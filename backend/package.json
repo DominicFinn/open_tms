@@ -1,0 +1,29 @@
+{
+  "name": "@open-tms/backend",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev --name init"
+  },
+  "dependencies": {
+    "@fastify/cors": "^8.4.2",
+    "@fastify/rate-limit": "^10.3.0",
+    "@fastify/swagger": "^8.14.0",
+    "@fastify/swagger-ui": "^1.0.0",
+    "@prisma/client": "^5.18.0",
+    "fastify": "^4.28.1",
+    "fastify-plugin": "^4.5.1",
+    "prisma": "^5.22.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.2"
+  }
+}

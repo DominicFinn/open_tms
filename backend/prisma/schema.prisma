@@ -1,0 +1,107 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Customer {
+  id           String   @id @default(uuid())
+  name         String
+  contactEmail String?
+  archived     Boolean  @default(false)
+  archivedAt   DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  shipments    Shipment[]
+}
+
+model Location {
+  id         String   @id @default(uuid())
+  name       String
+  address1   String
+  address2   String?
+  city       String
+  state      String?
+  postalCode String?
+  country    String
+  lat        Float?
+  lng        Float?
+  archived   Boolean  @default(false)
+  archivedAt DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  originFor  Shipment[] @relation("Origin")
+  destFor    Shipment[] @relation("Destination")
+}
+
+model Shipment {
+  id            String   @id @default(uuid())
+  reference     String
+  status        String   @default("draft")
+  pickupDate    DateTime?
+  deliveryDate  DateTime?
+  items         Json?
+  archived      Boolean  @default(false)
+  archivedAt    DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  customer      Customer @relation(fields: [customerId], references: [id])
+  customerId    String
+  origin        Location @relation("Origin", fields: [originId], references: [id])
+  originId      String
+  destination   Location @relation("Destination", fields: [destinationId], references: [id])
+  destinationId String
+  loads         Load[]
+}
+
+model Carrier {
+  id        String   @id @default(uuid())
+  name      String
+  mcNumber  String?
+  dotNumber String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  vehicles  Vehicle[]
+  drivers   Driver[]
+}
+
+model Vehicle {
+  id         String   @id @default(uuid())
+  carrier    Carrier  @relation(fields: [carrierId], references: [id])
+  carrierId  String
+  plate      String
+  type       String
+  capacityKg Int?
+  capacityM3 Int?
+  loads      Load[]
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Driver {
+  id        String   @id @default(uuid())
+  carrier   Carrier  @relation(fields: [carrierId], references: [id])
+  carrierId String
+  name      String
+  phone     String?
+  email     String?
+  loads     Load[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Load {
+  id         String   @id @default(uuid())
+  shipment   Shipment @relation(fields: [shipmentId], references: [id])
+  shipmentId String
+  vehicle    Vehicle? @relation(fields: [vehicleId], references: [id])
+  vehicleId  String?
+  driver     Driver?  @relation(fields: [driverId], references: [id])
+  driverId   String?
+  assignedAt DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}

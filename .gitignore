@@ -1,0 +1,40 @@
+node_modules/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# TypeScript
+*.tsbuildinfo
+
+# Env
+.env
+.env.local
+.env.production
+.env.staging
+backend/.env
+frontend/.env
+
+# Private keys and secrets
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+private/
+
+# Build outputs
+dist/
+backend/dist/
+frontend/dist/
+packages/**/dist/
+
+# Prisma
+**/.prisma/
+
+# macOS
+.DS_Store
+
+# Docker
+**/.docker-cache

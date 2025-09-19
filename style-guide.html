@@ -1,0 +1,1925 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LocoAware Style Guide</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <style>
+        :root {
+            /* Light Theme Colors */
+            --primary: #000000;
+            --on-primary: #FFFFFF;
+            --primary-container: #000000;
+            --on-primary-container: #FFFFFF;
+            --secondary: #FFE312;
+            --on-secondary: #FFF2B0;
+            --secondary-container: #FFF2B0;
+            --on-secondary-container: #191C1D;
+            --tertiary: #6750A4;
+            --on-tertiary: #FFFFFF;
+            --tertiary-container: #E9DDFF;
+            --on-tertiary-container: #22005D;
+            --error: #C00207;
+            --on-error: #FFFFFF;
+            --error-container: #FFDAD5;
+            --on-error-container: #410001;
+            --success: #016e00;
+            --on-success: #ffffff;
+            --success-container: #CAFFB8;
+            --on-success-container: #002200;
+            --warning: #8b5000;
+            --on-warning: #ffffff;
+            --warning-container: #ffdcbe;
+            --on-warning-container: #2c1600;
+            --info: #006874;
+            --on-info: #FFFFFF;
+            --info-container: #97f0ff;
+            --on-info-container: #001f24;
+            --outline: #6F797A;
+            --background: #FAFDFD;
+            --on-background: #191C1D;
+            --surface: #F8FAFA;
+            --on-surface: #191C1D;
+            --surface-variant: #DBE4E6;
+            --on-surface-variant: #3F484A;
+            --surface-container-lowest: #FFFFFF;
+            --surface-container-low: #F2F4F4;
+            --surface-container: #ECEEEF;
+            --surface-container-high: #E6E8E9;
+            --surface-container-highest: #E1E3E3;
+            --outline-variant: #BFC8CA;
+            --shadow: #000000;
+            --neutral-variant: #565656;
+            
+            /* Spacing */
+            --spacing-1: 8px;
+            --spacing-2: 16px;
+            --spacing-3: 24px;
+            --spacing-4: 32px;
+            
+            /* Border Radius */
+            --border-radius-sm: 8px;
+            --border-radius-md: 16px;
+            --border-radius-lg: 24px;
+            --border-radius-full: 30px;
+            
+            /* Shadows */
+            --shadow-1: 0px 1px 2px rgba(0, 0, 0, 0.3), 0px 1px 3px 1px rgba(0, 0, 0, 0.15);
+            --shadow-2: 0px 1px 2px rgba(0, 0, 0, 0.3), 0px 2px 6px 2px rgba(0, 0, 0, 0.15);
+        }
+        
+        @media (prefers-color-scheme: dark) {
+            :root {
+                /* Dark Theme Colors */
+                --primary: #FFE312;
+                --on-primary: #000000;
+                --primary-container: #FFE312;
+                --on-primary-container: #000000;
+                --secondary: #FFE312;
+                --on-secondary: #000000;
+                --secondary-container: #FFF2B0;
+                --on-secondary-container: #191C1D;
+                --tertiary: #CFBCFF;
+                --on-tertiary: #381E72;
+                --tertiary-container: #4F378A;
+                --on-tertiary-container: #E9DDFF;
+                --error: #FFB4A9;
+                --on-error: #690002;
+                --error-container: #930003;
+                --on-error-container: #FFDAD5;
+                --success: #27e51c;
+                --on-success: #013a00;
+                --success-container: #015300;
+                --on-success-container: #77ff61;
+                --warning: #ffb870;
+                --on-warning: #4a2800;
+                --warning-container: #693c00;
+                --on-warning-container: #ffdcbe;
+                --info: #4fd8eb;
+                --on-info: #00363d;
+                --info-container: #004f58;
+                --on-info-container: #97f0ff;
+                --outline: #FFE312;
+                --background: #191C1D;
+                --on-background: #E1E3E3;
+                --surface: #101415;
+                --on-surface: #C4C7C7;
+                --surface-variant: #3F484A;
+                --on-surface-variant: #BFC8CA;
+                --surface-container-lowest: #0B0F0F;
+                --surface-container-low: #191C1D;
+                --surface-container: #1D2021;
+                --surface-container-high: #272B2B;
+                --surface-container-highest: #323536;
+                --outline-variant: #3F484A;
+            }
+        }
+        
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: 'Roboto', sans-serif;
+            line-height: 1.6;
+            color: var(--on-background);
+            background-color: var(--surface-container-lowest);
+            padding: var(--spacing-2);
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: var(--spacing-2);
+        }
+        
+        h1, h2, h3 {
+            margin-bottom: var(--spacing-2);
+            color: var(--on-surface);
+        }
+        
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 400;
+            margin-bottom: var(--spacing-3);
+        }
+        
+        h2 {
+            font-size: 2rem;
+            font-weight: 400;
+            margin-top: var(--spacing-4);
+            margin-bottom: var(--spacing-2);
+        }
+        
+        h3 {
+            font-size: 1.5rem;
+            font-weight: 500;
+            margin-top: var(--spacing-3);
+            margin-bottom: var(--spacing-2);
+        }
+        
+        /* Color Palette */
+        .color-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: var(--spacing-2);
+            margin-bottom: var(--spacing-4);
+        }
+        
+        .color-swatch {
+            background: var(--surface-container);
+            border-radius: var(--border-radius-md);
+            padding: var(--spacing-2);
+            box-shadow: var(--shadow-1);
+        }
+        
+        .color-box {
+            width: 100%;
+            height: 80px;
+            border-radius: var(--border-radius-sm);
+            margin-bottom: var(--spacing-1);
+        }
+        
+        .color-primary { background-color: var(--primary); }
+        .color-secondary { background-color: var(--secondary); }
+        .color-tertiary { background-color: var(--tertiary); }
+        .color-error { background-color: var(--error); }
+        .color-success { background-color: var(--success); }
+        .color-warning { background-color: var(--warning); }
+        .color-info { background-color: var(--info); }
+        .color-surface { background-color: var(--surface); }
+        
+        .color-name {
+            font-weight: 500;
+            margin-bottom: 4px;
+            color: var(--on-surface);
+        }
+        
+        .color-value {
+            font-family: monospace;
+            font-size: 0.875rem;
+            color: var(--on-surface-variant);
+        }
+        
+        /* Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 36px;
+            padding: 8px 16px;
+            border: none;
+            border-radius: var(--border-radius-full);
+            font-family: 'Roboto', sans-serif;
+            font-size: 0.875rem;
+            font-weight: 700;
+            text-transform: none;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            text-decoration: none;
+            gap: 8px;
+        }
+        
+        .btn-filled {
+            background-color: var(--primary);
+            color: var(--on-primary);
+            box-shadow: none;
+        }
+        
+        .btn-filled:hover {
+            box-shadow: var(--shadow-1);
+        }
+        
+        .btn-tonal {
+            background-color: var(--secondary-container);
+            color: var(--on-secondary-container);
+            box-shadow: none;
+        }
+        
+        .btn-tonal:hover {
+            box-shadow: var(--shadow-1);
+        }
+        
+        .btn-outlined {
+            background-color: transparent;
+            color: var(--primary);
+            border: 1px solid var(--outline);
+        }
+        
+        .btn-text {
+            background-color: transparent;
+            color: var(--primary);
+            padding: 8px 12px;
+        }
+        
+        .btn-elevated {
+            background-color: var(--surface-container-low);
+            color: var(--primary);
+            box-shadow: var(--shadow-1);
+        }
+        
+        .btn-elevated:hover {
+            box-shadow: var(--shadow-2);
+        }
+        
+        .btn-small {
+            min-height: 32px;
+            padding: 6px 12px;
+            font-size: 0.75rem;
+        }
+        
+        .btn-large {
+            min-height: 40px;
+            padding: 10px 20px;
+            font-size: 1rem;
+        }
+        
+        /* Text Fields */
+        .text-field {
+            position: relative;
+            margin-bottom: var(--spacing-2);
+            width: 100%;
+        }
+        
+        .text-field input {
+            width: 100%;
+            padding: 16px 12px 8px 12px;
+            border: 1px solid var(--outline-variant);
+            border-radius: 4px;
+            background-color: transparent;
+            color: var(--on-surface);
+            font-family: 'Roboto', sans-serif;
+            font-size: 1rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        
+        .text-field input:focus {
+            border-color: var(--primary);
+        }
+        
+        .text-field label {
+            position: absolute;
+            left: 12px;
+            top: 12px;
+            color: var(--on-surface-variant);
+            font-size: 0.75rem;
+            font-weight: 400;
+            pointer-events: none;
+            transition: all 0.2s;
+        }
+        
+        .text-field input:focus + label,
+        .text-field input:not(:placeholder-shown) + label {
+            top: 8px;
+            color: var(--primary);
+        }
+        
+        /* Chips */
+        .chip {
+            display: inline-flex;
+            align-items: center;
+            padding: 6px 12px;
+            border-radius: var(--border-radius-sm);
+            font-size: 0.75rem;
+            font-weight: 500;
+            gap: 8px;
+            margin: 2px;
+        }
+        
+        .chip-primary {
+            background-color: rgba(63, 72, 74, 0.08);
+            color: var(--primary);
+        }
+        
+        .chip-secondary {
+            background-color: var(--secondary-container);
+            color: var(--on-secondary-container);
+        }
+        
+        .chip-tertiary {
+            background-color: var(--tertiary-container);
+            color: var(--tertiary);
+        }
+        
+        .chip-success {
+            background-color: var(--success-container);
+            color: var(--on-success-container);
+        }
+        
+        .chip-error {
+            background-color: var(--error-container);
+            color: var(--on-error-container);
+        }
+        
+        .chip-small {
+            padding: 4px 10px;
+            height: 24px;
+            font-size: 0.6875rem;
+        }
+        
+        .chip-large {
+            padding: 6px 12px;
+            font-weight: 700;
+            font-size: 0.875rem;
+        }
+        
+        /* Cards */
+        .card {
+            background-color: var(--surface-container-low);
+            border-radius: var(--border-radius-md);
+            padding: 12px;
+            box-shadow: none;
+            margin-bottom: var(--spacing-2);
+        }
+        
+        .card-elevated {
+            box-shadow: var(--shadow-1);
+        }
+        
+        .card-title {
+            font-size: 1.25rem;
+            font-weight: 500;
+            margin-bottom: var(--spacing-1);
+            color: var(--on-surface);
+        }
+        
+        .card-content {
+            color: var(--on-surface-variant);
+            line-height: 1.4;
+        }
+        
+        /* Navigation */
+        .nav {
+            background-color: var(--surface-container);
+            padding: var(--spacing-2);
+            border-radius: var(--border-radius-md);
+            margin-bottom: var(--spacing-3);
+        }
+        
+        .nav-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            border-radius: var(--border-radius-md);
+            color: var(--on-surface);
+            text-decoration: none;
+            transition: background-color 0.2s;
+            margin-bottom: 4px;
+        }
+        
+        .nav-item:hover {
+            background-color: var(--surface-variant);
+        }
+        
+        .nav-item.active {
+            background-color: var(--secondary-container);
+            color: var(--on-secondary-container);
+        }
+        
+        .nav-icon {
+            margin-right: 12px;
+            font-size: 18px;
+        }
+        
+        /* Demo Grid */
+        .demo-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: var(--spacing-3);
+            margin-bottom: var(--spacing-4);
+        }
+        
+        .demo-section {
+            background-color: var(--surface-container);
+            border-radius: var(--border-radius-md);
+            padding: var(--spacing-2);
+        }
+        
+        .component-showcase {
+            display: flex;
+            flex-wrap: wrap;
+            gap: var(--spacing-1);
+            align-items: center;
+            margin-bottom: var(--spacing-2);
+        }
+        
+        /* Typography */
+        .typography-scale {
+            margin-bottom: var(--spacing-3);
+        }
+        
+        .typography-sample {
+            margin-bottom: var(--spacing-2);
+            padding: var(--spacing-1);
+            background-color: var(--surface-container);
+            border-radius: var(--border-radius-sm);
+        }
+        
+        .typography-label {
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: var(--on-surface-variant);
+            margin-bottom: 4px;
+        }
+        
+        .display-large { font-size: 3.5rem; font-weight: 400; line-height: 1.12; }
+        .display-medium { font-size: 2.8125rem; font-weight: 400; line-height: 1.16; }
+        .display-small { font-size: 2.25rem; font-weight: 400; line-height: 1.22; }
+        .headline-large { font-size: 2rem; font-weight: 400; line-height: 1.25; }
+        .headline-medium { font-size: 1.75rem; font-weight: 400; line-height: 1.29; }
+        .headline-small { font-size: 1.5rem; font-weight: 400; line-height: 1.33; }
+        .title-large { font-size: 1.375rem; font-weight: 400; line-height: 1.27; }
+        .title-medium { font-size: 1rem; font-weight: 500; line-height: 1.5; }
+        .title-small { font-size: 0.875rem; font-weight: 500; line-height: 1.43; }
+        .body-large { font-size: 1rem; font-weight: 400; line-height: 1.5; }
+        .body-medium { font-size: 0.875rem; font-weight: 400; line-height: 1.43; }
+        .body-small { font-size: 0.75rem; font-weight: 400; line-height: 1.33; }
+        .label-large { font-size: 0.875rem; font-weight: 500; line-height: 1.43; }
+        .label-medium { font-size: 0.75rem; font-weight: 500; line-height: 1.33; }
+        .label-small { font-size: 0.6875rem; font-weight: 500; line-height: 1.45; }
+        
+        /* States */
+        .state-demo {
+            display: flex;
+            gap: var(--spacing-2);
+            margin-bottom: var(--spacing-2);
+        }
+        
+        .btn:disabled {
+            opacity: 0.38;
+            cursor: not-allowed;
+        }
+        
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 52px;
+            height: 32px;
+        }
+        
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: var(--surface-variant);
+            transition: 0.4s;
+            border-radius: 16px;
+        }
+        
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 28px;
+            width: 28px;
+            left: 2px;
+            bottom: 2px;
+            background-color: var(--outline);
+            transition: 0.4s;
+            border-radius: 50%;
+        }
+        
+        input:checked + .slider {
+            background-color: var(--primary);
+        }
+        
+        input:checked + .slider:before {
+            background-color: var(--on-primary);
+            transform: translateX(20px);
+        }
+        
+        /* App Bar */
+        .app-bar {
+            background-color: var(--surface-container-lowest);
+            color: var(--on-surface);
+            padding: 16px;
+            box-shadow: none;
+            border-bottom: 1px solid var(--outline-variant);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: var(--spacing-2);
+        }
+        
+        .app-bar-title {
+            font-size: 1.25rem;
+            font-weight: 500;
+            color: var(--on-surface);
+        }
+        
+        .app-bar-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        /* Tables */
+        .table-container {
+            background-color: var(--surface-container-low);
+            border-radius: var(--border-radius-md);
+            overflow: hidden;
+            box-shadow: none;
+            border: 1px solid var(--outline-variant);
+        }
+        
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .table th {
+            background-color: var(--surface);
+            padding: 8px 12px;
+            text-align: left;
+            font-weight: 500;
+            font-size: 0.875rem;
+            color: var(--on-surface);
+            border-bottom: 1px solid var(--outline-variant);
+            border-right: 1px solid var(--outline-variant);
+        }
+        
+        .table th:last-child {
+            border-right: none;
+        }
+        
+        .table td {
+            padding: 8px 12px;
+            border-bottom: 1px solid var(--outline-variant);
+            border-right: 1px solid var(--outline-variant);
+            color: var(--on-surface);
+        }
+        
+        .table td:last-child {
+            border-right: none;
+        }
+        
+        .table tr:hover {
+            background-color: var(--surface-variant);
+        }
+        
+        .table tr:last-child td {
+            border-bottom: none;
+        }
+        
+        /* Dialogs */
+        .dialog-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        
+        .dialog {
+            background-color: var(--surface-container-high);
+            border-radius: var(--border-radius-lg);
+            padding: 0;
+            max-width: 400px;
+            width: 90%;
+            max-height: 80vh;
+            overflow: hidden;
+            box-shadow: var(--shadow-2);
+        }
+        
+        .dialog-header {
+            padding: var(--spacing-3);
+            border-bottom: 1px solid var(--outline-variant);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .dialog-title {
+            font-size: 1.25rem;
+            font-weight: 500;
+            color: var(--on-surface);
+            margin: 0;
+        }
+        
+        .dialog-content {
+            padding: var(--spacing-3);
+            color: var(--on-surface-variant);
+            line-height: 1.5;
+        }
+        
+        .dialog-actions {
+            padding: var(--spacing-2) var(--spacing-3);
+            border-top: 1px solid var(--outline-variant);
+            display: flex;
+            gap: var(--spacing-1);
+            justify-content: flex-end;
+        }
+        
+        /* Drawers */
+        .drawer-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: transparent;
+            z-index: 1000;
+        }
+        
+        .drawer {
+            position: fixed;
+            top: 0;
+            right: 0;
+            height: 100vh;
+            width: 320px;
+            background-color: var(--surface-container-high);
+            box-shadow: var(--shadow-2);
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            z-index: 1001;
+        }
+        
+        .drawer.open {
+            transform: translateX(0);
+        }
+        
+        .drawer-header {
+            padding: var(--spacing-2);
+            border-bottom: 1px solid var(--outline-variant);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .drawer-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: var(--spacing-2);
+        }
+        
+        .drawer-footer {
+            padding: var(--spacing-2);
+            border-top: 1px solid var(--outline-variant);
+        }
+        
+        /* Notifications */
+        .notification-card {
+            background-color: var(--surface-container);
+            border-radius: var(--border-radius-md);
+            padding: var(--spacing-2);
+            margin-bottom: var(--spacing-1);
+            border-left: 4px solid var(--primary);
+        }
+        
+        .notification-card.error {
+            border-left-color: var(--error);
+        }
+        
+        .notification-card.warning {
+            border-left-color: var(--warning);
+        }
+        
+        .notification-card.info {
+            border-left-color: var(--info);
+        }
+        
+        .notification-card.success {
+            border-left-color: var(--success);
+        }
+        
+        .notification-title {
+            font-weight: 500;
+            margin-bottom: 4px;
+            color: var(--on-surface);
+        }
+        
+        .notification-message {
+            font-size: 0.875rem;
+            color: var(--on-surface-variant);
+            margin-bottom: var(--spacing-1);
+        }
+        
+        .notification-actions {
+            display: flex;
+            gap: var(--spacing-1);
+            justify-content: flex-end;
+        }
+        
+        /* Pagination */
+        .pagination {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: var(--spacing-2);
+            background-color: var(--surface-container);
+            border-radius: var(--border-radius-md);
+        }
+        
+        .pagination-info {
+            color: var(--on-surface-variant);
+            font-size: 0.875rem;
+        }
+        
+        .pagination-controls {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+        
+        .pagination-page {
+            font-weight: 700;
+            min-width: 65px;
+            text-align: center;
+            color: var(--on-surface);
+        }
+        
+        /* Filters */
+        .filters-section {
+            background-color: var(--surface-container);
+            border-radius: var(--border-radius-md);
+            padding: var(--spacing-2);
+            margin-bottom: var(--spacing-2);
+        }
+        
+        .filter-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: var(--spacing-1);
+            margin-bottom: var(--spacing-2);
+        }
+        
+        .filter-input-group {
+            display: flex;
+            gap: var(--spacing-2);
+            align-items: flex-end;
+            flex-wrap: wrap;
+        }
+        
+        /* Search */
+        .search-container {
+            position: relative;
+            width: 100%;
+            max-width: 400px;
+        }
+        
+        .search-input {
+            width: 100%;
+            padding: 12px 16px 12px 48px;
+            border: 1px solid var(--outline-variant);
+            border-radius: var(--border-radius-full);
+            background-color: var(--surface);
+            color: var(--on-surface);
+            font-family: 'Roboto', sans-serif;
+            font-size: 1rem;
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        
+        .search-input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 1px var(--primary);
+        }
+        
+        .search-icon {
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--on-surface-variant);
+            font-size: 20px;
+        }
+        
+        .search-suggestions {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background-color: var(--surface-container-high);
+            border: 1px solid var(--outline-variant);
+            border-radius: var(--border-radius-md);
+            margin-top: 4px;
+            box-shadow: var(--shadow-2);
+            z-index: 100;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .suggestion-item {
+            padding: 12px 16px;
+            cursor: pointer;
+            border-bottom: 1px solid var(--outline-variant);
+            color: var(--on-surface);
+        }
+        
+        .suggestion-item:last-child {
+            border-bottom: none;
+        }
+        
+        .suggestion-item:hover {
+            background-color: var(--surface-variant);
+        }
+        
+        /* Badges */
+        .badge {
+            position: relative;
+            display: inline-block;
+        }
+        
+        .badge-indicator {
+            position: absolute;
+            top: -6px;
+            right: -6px;
+            background-color: var(--error);
+            color: var(--on-error);
+            border-radius: 50%;
+            min-width: 18px;
+            height: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: 500;
+            line-height: 1;
+        }
+        
+        .badge-dot {
+            width: 8px;
+            height: 8px;
+            min-width: auto;
+        }
+        
+        /* Menu */
+        .menu {
+            background-color: var(--surface-container-high);
+            border: 1px solid var(--outline-variant);
+            border-radius: var(--border-radius-md);
+            box-shadow: var(--shadow-2);
+            padding: 8px 0;
+            min-width: 200px;
+        }
+        
+        .menu-item {
+            padding: 12px 16px;
+            cursor: pointer;
+            color: var(--on-surface);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 0.875rem;
+        }
+        
+        .menu-item:hover {
+            background-color: var(--surface-variant);
+        }
+        
+        .menu-item.disabled {
+            color: var(--on-surface-variant);
+            opacity: 0.5;
+            cursor: default;
+        }
+        
+        .menu-item.disabled:hover {
+            background-color: transparent;
+        }
+        
+        .menu-divider {
+            height: 1px;
+            background-color: var(--outline-variant);
+            margin: 8px 0;
+        }
+        
+        /* Tabs */
+        .tabs-container {
+            border-bottom: 1px solid var(--outline-variant);
+            margin-bottom: var(--spacing-3);
+        }
+        
+        .tabs-list {
+            display: flex;
+            gap: 0;
+            padding: 0;
+            margin: 0;
+            list-style: none;
+        }
+        
+        .tab {
+            padding: 12px 24px;
+            cursor: pointer;
+            color: var(--on-surface-variant);
+            font-weight: 500;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        
+        .tab:hover {
+            color: var(--on-surface);
+            background-color: var(--surface-variant);
+        }
+        
+        .tab.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+        }
+        
+        .tab-panel {
+            padding: var(--spacing-2) 0;
+        }
+        
+        /* Status indicators */
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 8px;
+            border-radius: var(--border-radius-sm);
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        
+        .status-online {
+            background-color: var(--success-container);
+            color: var(--on-success-container);
+        }
+        
+        .status-offline {
+            background-color: var(--error-container);
+            color: var(--on-error-container);
+        }
+        
+        .status-warning {
+            background-color: var(--warning-container);
+            color: var(--on-warning-container);
+        }
+        
+        .status-pending {
+            background-color: var(--info-container);
+            color: var(--on-info-container);
+        }
+        
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background-color: currentColor;
+        }
+        
+        /* Icon buttons */
+        .icon-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: none;
+            background-color: transparent;
+            color: var(--on-surface-variant);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .icon-btn:hover {
+            background-color: var(--surface-variant);
+        }
+        
+        .icon-btn.filled {
+            background-color: var(--primary);
+            color: var(--on-primary);
+        }
+        
+        .icon-btn.filled:hover {
+            box-shadow: var(--shadow-1);
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .demo-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .color-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+            
+            .drawer {
+                width: 100%;
+            }
+            
+            .pagination {
+                flex-direction: column;
+                gap: var(--spacing-2);
+                align-items: stretch;
+            }
+            
+            .filter-input-group {
+                flex-direction: column;
+                align-items: stretch;
+            }
+        }
+        
+        /* Utilities */
+        .hidden { display: none; }
+        .flex { display: flex; }
+        .items-center { align-items: center; }
+        .justify-between { justify-content: space-between; }
+        .gap-2 { gap: var(--spacing-1); }
+        .gap-4 { gap: var(--spacing-2); }
+        .p-2 { padding: var(--spacing-1); }
+        .p-4 { padding: var(--spacing-2); }
+        .mb-4 { margin-bottom: var(--spacing-2); }
+        .text-center { text-align: center; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="app-bar">
+            <div class="app-bar-title">LocoAware Design System</div>
+            <div class="app-bar-actions">
+                <div class="badge">
+                    <button class="icon-btn">
+                        <span class="material-icons">notifications</span>
+                    </button>
+                    <div class="badge-indicator">3</div>
+                </div>
+                <button class="icon-btn">
+                    <span class="material-icons">account_circle</span>
+                </button>
+                <button class="icon-btn" onclick="toggleDrawer('appSwitcher')">
+                    <span class="material-icons">apps</span>
+                </button>
+            </div>
+        </header>
+        <p style="margin-bottom: 32px;">A comprehensive style guide showcasing the visual design language used in the LocoAware Devices application.</p>
+
+        <section class="typography-scale">
+            <h2>Typography Scale</h2>
+            <div class="typography-sample">
+                <div class="typography-label">Display Large</div>
+                <div class="display-large">LocoAware</div>
+            </div>
+            <div class="typography-sample">
+                <div class="typography-label">Headline Large</div>
+                <div class="headline-large">Device Management</div>
+            </div>
+            <div class="typography-sample">
+                <div class="typography-label">Title Large</div>
+                <div class="title-large">Settings Configuration</div>
+            </div>
+            <div class="typography-sample">
+                <div class="typography-label">Body Large</div>
+                <div class="body-large">Monitor and manage your IoT devices with real-time location tracking, comprehensive analytics, and automated alerts.</div>
+            </div>
+            <div class="typography-sample">
+                <div class="typography-label">Label Medium</div>
+                <div class="label-medium">DEVICE STATUS</div>
+            </div>
+        </section>
+
+        <section>
+            <h2>Color Palette</h2>
+            <div class="color-grid">
+                <div class="color-swatch">
+                    <div class="color-box color-primary"></div>
+                    <div class="color-name">Primary</div>
+                    <div class="color-value">Black / Yellow</div>
+                </div>
+                <div class="color-swatch">
+                    <div class="color-box color-secondary"></div>
+                    <div class="color-name">Secondary</div>
+                    <div class="color-value">Yellow / Container</div>
+                </div>
+                <div class="color-swatch">
+                    <div class="color-box color-tertiary"></div>
+                    <div class="color-name">Tertiary</div>
+                    <div class="color-value">Purple</div>
+                </div>
+                <div class="color-swatch">
+                    <div class="color-box color-error"></div>
+                    <div class="color-name">Error</div>
+                    <div class="color-value">Red</div>
+                </div>
+                <div class="color-swatch">
+                    <div class="color-box color-success"></div>
+                    <div class="color-name">Success</div>
+                    <div class="color-value">Green</div>
+                </div>
+                <div class="color-swatch">
+                    <div class="color-box color-warning"></div>
+                    <div class="color-name">Warning</div>
+                    <div class="color-value">Orange</div>
+                </div>
+                <div class="color-swatch">
+                    <div class="color-box color-info"></div>
+                    <div class="color-name">Info</div>
+                    <div class="color-value">Blue</div>
+                </div>
+                <div class="color-swatch">
+                    <div class="color-box color-surface"></div>
+                    <div class="color-name">Surface</div>
+                    <div class="color-value">Background</div>
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <h2>Components</h2>
+            <div class="demo-grid">
+                <div class="demo-section">
+                    <h3>Buttons</h3>
+                    <div class="component-showcase">
+                        <button class="btn btn-filled">
+                            <span class="material-icons" style="font-size: 18px;">add</span>
+                            Filled
+                        </button>
+                        <button class="btn btn-tonal">Tonal</button>
+                        <button class="btn btn-outlined">Outlined</button>
+                        <button class="btn btn-text">Text</button>
+                        <button class="btn btn-elevated">Elevated</button>
+                    </div>
+                    <div class="component-showcase">
+                        <button class="btn btn-filled btn-small">Small</button>
+                        <button class="btn btn-filled">Medium</button>
+                        <button class="btn btn-filled btn-large">Large</button>
+                    </div>
+                    <div class="state-demo">
+                        <button class="btn btn-filled" disabled>Disabled</button>
+                        <button class="btn btn-outlined" disabled>Disabled</button>
+                    </div>
+                </div>
+
+                <div class="demo-section">
+                    <h3>Text Fields</h3>
+                    <div class="text-field">
+                        <input type="text" placeholder=" " />
+                        <label>Device Name</label>
+                    </div>
+                    <div class="text-field">
+                        <input type="email" placeholder=" " />
+                        <label>Email Address</label>
+                    </div>
+                    <div class="text-field">
+                        <input type="text" placeholder=" " disabled />
+                        <label>Disabled Field</label>
+                    </div>
+                </div>
+
+                <div class="demo-section">
+                    <h3>Chips</h3>
+                    <div class="component-showcase">
+                        <div class="chip chip-primary">
+                            <span class="material-icons" style="font-size: 16px;">device_hub</span>
+                            Online
+                        </div>
+                        <div class="chip chip-secondary">Location</div>
+                        <div class="chip chip-tertiary">Analytics</div>
+                        <div class="chip chip-success">Active</div>
+                        <div class="chip chip-error">
+                            Error
+                            <span class="material-icons" style="font-size: 16px;">close</span>
+                        </div>
+                    </div>
+                    <div class="component-showcase">
+                        <div class="chip chip-primary chip-small">Small</div>
+                        <div class="chip chip-primary">Medium</div>
+                        <div class="chip chip-primary chip-large">Large</div>
+                    </div>
+                </div>
+
+                <div class="demo-section">
+                    <h3>Cards</h3>
+                    <div class="card">
+                        <div class="card-title">Device Information</div>
+                        <div class="card-content">
+                            Device ID: 72308628872486381<br>
+                            Model: C2PL<br>
+                            Last Update: 2 minutes ago
+                        </div>
+                    </div>
+                    <div class="card card-elevated">
+                        <div class="card-title">Elevated Card</div>
+                        <div class="card-content">
+                            This card has a shadow elevation for emphasis.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="demo-section">
+                    <h3>Navigation</h3>
+                    <nav class="nav">
+                        <a href="#" class="nav-item active">
+                            <span class="material-icons nav-icon">dashboard</span>
+                            Dashboard
+                        </a>
+                        <a href="#" class="nav-item">
+                            <span class="material-icons nav-icon">devices</span>
+                            Devices
+                        </a>
+                        <a href="#" class="nav-item">
+                            <span class="material-icons nav-icon">analytics</span>
+                            Analytics
+                        </a>
+                        <a href="#" class="nav-item">
+                            <span class="material-icons nav-icon">settings</span>
+                            Settings
+                        </a>
+                    </nav>
+                </div>
+
+                <div class="demo-section">
+                    <h3>Controls</h3>
+                    <div class="component-showcase">
+                        <label class="switch">
+                            <input type="checkbox" checked>
+                            <span class="slider"></span>
+                        </label>
+                        <span style="margin-left: 12px;">Notifications</span>
+                    </div>
+                    <div class="component-showcase" style="margin-top: 16px;">
+                        <label class="switch">
+                            <input type="checkbox">
+                            <span class="slider"></span>
+                        </label>
+                        <span style="margin-left: 12px;">Auto-refresh</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <h2>Advanced Components</h2>
+            <div class="demo-grid">
+                <div class="demo-section">
+                    <h3>Search</h3>
+                    <div class="search-container">
+                        <input type="text" class="search-input" placeholder="Search devices..." onclick="showSearchSuggestions()">
+                        <span class="material-icons search-icon">search</span>
+                        <div id="searchSuggestions" class="search-suggestions hidden">
+                            <div class="suggestion-item">
+                                <span class="material-icons" style="font-size: 18px; margin-right: 8px;">device_hub</span>
+                                Device 72308628872486381
+                            </div>
+                            <div class="suggestion-item">
+                                <span class="material-icons" style="font-size: 18px; margin-right: 8px;">location_on</span>
+                                Warehouse A, Zone 1
+                            </div>
+                            <div class="suggestion-item">
+                                <span class="material-icons" style="font-size: 18px; margin-right: 8px;">business</span>
+                                SystemLoco Demo Company
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="demo-section">
+                    <h3>Status Indicators</h3>
+                    <div class="component-showcase" style="flex-direction: column; align-items: flex-start;">
+                        <div class="status-indicator status-online">
+                            <div class="status-dot"></div>
+                            Online
+                        </div>
+                        <div class="status-indicator status-offline">
+                            <div class="status-dot"></div>
+                            Offline
+                        </div>
+                        <div class="status-indicator status-warning">
+                            <div class="status-dot"></div>
+                            Low Battery
+                        </div>
+                        <div class="status-indicator status-pending">
+                            <div class="status-dot"></div>
+                            Pending
+                        </div>
+                    </div>
+                </div>
+
+                <div class="demo-section">
+                    <h3>Badges & Icons</h3>
+                    <div class="component-showcase">
+                        <div class="badge">
+                            <button class="icon-btn">
+                                <span class="material-icons">mail</span>
+                            </button>
+                            <div class="badge-indicator">12</div>
+                        </div>
+                        <div class="badge">
+                            <button class="icon-btn">
+                                <span class="material-icons">notifications</span>
+                            </button>
+                            <div class="badge-indicator badge-dot"></div>
+                        </div>
+                        <button class="icon-btn filled">
+                            <span class="material-icons">add</span>
+                        </button>
+                        <button class="icon-btn">
+                            <span class="material-icons">more_vert</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="demo-section">
+                    <h3>Menu</h3>
+                    <div class="menu" style="position: static; box-shadow: var(--shadow-1);">
+                        <div class="menu-item">
+                            <span class="material-icons" style="font-size: 18px;">edit</span>
+                            Edit Device
+                        </div>
+                        <div class="menu-item">
+                            <span class="material-icons" style="font-size: 18px;">content_copy</span>
+                            Clone Settings
+                        </div>
+                        <div class="menu-divider"></div>
+                        <div class="menu-item">
+                            <span class="material-icons" style="font-size: 18px;">download</span>
+                            Export Data
+                        </div>
+                        <div class="menu-item disabled">
+                            <span class="material-icons" style="font-size: 18px;">delete</span>
+                            Delete Device
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <h2>Data Display</h2>
+            <div class="demo-section">
+                <h3>Data Table</h3>
+                <div class="table-container">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Device ID</th>
+                                <th>Model</th>
+                                <th>Status</th>
+                                <th>Last Update</th>
+                                <th>Battery</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>72308628872486381</td>
+                                <td>C2PL</td>
+                                <td>
+                                    <div class="status-indicator status-online">
+                                        <div class="status-dot"></div>
+                                        Online
+                                    </div>
+                                </td>
+                                <td>2 minutes ago</td>
+                                <td>87%</td>
+                                <td>
+                                    <button class="icon-btn">
+                                        <span class="material-icons">more_horiz</span>
+                                    </button>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>72308628872372449</td>
+                                <td>E4BL</td>
+                                <td>
+                                    <div class="status-indicator status-warning">
+                                        <div class="status-dot"></div>
+                                        Low Battery
+                                    </div>
+                                </td>
+                                <td>15 minutes ago</td>
+                                <td>12%</td>
+                                <td>
+                                    <button class="icon-btn">
+                                        <span class="material-icons">more_horiz</span>
+                                    </button>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>72308628872889858</td>
+                                <td>HGD4</td>
+                                <td>
+                                    <div class="status-indicator status-offline">
+                                        <div class="status-dot"></div>
+                                        Offline
+                                    </div>
+                                </td>
+                                <td>3 hours ago</td>
+                                <td>--</td>
+                                <td>
+                                    <button class="icon-btn">
+                                        <span class="material-icons">more_horiz</span>
+                                    </button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="pagination">
+                    <div class="pagination-info">Showing 1-3 of 247 devices</div>
+                    <div class="pagination-controls">
+                        <button class="icon-btn filled" disabled>
+                            <span class="material-icons">arrow_back</span>
+                        </button>
+                        <div class="pagination-page">Page 1</div>
+                        <button class="icon-btn filled">
+                            <span class="material-icons">arrow_forward</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <h2>Filters & Tabs</h2>
+            <div class="demo-grid">
+                <div class="demo-section">
+                    <h3>Filter Section</h3>
+                    <div class="filters-section">
+                        <div class="filter-chips">
+                            <div class="chip chip-primary">
+                                <span class="material-icons" style="font-size: 16px;">device_hub</span>
+                                Model: C2PL
+                                <span class="material-icons" style="font-size: 16px;">close</span>
+                            </div>
+                            <div class="chip chip-success">
+                                Status: Online
+                                <span class="material-icons" style="font-size: 16px;">close</span>
+                            </div>
+                            <div class="chip chip-secondary">
+                                Zone: Warehouse A
+                                <span class="material-icons" style="font-size: 16px;">close</span>
+                            </div>
+                        </div>
+                        <div class="filter-input-group">
+                            <div class="text-field">
+                                <input type="text" placeholder=" " />
+                                <label>Device Model</label>
+                            </div>
+                            <button class="btn btn-outlined">
+                                <span class="material-icons" style="font-size: 18px;">filter_list</span>
+                                More Filters
+                            </button>
+                            <button class="btn btn-text">Clear All</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="demo-section">
+                    <h3>Tab Navigation</h3>
+                    <div class="tabs-container">
+                        <ul class="tabs-list">
+                            <li class="tab active" onclick="switchTab(this, 'overview')">Overview</li>
+                            <li class="tab" onclick="switchTab(this, 'analytics')">Analytics</li>
+                            <li class="tab" onclick="switchTab(this, 'settings')">Settings</li>
+                            <li class="tab" onclick="switchTab(this, 'history')">History</li>
+                        </ul>
+                    </div>
+                    <div class="tab-panel">
+                        <div id="overview" class="tab-content">
+                            <p class="body-medium">Device overview information including current status, location, and recent activity.</p>
+                        </div>
+                        <div id="analytics" class="tab-content hidden">
+                            <p class="body-medium">Analytics and reporting dashboard with charts and metrics.</p>
+                        </div>
+                        <div id="settings" class="tab-content hidden">
+                            <p class="body-medium">Device configuration and settings management.</p>
+                        </div>
+                        <div id="history" class="tab-content hidden">
+                            <p class="body-medium">Historical data and activity logs for this device.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <h2>Layout Principles</h2>
+            <div class="demo-grid">
+                <div class="demo-section">
+                    <h3>Spacing System</h3>
+                    <p class="body-medium" style="margin-bottom: 16px;">Based on 8px grid system:</p>
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        <div style="background: var(--primary); height: 8px; width: 64px; border-radius: 4px;"></div>
+                        <span class="label-small">8px (1 unit)</span>
+                        <div style="background: var(--secondary); height: 16px; width: 128px; border-radius: 4px;"></div>
+                        <span class="label-small">16px (2 units)</span>
+                        <div style="background: var(--tertiary); height: 24px; width: 192px; border-radius: 4px;"></div>
+                        <span class="label-small">24px (3 units)</span>
+                        <div style="background: var(--info); height: 32px; width: 256px; border-radius: 4px;"></div>
+                        <span class="label-small">32px (4 units)</span>
+                    </div>
+                </div>
+
+                <div class="demo-section">
+                    <h3>Border Radius</h3>
+                    <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+                        <div style="width: 60px; height: 60px; background: var(--primary); border-radius: 8px;"></div>
+                        <div style="width: 60px; height: 60px; background: var(--secondary); border-radius: 16px;"></div>
+                        <div style="width: 60px; height: 60px; background: var(--tertiary); border-radius: 24px;"></div>
+                        <div style="width: 60px; height: 60px; background: var(--info); border-radius: 30px;"></div>
+                    </div>
+                    <div style="display: flex; gap: 16px; flex-wrap: wrap; margin-top: 8px;">
+                        <span class="label-small">8px</span>
+                        <span class="label-small">16px</span>
+                        <span class="label-small">24px</span>
+                        <span class="label-small">30px</span>
+                    </div>
+                </div>
+
+                <div class="demo-section">
+                    <h3>Elevation</h3>
+                    <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+                        <div style="width: 80px; height: 60px; background: var(--surface-container-low); border-radius: 8px;"></div>
+                        <div style="width: 80px; height: 60px; background: var(--surface-container-low); border-radius: 8px; box-shadow: var(--shadow-1);"></div>
+                        <div style="width: 80px; height: 60px; background: var(--surface-container-low); border-radius: 8px; box-shadow: var(--shadow-2);"></div>
+                    </div>
+                    <div style="display: flex; gap: 16px; flex-wrap: wrap; margin-top: 8px;">
+                        <span class="label-small">None</span>
+                        <span class="label-small">Level 1</span>
+                        <span class="label-small">Level 2</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <h2>Dialogs & Drawers</h2>
+            <div class="demo-grid">
+                <div class="demo-section">
+                    <h3>Dialog Triggers</h3>
+                    <div class="component-showcase" style="flex-direction: column; align-items: flex-start;">
+                        <button class="btn btn-filled" onclick="showDialog('confirmDialog')">Confirmation Dialog</button>
+                        <button class="btn btn-outlined" onclick="showDialog('infoDialog')">Info Dialog</button>
+                        <button class="btn btn-tonal" onclick="toggleDrawer('notifications')">Notifications Drawer</button>
+                        <button class="btn btn-text" onclick="toggleDrawer('filters')">Filters Drawer</button>
+                    </div>
+                </div>
+
+                <div class="demo-section">
+                    <h3>Notification Examples</h3>
+                    <div style="display: flex; flex-direction: column; gap: 12px;">
+                        <div class="notification-card">
+                            <div class="notification-title">Device Connected</div>
+                            <div class="notification-message">Device 72308628872486381 has come online and is reporting location data.</div>
+                            <div class="notification-actions">
+                                <button class="btn btn-text btn-small">View</button>
+                                <button class="btn btn-text btn-small">Dismiss</button>
+                            </div>
+                        </div>
+                        <div class="notification-card warning">
+                            <div class="notification-title">Low Battery Alert</div>
+                            <div class="notification-message">Multiple devices are reporting battery levels below 15%.</div>
+                            <div class="notification-actions">
+                                <button class="btn btn-text btn-small">Details</button>
+                                <button class="btn btn-text btn-small">Acknowledge</button>
+                            </div>
+                        </div>
+                        <div class="notification-card error">
+                            <div class="notification-title">Connection Failed</div>
+                            <div class="notification-message">Unable to connect to device management server.</div>
+                            <div class="notification-actions">
+                                <button class="btn btn-text btn-small">Retry</button>
+                                <button class="btn btn-text btn-small">Dismiss</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <footer style="margin-top: 64px; padding-top: 32px; border-top: 1px solid var(--outline-variant); text-align: center;">
+            <p class="body-small" style="color: var(--on-surface-variant);">
+                LocoAware Design System • Material Design 3 • Responsive Design
+            </p>
+        </footer>
+    </div>
+
+    <!-- Confirmation Dialog -->
+    <div id="confirmDialog" class="dialog-overlay hidden" onclick="hideDialog('confirmDialog')">
+        <div class="dialog" onclick="event.stopPropagation()">
+            <div class="dialog-header">
+                <h3 class="dialog-title">Delete Device</h3>
+                <button class="icon-btn" onclick="hideDialog('confirmDialog')">
+                    <span class="material-icons">close</span>
+                </button>
+            </div>
+            <div class="dialog-content">
+                <p>Deleting the device cannot be undone. All associated data and configuration will be permanently removed from the system.</p>
+            </div>
+            <div class="dialog-actions">
+                <button class="btn btn-text" onclick="hideDialog('confirmDialog')">Cancel</button>
+                <button class="btn btn-filled" style="background-color: var(--error); color: var(--on-error);">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Info Dialog -->
+    <div id="infoDialog" class="dialog-overlay hidden" onclick="hideDialog('infoDialog')">
+        <div class="dialog" onclick="event.stopPropagation()">
+            <div class="dialog-header">
+                <h3 class="dialog-title">Device Information</h3>
+                <button class="icon-btn" onclick="hideDialog('infoDialog')">
+                    <span class="material-icons">close</span>
+                </button>
+            </div>
+            <div class="dialog-content">
+                <p><strong>Device ID:</strong> 72308628872486381</p>
+                <p><strong>Model:</strong> C2PL Cold Chain Monitor</p>
+                <p><strong>Firmware:</strong> v2.1.4</p>
+                <p><strong>Last Update:</strong> 2 minutes ago</p>
+                <p><strong>Battery Level:</strong> 87%</p>
+                <p><strong>Location:</strong> Warehouse A, Zone 1</p>
+            </div>
+            <div class="dialog-actions">
+                <button class="btn btn-filled" onclick="hideDialog('infoDialog')">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notifications Drawer -->
+    <div id="notifications" class="drawer-overlay hidden" onclick="toggleDrawer('notifications')">
+        <div class="drawer" onclick="event.stopPropagation()">
+            <div class="drawer-header">
+                <h3>Notifications</h3>
+                <button class="icon-btn" onclick="toggleDrawer('notifications')">
+                    <span class="material-icons">close</span>
+                </button>
+            </div>
+            <div class="drawer-content">
+                <div style="margin-bottom: 16px;">
+                    <h4 style="margin-bottom: 12px;">New</h4>
+                    <div class="notification-card">
+                        <div class="notification-title">Device Alert</div>
+                        <div class="notification-message">Temperature threshold exceeded on device C2PL-001</div>
+                        <div class="notification-actions">
+                            <button class="btn btn-text btn-small">Acknowledge</button>
+                        </div>
+                    </div>
+                    <div class="notification-card info">
+                        <div class="notification-title">System Update</div>
+                        <div class="notification-message">New firmware version 2.1.5 is available for HGD4 devices</div>
+                        <div class="notification-actions">
+                            <button class="btn btn-text btn-small">View Update</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="drawer-footer">
+                <button class="btn btn-filled" style="width: 100%;">Mark All as Read</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters Drawer -->
+    <div id="filters" class="drawer-overlay hidden" onclick="toggleDrawer('filters')">
+        <div class="drawer" onclick="event.stopPropagation()">
+            <div class="drawer-header">
+                <h3>Filter Devices</h3>
+                <button class="icon-btn" onclick="toggleDrawer('filters')">
+                    <span class="material-icons">close</span>
+                </button>
+            </div>
+            <div class="drawer-content">
+                <div style="display: flex; flex-direction: column; gap: 24px;">
+                    <div class="text-field">
+                        <input type="text" placeholder=" " />
+                        <label>Device Model</label>
+                    </div>
+                    <div class="text-field">
+                        <input type="text" placeholder=" " />
+                        <label>Location</label>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        <h4>Status</h4>
+                        <label style="display: flex; align-items: center; gap: 8px;">
+                            <input type="checkbox" checked>
+                            <span>Online</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px;">
+                            <input type="checkbox">
+                            <span>Offline</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px;">
+                            <input type="checkbox">
+                            <span>Warning</span>
+                        </label>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        <h4>Battery Level</h4>
+                        <label style="display: flex; align-items: center; gap: 8px;">
+                            <input type="radio" name="battery" value="all" checked>
+                            <span>All levels</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px;">
+                            <input type="radio" name="battery" value="low">
+                            <span>Low (&lt; 20%)</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px;">
+                            <input type="radio" name="battery" value="critical">
+                            <span>Critical (&lt; 5%)</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="drawer-footer">
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn btn-text" style="flex: 1;">Clear</button>
+                    <button class="btn btn-filled" style="flex: 1;">Apply Filters</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- App Switcher Drawer -->
+    <div id="appSwitcher" class="drawer-overlay hidden" onclick="toggleDrawer('appSwitcher')">
+        <div class="drawer" onclick="event.stopPropagation()">
+            <div class="drawer-header">
+                <h3>Applications</h3>
+                <button class="icon-btn" onclick="toggleDrawer('appSwitcher')">
+                    <span class="material-icons">close</span>
+                </button>
+            </div>
+            <div class="drawer-content">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                    <div class="card" style="text-align: center; cursor: pointer;">
+                        <span class="material-icons" style="font-size: 48px; color: var(--primary); margin-bottom: 8px;">dashboard</span>
+                        <div class="card-title" style="font-size: 0.875rem;">Dashboard</div>
+                    </div>
+                    <div class="card" style="text-align: center; cursor: pointer;">
+                        <span class="material-icons" style="font-size: 48px; color: var(--tertiary); margin-bottom: 8px;">devices</span>
+                        <div class="card-title" style="font-size: 0.875rem;">Devices</div>
+                    </div>
+                    <div class="card" style="text-align: center; cursor: pointer;">
+                        <span class="material-icons" style="font-size: 48px; color: var(--info); margin-bottom: 8px;">analytics</span>
+                        <div class="card-title" style="font-size: 0.875rem;">Analytics</div>
+                    </div>
+                    <div class="card" style="text-align: center; cursor: pointer;">
+                        <span class="material-icons" style="font-size: 48px; color: var(--success); margin-bottom: 8px;">map</span>
+                        <div class="card-title" style="font-size: 0.875rem;">Zones</div>
+                    </div>
+                    <div class="card" style="text-align: center; cursor: pointer;">
+                        <span class="material-icons" style="font-size: 48px; color: var(--warning); margin-bottom: 8px;">local_shipping</span>
+                        <div class="card-title" style="font-size: 0.875rem;">Shipments</div>
+                    </div>
+                    <div class="card" style="text-align: center; cursor: pointer;">
+                        <span class="material-icons" style="font-size: 48px; color: var(--on-surface-variant); margin-bottom: 8px;">settings</span>
+                        <div class="card-title" style="font-size: 0.875rem;">Settings</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Demo interactivity
+        document.addEventListener('DOMContentLoaded', function() {
+            // Button hover effects
+            const buttons = document.querySelectorAll('.btn');
+            buttons.forEach(btn => {
+                if (!btn.disabled) {
+                    btn.addEventListener('mouseenter', function() {
+                        this.style.transform = 'translateY(-1px)';
+                    });
+                    btn.addEventListener('mouseleave', function() {
+                        this.style.transform = 'translateY(0)';
+                    });
+                }
+            });
+            
+            // Nav item clicks
+            const navItems = document.querySelectorAll('.nav-item');
+            navItems.forEach(item => {
+                item.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    navItems.forEach(nav => nav.classList.remove('active'));
+                    this.classList.add('active');
+                });
+            });
+        });
+
+        // Dialog functions
+        function showDialog(dialogId) {
+            const dialog = document.getElementById(dialogId);
+            dialog.classList.remove('hidden');
+        }
+
+        function hideDialog(dialogId) {
+            const dialog = document.getElementById(dialogId);
+            dialog.classList.add('hidden');
+        }
+
+        // Drawer functions
+        function toggleDrawer(drawerId) {
+            const overlay = document.getElementById(drawerId);
+            const drawer = overlay.querySelector('.drawer');
+            
+            if (overlay.classList.contains('hidden')) {
+                overlay.classList.remove('hidden');
+                setTimeout(() => drawer.classList.add('open'), 10);
+            } else {
+                drawer.classList.remove('open');
+                setTimeout(() => overlay.classList.add('hidden'), 300);
+            }
+        }
+
+        // Search suggestions
+        function showSearchSuggestions() {
+            const suggestions = document.getElementById('searchSuggestions');
+            suggestions.classList.remove('hidden');
+        }
+
+        // Hide search suggestions when clicking elsewhere
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.search-container')) {
+                const suggestions = document.getElementById('searchSuggestions');
+                if (suggestions) suggestions.classList.add('hidden');
+            }
+        });
+
+        // Tab switching
+        function switchTab(tabElement, contentId) {
+            // Remove active class from all tabs
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            // Add active class to clicked tab
+            tabElement.classList.add('active');
+            
+            // Hide all tab content
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.add('hidden'));
+            // Show selected tab content
+            const content = document.getElementById(contentId);
+            if (content) content.classList.remove('hidden');
+        }
+
+        // Close dialogs and drawers with Escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                // Close any open dialogs
+                document.querySelectorAll('.dialog-overlay:not(.hidden)').forEach(dialog => {
+                    dialog.classList.add('hidden');
+                });
+                
+                // Close any open drawers
+                document.querySelectorAll('.drawer-overlay:not(.hidden)').forEach(overlay => {
+                    const drawer = overlay.querySelector('.drawer');
+                    drawer.classList.remove('open');
+                    setTimeout(() => overlay.classList.add('hidden'), 300);
+                });
+            }
+        });
+    </script>
+</body>
+</html>

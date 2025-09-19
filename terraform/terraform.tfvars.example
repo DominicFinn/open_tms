@@ -1,0 +1,9 @@
+# Terraform variables example
+# Copy this file to terraform.tfvars and update with your values
+
+project_id   = "your-project-id"
+region       = "us-central1"
+environment  = "prod"
+db_password  = "your-secure-database-password"
+domain_name  = "your-domain.com"
+enable_ssl   = true

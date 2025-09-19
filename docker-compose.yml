@@ -1,0 +1,35 @@
+version: "3.9"
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: tms
+      POSTGRES_PASSWORD: tms
+      POSTGRES_DB: tms
+    ports:
+      - "55432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+  backend:
+    build: ./backend
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgres://tms:tms@db:5432/tms
+      NODE_ENV: development
+    depends_on:
+      - db
+    ports:
+      - "3001:3001"
+  frontend:
+    build: ./frontend
+    env_file:
+      - ./frontend/.env
+    environment:
+      VITE_API_URL: http://localhost:3001
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+volumes:
+  db-data:
