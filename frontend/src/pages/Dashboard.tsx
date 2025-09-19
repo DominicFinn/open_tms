@@ -7,7 +7,9 @@ export default function Dashboard() {
         <h2>Welcome to Open TMS</h2>
         <p>The lightweight open source Transport Management System.</p>
         <p>Select an option from the sidebar to get started.</p>
-        
+        <h3>Help needed</h3>
+        <p>If you are interested in this project please feel free to contribute, ideally with feature requests, bug reports, or documentation improvements.</p>
+        <p>You can find the project on GitHub at <a href="https://github.com/DominicFinn/open_tms" target="_blank" rel="noopener noreferrer">https://github.com/DominicFinn/open_tms</a></p>
       </div>
       
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 'var(--spacing-3)' }}>

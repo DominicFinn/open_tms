@@ -93,6 +93,19 @@ curl -X POST http://localhost:3001/api/v1/seed
 - Create, edit, and delete records
 - View shipment details with interactive maps
 
+### 🛡️ Rate Limiting
+
+The demo deployment includes built-in rate limiting to protect against abuse:
+
+- **50 requests per minute** per IP address
+- **Automatic reset** every 60 seconds
+- **429 status code** when limit exceeded
+- **Clear error messages** with retry information
+
+IMPORTANT: If you are using the demo, please do not abuse the rate limit. If you need to make more requests, please contact me.
+
+Rate limiting is implemented in the demo backend (`backend/src/index-demo.ts`) and configured via the Docker container. See the [Dockerfile](./backend/Dockerfile) and [TypeScript configuration](./backend/tsconfig.json) for implementation details.
+
 ## 🌐 Deployment Options
 
 ### 🎪 Demo Deployment (5 minutes)
@@ -225,6 +238,7 @@ open_tms/
 - **Input validation** with Zod schemas
 - **SQL injection protection** via Prisma ORM
 - **CORS configuration** for secure cross-origin requests
+- **Rate limiting** for demo protection (50 requests/minute per IP)
 - **Environment variable** management
 - **Soft delete** for data preservation
 
