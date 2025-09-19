@@ -26,7 +26,7 @@ let shipments: any[] = [
 
 // Simple rate limiting for demo protection
 const requestCounts = new Map<string, { count: number; resetTime: number }>();
-const RATE_LIMIT = 100; // requests per minute
+const RATE_LIMIT = 50; // requests per minute
 const WINDOW_MS = 60 * 1000; // 1 minute
 
 function checkRateLimit(ip: string): boolean {
