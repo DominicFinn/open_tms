@@ -4,6 +4,7 @@ import swagger from '@fastify/swagger';
 import swaggerUI from '@fastify/swagger-ui';
 import { z } from 'zod';
 import prismaPlugin from './plugins/prisma.js';
+import { DistanceService } from './services/distanceService.js';
 
 const server = Fastify({ logger: true });
 
@@ -1270,9 +1271,158 @@ server.get('/api/v1/shipments', async (_req: FastifyRequest, _reply: FastifyRepl
         ]
       });
 
+      // Create realistic lane routes based on locations
+      const allLocations = await server.prisma.location.findMany();
+      
+      // Group locations by city for easier reference
+      const locationsByCity = allLocations.reduce((acc, location) => {
+        if (!acc[location.city]) {
+          acc[location.city] = [];
+        }
+        acc[location.city].push(location);
+        return acc;
+      }, {} as Record<string, typeof allLocations>);
+
+      // Define major interstate routes (realistic trucking lanes)
+      const majorRoutes = [
+        // East Coast Corridor
+        { from: 'New York', to: 'Philadelphia', distance: 95 },
+        { from: 'Philadelphia', to: 'Atlanta', distance: 750 },
+        { from: 'Atlanta', to: 'Miami', distance: 660 },
+        { from: 'New York', to: 'Boston', distance: 215 },
+        
+        // I-95 Corridor
+        { from: 'Boston', to: 'New York', distance: 215 },
+        { from: 'New York', to: 'Philadelphia', distance: 95 },
+        { from: 'Philadelphia', to: 'Atlanta', distance: 750 },
+        { from: 'Atlanta', to: 'Jacksonville', distance: 350 },
+        { from: 'Jacksonville', to: 'Miami', distance: 350 },
+        
+        // I-10 Corridor (Southern Route)
+        { from: 'Los Angeles', to: 'Phoenix', distance: 370 },
+        { from: 'Phoenix', to: 'San Antonio', distance: 870 },
+        { from: 'San Antonio', to: 'Houston', distance: 200 },
+        { from: 'Houston', to: 'New Orleans', distance: 350 },
+        { from: 'New Orleans', to: 'Jacksonville', distance: 500 },
+        
+        // I-40 Corridor (Central Route)
+        { from: 'Los Angeles', to: 'Phoenix', distance: 370 },
+        { from: 'Phoenix', to: 'Oklahoma City', distance: 850 },
+        { from: 'Oklahoma City', to: 'Nashville', distance: 650 },
+        { from: 'Nashville', to: 'Atlanta', distance: 250 },
+        
+        // I-80 Corridor (Northern Route)
+        { from: 'San Francisco', to: 'Salt Lake City', distance: 650 },
+        { from: 'Salt Lake City', to: 'Denver', distance: 520 },
+        { from: 'Denver', to: 'Chicago', distance: 920 },
+        { from: 'Chicago', to: 'New York', distance: 790 },
+        
+        // I-35 Corridor (North-South Central)
+        { from: 'Dallas', to: 'Oklahoma City', distance: 200 },
+        { from: 'Oklahoma City', to: 'Kansas City', distance: 350 },
+        { from: 'Kansas City', to: 'Minneapolis', distance: 400 },
+        { from: 'Dallas', to: 'San Antonio', distance: 280 },
+        { from: 'San Antonio', to: 'Houston', distance: 200 },
+        
+        // Regional Routes
+        { from: 'Seattle', to: 'Denver', distance: 1020 },
+        { from: 'Denver', to: 'Phoenix', distance: 600 },
+        { from: 'Chicago', to: 'Minneapolis', distance: 400 },
+        { from: 'Minneapolis', to: 'Denver', distance: 680 },
+        { from: 'Atlanta', to: 'Nashville', distance: 250 },
+        { from: 'Nashville', to: 'Chicago', distance: 470 },
+        { from: 'Houston', to: 'Dallas', distance: 240 },
+        { from: 'Dallas', to: 'Atlanta', distance: 800 },
+        { from: 'Los Angeles', to: 'San Diego', distance: 120 },
+        { from: 'San Francisco', to: 'Los Angeles', distance: 380 },
+        { from: 'Miami', to: 'Atlanta', distance: 660 },
+        { from: 'Jacksonville', to: 'Atlanta', distance: 350 },
+        { from: 'New Orleans', to: 'Atlanta', distance: 470 },
+        { from: 'Boston', to: 'Philadelphia', distance: 310 },
+        { from: 'Philadelphia', to: 'New York', distance: 95 }
+      ];
+
+      // Create lanes from the route definitions
+      const lanesToCreate = [];
+      for (const route of majorRoutes) {
+        const fromLocations = locationsByCity[route.from];
+        const toLocations = locationsByCity[route.to];
+        
+        if (fromLocations && toLocations) {
+          // Create lanes between different location types in each city
+          for (const fromLocation of fromLocations) {
+            for (const toLocation of toLocations) {
+              if (fromLocation.id !== toLocation.id) {
+                lanesToCreate.push({
+                  name: `${fromLocation.city} → ${toLocation.city}`,
+                  originId: fromLocation.id,
+                  destinationId: toLocation.id,
+                  distance: route.distance,
+                  notes: `Major ${route.from} → ${route.to} route`
+                });
+              }
+            }
+          }
+        }
+      }
+
+      // Add some additional regional and local routes
+      const additionalRoutes = [
+        // Texas Triangle
+        { from: 'Dallas', to: 'Houston', distance: 240 },
+        { from: 'Houston', to: 'San Antonio', distance: 200 },
+        { from: 'San Antonio', to: 'Dallas', distance: 280 },
+        
+        // California Routes
+        { from: 'Los Angeles', to: 'San Francisco', distance: 380 },
+        { from: 'San Francisco', to: 'San Diego', distance: 500 },
+        { from: 'Los Angeles', to: 'San Diego', distance: 120 },
+        
+        // Florida Routes
+        { from: 'Miami', to: 'Jacksonville', distance: 350 },
+        { from: 'Jacksonville', to: 'Atlanta', distance: 350 },
+        
+        // Midwest Routes
+        { from: 'Chicago', to: 'Minneapolis', distance: 400 },
+        { from: 'Minneapolis', to: 'Denver', distance: 680 },
+        { from: 'Chicago', to: 'Nashville', distance: 470 },
+        
+        // Northeast Routes
+        { from: 'Boston', to: 'New York', distance: 215 },
+        { from: 'New York', to: 'Philadelphia', distance: 95 },
+        { from: 'Philadelphia', to: 'Boston', distance: 310 }
+      ];
+
+      for (const route of additionalRoutes) {
+        const fromLocations = locationsByCity[route.from];
+        const toLocations = locationsByCity[route.to];
+        
+        if (fromLocations && toLocations) {
+          // Create one lane per city pair (not all combinations)
+          const fromLocation = fromLocations[0]; // Take first location of each type
+          const toLocation = toLocations[0];
+          
+          if (fromLocation.id !== toLocation.id) {
+            lanesToCreate.push({
+              name: `${fromLocation.city} → ${toLocation.city}`,
+              originId: fromLocation.id,
+              destinationId: toLocation.id,
+              distance: route.distance,
+              notes: `Regional ${route.from} → ${route.to} route`
+            });
+          }
+        }
+      }
+
+      // Create all lanes
+      if (lanesToCreate.length > 0) {
+        await server.prisma.lane.createMany({
+          data: lanesToCreate
+        });
+      }
+
       // Create some sample shipments
       const allCustomers = await server.prisma.customer.findMany();
-      const allLocations = await server.prisma.location.findMany();
       
       const sampleShipments = [];
       for (let i = 0; i < 15; i++) {
@@ -1302,12 +1452,16 @@ server.get('/api/v1/shipments', async (_req: FastifyRequest, _reply: FastifyRepl
         data: sampleShipments
       });
 
+      // Get count of created lanes
+      const laneCount = await server.prisma.lane.count();
+
       reply.code(201);
       return { 
         data: { 
           message: 'Database seeded successfully',
           customers: allCustomers.length,
           locations: allLocations.length,
+          lanes: laneCount,
           shipments: sampleShipments.length
         }, 
         error: null 
@@ -1315,6 +1469,45 @@ server.get('/api/v1/shipments', async (_req: FastifyRequest, _reply: FastifyRepl
     } catch (error) {
       reply.code(500);
       return { data: null, error: 'Failed to seed database' };
+    }
+  });
+
+  // Distance calculation endpoint
+  server.post('/api/v1/distance/calculate', async (req: FastifyRequest, reply: FastifyReply) => {
+    const body = z.object({
+      originId: z.string().uuid(),
+      destinationId: z.string().uuid()
+    }).parse((req as any).body);
+
+    try {
+      // Get locations from database
+      const [origin, destination] = await Promise.all([
+        server.prisma.location.findUnique({ where: { id: body.originId } }),
+        server.prisma.location.findUnique({ where: { id: body.destinationId } })
+      ]);
+
+      if (!origin || !destination) {
+        reply.code(404);
+        return { data: null, error: 'Origin or destination location not found' };
+      }
+
+      // Check if both locations have coordinates
+      if (!origin.lat || !origin.lng || !destination.lat || !destination.lng) {
+        reply.code(400);
+        return { 
+          data: null, 
+          error: 'Both locations must have latitude and longitude coordinates for distance calculation' 
+        };
+      }
+
+      // Calculate distance using the service
+      const result = await DistanceService.getDistance(origin, destination);
+
+      return { data: result, error: null };
+    } catch (error) {
+      console.error('Distance calculation error:', error);
+      reply.code(500);
+      return { data: null, error: 'Failed to calculate distance' };
     }
   });
 

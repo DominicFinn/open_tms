@@ -11,7 +11,7 @@
     "resolveJsonModule": true,
     "noEmit": false,
     "outDir": "dist",
-    "types": ["node"]
+    "types": ["node", "jest"]
   },
   "include": ["src", "prisma", "src/index-demo.ts"]
 }

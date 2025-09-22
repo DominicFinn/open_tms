@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { API_URL } from '../api';
 
 // Fix for default markers in Leaflet with Vite
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -30,8 +31,8 @@ interface LocationMapProps {
   height?: string;
 }
 
-// Calculate distance between two coordinates using Haversine formula
-function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
+// Calculate distance between two coordinates using Haversine formula (fallback)
+function calculateHaversineDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371; // Earth's radius in kilometers
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLng = (lng2 - lng1) * Math.PI / 180;
@@ -41,6 +42,36 @@ function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: numbe
     Math.sin(dLng/2) * Math.sin(dLng/2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
   return R * c;
+}
+
+// Calculate distance using the backend API (more accurate)
+async function calculateDistanceFromAPI(originId: string, destinationId: string): Promise<{ distance: number; duration?: number; error?: string }> {
+  try {
+    const response = await fetch(`${API_URL}/api/v1/distance/calculate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        originId,
+        destinationId
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to calculate distance');
+    }
+
+    const result = await response.json();
+    return result.data;
+  } catch (error) {
+    console.error('API distance calculation failed:', error);
+    return {
+      distance: 0,
+      error: error instanceof Error ? error.message : 'Failed to calculate distance'
+    };
+  }
 }
 
 export default function LocationMap({ 
@@ -54,6 +85,7 @@ export default function LocationMap({
   const markersRef = useRef<L.Marker[]>([]);
   const polylineRef = useRef<L.Polyline | null>(null);
   const [distance, setDistance] = useState<number | null>(null);
+  const [distanceSource, setDistanceSource] = useState<'api' | 'haversine' | null>(null);
 
   // Initialize map
   useEffect(() => {
@@ -156,16 +188,43 @@ export default function LocationMap({
 
     // Draw polyline and calculate distance if both locations are available
     if (origin?.lat && origin?.lng && destination?.lat && destination?.lng) {
-      const distanceKm = calculateDistance(
-        origin.lat, 
-        origin.lng, 
-        destination.lat, 
-        destination.lng
-      );
-      
-      setDistance(distanceKm);
-      if (onDistanceCalculated) {
-        onDistanceCalculated(distanceKm);
+      // Try API calculation first (more accurate)
+      if (origin.id && destination.id) {
+        calculateDistanceFromAPI(origin.id, destination.id).then(result => {
+          if (result.distance > 0) {
+            setDistance(result.distance);
+            setDistanceSource('api');
+            if (onDistanceCalculated) {
+              onDistanceCalculated(result.distance);
+            }
+          } else {
+            // Fallback to Haversine if API fails
+            const haversineDistance = calculateHaversineDistance(
+              origin.lat!, 
+              origin.lng!, 
+              destination.lat!, 
+              destination.lng!
+            );
+            setDistance(haversineDistance);
+            setDistanceSource('haversine');
+            if (onDistanceCalculated) {
+              onDistanceCalculated(haversineDistance);
+            }
+          }
+        });
+      } else {
+        // Fallback to Haversine if no IDs available
+        const haversineDistance = calculateHaversineDistance(
+          origin.lat, 
+          origin.lng, 
+          destination.lat, 
+          destination.lng
+        );
+        setDistance(haversineDistance);
+        setDistanceSource('haversine');
+        if (onDistanceCalculated) {
+          onDistanceCalculated(haversineDistance);
+        }
       }
 
       // Draw polyline between locations
@@ -196,7 +255,7 @@ export default function LocationMap({
               white-space: nowrap;
               box-shadow: 0 2px 4px rgba(0,0,0,0.3);
             ">
-              ${distanceKm.toFixed(1)} km
+              ${distance?.toFixed(1) || '0.0'} km
             </div>
           `,
           iconSize: [0, 0],
@@ -247,6 +306,16 @@ export default function LocationMap({
           color: 'var(--on-surface)'
         }}>
           Distance: {distance.toFixed(1)} km
+          {distanceSource === 'api' && (
+            <div style={{ fontSize: '12px', color: '#4CAF50', marginTop: '2px' }}>
+              ✓ Route-based
+            </div>
+          )}
+          {distanceSource === 'haversine' && (
+            <div style={{ fontSize: '12px', color: '#FF9800', marginTop: '2px' }}>
+              ⚠ Straight-line
+            </div>
+          )}
         </div>
       )}
 
