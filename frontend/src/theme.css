@@ -140,6 +140,12 @@ body {
   z-index: 100;
 }
 
+.app-bar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .app-bar-title {
   font-size: 1.25rem;
   font-weight: 500;
@@ -153,6 +159,17 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.mobile-menu-btn {
+  display: none;
+}
+
+/* Hide hamburger menu when sidebar is visible (desktop) */
+@media (min-width: 769px) {
+  .mobile-menu-btn {
+    display: none !important;
+  }
 }
 
 /* Sidebar */
@@ -209,6 +226,18 @@ body {
 
 .sidebar-nav .material-icons {
   font-size: 18px;
+}
+
+/* Mobile Overlay */
+.mobile-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 998;
+  display: none;
 }
 
 /* Main Layout */
@@ -635,16 +664,85 @@ h3 {
   to { transform: rotate(360deg); }
 }
 
+/* Apple-style Switch */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 52px;
+  height: 32px;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--surface-variant);
+  transition: 0.4s;
+  border-radius: 16px;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 28px;
+  width: 28px;
+  left: 2px;
+  bottom: 2px;
+  background-color: var(--outline);
+  transition: 0.4s;
+  border-radius: 50%;
+}
+
+input:checked + .slider {
+  background-color: var(--primary);
+}
+
+input:checked + .slider:before {
+  background-color: var(--on-primary);
+  transform: translateX(20px);
+}
+
+input:disabled + .slider {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
-  .sidebar {
-    width: 100%;
-    transform: translateX(-100%);
-    transition: transform 0.3s ease;
+  .mobile-menu-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--surface-variant);
+    border-radius: var(--border-radius-sm);
   }
   
-  .sidebar.open {
+  .mobile-menu-btn:hover {
+    background-color: var(--surface-container);
+  }
+  
+  .sidebar {
+    width: 280px;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+    z-index: 999;
+  }
+  
+  .sidebar-mobile-open {
     transform: translateX(0);
+  }
+  
+  .mobile-overlay {
+    display: block;
   }
   
   .main {
@@ -653,5 +751,25 @@ h3 {
   
   .app-bar {
     padding: 16px;
+  }
+  
+  .app-bar-title {
+    font-size: 1.1rem;
+  }
+  
+  /* Make cards more touch-friendly on mobile */
+  .card {
+    min-height: 120px;
+  }
+  
+  /* Improve button touch targets */
+  .button {
+    min-height: 44px;
+    padding: 12px 16px;
+  }
+  
+  .icon-btn {
+    min-width: 44px;
+    min-height: 44px;
   }
 }

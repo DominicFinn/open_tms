@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { API_URL } from '../api';
+import RouteSelection from '../components/RouteSelection';
 
 interface Customer {
   id: string;
@@ -25,7 +26,14 @@ interface Shipment {
   customer?: Customer;
   origin?: Location;
   destination?: Location;
+  lane?: {
+    id: string;
+    name: string;
+    origin: Location;
+    destination: Location;
+  };
   customerId: string;
+  laneId?: string;
   originId: string;
   destinationId: string;
   archived: boolean;
@@ -40,6 +48,8 @@ export default function Shipments() {
   const [locations, setLocations] = React.useState<Location[]>([]);
   const [reference, setReference] = React.useState('');
   const [customerId, setCustomerId] = React.useState('');
+  const [useLane, setUseLane] = React.useState(true);
+  const [laneId, setLaneId] = React.useState('');
   const [originId, setOriginId] = React.useState('');
   const [destinationId, setDestinationId] = React.useState('');
   const [status, setStatus] = React.useState('draft');
@@ -85,8 +95,10 @@ export default function Shipments() {
       const shipmentData = {
         reference,
         customerId,
-        originId,
-        destinationId,
+        ...(useLane 
+          ? { laneId } 
+          : { originId, destinationId }
+        ),
         status,
         pickupDate: pickupDate || undefined,
         deliveryDate: deliveryDate || undefined,
@@ -121,6 +133,8 @@ export default function Shipments() {
   const clearForm = () => {
     setReference('');
     setCustomerId('');
+    setUseLane(true);
+    setLaneId('');
     setOriginId('');
     setDestinationId('');
     setStatus('draft');
@@ -132,6 +146,16 @@ export default function Shipments() {
     setEditingShipment(shipment);
     setReference(shipment.reference);
     setCustomerId(shipment.customerId);
+    
+    // Determine route type based on whether laneId exists
+    if (shipment.laneId) {
+      setUseLane(true);
+      setLaneId(shipment.laneId);
+    } else {
+      setUseLane(false);
+      setLaneId('');
+    }
+    
     setOriginId(shipment.originId);
     setDestinationId(shipment.destinationId);
     setStatus(shipment.status);
@@ -187,30 +211,24 @@ export default function Shipments() {
               </select>
               <label>Customer</label>
             </div>
-            <div className="text-field">
-              <select 
-                value={originId} 
-                onChange={e => setOriginId(e.target.value)} 
-                required
-                disabled={loading}
-              >
-                <option value="">Select origin</option>
-                {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-              </select>
-              <label>Origin</label>
-            </div>
-            <div className="text-field">
-              <select 
-                value={destinationId} 
-                onChange={e => setDestinationId(e.target.value)} 
-                required
-                disabled={loading}
-              >
-                <option value="">Select destination</option>
-                {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-              </select>
-              <label>Destination</label>
-            </div>
+          </div>
+          
+          {/* Route Selection */}
+          <div style={{ marginBottom: 'var(--spacing-2)' }}>
+            <RouteSelection
+              useLane={useLane}
+              onUseLaneChange={setUseLane}
+              laneId={laneId}
+              onLaneChange={setLaneId}
+              originId={originId}
+              onOriginChange={setOriginId}
+              destinationId={destinationId}
+              onDestinationChange={setDestinationId}
+              disabled={loading}
+            />
+          </div>
+          
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--spacing-2)', marginBottom: 'var(--spacing-2)' }}>
             <div className="text-field">
               <select 
                 value={status} 
@@ -274,7 +292,7 @@ export default function Shipments() {
               <tr>
                 <th>Reference</th>
                 <th>Customer</th>
-                <th>Origin</th>
+                <th>Origin / Lane</th>
                 <th>Destination</th>
                 <th>Status</th>
                 <th>Pickup Date</th>
@@ -298,8 +316,40 @@ export default function Shipments() {
                     </Link>
                   </td>
                   <td>{s.customer?.name || s.customerId}</td>
-                  <td>{s.origin?.name || s.originId}</td>
-                  <td>{s.destination?.name || s.destinationId}</td>
+                  <td>
+                    {s.lane ? (
+                      <div>
+                        <div style={{ fontWeight: '500' }}>{s.lane.name}</div>
+                        <div style={{ fontSize: '0.9em', color: 'var(--on-surface-variant)' }}>
+                          {s.origin?.city} → {s.destination?.city}
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <div>{s.origin?.name || s.originId}</div>
+                        <div style={{ fontSize: '0.9em', color: 'var(--on-surface-variant)' }}>
+                          {s.origin?.city}
+                        </div>
+                      </div>
+                    )}
+                  </td>
+                  <td>
+                    {s.lane ? (
+                      <div>
+                        <div style={{ fontWeight: '500' }}>{s.destination?.name || s.destinationId}</div>
+                        <div style={{ fontSize: '0.9em', color: 'var(--on-surface-variant)' }}>
+                          {s.destination?.city}
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <div>{s.destination?.name || s.destinationId}</div>
+                        <div style={{ fontSize: '0.9em', color: 'var(--on-surface-variant)' }}>
+                          {s.destination?.city}
+                        </div>
+                      </div>
+                    )}
+                  </td>
                   <td>
                     <span className={`chip ${
                       s.status === 'delivered' ? 'chip-success' : 
