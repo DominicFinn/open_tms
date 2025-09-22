@@ -36,6 +36,7 @@ export interface Shipment extends Timestamped {
   id: ID;
   reference: string; // customer ref / order number
   customerId: ID;
+  laneId?: ID; // Optional lane reference
   originId: ID;
   destinationId: ID;
   pickupDate?: string; // ISO

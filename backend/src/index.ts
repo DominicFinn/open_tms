@@ -93,6 +93,80 @@ server.post('/api/v1/customers', async (req: FastifyRequest, reply: FastifyReply
     return { data: archived, error: null };
   });
 
+// Carriers CRUD
+server.get('/api/v1/carriers', async (_req: FastifyRequest, _reply: FastifyReply) => {
+  const carriers = await server.prisma.carrier.findMany({ 
+    orderBy: { name: 'asc' } 
+  });
+  return { data: carriers, error: null };
+});
+
+server.get('/api/v1/carriers/:id', async (req: FastifyRequest, reply: FastifyReply) => {
+  const { id } = req.params as { id: string };
+  const carrier = await server.prisma.carrier.findUnique({
+    where: { id }
+  });
+  if (!carrier) {
+    reply.code(404);
+    return { data: null, error: 'Carrier not found' };
+  }
+  return { data: carrier, error: null };
+});
+
+server.post('/api/v1/carriers', async (req: FastifyRequest, reply: FastifyReply) => {
+  const body = z
+    .object({
+      name: z.string().min(1),
+      mcNumber: z.string().optional(),
+      dotNumber: z.string().optional()
+    })
+    .parse((req as any).body);
+  const created = await server.prisma.carrier.create({ data: body });
+  reply.code(201);
+  return { data: created, error: null };
+});
+
+server.put('/api/v1/carriers/:id', async (req: FastifyRequest, reply: FastifyReply) => {
+  const { id } = req.params as { id: string };
+  const body = z.object({
+    name: z.string().min(1).optional(),
+    mcNumber: z.string().optional(),
+    dotNumber: z.string().optional()
+  }).parse((req as any).body);
+  
+  const carrier = await server.prisma.carrier.findUnique({
+    where: { id }
+  });
+  if (!carrier) {
+    reply.code(404);
+    return { data: null, error: 'Carrier not found' };
+  }
+  
+  const updated = await server.prisma.carrier.update({
+    where: { id },
+    data: body
+  });
+  return { data: updated, error: null };
+});
+
+server.delete('/api/v1/carriers/:id', async (req: FastifyRequest, reply: FastifyReply) => {
+  const { id } = req.params as { id: string };
+  
+  const carrier = await server.prisma.carrier.findUnique({
+    where: { id }
+  });
+  if (!carrier) {
+    reply.code(404);
+    return { data: null, error: 'Carrier not found' };
+  }
+  
+  await server.prisma.carrier.delete({
+    where: { id }
+  });
+  reply.code(204);
+  return { data: null, error: null };
+});
+
 // Locations CRUD
 server.get('/api/v1/locations', async (_req: FastifyRequest, _reply: FastifyReply) => {
     const locations = await server.prisma.location.findMany({ 
@@ -219,7 +293,17 @@ server.post('/api/v1/locations', async (req: FastifyRequest, reply: FastifyReply
 server.get('/api/v1/shipments', async (_req: FastifyRequest, _reply: FastifyReply) => {
     const shipments = await server.prisma.shipment.findMany({ 
       where: { archived: false },
-      include: { customer: true, origin: true, destination: true }, 
+      include: { 
+        customer: true, 
+        origin: true, 
+        destination: true,
+        lane: {
+          include: {
+            origin: true,
+            destination: true
+          }
+        }
+      }, 
       orderBy: { createdAt: 'desc' } 
     });
   return { data: shipments, error: null };
@@ -229,8 +313,9 @@ server.get('/api/v1/shipments', async (_req: FastifyRequest, _reply: FastifyRepl
   const schema = z.object({
     reference: z.string().min(1),
     customerId: z.string().uuid(),
-    originId: z.string().uuid(),
-    destinationId: z.string().uuid(),
+    laneId: z.string().uuid().optional(),
+    originId: z.string().uuid().optional(),
+    destinationId: z.string().uuid().optional(),
     pickupDate: z.string().datetime().optional(),
     deliveryDate: z.string().datetime().optional(),
       items: z.array(z.object({ 
@@ -240,11 +325,49 @@ server.get('/api/v1/shipments', async (_req: FastifyRequest, _reply: FastifyRepl
         weightKg: z.number().nonnegative().optional(), 
         volumeM3: z.number().nonnegative().optional() 
       })).default([])
+  }).refine((data) => {
+    // Either laneId OR (originId AND destinationId) must be provided
+    return (data.laneId && !data.originId && !data.destinationId) || 
+           (!data.laneId && data.originId && data.destinationId);
+  }, {
+    message: "Either laneId or both originId and destinationId must be provided"
   });
+  
   const body = schema.parse((req as any).body);
-    const created = await server.prisma.shipment.create({ 
-      data: { ...body, status: 'draft' } 
+  
+  // If laneId is provided, get the lane's origin and destination
+  let finalOriginId = body.originId;
+  let finalDestinationId = body.destinationId;
+  
+  if (body.laneId) {
+    const lane = await server.prisma.lane.findFirst({
+      where: { id: body.laneId, archived: false },
+      include: { origin: true, destination: true }
     });
+    
+    if (!lane) {
+      reply.code(400);
+      return { data: null, error: 'Lane not found' };
+    }
+    
+    finalOriginId = lane.originId;
+    finalDestinationId = lane.destinationId;
+  }
+  
+  const created = await server.prisma.shipment.create({ 
+    data: { 
+      ...body, 
+      originId: finalOriginId!,
+      destinationId: finalDestinationId!,
+      status: 'draft' 
+    },
+    include: {
+      customer: true,
+      origin: true,
+      destination: true,
+      lane: body.laneId ? { include: { origin: true, destination: true } } : false
+    }
+  });
     reply.code(201);
   return { data: created, error: null };
 });
@@ -257,6 +380,12 @@ server.get('/api/v1/shipments', async (_req: FastifyRequest, _reply: FastifyRepl
         customer: true, 
         origin: true, 
         destination: true,
+        lane: {
+          include: {
+            origin: true,
+            destination: true
+          }
+        },
         loads: {
           include: {
             vehicle: true,
@@ -280,6 +409,7 @@ server.get('/api/v1/shipments', async (_req: FastifyRequest, _reply: FastifyRepl
       pickupDate: z.string().datetime().optional(),
       deliveryDate: z.string().datetime().optional(),
       customerId: z.string().uuid().optional(),
+      laneId: z.string().uuid().optional(),
       originId: z.string().uuid().optional(),
       destinationId: z.string().uuid().optional(),
       items: z.array(z.object({ 
@@ -289,6 +419,16 @@ server.get('/api/v1/shipments', async (_req: FastifyRequest, _reply: FastifyRepl
         weightKg: z.number().nonnegative().optional(), 
         volumeM3: z.number().nonnegative().optional() 
       })).optional()
+    }).refine((data) => {
+      // If any route fields are provided, validate the combination
+      const hasRouteFields = data.laneId !== undefined || data.originId !== undefined || data.destinationId !== undefined;
+      if (!hasRouteFields) return true; // No route changes
+      
+      // Either laneId OR (originId AND destinationId) must be provided
+      return (data.laneId && !data.originId && !data.destinationId) || 
+             (!data.laneId && data.originId && data.destinationId);
+    }, {
+      message: "Either laneId or both originId and destinationId must be provided"
     }).parse((req as any).body);
     
     const shipment = await server.prisma.shipment.findFirst({
@@ -299,9 +439,34 @@ server.get('/api/v1/shipments', async (_req: FastifyRequest, _reply: FastifyRepl
       return { data: null, error: 'Shipment not found' };
     }
     
+    // Prepare update data
+    const updateData: any = { ...body };
+    
+    // If laneId is provided, get the lane's origin and destination
+    if (body.laneId) {
+      const lane = await server.prisma.lane.findFirst({
+        where: { id: body.laneId, archived: false },
+        include: { origin: true, destination: true }
+      });
+      
+      if (!lane) {
+        reply.code(400);
+        return { data: null, error: 'Lane not found' };
+      }
+      
+      updateData.originId = lane.originId;
+      updateData.destinationId = lane.destinationId;
+    }
+    
     const updated = await server.prisma.shipment.update({
       where: { id },
-      data: body
+      data: updateData,
+      include: {
+        customer: true,
+        origin: true,
+        destination: true,
+        lane: updateData.laneId ? { include: { origin: true, destination: true } } : false
+      }
     });
     return { data: updated, error: null };
   });
@@ -408,6 +573,8 @@ server.get('/api/v1/shipments', async (_req: FastifyRequest, _reply: FastifyRepl
   server.put('/api/v1/lanes/:id', async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
     const body = z.object({
+      originId: z.string().uuid().optional(),
+      destinationId: z.string().uuid().optional(),
       distance: z.number().positive().optional(),
       notes: z.string().optional(),
       status: z.string().optional()
@@ -420,13 +587,54 @@ server.get('/api/v1/shipments', async (_req: FastifyRequest, _reply: FastifyRepl
       reply.code(404);
       return { data: null, error: 'Lane not found' };
     }
+
+    // If origin or destination is being updated, validate they exist
+    if (body.originId || body.destinationId) {
+      const [origin, destination] = await Promise.all([
+        body.originId ? server.prisma.location.findUnique({ where: { id: body.originId } }) : null,
+        body.destinationId ? server.prisma.location.findUnique({ where: { id: body.destinationId } }) : null
+      ]);
+
+      if (body.originId && !origin) {
+        reply.code(400);
+        return { data: null, error: 'Origin location not found' };
+      }
+      if (body.destinationId && !destination) {
+        reply.code(400);
+        return { data: null, error: 'Destination location not found' };
+      }
+    }
+
+    // Prepare update data
+    const updateData: any = { ...body };
+    
+    // If origin or destination changed, update the lane name
+    if (body.originId || body.destinationId) {
+      const finalOriginId = body.originId || lane.originId;
+      const finalDestinationId = body.destinationId || lane.destinationId;
+      
+      const [origin, destination] = await Promise.all([
+        server.prisma.location.findUnique({ where: { id: finalOriginId } }),
+        server.prisma.location.findUnique({ where: { id: finalDestinationId } })
+      ]);
+      
+      if (origin && destination) {
+        updateData.name = `${origin.city} → ${destination.city}`;
+      }
+    }
     
     const updated = await server.prisma.lane.update({
       where: { id },
-      data: body,
+      data: updateData,
       include: { 
         origin: true, 
-        destination: true 
+        destination: true,
+        customerLanes: {
+          include: { customer: true }
+        },
+        laneCarriers: {
+          include: { carrier: true }
+        }
       }
     });
     return { data: updated, error: null };

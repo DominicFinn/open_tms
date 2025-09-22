@@ -13,8 +13,11 @@ L.Icon.Default.mergeOptions({
 interface Location {
   id: string;
   name: string;
+  address1: string;
+  address2?: string;
   city: string;
   state?: string;
+  postalCode?: string;
   country: string;
   lat?: number;
   lng?: number;
@@ -137,6 +140,7 @@ export default function LocationMap({
           <div style="min-width: 200px;">
             <h4 style="margin: 0 0 8px 0; color: var(--on-surface);">${location.name}</h4>
             <p style="margin: 0 0 4px 0; color: var(--on-surface-variant); font-size: 14px;">
+              ${location.address1}<br>
               ${location.city}${location.state ? `, ${location.state}` : ''}<br>
               ${location.country}
             </p>

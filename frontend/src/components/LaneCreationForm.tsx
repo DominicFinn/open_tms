@@ -6,8 +6,11 @@ import LocationMap from './LocationMap';
 interface Location {
   id: string;
   name: string;
+  address1: string;
+  address2?: string;
   city: string;
   state?: string;
+  postalCode?: string;
   country: string;
   lat?: number;
   lng?: number;
@@ -125,10 +128,7 @@ export default function LaneCreationForm({
       setError('Origin and destination must be different locations');
       return false;
     }
-    if (!origin?.lat || !origin?.lng || !destination?.lat || !destination?.lng) {
-      setError('Selected locations must have valid coordinates for distance calculation');
-      return false;
-    }
+    // Note: We don't require coordinates - distance calculation is optional
     return true;
   };
 
@@ -172,11 +172,11 @@ export default function LaneCreationForm({
 
       if (editingLane && onLaneUpdated) {
         onLaneUpdated(savedLane);
+        // Don't clear form for updates - let the parent handle closing
       } else if (onLaneCreated) {
         onLaneCreated(savedLane);
+        clearForm();
       }
-
-      clearForm();
     } catch (error) {
       console.error('Failed to save lane:', error);
       setError(error instanceof Error ? error.message : 'Failed to save lane');

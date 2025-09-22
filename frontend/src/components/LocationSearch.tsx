@@ -4,8 +4,11 @@ import { API_URL } from '../api';
 interface Location {
   id: string;
   name: string;
+  address1: string;
+  address2?: string;
   city: string;
   state?: string;
+  postalCode?: string;
   country: string;
   lat?: number;
   lng?: number;
@@ -76,7 +79,8 @@ export default function LocationSearch({
             location.name.toLowerCase().includes(searchLower) ||
             location.city.toLowerCase().includes(searchLower) ||
             location.state?.toLowerCase().includes(searchLower) ||
-            location.country.toLowerCase().includes(searchLower)
+            location.country.toLowerCase().includes(searchLower) ||
+            location.address1.toLowerCase().includes(searchLower)
           );
         });
         setFilteredLocations(filtered);
@@ -275,8 +279,9 @@ export default function LocationSearch({
                 {location.name}
               </div>
               <div style={{ fontSize: '0.875rem', color: 'var(--on-surface-variant)' }}>
-                {location.city}
+                {location.address1}, {location.city}
                 {location.state && `, ${location.state}`}
+                {location.postalCode && ` ${location.postalCode}`}
               </div>
               <div style={{ fontSize: '0.75rem', color: 'var(--on-surface-variant)' }}>
                 {location.country}

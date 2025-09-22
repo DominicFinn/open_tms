@@ -5,9 +5,14 @@ import LaneCreationForm from '../components/LaneCreationForm';
 interface Location {
   id: string;
   name: string;
+  address1: string;
+  address2?: string;
   city: string;
   state?: string;
+  postalCode?: string;
   country: string;
+  lat?: number;
+  lng?: number;
 }
 
 interface Customer {
@@ -61,9 +66,11 @@ export default function Lanes() {
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [showCreateForm, setShowCreateForm] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
 
   const loadData = async () => {
     setLoading(true);
+    setError(null);
     try {
       const [lanesRes, customersRes, carriersRes] = await Promise.all([
         fetch(API_URL + '/api/v1/lanes'),
@@ -82,6 +89,11 @@ export default function Lanes() {
       setCarriers(carriersData.data || []);
     } catch (error) {
       console.error('Failed to load data:', error);
+      setError('Failed to load data. Please refresh the page.');
+      // Set empty arrays as fallback to prevent undefined errors
+      setLanes([]);
+      setCustomers([]);
+      setCarriers([]);
     } finally {
       setLoading(false);
     }
@@ -99,6 +111,7 @@ export default function Lanes() {
   const handleLaneUpdated = (updatedLane: Lane) => {
     setLanes(prev => prev.map(lane => lane.id === updatedLane.id ? updatedLane : lane));
     setEditingLane(null);
+    setShowCreateForm(false); // Close the form after update
   };
 
   const editLane = (lane: Lane) => {
@@ -162,6 +175,37 @@ export default function Lanes() {
           </div>
         )}
         
+        {error && (
+          <div style={{
+            backgroundColor: 'var(--error-container)',
+            color: 'var(--on-error-container)',
+            padding: 'var(--spacing-2)',
+            borderRadius: '4px',
+            marginBottom: 'var(--spacing-2)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 'var(--spacing-1)'
+          }}>
+            <span className="material-icons">error</span>
+            {error}
+            <button 
+              onClick={loadData}
+              style={{ 
+                marginLeft: 'auto',
+                background: 'none',
+                border: 'none',
+                color: 'inherit',
+                cursor: 'pointer',
+                padding: '4px 8px',
+                borderRadius: '4px',
+                backgroundColor: 'rgba(255, 255, 255, 0.1)'
+              }}
+            >
+              Retry
+            </button>
+          </div>
+        )}
+        
         <div className="table-container">
           <table className="table">
             <thead>
@@ -178,7 +222,7 @@ export default function Lanes() {
               </tr>
             </thead>
             <tbody>
-              {lanes.map(lane => (
+              {(lanes || []).map(lane => (
                 <tr key={lane.id}>
                   <td>
                     <div style={{ fontWeight: '500' }}>{lane.name}</div>
@@ -203,21 +247,21 @@ export default function Lanes() {
                   <td>{lane.distance ? `${lane.distance} km` : '—'}</td>
                   <td>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                      {lane.customerLanes.map(cl => (
+                      {lane.customerLanes?.map(cl => (
                         <span key={cl.id} className="chip chip-primary">
                           {cl.customer.name}
                         </span>
-                      ))}
+                      )) || []}
                     </div>
                   </td>
                   <td>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                      {lane.laneCarriers.map(lc => (
+                      {lane.laneCarriers?.map(lc => (
                         <span key={lc.id} className="chip chip-secondary">
                           {lc.carrier.name}
                           {lc.price && ` - $${lc.price}`}
                         </span>
-                      ))}
+                      )) || []}
                     </div>
                   </td>
                   <td>
