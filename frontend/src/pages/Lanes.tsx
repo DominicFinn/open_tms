@@ -1,5 +1,6 @@
 import React from 'react';
 import { API_URL } from '../api';
+import LaneCreationForm from '../components/LaneCreationForm';
 
 interface Location {
   id: string;
@@ -54,36 +55,29 @@ interface Lane {
 
 export default function Lanes() {
   const [lanes, setLanes] = React.useState<Lane[]>([]);
-  const [locations, setLocations] = React.useState<Location[]>([]);
   const [customers, setCustomers] = React.useState<Customer[]>([]);
   const [carriers, setCarriers] = React.useState<Carrier[]>([]);
-  const [originId, setOriginId] = React.useState('');
-  const [destinationId, setDestinationId] = React.useState('');
-  const [distance, setDistance] = React.useState('');
-  const [notes, setNotes] = React.useState('');
   const [editingLane, setEditingLane] = React.useState<Lane | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
+  const [showCreateForm, setShowCreateForm] = React.useState(false);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const [lanesRes, locationsRes, customersRes, carriersRes] = await Promise.all([
+      const [lanesRes, customersRes, carriersRes] = await Promise.all([
         fetch(API_URL + '/api/v1/lanes'),
-        fetch(API_URL + '/api/v1/locations'),
         fetch(API_URL + '/api/v1/customers'),
         fetch(API_URL + '/api/v1/carriers')
       ]);
       
-      const [lanesData, locationsData, customersData, carriersData] = await Promise.all([
+      const [lanesData, customersData, carriersData] = await Promise.all([
         lanesRes.json(),
-        locationsRes.json(),
         customersRes.json(),
         carriersRes.json()
       ]);
       
       setLanes(lanesData.data || []);
-      setLocations(locationsData.data || []);
       setCustomers(customersData.data || []);
       setCarriers(carriersData.data || []);
     } catch (error) {
@@ -97,60 +91,24 @@ export default function Lanes() {
     loadData();
   }, []);
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      const laneData = {
-        originId,
-        destinationId,
-        distance: distance ? parseFloat(distance) : undefined,
-        notes: notes || undefined
-      };
-
-      if (editingLane) {
-        // Update existing lane
-        await fetch(API_URL + `/api/v1/lanes/${editingLane.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(laneData)
-        });
-        setEditingLane(null);
-      } else {
-        // Create new lane
-        await fetch(API_URL + '/api/v1/lanes', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(laneData)
-        });
-      }
-      clearForm();
-      await loadData();
-    } catch (error) {
-      console.error('Failed to save lane:', error);
-    } finally {
-      setLoading(false);
-    }
+  const handleLaneCreated = (lane: Lane) => {
+    setLanes(prev => [...prev, lane]);
+    setShowCreateForm(false);
   };
 
-  const clearForm = () => {
-    setOriginId('');
-    setDestinationId('');
-    setDistance('');
-    setNotes('');
+  const handleLaneUpdated = (updatedLane: Lane) => {
+    setLanes(prev => prev.map(lane => lane.id === updatedLane.id ? updatedLane : lane));
+    setEditingLane(null);
   };
 
   const editLane = (lane: Lane) => {
     setEditingLane(lane);
-    setOriginId(lane.origin.id);
-    setDestinationId(lane.destination.id);
-    setDistance(lane.distance?.toString() || '');
-    setNotes(lane.notes || '');
+    setShowCreateForm(true);
   };
 
   const cancelEdit = () => {
     setEditingLane(null);
-    clearForm();
+    setShowCreateForm(false);
   };
 
   const deleteLane = async (id: string) => {
@@ -170,71 +128,33 @@ export default function Lanes() {
 
   return (
     <div>
+      {/* Header with Create Button */}
+      <div className="card" style={{ marginBottom: 'var(--spacing-2)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h2 style={{ margin: 0 }}>Lanes</h2>
+          <button 
+            className="button" 
+            onClick={() => setShowCreateForm(true)}
+            disabled={loading}
+          >
+            <span className="material-icons" style={{ fontSize: '18px' }}>add</span>
+            Create New Lane
+          </button>
+        </div>
+      </div>
+
+      {/* Create/Edit Form */}
+      {showCreateForm && (
+        <LaneCreationForm
+          editingLane={editingLane}
+          onLaneCreated={handleLaneCreated}
+          onLaneUpdated={handleLaneUpdated}
+          onCancel={cancelEdit}
+        />
+      )}
+
+      {/* Lanes List */}
       <div className="card">
-        <h2>Lanes</h2>
-        <form onSubmit={submit} style={{ marginBottom: 'var(--spacing-2)' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--spacing-2)', marginBottom: 'var(--spacing-2)' }}>
-            <div className="text-field">
-              <select 
-                value={originId} 
-                onChange={e => setOriginId(e.target.value)} 
-                required
-                disabled={loading}
-              >
-                <option value="">Select origin</option>
-                {locations.map(l => <option key={l.id} value={l.id}>{l.name} - {l.city}</option>)}
-              </select>
-              <label>Origin Location</label>
-            </div>
-            <div className="text-field">
-              <select 
-                value={destinationId} 
-                onChange={e => setDestinationId(e.target.value)} 
-                required
-                disabled={loading}
-              >
-                <option value="">Select destination</option>
-                {locations.map(l => <option key={l.id} value={l.id}>{l.name} - {l.city}</option>)}
-              </select>
-              <label>Destination Location</label>
-            </div>
-            <div className="text-field">
-              <input 
-                value={distance} 
-                onChange={e => setDistance(e.target.value)} 
-                placeholder=" " 
-                type="number"
-                step="0.1"
-                disabled={loading}
-              />
-              <label>Distance (km)</label>
-            </div>
-            <div className="text-field">
-              <input 
-                value={notes} 
-                onChange={e => setNotes(e.target.value)} 
-                placeholder=" " 
-                disabled={loading}
-              />
-              <label>Notes</label>
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 'var(--spacing-1)' }}>
-            <button className="button" type="submit" disabled={loading}>
-              <span className="material-icons" style={{ fontSize: '18px' }}>
-                {editingLane ? 'save' : 'add'}
-              </span>
-              {editingLane ? 'Update' : 'Add'} Lane
-            </button>
-            {editingLane && (
-              <button type="button" className="button outlined" onClick={cancelEdit} disabled={loading}>
-                <span className="material-icons" style={{ fontSize: '18px' }}>cancel</span>
-                Cancel
-              </button>
-            )}
-          </div>
-        </form>
-        
         {loading && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-1)', marginBottom: 'var(--spacing-2)' }}>
             <span className="material-icons" style={{ animation: 'spin 1s linear infinite' }}>refresh</span>

@@ -162,6 +162,38 @@ server.post('/api/v1/locations', async (req: FastifyRequest, reply: FastifyReply
     return { data: updated, error: null };
   });
 
+  // Location search endpoint
+  server.get('/api/v1/locations/search', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { q } = req.query as { q?: string };
+    
+    if (!q || q.trim().length < 2) {
+      return { data: [], error: null };
+    }
+
+    const searchTerm = q.trim().toLowerCase();
+    
+    const locations = await server.prisma.location.findMany({
+      where: {
+        archived: false,
+        OR: [
+          { name: { contains: searchTerm, mode: 'insensitive' } },
+          { city: { contains: searchTerm, mode: 'insensitive' } },
+          { state: { contains: searchTerm, mode: 'insensitive' } },
+          { country: { contains: searchTerm, mode: 'insensitive' } },
+          { address1: { contains: searchTerm, mode: 'insensitive' } },
+          { postalCode: { contains: searchTerm, mode: 'insensitive' } }
+        ]
+      },
+      orderBy: [
+        { name: 'asc' },
+        { city: 'asc' }
+      ],
+      take: 20 // Limit results for performance
+    });
+
+    return { data: locations, error: null };
+  });
+
   server.delete('/api/v1/locations/:id', async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
     
