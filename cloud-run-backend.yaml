@@ -15,7 +15,7 @@ spec:
       containerConcurrency: 100
       timeoutSeconds: 300
       containers:
-      - image: gcr.io/PROJECT_ID/open-tms-backend:latest
+      - image: gcr.io/open-tms-demo/open-tms-backend:latest
         ports:
         - containerPort: 3001
         env:
@@ -24,7 +24,7 @@ spec:
         - name: PORT
           value: "3001"
         - name: DATABASE_URL
-          value: "postgresql://username:password@/database?host=/cloudsql/PROJECT_ID:REGION:INSTANCE_NAME"
+          value: "postgresql://username:password@/database?host=/cloudsql/open-tms-demo:REGION:INSTANCE_NAME"
         - name: CORS_ORIGIN
           value: "https://open-tms-frontend-XXXXX-uc.a.run.app"
         resources:

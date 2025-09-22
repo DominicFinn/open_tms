@@ -14,7 +14,7 @@ spec:
       containerConcurrency: 1000
       timeoutSeconds: 300
       containers:
-      - image: gcr.io/PROJECT_ID/open-tms-frontend:latest
+      - image: gcr.io/open-tms-demo/open-tms-frontend:latest
         ports:
         - containerPort: 80
         env:
