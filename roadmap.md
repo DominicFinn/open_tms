@@ -1,12 +1,13 @@
 # 🚚 Open TMS Roadmap
 
 ## **Phase 1: Core Setup (Foundation)**
-- **Route Management**  
-  - Create/manage routes (point-to-point, multi-stop).  
-  - Associate routes with locations and carriers.  
+- ** Lane Management **  
+  - Create/manage lanes (point-to-point, multi-stop).  
+  - Associate lanes with locations and carriers.  
+
 - **Carrier Management**  
   - Add carriers, store negotiated rates, service levels.  
-  - Link carriers to routes.  
+  - Link carriers to lanes.  
 - **Customer Management**  
   - Manage customers with contact/billing info.  
   - Apply customer-specific preferences or rules.  
@@ -23,7 +24,7 @@
   - Import customer orders (via FTP/SFTP drop or API).  
 - **Order to Shipment Workflow**  
   - Queue of pending orders waiting for conversion.  
-  - Auto-match orders to routes/carriers.  
+  - Auto-match orders to lanes/carriers.  
   - Combine or split orders into shipments.  
 - **Custom Fields**  
   - Allow configurable fields for customers, shipments, and items.  
@@ -81,6 +82,10 @@
   - Allow 3PLs or carriers to directly access or sync data.  
 
 ## **Phase 8: Intelligence & Optimization**
+- **Route Management**  
+  - Create/manage routes (point-to-point, multi-stop).  
+  - Associate routes with lanes, locations and carriers.  
+
 - **Route Optimization**  
   - Suggest best routes based on cost, history, traffic.  
 - **ETA Prediction**  
