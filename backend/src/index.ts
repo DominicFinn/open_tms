@@ -295,6 +295,287 @@ server.get('/api/v1/shipments', async (_req: FastifyRequest, _reply: FastifyRepl
     return { data: archived, error: null };
   });
 
+  // Lanes CRUD
+  server.get('/api/v1/lanes', async (_req: FastifyRequest, _reply: FastifyReply) => {
+    const lanes = await server.prisma.lane.findMany({ 
+      where: { archived: false },
+      include: { 
+        origin: true, 
+        destination: true,
+        customerLanes: {
+          include: { customer: true }
+        },
+        laneCarriers: {
+          include: { carrier: true }
+        }
+      },
+      orderBy: { name: 'asc' } 
+    });
+    return { data: lanes, error: null };
+  });
+
+  server.post('/api/v1/lanes', async (req: FastifyRequest, reply: FastifyReply) => {
+    const body = z
+      .object({
+        originId: z.string().uuid(),
+        destinationId: z.string().uuid(),
+        distance: z.number().positive().optional(),
+        notes: z.string().optional()
+      })
+      .parse((req as any).body);
+
+    // Get origin and destination to generate lane name
+    const [origin, destination] = await Promise.all([
+      server.prisma.location.findUnique({ where: { id: body.originId } }),
+      server.prisma.location.findUnique({ where: { id: body.destinationId } })
+    ]);
+
+    if (!origin || !destination) {
+      reply.code(400);
+      return { data: null, error: 'Origin or destination location not found' };
+    }
+
+    const laneName = `${origin.city} → ${destination.city}`;
+
+    const created = await server.prisma.lane.create({ 
+      data: { 
+        ...body, 
+        name: laneName 
+      },
+      include: { 
+        origin: true, 
+        destination: true 
+      }
+    });
+    reply.code(201);
+    return { data: created, error: null };
+  });
+
+  server.get('/api/v1/lanes/:id', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const lane = await server.prisma.lane.findFirst({
+      where: { id, archived: false },
+      include: { 
+        origin: true, 
+        destination: true,
+        customerLanes: {
+          include: { customer: true }
+        },
+        laneCarriers: {
+          include: { carrier: true }
+        }
+      }
+    });
+    if (!lane) {
+      reply.code(404);
+      return { data: null, error: 'Lane not found' };
+    }
+    return { data: lane, error: null };
+  });
+
+  server.put('/api/v1/lanes/:id', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const body = z.object({
+      distance: z.number().positive().optional(),
+      notes: z.string().optional(),
+      status: z.string().optional()
+    }).parse((req as any).body);
+    
+    const lane = await server.prisma.lane.findFirst({
+      where: { id, archived: false }
+    });
+    if (!lane) {
+      reply.code(404);
+      return { data: null, error: 'Lane not found' };
+    }
+    
+    const updated = await server.prisma.lane.update({
+      where: { id },
+      data: body,
+      include: { 
+        origin: true, 
+        destination: true 
+      }
+    });
+    return { data: updated, error: null };
+  });
+
+  server.delete('/api/v1/lanes/:id', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    
+    const lane = await server.prisma.lane.findFirst({
+      where: { id, archived: false }
+    });
+    if (!lane) {
+      reply.code(404);
+      return { data: null, error: 'Lane not found' };
+    }
+    
+    const archived = await server.prisma.lane.update({
+      where: { id },
+      data: { 
+        archived: true, 
+        archivedAt: new Date() 
+      }
+    });
+    return { data: archived, error: null };
+  });
+
+  // Customer-Lane relationships
+  server.post('/api/v1/lanes/:id/customers', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const body = z.object({
+      customerId: z.string().uuid()
+    }).parse((req as any).body);
+
+    const lane = await server.prisma.lane.findFirst({
+      where: { id, archived: false }
+    });
+    if (!lane) {
+      reply.code(404);
+      return { data: null, error: 'Lane not found' };
+    }
+
+    const customer = await server.prisma.customer.findFirst({
+      where: { id: body.customerId, archived: false }
+    });
+    if (!customer) {
+      reply.code(404);
+      return { data: null, error: 'Customer not found' };
+    }
+
+    const customerLane = await server.prisma.customerLane.create({
+      data: {
+        laneId: id,
+        customerId: body.customerId
+      },
+      include: {
+        customer: true,
+        lane: {
+          include: { origin: true, destination: true }
+        }
+      }
+    });
+
+    reply.code(201);
+    return { data: customerLane, error: null };
+  });
+
+  server.delete('/api/v1/lanes/:id/customers/:customerId', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id, customerId } = req.params as { id: string; customerId: string };
+    
+    const customerLane = await server.prisma.customerLane.findFirst({
+      where: { laneId: id, customerId }
+    });
+    if (!customerLane) {
+      reply.code(404);
+      return { data: null, error: 'Customer-lane relationship not found' };
+    }
+
+    await server.prisma.customerLane.delete({
+      where: { id: customerLane.id }
+    });
+
+    return { data: { message: 'Customer removed from lane' }, error: null };
+  });
+
+  // Lane-Carrier relationships
+  server.post('/api/v1/lanes/:id/carriers', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const body = z.object({
+      carrierId: z.string().uuid(),
+      price: z.number().positive().optional(),
+      currency: z.string().optional(),
+      serviceLevel: z.string().optional(),
+      notes: z.string().optional()
+    }).parse((req as any).body);
+
+    const lane = await server.prisma.lane.findFirst({
+      where: { id, archived: false }
+    });
+    if (!lane) {
+      reply.code(404);
+      return { data: null, error: 'Lane not found' };
+    }
+
+    const carrier = await server.prisma.carrier.findUnique({
+      where: { id: body.carrierId }
+    });
+    if (!carrier) {
+      reply.code(404);
+      return { data: null, error: 'Carrier not found' };
+    }
+
+    const laneCarrier = await server.prisma.laneCarrier.create({
+      data: {
+        laneId: id,
+        carrierId: body.carrierId,
+        price: body.price,
+        currency: body.currency || 'USD',
+        serviceLevel: body.serviceLevel,
+        notes: body.notes
+      },
+      include: {
+        carrier: true,
+        lane: {
+          include: { origin: true, destination: true }
+        }
+      }
+    });
+
+    reply.code(201);
+    return { data: laneCarrier, error: null };
+  });
+
+  server.put('/api/v1/lanes/:id/carriers/:carrierId', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id, carrierId } = req.params as { id: string; carrierId: string };
+    const body = z.object({
+      price: z.number().positive().optional(),
+      currency: z.string().optional(),
+      serviceLevel: z.string().optional(),
+      notes: z.string().optional()
+    }).parse((req as any).body);
+
+    const laneCarrier = await server.prisma.laneCarrier.findFirst({
+      where: { laneId: id, carrierId }
+    });
+    if (!laneCarrier) {
+      reply.code(404);
+      return { data: null, error: 'Lane-carrier relationship not found' };
+    }
+
+    const updated = await server.prisma.laneCarrier.update({
+      where: { id: laneCarrier.id },
+      data: body,
+      include: {
+        carrier: true,
+        lane: {
+          include: { origin: true, destination: true }
+        }
+      }
+    });
+
+    return { data: updated, error: null };
+  });
+
+  server.delete('/api/v1/lanes/:id/carriers/:carrierId', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id, carrierId } = req.params as { id: string; carrierId: string };
+    
+    const laneCarrier = await server.prisma.laneCarrier.findFirst({
+      where: { laneId: id, carrierId }
+    });
+    if (!laneCarrier) {
+      reply.code(404);
+      return { data: null, error: 'Lane-carrier relationship not found' };
+    }
+
+    await server.prisma.laneCarrier.delete({
+      where: { id: laneCarrier.id }
+    });
+
+    return { data: { message: 'Carrier removed from lane' }, error: null };
+  });
+
   // Seed data endpoint
   server.post('/api/v1/seed', async (_req: FastifyRequest, reply: FastifyReply) => {
     try {

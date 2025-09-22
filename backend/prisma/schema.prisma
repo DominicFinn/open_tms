@@ -16,6 +16,7 @@ model Customer {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   shipments    Shipment[]
+  customerLanes CustomerLane[]
 }
 
 model Location {
@@ -35,6 +36,8 @@ model Location {
   updatedAt  DateTime @updatedAt
   originFor  Shipment[] @relation("Origin")
   destFor    Shipment[] @relation("Destination")
+  lanesAsOrigin Lane[] @relation("LaneOrigin")
+  lanesAsDestination Lane[] @relation("LaneDestination")
 }
 
 model Shipment {
@@ -54,6 +57,8 @@ model Shipment {
   originId      String
   destination   Location @relation("Destination", fields: [destinationId], references: [id])
   destinationId String
+  lane          Lane?    @relation(fields: [laneId], references: [id])
+  laneId        String?
   loads         Load[]
 }
 
@@ -66,6 +71,7 @@ model Carrier {
   updatedAt DateTime @updatedAt
   vehicles  Vehicle[]
   drivers   Driver[]
+  laneCarriers LaneCarrier[]
 }
 
 model Vehicle {
@@ -104,4 +110,51 @@ model Load {
   assignedAt DateTime?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+}
+
+model Lane {
+  id            String   @id @default(uuid())
+  name          String   // Auto-generated: "Origin → Destination"
+  origin        Location @relation("LaneOrigin", fields: [originId], references: [id])
+  originId      String
+  destination   Location @relation("LaneDestination", fields: [destinationId], references: [id])
+  destinationId String
+  distance      Float?   // Optional distance in km
+  notes         String?
+  status        String   @default("active") // active/archived
+  archived      Boolean  @default(false)
+  archivedAt    DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  shipments     Shipment[]
+  customerLanes CustomerLane[]
+  laneCarriers  LaneCarrier[]
+}
+
+model CustomerLane {
+  id         String   @id @default(uuid())
+  customer   Customer @relation(fields: [customerId], references: [id])
+  customerId String
+  lane       Lane     @relation(fields: [laneId], references: [id])
+  laneId     String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([customerId, laneId])
+}
+
+model LaneCarrier {
+  id           String   @id @default(uuid())
+  lane         Lane     @relation(fields: [laneId], references: [id])
+  laneId       String
+  carrier      Carrier  @relation(fields: [carrierId], references: [id])
+  carrierId    String
+  price        Float?   // Price per shipment or per km
+  currency     String   @default("USD")
+  serviceLevel String?  // e.g., "Standard", "Express", "Economy"
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([laneId, carrierId])
 }
