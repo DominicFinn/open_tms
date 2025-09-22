@@ -11,10 +11,12 @@ A simple, open-source Transport Management System built with TypeScript, featuri
 ## 🚨 Help needed please
 Under development at the moment. I have really made this as a demo to show off our data platform capabilities at System Loco, we develop IoT devices and the supporting data and intelligence platform. We integrate with real time visibility platforms and TMS systems to provide a complete end to end solution.
 
-Please feel free to contribute to the project, ideally with feature requests, bug reports, or documentation improvements. 
+Please feel free to contribute to the project, ideally with feature requests, bug reports, or documentation improvements.
+
+I'm outlining a roadmap. It's high level. It can be ticketed up as it goes along as issues [Roadmap](./roadmap.md)
 
 > **🌟 Live Demo**: [Try it now!](https://open-tms-frontend-iutj2b4iaa-uc.a.run.app) | **📖 API Docs**: [View API](https://open-tms-backend-iutj2b4iaa-uc.a.run.app/docs)
-> 
+>
 > *Note: The demo URLs above are for the project maintainer's deployment. Deploy your own instance using the [Quick Demo Guide](./HOSTING-DEMO-GCP.md).*
 
 ## ✨ Features
@@ -308,4 +310,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 **Ready to get started?** Check out the [Quick Start](#-quick-start) section or [deploy a demo](./HOSTING-DEMO-GCP.md) in 5 minutes! 🚀
-

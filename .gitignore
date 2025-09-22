@@ -38,3 +38,7 @@ packages/**/dist/
 
 # Docker
 **/.docker-cache
+
+
+claude.md
+.claude/
