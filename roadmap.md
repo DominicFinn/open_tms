@@ -48,7 +48,7 @@
   - Alerts for delays, route deviations, failed deliveries.  
   - Dashboard for exception triage.  
 
-## **Phase 5: IoT Integration (System Loco Differentiator)**
+## **Phase 5: IoT Integration (System Loco)**
 - **Device–Shipment Linking**  
   - Associate IoT devices with shipments (1:1, 1:many).  
 - **Real-Time Data Ingestion**  
