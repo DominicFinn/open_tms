@@ -1,0 +1,26 @@
+{
+  "name": "open-tms-webhook-service",
+  "version": "1.0.0",
+  "description": "Webhook service for Open TMS - handles external shipment updates",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "deploy": "gcloud functions deploy open-tms-webhook --runtime nodejs20 --trigger-http --allow-unauthenticated --source .",
+    "dev": "functions-framework --target=webhook --port=8080"
+  },
+  "dependencies": {
+    "@google-cloud/functions-framework": "^3.3.0",
+    "express-rate-limit": "^7.1.5",
+    "dotenv": "^16.3.1"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "keywords": [
+    "webhook",
+    "tms",
+    "google-cloud-function"
+  ],
+  "author": "Open TMS",
+  "license": "MIT"
+}

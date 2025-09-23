@@ -917,6 +917,16 @@ server.get('/api/v1/shipments', async (_req: FastifyRequest, _reply: FastifyRepl
             lng: -112.0740
           },
           {
+            name: 'Phoenix DC - Distribution Center',
+            address1: '2500 W Buckeye Rd',
+            city: 'Phoenix',
+            state: 'Arizona',
+            postalCode: '85009',
+            country: 'USA',
+            lat: 33.4484,
+            lng: -112.0740
+          },
+          {
             name: 'Northwest Hub - Seattle',
             address1: '5000 1st Ave S',
             city: 'Seattle',
@@ -962,6 +972,16 @@ server.get('/api/v1/shipments', async (_req: FastifyRequest, _reply: FastifyRepl
             city: 'Portland',
             state: 'Oregon',
             postalCode: '97204',
+            country: 'USA',
+            lat: 45.5152,
+            lng: -122.6784
+          },
+          {
+            name: 'Walmart Supercenter - Portland',
+            address1: '4200 SE 82nd Ave',
+            city: 'Portland',
+            state: 'Oregon',
+            postalCode: '97266',
             country: 'USA',
             lat: 45.5152,
             lng: -122.6784
@@ -1386,11 +1406,14 @@ server.get('/api/v1/shipments', async (_req: FastifyRequest, _reply: FastifyRepl
         { from: 'Chicago', to: 'Minneapolis', distance: 400 },
         { from: 'Minneapolis', to: 'Denver', distance: 680 },
         { from: 'Chicago', to: 'Nashville', distance: 470 },
-        
+
         // Northeast Routes
         { from: 'Boston', to: 'New York', distance: 215 },
         { from: 'New York', to: 'Philadelphia', distance: 95 },
-        { from: 'Philadelphia', to: 'Boston', distance: 310 }
+        { from: 'Philadelphia', to: 'Boston', distance: 310 },
+
+        // Phoenix to Portland Route
+        { from: 'Phoenix', to: 'Portland', distance: 1140 }
       ];
 
       for (const route of additionalRoutes) {
@@ -1423,15 +1446,49 @@ server.get('/api/v1/shipments', async (_req: FastifyRequest, _reply: FastifyRepl
 
       // Create some sample shipments
       const allCustomers = await server.prisma.customer.findMany();
-      
+
+      // Find Phoenix DC and Portland Walmart locations
+      const phoenixDC = allLocations.find(loc => loc.name === 'Phoenix DC - Distribution Center');
+      const portlandWalmart = allLocations.find(loc => loc.name === 'Walmart Supercenter - Portland');
+      const walmartCustomer = allCustomers.find(customer => customer.name === 'Walmart Inc.');
+
       const sampleShipments = [];
-      for (let i = 0; i < 15; i++) {
+
+      // Add specific Phoenix to Portland shipment
+      if (phoenixDC && portlandWalmart && walmartCustomer) {
+        sampleShipments.push({
+          reference: 'SH-PHX-PDX-001',
+          customerId: walmartCustomer.id,
+          originId: phoenixDC.id,
+          destinationId: portlandWalmart.id,
+          status: 'in_transit',
+          items: [
+            {
+              sku: 'WAL-ELEC-001',
+              description: 'Electronics - Tablets and Accessories',
+              quantity: 120,
+              weightKg: 580,
+              volumeM3: 12
+            },
+            {
+              sku: 'WAL-HOME-002',
+              description: 'Home Goods - Kitchen Appliances',
+              quantity: 85,
+              weightKg: 920,
+              volumeM3: 18
+            }
+          ]
+        });
+      }
+
+      // Add random shipments
+      for (let i = 0; i < 14; i++) {
         const customer = allCustomers[Math.floor(Math.random() * allCustomers.length)];
         const origin = allLocations[Math.floor(Math.random() * allLocations.length)];
         const destination = allLocations[Math.floor(Math.random() * allLocations.length)];
-        
+
         sampleShipments.push({
-          reference: `SH-${String(i + 1).padStart(4, '0')}`,
+          reference: `SH-${String(i + 2).padStart(4, '0')}`,
           customerId: customer.id,
           originId: origin.id,
           destinationId: destination.id,
@@ -1439,7 +1496,7 @@ server.get('/api/v1/shipments', async (_req: FastifyRequest, _reply: FastifyRepl
           items: [
             {
               sku: `ITEM-${Math.floor(Math.random() * 1000)}`,
-              description: `Product ${i + 1}`,
+              description: `Product ${i + 2}`,
               quantity: Math.floor(Math.random() * 50) + 1,
               weightKg: Math.floor(Math.random() * 100) + 1,
               volumeM3: Math.floor(Math.random() * 10) + 1
