@@ -38,6 +38,7 @@ model Location {
   destFor    Shipment[] @relation("Destination")
   lanesAsOrigin Lane[] @relation("LaneOrigin")
   lanesAsDestination Lane[] @relation("LaneDestination")
+  laneStops  LaneStop[]
 }
 
 model Shipment {
@@ -129,6 +130,7 @@ model Lane {
   shipments     Shipment[]
   customerLanes CustomerLane[]
   laneCarriers  LaneCarrier[]
+  stops         LaneStop[]
 }
 
 model CustomerLane {
@@ -157,4 +159,19 @@ model LaneCarrier {
   updatedAt    DateTime @updatedAt
 
   @@unique([laneId, carrierId])
+}
+
+model LaneStop {
+  id         String   @id @default(uuid())
+  lane       Lane     @relation(fields: [laneId], references: [id], onDelete: Cascade)
+  laneId     String
+  location   Location @relation(fields: [locationId], references: [id])
+  locationId String
+  order      Int      // Order of the stop in the lane (1, 2, 3, etc.)
+  notes      String?  // Optional notes for this specific stop
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([laneId, order])
+  @@unique([laneId, locationId])
 }

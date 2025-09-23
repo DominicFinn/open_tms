@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard';
 import Customers from './pages/Customers';
 import Locations from './pages/Locations';
 import Lanes from './pages/Lanes';
+import CreateLane from './pages/CreateLane';
 import Shipments from './pages/Shipments';
 import ShipmentDetails from './pages/ShipmentDetails';
 import './theme.css';
@@ -19,6 +20,8 @@ root.render(
         <Route path="/customers" element={<Customers />} />
         <Route path="/locations" element={<Locations />} />
         <Route path="/lanes" element={<Lanes />} />
+        <Route path="/lanes/create" element={<CreateLane />} />
+        <Route path="/lanes/:id/edit" element={<CreateLane />} />
         <Route path="/shipments" element={<Shipments />} />
         <Route path="/shipments/:id" element={<ShipmentDetails />} />
       </Routes>

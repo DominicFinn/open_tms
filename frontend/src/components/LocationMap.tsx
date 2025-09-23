@@ -24,9 +24,16 @@ interface Location {
   lng?: number;
 }
 
+interface StopLocation {
+  location: Location;
+  order: number;
+  notes?: string;
+}
+
 interface LocationMapProps {
   origin?: Location | null;
   destination?: Location | null;
+  stops?: StopLocation[];
   onDistanceCalculated?: (distance: number) => void;
   height?: string;
 }
@@ -74,17 +81,20 @@ async function calculateDistanceFromAPI(originId: string, destinationId: string)
   }
 }
 
-export default function LocationMap({ 
-  origin, 
-  destination, 
+export default function LocationMap({
+  origin,
+  destination,
+  stops = [],
   onDistanceCalculated,
-  height = '400px' 
+  height = '400px'
 }: LocationMapProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const markersRef = useRef<L.Marker[]>([]);
-  const polylineRef = useRef<L.Polyline | null>(null);
-  const [distance, setDistance] = useState<number | null>(null);
+  const polylinesRef = useRef<L.Polyline[]>([]);
+  const distanceLabelsRef = useRef<L.Marker[]>([]);
+  const [totalDistance, setTotalDistance] = useState<number | null>(null);
+  const [segmentDistances, setSegmentDistances] = useState<number[]>([]);
   const [distanceSource, setDistanceSource] = useState<'api' | 'haversine' | null>(null);
 
   // Initialize map
@@ -111,42 +121,74 @@ export default function LocationMap({
     if (!mapInstanceRef.current) return;
 
     const map = mapInstanceRef.current;
-    
-    // Clear existing markers and polyline
+
+    // Clear existing markers, polylines, and distance labels
     markersRef.current.forEach(marker => map.removeLayer(marker));
     markersRef.current = [];
-    
-    if (polylineRef.current) {
-      map.removeLayer(polylineRef.current);
-      polylineRef.current = null;
+
+    polylinesRef.current.forEach(polyline => map.removeLayer(polyline));
+    polylinesRef.current = [];
+
+    distanceLabelsRef.current.forEach(label => map.removeLayer(label));
+    distanceLabelsRef.current = [];
+
+    // Build complete route: origin -> stops (in order) -> destination
+    const route: Location[] = [];
+    if (origin && origin.lat && origin.lng) {
+      route.push(origin);
     }
 
-    const locations: Location[] = [];
-    if (origin && origin.lat && origin.lng) locations.push(origin);
-    if (destination && destination.lat && destination.lng) locations.push(destination);
+    // Add stops in order
+    const sortedStops = [...stops]
+      .filter(stop => stop.location.lat && stop.location.lng)
+      .sort((a, b) => a.order - b.order);
 
-    if (locations.length === 0) {
+    sortedStops.forEach(stop => {
+      route.push(stop.location);
+    });
+
+    if (destination && destination.lat && destination.lng) {
+      route.push(destination);
+    }
+
+    if (route.length === 0) {
       // Reset to default view
       map.setView([39.8283, -98.5795], 4);
-      setDistance(null);
+      setTotalDistance(null);
+      setSegmentDistances([]);
       if (onDistanceCalculated) {
         onDistanceCalculated(0);
       }
       return;
     }
 
-    // Add markers for each location
-    locations.forEach((location, index) => {
+    // Add markers for each location in the route
+    route.forEach((location, index) => {
       if (location.lat && location.lng) {
         const isOrigin = location.id === origin?.id;
         const isDestination = location.id === destination?.id;
-        
+        const stopIndex = sortedStops.findIndex(stop => stop.location.id === location.id);
+
+        let markerColor = '#2196F3'; // Default blue for stops
+        let markerLabel = (index + 1).toString();
+
+        if (isOrigin) {
+          markerColor = '#4CAF50'; // Green for origin
+          markerLabel = 'O';
+        } else if (isDestination) {
+          markerColor = '#F44336'; // Red for destination
+          markerLabel = 'D';
+        } else if (stopIndex >= 0) {
+          markerColor = '#FF9800'; // Orange for stops
+          markerLabel = (stopIndex + 1).toString();
+        }
+
         const marker = L.marker([location.lat, location.lng], {
           icon: L.divIcon({
             className: 'custom-marker',
             html: `
               <div style="
-                background-color: ${isOrigin ? '#4CAF50' : isDestination ? '#F44336' : '#2196F3'};
+                background-color: ${markerColor};
                 color: white;
                 border-radius: 50%;
                 width: 30px;
@@ -159,7 +201,7 @@ export default function LocationMap({
                 border: 2px solid white;
                 box-shadow: 0 2px 4px rgba(0,0,0,0.3);
               ">
-                ${isOrigin ? 'O' : isDestination ? 'D' : index + 1}
+                ${markerLabel}
               </div>
             `,
             iconSize: [30, 30],
@@ -168,9 +210,20 @@ export default function LocationMap({
         }).addTo(map);
 
         // Add popup with location details
+        let locationTypeLabel = 'Location';
+        if (isOrigin) locationTypeLabel = 'Origin';
+        else if (isDestination) locationTypeLabel = 'Destination';
+        else if (stopIndex >= 0) {
+          const stop = sortedStops[stopIndex];
+          locationTypeLabel = `Stop ${stopIndex + 1}${stop.notes ? ` - ${stop.notes}` : ''}`;
+        }
+
         marker.bindPopup(`
           <div style="min-width: 200px;">
             <h4 style="margin: 0 0 8px 0; color: var(--on-surface);">${location.name}</h4>
+            <p style="margin: 0 0 4px 0; color: var(--primary); font-size: 12px; font-weight: bold;">
+              ${locationTypeLabel}
+            </p>
             <p style="margin: 0 0 4px 0; color: var(--on-surface-variant); font-size: 14px;">
               ${location.address1}<br>
               ${location.city}${location.state ? `, ${location.state}` : ''}<br>
@@ -186,97 +239,108 @@ export default function LocationMap({
       }
     });
 
-    // Draw polyline and calculate distance if both locations are available
-    if (origin?.lat && origin?.lng && destination?.lat && destination?.lng) {
-      // Try API calculation first (more accurate)
-      if (origin.id && destination.id) {
-        calculateDistanceFromAPI(origin.id, destination.id).then(result => {
-          if (result.distance > 0) {
-            setDistance(result.distance);
-            setDistanceSource('api');
-            if (onDistanceCalculated) {
-              onDistanceCalculated(result.distance);
+    // Calculate distances and draw polylines for each segment
+    if (route.length >= 2) {
+      const calculateSegmentDistances = async () => {
+        const distances: number[] = [];
+        let useHaversine = false;
+
+        for (let i = 0; i < route.length - 1; i++) {
+          const from = route[i];
+          const to = route[i + 1];
+
+          if (from.lat && from.lng && to.lat && to.lng) {
+            // Try API calculation first
+            let segmentDistance = 0;
+            if (from.id && to.id && !useHaversine) {
+              try {
+                const result = await calculateDistanceFromAPI(from.id, to.id);
+                if (result.distance > 0) {
+                  segmentDistance = result.distance;
+                  setDistanceSource('api');
+                } else {
+                  useHaversine = true;
+                  segmentDistance = calculateHaversineDistance(from.lat, from.lng, to.lat, to.lng);
+                  setDistanceSource('haversine');
+                }
+              } catch {
+                useHaversine = true;
+                segmentDistance = calculateHaversineDistance(from.lat, from.lng, to.lat, to.lng);
+                setDistanceSource('haversine');
+              }
+            } else {
+              segmentDistance = calculateHaversineDistance(from.lat, from.lng, to.lat, to.lng);
+              setDistanceSource('haversine');
             }
-          } else {
-            // Fallback to Haversine if API fails
-            const haversineDistance = calculateHaversineDistance(
-              origin.lat!, 
-              origin.lng!, 
-              destination.lat!, 
-              destination.lng!
-            );
-            setDistance(haversineDistance);
-            setDistanceSource('haversine');
-            if (onDistanceCalculated) {
-              onDistanceCalculated(haversineDistance);
-            }
+
+            distances.push(segmentDistance);
+
+            // Draw polyline for this segment
+            const polyline = L.polyline(
+              [[from.lat, from.lng], [to.lat, to.lng]],
+              {
+                color: '#2196F3',
+                weight: 3,
+                opacity: 0.7,
+                dashArray: i === 0 ? undefined : '5, 5' // Dashed lines for segments after first
+              }
+            ).addTo(map);
+
+            polylinesRef.current.push(polyline);
+
+            // Add distance label for this segment
+            const midLat = (from.lat + to.lat) / 2;
+            const midLng = (from.lng + to.lng) / 2;
+
+            const distanceLabel = L.marker([midLat, midLng], {
+              icon: L.divIcon({
+                className: 'distance-label',
+                html: `
+                  <div style="
+                    background-color: rgba(33, 150, 243, 0.9);
+                    color: white;
+                    padding: 2px 6px;
+                    border-radius: 3px;
+                    font-size: 10px;
+                    font-weight: bold;
+                    white-space: nowrap;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+                  ">
+                    ${segmentDistance.toFixed(1)}km
+                  </div>
+                `,
+                iconSize: [0, 0],
+                iconAnchor: [0, 0]
+              })
+            }).addTo(map);
+
+            distanceLabelsRef.current.push(distanceLabel);
           }
-        });
-      } else {
-        // Fallback to Haversine if no IDs available
-        const haversineDistance = calculateHaversineDistance(
-          origin.lat, 
-          origin.lng, 
-          destination.lat, 
-          destination.lng
-        );
-        setDistance(haversineDistance);
-        setDistanceSource('haversine');
+        }
+
+        const total = distances.reduce((sum, dist) => sum + dist, 0);
+        setTotalDistance(total);
+        setSegmentDistances(distances);
+
         if (onDistanceCalculated) {
-          onDistanceCalculated(haversineDistance);
+          onDistanceCalculated(total);
         }
-      }
+      };
 
-      // Draw polyline between locations
-      const polyline = L.polyline(
-        [[origin.lat, origin.lng], [destination.lat, destination.lng]],
-        {
-          color: '#2196F3',
-          weight: 3,
-          opacity: 0.7
-        }
-      ).addTo(map);
+      calculateSegmentDistances();
 
-      // Add distance label to polyline
-      const midLat = (origin.lat + destination.lat) / 2;
-      const midLng = (origin.lng + destination.lng) / 2;
-      
-      L.marker([midLat, midLng], {
-        icon: L.divIcon({
-          className: 'distance-label',
-          html: `
-            <div style="
-              background-color: rgba(33, 150, 243, 0.9);
-              color: white;
-              padding: 4px 8px;
-              border-radius: 4px;
-              font-size: 12px;
-              font-weight: bold;
-              white-space: nowrap;
-              box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-            ">
-              ${distance?.toFixed(1) || '0.0'} km
-            </div>
-          `,
-          iconSize: [0, 0],
-          iconAnchor: [0, 0]
-        })
-      }).addTo(map);
-
-      polylineRef.current = polyline;
-
-      // Fit map to show both locations
+      // Fit map to show all locations
       const group = L.featureGroup(markersRef.current);
       map.fitBounds(group.getBounds().pad(0.1));
-    } else if (locations.length === 1) {
+    } else if (route.length === 1) {
       // Center on single location
-      const location = locations[0];
+      const location = route[0];
       if (location.lat && location.lng) {
         map.setView([location.lat, location.lng], 10);
       }
     }
 
-  }, [origin, destination, onDistanceCalculated]);
+  }, [origin, destination, stops, onDistanceCalculated]);
 
   return (
     <div style={{ position: 'relative' }}>
@@ -291,7 +355,7 @@ export default function LocationMap({
       />
       
       {/* Distance display */}
-      {distance !== null && (
+      {totalDistance !== null && (
         <div style={{
           position: 'absolute',
           top: '8px',
@@ -303,9 +367,17 @@ export default function LocationMap({
           border: '1px solid var(--outline)',
           fontSize: '14px',
           fontWeight: '500',
-          color: 'var(--on-surface)'
+          color: 'var(--on-surface)',
+          minWidth: '160px'
         }}>
-          Distance: {distance.toFixed(1)} km
+          <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
+            Total Distance: {totalDistance.toFixed(1)} km
+          </div>
+          {segmentDistances.length > 1 && (
+            <div style={{ fontSize: '12px', color: 'var(--on-surface-variant)' }}>
+              {segmentDistances.length} segments
+            </div>
+          )}
           {distanceSource === 'api' && (
             <div style={{ fontSize: '12px', color: '#4CAF50', marginTop: '2px' }}>
               ✓ Route-based
