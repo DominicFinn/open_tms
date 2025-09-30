@@ -1738,10 +1738,36 @@ server.get('/api/v1/shipments', async (_req: FastifyRequest, _reply: FastifyRepl
     }
   });
 
-  // Start the server
-const port = Number(process.env.PORT || 3001);
-  await server.listen({ port, host: '0.0.0.0' });
-  server.log.info(`API running on :${port}`);
+  // Start the server with automatic port retry
+  const preferredPort = Number(process.env.PORT || 3001);
+  let port = preferredPort;
+  let attempts = 0;
+  const maxAttempts = 10;
+
+  while (attempts < maxAttempts) {
+    try {
+      await server.listen({ port, host: '0.0.0.0' });
+      server.log.info(`API running on http://localhost:${port}`);
+      if (port !== preferredPort) {
+        server.log.warn(`Port ${preferredPort} was unavailable, using port ${port} instead`);
+        server.log.warn(`Update VITE_API_URL in frontend/.env to: http://localhost:${port}`);
+      }
+      break;
+    } catch (err: any) {
+      if (err.code === 'EADDRINUSE') {
+        attempts++;
+        port++;
+        if (attempts < maxAttempts) {
+          server.log.warn(`Port ${port - 1} is in use, trying ${port}...`);
+        } else {
+          server.log.error(`Could not find available port after ${maxAttempts} attempts`);
+          throw err;
+        }
+      } else {
+        throw err;
+      }
+    }
+  }
 }
 
 // Start the application
