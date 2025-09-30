@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { API_URL } from '../api';
 
 interface Customer {
@@ -13,11 +14,13 @@ interface Customer {
 
 export default function Customers() {
   const [customers, setCustomers] = React.useState<Customer[]>([]);
-  const [name, setName] = React.useState('');
-  const [email, setEmail] = React.useState('');
-  const [editingCustomer, setEditingCustomer] = React.useState<Customer | null>(null);
+  const [filteredCustomers, setFilteredCustomers] = React.useState<Customer[]>([]);
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
+
+  // Filter state
+  const [searchTerm, setSearchTerm] = React.useState('');
+  const [statusFilter, setStatusFilter] = React.useState('all');
 
   const loadCustomers = async () => {
     setLoading(true);
@@ -36,46 +39,35 @@ export default function Customers() {
     loadCustomers();
   }, []);
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      if (editingCustomer) {
-        // Update existing customer
-        await fetch(API_URL + `/api/v1/customers/${editingCustomer.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, contactEmail: email })
-        });
-        setEditingCustomer(null);
-      } else {
-        // Create new customer
-        await fetch(API_URL + '/api/v1/customers', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, contactEmail: email })
-        });
-      }
-      setName('');
-      setEmail('');
-      await loadCustomers();
-    } catch (error) {
-      console.error('Failed to save customer:', error);
-    } finally {
-      setLoading(false);
+  // Filter customers based on search term and status
+  React.useEffect(() => {
+    let filtered = customers;
+
+    // Search filter
+    if (searchTerm) {
+      filtered = filtered.filter(customer =>
+        customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (customer.contactEmail && customer.contactEmail.toLowerCase().includes(searchTerm.toLowerCase()))
+      );
     }
-  };
 
-  const editCustomer = (customer: Customer) => {
-    setEditingCustomer(customer);
-    setName(customer.name);
-    setEmail(customer.contactEmail || '');
-  };
+    // Status filter
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(customer => {
+        if (statusFilter === 'active') return !customer.archived;
+        if (statusFilter === 'archived') return customer.archived;
+        return true;
+      });
+    }
 
-  const cancelEdit = () => {
-    setEditingCustomer(null);
-    setName('');
-    setEmail('');
+    setFilteredCustomers(filtered);
+  }, [customers, searchTerm, statusFilter]);
+
+  const hasActiveFilters = searchTerm !== '' || statusFilter !== 'all';
+
+  const clearFilters = () => {
+    setSearchTerm('');
+    setStatusFilter('all');
   };
 
   const deleteCustomer = async (id: string) => {
@@ -96,50 +88,84 @@ export default function Customers() {
   return (
     <div>
       <div className="card">
-        <h2>Customers</h2>
-        <form onSubmit={submit} style={{ marginBottom: 'var(--spacing-2)', display: 'flex', gap: 'var(--spacing-2)', flexWrap: 'wrap', alignItems: 'end' }}>
-          <div className="text-field" style={{ flex: '1', minWidth: '200px' }}>
-            <input 
-              value={name} 
-              onChange={e => setName(e.target.value)} 
-              placeholder=" " 
-              required 
-              disabled={loading}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-2)' }}>
+          <h2>Customers</h2>
+          <Link to="/customers/create" className="button">
+            <span className="material-icons" style={{ fontSize: '18px' }}>add</span>
+            Create Customer
+          </Link>
+        </div>
+
+        {/* Search and Filters */}
+        <div style={{
+          display: 'flex',
+          gap: 'var(--spacing-2)',
+          marginBottom: 'var(--spacing-2)',
+          flexWrap: 'wrap',
+          alignItems: 'center'
+        }}>
+          <div className="text-field" style={{ minWidth: '300px', flex: 1 }}>
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              placeholder="Search customers by name or email..."
+              style={{ width: '100%' }}
             />
-            <label>Customer Name</label>
+            <label>Search</label>
           </div>
-          <div className="text-field" style={{ flex: '1', minWidth: '200px' }}>
-            <input 
-              value={email} 
-              onChange={e => setEmail(e.target.value)} 
-              placeholder=" " 
-              type="email" 
-              disabled={loading}
-            />
-            <label>Email Address</label>
-          </div>
-          <div style={{ display: 'flex', gap: 'var(--spacing-1)' }}>
-            <button className="button" type="submit" disabled={loading}>
-              <span className="material-icons" style={{ fontSize: '18px' }}>
-                {editingCustomer ? 'save' : 'add'}
-              </span>
-              {editingCustomer ? 'Update' : 'Add'} Customer
+
+          <select
+            value={statusFilter}
+            onChange={e => setStatusFilter(e.target.value)}
+            style={{
+              padding: '8px 12px',
+              border: '1px solid var(--outline)',
+              borderRadius: '4px',
+              backgroundColor: 'var(--surface)',
+              color: 'var(--on-surface)',
+              minWidth: '120px'
+            }}
+          >
+            <option value="all">All Statuses</option>
+            <option value="active">Active</option>
+            <option value="archived">Archived</option>
+          </select>
+
+          {hasActiveFilters && (
+            <button
+              onClick={clearFilters}
+              className="button outlined"
+              style={{ whiteSpace: 'nowrap' }}
+            >
+              <span className="material-icons" style={{ fontSize: '18px' }}>clear</span>
+              Clear Filters
             </button>
-            {editingCustomer && (
-              <button type="button" className="button outlined" onClick={cancelEdit} disabled={loading}>
-                <span className="material-icons" style={{ fontSize: '18px' }}>cancel</span>
-                Cancel
-              </button>
-            )}
-          </div>
-        </form>
-        
-        {loading && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-1)', marginBottom: 'var(--spacing-2)' }}>
-            <span className="material-icons" style={{ animation: 'spin 1s linear infinite' }}>refresh</span>
-            Loading...
-          </div>
-        )}
+          )}
+        </div>
+
+        {/* Results Summary */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: 'var(--spacing-2)',
+          fontSize: '0.875rem',
+          color: 'var(--on-surface-variant)'
+        }}>
+          <span>
+            {hasActiveFilters
+              ? `${filteredCustomers.length} of ${customers.length} customers ${hasActiveFilters ? '(filtered)' : ''}`
+              : `${customers.length} customers`
+            }
+          </span>
+          {loading && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-1)' }}>
+              <span className="material-icons" style={{ animation: 'spin 1s linear infinite', fontSize: '16px' }}>refresh</span>
+              Loading...
+            </div>
+          )}
+        </div>
         
         <div className="table-container">
           <table className="table">
@@ -152,34 +178,42 @@ export default function Customers() {
               </tr>
             </thead>
             <tbody>
-              {customers.map(c => (
-                <tr key={c.id}>
-                  <td>{c.name}</td>
-                  <td>{c.contactEmail || '—'}</td>
-                  <td>{new Date(c.createdAt).toLocaleDateString()}</td>
-                  <td>
-                    <div style={{ display: 'flex', gap: 'var(--spacing-1)' }}>
-                      <button 
-                        className="icon-btn" 
-                        onClick={() => editCustomer(c)}
-                        disabled={loading}
-                        title="Edit customer"
-                      >
-                        <span className="material-icons">edit</span>
-                      </button>
-                      <button 
-                        className="icon-btn" 
-                        onClick={() => setShowDeleteConfirm(c.id)}
-                        disabled={loading}
-                        title="Delete customer"
-                        style={{ color: 'var(--error)' }}
-                      >
-                        <span className="material-icons">delete</span>
-                      </button>
-                    </div>
+              {filteredCustomers.length === 0 ? (
+                <tr>
+                  <td colSpan={4} style={{ textAlign: 'center', padding: 'var(--spacing-4)', color: 'var(--on-surface-variant)' }}>
+                    {hasActiveFilters ? 'No customers match your current filters' : 'No customers found'}
                   </td>
                 </tr>
-              ))}
+              ) : (
+                filteredCustomers.map(c => (
+                  <tr key={c.id}>
+                    <td>{c.name}</td>
+                    <td>{c.contactEmail || '—'}</td>
+                    <td>{new Date(c.createdAt).toLocaleDateString()}</td>
+                    <td>
+                      <div style={{ display: 'flex', gap: 'var(--spacing-1)' }}>
+                        <Link
+                          to={`/customers/${c.id}/edit`}
+                          className="icon-btn"
+                          title="Edit customer"
+                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        >
+                          <span className="material-icons">edit</span>
+                        </Link>
+                        <button
+                          className="icon-btn"
+                          onClick={() => setShowDeleteConfirm(c.id)}
+                          disabled={loading}
+                          title="Delete customer"
+                          style={{ color: 'var(--error)' }}
+                        >
+                          <span className="material-icons">delete</span>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

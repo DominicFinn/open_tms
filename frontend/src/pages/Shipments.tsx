@@ -1,7 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { API_URL } from '../api';
-import RouteSelection from '../components/RouteSelection';
 
 interface Customer {
   id: string;
@@ -44,39 +43,21 @@ interface Shipment {
 
 export default function Shipments() {
   const [shipments, setShipments] = React.useState<Shipment[]>([]);
-  const [customers, setCustomers] = React.useState<Customer[]>([]);
-  const [locations, setLocations] = React.useState<Location[]>([]);
-  const [reference, setReference] = React.useState('');
-  const [customerId, setCustomerId] = React.useState('');
-  const [useLane, setUseLane] = React.useState(true);
-  const [laneId, setLaneId] = React.useState('');
-  const [originId, setOriginId] = React.useState('');
-  const [destinationId, setDestinationId] = React.useState('');
-  const [status, setStatus] = React.useState('draft');
-  const [pickupDate, setPickupDate] = React.useState('');
-  const [deliveryDate, setDeliveryDate] = React.useState('');
-  const [editingShipment, setEditingShipment] = React.useState<Shipment | null>(null);
+  const [filteredShipments, setFilteredShipments] = React.useState<Shipment[]>([]);
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
+
+  // Filter state
+  const [searchTerm, setSearchTerm] = React.useState('');
+  const [statusFilter, setStatusFilter] = React.useState('all');
+  const [customerFilter, setCustomerFilter] = React.useState('all');
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const [shipmentsRes, customersRes, locationsRes] = await Promise.all([
-        fetch(API_URL + '/api/v1/shipments'),
-        fetch(API_URL + '/api/v1/customers'),
-        fetch(API_URL + '/api/v1/locations')
-      ]);
-      
-      const [shipmentsData, customersData, locationsData] = await Promise.all([
-        shipmentsRes.json(),
-        customersRes.json(),
-        locationsRes.json()
-      ]);
-      
-      setShipments(shipmentsData.data || []);
-      setCustomers(customersData.data || []);
-      setLocations(locationsData.data || []);
+      const response = await fetch(API_URL + '/api/v1/shipments');
+      const data = await response.json();
+      setShipments(data.data || []);
     } catch (error) {
       console.error('Failed to load data:', error);
     } finally {
@@ -88,84 +69,57 @@ export default function Shipments() {
     loadData();
   }, []);
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      const shipmentData = {
-        reference,
-        customerId,
-        ...(useLane 
-          ? { laneId } 
-          : { originId, destinationId }
-        ),
-        status,
-        pickupDate: pickupDate || undefined,
-        deliveryDate: deliveryDate || undefined,
-        items: []
-      };
+  // Get unique customers and statuses for filter dropdowns
+  const uniqueCustomers = React.useMemo(() => {
+    const customers = shipments
+      .filter(s => s.customer)
+      .map(s => s.customer!)
+      .filter((customer, index, arr) =>
+        arr.findIndex(c => c.id === customer.id) === index
+      )
+      .sort((a, b) => a.name.localeCompare(b.name));
+    return customers;
+  }, [shipments]);
 
-      if (editingShipment) {
-        // Update existing shipment
-        await fetch(API_URL + `/api/v1/shipments/${editingShipment.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(shipmentData)
-        });
-        setEditingShipment(null);
-      } else {
-        // Create new shipment
-        await fetch(API_URL + '/api/v1/shipments', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(shipmentData)
-        });
-      }
-      clearForm();
-      await loadData();
-    } catch (error) {
-      console.error('Failed to save shipment:', error);
-    } finally {
-      setLoading(false);
+  const uniqueStatuses = React.useMemo(() => {
+    const statuses = [...new Set(shipments.map(s => s.status))].filter(Boolean).sort();
+    return statuses;
+  }, [shipments]);
+
+  // Filter shipments based on search term, status, and customer
+  React.useEffect(() => {
+    let filtered = shipments;
+
+    // Search filter
+    if (searchTerm) {
+      filtered = filtered.filter(shipment =>
+        shipment.reference.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (shipment.customer && shipment.customer.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (shipment.origin && shipment.origin.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (shipment.destination && shipment.destination.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (shipment.lane && shipment.lane.name.toLowerCase().includes(searchTerm.toLowerCase()))
+      );
     }
-  };
 
-  const clearForm = () => {
-    setReference('');
-    setCustomerId('');
-    setUseLane(true);
-    setLaneId('');
-    setOriginId('');
-    setDestinationId('');
-    setStatus('draft');
-    setPickupDate('');
-    setDeliveryDate('');
-  };
-
-  const editShipment = (shipment: Shipment) => {
-    setEditingShipment(shipment);
-    setReference(shipment.reference);
-    setCustomerId(shipment.customerId);
-    
-    // Determine route type based on whether laneId exists
-    if (shipment.laneId) {
-      setUseLane(true);
-      setLaneId(shipment.laneId);
-    } else {
-      setUseLane(false);
-      setLaneId('');
+    // Status filter
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(shipment => shipment.status === statusFilter);
     }
-    
-    setOriginId(shipment.originId);
-    setDestinationId(shipment.destinationId);
-    setStatus(shipment.status);
-    setPickupDate(shipment.pickupDate ? shipment.pickupDate.split('T')[0] : '');
-    setDeliveryDate(shipment.deliveryDate ? shipment.deliveryDate.split('T')[0] : '');
-  };
 
-  const cancelEdit = () => {
-    setEditingShipment(null);
-    clearForm();
+    // Customer filter
+    if (customerFilter !== 'all') {
+      filtered = filtered.filter(shipment => shipment.customer && shipment.customer.id === customerFilter);
+    }
+
+    setFilteredShipments(filtered);
+  }, [shipments, searchTerm, statusFilter, customerFilter]);
+
+  const hasActiveFilters = searchTerm !== '' || statusFilter !== 'all' || customerFilter !== 'all';
+
+  const clearFilters = () => {
+    setSearchTerm('');
+    setStatusFilter('all');
+    setCustomerFilter('all');
   };
 
   const deleteShipment = async (id: string) => {
@@ -186,105 +140,105 @@ export default function Shipments() {
   return (
     <div>
       <div className="card">
-        <h2>Shipments</h2>
-        <form onSubmit={submit} style={{ marginBottom: 'var(--spacing-2)' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--spacing-2)', marginBottom: 'var(--spacing-2)' }}>
-            <div className="text-field">
-              <input 
-                value={reference} 
-                onChange={e => setReference(e.target.value)} 
-                placeholder=" " 
-                required 
-                disabled={loading}
-              />
-              <label>Reference</label>
-            </div>
-            <div className="text-field">
-              <select 
-                value={customerId} 
-                onChange={e => setCustomerId(e.target.value)} 
-                required
-                disabled={loading}
-              >
-                <option value="">Select customer</option>
-                {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-              <label>Customer</label>
-            </div>
-          </div>
-          
-          {/* Route Selection */}
-          <div style={{ marginBottom: 'var(--spacing-2)' }}>
-            <RouteSelection
-              useLane={useLane}
-              onUseLaneChange={setUseLane}
-              laneId={laneId}
-              onLaneChange={setLaneId}
-              originId={originId}
-              onOriginChange={setOriginId}
-              destinationId={destinationId}
-              onDestinationChange={setDestinationId}
-              disabled={loading}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-2)' }}>
+          <h2>Shipments</h2>
+          <Link to="/shipments/create" className="button">
+            <span className="material-icons" style={{ fontSize: '18px' }}>add</span>
+            Create Shipment
+          </Link>
+        </div>
+
+        {/* Search and Filters */}
+        <div style={{
+          display: 'flex',
+          gap: 'var(--spacing-2)',
+          marginBottom: 'var(--spacing-2)',
+          flexWrap: 'wrap',
+          alignItems: 'center'
+        }}>
+          <div className="text-field" style={{ minWidth: '300px', flex: 1 }}>
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              placeholder="Search by reference, customer, origin, destination..."
+              style={{ width: '100%' }}
             />
+            <label>Search</label>
           </div>
-          
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--spacing-2)', marginBottom: 'var(--spacing-2)' }}>
-            <div className="text-field">
-              <select 
-                value={status} 
-                onChange={e => setStatus(e.target.value)} 
-                disabled={loading}
-              >
-                <option value="draft">Draft</option>
-                <option value="in_transit">In Transit</option>
-                <option value="delivered">Delivered</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
-              <label>Status</label>
-            </div>
-            <div className="text-field">
-              <input 
-                value={pickupDate} 
-                onChange={e => setPickupDate(e.target.value)} 
-                placeholder=" " 
-                type="date"
-                disabled={loading}
-              />
-              <label>Pickup Date</label>
-            </div>
-            <div className="text-field">
-              <input 
-                value={deliveryDate} 
-                onChange={e => setDeliveryDate(e.target.value)} 
-                placeholder=" " 
-                type="date"
-                disabled={loading}
-              />
-              <label>Delivery Date</label>
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 'var(--spacing-1)' }}>
-            <button className="button" type="submit" disabled={loading}>
-              <span className="material-icons" style={{ fontSize: '18px' }}>
-                {editingShipment ? 'save' : 'add'}
-              </span>
-              {editingShipment ? 'Update' : 'Add'} Shipment
+
+          <select
+            value={statusFilter}
+            onChange={e => setStatusFilter(e.target.value)}
+            style={{
+              padding: '8px 12px',
+              border: '1px solid var(--outline)',
+              borderRadius: '4px',
+              backgroundColor: 'var(--surface)',
+              color: 'var(--on-surface)',
+              minWidth: '120px'
+            }}
+          >
+            <option value="all">All Statuses</option>
+            {uniqueStatuses.map(status => (
+              <option key={status} value={status}>
+                {status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={customerFilter}
+            onChange={e => setCustomerFilter(e.target.value)}
+            style={{
+              padding: '8px 12px',
+              border: '1px solid var(--outline)',
+              borderRadius: '4px',
+              backgroundColor: 'var(--surface)',
+              color: 'var(--on-surface)',
+              minWidth: '150px'
+            }}
+          >
+            <option value="all">All Customers</option>
+            {uniqueCustomers.map(customer => (
+              <option key={customer.id} value={customer.id}>{customer.name}</option>
+            ))}
+          </select>
+
+          {hasActiveFilters && (
+            <button
+              onClick={clearFilters}
+              className="button outlined"
+              style={{ whiteSpace: 'nowrap' }}
+            >
+              <span className="material-icons" style={{ fontSize: '18px' }}>clear</span>
+              Clear Filters
             </button>
-            {editingShipment && (
-              <button type="button" className="button outlined" onClick={cancelEdit} disabled={loading}>
-                <span className="material-icons" style={{ fontSize: '18px' }}>cancel</span>
-                Cancel
-              </button>
-            )}
-          </div>
-        </form>
-        
-        {loading && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-1)', marginBottom: 'var(--spacing-2)' }}>
-            <span className="material-icons" style={{ animation: 'spin 1s linear infinite' }}>refresh</span>
-            Loading...
-          </div>
-        )}
+          )}
+        </div>
+
+        {/* Results Summary */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: 'var(--spacing-2)',
+          fontSize: '0.875rem',
+          color: 'var(--on-surface-variant)'
+        }}>
+          <span>
+            {hasActiveFilters
+              ? `${filteredShipments.length} of ${shipments.length} shipments ${hasActiveFilters ? '(filtered)' : ''}`
+              : `${shipments.length} shipments`
+            }
+          </span>
+          {loading && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-1)' }}>
+              <span className="material-icons" style={{ animation: 'spin 1s linear infinite', fontSize: '16px' }}>refresh</span>
+              Loading...
+            </div>
+          )}
+        </div>
         
         <div className="table-container">
           <table className="table">
@@ -301,7 +255,14 @@ export default function Shipments() {
               </tr>
             </thead>
             <tbody>
-              {shipments.map(s => (
+              {filteredShipments.length === 0 ? (
+                <tr>
+                  <td colSpan={8} style={{ textAlign: 'center', padding: 'var(--spacing-4)', color: 'var(--on-surface-variant)' }}>
+                    {hasActiveFilters ? 'No shipments match your current filters' : 'No shipments found'}
+                  </td>
+                </tr>
+              ) : (
+                filteredShipments.map(s => (
                 <tr key={s.id}>
                   <td>
                     <Link 
@@ -364,14 +325,14 @@ export default function Shipments() {
                   <td>{new Date(s.createdAt).toLocaleDateString()}</td>
                   <td>
                     <div style={{ display: 'flex', gap: 'var(--spacing-1)' }}>
-                      <button 
-                        className="icon-btn" 
-                        onClick={() => editShipment(s)}
-                        disabled={loading}
+                      <Link
+                        to={`/shipments/${s.id}/edit`}
+                        className="icon-btn"
                         title="Edit shipment"
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                       >
                         <span className="material-icons">edit</span>
-                      </button>
+                      </Link>
                       <button 
                         className="icon-btn" 
                         onClick={() => setShowDeleteConfirm(s.id)}
@@ -384,7 +345,8 @@ export default function Shipments() {
                     </div>
                   </td>
                 </tr>
-              ))}
+                ))
+              )}
             </tbody>
           </table>
         </div>

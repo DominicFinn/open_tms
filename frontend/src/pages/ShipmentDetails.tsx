@@ -6,6 +6,39 @@ import 'leaflet/dist/leaflet.css';
 
 interface ShipmentDetailsProps {}
 
+interface Location {
+  id: string;
+  name: string;
+  address1: string;
+  address2?: string;
+  city: string;
+  state?: string;
+  postalCode?: string;
+  country: string;
+  lat?: number;
+  lng?: number;
+}
+
+interface LaneStop {
+  id: string;
+  laneId: string;
+  locationId: string;
+  order: number;
+  notes?: string;
+  location: Location;
+}
+
+interface Lane {
+  id: string;
+  name: string;
+  distance?: number;
+  notes?: string;
+  status: string;
+  origin: Location;
+  destination: Location;
+  stops: LaneStop[];
+}
+
 interface Shipment {
   id: string;
   reference: string;
@@ -20,30 +53,9 @@ interface Shipment {
     name: string;
     contactEmail?: string;
   };
-  origin: {
-    id: string;
-    name: string;
-    address1: string;
-    address2?: string;
-    city: string;
-    state?: string;
-    postalCode?: string;
-    country: string;
-    lat?: number;
-    lng?: number;
-  };
-  destination: {
-    id: string;
-    name: string;
-    address1: string;
-    address2?: string;
-    city: string;
-    state?: string;
-    postalCode?: string;
-    country: string;
-    lat?: number;
-    lng?: number;
-  };
+  origin: Location;
+  destination: Location;
+  lane?: Lane | null;
   loads: any[];
 }
 
@@ -95,17 +107,109 @@ export default function ShipmentDetails() {
         attribution: '© OpenStreetMap contributors'
       }).addTo(map);
 
-      // Add markers for origin and destination
+      // Add markers for origin, stops, and destination
+      const markers: L.Marker[] = [];
+
       if (shipment.origin.lat && shipment.origin.lng) {
-        L.marker([shipment.origin.lat, shipment.origin.lng])
-          .addTo(map)
-          .bindPopup(`<b>Origin:</b> ${shipment.origin.name}<br>${shipment.origin.address1}, ${shipment.origin.city}`);
+        const originMarker = L.marker([shipment.origin.lat, shipment.origin.lng], {
+          icon: L.divIcon({
+            className: 'custom-marker',
+            html: `
+              <div style="
+                background-color: #4CAF50;
+                color: white;
+                border-radius: 50%;
+                width: 30px;
+                height: 30px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-weight: bold;
+                font-size: 14px;
+                border: 2px solid white;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+              ">
+                O
+              </div>
+            `,
+            iconSize: [30, 30],
+            iconAnchor: [15, 15]
+          })
+        }).addTo(map);
+
+        originMarker.bindPopup(`<b>Origin:</b> ${shipment.origin.name}<br>${shipment.origin.address1}, ${shipment.origin.city}`);
+        markers.push(originMarker);
+      }
+
+      // Add lane stops if they exist
+      if (shipment.lane && shipment.lane.stops) {
+        shipment.lane.stops.forEach((stop, index) => {
+          if (stop.location.lat && stop.location.lng) {
+            const stopMarker = L.marker([stop.location.lat, stop.location.lng], {
+              icon: L.divIcon({
+                className: 'custom-marker',
+                html: `
+                  <div style="
+                    background-color: #FF9800;
+                    color: white;
+                    border-radius: 50%;
+                    width: 30px;
+                    height: 30px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-weight: bold;
+                    font-size: 14px;
+                    border: 2px solid white;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+                  ">
+                    ${stop.order}
+                  </div>
+                `,
+                iconSize: [30, 30],
+                iconAnchor: [15, 15]
+              })
+            }).addTo(map);
+
+            stopMarker.bindPopup(`
+              <b>Stop ${stop.order}:</b> ${stop.location.name}<br>
+              ${stop.location.address1}, ${stop.location.city}
+              ${stop.notes ? `<br><i>Note: ${stop.notes}</i>` : ''}
+            `);
+            markers.push(stopMarker);
+          }
+        });
       }
 
       if (shipment.destination.lat && shipment.destination.lng) {
-        L.marker([shipment.destination.lat, shipment.destination.lng])
-          .addTo(map)
-          .bindPopup(`<b>Destination:</b> ${shipment.destination.name}<br>${shipment.destination.address1}, ${shipment.destination.city}`);
+        const destMarker = L.marker([shipment.destination.lat, shipment.destination.lng], {
+          icon: L.divIcon({
+            className: 'custom-marker',
+            html: `
+              <div style="
+                background-color: #F44336;
+                color: white;
+                border-radius: 50%;
+                width: 30px;
+                height: 30px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-weight: bold;
+                font-size: 14px;
+                border: 2px solid white;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+              ">
+                D
+              </div>
+            `,
+            iconSize: [30, 30],
+            iconAnchor: [15, 15]
+          })
+        }).addTo(map);
+
+        destMarker.bindPopup(`<b>Destination:</b> ${shipment.destination.name}<br>${shipment.destination.address1}, ${shipment.destination.city}`);
+        markers.push(destMarker);
       }
 
       // If no coordinates, add a mock location marker
@@ -118,13 +222,8 @@ export default function ShipmentDetails() {
       }
 
       // Fit map to show all markers
-      const group = new (L as any).featureGroup();
-      map.eachLayer((layer) => {
-        if (layer instanceof L.Marker) {
-          group.addLayer(layer);
-        }
-      });
-      if (group.getLayers().length > 0) {
+      if (markers.length > 0) {
+        const group = new (L as any).featureGroup(markers);
         map.fitBounds(group.getBounds().pad(0.1));
       }
     };
@@ -242,6 +341,108 @@ export default function ShipmentDetails() {
             </div>
           </div>
         </div>
+
+        {/* Lane Information */}
+        {shipment.lane && (
+          <div style={{ marginTop: '24px' }}>
+            <h3>Lane Information</h3>
+            <div style={{
+              backgroundColor: 'var(--surface-variant)',
+              padding: 'var(--spacing-2)',
+              borderRadius: '8px',
+              border: '1px solid var(--outline-variant)',
+              marginBottom: 'var(--spacing-2)'
+            }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+                <div>
+                  <div><strong>Lane Name:</strong> {shipment.lane.name}</div>
+                  <div><strong>Status:</strong> <span className={`chip ${
+                    shipment.lane.status === 'active' ? 'chip-success' : 'chip-warning'
+                  }`}>{shipment.lane.status}</span></div>
+                </div>
+                <div>
+                  {shipment.lane.distance && (
+                    <div><strong>Distance:</strong> {shipment.lane.distance.toFixed(1)} km</div>
+                  )}
+                  {shipment.lane.notes && (
+                    <div><strong>Notes:</strong> {shipment.lane.notes}</div>
+                  )}
+                </div>
+              </div>
+
+              {/* Lane Stops */}
+              {shipment.lane.stops && shipment.lane.stops.length > 0 && (
+                <div>
+                  <h4 style={{ margin: '0 0 12px 0', fontSize: '1rem', color: 'var(--on-surface)' }}>
+                    Stops ({shipment.lane.stops.length})
+                  </h4>
+                  <div style={{ display: 'grid', gap: '8px' }}>
+                    {shipment.lane.stops.map((stop, index) => (
+                      <div
+                        key={stop.id}
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: '40px 1fr auto',
+                          gap: '12px',
+                          alignItems: 'center',
+                          padding: '12px',
+                          backgroundColor: 'var(--surface)',
+                          borderRadius: '4px',
+                          border: '1px solid var(--outline-variant)'
+                        }}
+                      >
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          backgroundColor: '#FF9800',
+                          color: 'white',
+                          borderRadius: '50%',
+                          width: '32px',
+                          height: '32px',
+                          fontSize: '0.875rem',
+                          fontWeight: 'bold'
+                        }}>
+                          {stop.order}
+                        </div>
+
+                        <div>
+                          <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
+                            {stop.location.name}
+                          </div>
+                          <div style={{ fontSize: '0.875rem', color: 'var(--on-surface-variant)' }}>
+                            {stop.location.address1}, {stop.location.city}
+                            {stop.location.state && `, ${stop.location.state}`}
+                          </div>
+                          {stop.notes && (
+                            <div style={{
+                              fontSize: '0.875rem',
+                              color: 'var(--on-surface-variant)',
+                              fontStyle: 'italic',
+                              marginTop: '4px'
+                            }}>
+                              Note: {stop.notes}
+                            </div>
+                          )}
+                        </div>
+
+                        {stop.location.lat && stop.location.lng && (
+                          <div style={{
+                            fontSize: '0.75rem',
+                            color: 'var(--on-surface-variant)',
+                            textAlign: 'right'
+                          }}>
+                            📍 {stop.location.lat.toFixed(4)}, {stop.location.lng.toFixed(4)}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="card" style={{ marginBottom: '24px' }}>

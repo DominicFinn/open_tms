@@ -384,7 +384,15 @@ server.get('/api/v1/shipments', async (_req: FastifyRequest, _reply: FastifyRepl
         lane: {
           include: {
             origin: true,
-            destination: true
+            destination: true,
+            stops: {
+              include: {
+                location: true
+              },
+              orderBy: {
+                order: 'asc'
+              }
+            }
           }
         },
         loads: {

@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { API_URL } from '../api';
 
 interface Location {
@@ -20,18 +21,14 @@ interface Location {
 
 export default function Locations() {
   const [locations, setLocations] = React.useState<Location[]>([]);
-  const [name, setName] = React.useState('');
-  const [address1, setAddress1] = React.useState('');
-  const [address2, setAddress2] = React.useState('');
-  const [city, setCity] = React.useState('');
-  const [state, setState] = React.useState('');
-  const [postalCode, setPostalCode] = React.useState('');
-  const [country, setCountry] = React.useState('');
-  const [lat, setLat] = React.useState('');
-  const [lng, setLng] = React.useState('');
-  const [editingLocation, setEditingLocation] = React.useState<Location | null>(null);
+  const [filteredLocations, setFilteredLocations] = React.useState<Location[]>([]);
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
+
+  // Filter state
+  const [searchTerm, setSearchTerm] = React.useState('');
+  const [statusFilter, setStatusFilter] = React.useState('all');
+  const [countryFilter, setCountryFilter] = React.useState('all');
 
   const loadLocations = async () => {
     setLoading(true);
@@ -50,75 +47,52 @@ export default function Locations() {
     loadLocations();
   }, []);
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      const locationData = {
-        name,
-        address1,
-        address2: address2 || undefined,
-        city,
-        state: state || undefined,
-        postalCode: postalCode || undefined,
-        country,
-        lat: lat ? parseFloat(lat) : undefined,
-        lng: lng ? parseFloat(lng) : undefined
-      };
+  // Get unique countries for filter dropdown
+  const uniqueCountries = React.useMemo(() => {
+    const countries = [...new Set(locations.map(l => l.country))].filter(Boolean).sort();
+    return countries;
+  }, [locations]);
 
-      if (editingLocation) {
-        // Update existing location
-        await fetch(API_URL + `/api/v1/locations/${editingLocation.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(locationData)
-        });
-        setEditingLocation(null);
-      } else {
-        // Create new location
-        await fetch(API_URL + '/api/v1/locations', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(locationData)
-        });
-      }
-      clearForm();
-      await loadLocations();
-    } catch (error) {
-      console.error('Failed to save location:', error);
-    } finally {
-      setLoading(false);
+  // Filter locations based on search term, status, and country
+  React.useEffect(() => {
+    let filtered = locations;
+
+    // Search filter
+    if (searchTerm) {
+      filtered = filtered.filter(location =>
+        location.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        location.address1.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (location.address2 && location.address2.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        location.city.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (location.state && location.state.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        location.country.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (location.postalCode && location.postalCode.toLowerCase().includes(searchTerm.toLowerCase()))
+      );
     }
-  };
 
-  const clearForm = () => {
-    setName('');
-    setAddress1('');
-    setAddress2('');
-    setCity('');
-    setState('');
-    setPostalCode('');
-    setCountry('');
-    setLat('');
-    setLng('');
-  };
+    // Status filter
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(location => {
+        if (statusFilter === 'active') return !location.archived;
+        if (statusFilter === 'archived') return location.archived;
+        return true;
+      });
+    }
 
-  const editLocation = (location: Location) => {
-    setEditingLocation(location);
-    setName(location.name);
-    setAddress1(location.address1);
-    setAddress2(location.address2 || '');
-    setCity(location.city);
-    setState(location.state || '');
-    setPostalCode(location.postalCode || '');
-    setCountry(location.country);
-    setLat(location.lat?.toString() || '');
-    setLng(location.lng?.toString() || '');
-  };
+    // Country filter
+    if (countryFilter !== 'all') {
+      filtered = filtered.filter(location => location.country === countryFilter);
+    }
 
-  const cancelEdit = () => {
-    setEditingLocation(null);
-    clearForm();
+    setFilteredLocations(filtered);
+  }, [locations, searchTerm, statusFilter, countryFilter]);
+
+  const hasActiveFilters = searchTerm !== '' || statusFilter !== 'all' || countryFilter !== 'all';
+
+  const clearFilters = () => {
+    setSearchTerm('');
+    setStatusFilter('all');
+    setCountryFilter('all');
   };
 
   const deleteLocation = async (id: string) => {
@@ -139,121 +113,102 @@ export default function Locations() {
   return (
     <div>
       <div className="card">
-        <h2>Locations</h2>
-        <form onSubmit={submit} style={{ marginBottom: 'var(--spacing-2)' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--spacing-2)', marginBottom: 'var(--spacing-2)' }}>
-            <div className="text-field">
-              <input 
-                value={name} 
-                onChange={e => setName(e.target.value)} 
-                placeholder=" " 
-                required 
-                disabled={loading}
-              />
-              <label>Location Name</label>
-            </div>
-            <div className="text-field">
-              <input 
-                value={address1} 
-                onChange={e => setAddress1(e.target.value)} 
-                placeholder=" " 
-                required 
-                disabled={loading}
-              />
-              <label>Address Line 1</label>
-            </div>
-            <div className="text-field">
-              <input 
-                value={address2} 
-                onChange={e => setAddress2(e.target.value)} 
-                placeholder=" " 
-                disabled={loading}
-              />
-              <label>Address Line 2</label>
-            </div>
-            <div className="text-field">
-              <input 
-                value={city} 
-                onChange={e => setCity(e.target.value)} 
-                placeholder=" " 
-                required 
-                disabled={loading}
-              />
-              <label>City</label>
-            </div>
-            <div className="text-field">
-              <input 
-                value={state} 
-                onChange={e => setState(e.target.value)} 
-                placeholder=" " 
-                disabled={loading}
-              />
-              <label>State/Province</label>
-            </div>
-            <div className="text-field">
-              <input 
-                value={postalCode} 
-                onChange={e => setPostalCode(e.target.value)} 
-                placeholder=" " 
-                disabled={loading}
-              />
-              <label>Postal Code</label>
-            </div>
-            <div className="text-field">
-              <input 
-                value={country} 
-                onChange={e => setCountry(e.target.value)} 
-                placeholder=" " 
-                required 
-                disabled={loading}
-              />
-              <label>Country</label>
-            </div>
-            <div className="text-field">
-              <input 
-                value={lat} 
-                onChange={e => setLat(e.target.value)} 
-                placeholder=" " 
-                type="number"
-                step="any"
-                disabled={loading}
-              />
-              <label>Latitude</label>
-            </div>
-            <div className="text-field">
-              <input 
-                value={lng} 
-                onChange={e => setLng(e.target.value)} 
-                placeholder=" " 
-                type="number"
-                step="any"
-                disabled={loading}
-              />
-              <label>Longitude</label>
-            </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-2)' }}>
+          <h2>Locations</h2>
+          <Link to="/locations/create" className="button">
+            <span className="material-icons" style={{ fontSize: '18px' }}>add</span>
+            Create Location
+          </Link>
+        </div>
+
+        {/* Search and Filters */}
+        <div style={{
+          display: 'flex',
+          gap: 'var(--spacing-2)',
+          marginBottom: 'var(--spacing-2)',
+          flexWrap: 'wrap',
+          alignItems: 'center'
+        }}>
+          <div className="text-field" style={{ minWidth: '300px', flex: 1 }}>
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              placeholder="Search locations by name, address, city..."
+              style={{ width: '100%' }}
+            />
+            <label>Search</label>
           </div>
-          <div style={{ display: 'flex', gap: 'var(--spacing-1)' }}>
-            <button className="button" type="submit" disabled={loading}>
-              <span className="material-icons" style={{ fontSize: '18px' }}>
-                {editingLocation ? 'save' : 'add'}
-              </span>
-              {editingLocation ? 'Update' : 'Add'} Location
+
+          <select
+            value={statusFilter}
+            onChange={e => setStatusFilter(e.target.value)}
+            style={{
+              padding: '8px 12px',
+              border: '1px solid var(--outline)',
+              borderRadius: '4px',
+              backgroundColor: 'var(--surface)',
+              color: 'var(--on-surface)',
+              minWidth: '120px'
+            }}
+          >
+            <option value="all">All Statuses</option>
+            <option value="active">Active</option>
+            <option value="archived">Archived</option>
+          </select>
+
+          <select
+            value={countryFilter}
+            onChange={e => setCountryFilter(e.target.value)}
+            style={{
+              padding: '8px 12px',
+              border: '1px solid var(--outline)',
+              borderRadius: '4px',
+              backgroundColor: 'var(--surface)',
+              color: 'var(--on-surface)',
+              minWidth: '120px'
+            }}
+          >
+            <option value="all">All Countries</option>
+            {uniqueCountries.map(country => (
+              <option key={country} value={country}>{country}</option>
+            ))}
+          </select>
+
+          {hasActiveFilters && (
+            <button
+              onClick={clearFilters}
+              className="button outlined"
+              style={{ whiteSpace: 'nowrap' }}
+            >
+              <span className="material-icons" style={{ fontSize: '18px' }}>clear</span>
+              Clear Filters
             </button>
-            {editingLocation && (
-              <button type="button" className="button outlined" onClick={cancelEdit} disabled={loading}>
-                <span className="material-icons" style={{ fontSize: '18px' }}>cancel</span>
-                Cancel
-              </button>
-            )}
-          </div>
-        </form>
-        
-        {loading && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-1)', marginBottom: 'var(--spacing-2)' }}>
-            <span className="material-icons" style={{ animation: 'spin 1s linear infinite' }}>refresh</span>
-            Loading...
-          </div>
-        )}
+          )}
+        </div>
+
+        {/* Results Summary */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: 'var(--spacing-2)',
+          fontSize: '0.875rem',
+          color: 'var(--on-surface-variant)'
+        }}>
+          <span>
+            {hasActiveFilters
+              ? `${filteredLocations.length} of ${locations.length} locations ${hasActiveFilters ? '(filtered)' : ''}`
+              : `${locations.length} locations`
+            }
+          </span>
+          {loading && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-1)' }}>
+              <span className="material-icons" style={{ animation: 'spin 1s linear infinite', fontSize: '16px' }}>refresh</span>
+              Loading...
+            </div>
+          )}
+        </div>
         
         <div className="table-container">
           <table className="table">
@@ -269,42 +224,50 @@ export default function Locations() {
               </tr>
             </thead>
             <tbody>
-              {locations.map(l => (
-                <tr key={l.id}>
-                  <td>{l.name}</td>
-                  <td>
-                    <div>
-                      <div>{l.address1}</div>
-                      {l.address2 && <div style={{ fontSize: '0.875rem', color: 'var(--on-surface-variant)' }}>{l.address2}</div>}
-                    </div>
-                  </td>
-                  <td>{l.city}</td>
-                  <td>{l.state || '—'}</td>
-                  <td>{l.country}</td>
-                  <td>{new Date(l.createdAt).toLocaleDateString()}</td>
-                  <td>
-                    <div style={{ display: 'flex', gap: 'var(--spacing-1)' }}>
-                      <button 
-                        className="icon-btn" 
-                        onClick={() => editLocation(l)}
-                        disabled={loading}
-                        title="Edit location"
-                      >
-                        <span className="material-icons">edit</span>
-                      </button>
-                      <button 
-                        className="icon-btn" 
-                        onClick={() => setShowDeleteConfirm(l.id)}
-                        disabled={loading}
-                        title="Delete location"
-                        style={{ color: 'var(--error)' }}
-                      >
-                        <span className="material-icons">delete</span>
-                      </button>
-                    </div>
+              {filteredLocations.length === 0 ? (
+                <tr>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: 'var(--spacing-4)', color: 'var(--on-surface-variant)' }}>
+                    {hasActiveFilters ? 'No locations match your current filters' : 'No locations found'}
                   </td>
                 </tr>
-              ))}
+              ) : (
+                filteredLocations.map(l => (
+                  <tr key={l.id}>
+                    <td>{l.name}</td>
+                    <td>
+                      <div>
+                        <div>{l.address1}</div>
+                        {l.address2 && <div style={{ fontSize: '0.875rem', color: 'var(--on-surface-variant)' }}>{l.address2}</div>}
+                      </div>
+                    </td>
+                    <td>{l.city}</td>
+                    <td>{l.state || '—'}</td>
+                    <td>{l.country}</td>
+                    <td>{new Date(l.createdAt).toLocaleDateString()}</td>
+                    <td>
+                      <div style={{ display: 'flex', gap: 'var(--spacing-1)' }}>
+                        <Link
+                          to={`/locations/${l.id}/edit`}
+                          className="icon-btn"
+                          title="Edit location"
+                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        >
+                          <span className="material-icons">edit</span>
+                        </Link>
+                        <button
+                          className="icon-btn"
+                          onClick={() => setShowDeleteConfirm(l.id)}
+                          disabled={loading}
+                          title="Delete location"
+                          style={{ color: 'var(--error)' }}
+                        >
+                          <span className="material-icons">delete</span>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
