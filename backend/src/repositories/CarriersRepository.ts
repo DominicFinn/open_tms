@@ -4,12 +4,30 @@ export interface CreateCarrierDTO {
   name: string;
   mcNumber?: string;
   dotNumber?: string;
+  contactName?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  address1?: string;
+  address2?: string;
+  city?: string;
+  state?: string;
+  postalCode?: string;
+  country?: string;
 }
 
 export interface UpdateCarrierDTO {
   name?: string;
   mcNumber?: string;
   dotNumber?: string;
+  contactName?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  address1?: string;
+  address2?: string;
+  city?: string;
+  state?: string;
+  postalCode?: string;
+  country?: string;
 }
 
 export interface ICarriersRepository {
@@ -17,7 +35,7 @@ export interface ICarriersRepository {
   findById(id: string): Promise<Carrier | null>;
   create(data: CreateCarrierDTO): Promise<Carrier>;
   update(id: string, data: UpdateCarrierDTO): Promise<Carrier>;
-  delete(id: string): Promise<void>;
+  archive(id: string): Promise<Carrier>;
 }
 
 export class CarriersRepository implements ICarriersRepository {
@@ -25,13 +43,14 @@ export class CarriersRepository implements ICarriersRepository {
 
   async all(): Promise<Carrier[]> {
     return this.prisma.carrier.findMany({
+      where: { archived: false },
       orderBy: { name: 'asc' }
     });
   }
 
   async findById(id: string): Promise<Carrier | null> {
-    return this.prisma.carrier.findUnique({
-      where: { id }
+    return this.prisma.carrier.findFirst({
+      where: { id, archived: false }
     });
   }
 
@@ -46,9 +65,13 @@ export class CarriersRepository implements ICarriersRepository {
     });
   }
 
-  async delete(id: string): Promise<void> {
-    await this.prisma.carrier.delete({
-      where: { id }
+  async archive(id: string): Promise<Carrier> {
+    return this.prisma.carrier.update({
+      where: { id },
+      data: {
+        archived: true,
+        archivedAt: new Date()
+      }
     });
   }
 }

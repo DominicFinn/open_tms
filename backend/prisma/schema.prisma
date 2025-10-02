@@ -60,19 +60,33 @@ model Shipment {
   destinationId String
   lane          Lane?    @relation(fields: [laneId], references: [id])
   laneId        String?
+  carrier       Carrier? @relation(fields: [carrierId], references: [id])
+  carrierId     String?  // Manual carrier assignment for non-lane shipments
   loads         Load[]
 }
 
 model Carrier {
-  id        String   @id @default(uuid())
-  name      String
-  mcNumber  String?
-  dotNumber String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  vehicles  Vehicle[]
-  drivers   Driver[]
+  id           String   @id @default(uuid())
+  name         String
+  mcNumber     String?
+  dotNumber    String?
+  contactName  String?
+  contactEmail String?
+  contactPhone String?
+  address1     String?
+  address2     String?
+  city         String?
+  state        String?
+  postalCode   String?
+  country      String?
+  archived     Boolean  @default(false)
+  archivedAt   DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  vehicles     Vehicle[]
+  drivers      Driver[]
   laneCarriers LaneCarrier[]
+  shipments    Shipment[]
 }
 
 model Vehicle {
@@ -155,6 +169,7 @@ model LaneCarrier {
   currency     String   @default("USD")
   serviceLevel String?  // e.g., "Standard", "Express", "Economy"
   notes        String?
+  assigned     Boolean  @default(false) // True if this carrier is assigned to the lane
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

@@ -13,9 +13,14 @@ export async function shipmentRoutes(server: FastifyInstance) {
         lane: {
           include: {
             origin: true,
-            destination: true
+            destination: true,
+            laneCarriers: {
+              where: { assigned: true },
+              include: { carrier: true }
+            }
           }
-        }
+        },
+        carrier: true // Manual carrier assignment
       },
       orderBy: { createdAt: 'desc' }
     });
@@ -28,6 +33,7 @@ export async function shipmentRoutes(server: FastifyInstance) {
       reference: z.string().min(1),
       customerId: z.string().uuid(),
       laneId: z.string().uuid().optional(),
+      carrierId: z.string().uuid().optional(), // Manual carrier assignment for non-lane shipments
       originId: z.string().uuid().optional(),
       destinationId: z.string().uuid().optional(),
       pickupDate: z.string().datetime().optional(),
@@ -106,9 +112,14 @@ export async function shipmentRoutes(server: FastifyInstance) {
               orderBy: {
                 order: 'asc'
               }
+            },
+            laneCarriers: {
+              include: { carrier: true },
+              orderBy: { assigned: 'desc' } // Show assigned carrier first
             }
           }
         },
+        carrier: true, // Manual carrier assignment
         loads: {
           include: {
             vehicle: true,
@@ -134,6 +145,7 @@ export async function shipmentRoutes(server: FastifyInstance) {
       deliveryDate: z.string().datetime().optional(),
       customerId: z.string().uuid().optional(),
       laneId: z.string().uuid().optional(),
+      carrierId: z.string().uuid().nullable().optional(), // Manual carrier assignment
       originId: z.string().uuid().optional(),
       destinationId: z.string().uuid().optional(),
       items: z.array(z.object({

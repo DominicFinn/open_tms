@@ -42,8 +42,30 @@ export default function Dashboard() {
           </div>
         </div>
         
-        <div 
-          className="card" 
+        <div
+          className="card"
+          style={{ cursor: 'pointer', transition: 'transform 0.2s, box-shadow 0.2s' }}
+          onClick={() => handleCardClick('/carriers')}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'translateY(-2px)';
+            e.currentTarget.style.boxShadow = 'var(--shadow-2)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'translateY(0)';
+            e.currentTarget.style.boxShadow = 'var(--shadow-1)';
+          }}
+        >
+          <div className="card-title">
+            <span className="material-icons" style={{ marginRight: '8px', verticalAlign: 'middle' }}>airport_shuttle</span>
+            Carriers
+          </div>
+          <div className="card-content">
+            Manage carriers and 3PLs with contact and address details.
+          </div>
+        </div>
+
+        <div
+          className="card"
           style={{ cursor: 'pointer', transition: 'transform 0.2s, box-shadow 0.2s' }}
           onClick={() => handleCardClick('/locations')}
           onMouseEnter={(e) => {

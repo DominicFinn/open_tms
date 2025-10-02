@@ -449,7 +449,8 @@ export async function laneRoutes(server: FastifyInstance) {
       price: z.number().positive().optional(),
       currency: z.string().optional(),
       serviceLevel: z.string().optional(),
-      notes: z.string().optional()
+      notes: z.string().optional(),
+      assigned: z.boolean().optional()
     }).parse((req as any).body);
 
     const laneCarrier = await server.prisma.laneCarrier.findFirst({
@@ -460,9 +461,50 @@ export async function laneRoutes(server: FastifyInstance) {
       return { data: null, error: 'Lane-carrier relationship not found' };
     }
 
+    // If assigning this carrier, unassign all others for this lane
+    if (body.assigned === true) {
+      await server.prisma.laneCarrier.updateMany({
+        where: { laneId: id, id: { not: laneCarrier.id } },
+        data: { assigned: false }
+      });
+    }
+
     const updated = await server.prisma.laneCarrier.update({
       where: { id: laneCarrier.id },
       data: body,
+      include: {
+        carrier: true,
+        lane: {
+          include: { origin: true, destination: true }
+        }
+      }
+    });
+
+    return { data: updated, error: null };
+  });
+
+  // Assign carrier to lane (convenience endpoint)
+  server.post('/api/v1/lanes/:id/carriers/:carrierId/assign', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id, carrierId } = req.params as { id: string; carrierId: string };
+
+    const laneCarrier = await server.prisma.laneCarrier.findFirst({
+      where: { laneId: id, carrierId }
+    });
+    if (!laneCarrier) {
+      reply.code(404);
+      return { data: null, error: 'Lane-carrier relationship not found. Add carrier to lane first.' };
+    }
+
+    // Unassign all other carriers for this lane
+    await server.prisma.laneCarrier.updateMany({
+      where: { laneId: id, id: { not: laneCarrier.id } },
+      data: { assigned: false }
+    });
+
+    // Assign this carrier
+    const updated = await server.prisma.laneCarrier.update({
+      where: { id: laneCarrier.id },
+      data: { assigned: true },
       include: {
         carrier: true,
         lane: {

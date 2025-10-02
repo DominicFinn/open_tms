@@ -28,6 +28,26 @@ interface LaneStop {
   location: Location;
 }
 
+interface Carrier {
+  id: string;
+  name: string;
+  mcNumber?: string;
+  dotNumber?: string;
+  contactName?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+}
+
+interface LaneCarrier {
+  id: string;
+  price?: number;
+  currency: string;
+  serviceLevel?: string;
+  notes?: string;
+  assigned: boolean;
+  carrier: Carrier;
+}
+
 interface Lane {
   id: string;
   name: string;
@@ -37,6 +57,7 @@ interface Lane {
   origin: Location;
   destination: Location;
   stops: LaneStop[];
+  laneCarriers?: LaneCarrier[];
 }
 
 interface Shipment {
@@ -56,6 +77,7 @@ interface Shipment {
   origin: Location;
   destination: Location;
   lane?: Lane | null;
+  carrier?: Carrier | null; // Manual carrier assignment
   loads: any[];
 }
 
@@ -441,6 +463,88 @@ export default function ShipmentDetails() {
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* Carrier Information */}
+        {(shipment.carrier || (shipment.lane?.laneCarriers && shipment.lane.laneCarriers.length > 0)) && (
+          <div style={{ marginTop: '24px' }}>
+            <h3>Carrier Information</h3>
+
+            {/* Assigned Carrier - From Lane or Manual */}
+            {(() => {
+              const assignedCarrier = shipment.carrier || shipment.lane?.laneCarriers?.find(lc => lc.assigned)?.carrier;
+              if (assignedCarrier) {
+                return (
+                  <div style={{
+                    backgroundColor: 'var(--primary-container)',
+                    padding: 'var(--spacing-2)',
+                    borderRadius: '8px',
+                    border: '2px solid var(--primary)',
+                    marginBottom: 'var(--spacing-2)'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-1)', marginBottom: 'var(--spacing-1)' }}>
+                      <span className="material-icons" style={{ color: 'var(--primary)' }}>check_circle</span>
+                      <strong style={{ color: 'var(--on-primary-container)' }}>Assigned Carrier</strong>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                      <div><strong>Name:</strong> {assignedCarrier.name}</div>
+                      {assignedCarrier.mcNumber && <div><strong>MC #:</strong> {assignedCarrier.mcNumber}</div>}
+                      {assignedCarrier.dotNumber && <div><strong>DOT #:</strong> {assignedCarrier.dotNumber}</div>}
+                      {assignedCarrier.contactName && <div><strong>Contact:</strong> {assignedCarrier.contactName}</div>}
+                      {assignedCarrier.contactEmail && <div><strong>Email:</strong> {assignedCarrier.contactEmail}</div>}
+                      {assignedCarrier.contactPhone && <div><strong>Phone:</strong> {assignedCarrier.contactPhone}</div>}
+                    </div>
+                  </div>
+                );
+              }
+              return null;
+            })()}
+
+            {/* All Carrier Quotes (for lane-based shipments) */}
+            {shipment.lane?.laneCarriers && shipment.lane.laneCarriers.length > 0 && (
+              <div>
+                <h4 style={{ margin: '0 0 12px 0', fontSize: '1rem', color: 'var(--on-surface)' }}>
+                  Carrier Quotes ({shipment.lane.laneCarriers.length})
+                </h4>
+                <div className="table-container">
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Carrier</th>
+                        <th>Price</th>
+                        <th>Service Level</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {shipment.lane.laneCarriers.map(laneCarrier => (
+                        <tr key={laneCarrier.id} style={laneCarrier.assigned ? { backgroundColor: 'var(--primary-container)' } : {}}>
+                          <td>
+                            <strong>{laneCarrier.carrier.name}</strong>
+                            {laneCarrier.carrier.mcNumber && <div style={{ fontSize: '0.875rem', color: 'var(--on-surface-variant)' }}>MC: {laneCarrier.carrier.mcNumber}</div>}
+                          </td>
+                          <td>
+                            {laneCarrier.price ? `${laneCarrier.currency} ${laneCarrier.price.toFixed(2)}` : '—'}
+                          </td>
+                          <td>{laneCarrier.serviceLevel || '—'}</td>
+                          <td>
+                            {laneCarrier.assigned ? (
+                              <span className="chip chip-success">
+                                <span className="material-icons" style={{ fontSize: '14px' }}>check</span>
+                                Assigned
+                              </span>
+                            ) : (
+                              <span className="chip chip-default">Quote</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

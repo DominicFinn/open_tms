@@ -34,6 +34,7 @@ interface LaneCarrier {
   currency: string;
   serviceLevel?: string;
   notes?: string;
+  assigned: boolean;
   carrier: Carrier;
 }
 
@@ -482,16 +483,24 @@ export default function Lanes() {
                   <td>{new Date(lane.createdAt).toLocaleDateString()}</td>
                   <td>
                     <div style={{ display: 'flex', gap: 'var(--spacing-1)' }}>
-                      <button 
-                        className="icon-btn" 
+                      <button
+                        className="icon-btn"
+                        onClick={() => navigate(`/lanes/${lane.id}`)}
+                        disabled={loading}
+                        title="View lane details"
+                      >
+                        <span className="material-icons">visibility</span>
+                      </button>
+                      <button
+                        className="icon-btn"
                         onClick={() => editLane(lane)}
                         disabled={loading}
                         title="Edit lane"
                       >
                         <span className="material-icons">edit</span>
                       </button>
-                      <button 
-                        className="icon-btn" 
+                      <button
+                        className="icon-btn"
                         onClick={() => setShowDeleteConfirm(lane.id)}
                         disabled={loading}
                         title="Delete lane"

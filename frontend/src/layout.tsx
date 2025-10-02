@@ -29,6 +29,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <span className="material-icons">people</span>
             Customers
           </NavLink>
+          <NavLink to="/carriers" onClick={closeMobileMenu}>
+            <span className="material-icons">airport_shuttle</span>
+            Carriers
+          </NavLink>
           <NavLink to="/locations" onClick={closeMobileMenu}>
             <span className="material-icons">location_on</span>
             Locations

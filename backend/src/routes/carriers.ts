@@ -29,7 +29,16 @@ export async function carrierRoutes(server: FastifyInstance) {
       .object({
         name: z.string().min(1),
         mcNumber: z.string().optional(),
-        dotNumber: z.string().optional()
+        dotNumber: z.string().optional(),
+        contactName: z.string().optional(),
+        contactEmail: z.string().email().optional(),
+        contactPhone: z.string().optional(),
+        address1: z.string().optional(),
+        address2: z.string().optional(),
+        city: z.string().optional(),
+        state: z.string().optional(),
+        postalCode: z.string().optional(),
+        country: z.string().optional()
       })
       .parse((req as any).body);
     const created = await carriersRepo.create(body);
@@ -43,7 +52,16 @@ export async function carrierRoutes(server: FastifyInstance) {
     const body = z.object({
       name: z.string().min(1).optional(),
       mcNumber: z.string().optional(),
-      dotNumber: z.string().optional()
+      dotNumber: z.string().optional(),
+      contactName: z.string().optional(),
+      contactEmail: z.string().email().optional(),
+      contactPhone: z.string().optional(),
+      address1: z.string().optional(),
+      address2: z.string().optional(),
+      city: z.string().optional(),
+      state: z.string().optional(),
+      postalCode: z.string().optional(),
+      country: z.string().optional()
     }).parse((req as any).body);
 
     const carrier = await carriersRepo.findById(id);
@@ -56,7 +74,7 @@ export async function carrierRoutes(server: FastifyInstance) {
     return { data: updated, error: null };
   });
 
-  // Delete carrier
+  // Delete (archive) carrier
   server.delete('/api/v1/carriers/:id', async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
 
@@ -66,8 +84,7 @@ export async function carrierRoutes(server: FastifyInstance) {
       return { data: null, error: 'Carrier not found' };
     }
 
-    await carriersRepo.delete(id);
-    reply.code(204);
-    return { data: null, error: null };
+    const archived = await carriersRepo.archive(id);
+    return { data: archived, error: null };
   });
 }
