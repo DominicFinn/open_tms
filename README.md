@@ -39,6 +39,9 @@ I'm outlining a roadmap. It's high level. It can be ticketed up as it goes along
 - **TypeScript** - Full type safety across frontend and backend
 - **RESTful API** - Well-documented API with Swagger/OpenAPI
 - **Database Migrations** - Prisma-powered database management
+- **Repository Pattern** - Clean data access layer with interface-based design
+- **Dependency Injection** - Testable, loosely-coupled architecture
+- **DTO Pattern** - Type-safe data transfer with validation
 - **Soft Delete** - Data preservation with archive functionality
 - **Validation** - Comprehensive input validation and error handling
 
@@ -51,6 +54,29 @@ I'm outlining a roadmap. It's high level. It can be ticketed up as it goes along
 │   TypeScript    │    │   TypeScript    │    │   Prisma ORM    │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
 ```
+
+### Backend Architecture
+
+The backend follows a clean, layered architecture with:
+
+- **Routes Layer** - HTTP endpoints and request/response handling
+- **Repository Layer** - Data access abstraction using the Repository Pattern
+- **Dependency Injection** - Custom DI container for loose coupling and testability
+- **Type Safety** - TypeScript interfaces (DTOs) for all data structures
+
+```
+Routes (HTTP)
+    ↓ (uses interfaces)
+Repositories (Data Access)
+    ↓ (uses Prisma)
+Database (PostgreSQL)
+```
+
+**Key Patterns:**
+- **Repository Pattern** - All database operations abstracted into repository classes
+- **Dependency Injection** - Interface-based DI container for testability
+- **DTO Pattern** - Type-safe data transfer objects for API contracts
+- **Interface Segregation** - Each repository has a corresponding interface
 
 ## 🚀 Quick Start
 
@@ -178,6 +204,13 @@ Visit http://localhost:3001/docs for the complete Swagger/OpenAPI documentation.
 - **Zod** - Schema validation
 - **Swagger** - API documentation
 
+### Architecture Patterns
+- **Repository Pattern** - Data access abstraction layer
+- **Dependency Injection** - Custom DI container for loose coupling
+- **DTO Pattern** - Type-safe data transfer objects
+- **Interface Segregation** - Interface-based repository contracts
+- **Layered Architecture** - Clear separation of routes, repositories, and services
+
 ### Development Tools
 - **ESLint** - Code linting
 - **Prettier** - Code formatting
@@ -191,6 +224,13 @@ open_tms/
 ├── backend/                 # Fastify API server
 │   ├── src/
 │   │   ├── index.ts        # Main server file
+│   │   ├── routes/         # HTTP route handlers
+│   │   ├── repositories/   # Data access layer (Repository Pattern)
+│   │   ├── di/             # Dependency Injection container
+│   │   │   ├── container.ts   # DI container implementation
+│   │   │   ├── tokens.ts      # Dependency tokens
+│   │   │   └── registry.ts    # Dependency registration
+│   │   ├── services/       # Business logic services
 │   │   └── plugins/        # Fastify plugins
 │   ├── prisma/             # Database schema and migrations
 │   └── Dockerfile          # Backend container
@@ -205,6 +245,81 @@ open_tms/
 ├── terraform/              # Infrastructure as Code
 ├── .github/workflows/      # CI/CD pipelines
 └── docs/                   # Documentation
+```
+
+### Backend Code Organization
+
+The backend follows a modular architecture with clear separation of concerns:
+
+#### **Routes** (`src/routes/`)
+- HTTP endpoint definitions
+- Request/response handling
+- Validation using Zod schemas
+- Depends on repository interfaces (not implementations)
+
+#### **Repositories** (`src/repositories/`)
+Each repository provides:
+- **Interface** - Contract definition (e.g., `ICustomersRepository`)
+- **DTOs** - Data Transfer Objects (e.g., `CreateCustomerDTO`, `UpdateCustomerDTO`)
+- **Implementation** - Concrete class with Prisma database operations
+
+Example:
+```typescript
+// Interface defines the contract
+export interface ICustomersRepository {
+  all(): Promise<Customer[]>;
+  findById(id: string): Promise<Customer | null>;
+  create(data: CreateCustomerDTO): Promise<Customer>;
+  // ...
+}
+
+// Implementation uses Prisma
+export class CustomersRepository implements ICustomersRepository {
+  constructor(private prisma: PrismaClient) {}
+  // ... method implementations
+}
+```
+
+#### **Dependency Injection** (`src/di/`)
+- **Container** - Simple DI container for managing dependencies
+- **Tokens** - Symbol-based identifiers for each dependency
+- **Registry** - Central registration of all application dependencies
+
+Usage in routes:
+```typescript
+const customersRepo = container.resolve<ICustomersRepository>(
+  TOKENS.ICustomersRepository
+);
+```
+
+This architecture enables:
+- ✅ **Testability** - Easy to inject mock repositories
+- ✅ **Loose Coupling** - Routes depend on interfaces, not concrete classes
+- ✅ **Flexibility** - Swap implementations without changing routes
+- ✅ **Type Safety** - Full TypeScript support with generics
+
+#### Testing with Dependency Injection
+
+The DI container makes testing straightforward:
+
+```typescript
+import { container, TOKENS } from '../di';
+import { ICustomersRepository } from '../repositories/CustomersRepository';
+
+// Create a mock repository
+const mockCustomersRepo: ICustomersRepository = {
+  all: jest.fn().mockResolvedValue([]),
+  findById: jest.fn(),
+  create: jest.fn(),
+  update: jest.fn(),
+  archive: jest.fn(),
+};
+
+// Replace the binding for testing
+container.singleton(TOKENS.ICustomersRepository)
+  .toFactory(() => mockCustomersRepo);
+
+// Now your routes will use the mock!
 ```
 
 ## 🎯 Key Features in Detail
