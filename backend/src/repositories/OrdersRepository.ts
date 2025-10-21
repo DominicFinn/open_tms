@@ -1,4 +1,4 @@
-import { PrismaClient, Order, OrderLineItem } from '@prisma/client';
+import { PrismaClient, Order, OrderLineItem, TrackableUnit } from '@prisma/client';
 
 export interface CreateOrderLineItemDTO {
   sku: string;
@@ -12,6 +12,15 @@ export interface CreateOrderLineItemDTO {
   dimUnit?: string;
   hazmat?: boolean;
   temperature?: string;
+}
+
+export interface CreateTrackableUnitDTO {
+  identifier: string;
+  unitType: string;
+  customTypeName?: string;
+  barcode?: string;
+  notes?: string;
+  lineItems: CreateOrderLineItemDTO[];
 }
 
 export interface CreateOrderDTO {
@@ -34,7 +43,10 @@ export interface CreateOrderDTO {
   requestedPickupDate?: Date;
   requestedDeliveryDate?: Date;
 
-  // Line items
+  // Trackable units (new preferred way)
+  trackableUnits?: CreateTrackableUnitDTO[];
+
+  // Line items (legacy - for backward compatibility)
   lineItems?: CreateOrderLineItemDTO[];
 
   // Additional info
@@ -61,6 +73,10 @@ export interface UpdateOrderDTO {
   notes?: string;
 }
 
+export interface TrackableUnitWithItems extends TrackableUnit {
+  lineItems: OrderLineItem[];
+}
+
 export interface OrderWithRelations extends Order {
   customer: {
     id: string;
@@ -83,7 +99,8 @@ export interface OrderWithRelations extends Order {
     state: string | null;
     country: string;
   } | null;
-  lineItems: OrderLineItem[];
+  trackableUnits: TrackableUnitWithItems[];
+  lineItems: OrderLineItem[]; // Legacy line items not in trackable units
 }
 
 export interface IOrdersRepository {
@@ -132,7 +149,17 @@ export class OrdersRepository implements IOrdersRepository {
             country: true
           }
         },
-        lineItems: true
+        trackableUnits: {
+          include: {
+            lineItems: true
+          },
+          orderBy: { sequenceNumber: 'asc' }
+        },
+        lineItems: {
+          where: {
+            trackableUnitId: null // Only get legacy line items not in trackable units
+          }
+        }
       },
       orderBy: { createdAt: 'desc' }
     }) as Promise<OrderWithRelations[]>;
@@ -169,7 +196,17 @@ export class OrdersRepository implements IOrdersRepository {
             country: true
           }
         },
-        lineItems: true
+        trackableUnits: {
+          include: {
+            lineItems: true
+          },
+          orderBy: { sequenceNumber: 'asc' }
+        },
+        lineItems: {
+          where: {
+            trackableUnitId: null
+          }
+        }
       }
     }) as Promise<OrderWithRelations | null>;
   }
@@ -205,17 +242,45 @@ export class OrdersRepository implements IOrdersRepository {
             country: true
           }
         },
-        lineItems: true
+        trackableUnits: {
+          include: {
+            lineItems: true
+          },
+          orderBy: { sequenceNumber: 'asc' }
+        },
+        lineItems: {
+          where: {
+            trackableUnitId: null
+          }
+        }
       }
     }) as Promise<OrderWithRelations | null>;
   }
 
   async create(data: CreateOrderDTO): Promise<OrderWithRelations> {
-    const { lineItems, ...orderData } = data;
+    const { lineItems, trackableUnits, ...orderData } = data;
+
+    // Prepare trackable units with sequence numbers
+    const trackableUnitsData = trackableUnits?.map((unit, index) => ({
+      identifier: unit.identifier,
+      unitType: unit.unitType,
+      customTypeName: unit.customTypeName,
+      barcode: unit.barcode,
+      notes: unit.notes,
+      sequenceNumber: index + 1,
+      lineItems: {
+        create: unit.lineItems
+      }
+    }));
 
     return this.prisma.order.create({
       data: {
         ...orderData,
+        // Create trackable units with their line items
+        trackableUnits: trackableUnitsData ? {
+          create: trackableUnitsData
+        } : undefined,
+        // Legacy line items (not in trackable units)
         lineItems: lineItems ? {
           create: lineItems
         } : undefined
@@ -248,7 +313,17 @@ export class OrdersRepository implements IOrdersRepository {
             country: true
           }
         },
-        lineItems: true
+        trackableUnits: {
+          include: {
+            lineItems: true
+          },
+          orderBy: { sequenceNumber: 'asc' }
+        },
+        lineItems: {
+          where: {
+            trackableUnitId: null
+          }
+        }
       }
     }) as Promise<OrderWithRelations>;
   }

@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import OrderCreationForm from '../components/OrderCreationForm';
+import OrderCreationFormWithUnits from '../components/OrderCreationFormWithUnits';
 
 export default function CreateOrder() {
   const navigate = useNavigate();
@@ -19,9 +19,12 @@ export default function CreateOrder() {
       <div className="card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-2)' }}>
           <h2>Create New Order</h2>
+          <div style={{ fontSize: '14px', color: 'var(--color-grey)' }}>
+            Orders are organized into trackable units
+          </div>
         </div>
 
-        <OrderCreationForm
+        <OrderCreationFormWithUnits
           onOrderCreated={handleOrderCreated}
           onCancel={handleCancel}
         />

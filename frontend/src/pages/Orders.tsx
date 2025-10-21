@@ -11,6 +11,15 @@ interface OrderLineItem {
   hazmat: boolean;
 }
 
+interface TrackableUnit {
+  id: string;
+  identifier: string;
+  unitType: string;
+  customTypeName?: string;
+  sequenceNumber: number;
+  lineItems: OrderLineItem[];
+}
+
 interface Order {
   id: string;
   orderNumber: string;
@@ -42,6 +51,7 @@ interface Order {
   orderDate: string;
   requestedPickupDate?: string;
   requestedDeliveryDate?: string;
+  trackableUnits: TrackableUnit[];
   lineItems: OrderLineItem[];
   archived: boolean;
   createdAt: string;
@@ -269,7 +279,7 @@ export default function Orders() {
                   <th>Destination</th>
                   <th>Status</th>
                   <th>Source</th>
-                  <th>Line Items</th>
+                  <th>Units / Items</th>
                   <th>Order Date</th>
                   <th>Actions</th>
                 </tr>
@@ -297,8 +307,17 @@ export default function Orders() {
                     <td>{getStatusBadge(order.status)}</td>
                     <td style={{ textTransform: 'capitalize' }}>{order.importSource}</td>
                     <td style={{ textAlign: 'center' }}>
-                      {order.lineItems.length > 0 ? (
-                        <span>{order.lineItems.length} items</span>
+                      {order.trackableUnits.length > 0 ? (
+                        <div>
+                          <div style={{ fontWeight: '500' }}>
+                            {order.trackableUnits.length} {order.trackableUnits.length === 1 ? 'unit' : 'units'}
+                          </div>
+                          <div style={{ fontSize: '12px', color: 'var(--color-grey)' }}>
+                            {order.trackableUnits.reduce((total, unit) => total + unit.lineItems.length, 0)} items
+                          </div>
+                        </div>
+                      ) : order.lineItems.length > 0 ? (
+                        <span>{order.lineItems.length} items (legacy)</span>
                       ) : (
                         <span style={{ color: 'var(--color-grey)' }}>—</span>
                       )}

@@ -19,6 +19,15 @@ const lineItemSchema = z.object({
   temperature: z.string().optional()
 });
 
+const trackableUnitSchema = z.object({
+  identifier: z.string().min(1),
+  unitType: z.string().min(1),
+  customTypeName: z.string().optional(),
+  barcode: z.string().optional(),
+  notes: z.string().optional(),
+  lineItems: z.array(lineItemSchema).min(1, 'Each trackable unit must have at least one line item')
+});
+
 const createOrderSchema = z.object({
   orderNumber: z.string().min(1),
   poNumber: z.string().optional(),
@@ -54,7 +63,10 @@ const createOrderSchema = z.object({
   requestedPickupDate: z.string().datetime().optional(),
   requestedDeliveryDate: z.string().datetime().optional(),
 
-  // Line items
+  // Trackable units (new preferred way)
+  trackableUnits: z.array(trackableUnitSchema).optional(),
+
+  // Line items (legacy - for backward compatibility)
   lineItems: z.array(lineItemSchema).optional(),
 
   // Additional info
