@@ -17,6 +17,7 @@ model Customer {
   updatedAt    DateTime @updatedAt
   shipments    Shipment[]
   customerLanes CustomerLane[]
+  orders       Order[]
 }
 
 model Location {
@@ -39,6 +40,8 @@ model Location {
   lanesAsOrigin Lane[] @relation("LaneOrigin")
   lanesAsDestination Lane[] @relation("LaneDestination")
   laneStops  LaneStop[]
+  orderOriginFor Order[] @relation("OrderOrigin")
+  orderDestFor   Order[] @relation("OrderDestination")
 }
 
 model Shipment {
@@ -61,6 +64,7 @@ model Shipment {
   lane          Lane?    @relation(fields: [laneId], references: [id])
   laneId        String?
   loads         Load[]
+  orderShipments OrderShipment[]
 }
 
 model Carrier {
@@ -174,4 +178,82 @@ model LaneStop {
 
   @@unique([laneId, order])
   @@unique([laneId, locationId])
+}
+
+model Order {
+  id                    String   @id @default(uuid())
+  orderNumber           String   @unique // Customer's order number or our generated number
+  poNumber              String?  // Purchase order number
+  status                String   @default("pending") // pending, validated, location_error, converted, cancelled, archived
+  importSource          String   @default("manual") // manual, csv, edi
+  ediData               Json?    // Store original EDI data if imported via EDI
+
+  customer              Customer @relation(fields: [customerId], references: [id])
+  customerId            String
+
+  // Origin and destination - nullable because location might not exist yet
+  origin                Location? @relation("OrderOrigin", fields: [originId], references: [id])
+  originId              String?
+  originData            Json?     // Store raw location data if location doesn't exist
+  originValidated       Boolean   @default(false)
+
+  destination           Location? @relation("OrderDestination", fields: [destinationId], references: [id])
+  destinationId         String?
+  destinationData       Json?     // Store raw location data if location doesn't exist
+  destinationValidated  Boolean   @default(false)
+
+  // Dates
+  orderDate             DateTime  @default(now())
+  requestedPickupDate   DateTime?
+  requestedDeliveryDate DateTime?
+
+  // Line items
+  lineItems             OrderLineItem[]
+
+  // Additional info
+  specialInstructions   String?
+  notes                 String?
+
+  // Tracking
+  archived              Boolean   @default(false)
+  archivedAt            DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  // Relationship to shipments
+  orderShipments        OrderShipment[]
+}
+
+model OrderLineItem {
+  id          String  @id @default(uuid())
+  order       Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId     String
+
+  sku         String
+  description String?
+  quantity    Int
+  weight      Float?  // in kg
+  weightUnit  String  @default("kg")
+  length      Float?  // dimensions in cm
+  width       Float?
+  height      Float?
+  dimUnit     String  @default("cm")
+
+  // Additional fields
+  hazmat      Boolean @default(false)
+  temperature String? // e.g., "ambient", "refrigerated", "frozen"
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model OrderShipment {
+  id          String   @id @default(uuid())
+  order       Order    @relation(fields: [orderId], references: [id])
+  orderId     String
+  shipment    Shipment @relation(fields: [shipmentId], references: [id])
+  shipmentId  String
+  createdAt   DateTime @default(now())
+
+  @@unique([orderId, shipmentId])
 }

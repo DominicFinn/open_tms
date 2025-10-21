@@ -11,6 +11,7 @@ import { CarriersRepository } from '../repositories/CarriersRepository.js';
 import { LocationsRepository } from '../repositories/LocationsRepository.js';
 import { ShipmentsRepository } from '../repositories/ShipmentsRepository.js';
 import { LanesRepository } from '../repositories/LanesRepository.js';
+import { OrdersRepository } from '../repositories/OrdersRepository.js';
 
 /**
  * Register all application dependencies
@@ -38,5 +39,9 @@ export function registerDependencies(prisma: PrismaClient): void {
 
   container.singleton(TOKENS.ILanesRepository).toFactory(() => {
     return new LanesRepository(container.resolve(TOKENS.PrismaClient));
+  });
+
+  container.singleton(TOKENS.IOrdersRepository).toFactory(() => {
+    return new OrdersRepository(container.resolve(TOKENS.PrismaClient));
   });
 }

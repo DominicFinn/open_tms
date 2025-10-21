@@ -12,6 +12,8 @@ import CreateLane from './pages/CreateLane';
 import Shipments from './pages/Shipments';
 import CreateShipment from './pages/CreateShipment';
 import ShipmentDetails from './pages/ShipmentDetails';
+import Orders from './pages/Orders';
+import CreateOrder from './pages/CreateOrder';
 import './theme.css';
 
 const root = createRoot(document.getElementById('root')!);
@@ -29,6 +31,8 @@ root.render(
         <Route path="/lanes" element={<Lanes />} />
         <Route path="/lanes/create" element={<CreateLane />} />
         <Route path="/lanes/:id/edit" element={<CreateLane />} />
+        <Route path="/orders" element={<Orders />} />
+        <Route path="/orders/create" element={<CreateOrder />} />
         <Route path="/shipments" element={<Shipments />} />
         <Route path="/shipments/create" element={<CreateShipment />} />
         <Route path="/shipments/:id/edit" element={<CreateShipment />} />
