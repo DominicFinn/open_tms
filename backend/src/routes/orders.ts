@@ -244,6 +244,258 @@ export async function orderRoutes(server: FastifyInstance) {
     return { data: { success: true }, error: null };
   });
 
+  // Add trackable unit to order
+  server.post('/api/v1/orders/:id/trackable-units', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const body = trackableUnitSchema.parse((req as any).body);
+
+    const order = await ordersRepo.findById(id);
+    if (!order) {
+      reply.code(404);
+      return { data: null, error: 'Order not found' };
+    }
+
+    const unit = await ordersRepo.addTrackableUnit(id, body);
+    reply.code(201);
+    return { data: unit, error: null };
+  });
+
+  // Update trackable unit
+  server.put('/api/v1/orders/:orderId/trackable-units/:unitId', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { orderId, unitId } = req.params as { orderId: string; unitId: string };
+    const body = z.object({
+      identifier: z.string().min(1).optional(),
+      notes: z.string().optional(),
+      barcode: z.string().optional()
+    }).parse((req as any).body);
+
+    const order = await ordersRepo.findById(orderId);
+    if (!order) {
+      reply.code(404);
+      return { data: null, error: 'Order not found' };
+    }
+
+    const updated = await ordersRepo.updateTrackableUnit(unitId, body);
+    return { data: updated, error: null };
+  });
+
+  // Remove trackable unit
+  server.delete('/api/v1/orders/:orderId/trackable-units/:unitId', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { orderId, unitId } = req.params as { orderId: string; unitId: string };
+
+    const order = await ordersRepo.findById(orderId);
+    if (!order) {
+      reply.code(404);
+      return { data: null, error: 'Order not found' };
+    }
+
+    await ordersRepo.removeTrackableUnit(unitId);
+    return { data: { success: true }, error: null };
+  });
+
+  // Add line item to trackable unit
+  server.post('/api/v1/orders/:orderId/trackable-units/:unitId/line-items', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { orderId, unitId } = req.params as { orderId: string; unitId: string };
+    const body = lineItemSchema.parse((req as any).body);
+
+    const order = await ordersRepo.findById(orderId);
+    if (!order) {
+      reply.code(404);
+      return { data: null, error: 'Order not found' };
+    }
+
+    const lineItem = await ordersRepo.addLineItemToUnit(unitId, body);
+    reply.code(201);
+    return { data: lineItem, error: null };
+  });
+
+  // Move line item to another trackable unit
+  server.put('/api/v1/orders/:orderId/line-items/:itemId/move', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { orderId, itemId } = req.params as { orderId: string; itemId: string };
+    const body = z.object({
+      targetUnitId: z.string().uuid()
+    }).parse((req as any).body);
+
+    const order = await ordersRepo.findById(orderId);
+    if (!order) {
+      reply.code(404);
+      return { data: null, error: 'Order not found' };
+    }
+
+    const lineItem = await ordersRepo.moveLineItemToUnit(itemId, body.targetUnitId);
+    return { data: lineItem, error: null };
+  });
+
+  // Generate barcode for trackable unit
+  server.post('/api/v1/orders/:orderId/trackable-units/:unitId/generate-barcode', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { orderId, unitId } = req.params as { orderId: string; unitId: string };
+
+    const order = await ordersRepo.findById(orderId);
+    if (!order) {
+      reply.code(404);
+      return { data: null, error: 'Order not found' };
+    }
+
+    const updated = await ordersRepo.generateBarcode(unitId);
+    return { data: updated, error: null };
+  });
+
+  // Convert order to shipment
+  server.post('/api/v1/orders/:id/convert-to-shipment', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+
+    try {
+      const order = await ordersRepo.findById(id);
+      if (!order) {
+        reply.code(404);
+        return { data: null, error: 'Order not found' };
+      }
+
+      const result = await ordersRepo.convertToShipment(id);
+      return { data: result, error: null };
+    } catch (err: any) {
+      reply.code(400);
+      return { data: null, error: err.message || 'Failed to convert order to shipment' };
+    }
+  });
+
+  // Get audit logs for order
+  server.get('/api/v1/orders/:id/audit-logs', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+
+    const order = await ordersRepo.findById(id);
+    if (!order) {
+      reply.code(404);
+      return { data: null, error: 'Order not found' };
+    }
+
+    // Fetch audit logs (for now, return empty array - audit logging would be implemented across all operations)
+    const auditLogs = await (ordersRepo as any).prisma.auditLog.findMany({
+      where: { orderId: id },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    return { data: auditLogs, error: null };
+  });
+
+  // Merge trackable units
+  server.post('/api/v1/orders/:orderId/trackable-units/merge', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { orderId } = req.params as { orderId: string };
+    const body = z.object({
+      sourceUnitId: z.string().uuid(),
+      targetUnitId: z.string().uuid()
+    }).parse((req as any).body);
+
+    try {
+      const order = await ordersRepo.findById(orderId);
+      if (!order) {
+        reply.code(404);
+        return { data: null, error: 'Order not found' };
+      }
+
+      await ordersRepo.mergeUnits(body.sourceUnitId, body.targetUnitId);
+      return { data: { success: true }, error: null };
+    } catch (err: any) {
+      reply.code(400);
+      return { data: null, error: err.message || 'Failed to merge units' };
+    }
+  });
+
+  // Split trackable unit
+  server.post('/api/v1/orders/:orderId/trackable-units/:unitId/split', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { orderId, unitId } = req.params as { orderId: string; unitId: string };
+    const body = z.object({
+      itemIdsToMove: z.array(z.string().uuid()),
+      newIdentifier: z.string().min(1),
+      notes: z.string().optional()
+    }).parse((req as any).body);
+
+    try {
+      const order = await ordersRepo.findById(orderId);
+      if (!order) {
+        reply.code(404);
+        return { data: null, error: 'Order not found' };
+      }
+
+      const newUnit = await ordersRepo.splitUnit(unitId, body.itemIdsToMove, {
+        identifier: body.newIdentifier,
+        notes: body.notes
+      });
+
+      reply.code(201);
+      return { data: newUnit, error: null };
+    } catch (err: any) {
+      reply.code(400);
+      return { data: null, error: err.message || 'Failed to split unit' };
+    }
+  });
+
+  // Export order to CSV
+  server.get('/api/v1/orders/:id/export/csv', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+
+    const order = await ordersRepo.findById(id);
+    if (!order) {
+      reply.code(404);
+      return { data: null, error: 'Order not found' };
+    }
+
+    // Build CSV content
+    const csvRows = [];
+
+    // Header
+    csvRows.push('Unit ID,Unit Type,Line Item,SKU,Description,Quantity,Weight,Weight Unit,Length,Width,Height,Dim Unit,Hazmat,Temperature');
+
+    // Trackable units
+    order.trackableUnits.forEach(unit => {
+      unit.lineItems.forEach((item, index) => {
+        csvRows.push([
+          unit.identifier,
+          unit.customTypeName || unit.unitType,
+          index + 1,
+          item.sku,
+          item.description || '',
+          item.quantity,
+          item.weight || '',
+          item.weightUnit || '',
+          item.length || '',
+          item.width || '',
+          item.height || '',
+          item.dimUnit || '',
+          item.hazmat ? 'Yes' : 'No',
+          item.temperature || ''
+        ].map(field => `"${field}"`).join(','));
+      });
+    });
+
+    // Legacy line items
+    order.lineItems.forEach((item, index) => {
+      csvRows.push([
+        'N/A',
+        'Legacy',
+        index + 1,
+        item.sku,
+        item.description || '',
+        item.quantity,
+        item.weight || '',
+        item.weightUnit || '',
+        item.length || '',
+        item.width || '',
+        item.height || '',
+        item.dimUnit || '',
+        item.hazmat ? 'Yes' : 'No',
+        item.temperature || ''
+      ].map(field => `"${field}"`).join(','));
+    });
+
+    const csvContent = csvRows.join('\n');
+
+    reply
+      .header('Content-Type', 'text/csv')
+      .header('Content-Disposition', `attachment; filename="order-${order.orderNumber}.csv"`)
+      .send(csvContent);
+  });
+
   // CSV Import endpoint (placeholder)
   server.post('/api/v1/orders/import/csv', async (req: FastifyRequest, reply: FastifyReply) => {
     // TODO: Implement CSV parsing and order creation

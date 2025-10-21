@@ -137,6 +137,40 @@ export default function OrderDetails() {
     }
   };
 
+  const handleConvertToShipment = async () => {
+    if (!order) return;
+
+    if (!confirm(`Convert order ${order.orderNumber} to a shipment? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/api/v1/orders/${order.id}/convert-to-shipment`, {
+        method: 'POST'
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to convert order to shipment');
+      }
+
+      // Navigate to the new shipment
+      navigate(`/shipments/${result.data.shipmentId}`);
+    } catch (err: any) {
+      setError(err.message || 'Failed to convert order to shipment');
+    }
+  };
+
+  const handlePrint = () => {
+    window.print();
+  };
+
+  const handleExportCSV = () => {
+    if (!order) return;
+    window.location.href = `${API_URL}/api/v1/orders/${order.id}/export/csv`;
+  };
+
   const getStatusBadge = (status: string) => {
     const color = statusColors[status] || 'var(--color-grey)';
     return (
@@ -245,18 +279,52 @@ export default function OrderDetails() {
           </div>
           <div style={{ display: 'flex', gap: 'var(--spacing-1)', alignItems: 'center' }}>
             {getStatusBadge(order.status)}
+            <button
+              onClick={handleExportCSV}
+              className="button button-sm button-outline no-print"
+            >
+              <span className="material-icons" style={{ fontSize: '16px' }}>download</span>
+              Export CSV
+            </button>
+            <button
+              onClick={handlePrint}
+              className="button button-sm button-outline no-print"
+            >
+              <span className="material-icons" style={{ fontSize: '16px' }}>print</span>
+              Print
+            </button>
+            {order.status !== 'converted' && order.status !== 'archived' && (
+              <>
+                <button
+                  onClick={() => navigate(`/orders/${order.id}/edit`)}
+                  className="button button-sm button-outline no-print"
+                >
+                  <span className="material-icons" style={{ fontSize: '16px' }}>edit</span>
+                  Edit
+                </button>
+                {order.originId && order.destinationId && (
+                  <button
+                    onClick={handleConvertToShipment}
+                    className="button button-sm button-primary no-print"
+                  >
+                    <span className="material-icons" style={{ fontSize: '16px' }}>local_shipping</span>
+                    Convert to Shipment
+                  </button>
+                )}
+              </>
+            )}
             {showDeleteConfirm ? (
               <>
                 <button
                   onClick={handleDelete}
-                  className="button button-sm"
+                  className="button button-sm no-print"
                   style={{ backgroundColor: 'var(--color-error)', color: 'white' }}
                 >
                   Confirm Archive
                 </button>
                 <button
                   onClick={() => setShowDeleteConfirm(false)}
-                  className="button button-sm button-outline"
+                  className="button button-sm button-outline no-print"
                 >
                   Cancel
                 </button>
@@ -264,7 +332,7 @@ export default function OrderDetails() {
             ) : (
               <button
                 onClick={() => setShowDeleteConfirm(true)}
-                className="button button-sm button-outline"
+                className="button button-sm button-outline no-print"
                 style={{ color: 'var(--color-error)', borderColor: 'var(--color-error)' }}
               >
                 <span className="material-icons" style={{ fontSize: '16px' }}>delete</span>

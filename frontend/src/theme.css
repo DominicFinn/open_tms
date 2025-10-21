@@ -773,3 +773,96 @@ input:disabled + .slider {
     min-height: 44px;
   }
 }
+
+/* Print Styles */
+@media print {
+  /* Hide navigation and non-essential elements */
+  .no-print,
+  nav,
+  .sidebar,
+  .app-bar,
+  button.no-print,
+  .alert {
+    display: none !important;
+  }
+
+  /* Reset page layout for print */
+  body {
+    background: white;
+    color: black;
+    margin: 0;
+    padding: 20px;
+  }
+
+  .main-content {
+    margin: 0;
+    padding: 0;
+    max-width: 100%;
+  }
+
+  .card {
+    box-shadow: none;
+    border: 1px solid #ccc;
+    page-break-inside: avoid;
+    margin-bottom: 20px;
+    padding: 20px;
+  }
+
+  /* Table styling for print */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    page-break-inside: auto;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+
+  td, th {
+    padding: 8px;
+    border: 1px solid #ddd;
+  }
+
+  /* Typography adjustments */
+  h1, h2, h3, h4, h5, h6 {
+    page-break-after: avoid;
+    color: black;
+  }
+
+  h1 { font-size: 24pt; }
+  h2 { font-size: 20pt; }
+  h3 { font-size: 16pt; }
+  h4 { font-size: 14pt; }
+
+  /* Remove background colors */
+  * {
+    background-color: white !important;
+    color: black !important;
+  }
+
+  /* Keep table headers */
+  .data-table th {
+    background-color: #f0f0f0 !important;
+    font-weight: bold;
+  }
+
+  /* Print links with URL */
+  a[href]:after {
+    content: " (" attr(href) ")";
+    font-size: 10pt;
+  }
+
+  /* Status badges */
+  .status-badge,
+  span[style*="border-radius"] {
+    border: 1px solid black !important;
+    padding: 4px 8px !important;
+    display: inline-block !important;
+  }
+}

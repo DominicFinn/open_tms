@@ -225,6 +225,9 @@ model Order {
 
   // Relationship to shipments
   orderShipments        OrderShipment[]
+
+  // Audit trail
+  auditLogs             AuditLog[]
 }
 
 model OrderLineItem {
@@ -304,4 +307,33 @@ model TrackableUnit {
 
   @@unique([orderId, sequenceNumber])
   @@index([orderId])
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+
+  // Entity tracking
+  entityType  String   // "order", "trackable_unit", "line_item"
+  entityId    String   // ID of the affected entity
+  orderId     String?  // Reference to order for easy filtering
+  order       Order?   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  // Action details
+  action      String   // "created", "updated", "deleted", "converted", "moved", etc.
+  description String   // Human-readable description
+  changes     Json?    // JSON object with before/after values
+
+  // User tracking (placeholder for future authentication)
+  userId      String?  // User who performed the action
+  userName    String?  // Name of the user
+
+  // Metadata
+  ipAddress   String?
+  userAgent   String?
+
+  createdAt   DateTime @default(now())
+
+  @@index([orderId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
 }
