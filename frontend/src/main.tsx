@@ -14,6 +14,7 @@ import CreateShipment from './pages/CreateShipment';
 import ShipmentDetails from './pages/ShipmentDetails';
 import Orders from './pages/Orders';
 import CreateOrder from './pages/CreateOrder';
+import OrderDetails from './pages/OrderDetails';
 import Settings from './pages/Settings';
 import './theme.css';
 
@@ -34,6 +35,7 @@ root.render(
         <Route path="/lanes/:id/edit" element={<CreateLane />} />
         <Route path="/orders" element={<Orders />} />
         <Route path="/orders/create" element={<CreateOrder />} />
+        <Route path="/orders/:id" element={<OrderDetails />} />
         <Route path="/shipments" element={<Shipments />} />
         <Route path="/shipments/create" element={<CreateShipment />} />
         <Route path="/shipments/:id/edit" element={<CreateShipment />} />
