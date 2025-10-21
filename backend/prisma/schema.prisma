@@ -207,7 +207,10 @@ model Order {
   requestedPickupDate   DateTime?
   requestedDeliveryDate DateTime?
 
-  // Line items
+  // Trackable units (pallets, totes, boxes, etc.)
+  trackableUnits        TrackableUnit[]
+
+  // Line items (legacy - will be moved to trackable units)
   lineItems             OrderLineItem[]
 
   // Additional info
@@ -228,6 +231,10 @@ model OrderLineItem {
   id          String  @id @default(uuid())
   order       Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
   orderId     String
+
+  // Optional: which trackable unit does this item belong to?
+  trackableUnit   TrackableUnit? @relation(fields: [trackableUnitId], references: [id], onDelete: Cascade)
+  trackableUnitId String?
 
   sku         String
   description String?
@@ -256,4 +263,45 @@ model OrderShipment {
   createdAt   DateTime @default(now())
 
   @@unique([orderId, shipmentId])
+}
+
+model Organization {
+  id                  String   @id @default(uuid())
+  name                String   @default("Default Organization")
+
+  // Lowest Trackable Unit Configuration
+  trackingMode        String   @default("item") // "group" or "item"
+  trackableUnitType   String   @default("box") // "pallet", "tote", "box", "stillage", "custom"
+  customUnitName      String?  // Used when trackableUnitType is "custom"
+
+  // Metadata
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+model TrackableUnit {
+  id              String   @id @default(uuid())
+  order           Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId         String
+
+  // Unit identification
+  identifier      String   // e.g., "PALLET-001", "BOX-123", user-defined identifier
+  unitType        String   // Snapshot of the org setting at creation time (pallet, tote, box, stillage, custom)
+  customTypeName  String?  // If custom type was used
+
+  // Sequence number within the order
+  sequenceNumber  Int      // 1, 2, 3... for ordering within an order
+
+  // Line items contained in this unit
+  lineItems       OrderLineItem[]
+
+  // Additional tracking
+  barcode         String?  // Optional barcode/QR code
+  notes           String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([orderId, sequenceNumber])
+  @@index([orderId])
 }

@@ -14,6 +14,7 @@ import CreateShipment from './pages/CreateShipment';
 import ShipmentDetails from './pages/ShipmentDetails';
 import Orders from './pages/Orders';
 import CreateOrder from './pages/CreateOrder';
+import Settings from './pages/Settings';
 import './theme.css';
 
 const root = createRoot(document.getElementById('root')!);
@@ -37,6 +38,7 @@ root.render(
         <Route path="/shipments/create" element={<CreateShipment />} />
         <Route path="/shipments/:id/edit" element={<CreateShipment />} />
         <Route path="/shipments/:id" element={<ShipmentDetails />} />
+        <Route path="/settings" element={<Settings />} />
       </Routes>
     </Layout>
   </BrowserRouter>
