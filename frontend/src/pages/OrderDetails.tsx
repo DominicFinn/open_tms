@@ -70,6 +70,25 @@ interface Order {
   orderDate: string;
   requestedPickupDate?: string;
   requestedDeliveryDate?: string;
+  // Delivery status fields
+  deliveryStatus: string;
+  deliveredAt?: string;
+  deliveryConfirmedBy?: string;
+  deliveryMethod?: string;
+  deliveryNotes?: string;
+  exceptionType?: string;
+  exceptionNotes?: string;
+  exceptionResolvedAt?: string;
+  deliveryStop?: {
+    id: string;
+    sequenceNumber: number;
+    location: {
+      id: string;
+      name: string;
+      city: string;
+    };
+    status: string;
+  };
   trackableUnits: TrackableUnit[];
   lineItems: OrderLineItem[];
   specialInstructions?: string;
@@ -88,6 +107,15 @@ const statusColors: { [key: string]: string } = {
   pending_lane: 'var(--color-warning)',
   cancelled: 'var(--color-grey)',
   archived: 'var(--color-grey)'
+};
+
+const deliveryStatusColors: { [key: string]: string } = {
+  unassigned: 'var(--color-grey)',
+  assigned: 'var(--color-info)',
+  in_transit: 'var(--color-primary)',
+  delivered: 'var(--color-success)',
+  exception: 'var(--color-error)',
+  cancelled: 'var(--color-grey)'
 };
 
 export default function OrderDetails() {
@@ -212,8 +240,121 @@ export default function OrderDetails() {
     }
   };
 
+  const handleMarkDelivered = async () => {
+    if (!order) return;
+
+    const notes = prompt('Delivery notes (optional):');
+    if (notes === null) return; // User cancelled
+
+    try {
+      const response = await fetch(`${API_URL}/api/v1/orders/${order.id}/mark-delivered`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          method: 'manual',
+          confirmedBy: 'user', // In future, use actual user ID
+          notes: notes || undefined
+        })
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to mark order as delivered');
+      }
+
+      alert('Order marked as delivered successfully!');
+      loadOrder();
+    } catch (err: any) {
+      setError(err.message || 'Failed to mark order as delivered');
+    }
+  };
+
+  const handleCreateException = async () => {
+    if (!order) return;
+
+    const exceptionType = prompt('Exception type (delay/damage/refused/address_issue/weather/other):');
+    if (!exceptionType) return;
+
+    const exceptionNotes = prompt('Exception details:');
+    if (!exceptionNotes) return;
+
+    try {
+      const response = await fetch(`${API_URL}/api/v1/orders/${order.id}/delivery-exception`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          exceptionType,
+          exceptionNotes,
+          reportedBy: 'user'
+        })
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to create exception');
+      }
+
+      alert('Exception created successfully!');
+      loadOrder();
+    } catch (err: any) {
+      setError(err.message || 'Failed to create exception');
+    }
+  };
+
+  const handleResolveException = async () => {
+    if (!order) return;
+
+    const notes = prompt('Resolution notes (optional):');
+    if (notes === null) return; // User cancelled
+
+    try {
+      const response = await fetch(`${API_URL}/api/v1/orders/${order.id}/resolve-exception`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          resolvedBy: 'user',
+          notes: notes || undefined
+        })
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to resolve exception');
+      }
+
+      alert('Exception resolved successfully!');
+      loadOrder();
+    } catch (err: any) {
+      setError(err.message || 'Failed to resolve exception');
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     const color = statusColors[status] || 'var(--color-grey)';
+    return (
+      <span
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          padding: '6px 16px',
+          borderRadius: '16px',
+          fontSize: '14px',
+          fontWeight: '500',
+          backgroundColor: `${color}15`,
+          color: color,
+          textTransform: 'capitalize'
+        }}
+      >
+        {status.replace('_', ' ')}
+      </span>
+    );
+  };
+
+  const getDeliveryStatusBadge = (status: string) => {
+    const color = deliveryStatusColors[status] || 'var(--color-grey)';
     return (
       <span
         style={{
@@ -447,6 +588,159 @@ export default function OrderDetails() {
             </div>
             {getLocationDisplay(order.destination, order.destinationData, order.destinationValidated)}
           </div>
+        </div>
+      </div>
+
+      {/* Delivery Status */}
+      <div className="card">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-2)' }}>
+          <h3 style={{ margin: 0 }}>Delivery Status</h3>
+          {getDeliveryStatusBadge(order.deliveryStatus)}
+        </div>
+
+        {/* Status Info Grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--spacing-2)', marginBottom: 'var(--spacing-2)' }}>
+          <div>
+            <div style={{ fontSize: '12px', color: 'var(--color-grey)', textTransform: 'uppercase', marginBottom: '4px' }}>Status</div>
+            <div style={{ fontWeight: '500', textTransform: 'capitalize' }}>{order.deliveryStatus.replace('_', ' ')}</div>
+          </div>
+
+          {order.deliveryMethod && (
+            <div>
+              <div style={{ fontSize: '12px', color: 'var(--color-grey)', textTransform: 'uppercase', marginBottom: '4px' }}>Confirmation Method</div>
+              <div style={{ fontWeight: '500', textTransform: 'capitalize' }}>{order.deliveryMethod.replace('_', ' ')}</div>
+            </div>
+          )}
+
+          {order.deliveredAt && (
+            <div>
+              <div style={{ fontSize: '12px', color: 'var(--color-grey)', textTransform: 'uppercase', marginBottom: '4px' }}>Delivered At</div>
+              <div style={{ fontWeight: '500' }}>{new Date(order.deliveredAt).toLocaleString()}</div>
+            </div>
+          )}
+
+          {order.deliveryConfirmedBy && (
+            <div>
+              <div style={{ fontSize: '12px', color: 'var(--color-grey)', textTransform: 'uppercase', marginBottom: '4px' }}>Confirmed By</div>
+              <div style={{ fontWeight: '500' }}>{order.deliveryConfirmedBy}</div>
+            </div>
+          )}
+        </div>
+
+        {/* Delivery Stop Info (Multi-leg shipment) */}
+        {order.deliveryStop && (
+          <div style={{
+            padding: 'var(--spacing-2)',
+            backgroundColor: 'var(--color-info-light)',
+            border: '1px solid var(--color-info)',
+            borderRadius: '8px',
+            marginBottom: 'var(--spacing-2)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-1)', marginBottom: '4px' }}>
+              <span className="material-icons" style={{ color: 'var(--color-info)', fontSize: '18px' }}>flag</span>
+              <strong>Multi-Leg Shipment - Stop #{order.deliveryStop.sequenceNumber}</strong>
+            </div>
+            <div style={{ fontSize: '14px', color: 'var(--color-grey)' }}>
+              Delivery at: {order.deliveryStop.location.name}, {order.deliveryStop.location.city}
+            </div>
+            <div style={{ fontSize: '14px', color: 'var(--color-grey)' }}>
+              Stop Status: <span style={{ textTransform: 'capitalize', fontWeight: '500' }}>{order.deliveryStop.status}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Exception Info */}
+        {order.deliveryStatus === 'exception' && (
+          <div style={{
+            padding: 'var(--spacing-2)',
+            backgroundColor: 'var(--color-error-light)',
+            border: '1px solid var(--color-error)',
+            borderRadius: '8px',
+            marginBottom: 'var(--spacing-2)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-1)', marginBottom: '8px' }}>
+              <span className="material-icons" style={{ color: 'var(--color-error)' }}>warning</span>
+              <strong>Delivery Exception</strong>
+            </div>
+            {order.exceptionType && (
+              <div style={{ marginBottom: '4px' }}>
+                <strong>Type:</strong> <span style={{ textTransform: 'capitalize' }}>{order.exceptionType.replace('_', ' ')}</span>
+              </div>
+            )}
+            {order.exceptionNotes && (
+              <div style={{ marginBottom: '4px' }}>
+                <strong>Details:</strong> {order.exceptionNotes}
+              </div>
+            )}
+            {order.exceptionResolvedAt && (
+              <div style={{ fontSize: '14px', color: 'var(--color-success)' }}>
+                Resolved: {new Date(order.exceptionResolvedAt).toLocaleString()}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Delivery Notes */}
+        {order.deliveryNotes && (
+          <div style={{
+            padding: 'var(--spacing-2)',
+            backgroundColor: 'var(--color-surface)',
+            border: '1px solid var(--color-border)',
+            borderRadius: '8px',
+            marginBottom: 'var(--spacing-2)'
+          }}>
+            <div style={{ fontSize: '12px', color: 'var(--color-grey)', textTransform: 'uppercase', marginBottom: '4px' }}>Delivery Notes</div>
+            <div style={{ whiteSpace: 'pre-wrap' }}>{order.deliveryNotes}</div>
+          </div>
+        )}
+
+        {/* Action Buttons */}
+        <div style={{ display: 'flex', gap: 'var(--spacing-1)', flexWrap: 'wrap' }} className="no-print">
+          {order.deliveryStatus !== 'delivered' && order.deliveryStatus !== 'cancelled' && (
+            <>
+              {order.deliveryStatus === 'exception' ? (
+                <button
+                  onClick={handleResolveException}
+                  className="button button-sm button-success"
+                >
+                  <span className="material-icons" style={{ fontSize: '16px' }}>check_circle</span>
+                  Resolve Exception
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={handleMarkDelivered}
+                    className="button button-sm button-success"
+                  >
+                    <span className="material-icons" style={{ fontSize: '16px' }}>check_circle</span>
+                    Mark Delivered
+                  </button>
+                  <button
+                    onClick={handleCreateException}
+                    className="button button-sm button-outline"
+                    style={{ borderColor: 'var(--color-error)', color: 'var(--color-error)' }}
+                  >
+                    <span className="material-icons" style={{ fontSize: '16px' }}>warning</span>
+                    Report Exception
+                  </button>
+                </>
+              )}
+            </>
+          )}
+          {order.deliveryStatus === 'delivered' && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 'var(--spacing-1)',
+              padding: 'var(--spacing-1)',
+              backgroundColor: 'var(--color-success-light)',
+              borderRadius: '8px',
+              color: 'var(--color-success)'
+            }}>
+              <span className="material-icons">check_circle</span>
+              <span style={{ fontWeight: '500' }}>Order delivered successfully</span>
+            </div>
+          )}
         </div>
       </div>
 
