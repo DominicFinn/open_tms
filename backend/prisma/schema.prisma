@@ -42,6 +42,8 @@ model Location {
   laneStops  LaneStop[]
   orderOriginFor Order[] @relation("OrderOrigin")
   orderDestFor   Order[] @relation("OrderDestination")
+  pendingLaneRequestsAsOrigin PendingLaneRequest[] @relation("PendingLaneOrigin")
+  pendingLaneRequestsAsDestination PendingLaneRequest[] @relation("PendingLaneDestination")
 }
 
 model Shipment {
@@ -126,6 +128,14 @@ model Lane {
   destinationId String
   distance      Float?   // Optional distance in km
   notes         String?
+
+  // Lane capabilities for order matching
+  serviceLevel          String    @default("LTL") // "FTL", "LTL", or "Both"
+  supportsTemperatureControl Boolean @default(false) // Can handle refrigerated/frozen
+  supportsHazmat        Boolean   @default(false) // Hazmat certified
+  maxWeight             Float?    // Maximum weight capacity in kg
+  maxVolume             Float?    // Maximum volume capacity in m³
+
   status        String   @default("active") // active/archived
   archived      Boolean  @default(false)
   archivedAt    DateTime?
@@ -207,6 +217,12 @@ model Order {
   requestedPickupDate   DateTime?
   requestedDeliveryDate DateTime?
 
+  // Special requirements for shipment assignment
+  serviceLevel          String    @default("LTL") // "FTL" (Full Truck Load) or "LTL" (Less Than Truck Load)
+  temperatureControl    String    @default("ambient") // "ambient", "refrigerated", "frozen"
+  requiresHazmat        Boolean   @default(false)
+  specialRequirements   Json?     // Additional requirements as JSON array
+
   // Trackable units (pallets, totes, boxes, etc.)
   trackableUnits        TrackableUnit[]
 
@@ -228,6 +244,9 @@ model Order {
 
   // Audit trail
   auditLogs             AuditLog[]
+
+  // Pending lane requests
+  pendingLaneRequests   PendingLaneRequest[]
 }
 
 model OrderLineItem {
@@ -336,4 +355,39 @@ model AuditLog {
   @@index([orderId])
   @@index([entityType, entityId])
   @@index([createdAt])
+}
+
+model PendingLaneRequest {
+  id          String   @id @default(uuid())
+
+  // Order that triggered this request
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId     String
+
+  // Lane details needed
+  originId      String
+  origin        Location @relation("PendingLaneOrigin", fields: [originId], references: [id])
+  destinationId String
+  destination   Location @relation("PendingLaneDestination", fields: [destinationId], references: [id])
+
+  // Required capabilities
+  serviceLevel          String   // "FTL" or "LTL"
+  requiresTemperatureControl Boolean @default(false)
+  requiresHazmat        Boolean  @default(false)
+
+  // Status tracking
+  status        String   @default("pending") // "pending", "approved", "rejected", "lane_created"
+  resolvedAt    DateTime?
+  resolvedById  String?  // User who resolved this request
+  createdLaneId String?  // If approved and lane was created
+
+  // Notes
+  notes         String?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([status])
+  @@index([originId, destinationId])
 }

@@ -13,6 +13,7 @@ import { ShipmentsRepository } from '../repositories/ShipmentsRepository.js';
 import { LanesRepository } from '../repositories/LanesRepository.js';
 import { OrdersRepository } from '../repositories/OrdersRepository.js';
 import { OrganizationRepository } from '../repositories/OrganizationRepository.js';
+import { ShipmentAssignmentService } from '../services/ShipmentAssignmentService.js';
 
 /**
  * Register all application dependencies
@@ -48,5 +49,10 @@ export function registerDependencies(prisma: PrismaClient): void {
 
   container.singleton(TOKENS.IOrganizationRepository).toFactory(() => {
     return new OrganizationRepository(container.resolve(TOKENS.PrismaClient));
+  });
+
+  // Register services as singletons
+  container.singleton(TOKENS.IShipmentAssignmentService).toFactory(() => {
+    return new ShipmentAssignmentService(container.resolve(TOKENS.PrismaClient));
   });
 }

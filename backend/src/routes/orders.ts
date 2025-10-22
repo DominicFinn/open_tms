@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { IOrdersRepository } from '../repositories/OrdersRepository.js';
 import { ILocationsRepository } from '../repositories/LocationsRepository.js';
+import { IShipmentAssignmentService } from '../services/ShipmentAssignmentService.js';
 import { container, TOKENS } from '../di/index.js';
 
 // Validation schemas
@@ -63,6 +64,12 @@ const createOrderSchema = z.object({
   requestedPickupDate: z.string().datetime().optional(),
   requestedDeliveryDate: z.string().datetime().optional(),
 
+  // Special requirements
+  serviceLevel: z.enum(['FTL', 'LTL']).default('LTL'),
+  temperatureControl: z.enum(['ambient', 'refrigerated', 'frozen']).default('ambient'),
+  requiresHazmat: z.boolean().default(false),
+  specialRequirements: z.array(z.string()).optional(),
+
   // Trackable units (new preferred way)
   trackableUnits: z.array(trackableUnitSchema).optional(),
 
@@ -89,6 +96,7 @@ const updateOrderSchema = z.object({
 export async function orderRoutes(server: FastifyInstance) {
   const ordersRepo = container.resolve<IOrdersRepository>(TOKENS.IOrdersRepository);
   const locationsRepo = container.resolve<ILocationsRepository>(TOKENS.ILocationsRepository);
+  const assignmentService = container.resolve<IShipmentAssignmentService>(TOKENS.IShipmentAssignmentService);
 
   // Get all orders
   server.get('/api/v1/orders', async (_req: FastifyRequest, _reply: FastifyReply) => {
@@ -514,5 +522,30 @@ export async function orderRoutes(server: FastifyInstance) {
       data: null,
       error: 'EDI import not yet implemented. Coming soon!'
     };
+  });
+
+  // Assign order to shipment based on matching lane
+  server.post('/api/v1/orders/:id/assign-to-shipment', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+
+    try {
+      const order = await ordersRepo.findById(id);
+      if (!order) {
+        reply.code(404);
+        return { data: null, error: 'Order not found' };
+      }
+
+      const result = await assignmentService.assignOrderToShipment(id);
+
+      if (!result.success) {
+        reply.code(400);
+        return { data: null, error: result.message };
+      }
+
+      return { data: result, error: null };
+    } catch (err: any) {
+      reply.code(500);
+      return { data: null, error: err.message || 'Failed to assign order to shipment' };
+    }
   });
 }

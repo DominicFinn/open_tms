@@ -13,6 +13,9 @@ export const TOKENS = {
   IOrdersRepository: Symbol.for('IOrdersRepository'),
   IOrganizationRepository: Symbol.for('IOrganizationRepository'),
 
+  // Service tokens
+  IShipmentAssignmentService: Symbol.for('IShipmentAssignmentService'),
+
   // Infrastructure tokens
   PrismaClient: Symbol.for('PrismaClient'),
 } as const;

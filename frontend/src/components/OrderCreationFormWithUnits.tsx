@@ -79,6 +79,11 @@ export default function OrderCreationFormWithUnits({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Special requirements
+  const [serviceLevel, setServiceLevel] = useState<'FTL' | 'LTL'>('LTL');
+  const [temperatureControl, setTemperatureControl] = useState<'ambient' | 'refrigerated' | 'frozen'>('ambient');
+  const [requiresHazmat, setRequiresHazmat] = useState(false);
+
   useEffect(() => {
     loadCustomers();
     loadOrgSettings();
@@ -227,6 +232,9 @@ export default function OrderCreationFormWithUnits({
         customerId,
         requestedPickupDate: requestedPickupDate ? new Date(requestedPickupDate).toISOString() : undefined,
         requestedDeliveryDate: requestedDeliveryDate ? new Date(requestedDeliveryDate).toISOString() : undefined,
+        serviceLevel,
+        temperatureControl,
+        requiresHazmat,
         trackableUnits,
         specialInstructions: specialInstructions || undefined,
         notes: notes || undefined,
@@ -395,6 +403,37 @@ export default function OrderCreationFormWithUnits({
       <div className="input-wrapper">
         <input type="date" value={requestedDeliveryDate} onChange={(e) => setRequestedDeliveryDate(e.target.value)} className="input" />
         <label>Requested Delivery Date</label>
+      </div>
+
+      <h3 style={{ gridColumn: '1 / -1', marginTop: 'var(--spacing-2)' }}>Special Requirements</h3>
+
+      <div className="input-wrapper">
+        <select value={serviceLevel} onChange={(e) => setServiceLevel(e.target.value as 'FTL' | 'LTL')} className="input" required>
+          <option value="LTL">LTL (Less Than Truck Load)</option>
+          <option value="FTL">FTL (Full Truck Load)</option>
+        </select>
+        <label>Service Level *</label>
+      </div>
+
+      <div className="input-wrapper">
+        <select value={temperatureControl} onChange={(e) => setTemperatureControl(e.target.value as 'ambient' | 'refrigerated' | 'frozen')} className="input" required>
+          <option value="ambient">Ambient</option>
+          <option value="refrigerated">Refrigerated</option>
+          <option value="frozen">Frozen</option>
+        </select>
+        <label>Temperature Control *</label>
+      </div>
+
+      <div className="input-wrapper" style={{ gridColumn: '1 / -1' }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={requiresHazmat}
+            onChange={(e) => setRequiresHazmat(e.target.checked)}
+            style={{ width: 'auto' }}
+          />
+          <span>Requires Hazmat Certification</span>
+        </label>
       </div>
 
       <h3 style={{ gridColumn: '1 / -1', marginTop: 'var(--spacing-2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
