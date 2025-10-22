@@ -84,6 +84,8 @@ const statusColors: { [key: string]: string } = {
   validated: 'var(--color-success)',
   location_error: 'var(--color-error)',
   converted: 'var(--color-info)',
+  assigned: 'var(--color-success)',
+  pending_lane: 'var(--color-warning)',
   cancelled: 'var(--color-grey)',
   archived: 'var(--color-grey)'
 };
@@ -169,6 +171,45 @@ export default function OrderDetails() {
   const handleExportCSV = () => {
     if (!order) return;
     window.location.href = `${API_URL}/api/v1/orders/${order.id}/export/csv`;
+  };
+
+  const handleAssignToShipment = async () => {
+    if (!order) return;
+
+    if (!confirm(`Attempt to automatically assign order ${order.orderNumber} to a matching shipment?`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/api/v1/orders/${order.id}/assign-to-shipment`, {
+        method: 'POST'
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to assign order to shipment');
+      }
+
+      // Show result message
+      if (result.data.shipmentId) {
+        if (confirm(`Order assigned to shipment! Would you like to view the shipment now?`)) {
+          navigate(`/shipments/${result.data.shipmentId}`);
+        } else {
+          // Reload order to show updated status
+          loadOrder();
+        }
+      } else if (result.data.pendingLaneRequestId) {
+        alert(`No matching lane found. A pending lane request has been created. Please review pending lane requests to create the required lane.`);
+        // Reload order to show updated status
+        loadOrder();
+      } else {
+        alert(result.data.message);
+        loadOrder();
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to assign order to shipment');
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -293,7 +334,7 @@ export default function OrderDetails() {
               <span className="material-icons" style={{ fontSize: '16px' }}>print</span>
               Print
             </button>
-            {order.status !== 'converted' && order.status !== 'archived' && (
+            {order.status !== 'converted' && order.status !== 'archived' && order.status !== 'assigned' && (
               <>
                 <button
                   onClick={() => navigate(`/orders/${order.id}/edit`)}
@@ -303,13 +344,22 @@ export default function OrderDetails() {
                   Edit
                 </button>
                 {order.originId && order.destinationId && (
-                  <button
-                    onClick={handleConvertToShipment}
-                    className="button button-sm button-primary no-print"
-                  >
-                    <span className="material-icons" style={{ fontSize: '16px' }}>local_shipping</span>
-                    Convert to Shipment
-                  </button>
+                  <>
+                    <button
+                      onClick={handleAssignToShipment}
+                      className="button button-sm button-primary no-print"
+                    >
+                      <span className="material-icons" style={{ fontSize: '16px' }}>auto_awesome</span>
+                      Assign to Shipment
+                    </button>
+                    <button
+                      onClick={handleConvertToShipment}
+                      className="button button-sm button-outline no-print"
+                    >
+                      <span className="material-icons" style={{ fontSize: '16px' }}>local_shipping</span>
+                      Manual Convert
+                    </button>
+                  </>
                 )}
               </>
             )}

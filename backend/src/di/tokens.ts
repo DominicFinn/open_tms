@@ -12,6 +12,7 @@ export const TOKENS = {
   ILanesRepository: Symbol.for('ILanesRepository'),
   IOrdersRepository: Symbol.for('IOrdersRepository'),
   IOrganizationRepository: Symbol.for('IOrganizationRepository'),
+  IPendingLaneRequestsRepository: Symbol.for('IPendingLaneRequestsRepository'),
 
   // Service tokens
   IShipmentAssignmentService: Symbol.for('IShipmentAssignmentService'),

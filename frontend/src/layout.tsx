@@ -45,6 +45,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <span className="material-icons">local_shipping</span>
             Shipments
           </NavLink>
+          <NavLink to="/pending-lane-requests" onClick={closeMobileMenu}>
+            <span className="material-icons">pending_actions</span>
+            Pending Lane Requests
+          </NavLink>
           <div style={{ borderTop: '1px solid var(--color-border)', margin: 'var(--spacing-1) 0' }}></div>
           <NavLink to="/settings" onClick={closeMobileMenu}>
             <span className="material-icons">settings</span>

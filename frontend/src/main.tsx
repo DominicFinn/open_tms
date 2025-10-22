@@ -16,6 +16,7 @@ import Orders from './pages/Orders';
 import CreateOrder from './pages/CreateOrder';
 import OrderDetails from './pages/OrderDetails';
 import EditOrder from './pages/EditOrder';
+import PendingLaneRequests from './pages/PendingLaneRequests';
 import Settings from './pages/Settings';
 import './theme.css';
 
@@ -42,6 +43,7 @@ root.render(
         <Route path="/shipments/create" element={<CreateShipment />} />
         <Route path="/shipments/:id/edit" element={<CreateShipment />} />
         <Route path="/shipments/:id" element={<ShipmentDetails />} />
+        <Route path="/pending-lane-requests" element={<PendingLaneRequests />} />
         <Route path="/settings" element={<Settings />} />
       </Routes>
     </Layout>
