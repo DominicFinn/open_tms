@@ -4,6 +4,7 @@ import { IOrdersRepository } from '../repositories/OrdersRepository.js';
 import { ILocationsRepository } from '../repositories/LocationsRepository.js';
 import { IShipmentAssignmentService } from '../services/ShipmentAssignmentService.js';
 import { ICSVImportService } from '../services/CSVImportService.js';
+import { IOrderDeliveryService } from '../services/OrderDeliveryService.js';
 import { container, TOKENS } from '../di/index.js';
 
 // Validation schemas
@@ -99,6 +100,7 @@ export async function orderRoutes(server: FastifyInstance) {
   const locationsRepo = container.resolve<ILocationsRepository>(TOKENS.ILocationsRepository);
   const assignmentService = container.resolve<IShipmentAssignmentService>(TOKENS.IShipmentAssignmentService);
   const csvImportService = container.resolve<ICSVImportService>(TOKENS.ICSVImportService);
+  const deliveryService = container.resolve<IOrderDeliveryService>(TOKENS.IOrderDeliveryService);
 
   // Get all orders
   server.get('/api/v1/orders', async (_req: FastifyRequest, _reply: FastifyReply) => {
@@ -574,6 +576,150 @@ export async function orderRoutes(server: FastifyInstance) {
     } catch (err: any) {
       reply.code(500);
       return { data: null, error: err.message || 'Failed to assign order to shipment' };
+    }
+  });
+
+  // Update order delivery status
+  server.post('/api/v1/orders/:id/delivery-status', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const body = req.body as {
+      deliveryStatus: string;
+      deliveryMethod?: string;
+      deliveryConfirmedBy?: string;
+      deliveryNotes?: string;
+      exceptionType?: string;
+      exceptionNotes?: string;
+    };
+
+    try {
+      const updatedOrder = await deliveryService.updateOrderDeliveryStatus({
+        orderId: id,
+        deliveryStatus: body.deliveryStatus as any,
+        deliveryMethod: body.deliveryMethod as any,
+        deliveryConfirmedBy: body.deliveryConfirmedBy,
+        deliveryNotes: body.deliveryNotes,
+        exceptionType: body.exceptionType as any,
+        exceptionNotes: body.exceptionNotes
+      });
+
+      return { data: updatedOrder, error: null };
+    } catch (err: any) {
+      reply.code(400);
+      return { data: null, error: err.message || 'Failed to update delivery status' };
+    }
+  });
+
+  // Mark order as delivered
+  server.post('/api/v1/orders/:id/mark-delivered', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const body = req.body as {
+      method?: string;
+      confirmedBy?: string;
+      notes?: string;
+    };
+
+    try {
+      const updatedOrder = await deliveryService.markOrderDelivered(
+        id,
+        body.method || 'manual',
+        body.confirmedBy,
+        body.notes
+      );
+
+      return { data: updatedOrder, error: null };
+    } catch (err: any) {
+      reply.code(400);
+      return { data: null, error: err.message || 'Failed to mark order as delivered' };
+    }
+  });
+
+  // Create delivery exception
+  server.post('/api/v1/orders/:id/delivery-exception', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const body = req.body as {
+      exceptionType: string;
+      exceptionNotes: string;
+      reportedBy?: string;
+    };
+
+    try {
+      const updatedOrder = await deliveryService.createDeliveryException({
+        orderId: id,
+        exceptionType: body.exceptionType as any,
+        exceptionNotes: body.exceptionNotes,
+        reportedBy: body.reportedBy
+      });
+
+      return { data: updatedOrder, error: null };
+    } catch (err: any) {
+      reply.code(400);
+      return { data: null, error: err.message || 'Failed to create delivery exception' };
+    }
+  });
+
+  // Resolve delivery exception
+  server.post('/api/v1/orders/:id/resolve-exception', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const body = req.body as {
+      resolvedBy?: string;
+      notes?: string;
+    };
+
+    try {
+      const updatedOrder = await deliveryService.resolveDeliveryException(
+        id,
+        body.resolvedBy,
+        body.notes
+      );
+
+      return { data: updatedOrder, error: null };
+    } catch (err: any) {
+      reply.code(400);
+      return { data: null, error: err.message || 'Failed to resolve exception' };
+    }
+  });
+
+  // Update all orders for a shipment stop
+  server.post('/api/v1/shipment-stops/:id/update-orders', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const body = req.body as {
+      status: string;
+      method?: string;
+    };
+
+    try {
+      const ordersUpdated = await deliveryService.updateOrdersForStop(
+        id,
+        body.status,
+        body.method || 'auto'
+      );
+
+      return { data: { ordersUpdated }, error: null };
+    } catch (err: any) {
+      reply.code(400);
+      return { data: null, error: err.message || 'Failed to update orders for stop' };
+    }
+  });
+
+  // Geofence check (webhook endpoint for GPS tracking)
+  server.post('/api/v1/shipments/:id/geofence-check', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const body = req.body as {
+      lat: number;
+      lng: number;
+    };
+
+    try {
+      const ordersUpdated = await deliveryService.checkGeofenceAndUpdateOrders(
+        id,
+        body.lat,
+        body.lng
+      );
+
+      return { data: { ordersUpdated }, error: null };
+    } catch (err: any) {
+      reply.code(400);
+      return { data: null, error: err.message || 'Failed to check geofence' };
     }
   });
 }

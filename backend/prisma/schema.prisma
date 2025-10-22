@@ -44,6 +44,7 @@ model Location {
   orderDestFor   Order[] @relation("OrderDestination")
   pendingLaneRequestsAsOrigin PendingLaneRequest[] @relation("PendingLaneOrigin")
   pendingLaneRequestsAsDestination PendingLaneRequest[] @relation("PendingLaneDestination")
+  shipmentStops  ShipmentStop[] // Multi-stop shipment support
 }
 
 model Shipment {
@@ -67,6 +68,54 @@ model Shipment {
   laneId        String?
   loads         Load[]
   orderShipments OrderShipment[]
+  stops         ShipmentStop[] // Multi-stop route support
+}
+
+model ShipmentStop {
+  id                String    @id @default(uuid())
+  shipment          Shipment  @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  shipmentId        String
+  location          Location  @relation(fields: [locationId], references: [id])
+  locationId        String
+
+  // Stop sequence in the route (1 = first stop, 2 = second, etc.)
+  sequenceNumber    Int
+
+  // Type of stop
+  stopType          String    @default("delivery") // pickup, delivery, both
+
+  // Timing
+  estimatedArrival  DateTime?
+  actualArrival     DateTime?
+  estimatedDeparture DateTime?
+  actualDeparture   DateTime?
+
+  // Status
+  status            String    @default("pending") // pending, arrived, in_progress, completed, skipped
+
+  // Orders to be delivered at this stop
+  orders            Order[]
+
+  // Geofencing (for automatic status updates)
+  geofenceRadius    Float?    // Radius in meters for geofence trigger
+  geofenceEnabled   Boolean   @default(false)
+
+  // Notes and instructions
+  notes             String?
+  instructions      String?   // Specific delivery instructions for this stop
+
+  // Proof of delivery
+  signatureUrl      String?   // URL to signature image
+  photoUrls         Json?     // Array of photo URLs
+  proofOfDelivery   Json?     // Additional proof data
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@unique([shipmentId, sequenceNumber])
+  @@index([shipmentId])
+  @@index([locationId])
+  @@index([status])
 }
 
 model Carrier {
@@ -222,6 +271,20 @@ model Order {
   temperatureControl    String    @default("ambient") // "ambient", "refrigerated", "frozen"
   requiresHazmat        Boolean   @default(false)
   specialRequirements   Json?     // Additional requirements as JSON array
+
+  // Delivery status tracking (separate from order lifecycle status)
+  deliveryStatus        String    @default("unassigned") // unassigned, assigned, in_transit, delivered, exception, cancelled
+  deliveredAt           DateTime? // When the order was delivered
+  deliveryConfirmedBy   String?   // User ID or system identifier who confirmed delivery
+  deliveryMethod        String?   // manual, geofence, geofence_iot, auto, driver_app
+  deliveryNotes         String?   // Notes about the delivery
+  exceptionType         String?   // If exception status: delay, damage, refused, address_issue, weather, other
+  exceptionNotes        String?   // Details about the exception
+  exceptionResolvedAt   DateTime? // When the exception was resolved
+
+  // Link to the specific stop where this order should be delivered (for multi-stop shipments)
+  deliveryStop          ShipmentStop? @relation(fields: [deliveryStopId], references: [id])
+  deliveryStopId        String?
 
   // Trackable units (pallets, totes, boxes, etc.)
   trackableUnits        TrackableUnit[]
