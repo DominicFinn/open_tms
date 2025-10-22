@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { IOrdersRepository } from '../repositories/OrdersRepository.js';
 import { ILocationsRepository } from '../repositories/LocationsRepository.js';
 import { IShipmentAssignmentService } from '../services/ShipmentAssignmentService.js';
+import { ICSVImportService } from '../services/CSVImportService.js';
 import { container, TOKENS } from '../di/index.js';
 
 // Validation schemas
@@ -97,6 +98,7 @@ export async function orderRoutes(server: FastifyInstance) {
   const ordersRepo = container.resolve<IOrdersRepository>(TOKENS.IOrdersRepository);
   const locationsRepo = container.resolve<ILocationsRepository>(TOKENS.ILocationsRepository);
   const assignmentService = container.resolve<IShipmentAssignmentService>(TOKENS.IShipmentAssignmentService);
+  const csvImportService = container.resolve<ICSVImportService>(TOKENS.ICSVImportService);
 
   // Get all orders
   server.get('/api/v1/orders', async (_req: FastifyRequest, _reply: FastifyReply) => {
@@ -504,14 +506,40 @@ export async function orderRoutes(server: FastifyInstance) {
       .send(csvContent);
   });
 
-  // CSV Import endpoint (placeholder)
+  // CSV Import endpoint
   server.post('/api/v1/orders/import/csv', async (req: FastifyRequest, reply: FastifyReply) => {
-    // TODO: Implement CSV parsing and order creation
-    reply.code(501);
-    return {
-      data: null,
-      error: 'CSV import not yet implemented. Coming soon!'
-    };
+    try {
+      const body = req.body as { csvContent: string };
+
+      if (!body.csvContent) {
+        reply.code(400);
+        return {
+          data: null,
+          error: 'CSV content is required'
+        };
+      }
+
+      const result = await csvImportService.importOrders(body.csvContent);
+
+      if (!result.success && result.errors.length > 0) {
+        reply.code(400);
+        return {
+          data: result,
+          error: `Import completed with errors: ${result.errors.length} errors occurred`
+        };
+      }
+
+      return {
+        data: result,
+        error: null
+      };
+    } catch (err: any) {
+      reply.code(500);
+      return {
+        data: null,
+        error: err.message || 'CSV import failed'
+      };
+    }
   });
 
   // EDI Import endpoint (placeholder)

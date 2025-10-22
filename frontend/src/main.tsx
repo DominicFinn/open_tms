@@ -16,6 +16,7 @@ import Orders from './pages/Orders';
 import CreateOrder from './pages/CreateOrder';
 import OrderDetails from './pages/OrderDetails';
 import EditOrder from './pages/EditOrder';
+import OrderImportCSV from './pages/OrderImportCSV';
 import PendingLaneRequests from './pages/PendingLaneRequests';
 import Settings from './pages/Settings';
 import './theme.css';
@@ -37,6 +38,7 @@ root.render(
         <Route path="/lanes/:id/edit" element={<CreateLane />} />
         <Route path="/orders" element={<Orders />} />
         <Route path="/orders/create" element={<CreateOrder />} />
+        <Route path="/orders/import/csv" element={<OrderImportCSV />} />
         <Route path="/orders/:id" element={<OrderDetails />} />
         <Route path="/orders/:id/edit" element={<EditOrder />} />
         <Route path="/shipments" element={<Shipments />} />

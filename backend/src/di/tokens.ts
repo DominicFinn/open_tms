@@ -16,6 +16,7 @@ export const TOKENS = {
 
   // Service tokens
   IShipmentAssignmentService: Symbol.for('IShipmentAssignmentService'),
+  ICSVImportService: Symbol.for('ICSVImportService'),
 
   // Infrastructure tokens
   PrismaClient: Symbol.for('PrismaClient'),
