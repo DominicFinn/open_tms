@@ -21,4 +21,4 @@ EXPOSE 3001
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["node", "dist/index-demo.js"]
+CMD ["node", "dist/index.js"]

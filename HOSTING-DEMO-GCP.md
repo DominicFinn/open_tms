@@ -22,7 +22,32 @@ gcloud config set project your-demo-project-id
 # Go to: https://console.cloud.google.com/billing
 ```
 
-### Step 2: One-Command Deployment
+### Step 2: Set Up Database
+
+```bash
+# Create Cloud SQL PostgreSQL instance (smallest tier)
+gcloud sql instances create open-tms-db \
+  --database-version=POSTGRES_15 \
+  --tier=db-f1-micro \
+  --region=us-central1
+
+# Create the database
+gcloud sql databases create open_tms --instance=open-tms-db
+
+# Set a password for postgres user
+gcloud sql users set-password postgres \
+  --instance=open-tms-db \
+  --password=YOUR_SECURE_PASSWORD
+
+# Get the Cloud SQL connection name
+CONNECTION_NAME=$(gcloud sql instances describe open-tms-db --format='value(connectionName)')
+echo "Connection name: $CONNECTION_NAME"
+
+# Create the DATABASE_URL secret (replace YOUR_SECURE_PASSWORD)
+echo -n "postgresql://postgres:YOUR_SECURE_PASSWORD@/open_tms?host=/cloudsql/$CONNECTION_NAME" | gcloud secrets create DATABASE_URL --data-file=-
+```
+
+### Step 3: One-Command Deployment
 
 ```bash
 # Clone the repository
@@ -125,7 +150,7 @@ The demo includes:
 ### Adding Your Own Data
 ```bash
 # Connect to the demo database
-gcloud sql connect open-tms-db --user=tms_user --database=tms
+gcloud sql connect open-tms-db --user=postgres --database=open_tms
 
 # Or use the API to add data
 curl -X POST https://your-backend-url/api/v1/customers \
@@ -206,7 +231,10 @@ gcloud logging read "resource.type=cloud_run_revision"
 gcloud sql instances list
 
 # Test connection
-gcloud sql connect open-tms-db --user=tms_user --database=tms
+gcloud sql connect open-tms-db --user=postgres --database=open_tms
+
+# Check if DATABASE_URL secret exists
+gcloud secrets versions access latest --secret=DATABASE_URL
 ```
 
 #### Frontend Not Loading

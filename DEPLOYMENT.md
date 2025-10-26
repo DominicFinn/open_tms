@@ -68,10 +68,25 @@ gcloud sql instances create open-tms-db \
 
 ```bash
 # Create database
-gcloud sql databases create tms --instance=open-tms-db
+gcloud sql databases create open_tms --instance=open-tms-db
 
-# Create user
-gcloud sql users create tms_user --instance=open-tms-db --password=YOUR_SECURE_PASSWORD
+# Set password for postgres user
+gcloud sql users set-password postgres \
+  --instance=open-tms-db \
+  --password=YOUR_SECURE_PASSWORD
+```
+
+### 2.3 Create DATABASE_URL Secret
+
+```bash
+# Get the Cloud SQL connection name
+CONNECTION_NAME=$(gcloud sql instances describe open-tms-db --format='value(connectionName)')
+
+# Create the DATABASE_URL secret
+echo -n "postgresql://postgres:YOUR_SECURE_PASSWORD@/open_tms?host=/cloudsql/$CONNECTION_NAME" | gcloud secrets create DATABASE_URL --data-file=-
+
+# Verify the secret was created
+gcloud secrets versions access latest --secret=DATABASE_URL
 ```
 
 ## Step 3: Deploy Application
@@ -96,7 +111,10 @@ cd backend
 # Build and push image
 gcloud builds submit --tag gcr.io/your-project-id/open-tms-backend:latest .
 
-# Deploy to Cloud Run
+# Get Cloud SQL connection name
+CLOUD_SQL_CONNECTION=$(gcloud sql instances describe open-tms-db --format='value(connectionName)')
+
+# Deploy to Cloud Run with database connection
 gcloud run deploy open-tms-backend \
   --image gcr.io/your-project-id/open-tms-backend:latest \
   --platform managed \
@@ -106,7 +124,9 @@ gcloud run deploy open-tms-backend \
   --memory 512Mi \
   --cpu 1 \
   --max-instances 10 \
-  --set-env-vars NODE_ENV=production,PORT=3001
+  --set-env-vars NODE_ENV=production,PORT=3001 \
+  --update-secrets DATABASE_URL=DATABASE_URL:latest \
+  --add-cloudsql-instances $CLOUD_SQL_CONNECTION
 ```
 
 #### Deploy Frontend
@@ -168,13 +188,15 @@ gcloud iam service-accounts keys create key.json \
 
 ### 5.1 Backend Environment Variables
 
-Set these in Cloud Run:
+The deployment script automatically sets:
+- `NODE_ENV=production`
+- `DATABASE_URL` (from secret)
 
+The backend also connects to Cloud SQL via `--add-cloudsql-instances` flag.
+
+Example DATABASE_URL format:
 ```bash
-DATABASE_URL=postgresql://tms_user:password@/tms?host=/cloudsql/your-project-id:us-central1:open-tms-db
-NODE_ENV=production
-PORT=3001
-CORS_ORIGIN=https://open-tms-frontend-XXXXX-uc.a.run.app
+postgresql://postgres:YOUR_PASSWORD@/open_tms?host=/cloudsql/PROJECT_ID:REGION:INSTANCE_NAME
 ```
 
 ### 5.2 Frontend Environment Variables
@@ -187,16 +209,20 @@ VITE_API_URL=https://open-tms-backend-XXXXX-uc.a.run.app
 
 ## Step 6: Database Migration
 
-### 6.1 Run Prisma Migrations
+### 6.1 Automatic Migrations
+
+Migrations run automatically when the backend container starts! The `entrypoint.sh` script runs `npx prisma migrate deploy` before starting the server.
+
+### 6.2 Manual Migration (if needed)
 
 ```bash
-# Connect to Cloud SQL and run migrations
-gcloud sql connect open-tms-db --user=tms_user --database=tms
-
-# Or use Cloud SQL Proxy
+# Use Cloud SQL Proxy for local migration
 cloud_sql_proxy -instances=your-project-id:us-central1:open-tms-db=tcp:5432
 
-# Then run migrations locally
+# Set DATABASE_URL locally
+export DATABASE_URL="postgresql://postgres:YOUR_PASSWORD@localhost:5432/open_tms"
+
+# Run migrations
 cd backend
 npx prisma migrate deploy
 ```

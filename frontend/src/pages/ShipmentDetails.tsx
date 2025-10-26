@@ -60,6 +60,22 @@ interface Lane {
   laneCarriers?: LaneCarrier[];
 }
 
+interface ShipmentEvent {
+  id: string;
+  shipmentId: string;
+  eventType: string;
+  deviceId?: string;
+  deviceName?: string;
+  lat?: number;
+  lng?: number;
+  address?: string;
+  locationSummary?: string;
+  rawPayload?: any;
+  eventTime: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface Shipment {
   id: string;
   reference: string;
@@ -79,6 +95,7 @@ interface Shipment {
   lane?: Lane | null;
   carrier?: Carrier | null; // Manual carrier assignment
   loads: any[];
+  events?: ShipmentEvent[];
 }
 
 export default function ShipmentDetails() {
@@ -199,6 +216,48 @@ export default function ShipmentDetails() {
               ${stop.notes ? `<br><i>Note: ${stop.notes}</i>` : ''}
             `);
             markers.push(stopMarker);
+          }
+        });
+      }
+
+      // Add shipment event markers (tracking history)
+      if (shipment.events && shipment.events.length > 0) {
+        shipment.events.forEach((event, index) => {
+          if (event.lat && event.lng) {
+            const eventMarker = L.marker([event.lat, event.lng], {
+              icon: L.divIcon({
+                className: 'custom-marker',
+                html: `
+                  <div style="
+                    background-color: #2196F3;
+                    color: white;
+                    border-radius: 50%;
+                    width: 24px;
+                    height: 24px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-weight: bold;
+                    font-size: 12px;
+                    border: 2px solid white;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+                  ">
+                    📍
+                  </div>
+                `,
+                iconSize: [24, 24],
+                iconAnchor: [12, 12]
+              })
+            }).addTo(map);
+
+            const eventTime = new Date(event.eventTime).toLocaleString();
+            eventMarker.bindPopup(`
+              <b>Event:</b> ${event.eventType}<br>
+              <b>Time:</b> ${eventTime}<br>
+              ${event.address ? `<b>Location:</b> ${event.address}<br>` : ''}
+              ${event.locationSummary ? `<i>${event.locationSummary}</i>` : ''}
+            `);
+            markers.push(eventMarker);
           }
         });
       }
@@ -564,29 +623,52 @@ export default function ShipmentDetails() {
 
       <div className="card">
         <h3>Shipment Events</h3>
-        <p style={{ color: '#666', fontStyle: 'italic' }}>
-          Event tracking will be implemented in a future update.
-        </p>
-        <div className="table-container" style={{ marginTop: 'var(--spacing-2)' }}>
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Timestamp</th>
-                <th>Event Type</th>
-                <th>Description</th>
-                <th>Location</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td colSpan={5} style={{ textAlign: 'center', padding: '16px', color: 'var(--on-surface-variant)' }}>
-                  No events recorded yet
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        {(!shipment.events || shipment.events.length === 0) ? (
+          <p style={{ color: '#666', fontStyle: 'italic' }}>
+            No events recorded yet. Events will appear here when the shipment is tracked via GPS devices.
+          </p>
+        ) : (
+          <div className="table-container" style={{ marginTop: 'var(--spacing-2)' }}>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Timestamp</th>
+                  <th>Event Type</th>
+                  <th>Location</th>
+                  <th>Coordinates</th>
+                  <th>Device</th>
+                </tr>
+              </thead>
+              <tbody>
+                {shipment.events.map(event => (
+                  <tr key={event.id}>
+                    <td>{new Date(event.eventTime).toLocaleString()}</td>
+                    <td>
+                      <span className={`chip ${
+                        event.eventType === 'location' ? 'chip-primary' : 'chip-default'
+                      }`}>
+                        {event.eventType}
+                      </span>
+                    </td>
+                    <td>
+                      {event.locationSummary || event.address || '—'}
+                    </td>
+                    <td>
+                      {event.lat && event.lng ? (
+                        <span style={{ fontSize: '0.875rem', color: 'var(--on-surface-variant)' }}>
+                          📍 {event.lat.toFixed(4)}, {event.lng.toFixed(4)}
+                        </span>
+                      ) : '—'}
+                    </td>
+                    <td>
+                      {event.deviceName || event.deviceId || '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

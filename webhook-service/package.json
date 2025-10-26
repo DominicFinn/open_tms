@@ -10,8 +10,12 @@
   },
   "dependencies": {
     "@google-cloud/functions-framework": "^3.3.0",
+    "@prisma/client": "^5.22.0",
     "express-rate-limit": "^7.1.5",
     "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "prisma": "^5.22.0"
   },
   "engines": {
     "node": ">=20.0.0"

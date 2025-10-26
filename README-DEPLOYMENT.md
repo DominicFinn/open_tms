@@ -10,10 +10,23 @@ Complete deployment setup for Open TMS on Google Cloud Platform using Cloud Run 
 # 1. Set up your GCP project
 gcloud config set project your-project-id
 
-# 2. Run the database setup
-./setup-database.sh your-project-id us-central1
+# 2. Set up Cloud SQL database
+gcloud sql instances create open-tms-db \
+  --database-version=POSTGRES_15 \
+  --tier=db-f1-micro \
+  --region=us-central1
 
-# 3. Deploy the application
+gcloud sql databases create open_tms --instance=open-tms-db
+
+gcloud sql users set-password postgres \
+  --instance=open-tms-db \
+  --password=YOUR_SECURE_PASSWORD
+
+# 3. Create DATABASE_URL secret
+CONNECTION_NAME=$(gcloud sql instances describe open-tms-db --format='value(connectionName)')
+echo -n "postgresql://postgres:YOUR_PASSWORD@/open_tms?host=/cloudsql/$CONNECTION_NAME" | gcloud secrets create DATABASE_URL --data-file=-
+
+# 4. Deploy the application
 ./deploy.sh your-project-id us-central1
 ```
 
@@ -107,10 +120,11 @@ Follow the step-by-step guide in [DEPLOYMENT.md](./DEPLOYMENT.md).
 
 ## 🔐 Security
 
-- **Database**: Cloud SQL with private IP
+- **Database**: Cloud SQL with Unix socket connection
+- **Secrets**: DATABASE_URL stored in Google Secret Manager
 - **Authentication**: IAM-based access control
-- **Network**: VPC connector for private communication
 - **SSL**: Automatic HTTPS with Cloud Run
+- **Migrations**: Run automatically on container startup
 
 ## 📊 Monitoring
 
@@ -146,9 +160,16 @@ npm run dev
 
 ### Database Migrations
 
+Migrations run automatically on deployment via the backend's `entrypoint.sh` script.
+
+To run manually:
 ```bash
+# Use Cloud SQL Proxy
+cloud_sql_proxy -instances=PROJECT_ID:REGION:open-tms-db=tcp:5432
+
 # Run migrations
 cd backend
+export DATABASE_URL="postgresql://postgres:PASSWORD@localhost:5432/open_tms"
 npx prisma migrate deploy
 ```
 

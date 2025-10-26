@@ -125,6 +125,11 @@ export async function shipmentRoutes(server: FastifyInstance) {
             vehicle: true,
             driver: true
           }
+        },
+        events: {
+          orderBy: {
+            eventTime: 'desc'
+          }
         }
       }
     });
@@ -133,6 +138,28 @@ export async function shipmentRoutes(server: FastifyInstance) {
       return { data: null, error: 'Shipment not found' };
     }
     return { data: shipment, error: null };
+  });
+
+  // Get shipment events
+  server.get('/api/v1/shipments/:id/events', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+
+    // Verify shipment exists
+    const shipment = await server.prisma.shipment.findFirst({
+      where: { id, archived: false }
+    });
+
+    if (!shipment) {
+      reply.code(404);
+      return { data: null, error: 'Shipment not found' };
+    }
+
+    const events = await server.prisma.shipmentEvent.findMany({
+      where: { shipmentId: id },
+      orderBy: { eventTime: 'desc' }
+    });
+
+    return { data: events, error: null };
   });
 
   // Update shipment

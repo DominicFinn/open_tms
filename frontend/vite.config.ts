@@ -6,7 +6,12 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: parseInt(process.env.VITE_PORT || '5173'),
-    strictPort: false // Automatically try next port if in use
+    strictPort: false, // Automatically try next port if in use
+    allowedHosts: [
+      '.ngrok-free.dev',
+      '.ngrok.io',
+      '.ngrok.app'
+    ]
   },
   define: {
     'import.meta.env.VITE_API_URL': JSON.stringify(process.env.VITE_API_URL || 'http://localhost:3001')

@@ -42,18 +42,40 @@ cd frontend
 gcloud builds submit --tag gcr.io/$PROJECT_ID/$SERVICE_NAME-frontend:latest .
 cd ..
 
+# Get Cloud SQL connection name
+echo "🔍 Getting Cloud SQL connection name..."
+CLOUD_SQL_CONNECTION=$(gcloud sql instances describe open-tms-db --format='value(connectionName)' 2>/dev/null || echo "")
+
 # Deploy backend to Cloud Run
 echo "🚀 Deploying backend to Cloud Run..."
-gcloud run deploy $SERVICE_NAME-backend \
-  --image gcr.io/$PROJECT_ID/$SERVICE_NAME-backend:latest \
-  --platform managed \
-  --region $REGION \
-  --allow-unauthenticated \
-  --port 3001 \
-  --memory 512Mi \
-  --cpu 1 \
-  --max-instances 10 \
-  --set-env-vars NODE_ENV=production
+if [ -z "$CLOUD_SQL_CONNECTION" ]; then
+  echo "⚠️  Warning: Cloud SQL instance 'open-tms-db' not found. Deploying without database connection."
+  gcloud run deploy $SERVICE_NAME-backend \
+    --image gcr.io/$PROJECT_ID/$SERVICE_NAME-backend:latest \
+    --platform managed \
+    --region $REGION \
+    --allow-unauthenticated \
+    --port 3001 \
+    --memory 512Mi \
+    --cpu 1 \
+    --max-instances 10 \
+    --set-env-vars NODE_ENV=production \
+    --update-secrets DATABASE_URL=DATABASE_URL:latest
+else
+  echo "✅ Connecting to Cloud SQL: $CLOUD_SQL_CONNECTION"
+  gcloud run deploy $SERVICE_NAME-backend \
+    --image gcr.io/$PROJECT_ID/$SERVICE_NAME-backend:latest \
+    --platform managed \
+    --region $REGION \
+    --allow-unauthenticated \
+    --port 3001 \
+    --memory 512Mi \
+    --cpu 1 \
+    --max-instances 10 \
+    --set-env-vars NODE_ENV=production \
+    --update-secrets DATABASE_URL=DATABASE_URL:latest \
+    --add-cloudsql-instances $CLOUD_SQL_CONNECTION
+fi
 
 # Get the backend URL
 BACKEND_URL=$(gcloud run services describe $SERVICE_NAME-backend --platform managed --region $REGION --format 'value(status.url)')

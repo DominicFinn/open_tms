@@ -1,6 +1,9 @@
 const functions = require('@google-cloud/functions-framework');
 const rateLimit = require('express-rate-limit');
+const { PrismaClient } = require('@prisma/client');
 require('dotenv').config();
+
+const prisma = new PrismaClient();
 
 // Rate limiting middleware - 100 requests per minute
 const limiter = rateLimit({
@@ -12,6 +15,7 @@ const limiter = rateLimit({
   },
   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  validate: { trustProxy: false }, // Disable trust proxy validation for local dev
 });
 
 // API Key authentication middleware
@@ -46,7 +50,7 @@ functions.http('webhook', (req, res) => {
     }
 
     // Apply API key authentication
-    authenticateApiKey(req, res, (authErr) => {
+    authenticateApiKey(req, res, async (authErr) => {
       if (authErr) {
         return; // Response already sent by middleware
       }
@@ -86,22 +90,88 @@ functions.http('webhook', (req, res) => {
           });
         }
 
-        // TODO: In future iterations, this is where we would:
-        // 1. Validate the webhook payload structure
-        // 2. Extract shipment reference and location data
-        // 3. Connect to the database and update shipment locations
-        // 4. Handle any business logic for location updates
+        // Extract data from webhook payload
+        // Handle both formats: { event: {...} } or direct event object
+        const event = req.body.event || req.body;
 
-        // For now, just return success with the logged data
+        if (!event || !event.device || !event.device.name) {
+          return res.status(400).json({
+            error: 'Invalid webhook payload. Missing device.name',
+            received: req.body
+          });
+        }
+
+        const deviceName = event.device.name; // e.g., "SH-0001"
+        const eventType = event.type || 'location';
+        const eventTime = event.startTime || event.latestTime || new Date().toISOString();
+
+        // Extract location data if available
+        const location = event.location;
+        const lat = location?.global?.lat;
+        const lng = location?.global?.lon;
+        const address = location?.global?.address;
+        const locationSummary = location?.summary;
+
+        // Skip events that don't have location data (like charging events)
+        if (!lat || !lng) {
+          console.log(`Skipping ${eventType} event for ${deviceName} - no location data`);
+          return res.status(200).json({
+            success: true,
+            message: 'Event received but skipped - no location data',
+            timestamp: new Date().toISOString(),
+            data: {
+              deviceName,
+              eventType
+            }
+          });
+        }
+
+        // Find shipment by reference (device name matches shipment reference)
+        const shipment = await prisma.shipment.findFirst({
+          where: {
+            reference: deviceName,
+            archived: false
+          }
+        });
+
+        if (!shipment) {
+          console.warn(`Shipment not found for device name: ${deviceName}`);
+          return res.status(404).json({
+            error: 'Shipment not found',
+            deviceName,
+            message: `No active shipment found with reference: ${deviceName}`
+          });
+        }
+
+        // Create shipment event
+        const shipmentEvent = await prisma.shipmentEvent.create({
+          data: {
+            shipmentId: shipment.id,
+            eventType,
+            deviceId: event.device.id,
+            deviceName,
+            lat,
+            lng,
+            address,
+            locationSummary,
+            rawPayload: req.body,
+            eventTime: new Date(eventTime)
+          }
+        });
+
+        console.log('Shipment event created:', shipmentEvent.id);
+
         res.status(200).json({
           success: true,
-          message: 'Webhook received and logged successfully',
+          message: 'Webhook processed and shipment event created',
           timestamp,
-          dataReceived: {
-            bodyKeys: Object.keys(req.body),
-            bodySize: JSON.stringify(req.body).length
-          },
-          note: 'This is a placeholder implementation. Shipment updates will be implemented in future versions.'
+          data: {
+            eventId: shipmentEvent.id,
+            shipmentId: shipment.id,
+            shipmentReference: shipment.reference,
+            eventType,
+            location: lat && lng ? { lat, lng, address } : null
+          }
         });
 
       } catch (error) {
