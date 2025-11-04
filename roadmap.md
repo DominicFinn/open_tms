@@ -19,14 +19,36 @@
   - CSV/Excel import for bulk item ingestion.  
 
 ## **Phase 2: Orders & Ingestion**
-- **EDI Support**  
-  - Parse X12/EDIFACT orders → map into JSON for the TMS.  
-  - Import customer orders (via FTP/SFTP drop or API).  
-- **Order to Shipment Workflow**  
-  - Queue of pending orders waiting for conversion.  
-  - Auto-match orders to lanes/carriers.  
-  - Combine or split orders into shipments.  
-- **Custom Fields**  
+- **Order Management** ✅
+  - ✅ CSV import with trackable units (pallets, totes, etc.)
+  - ✅ Manual order creation via UI with trackable units
+  - ✅ Automatic order-to-shipment assignment based on lane matching
+  - ✅ Pending lane request system for unmatched orders
+  - ✅ Special requirements (FTL/LTL, temperature control, hazmat)
+  - 🔲 **Customer API for Order Creation**
+    - REST API endpoint for customers to programmatically create orders
+    - API key authentication and authorization system
+    - Rate limiting and security controls
+    - API documentation and examples
+  - 🔲 **Order Status Lifecycle & Multi-Leg Tracking**
+    - Status flow: unassigned → assigned → in_progress → complete/exception
+    - Support for orders completing mid-route (e.g., order A→B in shipment A→B→C)
+    - Multiple status update mechanisms:
+      - Manual updates by drivers/logistics users
+      - Geofencing-based automatic updates
+      - IoT sensor triggers (geofence + light sensor = truck opened)
+    - Order-level delivery confirmation tracking
+  - 🔲 **EDI Import Support**
+    - Parse X12/EDIFACT orders → create orders in TMS
+    - EDI partner configuration and credentials management
+    - FTP/SFTP drop folder monitoring
+    - Scheduled EDI polling and processing
+    - Error handling and EDI transaction logging
+- **Order to Shipment Workflow** ✅
+  - ✅ Queue of pending orders waiting for conversion
+  - ✅ Auto-match orders to lanes/carriers
+  - 🔲 Combine or split orders into shipments
+- **Custom Fields**
   - Allow configurable fields for customers, shipments, and items.  
 
 ## **Phase 3: Documentation & Compliance**
@@ -38,27 +60,38 @@
   - Begin audit trail for shipment events.  
 
 ## **Phase 4: Live Tracking & Exception Management**
-- **Carrier API Integration**  
-  - Connect to major carriers (FedEx, UPS, DHL).  
-  - Optionally integrate via middleware (EasyPost, Shippo).  
-- **Status & Event Tracking**  
-  - Update shipments automatically from carrier feeds.  
-  - Store timestamps, current location.  
-- **Exceptions**  
-  - Alerts for delays, route deviations, failed deliveries.  
+- **Driver Mobile App** 🔲
+  - Mobile app for drivers to update order/shipment status in the field
+  - Delivery confirmation with signature capture
+  - Photo proof of delivery
+  - Real-time GPS location tracking
+  - Offline support with sync when reconnected
+  - Push notifications for new assignments
+- **Carrier API Integration**
+  - Connect to major carriers (FedEx, UPS, DHL).
+  - Optionally integrate via middleware (EasyPost, Shippo).
+- **Status & Event Tracking**
+  - Update shipments automatically from carrier feeds.
+  - Store timestamps, current location.
+- **Exceptions**
+  - Alerts for delays, route deviations, failed deliveries.
   - Dashboard for exception triage.  
 
 ## **Phase 5: IoT Integration (System Loco)**
-- **Device–Shipment Linking**  
-  - Associate IoT devices with shipments (1:1, 1:many).  
-- **Real-Time Data Ingestion**  
-  - Pull telemetry from System Loco’s IoT platform (temperature, humidity, shock, light, GPS).  
-- **Visualization**  
-  - Show sensor streams on shipment detail pages.  
-  - Interactive maps with live device location.  
-- **IoT-Based Alerts**  
-  - Rule engine for excursion alerts (e.g., temperature breach).  
-  - Integration with LocoEvents for webhooks and notifications.  
+- **Device–Shipment Linking**
+  - Associate IoT devices with shipments (1:1, 1:many).
+- **Real-Time Data Ingestion**
+  - Pull telemetry from System Loco's IoT platform (temperature, humidity, shock, light, GPS).
+- **Visualization**
+  - Show sensor streams on shipment detail pages.
+  - Interactive maps with live device location.
+- **IoT-Based Alerts & Automation**
+  - Rule engine for excursion alerts (e.g., temperature breach).
+  - Integration with LocoEvents for webhooks and notifications.
+  - **Geofencing + IoT Triggers**
+    - Automatic order completion when shipment enters destination geofence
+    - Enhanced triggers: geofence + light sensor = truck door opened at destination
+    - Automatic status updates based on sensor data  
 
 ## **Phase 6: Cold Chain & Advanced Compliance**
 - **Cold Chain Profiles**  

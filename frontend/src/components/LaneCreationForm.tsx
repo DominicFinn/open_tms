@@ -99,6 +99,13 @@ export default function LaneCreationForm({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Lane capabilities
+  const [serviceLevel, setServiceLevel] = useState<'FTL' | 'LTL' | 'Both'>('LTL');
+  const [supportsTemperatureControl, setSupportsTemperatureControl] = useState(false);
+  const [supportsHazmat, setSupportsHazmat] = useState(false);
+  const [maxWeight, setMaxWeight] = useState<number | undefined>(undefined);
+  const [maxVolume, setMaxVolume] = useState<number | undefined>(undefined);
+
   // Initialize form when editing
   useEffect(() => {
     if (editingLane) {
@@ -108,6 +115,13 @@ export default function LaneCreationForm({
       setDestination(editingLane.destination);
       setDistance(editingLane.distance || 0);
       setNotes(editingLane.notes || '');
+
+      // Initialize capabilities
+      setServiceLevel((editingLane as any).serviceLevel || 'LTL');
+      setSupportsTemperatureControl((editingLane as any).supportsTemperatureControl || false);
+      setSupportsHazmat((editingLane as any).supportsHazmat || false);
+      setMaxWeight((editingLane as any).maxWeight || undefined);
+      setMaxVolume((editingLane as any).maxVolume || undefined);
 
       // Initialize stops from editing lane
       const editingStops = editingLane.stops
@@ -132,6 +146,11 @@ export default function LaneCreationForm({
     setDistance(0);
     setNotes('');
     setStops([]);
+    setServiceLevel('LTL');
+    setSupportsTemperatureControl(false);
+    setSupportsHazmat(false);
+    setMaxWeight(undefined);
+    setMaxVolume(undefined);
     setError(null);
   };
 
@@ -248,7 +267,12 @@ export default function LaneCreationForm({
         destinationId,
         distance: distance > 0 ? distance : undefined,
         notes: notes || undefined,
-        stops: stopsData.length > 0 ? stopsData : undefined
+        stops: stopsData.length > 0 ? stopsData : undefined,
+        serviceLevel,
+        supportsTemperatureControl,
+        supportsHazmat,
+        maxWeight: maxWeight && maxWeight > 0 ? maxWeight : undefined,
+        maxVolume: maxVolume && maxVolume > 0 ? maxVolume : undefined
       };
 
       const url = editingLane 
@@ -472,6 +496,77 @@ export default function LaneCreationForm({
               disabled={loading}
             />
             <label>Notes (optional)</label>
+          </div>
+        </div>
+
+        {/* Lane Capabilities */}
+        <div style={{ marginBottom: 'var(--spacing-2)', marginTop: 'var(--spacing-3)' }}>
+          <h3 style={{ marginBottom: 'var(--spacing-2)', fontSize: '1.1rem' }}>Lane Capabilities</h3>
+
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+            gap: 'var(--spacing-2)',
+            marginBottom: 'var(--spacing-2)'
+          }}>
+            <div className="text-field">
+              <select
+                value={serviceLevel}
+                onChange={e => setServiceLevel(e.target.value as 'FTL' | 'LTL' | 'Both')}
+                disabled={loading}
+              >
+                <option value="LTL">LTL (Less Than Truck Load)</option>
+                <option value="FTL">FTL (Full Truck Load)</option>
+                <option value="Both">Both FTL & LTL</option>
+              </select>
+              <label>Service Level *</label>
+            </div>
+
+            <div className="text-field">
+              <input
+                value={maxWeight ?? ''}
+                onChange={e => setMaxWeight(e.target.value ? parseFloat(e.target.value) : undefined)}
+                placeholder=" "
+                type="number"
+                step="0.1"
+                disabled={loading}
+              />
+              <label>Max Weight (kg)</label>
+            </div>
+
+            <div className="text-field">
+              <input
+                value={maxVolume ?? ''}
+                onChange={e => setMaxVolume(e.target.value ? parseFloat(e.target.value) : undefined)}
+                placeholder=" "
+                type="number"
+                step="0.1"
+                disabled={loading}
+              />
+              <label>Max Volume (m³)</label>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: 'var(--spacing-3)', flexWrap: 'wrap' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={supportsTemperatureControl}
+                onChange={(e) => setSupportsTemperatureControl(e.target.checked)}
+                disabled={loading}
+              />
+              <span>Supports Temperature Control (Refrigerated/Frozen)</span>
+            </label>
+
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={supportsHazmat}
+                onChange={(e) => setSupportsHazmat(e.target.checked)}
+                disabled={loading}
+              />
+              <span>Hazmat Certified</span>
+            </label>
           </div>
         </div>
 

@@ -17,6 +17,7 @@ model Customer {
   updatedAt    DateTime @updatedAt
   shipments    Shipment[]
   customerLanes CustomerLane[]
+  orders       Order[]
 }
 
 model Location {
@@ -39,6 +40,11 @@ model Location {
   lanesAsOrigin Lane[] @relation("LaneOrigin")
   lanesAsDestination Lane[] @relation("LaneDestination")
   laneStops  LaneStop[]
+  orderOriginFor Order[] @relation("OrderOrigin")
+  orderDestFor   Order[] @relation("OrderDestination")
+  pendingLaneRequestsAsOrigin PendingLaneRequest[] @relation("PendingLaneOrigin")
+  pendingLaneRequestsAsDestination PendingLaneRequest[] @relation("PendingLaneDestination")
+  shipmentStops  ShipmentStop[] // Multi-stop shipment support
 }
 
 model Shipment {
@@ -64,6 +70,75 @@ model Shipment {
   carrierId     String?  // Manual carrier assignment for non-lane shipments
   loads         Load[]
   events        ShipmentEvent[]
+  orderShipments OrderShipment[]
+  stops         ShipmentStop[] // Multi-stop route support
+}
+
+model ShipmentStop {
+  id                String    @id @default(uuid())
+  shipment          Shipment  @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  shipmentId        String
+  location          Location  @relation(fields: [locationId], references: [id])
+  locationId        String
+
+  // Stop sequence in the route (1 = first stop, 2 = second, etc.)
+  sequenceNumber    Int
+
+  // Type of stop
+  stopType          String    @default("delivery") // pickup, delivery, both
+
+  // Timing
+  estimatedArrival  DateTime?
+  actualArrival     DateTime?
+  estimatedDeparture DateTime?
+  actualDeparture   DateTime?
+
+  // Status
+  status            String    @default("pending") // pending, arrived, in_progress, completed, skipped
+
+  // Orders to be delivered at this stop
+  orders            Order[]
+
+  // Geofencing (for automatic status updates)
+  geofenceRadius    Float?    // Radius in meters for geofence trigger
+  geofenceEnabled   Boolean   @default(false)
+
+  // Notes and instructions
+  notes             String?
+  instructions      String?   // Specific delivery instructions for this stop
+
+  // Proof of delivery
+  signatureUrl      String?   // URL to signature image
+  photoUrls         Json?     // Array of photo URLs
+  proofOfDelivery   Json?     // Additional proof data
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@unique([shipmentId, sequenceNumber])
+  @@index([shipmentId])
+  @@index([locationId])
+  @@index([status])
+}
+
+model ShipmentEvent {
+  id              String   @id @default(uuid())
+  shipment        Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  shipmentId      String
+  eventType       String   // "location", "status_change", "note", etc.
+  deviceId        String?  // External device ID (e.g., "72308628872889491")
+  deviceName      String?  // Device display name (e.g., "SH-0001")
+  lat             Float?   // Latitude from GPS
+  lng             Float?   // Longitude from GPS
+  address         String?  // Human-readable address
+  locationSummary String?  // Full location summary from webhook
+  rawPayload      Json?    // Store the entire webhook payload for debugging
+  eventTime       DateTime // When the event occurred (from webhook)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([shipmentId])
+  @@index([eventTime])
 }
 
 model Carrier {
@@ -137,6 +212,14 @@ model Lane {
   destinationId String
   distance      Float?   // Optional distance in km
   notes         String?
+
+  // Lane capabilities for order matching
+  serviceLevel          String    @default("LTL") // "FTL", "LTL", or "Both"
+  supportsTemperatureControl Boolean @default(false) // Can handle refrigerated/frozen
+  supportsHazmat        Boolean   @default(false) // Hazmat certified
+  maxWeight             Float?    // Maximum weight capacity in kg
+  maxVolume             Float?    // Maximum volume capacity in m³
+
   status        String   @default("active") // active/archived
   archived      Boolean  @default(false)
   archivedAt    DateTime?
@@ -192,22 +275,218 @@ model LaneStop {
   @@unique([laneId, locationId])
 }
 
-model ShipmentEvent {
+model Order {
+  id                    String   @id @default(uuid())
+  orderNumber           String   @unique // Customer's order number or our generated number
+  poNumber              String?  // Purchase order number
+  status                String   @default("pending") // pending, validated, location_error, converted, cancelled, archived
+  importSource          String   @default("manual") // manual, csv, edi
+  ediData               Json?    // Store original EDI data if imported via EDI
+
+  customer              Customer @relation(fields: [customerId], references: [id])
+  customerId            String
+
+  // Origin and destination - nullable because location might not exist yet
+  origin                Location? @relation("OrderOrigin", fields: [originId], references: [id])
+  originId              String?
+  originData            Json?     // Store raw location data if location doesn't exist
+  originValidated       Boolean   @default(false)
+
+  destination           Location? @relation("OrderDestination", fields: [destinationId], references: [id])
+  destinationId         String?
+  destinationData       Json?     // Store raw location data if location doesn't exist
+  destinationValidated  Boolean   @default(false)
+
+  // Dates
+  orderDate             DateTime  @default(now())
+  requestedPickupDate   DateTime?
+  requestedDeliveryDate DateTime?
+
+  // Special requirements for shipment assignment
+  serviceLevel          String    @default("LTL") // "FTL" (Full Truck Load) or "LTL" (Less Than Truck Load)
+  temperatureControl    String    @default("ambient") // "ambient", "refrigerated", "frozen"
+  requiresHazmat        Boolean   @default(false)
+  specialRequirements   Json?     // Additional requirements as JSON array
+
+  // Delivery status tracking (separate from order lifecycle status)
+  deliveryStatus        String    @default("unassigned") // unassigned, assigned, in_transit, delivered, exception, cancelled
+  deliveredAt           DateTime? // When the order was delivered
+  deliveryConfirmedBy   String?   // User ID or system identifier who confirmed delivery
+  deliveryMethod        String?   // manual, geofence, geofence_iot, auto, driver_app
+  deliveryNotes         String?   // Notes about the delivery
+  exceptionType         String?   // If exception status: delay, damage, refused, address_issue, weather, other
+  exceptionNotes        String?   // Details about the exception
+  exceptionResolvedAt   DateTime? // When the exception was resolved
+
+  // Link to the specific stop where this order should be delivered (for multi-stop shipments)
+  deliveryStop          ShipmentStop? @relation(fields: [deliveryStopId], references: [id])
+  deliveryStopId        String?
+
+  // Trackable units (pallets, totes, boxes, etc.)
+  trackableUnits        TrackableUnit[]
+
+  // Line items (legacy - will be moved to trackable units)
+  lineItems             OrderLineItem[]
+
+  // Additional info
+  specialInstructions   String?
+  notes                 String?
+
+  // Tracking
+  archived              Boolean   @default(false)
+  archivedAt            DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  // Relationship to shipments
+  orderShipments        OrderShipment[]
+
+  // Audit trail
+  auditLogs             AuditLog[]
+
+  // Pending lane requests
+  pendingLaneRequests   PendingLaneRequest[]
+}
+
+model OrderLineItem {
+  id          String  @id @default(uuid())
+  order       Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId     String
+
+  // Optional: which trackable unit does this item belong to?
+  trackableUnit   TrackableUnit? @relation(fields: [trackableUnitId], references: [id], onDelete: Cascade)
+  trackableUnitId String?
+
+  sku         String
+  description String?
+  quantity    Int
+  weight      Float?  // in kg
+  weightUnit  String  @default("kg")
+  length      Float?  // dimensions in cm
+  width       Float?
+  height      Float?
+  dimUnit     String  @default("cm")
+
+  // Additional fields
+  hazmat      Boolean @default(false)
+  temperature String? // e.g., "ambient", "refrigerated", "frozen"
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model OrderShipment {
+  id          String   @id @default(uuid())
+  order       Order    @relation(fields: [orderId], references: [id])
+  orderId     String
+  shipment    Shipment @relation(fields: [shipmentId], references: [id])
+  shipmentId  String
+  createdAt   DateTime @default(now())
+
+  @@unique([orderId, shipmentId])
+}
+
+model Organization {
+  id                  String   @id @default(uuid())
+  name                String   @default("Default Organization")
+
+  // Lowest Trackable Unit Configuration
+  trackingMode        String   @default("item") // "group" or "item"
+  trackableUnitType   String   @default("box") // "pallet", "tote", "box", "stillage", "custom"
+  customUnitName      String?  // Used when trackableUnitType is "custom"
+
+  // Metadata
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+model TrackableUnit {
   id              String   @id @default(uuid())
-  shipment        Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
-  shipmentId      String
-  eventType       String   // "location", "status_change", "note", etc.
-  deviceId        String?  // External device ID (e.g., "72308628872889491")
-  deviceName      String?  // Device display name (e.g., "SH-0001")
-  lat             Float?   // Latitude from GPS
-  lng             Float?   // Longitude from GPS
-  address         String?  // Human-readable address
-  locationSummary String?  // Full location summary from webhook
-  rawPayload      Json?    // Store the entire webhook payload for debugging
-  eventTime       DateTime // When the event occurred (from webhook)
+  order           Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId         String
+
+  // Unit identification
+  identifier      String   // e.g., "PALLET-001", "BOX-123", user-defined identifier
+  unitType        String   // Snapshot of the org setting at creation time (pallet, tote, box, stillage, custom)
+  customTypeName  String?  // If custom type was used
+
+  // Sequence number within the order
+  sequenceNumber  Int      // 1, 2, 3... for ordering within an order
+
+  // Line items contained in this unit
+  lineItems       OrderLineItem[]
+
+  // Additional tracking
+  barcode         String?  // Optional barcode/QR code
+  notes           String?
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  @@index([shipmentId])
-  @@index([eventTime])
+  @@unique([orderId, sequenceNumber])
+  @@index([orderId])
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+
+  // Entity tracking
+  entityType  String   // "order", "trackable_unit", "line_item"
+  entityId    String   // ID of the affected entity
+  orderId     String?  // Reference to order for easy filtering
+  order       Order?   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  // Action details
+  action      String   // "created", "updated", "deleted", "converted", "moved", etc.
+  description String   // Human-readable description
+  changes     Json?    // JSON object with before/after values
+
+  // User tracking (placeholder for future authentication)
+  userId      String?  // User who performed the action
+  userName    String?  // Name of the user
+
+  // Metadata
+  ipAddress   String?
+  userAgent   String?
+
+  createdAt   DateTime @default(now())
+
+  @@index([orderId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+model PendingLaneRequest {
+  id          String   @id @default(uuid())
+
+  // Order that triggered this request
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId     String
+
+  // Lane details needed
+  originId      String
+  origin        Location @relation("PendingLaneOrigin", fields: [originId], references: [id])
+  destinationId String
+  destination   Location @relation("PendingLaneDestination", fields: [destinationId], references: [id])
+
+  // Required capabilities
+  serviceLevel          String   // "FTL" or "LTL"
+  requiresTemperatureControl Boolean @default(false)
+  requiresHazmat        Boolean  @default(false)
+
+  // Status tracking
+  status        String   @default("pending") // "pending", "approved", "rejected", "lane_created"
+  resolvedAt    DateTime?
+  resolvedById  String?  // User who resolved this request
+  createdLaneId String?  // If approved and lane was created
+
+  // Notes
+  notes         String?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([status])
+  @@index([originId, destinationId])
 }

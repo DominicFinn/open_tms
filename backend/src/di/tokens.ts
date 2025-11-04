@@ -10,6 +10,14 @@ export const TOKENS = {
   ILocationsRepository: Symbol.for('ILocationsRepository'),
   IShipmentsRepository: Symbol.for('IShipmentsRepository'),
   ILanesRepository: Symbol.for('ILanesRepository'),
+  IOrdersRepository: Symbol.for('IOrdersRepository'),
+  IOrganizationRepository: Symbol.for('IOrganizationRepository'),
+  IPendingLaneRequestsRepository: Symbol.for('IPendingLaneRequestsRepository'),
+
+  // Service tokens
+  IShipmentAssignmentService: Symbol.for('IShipmentAssignmentService'),
+  ICSVImportService: Symbol.for('ICSVImportService'),
+  IOrderDeliveryService: Symbol.for('IOrderDeliveryService'),
 
   // Infrastructure tokens
   PrismaClient: Symbol.for('PrismaClient'),
