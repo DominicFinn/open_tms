@@ -42,5 +42,39 @@ packages/**/dist/
 
 claude.md
 .claude/
+# Java
+*.class
+*.jar
+*.war
+*.ear
+*.iml
+*.ipr
+*.iws
+*.javadoc
+*.log
+*.hprof
+*.project
+*.classpath
+*.settings/
+target/
+bin/
+out/
+build/
+.gradle/
+.idea/
+*.swp
+*.swo
+# Maven
+.mvn/
+# Eclipse
+*.launch
+*.metadata/
+# NetBeans
+nbproject/private/
+build/
+nbbuild/
+dist/
+nbdist/
+.nb-gradle/
 
 deploy-personal.sh
