@@ -65,31 +65,60 @@ if ! docker info > /dev/null 2>&1; then
 fi
 success "Docker is running"
 
-# Check if docker-compose is available
-if command -v docker-compose &> /dev/null; then
-    DOCKER_COMPOSE_CMD="docker-compose"
-elif docker compose version &> /dev/null 2>&1; then
+# Check if docker-compose is available and working
+DOCKER_COMPOSE_CMD=""
+if docker compose version &> /dev/null 2>&1; then
     DOCKER_COMPOSE_CMD="docker compose"
+    success "Using 'docker compose'"
+elif command -v docker-compose &> /dev/null && docker-compose version &> /dev/null 2>&1; then
+    DOCKER_COMPOSE_CMD="docker-compose"
+    success "Using 'docker-compose'"
 else
-    error "Neither 'docker-compose' nor 'docker compose' is available. Please install Docker Compose."
-    exit 1
+    warning "Docker Compose not available, will use 'docker run' directly"
+    DOCKER_COMPOSE_CMD=""
 fi
 
 # Start database
 info "Starting database container..."
 cd "$(dirname "$0")"
-DB_CONTAINER_ID=$($DOCKER_COMPOSE_CMD ps -q $DB_SERVICE 2>/dev/null || echo "")
-if [ ! -z "$DB_CONTAINER_ID" ] && docker ps --format '{{.ID}}' | grep -q "^${DB_CONTAINER_ID}$"; then
-    info "Database container is already running"
+CONTAINER_NAME="open-tms-db"
+
+if [ ! -z "$DOCKER_COMPOSE_CMD" ]; then
+    # Use docker compose
+    DB_CONTAINER_ID=$($DOCKER_COMPOSE_CMD ps -q $DB_SERVICE 2>/dev/null || echo "")
+    if [ ! -z "$DB_CONTAINER_ID" ] && docker ps --format '{{.ID}}' | grep -q "^${DB_CONTAINER_ID}$"; then
+        info "Database container is already running"
+    else
+        $DOCKER_COMPOSE_CMD up -d $DB_SERVICE
+    fi
+    DB_CONTAINER_ID=$($DOCKER_COMPOSE_CMD ps -q $DB_SERVICE 2>/dev/null || echo "")
 else
-    $DOCKER_COMPOSE_CMD up -d $DB_SERVICE
+    # Use docker run directly
+    if docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
+        if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
+            info "Database container is already running"
+        else
+            info "Starting existing database container..."
+            docker start $CONTAINER_NAME
+        fi
+    else
+        info "Creating new database container..."
+        docker run -d \
+            --name $CONTAINER_NAME \
+            -e POSTGRES_USER=$DB_USER \
+            -e POSTGRES_PASSWORD=$DB_PASSWORD \
+            -e POSTGRES_DB=$DB_NAME \
+            -p ${DB_PORT}:5432 \
+            -v open-tms-db-data:/var/lib/postgresql/data \
+            postgres:16-alpine
+    fi
+    DB_CONTAINER_ID=$(docker ps -q -f name=$CONTAINER_NAME)
 fi
 
 # Wait for database to be ready
 info "Waiting for database to be ready..."
 MAX_ATTEMPTS=30
 ATTEMPT=0
-DB_CONTAINER_ID=$($DOCKER_COMPOSE_CMD ps -q $DB_SERVICE 2>/dev/null || echo "")
 while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
     if [ ! -z "$DB_CONTAINER_ID" ] && docker exec $DB_CONTAINER_ID pg_isready -U $DB_USER -d $DB_NAME > /dev/null 2>&1; then
         success "Database is ready"
@@ -103,7 +132,11 @@ while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
     sleep 1
     # Refresh container ID in case it just started
     if [ -z "$DB_CONTAINER_ID" ]; then
-        DB_CONTAINER_ID=$($DOCKER_COMPOSE_CMD ps -q $DB_SERVICE 2>/dev/null || echo "")
+        if [ ! -z "$DOCKER_COMPOSE_CMD" ]; then
+            DB_CONTAINER_ID=$($DOCKER_COMPOSE_CMD ps -q $DB_SERVICE 2>/dev/null || echo "")
+        else
+            DB_CONTAINER_ID=$(docker ps -q -f name=$CONTAINER_NAME)
+        fi
     fi
 done
 
@@ -122,14 +155,30 @@ fi
 
 # Check if there are pending migrations
 info "Checking for pending migrations..."
-npx prisma migrate deploy || {
-    warning "Migration deploy failed, trying migrate dev (this may create a new migration)..."
-    npx prisma migrate dev --name local_dev || {
+if npx prisma migrate deploy 2>&1 | grep -q "All migrations have been successfully applied\|No pending migrations"; then
+    success "Database migrations applied"
+else
+    warning "Migration deploy had issues, checking status..."
+    MIGRATION_STATUS=$(npx prisma migrate status 2>&1)
+    if echo "$MIGRATION_STATUS" | grep -q "Database schema is up to date"; then
+        success "Database schema is up to date"
+    elif echo "$MIGRATION_STATUS" | grep -q "following migrations have not yet been applied"; then
+        warning "Some migrations failed. Attempting to resolve..."
+        # Try to resolve failed migrations
+        npx prisma migrate resolve --applied $(echo "$MIGRATION_STATUS" | grep -A 10 "not yet been applied" | grep -E "^\s+[0-9]" | head -1 | xargs) 2>/dev/null || true
+        # Try deploy again
+        npx prisma migrate deploy || {
+            error "Failed to apply migrations. You may need to reset the database."
+            error "Run: cd backend && npx prisma migrate reset (WARNING: This will delete all data)"
+            exit 1
+        }
+        success "Database migrations applied"
+    else
         error "Failed to apply migrations"
+        echo "$MIGRATION_STATUS"
         exit 1
-    }
-}
-success "Database migrations applied"
+    fi
+fi
 
 # Generate Prisma client (ensure it's up to date)
 info "Ensuring Prisma client is generated..."

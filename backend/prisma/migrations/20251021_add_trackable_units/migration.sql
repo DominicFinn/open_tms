@@ -42,6 +42,7 @@ ALTER TABLE "OrderLineItem" ADD CONSTRAINT "OrderLineItem_trackableUnitId_fkey" 
 -- AddForeignKey
 ALTER TABLE "TrackableUnit" ADD CONSTRAINT "TrackableUnit_orderId_fkey" FOREIGN KEY ("orderId") REFERENCES "Order"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
--- Insert default organization settings
-INSERT INTO "Organization" (id, name, trackingMode, trackableUnitType, "createdAt", "updatedAt")
-VALUES (gen_random_uuid(), 'Default Organization', 'item', 'box', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+-- Insert default organization settings (only if table is empty)
+INSERT INTO "Organization" (id, name, "trackingMode", "trackableUnitType", "createdAt", "updatedAt")
+SELECT gen_random_uuid(), 'Default Organization', 'item', 'box', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+WHERE NOT EXISTS (SELECT 1 FROM "Organization");
