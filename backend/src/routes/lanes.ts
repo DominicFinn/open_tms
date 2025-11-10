@@ -86,7 +86,7 @@ export async function laneRoutes(server: FastifyInstance) {
     const laneName = `${origin.city} → ${destination.city}`;
 
     // Create lane with stops in a transaction
-    const created = await server.prisma.$transaction(async (tx) => {
+    const created = await server.prisma.$transaction(async (tx: any) => {
       // Create the lane
       const lane = await tx.lane.create({
         data: {
@@ -234,7 +234,7 @@ export async function laneRoutes(server: FastifyInstance) {
     }
 
     // Update lane with stops in a transaction
-    const updated = await server.prisma.$transaction(async (tx) => {
+    const updated = await server.prisma.$transaction(async (tx: any) => {
       // Prepare lane update data
       const updateData: any = {
         originId: body.originId,

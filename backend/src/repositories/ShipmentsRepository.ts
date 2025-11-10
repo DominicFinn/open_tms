@@ -1,43 +1,8 @@
-import { PrismaClient, Shipment, Prisma } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 
-export type ShipmentWithRelations = Prisma.ShipmentGetPayload<{
-  include: {
-    customer: true;
-    origin: true;
-    destination: true;
-    lane: {
-      include: {
-        origin: true;
-        destination: true;
-      };
-    };
-  };
-}>;
+export type ShipmentWithRelations = any;
 
-export type ShipmentWithFullRelations = Prisma.ShipmentGetPayload<{
-  include: {
-    customer: true;
-    origin: true;
-    destination: true;
-    lane: {
-      include: {
-        origin: true;
-        destination: true;
-        stops: {
-          include: {
-            location: true;
-          };
-        };
-      };
-    };
-    loads: {
-      include: {
-        vehicle: true;
-        driver: true;
-      };
-    };
-  };
-}>;
+export type ShipmentWithFullRelations = any;
 
 export interface CreateShipmentDTO {
   reference: string;
@@ -68,7 +33,7 @@ export interface IShipmentsRepository {
   findById(id: string): Promise<ShipmentWithFullRelations | null>;
   create(data: CreateShipmentDTO, includeLane?: boolean): Promise<ShipmentWithRelations>;
   update(id: string, data: UpdateShipmentDTO, includeLane?: boolean): Promise<ShipmentWithRelations>;
-  archive(id: string): Promise<Shipment>;
+  archive(id: string): Promise<any>;
   createMany(data: CreateShipmentDTO[]): Promise<void>;
   deleteMany(): Promise<void>;
 }
@@ -153,7 +118,7 @@ export class ShipmentsRepository implements IShipmentsRepository {
     }) as Promise<ShipmentWithRelations>;
   }
 
-  async archive(id: string): Promise<Shipment> {
+  async archive(id: string): Promise<any> {
     return this.prisma.shipment.update({
       where: { id },
       data: {

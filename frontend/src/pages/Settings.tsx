@@ -7,6 +7,8 @@ interface OrganizationSettings {
   trackingMode: 'group' | 'item';
   trackableUnitType: 'pallet' | 'tote' | 'box' | 'stillage' | 'custom';
   customUnitName?: string;
+  weightUnit?: 'kg' | 'lb';
+  dimUnit?: 'cm' | 'in';
   createdAt: string;
   updatedAt: string;
 }
@@ -23,6 +25,8 @@ export default function Settings() {
   const [trackingMode, setTrackingMode] = useState<'group' | 'item'>('item');
   const [trackableUnitType, setTrackableUnitType] = useState<'pallet' | 'tote' | 'box' | 'stillage' | 'custom'>('box');
   const [customUnitName, setCustomUnitName] = useState('');
+  const [weightUnit, setWeightUnit] = useState<'kg' | 'lb'>('kg');
+  const [dimUnit, setDimUnit] = useState<'cm' | 'in'>('cm');
 
   useEffect(() => {
     loadSettings();
@@ -33,18 +37,35 @@ export default function Settings() {
     setError(null);
     try {
       const response = await fetch(`${API_URL}/api/v1/organization/settings`);
+      
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status} ${response.statusText}`);
+      }
+      
       const result = await response.json();
 
       if (result.data) {
         setSettings(result.data);
-        setName(result.data.name);
-        setTrackingMode(result.data.trackingMode);
-        setTrackableUnitType(result.data.trackableUnitType);
+        setName(result.data.name || '');
+        setTrackingMode(result.data.trackingMode || 'item');
+        setTrackableUnitType(result.data.trackableUnitType || 'box');
         setCustomUnitName(result.data.customUnitName || '');
+        setWeightUnit(result.data.weightUnit || 'kg');
+        setDimUnit(result.data.dimUnit || 'cm');
+      } else {
+        // If no data but successful response, use defaults
+        setWeightUnit('kg');
+        setDimUnit('cm');
       }
     } catch (err: any) {
-      setError('Failed to load settings');
+      const errorMessage = err.message?.includes('Failed to fetch') || err.message?.includes('NetworkError')
+        ? 'Cannot connect to the server. Please make sure the backend is running on ' + API_URL
+        : err.message || 'Failed to load settings';
+      setError(errorMessage);
       console.error('Failed to load settings:', err);
+      // Still allow editing with defaults even if load fails
+      setWeightUnit('kg');
+      setDimUnit('cm');
     } finally {
       setLoading(false);
     }
@@ -67,7 +88,9 @@ export default function Settings() {
       const updateData: any = {
         name,
         trackingMode,
-        trackableUnitType
+        trackableUnitType,
+        weightUnit,
+        dimUnit
       };
 
       if (trackableUnitType === 'custom') {
@@ -127,7 +150,7 @@ export default function Settings() {
           </div>
         )}
 
-        {!loading && settings && (
+        {!loading && (
           <form onSubmit={handleSave} className="form-grid">
             {error && (
               <div className="alert alert-error" style={{ gridColumn: '1 / -1' }}>
@@ -233,6 +256,47 @@ export default function Settings() {
               </div>
             )}
 
+            <h3 style={{ gridColumn: '1 / -1', marginTop: 'var(--spacing-3)' }}>Unit of Measure</h3>
+
+            <div style={{
+              gridColumn: '1 / -1',
+              padding: 'var(--spacing-2)',
+              backgroundColor: 'var(--color-surface-variant)',
+              borderRadius: '8px',
+              marginBottom: 'var(--spacing-2)'
+            }}>
+              <p style={{ color: 'var(--color-grey)', fontSize: '14px', margin: 0 }}>
+                These settings define the default units used when entering weight and dimensions for line items in orders.
+                Users can override these defaults on individual items if needed.
+              </p>
+            </div>
+
+            <div className="input-wrapper" style={{ gridColumn: '1 / -1' }}>
+              <select
+                value={weightUnit}
+                onChange={(e) => setWeightUnit(e.target.value as 'kg' | 'lb')}
+                className="input"
+                required
+              >
+                <option value="kg">Kilograms (kg)</option>
+                <option value="lb">Pounds (lb)</option>
+              </select>
+              <label>Default Weight Unit</label>
+            </div>
+
+            <div className="input-wrapper" style={{ gridColumn: '1 / -1' }}>
+              <select
+                value={dimUnit}
+                onChange={(e) => setDimUnit(e.target.value as 'cm' | 'in')}
+                className="input"
+                required
+              >
+                <option value="cm">Centimeters (cm)</option>
+                <option value="in">Inches (in)</option>
+              </select>
+              <label>Default Dimension Unit</label>
+            </div>
+
             <div style={{
               gridColumn: '1 / -1',
               padding: 'var(--spacing-2)',
@@ -243,8 +307,8 @@ export default function Settings() {
               <div style={{ display: 'flex', alignItems: 'start', gap: 'var(--spacing-1)' }}>
                 <span className="material-icons" style={{ color: 'var(--color-warning)' }}>warning</span>
                 <div>
-                  <strong>Important:</strong> Changing this setting will affect how new orders are created.
-                  Existing orders will retain their current trackable unit configuration.
+                  <strong>Important:</strong> Changing these settings will affect how new orders are created.
+                  Existing orders will retain their current unit configuration.
                 </div>
               </div>
             </div>
@@ -279,6 +343,18 @@ export default function Settings() {
                   ? customUnitName || 'Custom (not specified)'
                   : trackableUnitType.charAt(0).toUpperCase() + trackableUnitType.slice(1)
                 }
+              </span>
+            </div>
+            <div>
+              <strong>Default Weight Unit:</strong>{' '}
+              <span style={{ color: 'var(--color-primary)' }}>
+                {weightUnit === 'kg' ? 'Kilograms (kg)' : 'Pounds (lb)'}
+              </span>
+            </div>
+            <div>
+              <strong>Default Dimension Unit:</strong>{' '}
+              <span style={{ color: 'var(--color-primary)' }}>
+                {dimUnit === 'cm' ? 'Centimeters (cm)' : 'Inches (in)'}
               </span>
             </div>
             <div style={{

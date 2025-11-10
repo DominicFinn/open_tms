@@ -22,6 +22,10 @@ import EditOrder from './pages/EditOrder';
 import OrderImportCSV from './pages/OrderImportCSV';
 import PendingLaneRequests from './pages/PendingLaneRequests';
 import Settings from './pages/Settings';
+import ApiKeys from './pages/ApiKeys';
+import WebhookLogs from './pages/WebhookLogs';
+import OutboundIntegrations from './pages/OutboundIntegrations';
+import OutboundIntegrationLogs from './pages/OutboundIntegrationLogs';
 import './theme.css';
 
 const root = createRoot(document.getElementById('root')!);
@@ -61,6 +65,10 @@ root.render(
         
         <Route path="/pending-lane-requests" element={<PendingLaneRequests />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="/api-keys" element={<ApiKeys />} />
+        <Route path="/webhook-logs" element={<WebhookLogs />} />
+        <Route path="/outbound-integrations" element={<OutboundIntegrations />} />
+        <Route path="/outbound-integration-logs" element={<OutboundIntegrationLogs />} />
       </Routes>
     </Layout>
   </BrowserRouter>

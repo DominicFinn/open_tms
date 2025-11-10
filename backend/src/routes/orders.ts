@@ -5,6 +5,7 @@ import { ILocationsRepository } from '../repositories/LocationsRepository.js';
 import { IShipmentAssignmentService } from '../services/ShipmentAssignmentService.js';
 import { ICSVImportService } from '../services/CSVImportService.js';
 import { IOrderDeliveryService } from '../services/OrderDeliveryService.js';
+import { IOrganizationRepository } from '../repositories/OrganizationRepository.js';
 import { container, TOKENS } from '../di/index.js';
 
 // Validation schemas
@@ -101,6 +102,7 @@ export async function orderRoutes(server: FastifyInstance) {
   const assignmentService = container.resolve<IShipmentAssignmentService>(TOKENS.IShipmentAssignmentService);
   const csvImportService = container.resolve<ICSVImportService>(TOKENS.ICSVImportService);
   const deliveryService = container.resolve<IOrderDeliveryService>(TOKENS.IOrderDeliveryService);
+  const orgRepo = container.resolve<IOrganizationRepository>(TOKENS.IOrganizationRepository);
 
   // Get all orders
   server.get('/api/v1/orders', async (_req: FastifyRequest, _reply: FastifyReply) => {
@@ -112,11 +114,36 @@ export async function orderRoutes(server: FastifyInstance) {
   server.post('/api/v1/orders', async (req: FastifyRequest, reply: FastifyReply) => {
     const body = createOrderSchema.parse((req as any).body);
 
+    // Get organization settings for default units
+    const orgSettings = await orgRepo.getSettings();
+
+    // Apply organization defaults to line items if not specified
+    const applyOrgDefaults = (items: any[]) => {
+      return items.map((item: any) => ({
+        ...item,
+        weightUnit: item.weightUnit || orgSettings.weightUnit || 'kg',
+        dimUnit: item.dimUnit || orgSettings.dimUnit || 'cm'
+      }));
+    };
+
     // Convert date strings to Date objects
     const orderData: any = { ...body };
     if (body.orderDate) orderData.orderDate = new Date(body.orderDate);
     if (body.requestedPickupDate) orderData.requestedPickupDate = new Date(body.requestedPickupDate);
     if (body.requestedDeliveryDate) orderData.requestedDeliveryDate = new Date(body.requestedDeliveryDate);
+
+    // Apply defaults to legacy line items
+    if (orderData.lineItems && orderData.lineItems.length > 0) {
+      orderData.lineItems = applyOrgDefaults(orderData.lineItems);
+    }
+
+    // Apply defaults to trackable unit line items
+    if (orderData.trackableUnits && orderData.trackableUnits.length > 0) {
+      orderData.trackableUnits = orderData.trackableUnits.map((unit: any) => ({
+        ...unit,
+        lineItems: unit.lineItems ? applyOrgDefaults(unit.lineItems) : []
+      }));
+    }
 
     // Determine order status based on location validation
     let status = 'pending';
@@ -194,7 +221,7 @@ export async function orderRoutes(server: FastifyInstance) {
       return { data: null, error: 'Order not found' };
     }
 
-    const locationData = body.locationType === 'origin' ? order.originData : order.destinationData;
+    const locationData = body.locationType === 'origin' ? (order as any).originData : (order as any).destinationData;
 
     if (!locationData) {
       reply.code(400);
@@ -460,10 +487,10 @@ export async function orderRoutes(server: FastifyInstance) {
 
     // Trackable units
     order.trackableUnits.forEach(unit => {
-      unit.lineItems.forEach((item, index) => {
+      (unit as any).lineItems.forEach((item: any, index: number) => {
         csvRows.push([
-          unit.identifier,
-          unit.customTypeName || unit.unitType,
+          (unit as any).identifier,
+          (unit as any).customTypeName || (unit as any).unitType,
           index + 1,
           item.sku,
           item.description || '',
@@ -504,7 +531,7 @@ export async function orderRoutes(server: FastifyInstance) {
 
     reply
       .header('Content-Type', 'text/csv')
-      .header('Content-Disposition', `attachment; filename="order-${order.orderNumber}.csv"`)
+      .header('Content-Disposition', `attachment; filename="order-${(order as any).orderNumber}.csv"`)
       .send(csvContent);
   });
 

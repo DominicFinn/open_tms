@@ -14,6 +14,11 @@ import { organizationRoutes } from './routes/organization.js';
 import { pendingLaneRequestRoutes } from './routes/pendingLaneRequests.js';
 import { seedRoutes } from './routes/seed.js';
 import { distanceRoutes } from './routes/distance.js';
+import { apiKeyRoutes } from './routes/apiKeys.js';
+import { webhookRoutes } from './routes/webhook.js';
+import { webhookLogRoutes } from './routes/webhookLogs.js';
+import { outboundIntegrationRoutes } from './routes/outboundIntegrations.js';
+import { outboundIntegrationLogRoutes } from './routes/outboundIntegrationLogs.js';
 
 const server = Fastify({ logger: true });
 
@@ -44,6 +49,11 @@ async function start() {
   await server.register(pendingLaneRequestRoutes);
   await server.register(seedRoutes);
   await server.register(distanceRoutes);
+  await server.register(apiKeyRoutes);
+  await server.register(webhookRoutes);
+  await server.register(webhookLogRoutes);
+  await server.register(outboundIntegrationRoutes);
+  await server.register(outboundIntegrationLogRoutes);
 
   // Start the server with automatic port retry
   const preferredPort = Number(process.env.PORT || 3001);

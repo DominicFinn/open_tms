@@ -368,12 +368,9 @@ export class CSVImportService implements ICSVImportService {
             originData: !originId ? parsedOrder.originData : undefined,
             destinationId,
             destinationData: !destinationId ? parsedOrder.destinationData : undefined,
-            orderDate: parsedOrder.orderDate,
-            requestedPickupDate: parsedOrder.requestedPickupDate,
-            requestedDeliveryDate: parsedOrder.requestedDeliveryDate,
-            serviceLevel: parsedOrder.serviceLevel,
-            temperatureControl: parsedOrder.temperatureControl,
-            requiresHazmat: parsedOrder.requiresHazmat,
+            orderDate: parsedOrder.orderDate ? new Date(parsedOrder.orderDate) : undefined,
+            requestedPickupDate: parsedOrder.requestedPickupDate ? new Date(parsedOrder.requestedPickupDate) : undefined,
+            requestedDeliveryDate: parsedOrder.requestedDeliveryDate ? new Date(parsedOrder.requestedDeliveryDate) : undefined,
             trackableUnits: parsedOrder.trackableUnits,
             lineItems: [] // We're using trackable units
           });
@@ -381,7 +378,7 @@ export class CSVImportService implements ICSVImportService {
           result.ordersCreated++;
           result.orders.push({
             orderNumber: parsedOrder.orderNumber,
-            id: order.id
+            id: (order as any).id
           });
 
         } catch (error: any) {

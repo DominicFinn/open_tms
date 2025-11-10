@@ -1,15 +1,17 @@
-import { PrismaClient, Organization } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 
 export interface UpdateOrganizationSettingsDTO {
   name?: string;
   trackingMode?: 'group' | 'item';
   trackableUnitType?: 'pallet' | 'tote' | 'box' | 'stillage' | 'custom';
   customUnitName?: string;
+  weightUnit?: 'kg' | 'lb';
+  dimUnit?: 'cm' | 'in';
 }
 
 export interface IOrganizationRepository {
-  getSettings(): Promise<Organization>;
-  updateSettings(data: UpdateOrganizationSettingsDTO): Promise<Organization>;
+  getSettings(): Promise<any>;
+  updateSettings(data: UpdateOrganizationSettingsDTO): Promise<any>;
   getTrackableUnitLabel(): Promise<string>;
 }
 
@@ -20,7 +22,7 @@ export class OrganizationRepository implements IOrganizationRepository {
    * Get the organization settings (there's only one org in the system)
    * If no org exists, create a default one
    */
-  async getSettings(): Promise<Organization> {
+  async getSettings(): Promise<any> {
     let org = await this.prisma.organization.findFirst();
 
     if (!org) {
@@ -29,7 +31,9 @@ export class OrganizationRepository implements IOrganizationRepository {
         data: {
           name: 'Default Organization',
           trackingMode: 'item',
-          trackableUnitType: 'box'
+          trackableUnitType: 'box',
+          weightUnit: 'kg',
+          dimUnit: 'cm'
         }
       });
     }
@@ -40,7 +44,7 @@ export class OrganizationRepository implements IOrganizationRepository {
   /**
    * Update organization settings
    */
-  async updateSettings(data: UpdateOrganizationSettingsDTO): Promise<Organization> {
+  async updateSettings(data: UpdateOrganizationSettingsDTO): Promise<any> {
     const org = await this.getSettings();
 
     return this.prisma.organization.update({

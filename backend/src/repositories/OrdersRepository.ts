@@ -290,16 +290,16 @@ export class OrdersRepository implements IOrdersRepository {
       }
     }));
 
-    return this.prisma.order.create({
+    return (this.prisma.order.create({
       data: {
         ...orderData,
         // Create trackable units with their line items
         trackableUnits: trackableUnitsData ? {
-          create: trackableUnitsData
+          create: trackableUnitsData as any
         } : undefined,
         // Legacy line items (not in trackable units)
         lineItems: lineItems ? {
-          create: lineItems
+          create: lineItems as any
         } : undefined
       },
       include: {
@@ -342,7 +342,7 @@ export class OrdersRepository implements IOrdersRepository {
           }
         }
       }
-    }) as Promise<OrderWithRelations>;
+    }) as Promise<OrderWithRelations>);
   }
 
   async update(id: string, data: UpdateOrderDTO): Promise<Order> {
@@ -421,7 +421,7 @@ export class OrdersRepository implements IOrdersRepository {
         notes: unit.notes,
         sequenceNumber: nextSequence,
         lineItems: {
-          create: unit.lineItems
+          create: unit.lineItems as any
         }
       },
       include: {
@@ -559,7 +559,7 @@ export class OrdersRepository implements IOrdersRepository {
     const shipmentReference = `SH-${order.orderNumber}`;
 
     // Create shipment and link order in a transaction
-    const result = await this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx: any) => {
       // Create the shipment
       const shipment = await tx.shipment.create({
         data: {
@@ -567,8 +567,8 @@ export class OrdersRepository implements IOrdersRepository {
           customerId: order.customer.id,
           originId: order.originId!,
           destinationId: order.destinationId!,
-          pickupDate: order.requestedPickupDate ? new Date(order.requestedPickupDate) : undefined,
-          deliveryDate: order.requestedDeliveryDate ? new Date(order.requestedDeliveryDate) : undefined,
+          pickupDate: (order as any).requestedPickupDate ? new Date((order as any).requestedPickupDate) : undefined,
+          deliveryDate: (order as any).requestedDeliveryDate ? new Date((order as any).requestedDeliveryDate) : undefined,
           items: allItems,
           status: 'draft'
         }
@@ -577,7 +577,7 @@ export class OrdersRepository implements IOrdersRepository {
       // Link order to shipment
       await tx.orderShipment.create({
         data: {
-          orderId: order.id,
+          orderId: (order as any).id,
           shipmentId: shipment.id
         }
       });

@@ -54,6 +54,22 @@ export function Layout({ children }: { children: React.ReactNode }) {
             Pending Lane Requests
           </NavLink>
           <div style={{ borderTop: '1px solid var(--color-border)', margin: 'var(--spacing-1) 0' }}></div>
+          <NavLink to="/api-keys" onClick={closeMobileMenu}>
+            <span className="material-icons">vpn_key</span>
+            API Keys
+          </NavLink>
+          <NavLink to="/webhook-logs" onClick={closeMobileMenu}>
+            <span className="material-icons">webhook</span>
+            Webhook Logs
+          </NavLink>
+          <NavLink to="/outbound-integrations" onClick={closeMobileMenu}>
+            <span className="material-icons">send</span>
+            Outbound Integrations
+          </NavLink>
+          <NavLink to="/outbound-integration-logs" onClick={closeMobileMenu}>
+            <span className="material-icons">description</span>
+            Outbound Logs
+          </NavLink>
           <NavLink to="/settings" onClick={closeMobileMenu}>
             <span className="material-icons">settings</span>
             Settings

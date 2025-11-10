@@ -146,7 +146,7 @@ export class LanesRepository implements ILanesRepository {
     laneData: CreateLaneDTO,
     stops: CreateLaneStopDTO[]
   ): Promise<LaneWithBasicRelations> {
-    return this.prisma.$transaction(async (tx) => {
+    return this.prisma.$transaction(async (tx: any) => {
       // Create the lane
       const lane = await tx.lane.create({
         data: laneData
@@ -182,7 +182,7 @@ export class LanesRepository implements ILanesRepository {
     laneData: UpdateLaneDTO,
     stops?: CreateLaneStopDTO[]
   ): Promise<LaneWithRelations> {
-    return this.prisma.$transaction(async (tx) => {
+    return this.prisma.$transaction(async (tx: any) => {
       // Remove undefined values
       const cleanedData = Object.fromEntries(
         Object.entries(laneData).filter(([_, v]) => v !== undefined)

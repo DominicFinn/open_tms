@@ -484,7 +484,7 @@ export default function OrderDetails() {
                   <span className="material-icons" style={{ fontSize: '16px' }}>edit</span>
                   Edit
                 </button>
-                {order.originId && order.destinationId && (
+                {order.origin && order.destination && (
                   <>
                     <button
                       onClick={handleAssignToShipment}

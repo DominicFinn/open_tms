@@ -11,7 +11,9 @@
     "build": "npm -w packages/shared run build && npm -w backend run build && npm -w frontend run build",
     "dev": "concurrently -k -n backend,frontend -c blue,green \"npm -w backend run dev\" \"npm -w frontend run dev\"",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "clean": "rm -rf node_modules package-lock.json frontend/node_modules backend/node_modules packages/*/node_modules",
+    "reinstall": "npm run clean && npm install"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",

@@ -1,5 +1,6 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { OutboundIntegrationService } from '../services/OutboundIntegrationService.js';
 
 export async function shipmentRoutes(server: FastifyInstance) {
   // Get all shipments
@@ -85,9 +86,34 @@ export async function shipmentRoutes(server: FastifyInstance) {
         customer: true,
         origin: true,
         destination: true,
-        lane: body.laneId ? { include: { origin: true, destination: true } } : false
+        carrier: true,
+        lane: body.laneId ? { include: { origin: true, destination: true } } : false,
+        orderShipments: {
+          include: {
+            order: {
+              include: {
+                trackableUnits: {
+                  include: {
+                    lineItems: true
+                  },
+                  orderBy: {
+                    sequenceNumber: 'asc'
+                  }
+                },
+                lineItems: true
+              }
+            }
+          }
+        }
       }
     });
+
+    // Trigger outbound integration (fire and forget)
+    const outboundService = new OutboundIntegrationService(server.prisma);
+    outboundService.sendShipmentNotification(created as any).catch(error => {
+      server.log.error('Failed to send outbound integration:', error);
+    });
+
     reply.code(201);
     return { data: created, error: null };
   });

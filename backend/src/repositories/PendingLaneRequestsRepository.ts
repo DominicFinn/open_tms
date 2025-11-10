@@ -52,7 +52,7 @@ export class PendingLaneRequestsRepository implements IPendingLaneRequestsReposi
   constructor(private prisma: PrismaClient) {}
 
   async all(): Promise<PendingLaneRequestWithRelations[]> {
-    return this.prisma.pendingLaneRequest.findMany({
+    return (this.prisma.pendingLaneRequest.findMany({
       include: {
         order: {
           select: {
@@ -86,11 +86,11 @@ export class PendingLaneRequestsRepository implements IPendingLaneRequestsReposi
         }
       },
       orderBy: { createdAt: 'desc' }
-    }) as PendingLaneRequestWithRelations[];
+    }) as Promise<PendingLaneRequestWithRelations[]>);
   }
 
   async findById(id: string): Promise<PendingLaneRequestWithRelations | null> {
-    return this.prisma.pendingLaneRequest.findUnique({
+    return (this.prisma.pendingLaneRequest.findUnique({
       where: { id },
       include: {
         order: {
@@ -124,11 +124,11 @@ export class PendingLaneRequestsRepository implements IPendingLaneRequestsReposi
           }
         }
       }
-    }) as PendingLaneRequestWithRelations | null;
+    }) as Promise<PendingLaneRequestWithRelations | null>);
   }
 
   async findByStatus(status: string): Promise<PendingLaneRequestWithRelations[]> {
-    return this.prisma.pendingLaneRequest.findMany({
+    return (this.prisma.pendingLaneRequest.findMany({
       where: { status },
       include: {
         order: {
@@ -163,7 +163,7 @@ export class PendingLaneRequestsRepository implements IPendingLaneRequestsReposi
         }
       },
       orderBy: { createdAt: 'desc' }
-    }) as PendingLaneRequestWithRelations[];
+    }) as Promise<PendingLaneRequestWithRelations[]>);
   }
 
   async approve(id: string, resolvedById: string, notes?: string): Promise<PendingLaneRequestWithRelations> {

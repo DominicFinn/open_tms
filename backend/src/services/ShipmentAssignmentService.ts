@@ -150,7 +150,7 @@ export class ShipmentAssignmentService implements IShipmentAssignmentService {
     });
 
     // Filter lanes by additional requirements
-    const matchingLane = lanes.find(lane => {
+    const matchingLane = lanes.find((lane: any) => {
       // Check temperature control
       if ((temperatureControl === 'refrigerated' || temperatureControl === 'frozen')
           && !lane.supportsTemperatureControl) {

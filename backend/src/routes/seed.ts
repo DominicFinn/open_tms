@@ -479,7 +479,7 @@ export async function seedRoutes(server: FastifyInstance) {
       const allLocations = await server.prisma.location.findMany();
 
       // Group locations by city for easier reference
-      const locationsByCity = allLocations.reduce((acc, location) => {
+      const locationsByCity = allLocations.reduce((acc: any, location: any) => {
         if (!acc[location.city]) {
           acc[location.city] = [];
         }
@@ -632,9 +632,9 @@ export async function seedRoutes(server: FastifyInstance) {
       const allCustomers = await server.prisma.customer.findMany();
 
       // Find Phoenix DC and Portland Walmart locations
-      const phoenixDC = allLocations.find(loc => loc.name === 'Phoenix DC - Distribution Center');
-      const portlandWalmart = allLocations.find(loc => loc.name === 'Walmart Supercenter - Portland');
-      const walmartCustomer = allCustomers.find(customer => customer.name === 'Walmart Inc.');
+      const phoenixDC = allLocations.find((loc: any) => loc.name === 'Phoenix DC - Distribution Center');
+      const portlandWalmart = allLocations.find((loc: any) => loc.name === 'Walmart Supercenter - Portland');
+      const walmartCustomer = allCustomers.find((customer: any) => customer.name === 'Walmart Inc.');
 
       const sampleShipments = [];
 

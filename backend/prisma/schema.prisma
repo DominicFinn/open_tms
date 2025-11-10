@@ -72,6 +72,7 @@ model Shipment {
   events        ShipmentEvent[]
   orderShipments OrderShipment[]
   stops         ShipmentStop[] // Multi-stop route support
+  outboundLogs  OutboundIntegrationLog[] // Outbound integration logs
 }
 
 model ShipmentStop {
@@ -395,6 +396,10 @@ model Organization {
   trackableUnitType   String   @default("box") // "pallet", "tote", "box", "stillage", "custom"
   customUnitName      String?  // Used when trackableUnitType is "custom"
 
+  // Unit of Measure Configuration
+  weightUnit          String   @default("kg") // "kg" or "lb"
+  dimUnit             String   @default("cm") // "cm" or "in"
+
   // Metadata
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
@@ -489,4 +494,128 @@ model PendingLaneRequest {
   @@index([orderId])
   @@index([status])
   @@index([originId, destinationId])
+}
+
+model ApiKey {
+  id          String   @id @default(uuid())
+  name        String   // User-friendly name for the API key
+  keyHash     String   @unique // Hashed version of the API key
+  keyPrefix   String   // First 8 characters for display (e.g., "sk_live_...")
+  active      Boolean  @default(true)
+  lastUsedAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  webhookLogs WebhookLog[]
+
+  @@index([active])
+  @@index([createdAt])
+}
+
+model WebhookLog {
+  id                String   @id @default(uuid())
+  apiKey            ApiKey?  @relation(fields: [apiKeyId], references: [id], onDelete: SetNull)
+  apiKeyId          String?
+  
+  // Request details
+  method            String   // HTTP method (POST, etc.)
+  path              String?
+  ipAddress         String?
+  userAgent         String?
+  headers           Json?    // Request headers (redacted API key)
+  
+  // Payload details
+  deviceName        String?  // Extracted device name from payload
+  deviceId          String?  // Device ID from payload
+  eventType         String?  // Event type (location, etc.)
+  hasLocation       Boolean  @default(false) // Whether lat/lng were provided
+  lat               Float?
+  lng               Float?
+  rawPayload        Json?    // Full request body
+  
+  // Processing results
+  status            String   // "success", "error", "skipped", "not_found"
+  shipmentFound     Boolean  @default(false)
+  shipmentUpdated   Boolean  @default(false)
+  shipmentId        String?  // ID of shipment if found
+  shipmentReference String?  // Reference of shipment if found
+  shipmentEventId   String?  // ID of created ShipmentEvent if any
+  errorMessage      String?  // Error message if status is "error"
+  
+  // Response
+  responseCode      Int?     // HTTP response code
+  responseBody      Json?    // Response body sent back
+  
+  // Timestamps
+  receivedAt        DateTime @default(now())
+  processedAt       DateTime?
+  
+  @@index([apiKeyId])
+  @@index([status])
+  @@index([shipmentId])
+  @@index([receivedAt])
+  @@index([deviceName])
+}
+
+model OutboundIntegration {
+  id          String   @id @default(uuid())
+  name        String   // User-friendly name
+  url         String   // URL to send EDI 856 to
+  active      Boolean  @default(true)
+  description String?  // Optional description
+  
+  // EDI Configuration
+  senderId     String?  // ISA06 - Sender ID
+  receiverId  String?  // ISA08 - Receiver ID
+  interchangeControlNumber String? // ISA13 - Control number prefix
+  
+  // Authentication (optional)
+  authType    String?  // "none", "basic", "bearer", "api_key"
+  authHeader  String?  // Header name for auth (e.g., "X-API-Key")
+  authValue   String?  // Encrypted/hashed auth value
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  logs        OutboundIntegrationLog[]
+
+  @@index([active])
+  @@index([createdAt])
+}
+
+model OutboundIntegrationLog {
+  id                String   @id @default(uuid())
+  integration       OutboundIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  integrationId     String
+  
+  // Shipment details
+  shipment          Shipment? @relation(fields: [shipmentId], references: [id], onDelete: SetNull)
+  shipmentId        String?
+  shipmentReference String?  // For easier filtering
+  
+  // Request details
+  url               String
+  method            String   @default("POST")
+  headers           Json?    // Request headers (redacted auth)
+  ediPayload        String?  // The EDI 856 document sent
+  payloadSize       Int?     // Size in bytes
+  
+  // Response details
+  status            String   // "success", "error", "pending"
+  responseCode      Int?
+  responseBody      String?  // Response body received
+  responseHeaders   Json?    // Response headers
+  errorMessage      String?  // Error message if failed
+  
+  // Retry information
+  retryCount        Int      @default(0)
+  lastRetryAt       DateTime?
+  
+  // Timestamps
+  sentAt            DateTime @default(now())
+  respondedAt       DateTime?
+  
+  @@index([integrationId])
+  @@index([shipmentId])
+  @@index([shipmentReference])
+  @@index([status])
+  @@index([sentAt])
 }
