@@ -5,7 +5,7 @@
 
 set -e
 
-PROJECT_ID=${1:-"your-project-id"}
+PROJECT_ID=${1:-"open-tms-demo"}
 REGION=${2:-"us-central1"}
 INSTANCE_NAME=${3:-"open-tms-db"}
 DATABASE_NAME="tms"

@@ -162,3 +162,4 @@ export async function apiKeyRoutes(server: FastifyInstance) {
     return { data: { valid: true, apiKey }, error: null };
   });
 }
+

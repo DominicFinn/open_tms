@@ -87,6 +87,28 @@ Database (PostgreSQL)
 
 ### Local Development
 
+#### Quick Start (Recommended)
+
+Use the provided run script to start everything automatically:
+
+```bash
+git clone https://github.com/DominicFinn/open_tms.git
+cd open_tms
+npm install
+./run.sh
+```
+
+This script will:
+- ✅ Start the database in Docker
+- ✅ Apply any pending database migrations
+- ✅ Generate Prisma client
+- ✅ Start the backend server
+- ✅ Start the frontend development server
+
+#### Manual Setup
+
+If you prefer to start services manually:
+
 1. **Clone and install dependencies:**
 ```bash
 git clone https://github.com/DominicFinn/open_tms.git
@@ -99,13 +121,21 @@ npm install
 docker compose up -d db
 ```
 
-3. **Start development servers:**
+3. **Apply database migrations:**
+```bash
+cd backend
+npx prisma migrate deploy
+npm run prisma:generate
+cd ..
+```
+
+4. **Start development servers:**
 ```bash
 npm run dev
 ```
 
-4. **Access the application:**
-- **Frontend**: http://localhost:5174
+5. **Access the application:**
+- **Frontend**: http://localhost:5173
 - **Backend API**: http://localhost:3001
 - **API Documentation**: http://localhost:3001/docs
 
