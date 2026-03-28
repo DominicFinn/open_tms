@@ -38,18 +38,18 @@
       - Geofencing-based automatic updates
       - IoT sensor triggers (geofence + light sensor = truck opened)
     - Order-level delivery confirmation tracking
-  - **EDI Import Support** (partially complete)
+  - **EDI Import Support** ✅
     - ✅ Parse X12 850 Purchase Orders → create orders in TMS
     - ✅ EDI partner configuration and credentials management
     - ✅ EDI file storage with deduplication (database adapter, pluggable interface)
     - ✅ EDI preview endpoint (parse without creating orders)
     - ✅ EDI file history, stats, and reprocessing
     - ✅ Error handling and EDI transaction logging
-    - 🔲 FTP/SFTP drop folder monitoring (edi-collector service)
-    - 🔲 Scheduled EDI polling and processing
-    - 🔲 Frontend: EDI partner config UI
-    - 🔲 Frontend: Drag-and-drop EDI upload with field mapping preview
-    - 🔲 Frontend: EDI file history page
+    - ✅ FTP/SFTP drop folder monitoring (edi-collector service)
+    - ✅ Scheduled EDI polling and processing
+    - ✅ Frontend: EDI partner config UI
+    - ✅ Frontend: Drag-and-drop EDI upload with field mapping preview
+    - ✅ Frontend: EDI file history page
 - **Order to Shipment Workflow** ✅
   - ✅ Queue of pending orders waiting for conversion
   - ✅ Auto-match orders to lanes/carriers
