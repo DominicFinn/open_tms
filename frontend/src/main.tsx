@@ -26,6 +26,9 @@ import ApiKeys from './pages/ApiKeys';
 import WebhookLogs from './pages/WebhookLogs';
 import OutboundIntegrations from './pages/OutboundIntegrations';
 import OutboundIntegrationLogs from './pages/OutboundIntegrationLogs';
+import OrderImportEDI from './pages/OrderImportEDI';
+import EdiPartners from './pages/EdiPartners';
+import EdiFiles from './pages/EdiFiles';
 import './theme.css';
 
 const root = createRoot(document.getElementById('root')!);
@@ -55,6 +58,7 @@ root.render(
         <Route path="/orders" element={<Orders />} />
         <Route path="/orders/create" element={<CreateOrder />} />
         <Route path="/orders/import/csv" element={<OrderImportCSV />} />
+        <Route path="/orders/import/edi" element={<OrderImportEDI />} />
         <Route path="/orders/:id" element={<OrderDetails />} />
         <Route path="/orders/:id/edit" element={<EditOrder />} />
 
@@ -69,6 +73,8 @@ root.render(
         <Route path="/webhook-logs" element={<WebhookLogs />} />
         <Route path="/outbound-integrations" element={<OutboundIntegrations />} />
         <Route path="/outbound-integration-logs" element={<OutboundIntegrationLogs />} />
+        <Route path="/edi-partners" element={<EdiPartners />} />
+        <Route path="/edi-files" element={<EdiFiles />} />
       </Routes>
     </Layout>
   </BrowserRouter>

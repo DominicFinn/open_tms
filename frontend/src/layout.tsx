@@ -62,6 +62,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <span className="material-icons">webhook</span>
             Webhook Logs
           </NavLink>
+          <NavLink to="/edi-partners" onClick={closeMobileMenu}>
+            <span className="material-icons">swap_horiz</span>
+            EDI Partners
+          </NavLink>
+          <NavLink to="/edi-files" onClick={closeMobileMenu}>
+            <span className="material-icons">insert_drive_file</span>
+            EDI Files
+          </NavLink>
           <NavLink to="/outbound-integrations" onClick={closeMobileMenu}>
             <span className="material-icons">send</span>
             Outbound Integrations
