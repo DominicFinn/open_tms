@@ -18,6 +18,7 @@ model Customer {
   shipments    Shipment[]
   customerLanes CustomerLane[]
   orders       Order[]
+  apiKeys      ApiKey[]
 }
 
 model Location {
@@ -502,6 +503,8 @@ model ApiKey {
   keyHash     String   @unique // Hashed version of the API key
   keyPrefix   String   // First 8 characters for display (e.g., "sk_live_...")
   active      Boolean  @default(true)
+  customer    Customer? @relation(fields: [customerId], references: [id])
+  customerId  String?   // Links API key to a specific customer for scoped access
   lastUsedAt  DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -509,6 +512,7 @@ model ApiKey {
 
   @@index([active])
   @@index([createdAt])
+  @@index([customerId])
 }
 
 model WebhookLog {

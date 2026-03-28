@@ -8,8 +8,8 @@ import { IOrderDeliveryService } from '../services/OrderDeliveryService.js';
 import { IOrganizationRepository } from '../repositories/OrganizationRepository.js';
 import { container, TOKENS } from '../di/index.js';
 
-// Validation schemas
-const lineItemSchema = z.object({
+// Validation schemas (exported for reuse by customerApi.ts)
+export const lineItemSchema = z.object({
   sku: z.string().min(1),
   description: z.string().optional(),
   quantity: z.number().int().positive(),
@@ -23,7 +23,7 @@ const lineItemSchema = z.object({
   temperature: z.string().optional()
 });
 
-const trackableUnitSchema = z.object({
+export const trackableUnitSchema = z.object({
   identifier: z.string().min(1),
   unitType: z.string().min(1),
   customTypeName: z.string().optional(),
@@ -32,7 +32,7 @@ const trackableUnitSchema = z.object({
   lineItems: z.array(lineItemSchema).min(1, 'Each trackable unit must have at least one line item')
 });
 
-const createOrderSchema = z.object({
+export const createOrderSchema = z.object({
   orderNumber: z.string().min(1),
   poNumber: z.string().optional(),
   customerId: z.string().uuid(),

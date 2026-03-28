@@ -25,11 +25,11 @@
   - ✅ Automatic order-to-shipment assignment based on lane matching
   - ✅ Pending lane request system for unmatched orders
   - ✅ Special requirements (FTL/LTL, temperature control, hazmat)
-  - 🔲 **Customer API for Order Creation**
-    - REST API endpoint for customers to programmatically create orders
-    - API key authentication and authorization system
-    - Rate limiting and security controls
-    - API documentation and examples
+  - ✅ **Customer API for Order Creation**
+    - ✅ REST API endpoint for customers to programmatically create orders
+    - ✅ API key authentication and authorization system (customer-scoped API keys)
+    - ✅ Rate limiting and security controls
+    - 🔲 API documentation and examples
   - 🔲 **Order Status Lifecycle & Multi-Leg Tracking**
     - Status flow: unassigned → assigned → in_progress → complete/exception
     - Support for orders completing mid-route (e.g., order A→B in shipment A→B→C)
