@@ -98,24 +98,24 @@ interface Order {
   updatedAt: string;
 }
 
-const statusColors: { [key: string]: string } = {
-  pending: 'var(--color-warning)',
-  validated: 'var(--color-success)',
-  location_error: 'var(--color-error)',
-  converted: 'var(--color-info)',
-  assigned: 'var(--color-success)',
-  pending_lane: 'var(--color-warning)',
-  cancelled: 'var(--color-grey)',
-  archived: 'var(--color-grey)'
+const statusChipClass: { [key: string]: string } = {
+  pending: 'chip chip-warning',
+  validated: 'chip chip-success',
+  location_error: 'chip chip-error',
+  converted: 'chip chip-info',
+  assigned: 'chip chip-success',
+  pending_lane: 'chip chip-warning',
+  cancelled: 'chip chip-primary',
+  archived: 'chip chip-primary'
 };
 
-const deliveryStatusColors: { [key: string]: string } = {
-  unassigned: 'var(--color-grey)',
-  assigned: 'var(--color-info)',
-  in_transit: 'var(--color-primary)',
-  delivered: 'var(--color-success)',
-  exception: 'var(--color-error)',
-  cancelled: 'var(--color-grey)'
+const deliveryStatusChipClass: { [key: string]: string } = {
+  unassigned: 'chip chip-primary',
+  assigned: 'chip chip-info',
+  in_transit: 'chip chip-warning',
+  delivered: 'chip chip-success',
+  exception: 'chip chip-error',
+  cancelled: 'chip chip-primary'
 };
 
 export default function OrderDetails() {
@@ -332,58 +332,28 @@ export default function OrderDetails() {
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    const color = statusColors[status] || 'var(--color-grey)';
-    return (
-      <span
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          padding: '6px 16px',
-          borderRadius: '16px',
-          fontSize: '14px',
-          fontWeight: '500',
-          backgroundColor: `${color}15`,
-          color: color,
-          textTransform: 'capitalize'
-        }}
-      >
-        {status.replace('_', ' ')}
-      </span>
-    );
-  };
+  const getStatusChip = (status: string) => (
+    <span className={statusChipClass[status] || 'chip chip-primary'}>
+      {status.replace(/_/g, ' ')}
+    </span>
+  );
 
-  const getDeliveryStatusBadge = (status: string) => {
-    const color = deliveryStatusColors[status] || 'var(--color-grey)';
-    return (
-      <span
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          padding: '6px 16px',
-          borderRadius: '16px',
-          fontSize: '14px',
-          fontWeight: '500',
-          backgroundColor: `${color}15`,
-          color: color,
-          textTransform: 'capitalize'
-        }}
-      >
-        {status.replace('_', ' ')}
-      </span>
-    );
-  };
+  const getDeliveryStatusChip = (status: string) => (
+    <span className={deliveryStatusChipClass[status] || 'chip chip-primary'}>
+      {status.replace(/_/g, ' ')}
+    </span>
+  );
 
   const getLocationDisplay = (location?: any, locationData?: any, validated?: boolean) => {
     if (location) {
       return (
         <div>
           <div style={{ fontWeight: '500' }}>{location.name}</div>
-          <div style={{ fontSize: '14px', color: 'var(--color-grey)' }}>
+          <div className="text-sm text-muted">
             {location.address1}
             {location.address2 && `, ${location.address2}`}
           </div>
-          <div style={{ fontSize: '14px', color: 'var(--color-grey)' }}>
+          <div className="text-sm text-muted">
             {location.city}, {location.state || location.country} {location.postalCode}
           </div>
         </div>
@@ -391,16 +361,16 @@ export default function OrderDetails() {
     }
     if (locationData && !validated) {
       return (
-        <div style={{ color: 'var(--color-warning)' }}>
+        <div style={{ color: 'var(--warning)' }}>
           <span className="material-icons" style={{ fontSize: '16px', verticalAlign: 'middle' }}>warning</span>
           {' '}Location not validated
-          <div style={{ fontSize: '12px', marginTop: '4px' }}>
+          <div className="text-sm" style={{ marginTop: '4px' }}>
             {locationData.name} - {locationData.city}, {locationData.country}
           </div>
         </div>
       );
     }
-    return <span style={{ color: 'var(--color-grey)' }}>Not specified</span>;
+    return <span className="text-muted">Not specified</span>;
   };
 
   const getTotalItems = () => {
@@ -459,8 +429,8 @@ export default function OrderDetails() {
               </div>
             )}
           </div>
-          <div style={{ display: 'flex', gap: 'var(--spacing-1)', alignItems: 'center' }}>
-            {getStatusBadge(order.status)}
+          <div style={{ display: 'flex', gap: 'var(--spacing-1)', alignItems: 'center', flexWrap: 'wrap' }}>
+            {getStatusChip(order.status)}
             <button
               onClick={handleExportCSV}
               className="button button-sm button-outline no-print"
@@ -506,26 +476,15 @@ export default function OrderDetails() {
             )}
             {showDeleteConfirm ? (
               <>
-                <button
-                  onClick={handleDelete}
-                  className="button button-sm no-print"
-                  style={{ backgroundColor: 'var(--color-error)', color: 'white' }}
-                >
+                <button onClick={handleDelete} className="button button-sm button-danger no-print">
                   Confirm Archive
                 </button>
-                <button
-                  onClick={() => setShowDeleteConfirm(false)}
-                  className="button button-sm button-outline no-print"
-                >
+                <button onClick={() => setShowDeleteConfirm(false)} className="button button-sm button-outline no-print">
                   Cancel
                 </button>
               </>
             ) : (
-              <button
-                onClick={() => setShowDeleteConfirm(true)}
-                className="button button-sm button-outline no-print"
-                style={{ color: 'var(--color-error)', borderColor: 'var(--color-error)' }}
-              >
+              <button onClick={() => setShowDeleteConfirm(true)} className="button button-sm button-outline no-print">
                 <span className="material-icons" style={{ fontSize: '16px' }}>delete</span>
                 Archive
               </button>
@@ -536,7 +495,7 @@ export default function OrderDetails() {
         {/* Order Info Grid */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--spacing-2)', marginTop: 'var(--spacing-2)' }}>
           <div>
-            <div style={{ fontSize: '12px', color: 'var(--color-grey)', textTransform: 'uppercase', marginBottom: '4px' }}>Customer</div>
+            <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px', color: 'var(--on-surface-variant)' }}>Customer</div>
             <div style={{ fontWeight: '500' }}>{order.customer.name}</div>
             {order.customer.contactEmail && (
               <div style={{ fontSize: '14px', color: 'var(--color-grey)' }}>{order.customer.contactEmail}</div>
@@ -544,25 +503,25 @@ export default function OrderDetails() {
           </div>
 
           <div>
-            <div style={{ fontSize: '12px', color: 'var(--color-grey)', textTransform: 'uppercase', marginBottom: '4px' }}>Import Source</div>
+            <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px', color: 'var(--on-surface-variant)' }}>Import Source</div>
             <div style={{ fontWeight: '500', textTransform: 'capitalize' }}>{order.importSource}</div>
           </div>
 
           <div>
-            <div style={{ fontSize: '12px', color: 'var(--color-grey)', textTransform: 'uppercase', marginBottom: '4px' }}>Order Date</div>
+            <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px', color: 'var(--on-surface-variant)' }}>Order Date</div>
             <div style={{ fontWeight: '500' }}>{new Date(order.orderDate).toLocaleDateString()}</div>
           </div>
 
           {order.requestedPickupDate && (
             <div>
-              <div style={{ fontSize: '12px', color: 'var(--color-grey)', textTransform: 'uppercase', marginBottom: '4px' }}>Requested Pickup</div>
+              <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px', color: 'var(--on-surface-variant)' }}>Requested Pickup</div>
               <div style={{ fontWeight: '500' }}>{new Date(order.requestedPickupDate).toLocaleDateString()}</div>
             </div>
           )}
 
           {order.requestedDeliveryDate && (
             <div>
-              <div style={{ fontSize: '12px', color: 'var(--color-grey)', textTransform: 'uppercase', marginBottom: '4px' }}>Requested Delivery</div>
+              <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px', color: 'var(--on-surface-variant)' }}>Requested Delivery</div>
               <div style={{ fontWeight: '500' }}>{new Date(order.requestedDeliveryDate).toLocaleDateString()}</div>
             </div>
           )}
@@ -595,33 +554,33 @@ export default function OrderDetails() {
       <div className="card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-2)' }}>
           <h3 style={{ margin: 0 }}>Delivery Status</h3>
-          {getDeliveryStatusBadge(order.deliveryStatus)}
+          {getDeliveryStatusChip(order.deliveryStatus)}
         </div>
 
         {/* Status Info Grid */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--spacing-2)', marginBottom: 'var(--spacing-2)' }}>
           <div>
-            <div style={{ fontSize: '12px', color: 'var(--color-grey)', textTransform: 'uppercase', marginBottom: '4px' }}>Status</div>
+            <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px', color: 'var(--on-surface-variant)' }}>Status</div>
             <div style={{ fontWeight: '500', textTransform: 'capitalize' }}>{order.deliveryStatus.replace('_', ' ')}</div>
           </div>
 
           {order.deliveryMethod && (
             <div>
-              <div style={{ fontSize: '12px', color: 'var(--color-grey)', textTransform: 'uppercase', marginBottom: '4px' }}>Confirmation Method</div>
+              <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px', color: 'var(--on-surface-variant)' }}>Confirmation Method</div>
               <div style={{ fontWeight: '500', textTransform: 'capitalize' }}>{order.deliveryMethod.replace('_', ' ')}</div>
             </div>
           )}
 
           {order.deliveredAt && (
             <div>
-              <div style={{ fontSize: '12px', color: 'var(--color-grey)', textTransform: 'uppercase', marginBottom: '4px' }}>Delivered At</div>
+              <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px', color: 'var(--on-surface-variant)' }}>Delivered At</div>
               <div style={{ fontWeight: '500' }}>{new Date(order.deliveredAt).toLocaleString()}</div>
             </div>
           )}
 
           {order.deliveryConfirmedBy && (
             <div>
-              <div style={{ fontSize: '12px', color: 'var(--color-grey)', textTransform: 'uppercase', marginBottom: '4px' }}>Confirmed By</div>
+              <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px', color: 'var(--on-surface-variant)' }}>Confirmed By</div>
               <div style={{ fontWeight: '500' }}>{order.deliveryConfirmedBy}</div>
             </div>
           )}
@@ -629,67 +588,39 @@ export default function OrderDetails() {
 
         {/* Delivery Stop Info (Multi-leg shipment) */}
         {order.deliveryStop && (
-          <div style={{
-            padding: 'var(--spacing-2)',
-            backgroundColor: 'var(--color-info-light)',
-            border: '1px solid var(--color-info)',
-            borderRadius: '8px',
-            marginBottom: 'var(--spacing-2)'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-1)', marginBottom: '4px' }}>
-              <span className="material-icons" style={{ color: 'var(--color-info)', fontSize: '18px' }}>flag</span>
-              <strong>Multi-Leg Shipment - Stop #{order.deliveryStop.sequenceNumber}</strong>
-            </div>
-            <div style={{ fontSize: '14px', color: 'var(--color-grey)' }}>
-              Delivery at: {order.deliveryStop.location.name}, {order.deliveryStop.location.city}
-            </div>
-            <div style={{ fontSize: '14px', color: 'var(--color-grey)' }}>
-              Stop Status: <span style={{ textTransform: 'capitalize', fontWeight: '500' }}>{order.deliveryStop.status}</span>
+          <div className="alert alert-info" style={{ marginBottom: 'var(--spacing-2)' }}>
+            <span className="material-icons">flag</span>
+            <div>
+              <strong>Multi-Leg Shipment — Stop #{order.deliveryStop.sequenceNumber}</strong>
+              <div className="text-sm">Delivery at: {order.deliveryStop.location.name}, {order.deliveryStop.location.city}</div>
+              <div className="text-sm">Stop Status: <span style={{ textTransform: 'capitalize', fontWeight: '500' }}>{order.deliveryStop.status}</span></div>
             </div>
           </div>
         )}
 
         {/* Exception Info */}
         {order.deliveryStatus === 'exception' && (
-          <div style={{
-            padding: 'var(--spacing-2)',
-            backgroundColor: 'var(--color-error-light)',
-            border: '1px solid var(--color-error)',
-            borderRadius: '8px',
-            marginBottom: 'var(--spacing-2)'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-1)', marginBottom: '8px' }}>
-              <span className="material-icons" style={{ color: 'var(--color-error)' }}>warning</span>
+          <div className="alert alert-error" style={{ marginBottom: 'var(--spacing-2)' }}>
+            <span className="material-icons">warning</span>
+            <div>
               <strong>Delivery Exception</strong>
+              {order.exceptionType && (
+                <div className="text-sm">Type: <span style={{ textTransform: 'capitalize', fontWeight: '500' }}>{order.exceptionType.replace(/_/g, ' ')}</span></div>
+              )}
+              {order.exceptionNotes && (
+                <div className="text-sm">Details: {order.exceptionNotes}</div>
+              )}
+              {order.exceptionResolvedAt && (
+                <div className="text-sm">Resolved: {new Date(order.exceptionResolvedAt).toLocaleString()}</div>
+              )}
             </div>
-            {order.exceptionType && (
-              <div style={{ marginBottom: '4px' }}>
-                <strong>Type:</strong> <span style={{ textTransform: 'capitalize' }}>{order.exceptionType.replace('_', ' ')}</span>
-              </div>
-            )}
-            {order.exceptionNotes && (
-              <div style={{ marginBottom: '4px' }}>
-                <strong>Details:</strong> {order.exceptionNotes}
-              </div>
-            )}
-            {order.exceptionResolvedAt && (
-              <div style={{ fontSize: '14px', color: 'var(--color-success)' }}>
-                Resolved: {new Date(order.exceptionResolvedAt).toLocaleString()}
-              </div>
-            )}
           </div>
         )}
 
         {/* Delivery Notes */}
         {order.deliveryNotes && (
-          <div style={{
-            padding: 'var(--spacing-2)',
-            backgroundColor: 'var(--color-surface)',
-            border: '1px solid var(--color-border)',
-            borderRadius: '8px',
-            marginBottom: 'var(--spacing-2)'
-          }}>
-            <div style={{ fontSize: '12px', color: 'var(--color-grey)', textTransform: 'uppercase', marginBottom: '4px' }}>Delivery Notes</div>
+          <div style={{ padding: 'var(--spacing-1) var(--spacing-2)', backgroundColor: 'var(--surface-container)', borderRadius: 'var(--border-radius-sm)', border: '1px solid var(--outline-variant)', marginBottom: 'var(--spacing-2)' }}>
+            <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px', color: 'var(--on-surface-variant)' }}>Delivery Notes</div>
             <div style={{ whiteSpace: 'pre-wrap' }}>{order.deliveryNotes}</div>
           </div>
         )}
@@ -718,7 +649,6 @@ export default function OrderDetails() {
                   <button
                     onClick={handleCreateException}
                     className="button button-sm button-outline"
-                    style={{ borderColor: 'var(--color-error)', color: 'var(--color-error)' }}
                   >
                     <span className="material-icons" style={{ fontSize: '16px' }}>warning</span>
                     Report Exception
@@ -728,15 +658,7 @@ export default function OrderDetails() {
             </>
           )}
           {order.deliveryStatus === 'delivered' && (
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 'var(--spacing-1)',
-              padding: 'var(--spacing-1)',
-              backgroundColor: 'var(--color-success-light)',
-              borderRadius: '8px',
-              color: 'var(--color-success)'
-            }}>
+            <div className="alert alert-success" style={{ marginBottom: 0 }}>
               <span className="material-icons">check_circle</span>
               <span style={{ fontWeight: '500' }}>Order delivered successfully</span>
             </div>
@@ -747,35 +669,25 @@ export default function OrderDetails() {
       {/* Trackable Units */}
       {order.trackableUnits.length > 0 && (
         <div className="card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-2)' }}>
-            <h3 style={{ margin: 0 }}>
-              Trackable Units ({order.trackableUnits.length})
-            </h3>
-            <div style={{ fontSize: '14px', color: 'var(--color-grey)' }}>
-              {getTotalItems()} items total • {getTotalQuantity()} units total
-            </div>
+          <div className="page-header">
+            <h3 style={{ margin: 0 }}>Trackable Units ({order.trackableUnits.length})</h3>
+            <div className="text-sm text-muted">{getTotalItems()} items total • {getTotalQuantity()} units total</div>
           </div>
 
           {order.trackableUnits.map((unit) => (
             <div
               key={unit.id}
-              style={{
-                padding: 'var(--spacing-2)',
-                backgroundColor: 'var(--color-surface)',
-                border: '1px solid var(--color-border)',
-                borderRadius: '8px',
-                marginBottom: 'var(--spacing-2)'
-              }}
+              style={{ padding: 'var(--spacing-2)', backgroundColor: 'var(--surface-container)', border: '1px solid var(--outline-variant)', borderRadius: 'var(--border-radius-sm)', marginBottom: 'var(--spacing-2)' }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: 'var(--spacing-1)' }}>
                 <div>
                   <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span className="material-icons" style={{ color: 'var(--color-primary)' }}>
+                    <span className="material-icons">
                       {unit.unitType === 'pallet' || unit.unitType === 'tote' ? 'inventory_2' : 'widgets'}
                     </span>
                     {unit.identifier}
                   </h4>
-                  <div style={{ fontSize: '14px', color: 'var(--color-grey)', marginTop: '4px' }}>
+                  <div className="text-sm text-muted" style={{ marginTop: '4px' }}>
                     {unit.customTypeName || unit.unitType.charAt(0).toUpperCase() + unit.unitType.slice(1)}
                     {' • '}
                     {unit.lineItems.length} {unit.lineItems.length === 1 ? 'item' : 'items'}
@@ -783,13 +695,13 @@ export default function OrderDetails() {
                     Sequence #{unit.sequenceNumber}
                   </div>
                   {unit.barcode && (
-                    <div style={{ fontSize: '12px', color: 'var(--color-grey)', marginTop: '4px' }}>
+                    <div className="text-sm text-muted" style={{ marginTop: '4px' }}>
                       <span className="material-icons" style={{ fontSize: '14px', verticalAlign: 'middle' }}>qr_code</span>
                       {' '}{unit.barcode}
                     </div>
                   )}
                   {unit.notes && (
-                    <div style={{ fontSize: '14px', fontStyle: 'italic', color: 'var(--color-grey)', marginTop: '4px' }}>
+                    <div className="text-sm text-muted" style={{ fontStyle: 'italic', marginTop: '4px' }}>
                       {unit.notes}
                     </div>
                   )}
@@ -825,9 +737,9 @@ export default function OrderDetails() {
                         <td style={{ textTransform: 'capitalize' }}>{item.temperature || 'Ambient'}</td>
                         <td>
                           {item.hazmat ? (
-                            <span style={{ color: 'var(--color-error)' }}>⚠️ Yes</span>
+                            <span className="chip chip-error">⚠ Yes</span>
                           ) : (
-                            <span style={{ color: 'var(--color-grey)' }}>No</span>
+                            <span className="text-muted">No</span>
                           )}
                         </td>
                       </tr>
@@ -843,17 +755,9 @@ export default function OrderDetails() {
       {/* Legacy Line Items (if any) */}
       {order.lineItems.length > 0 && (
         <div className="card">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 'var(--spacing-2)' }}>
+          <div className="page-header">
             <h3 style={{ margin: 0 }}>Line Items (Legacy)</h3>
-            <span style={{
-              fontSize: '12px',
-              padding: '4px 8px',
-              borderRadius: '4px',
-              backgroundColor: 'var(--color-warning-bg)',
-              color: 'var(--color-warning)'
-            }}>
-              Not in trackable units
-            </span>
+            <span className="chip chip-warning">Not in trackable units</span>
           </div>
 
           <div style={{ overflowX: 'auto' }}>
@@ -903,20 +807,20 @@ export default function OrderDetails() {
           <h3>Additional Information</h3>
           {order.specialInstructions && (
             <div style={{ marginBottom: 'var(--spacing-2)' }}>
-              <div style={{ fontSize: '12px', color: 'var(--color-grey)', textTransform: 'uppercase', marginBottom: '4px' }}>
+              <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px', color: 'var(--on-surface-variant)' }}>
                 Special Instructions
               </div>
-              <div style={{ padding: 'var(--spacing-1)', backgroundColor: 'var(--color-surface)', borderRadius: '4px' }}>
+              <div style={{ padding: 'var(--spacing-1)', backgroundColor: 'var(--surface-container)', borderRadius: 'var(--border-radius-sm)' }}>
                 {order.specialInstructions}
               </div>
             </div>
           )}
           {order.notes && (
             <div>
-              <div style={{ fontSize: '12px', color: 'var(--color-grey)', textTransform: 'uppercase', marginBottom: '4px' }}>
+              <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px', color: 'var(--on-surface-variant)' }}>
                 Notes
               </div>
-              <div style={{ padding: 'var(--spacing-1)', backgroundColor: 'var(--color-surface)', borderRadius: '4px' }}>
+              <div style={{ padding: 'var(--spacing-1)', backgroundColor: 'var(--surface-container)', borderRadius: 'var(--border-radius-sm)' }}>
                 {order.notes}
               </div>
             </div>
@@ -929,15 +833,15 @@ export default function OrderDetails() {
         <h3>Metadata</h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--spacing-2)' }}>
           <div>
-            <div style={{ fontSize: '12px', color: 'var(--color-grey)', textTransform: 'uppercase', marginBottom: '4px' }}>Created</div>
+            <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px', color: 'var(--on-surface-variant)' }}>Created</div>
             <div>{new Date(order.createdAt).toLocaleString()}</div>
           </div>
           <div>
-            <div style={{ fontSize: '12px', color: 'var(--color-grey)', textTransform: 'uppercase', marginBottom: '4px' }}>Last Updated</div>
+            <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px', color: 'var(--on-surface-variant)' }}>Last Updated</div>
             <div>{new Date(order.updatedAt).toLocaleString()}</div>
           </div>
           <div>
-            <div style={{ fontSize: '12px', color: 'var(--color-grey)', textTransform: 'uppercase', marginBottom: '4px' }}>Order ID</div>
+            <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px', color: 'var(--on-surface-variant)' }}>Order ID</div>
             <div style={{ fontSize: '12px', fontFamily: 'monospace' }}>{order.id}</div>
           </div>
         </div>

@@ -195,13 +195,9 @@ export default function Lanes() {
     <div>
       {/* Header with Create Button */}
       <div className="card" style={{ marginBottom: 'var(--spacing-2)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className="page-header">
           <h2 style={{ margin: 0 }}>Lanes</h2>
-          <button
-            className="button"
-            onClick={() => navigate('/lanes/create')}
-            disabled={loading}
-          >
+          <button className="button" onClick={() => navigate('/lanes/create')} disabled={loading}>
             <span className="material-icons" style={{ fontSize: '18px' }}>add</span>
             Create New Lane
           </button>
@@ -275,7 +271,7 @@ export default function Lanes() {
           {/* Clear Filters Button */}
           {hasActiveFilters && (
             <button
-              className="button outlined"
+              className="button button-outline"
               onClick={clearFilters}
               disabled={loading}
               title="Clear all filters"
@@ -319,33 +315,10 @@ export default function Lanes() {
         )}
         
         {error && (
-          <div style={{
-            backgroundColor: 'var(--error-container)',
-            color: 'var(--on-error-container)',
-            padding: 'var(--spacing-2)',
-            borderRadius: '4px',
-            marginBottom: 'var(--spacing-2)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 'var(--spacing-1)'
-          }}>
+          <div className="alert alert-error">
             <span className="material-icons">error</span>
-            {error}
-            <button 
-              onClick={loadData}
-              style={{ 
-                marginLeft: 'auto',
-                background: 'none',
-                border: 'none',
-                color: 'inherit',
-                cursor: 'pointer',
-                padding: '4px 8px',
-                borderRadius: '4px',
-                backgroundColor: 'rgba(255, 255, 255, 0.1)'
-              }}
-            >
-              Retry
-            </button>
+            <span style={{ flex: 1 }}>{error}</span>
+            <button onClick={loadData} className="button button-sm button-outline" style={{ marginLeft: 'auto' }}>Retry</button>
           </div>
         )}
         
@@ -379,7 +352,7 @@ export default function Lanes() {
                             No lanes match your current filters
                           </div>
                           <button
-                            className="button outlined"
+                            className="button button-outline"
                             onClick={clearFilters}
                             style={{ marginTop: 'var(--spacing-2)' }}
                           >
@@ -520,35 +493,13 @@ export default function Lanes() {
 
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000
-        }}>
-          <div className="card" style={{ maxWidth: '400px', margin: 'var(--spacing-2)' }}>
+        <div className="modal-backdrop">
+          <div className="modal-card">
             <h3>Delete Lane</h3>
             <p>Are you sure you want to delete this lane? This action cannot be undone.</p>
-            <div style={{ display: 'flex', gap: 'var(--spacing-1)', justifyContent: 'flex-end', marginTop: 'var(--spacing-2)' }}>
-              <button 
-                className="button outlined" 
-                onClick={() => setShowDeleteConfirm(null)}
-                disabled={loading}
-              >
-                Cancel
-              </button>
-              <button 
-                className="button" 
-                onClick={() => deleteLane(showDeleteConfirm)}
-                disabled={loading}
-                style={{ backgroundColor: 'var(--error)', color: 'var(--on-error)' }}
-              >
+            <div className="modal-actions">
+              <button className="button button-outline" onClick={() => setShowDeleteConfirm(null)} disabled={loading}>Cancel</button>
+              <button className="button button-danger" onClick={() => deleteLane(showDeleteConfirm)} disabled={loading}>
                 <span className="material-icons" style={{ fontSize: '18px' }}>delete</span>
                 Delete
               </button>

@@ -392,7 +392,7 @@ export default function EditOrder() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-3)' }}>
           <h2>Edit Order</h2>
           <div style={{ display: 'flex', gap: 'var(--spacing-2)' }}>
-            <button onClick={() => navigate(`/orders/${id}`)} className="button button-outlined">
+            <button onClick={() => navigate(`/orders/${id}`)} className="button button-outline">
               Cancel
             </button>
             <button onClick={handleSaveMetadata} disabled={saving} className="button button-primary">
@@ -498,7 +498,7 @@ export default function EditOrder() {
                       Save
                     </button>
                     <button
-                      className="button button-outlined"
+                      className="button button-outline"
                       onClick={() => setEditingUnitId(null)}
                     >
                       Cancel
@@ -520,35 +520,35 @@ export default function EditOrder() {
                     </div>
                     <div style={{ display: 'flex', gap: 'var(--spacing-1)' }}>
                       <button
-                        className="button button-outlined button-small"
+                        className="button button-outline button-sm"
                         onClick={() => setEditingUnitId(unit.id!)}
                         title="Edit Unit"
                       >
                         <span className="material-icons">edit</span>
                       </button>
                       <button
-                        className="button button-outlined button-small"
+                        className="button button-outline button-sm"
                         onClick={() => handleGenerateBarcode(unit.id!)}
                         title="Generate Barcode"
                       >
                         <span className="material-icons">qr_code</span>
                       </button>
                       <button
-                        className="button button-outlined button-small"
+                        className="button button-outline button-sm"
                         onClick={() => handleSplitUnit(unit.id!)}
                         title="Split Unit"
                       >
                         <span className="material-icons">call_split</span>
                       </button>
                       <button
-                        className="button button-outlined button-small"
+                        className="button button-outline button-sm"
                         onClick={() => handleMergeUnits(unit.id!)}
                         title="Merge Unit"
                       >
                         <span className="material-icons">merge</span>
                       </button>
                       <button
-                        className="button button-outlined button-small"
+                        className="button button-outline button-sm"
                         onClick={() => handleRemoveUnit(unit.id!)}
                         style={{ color: 'var(--color-error)' }}
                         title="Delete Unit"
@@ -582,14 +582,14 @@ export default function EditOrder() {
                         <td>
                           <div style={{ display: 'flex', gap: 'var(--spacing-1)' }}>
                             <button
-                              className="button button-outlined button-small"
+                              className="button button-outline button-sm"
                               onClick={() => handleRemoveLineItem(item.id!, unit.id!)}
                               style={{ color: 'var(--color-error)' }}
                             >
                               <span className="material-icons">delete</span>
                             </button>
                             <select
-                              className="button button-outlined button-small"
+                              className="button button-outline button-sm"
                               onChange={(e) => {
                                 if (e.target.value) {
                                   handleMoveItem(item.id!, unit.id!, e.target.value);
@@ -663,7 +663,7 @@ export default function EditOrder() {
                       Add Item
                     </button>
                     <button
-                      className="button button-outlined"
+                      className="button button-outline"
                       onClick={() => setAddingItemToUnit(null)}
                     >
                       Cancel
@@ -672,7 +672,7 @@ export default function EditOrder() {
                 </div>
               ) : (
                 <button
-                  className="button button-outlined"
+                  className="button button-outline"
                   style={{ marginTop: 'var(--spacing-2)' }}
                   onClick={() => setAddingItemToUnit(unit.id!)}
                 >
