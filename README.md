@@ -213,8 +213,63 @@ docker build -t open-tms-frontend ./frontend
 - `PUT /api/v1/shipments/:id` - Update shipment
 - `DELETE /api/v1/shipments/:id` - Archive shipment
 
+#### Orders
+- `GET /api/v1/orders` - List all orders
+- `POST /api/v1/orders` - Create new order
+- `GET /api/v1/orders/:id` - Get order details
+- `PUT /api/v1/orders/:id` - Update order
+- `DELETE /api/v1/orders/:id` - Archive order
+- `POST /api/v1/orders/:id/assign-to-shipment` - Auto-assign order to a shipment via lane matching
+- `POST /api/v1/orders/import/csv` - Bulk import orders from CSV
+
+#### Customer API (External Integration)
+
+Customer-facing API for programmatic order creation and tracking. Requires a customer-scoped API key.
+
+**Authentication:** Pass your API key via `x-api-key` header or `Authorization: Bearer <key>`.
+
+- `POST /api/v1/customer-api/orders` - Create an order
+- `GET /api/v1/customer-api/orders` - List your orders (supports `?status=`, `?limit=`, `?offset=`)
+- `GET /api/v1/customer-api/orders/:id` - Get order details
+- `GET /api/v1/customer-api/orders/:id/status` - Lightweight status check
+
+**Setup:**
+1. Create a customer via the UI or `POST /api/v1/customers`
+2. Create an API key linked to that customer: `POST /api/v1/api-keys` with `{ "name": "My Key", "customerId": "<uuid>" }`
+3. Use the returned key in your API calls
+
+**Example:**
+```bash
+curl -X POST http://localhost:3001/api/v1/customer-api/orders \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: sk_live_your_key_here" \
+  -d '{
+    "orderNumber": "ORD-001",
+    "originId": "<location-uuid>",
+    "destinationId": "<location-uuid>",
+    "serviceLevel": "LTL",
+    "trackableUnits": [{
+      "identifier": "PALLET-001",
+      "unitType": "pallet",
+      "lineItems": [{ "sku": "WIDGET-A", "quantity": 100, "weight": 25.0 }]
+    }],
+    "autoAssign": true
+  }'
+```
+
+**Rate Limiting:** 100 requests/minute per IP. Returns `429` when exceeded.
+
+#### API Keys
+- `GET /api/v1/api-keys` - List all API keys
+- `POST /api/v1/api-keys` - Create new API key (optional `customerId` to scope to a customer)
+- `PUT /api/v1/api-keys/:id` - Update key name/status
+- `DELETE /api/v1/api-keys/:id` - Delete key
+
+#### Webhooks
+- `POST /api/v1/webhook` - Receive location/status updates from IoT devices (requires API key)
+
 ### Interactive API Documentation
-Visit http://localhost:3001/docs for the complete Swagger/OpenAPI documentation.
+Visit http://localhost:3001/docs for the complete Swagger/OpenAPI documentation with full request/response schemas for all endpoints.
 
 ## 🛠️ Technology Stack
 
