@@ -156,6 +156,36 @@ export async function shipmentRoutes(server: FastifyInstance) {
           orderBy: {
             eventTime: 'desc'
           }
+        },
+        stops: {
+          include: {
+            location: true,
+            orders: {
+              select: {
+                id: true,
+                orderNumber: true,
+                deliveryStatus: true,
+                status: true,
+                customer: { select: { name: true } }
+              }
+            }
+          },
+          orderBy: {
+            sequenceNumber: 'asc'
+          }
+        },
+        orderShipments: {
+          include: {
+            order: {
+              select: {
+                id: true,
+                orderNumber: true,
+                status: true,
+                deliveryStatus: true,
+                customer: { select: { name: true } }
+              }
+            }
+          }
         }
       }
     });

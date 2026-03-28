@@ -76,6 +76,28 @@ interface ShipmentEvent {
   updatedAt: string;
 }
 
+interface StopOrder {
+  id: string;
+  orderNumber: string;
+  deliveryStatus: string;
+  status: string;
+  customer: { name: string };
+}
+
+interface ShipmentStop {
+  id: string;
+  sequenceNumber: number;
+  stopType: string;
+  status: string;
+  estimatedArrival?: string;
+  actualArrival?: string;
+  actualDeparture?: string;
+  location: Location;
+  orders: StopOrder[];
+  notes?: string;
+  instructions?: string;
+}
+
 interface Shipment {
   id: string;
   reference: string;
@@ -93,9 +115,11 @@ interface Shipment {
   origin: Location;
   destination: Location;
   lane?: Lane | null;
-  carrier?: Carrier | null; // Manual carrier assignment
+  carrier?: Carrier | null;
   loads: any[];
   events?: ShipmentEvent[];
+  stops?: ShipmentStop[];
+  orderShipments?: { order: StopOrder }[];
 }
 
 export default function ShipmentDetails() {
@@ -106,24 +130,49 @@ export default function ShipmentDetails() {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
 
-  useEffect(() => {
+  const loadShipment = async () => {
     if (!id) return;
-    
-    fetch(`${API_URL}/api/v1/shipments/${id}`)
-      .then(r => r.json())
-      .then(data => {
-        if (data.error) {
-          setError(data.error);
-        } else {
-          setShipment(data.data);
-        }
-        setLoading(false);
-      })
-      .catch(err => {
-        setError('Failed to load shipment details');
-        setLoading(false);
-      });
+    try {
+      const r = await fetch(`${API_URL}/api/v1/shipments/${id}`);
+      const data = await r.json();
+      if (data.error) {
+        setError(data.error);
+      } else {
+        setShipment(data.data);
+      }
+    } catch {
+      setError('Failed to load shipment details');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadShipment();
   }, [id]);
+
+  const handleUpdateStop = async (stopId: string, status: string) => {
+    try {
+      const response = await fetch(`${API_URL}/api/v1/shipment-stops/${stopId}/update-orders`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status, method: 'manual' })
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        alert(result.error || 'Failed to update stop');
+        return;
+      }
+      loadShipment();
+    } catch {
+      alert('Failed to update stop');
+    }
+  };
+
+  const handleBulkMarkDelivered = async (stopId: string, orderCount: number) => {
+    if (!confirm(`Mark all ${orderCount} orders at this stop as delivered?`)) return;
+    await handleUpdateStop(stopId, 'completed');
+  };
 
   useEffect(() => {
     if (!shipment || !mapRef.current) return;
@@ -620,6 +669,142 @@ export default function ShipmentDetails() {
           }}
         />
       </div>
+
+      {/* Delivery Stops */}
+      {shipment.stops && shipment.stops.length > 0 && (
+        <div className="card" style={{ marginBottom: '24px' }}>
+          <h3>Delivery Stops ({shipment.stops.length})</h3>
+          <div style={{ display: 'grid', gap: '12px' }}>
+            {shipment.stops.map((stop) => {
+              const stopStatusChip: { [key: string]: string } = {
+                pending: 'chip chip-warning',
+                arrived: 'chip chip-info',
+                in_progress: 'chip chip-warning',
+                completed: 'chip chip-success',
+                skipped: 'chip chip-primary'
+              };
+
+              const activeOrders = stop.orders.filter(
+                o => o.deliveryStatus !== 'delivered' && o.deliveryStatus !== 'cancelled'
+              );
+
+              return (
+                <div key={stop.id} style={{
+                  padding: 'var(--spacing-2)',
+                  backgroundColor: 'var(--surface-container)',
+                  borderRadius: '8px',
+                  border: stop.status === 'completed' ? '2px solid var(--color-success)' : '1px solid var(--outline-variant)'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <div style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        backgroundColor: stop.status === 'completed' ? 'var(--color-success)' : '#FF9800',
+                        color: 'white', borderRadius: '50%', width: '32px', height: '32px',
+                        fontSize: '0.875rem', fontWeight: 'bold'
+                      }}>
+                        {stop.status === 'completed' ? (
+                          <span className="material-icons" style={{ fontSize: '18px' }}>check</span>
+                        ) : stop.sequenceNumber}
+                      </div>
+                      <div>
+                        <div style={{ fontWeight: '600' }}>{stop.location.name}</div>
+                        <div style={{ fontSize: '0.875rem', color: 'var(--on-surface-variant)' }}>
+                          {stop.location.address1}, {stop.location.city}{stop.location.state && `, ${stop.location.state}`}
+                        </div>
+                      </div>
+                    </div>
+                    <span className={stopStatusChip[stop.status] || 'chip chip-primary'}>
+                      {stop.status.replace(/_/g, ' ')}
+                    </span>
+                  </div>
+
+                  {/* Timing */}
+                  {(stop.actualArrival || stop.actualDeparture || stop.estimatedArrival) && (
+                    <div style={{ display: 'flex', gap: '16px', fontSize: '0.875rem', color: 'var(--on-surface-variant)', marginBottom: '8px', flexWrap: 'wrap' }}>
+                      {stop.estimatedArrival && <span>ETA: {new Date(stop.estimatedArrival).toLocaleString()}</span>}
+                      {stop.actualArrival && <span>Arrived: {new Date(stop.actualArrival).toLocaleString()}</span>}
+                      {stop.actualDeparture && <span>Departed: {new Date(stop.actualDeparture).toLocaleString()}</span>}
+                    </div>
+                  )}
+
+                  {/* Orders at this stop */}
+                  {stop.orders.length > 0 && (
+                    <div style={{ marginBottom: '8px' }}>
+                      <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px', color: 'var(--on-surface-variant)' }}>
+                        Orders ({stop.orders.length})
+                      </div>
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        {stop.orders.map(o => {
+                          const deliveryChip: { [key: string]: string } = {
+                            unassigned: 'chip-primary', assigned: 'chip-info',
+                            in_transit: 'chip-warning', delivered: 'chip-success',
+                            exception: 'chip-error', cancelled: 'chip-primary'
+                          };
+                          return (
+                            <Link key={o.id} to={`/orders/${o.id}`} style={{ textDecoration: 'none' }}>
+                              <span className={`chip ${deliveryChip[o.deliveryStatus] || 'chip-primary'}`}>
+                                {o.orderNumber} — {o.deliveryStatus.replace(/_/g, ' ')}
+                              </span>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Action Buttons */}
+                  {stop.status !== 'completed' && stop.status !== 'skipped' && (
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }} className="no-print">
+                      {stop.status === 'pending' && (
+                        <button onClick={() => handleUpdateStop(stop.id, 'arrived')} className="button button-sm button-outline">
+                          <span className="material-icons" style={{ fontSize: '16px' }}>place</span>
+                          Mark Arrived
+                        </button>
+                      )}
+                      {stop.status === 'arrived' && (
+                        <button onClick={() => handleUpdateStop(stop.id, 'in_progress')} className="button button-sm button-outline">
+                          <span className="material-icons" style={{ fontSize: '16px' }}>local_shipping</span>
+                          Mark In Progress
+                        </button>
+                      )}
+                      {(stop.status === 'arrived' || stop.status === 'in_progress') && (
+                        <button onClick={() => handleBulkMarkDelivered(stop.id, activeOrders.length)} className="button button-sm button-success">
+                          <span className="material-icons" style={{ fontSize: '16px' }}>check_circle</span>
+                          Complete Stop ({activeOrders.length} orders)
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Orders on this Shipment (not linked to stops) */}
+      {shipment.orderShipments && shipment.orderShipments.length > 0 && (!shipment.stops || shipment.stops.length === 0) && (
+        <div className="card" style={{ marginBottom: '24px' }}>
+          <h3>Orders ({shipment.orderShipments.length})</h3>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            {shipment.orderShipments.map(os => {
+              const deliveryChip: { [key: string]: string } = {
+                unassigned: 'chip-primary', assigned: 'chip-info',
+                in_transit: 'chip-warning', delivered: 'chip-success',
+                exception: 'chip-error', cancelled: 'chip-primary'
+              };
+              return (
+                <Link key={os.order.id} to={`/orders/${os.order.id}`} style={{ textDecoration: 'none' }}>
+                  <span className={`chip ${deliveryChip[os.order.deliveryStatus] || 'chip-primary'}`}>
+                    {os.order.orderNumber} — {os.order.deliveryStatus.replace(/_/g, ' ')}
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="card">
         <h3>Shipment Events</h3>

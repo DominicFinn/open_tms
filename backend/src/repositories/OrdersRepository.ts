@@ -636,10 +636,40 @@ export class OrdersRepository implements IOrdersRepository {
         }
       });
 
-      // Update order status
+      // Create delivery stop for destination
+      const deliveryStop = await tx.shipmentStop.create({
+        data: {
+          shipmentId: shipment.id,
+          locationId: order.destinationId!,
+          sequenceNumber: 1,
+          stopType: 'delivery',
+          status: 'pending'
+        }
+      });
+
+      // Update order status and delivery status
       await tx.order.update({
         where: { id: orderId },
-        data: { status: 'converted' }
+        data: {
+          status: 'converted',
+          deliveryStatus: 'assigned',
+          deliveryStopId: deliveryStop.id
+        }
+      });
+
+      // Audit log
+      await tx.auditLog.create({
+        data: {
+          entityType: 'order',
+          entityId: orderId,
+          orderId,
+          action: 'delivery_status_changed',
+          description: 'Order converted to shipment, delivery status set to assigned',
+          changes: {
+            before: { deliveryStatus: 'unassigned', status: order.status },
+            after: { deliveryStatus: 'assigned', status: 'converted' }
+          },
+        }
       });
 
       return { shipmentId: shipment.id };

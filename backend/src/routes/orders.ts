@@ -417,6 +417,60 @@ export async function orderRoutes(server: FastifyInstance) {
     return { data: auditLogs, error: null };
   });
 
+  // Get status timeline for order
+  server.get('/api/v1/orders/:id/status-timeline', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+
+    const order = await ordersRepo.findById(id);
+    if (!order) {
+      reply.code(404);
+      return { data: null, error: 'Order not found' };
+    }
+
+    // Fetch audit logs relevant to status changes
+    const auditLogs = await (ordersRepo as any).prisma.auditLog.findMany({
+      where: {
+        orderId: id,
+        action: {
+          in: ['delivery_status_changed', 'exception_resolved', 'created', 'status_changed']
+        }
+      },
+      orderBy: { createdAt: 'asc' }
+    });
+
+    // Build timeline: start with creation event, then audit log entries
+    const timeline: any[] = [];
+
+    // Always include the order creation event
+    timeline.push({
+      id: `created-${(order as any).id}`,
+      timestamp: (order as any).createdAt,
+      action: 'created',
+      description: `Order created via ${(order as any).importSource || 'manual'}`,
+      fromStatus: null,
+      toStatus: 'unassigned',
+      method: (order as any).importSource || 'manual',
+      actor: null
+    });
+
+    // Add audit log entries
+    for (const log of auditLogs) {
+      const changes = log.changes as any;
+      timeline.push({
+        id: log.id,
+        timestamp: log.createdAt,
+        action: log.action,
+        description: log.description,
+        fromStatus: changes?.before?.deliveryStatus || null,
+        toStatus: changes?.after?.deliveryStatus || null,
+        method: changes?.after?.deliveryMethod || null,
+        actor: log.userId || null
+      });
+    }
+
+    return { data: timeline, error: null };
+  });
+
   // Merge trackable units
   server.post('/api/v1/orders/:orderId/trackable-units/merge', async (req: FastifyRequest, reply: FastifyReply) => {
     const { orderId } = req.params as { orderId: string };

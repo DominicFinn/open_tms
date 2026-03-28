@@ -28,6 +28,17 @@ interface TrackableUnit {
   lineItems: OrderLineItem[];
 }
 
+interface TimelineEntry {
+  id: string;
+  timestamp: string;
+  action: string;
+  description: string;
+  fromStatus: string | null;
+  toStatus: string | null;
+  method: string | null;
+  actor: string | null;
+}
+
 interface Order {
   id: string;
   orderNumber: string;
@@ -122,12 +133,14 @@ export default function OrderDetails() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [order, setOrder] = useState<Order | null>(null);
+  const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
     loadOrder();
+    loadTimeline();
   }, [id]);
 
   const loadOrder = async () => {
@@ -146,6 +159,18 @@ export default function OrderDetails() {
       setError(err.message || 'Failed to load order');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadTimeline = async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/v1/orders/${id}/status-timeline`);
+      const result = await response.json();
+      if (response.ok && result.data) {
+        setTimeline(result.data);
+      }
+    } catch {
+      // Timeline is non-critical, silently fail
     }
   };
 
@@ -665,6 +690,64 @@ export default function OrderDetails() {
           )}
         </div>
       </div>
+
+      {/* Status Timeline */}
+      {timeline.length > 0 && (
+        <div className="card">
+          <h3>Status Timeline</h3>
+          <div style={{ position: 'relative', paddingLeft: '32px' }}>
+            {/* Vertical line */}
+            <div style={{
+              position: 'absolute',
+              left: '11px',
+              top: '8px',
+              bottom: '8px',
+              width: '2px',
+              backgroundColor: 'var(--outline-variant)'
+            }} />
+
+            {timeline.map((entry, idx) => {
+              const isLatest = idx === timeline.length - 1;
+              const dotColor =
+                entry.toStatus === 'delivered' ? 'var(--color-success)' :
+                entry.toStatus === 'exception' ? 'var(--color-error)' :
+                entry.toStatus === 'in_transit' ? 'var(--color-warning)' :
+                entry.toStatus === 'assigned' ? 'var(--color-info)' :
+                entry.action === 'created' ? 'var(--color-primary)' :
+                'var(--outline)';
+
+              return (
+                <div key={entry.id} style={{ position: 'relative', paddingBottom: idx < timeline.length - 1 ? '16px' : '0' }}>
+                  {/* Dot */}
+                  <div style={{
+                    position: 'absolute',
+                    left: '-25px',
+                    top: '4px',
+                    width: '14px',
+                    height: '14px',
+                    borderRadius: '50%',
+                    backgroundColor: isLatest ? dotColor : 'var(--surface)',
+                    border: `3px solid ${dotColor}`,
+                    zIndex: 1
+                  }} />
+
+                  {/* Content */}
+                  <div>
+                    <div style={{ fontSize: '13px', fontWeight: isLatest ? '600' : '400' }}>
+                      {entry.description}
+                    </div>
+                    <div style={{ fontSize: '12px', color: 'var(--on-surface-variant)', marginTop: '2px', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                      <span>{new Date(entry.timestamp).toLocaleString()}</span>
+                      {entry.method && <span style={{ textTransform: 'capitalize' }}>{entry.method.replace(/_/g, ' ')}</span>}
+                      {entry.actor && <span>by {entry.actor}</span>}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Trackable Units */}
       {order.trackableUnits.length > 0 && (
