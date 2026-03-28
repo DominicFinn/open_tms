@@ -27,7 +27,17 @@ async function start() {
   await server.register(cors, { origin: true });
   await server.register(swagger, {
     openapi: {
-      info: { title: 'Open TMS API', version: '0.1.0' }
+      info: { title: 'Open TMS API', version: '0.1.0' },
+      components: {
+        securitySchemes: {
+          ApiKeyAuth: {
+            type: 'apiKey',
+            in: 'header',
+            name: 'x-api-key',
+            description: 'Customer-scoped API key. Create one via POST /api/v1/api-keys with a customerId. Can also be passed as Authorization: Bearer <key>.'
+          }
+        }
+      }
     }
   });
   await server.register(swaggerUI, { routePrefix: '/docs' });
