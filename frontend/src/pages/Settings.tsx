@@ -139,7 +139,7 @@ export default function Settings() {
     <div>
       <div className="card">
         <h2>Organization Settings</h2>
-        <p style={{ color: 'var(--color-grey)', marginBottom: 'var(--spacing-3)' }}>
+        <p className="text-muted" style={{ marginBottom: 'var(--spacing-3)' }}>
           Configure how your organization tracks inventory within orders
         </p>
 
@@ -258,26 +258,15 @@ export default function Settings() {
 
             <h3 style={{ gridColumn: '1 / -1', marginTop: 'var(--spacing-3)' }}>Unit of Measure</h3>
 
-            <div style={{
-              gridColumn: '1 / -1',
-              padding: 'var(--spacing-2)',
-              backgroundColor: 'var(--color-surface-variant)',
-              borderRadius: '8px',
-              marginBottom: 'var(--spacing-2)'
-            }}>
-              <p style={{ color: 'var(--color-grey)', fontSize: '14px', margin: 0 }}>
+            <div style={{ gridColumn: '1 / -1', padding: 'var(--spacing-2)', backgroundColor: 'var(--surface-container)', borderRadius: 'var(--border-radius-sm)', marginBottom: 'var(--spacing-2)' }}>
+              <p className="text-muted" style={{ fontSize: '0.9375rem', margin: 0 }}>
                 These settings define the default units used when entering weight and dimensions for line items in orders.
                 Users can override these defaults on individual items if needed.
               </p>
             </div>
 
             <div className="input-wrapper" style={{ gridColumn: '1 / -1' }}>
-              <select
-                value={weightUnit}
-                onChange={(e) => setWeightUnit(e.target.value as 'kg' | 'lb')}
-                className="input"
-                required
-              >
+              <select value={weightUnit} onChange={(e) => setWeightUnit(e.target.value as 'kg' | 'lb')} className="input" required>
                 <option value="kg">Kilograms (kg)</option>
                 <option value="lb">Pounds (lb)</option>
               </select>
@@ -285,35 +274,22 @@ export default function Settings() {
             </div>
 
             <div className="input-wrapper" style={{ gridColumn: '1 / -1' }}>
-              <select
-                value={dimUnit}
-                onChange={(e) => setDimUnit(e.target.value as 'cm' | 'in')}
-                className="input"
-                required
-              >
+              <select value={dimUnit} onChange={(e) => setDimUnit(e.target.value as 'cm' | 'in')} className="input" required>
                 <option value="cm">Centimeters (cm)</option>
                 <option value="in">Inches (in)</option>
               </select>
               <label>Default Dimension Unit</label>
             </div>
 
-            <div style={{
-              gridColumn: '1 / -1',
-              padding: 'var(--spacing-2)',
-              backgroundColor: 'var(--color-warning-bg)',
-              borderLeft: '4px solid var(--color-warning)',
-              borderRadius: '4px'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'start', gap: 'var(--spacing-1)' }}>
-                <span className="material-icons" style={{ color: 'var(--color-warning)' }}>warning</span>
-                <div>
-                  <strong>Important:</strong> Changing these settings will affect how new orders are created.
-                  Existing orders will retain their current unit configuration.
-                </div>
+            <div className="alert alert-warning" style={{ gridColumn: '1 / -1' }}>
+              <span className="material-icons">warning</span>
+              <div>
+                <strong>Important:</strong> Changing these settings will affect how new orders are created.
+                Existing orders will retain their current unit configuration.
               </div>
             </div>
 
-            <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 'var(--spacing-1)', justifyContent: 'flex-end', marginTop: 'var(--spacing-2)' }}>
+            <div className="form-actions" style={{ gridColumn: '1 / -1' }}>
               <button type="button" onClick={loadSettings} className="button button-outline" disabled={saving}>
                 Reset
               </button>
@@ -332,13 +308,13 @@ export default function Settings() {
           <div style={{ display: 'grid', gap: 'var(--spacing-2)' }}>
             <div>
               <strong>Tracking Mode:</strong>{' '}
-              <span style={{ color: 'var(--color-primary)' }}>
+              <span className="chip chip-primary" style={{ marginLeft: '4px' }}>
                 {trackingMode === 'group' ? 'Group Level' : 'Item Level'}
               </span>
             </div>
             <div>
               <strong>Trackable Unit Type:</strong>{' '}
-              <span style={{ color: 'var(--color-primary)' }}>
+              <span className="chip chip-primary" style={{ marginLeft: '4px' }}>
                 {trackableUnitType === 'custom'
                   ? customUnitName || 'Custom (not specified)'
                   : trackableUnitType.charAt(0).toUpperCase() + trackableUnitType.slice(1)
@@ -347,22 +323,17 @@ export default function Settings() {
             </div>
             <div>
               <strong>Default Weight Unit:</strong>{' '}
-              <span style={{ color: 'var(--color-primary)' }}>
+              <span className="chip chip-primary" style={{ marginLeft: '4px' }}>
                 {weightUnit === 'kg' ? 'Kilograms (kg)' : 'Pounds (lb)'}
               </span>
             </div>
             <div>
               <strong>Default Dimension Unit:</strong>{' '}
-              <span style={{ color: 'var(--color-primary)' }}>
+              <span className="chip chip-primary" style={{ marginLeft: '4px' }}>
                 {dimUnit === 'cm' ? 'Centimeters (cm)' : 'Inches (in)'}
               </span>
             </div>
-            <div style={{
-              padding: 'var(--spacing-2)',
-              backgroundColor: 'var(--color-surface)',
-              borderRadius: '4px',
-              fontSize: '14px'
-            }}>
+            <div style={{ padding: 'var(--spacing-2)', backgroundColor: 'var(--surface-container)', borderRadius: 'var(--border-radius-sm)', fontSize: '0.9375rem' }}>
               <strong>This means:</strong> When creating orders, users will add one or more{' '}
               <strong>
                 {trackableUnitType === 'custom'

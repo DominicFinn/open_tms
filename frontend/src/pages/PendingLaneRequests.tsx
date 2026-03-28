@@ -286,7 +286,7 @@ export default function PendingLaneRequests() {
                           <>
                             <button
                               onClick={() => handleCreateLane(request)}
-                              className="button button-small button-primary"
+                              className="button button-sm"
                               style={{ fontSize: '12px', padding: '4px 8px' }}
                             >
                               <span className="material-icons" style={{ fontSize: '14px' }}>add</span>
@@ -294,7 +294,7 @@ export default function PendingLaneRequests() {
                             </button>
                             <button
                               onClick={() => handleApprove(request.id)}
-                              className="button button-small button-outlined"
+                              className="button button-sm button-outline"
                               style={{ fontSize: '12px', padding: '4px 8px' }}
                             >
                               <span className="material-icons" style={{ fontSize: '14px' }}>check</span>
@@ -302,7 +302,7 @@ export default function PendingLaneRequests() {
                             </button>
                             <button
                               onClick={() => handleReject(request.id)}
-                              className="button button-small button-outlined"
+                              className="button button-sm button-outline"
                               style={{ fontSize: '12px', padding: '4px 8px', color: 'var(--color-error)' }}
                             >
                               <span className="material-icons" style={{ fontSize: '14px' }}>close</span>
@@ -313,7 +313,7 @@ export default function PendingLaneRequests() {
                         {request.status === 'approved' && (
                           <button
                             onClick={() => handleCreateLane(request)}
-                            className="button button-small button-primary"
+                            className="button button-sm"
                             style={{ fontSize: '12px', padding: '4px 8px' }}
                           >
                             <span className="material-icons" style={{ fontSize: '14px' }}>add</span>
@@ -323,7 +323,7 @@ export default function PendingLaneRequests() {
                         {request.status === 'lane_created' && request.createdLaneId && (
                           <Link
                             to={`/lanes/${request.createdLaneId}/edit`}
-                            className="button button-small button-outlined"
+                            className="button button-sm button-outline"
                             style={{ fontSize: '12px', padding: '4px 8px', textDecoration: 'none' }}
                           >
                             <span className="material-icons" style={{ fontSize: '14px' }}>visibility</span>

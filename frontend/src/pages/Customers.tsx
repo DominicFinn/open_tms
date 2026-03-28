@@ -88,7 +88,7 @@ export default function Customers() {
   return (
     <div>
       <div className="card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-2)' }}>
+        <div className="page-header">
           <h2>Customers</h2>
           <Link to="/customers/create" className="button">
             <span className="material-icons" style={{ fontSize: '18px' }}>add</span>
@@ -97,47 +97,23 @@ export default function Customers() {
         </div>
 
         {/* Search and Filters */}
-        <div style={{
-          display: 'flex',
-          gap: 'var(--spacing-2)',
-          marginBottom: 'var(--spacing-2)',
-          flexWrap: 'wrap',
-          alignItems: 'center'
-        }}>
-          <div className="text-field" style={{ minWidth: '300px', flex: 1 }}>
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              placeholder="Search customers by name or email..."
-              style={{ width: '100%' }}
-            />
-            <label>Search</label>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 'var(--spacing-1)', marginBottom: 'var(--spacing-2)' }}>
+          <div className="text-field">
+            <input type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder=" " />
+            <label>Search by name or email</label>
           </div>
 
-          <select
-            value={statusFilter}
-            onChange={e => setStatusFilter(e.target.value)}
-            style={{
-              padding: '8px 12px',
-              border: '1px solid var(--outline)',
-              borderRadius: '4px',
-              backgroundColor: 'var(--surface)',
-              color: 'var(--on-surface)',
-              minWidth: '120px'
-            }}
-          >
-            <option value="all">All Statuses</option>
-            <option value="active">Active</option>
-            <option value="archived">Archived</option>
-          </select>
+          <div className="text-field">
+            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+              <option value="all">All Statuses</option>
+              <option value="active">Active</option>
+              <option value="archived">Archived</option>
+            </select>
+            <label>Status</label>
+          </div>
 
           {hasActiveFilters && (
-            <button
-              onClick={clearFilters}
-              className="button outlined"
-              style={{ whiteSpace: 'nowrap' }}
-            >
+            <button onClick={clearFilters} className="button button-outline" style={{ alignSelf: 'end', height: '46px' }}>
               <span className="material-icons" style={{ fontSize: '18px' }}>clear</span>
               Clear Filters
             </button>
@@ -221,35 +197,13 @@ export default function Customers() {
 
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000
-        }}>
-          <div className="card" style={{ maxWidth: '400px', margin: 'var(--spacing-2)' }}>
+        <div className="modal-backdrop">
+          <div className="modal-card">
             <h3>Delete Customer</h3>
             <p>Are you sure you want to delete this customer? This action cannot be undone.</p>
-            <div style={{ display: 'flex', gap: 'var(--spacing-1)', justifyContent: 'flex-end', marginTop: 'var(--spacing-2)' }}>
-              <button 
-                className="button outlined" 
-                onClick={() => setShowDeleteConfirm(null)}
-                disabled={loading}
-              >
-                Cancel
-              </button>
-              <button 
-                className="button" 
-                onClick={() => deleteCustomer(showDeleteConfirm)}
-                disabled={loading}
-                style={{ backgroundColor: 'var(--error)', color: 'var(--on-error)' }}
-              >
+            <div className="modal-actions">
+              <button className="button button-outline" onClick={() => setShowDeleteConfirm(null)} disabled={loading}>Cancel</button>
+              <button className="button button-danger" onClick={() => deleteCustomer(showDeleteConfirm)} disabled={loading}>
                 <span className="material-icons" style={{ fontSize: '18px' }}>delete</span>
                 Delete
               </button>

@@ -58,13 +58,13 @@ interface Order {
   updatedAt: string;
 }
 
-const statusColors: { [key: string]: string } = {
-  pending: 'var(--color-warning)',
-  validated: 'var(--color-success)',
-  location_error: 'var(--color-error)',
-  converted: 'var(--color-info)',
-  cancelled: 'var(--color-grey)',
-  archived: 'var(--color-grey)'
+const statusChipClass: { [key: string]: string } = {
+  pending: 'chip chip-warning',
+  validated: 'chip chip-success',
+  location_error: 'chip chip-error',
+  converted: 'chip chip-info',
+  cancelled: 'chip chip-primary',
+  archived: 'chip chip-primary'
 };
 
 export default function Orders() {
@@ -144,26 +144,11 @@ export default function Orders() {
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    const color = statusColors[status] || 'var(--color-grey)';
-    return (
-      <span
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          padding: '4px 12px',
-          borderRadius: '12px',
-          fontSize: '12px',
-          fontWeight: '500',
-          backgroundColor: `${color}15`,
-          color: color,
-          textTransform: 'capitalize'
-        }}
-      >
-        {status.replace('_', ' ')}
-      </span>
-    );
-  };
+  const getStatusChip = (status: string) => (
+    <span className={statusChipClass[status] || 'chip chip-primary'}>
+      {status.replace(/_/g, ' ')}
+    </span>
+  );
 
   const getLocationDisplay = (location?: any, locationData?: any, validated?: boolean) => {
     if (location) {
@@ -171,19 +156,19 @@ export default function Orders() {
     }
     if (locationData && !validated) {
       return (
-        <span style={{ color: 'var(--color-warning)' }}>
+        <span style={{ color: 'var(--warning)' }}>
           <span className="material-icons" style={{ fontSize: '14px', verticalAlign: 'middle' }}>warning</span>
           {' '}Not validated
         </span>
       );
     }
-    return <span style={{ color: 'var(--color-grey)' }}>Not specified</span>;
+    return <span className="text-muted">Not specified</span>;
   };
 
   return (
     <div>
       <div className="card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-2)' }}>
+        <div className="page-header">
           <h2>Orders</h2>
           <div style={{ display: 'flex', gap: 'var(--spacing-1)' }}>
             <Link to="/orders/create" className="button">
@@ -254,8 +239,8 @@ export default function Orders() {
 
         {loading && (
           <div style={{ textAlign: 'center', padding: 'var(--spacing-4)' }}>
-            <div className="loading-spinner"></div>
-            <p>Loading orders...</p>
+            <div className="loading-spinner" style={{ margin: '0 auto var(--spacing-1)' }}></div>
+            <p className="text-muted">Loading orders...</p>
           </div>
         )}
 
@@ -269,7 +254,7 @@ export default function Orders() {
         )}
 
         {!loading && filteredOrders.length > 0 && (
-          <div style={{ overflowX: 'auto' }}>
+          <div className="table-container" style={{ overflowX: 'auto' }}>
             <table className="data-table">
               <thead>
                 <tr>
@@ -288,11 +273,11 @@ export default function Orders() {
                 {filteredOrders.map((order) => (
                   <tr key={order.id}>
                     <td>
-                      <Link to={`/orders/${order.id}`} style={{ fontWeight: '500', color: 'var(--color-primary)' }}>
+                      <Link to={`/orders/${order.id}`} style={{ fontWeight: '500' }}>
                         {order.orderNumber}
                       </Link>
                       {order.poNumber && (
-                        <div style={{ fontSize: '12px', color: 'var(--color-grey)' }}>
+                        <div className="text-sm text-muted">
                           PO: {order.poNumber}
                         </div>
                       )}
@@ -304,7 +289,7 @@ export default function Orders() {
                     <td style={{ fontSize: '14px' }}>
                       {getLocationDisplay(order.destination, order.destinationData, order.destinationValidated)}
                     </td>
-                    <td>{getStatusBadge(order.status)}</td>
+                    <td>{getStatusChip(order.status)}</td>
                     <td style={{ textTransform: 'capitalize' }}>{order.importSource}</td>
                     <td style={{ textAlign: 'center' }}>
                       {order.trackableUnits.length > 0 ? (
@@ -312,14 +297,14 @@ export default function Orders() {
                           <div style={{ fontWeight: '500' }}>
                             {order.trackableUnits.length} {order.trackableUnits.length === 1 ? 'unit' : 'units'}
                           </div>
-                          <div style={{ fontSize: '12px', color: 'var(--color-grey)' }}>
+                          <div className="text-sm text-muted">
                             {order.trackableUnits.reduce((total, unit) => total + unit.lineItems.length, 0)} items
                           </div>
                         </div>
                       ) : order.lineItems.length > 0 ? (
                         <span>{order.lineItems.length} items (legacy)</span>
                       ) : (
-                        <span style={{ color: 'var(--color-grey)' }}>—</span>
+                        <span className="text-muted">—</span>
                       )}
                     </td>
                     <td>{new Date(order.orderDate).toLocaleDateString()}</td>
@@ -336,8 +321,7 @@ export default function Orders() {
                           <>
                             <button
                               onClick={() => deleteOrder(order.id)}
-                              className="button button-sm"
-                              style={{ backgroundColor: 'var(--color-error)', color: 'white' }}
+                              className="button button-sm button-danger"
                             >
                               Confirm
                             </button>
@@ -353,7 +337,6 @@ export default function Orders() {
                             onClick={() => setShowDeleteConfirm(order.id)}
                             className="button button-sm button-outline"
                             title="Archive Order"
-                            style={{ color: 'var(--color-error)', borderColor: 'var(--color-error)' }}
                           >
                             <span className="material-icons" style={{ fontSize: '16px' }}>delete</span>
                           </button>
