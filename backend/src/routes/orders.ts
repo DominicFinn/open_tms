@@ -571,15 +571,8 @@ export async function orderRoutes(server: FastifyInstance) {
     }
   });
 
-  // EDI Import endpoint (placeholder)
-  server.post('/api/v1/orders/import/edi', async (req: FastifyRequest, reply: FastifyReply) => {
-    // TODO: Implement EDI parsing (X12/EDIFACT) and order creation
-    reply.code(501);
-    return {
-      data: null,
-      error: 'EDI import not yet implemented. Coming soon!'
-    };
-  });
+  // EDI Import endpoint — handled by ediImport.ts route module
+  // POST /api/v1/orders/import/edi and POST /api/v1/orders/import/edi/preview
 
   // Assign order to shipment based on matching lane
   server.post('/api/v1/orders/:id/assign-to-shipment', async (req: FastifyRequest, reply: FastifyReply) => {

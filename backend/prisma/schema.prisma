@@ -19,6 +19,7 @@ model Customer {
   customerLanes CustomerLane[]
   orders       Order[]
   apiKeys      ApiKey[]
+  ediPartners  EdiPartner[]
 }
 
 model Location {
@@ -622,4 +623,87 @@ model OutboundIntegrationLog {
   @@index([shipmentReference])
   @@index([status])
   @@index([sentAt])
+}
+
+model EdiPartner {
+  id              String   @id @default(uuid())
+  name            String
+  active          Boolean  @default(true)
+
+  // Link to customer
+  customer        Customer @relation(fields: [customerId], references: [id])
+  customerId      String
+
+  // SFTP Configuration
+  sftpHost        String?
+  sftpPort        Int      @default(22)
+  sftpUsername     String?
+  sftpPassword    String?
+  sftpPrivateKey  String?
+  sftpRemoteDir   String   @default("/")
+  sftpFilePattern String   @default("*.edi,*.x12,*.850")
+
+  // Polling schedule
+  pollingEnabled  Boolean  @default(false)
+  pollingInterval Int      @default(900) // seconds (15 min default)
+  pollingCron     String?
+  lastPolledAt    DateTime?
+
+  // EDI Configuration
+  senderId        String?
+  receiverId      String?
+  ediVersion      String   @default("005010")
+
+  // Processing options
+  autoCreateOrders    Boolean @default(true)
+  autoAssignShipments Boolean @default(false)
+
+  // Field mapping template (JSON)
+  fieldMapping    Json?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  ediFiles        EdiFile[]
+
+  @@index([customerId])
+  @@index([active])
+}
+
+model EdiFile {
+  id              String   @id @default(uuid())
+
+  // Link to partner (optional — manual uploads won't have one)
+  partner         EdiPartner? @relation(fields: [partnerId], references: [id])
+  partnerId       String?
+
+  // File metadata
+  fileName        String
+  fileSize        Int?
+  fileContent     String   // Raw EDI content (database storage adapter)
+  fileHash        String?  // SHA-256 for dedup
+
+  // Source tracking
+  source          String   @default("manual") // manual, sftp, api
+
+  // Processing status
+  status          String   @default("pending") // pending, processing, completed, failed, duplicate
+  processedAt     DateTime?
+  errorMessage    String?
+
+  // Parsing results
+  parsedData      Json?
+  transactionType String?
+  transactionCount Int     @default(0)
+
+  // Orders created from this file
+  ordersCreated   Int      @default(0)
+  orderIds        Json?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([partnerId])
+  @@index([status])
+  @@index([fileHash])
+  @@index([createdAt])
 }

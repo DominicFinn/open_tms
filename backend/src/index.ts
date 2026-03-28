@@ -20,6 +20,9 @@ import { webhookLogRoutes } from './routes/webhookLogs.js';
 import { outboundIntegrationRoutes } from './routes/outboundIntegrations.js';
 import { outboundIntegrationLogRoutes } from './routes/outboundIntegrationLogs.js';
 import { customerApiRoutes } from './routes/customerApi.js';
+import { ediImportRoutes } from './routes/ediImport.js';
+import { ediPartnerRoutes } from './routes/ediPartners.js';
+import { ediFileRoutes } from './routes/ediFiles.js';
 
 const server = Fastify({ logger: true });
 
@@ -66,6 +69,9 @@ async function start() {
   await server.register(outboundIntegrationRoutes);
   await server.register(outboundIntegrationLogRoutes);
   await server.register(customerApiRoutes);
+  await server.register(ediImportRoutes);
+  await server.register(ediPartnerRoutes);
+  await server.register(ediFileRoutes);
 
   // Start the server with automatic port retry
   const preferredPort = Number(process.env.PORT || 3001);

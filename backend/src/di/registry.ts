@@ -17,6 +17,9 @@ import { PendingLaneRequestsRepository } from '../repositories/PendingLaneReques
 import { ShipmentAssignmentService } from '../services/ShipmentAssignmentService.js';
 import { CSVImportService } from '../services/CSVImportService.js';
 import { OrderDeliveryService } from '../services/OrderDeliveryService.js';
+import { EDI850ParseService } from '../services/EDI850ParseService.js';
+import { EdiImportService } from '../services/EdiImportService.js';
+import { DatabaseFileStorage } from '../storage/DatabaseFileStorage.js';
 
 /**
  * Register all application dependencies
@@ -74,5 +77,25 @@ export function registerDependencies(prisma: PrismaClient): void {
 
   container.singleton(TOKENS.IOrderDeliveryService).toFactory(() => {
     return new OrderDeliveryService(container.resolve(TOKENS.PrismaClient));
+  });
+
+  // File storage provider (default: database)
+  container.singleton(TOKENS.IFileStorageProvider).toFactory(() => {
+    return new DatabaseFileStorage(container.resolve(TOKENS.PrismaClient));
+  });
+
+  // EDI services
+  container.singleton(TOKENS.IEDI850ParseService).toFactory(() => {
+    return new EDI850ParseService();
+  });
+
+  container.singleton(TOKENS.IEdiImportService).toFactory(() => {
+    return new EdiImportService(
+      container.resolve(TOKENS.PrismaClient),
+      container.resolve(TOKENS.IEDI850ParseService),
+      container.resolve(TOKENS.IOrdersRepository),
+      container.resolve(TOKENS.ICustomersRepository),
+      container.resolve(TOKENS.ILocationsRepository)
+    );
   });
 }
