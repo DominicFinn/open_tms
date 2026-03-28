@@ -30,14 +30,19 @@
     - ✅ API key authentication and authorization system (customer-scoped API keys)
     - ✅ Rate limiting and security controls
     - ✅ API documentation via Swagger/OpenAPI at /docs
-  - 🔲 **Order Status Lifecycle & Multi-Leg Tracking**
-    - Status flow: unassigned → assigned → in_progress → complete/exception
-    - Support for orders completing mid-route (e.g., order A→B in shipment A→B→C)
-    - Multiple status update mechanisms:
-      - Manual updates by drivers/logistics users
-      - Geofencing-based automatic updates
-      - IoT sensor triggers (geofence + light sensor = truck opened)
-    - Order-level delivery confirmation tracking
+  - ✅ **Order Status Lifecycle & Multi-Leg Tracking**
+    - ✅ Status flow: unassigned → assigned → in_transit → delivered/exception
+    - ✅ Auto-set delivery status on order assignment/conversion
+    - ✅ Order-to-stop linking for multi-leg shipments
+    - ✅ Multiple status update mechanisms:
+      - ✅ Manual updates by drivers/logistics users
+      - ✅ Geofencing-based automatic updates
+      - ✅ IoT sensor triggers (geofence + light sensor = truck opened)
+    - ✅ Order-level delivery confirmation tracking
+    - ✅ Audit trail for all delivery status transitions
+    - ✅ Status timeline API and UI
+    - ✅ Shipment stop management (arrive, in progress, complete)
+    - ✅ Bulk order updates at stop level
   - **EDI Import Support** ✅
     - ✅ Parse X12 850 Purchase Orders → create orders in TMS
     - ✅ EDI partner configuration and credentials management
