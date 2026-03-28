@@ -31,5 +31,15 @@ services:
       - backend
     ports:
       - "8080:80"
+  edi-collector:
+    build: ./edi-collector
+    environment:
+      BACKEND_URL: http://backend:3001
+      API_KEY: ${EDI_COLLECTOR_API_KEY:-changeme}
+      POLL_CONFIG_INTERVAL: "300"
+      LOG_LEVEL: info
+    depends_on:
+      - backend
+    restart: unless-stopped
 volumes:
   db-data:
