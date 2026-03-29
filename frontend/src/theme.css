@@ -278,6 +278,90 @@ body {
   font-size: 18px;
 }
 
+.sidebar-section-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--on-surface-variant);
+  padding: var(--spacing-2) var(--spacing-2) var(--spacing-1);
+  margin-top: var(--spacing-1);
+}
+
+/* ============================================================
+   APP SWITCHER
+   ============================================================ */
+.app-switcher {
+  position: relative;
+}
+
+.app-switcher-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 8px;
+  width: 280px;
+  background: var(--surface-container);
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius-md);
+  box-shadow: var(--elevation-2);
+  z-index: 1000;
+  overflow: hidden;
+}
+
+.app-switcher-header {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--on-surface-variant);
+  padding: var(--spacing-2) var(--spacing-2) var(--spacing-1);
+}
+
+.app-switcher-option {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  width: 100%;
+  padding: var(--spacing-2);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.15s;
+  color: var(--on-surface);
+}
+
+.app-switcher-option:hover {
+  background: var(--surface-container-highest);
+}
+
+.app-switcher-option-active {
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+}
+
+.app-switcher-icon {
+  font-size: 24px;
+  color: var(--primary);
+  flex-shrink: 0;
+}
+
+.app-switcher-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.app-switcher-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--on-surface);
+}
+
+.app-switcher-desc {
+  font-size: 12px;
+  color: var(--on-surface-variant);
+}
+
 /* ============================================================
    MOBILE OVERLAY
    ============================================================ */

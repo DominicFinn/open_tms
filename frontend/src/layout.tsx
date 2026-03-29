@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
+import AppSwitcher from './components/AppSwitcher';
 import './theme.css';
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -54,49 +55,25 @@ export function Layout({ children }: { children: React.ReactNode }) {
             Pending Lane Requests
           </NavLink>
           <div style={{ borderTop: '1px solid var(--color-border)', margin: 'var(--spacing-1) 0' }}></div>
-          <NavLink to="/api-keys" onClick={closeMobileMenu}>
-            <span className="material-icons">vpn_key</span>
-            API Keys
-          </NavLink>
-          <NavLink to="/webhook-logs" onClick={closeMobileMenu}>
-            <span className="material-icons">webhook</span>
-            Webhook Logs
-          </NavLink>
-          <NavLink to="/edi-partners" onClick={closeMobileMenu}>
-            <span className="material-icons">swap_horiz</span>
-            EDI Partners
-          </NavLink>
-          <NavLink to="/edi-files" onClick={closeMobileMenu}>
-            <span className="material-icons">insert_drive_file</span>
-            EDI Files
-          </NavLink>
-          <NavLink to="/outbound-integrations" onClick={closeMobileMenu}>
-            <span className="material-icons">send</span>
-            Outbound Integrations
-          </NavLink>
-          <NavLink to="/outbound-integration-logs" onClick={closeMobileMenu}>
-            <span className="material-icons">description</span>
-            Outbound Logs
-          </NavLink>
           <NavLink to="/settings" onClick={closeMobileMenu}>
             <span className="material-icons">settings</span>
             Settings
           </NavLink>
         </nav>
       </aside>
-      
+
       {/* Mobile overlay */}
       {mobileMenuOpen && (
-        <div 
-          className="mobile-overlay" 
+        <div
+          className="mobile-overlay"
           onClick={closeMobileMenu}
         />
       )}
-      
+
       <header className="app-bar">
         <div className="app-bar-left">
-          <button 
-            className="icon-btn mobile-menu-btn" 
+          <button
+            className="icon-btn mobile-menu-btn"
             onClick={toggleMobileMenu}
             aria-label="Toggle menu"
           >
@@ -114,9 +91,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <button className="icon-btn">
             <span className="material-icons">account_circle</span>
           </button>
-          <button className="icon-btn">
-            <span className="material-icons">apps</span>
-          </button>
+          <AppSwitcher />
         </div>
       </header>
       <main className="main">{children}</main>
