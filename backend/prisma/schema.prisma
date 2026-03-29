@@ -684,10 +684,14 @@ model EdiPartner {
 model User {
   id             String   @id @default(uuid())
   email          String   @unique
-  passwordHash   String
+  passwordHash   String?  // Null for OAuth-only users
   firstName      String
   lastName       String
   active         Boolean  @default(true)
+
+  // OAuth provider (null = local password auth)
+  authProvider   String?  // "google", "microsoft", or null for local
+  authProviderId String?  // External user ID from the OAuth provider
 
   // Organization
   organization   Organization? @relation(fields: [organizationId], references: [id])
@@ -721,6 +725,29 @@ model User {
   @@index([organizationId])
   @@index([customerId])
   @@index([active])
+  @@unique([authProvider, authProviderId])
+}
+
+model AuthProvider {
+  id           String   @id @default(uuid())
+  provider     String   @unique // "google", "microsoft"
+  displayName  String   // "Google", "Microsoft"
+  enabled      Boolean  @default(false)
+
+  // OAuth credentials (set by admin)
+  clientId     String?
+  clientSecret String?
+
+  // Provider-specific config
+  tenantId     String?  // Microsoft: Azure AD tenant ID (blank = common)
+  allowedDomains Json?  // Optional: restrict to specific email domains e.g. ["company.com"]
+
+  // Auto-provisioning
+  autoCreateUsers   Boolean @default(true)  // Create user on first OAuth login
+  defaultRoleId     String? // Role to assign to auto-created users
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 model Role {

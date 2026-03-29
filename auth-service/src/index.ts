@@ -8,6 +8,8 @@ import { authRoutes } from './routes/auth.js';
 import { userRoutes } from './routes/users.js';
 import { roleRoutes } from './routes/roles.js';
 import { setupRoutes } from './routes/setup.js';
+import { authProviderRoutes } from './routes/authProviders.js';
+import { oauthRoutes } from './routes/oauth.js';
 
 const server = Fastify({ logger: true });
 
@@ -42,6 +44,8 @@ async function start() {
   await server.register(userRoutes);
   await server.register(roleRoutes);
   await server.register(setupRoutes);
+  await server.register(authProviderRoutes);
+  await server.register(oauthRoutes);
 
   // Start server
   const preferredPort = Number(process.env.AUTH_PORT || process.env.PORT || 3002);

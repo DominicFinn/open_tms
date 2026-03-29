@@ -4,9 +4,11 @@ import { TOKENS } from './tokens.js';
 import { UserRepository } from '../repositories/UserRepository.js';
 import { RoleRepository } from '../repositories/RoleRepository.js';
 import { SessionRepository } from '../repositories/SessionRepository.js';
+import { AuthProviderRepository } from '../repositories/AuthProviderRepository.js';
 import { AuthService } from '../services/AuthService.js';
 import { PasswordService } from '../services/PasswordService.js';
 import { TokenService } from '../services/TokenService.js';
+import { OAuthService } from '../services/OAuthService.js';
 
 export function registerDependencies(prisma: PrismaClient): void {
   container.singleton(TOKENS.PrismaClient).toFactory(() => prisma);
@@ -23,6 +25,10 @@ export function registerDependencies(prisma: PrismaClient): void {
     return new SessionRepository(container.resolve(TOKENS.PrismaClient));
   });
 
+  container.singleton(TOKENS.IAuthProviderRepository).toFactory(() => {
+    return new AuthProviderRepository(container.resolve(TOKENS.PrismaClient));
+  });
+
   container.singleton(TOKENS.IPasswordService).toFactory(() => {
     return new PasswordService();
   });
@@ -37,6 +43,15 @@ export function registerDependencies(prisma: PrismaClient): void {
       container.resolve(TOKENS.IRoleRepository),
       container.resolve(TOKENS.ISessionRepository),
       container.resolve(TOKENS.IPasswordService),
+      container.resolve(TOKENS.ITokenService),
+    );
+  });
+
+  container.singleton(TOKENS.IOAuthService).toFactory(() => {
+    return new OAuthService(
+      container.resolve(TOKENS.IUserRepository),
+      container.resolve(TOKENS.IRoleRepository),
+      container.resolve(TOKENS.ISessionRepository),
       container.resolve(TOKENS.ITokenService),
     );
   });

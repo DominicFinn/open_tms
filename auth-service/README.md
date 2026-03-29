@@ -77,6 +77,17 @@ curl -X POST http://localhost:3002/api/v1/auth/setup \
 - `PUT    /api/v1/roles/:id` — Update role permissions
 - `DELETE /api/v1/roles/:id` — Delete custom role
 
+### OAuth Provider Admin (requires `auth:admin`)
+- `GET    /api/v1/admin/auth-providers` — List all providers (secrets masked)
+- `GET    /api/v1/admin/auth-providers/:id` — Get provider config
+- `PUT    /api/v1/admin/auth-providers/:id` — Update provider (clientId, clientSecret, domains, etc.)
+- `POST   /api/v1/admin/auth-providers/:id/toggle` — Enable/disable provider
+
+### OAuth Flow (public)
+- `GET  /api/v1/auth/providers` — List enabled providers (for login UI)
+- `GET  /api/v1/oauth/:provider` — Start OAuth flow (redirects to Google/Microsoft)
+- `GET  /api/v1/oauth/:provider/callback` — OAuth callback (exchanges code, redirects to frontend with tokens)
+
 ## Default Roles
 
 | Role | Permissions |
@@ -87,6 +98,37 @@ curl -X POST http://localhost:3002/api/v1/auth/setup \
 | `readonly` | Read-only access to all data |
 | `customer` | Own orders, shipments, and documents only |
 
+## OAuth Setup (Google / Microsoft)
+
+OAuth providers are **admin-configurable** and stored in the database. The setup flow:
+
+1. Run `/api/v1/auth/setup` to seed default provider entries (disabled by default)
+2. Admin logs in, goes to Auth Provider settings
+3. Enters Client ID and Client Secret from Google Cloud Console / Azure AD
+4. Optionally restricts to specific email domains (e.g. `["company.com"]`)
+5. Toggles the provider **on**
+6. Frontend calls `GET /api/v1/auth/providers` to see which buttons to show
+
+### Google Setup
+1. Go to [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
+2. Create OAuth 2.0 Client ID (Web application)
+3. Add redirect URI: `{AUTH_SERVICE_URL}/api/v1/oauth/google/callback`
+4. Copy Client ID and Client Secret into the admin panel
+
+### Microsoft Setup
+1. Go to [Azure Portal > App Registrations](https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps)
+2. Register an application, add redirect URI: `{AUTH_SERVICE_URL}/api/v1/oauth/microsoft/callback`
+3. Create a client secret under "Certificates & secrets"
+4. Optionally set `tenantId` to restrict to your org (leave blank for "common" / any Microsoft account)
+5. Copy Client ID, Client Secret, and Tenant ID into the admin panel
+
+### Environment Variables for OAuth
+
+| Variable | Default | Description |
+|---|---|---|
+| `AUTH_SERVICE_URL` | `http://localhost:3002` | Base URL of the auth service (used to build callback URLs) |
+| `FRONTEND_URL` | `http://localhost:5173` | Frontend URL (OAuth callback redirects here with tokens) |
+
 ## Security
 
 - Passwords hashed with bcrypt (12 rounds)
@@ -94,3 +136,4 @@ curl -X POST http://localhost:3002/api/v1/auth/setup \
 - Refresh token rotation (old token invalidated on each refresh)
 - Tokens stored as SHA-256 hashes in database
 - Access tokens are short-lived (15 min) to limit exposure
+- OAuth: CSRF protection via state parameter, domain allowlisting, auto-provisioning toggle

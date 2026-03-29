@@ -5,6 +5,7 @@ import { TOKENS } from '../di/tokens.js';
 import { IRoleRepository } from '../repositories/RoleRepository.js';
 import { IAuthService } from '../services/AuthService.js';
 import { IUserRepository } from '../repositories/UserRepository.js';
+import { IAuthProviderRepository } from '../repositories/AuthProviderRepository.js';
 
 const setupSchema = z.object({
   email: z.string().email(),
@@ -18,6 +19,7 @@ export async function setupRoutes(server: FastifyInstance) {
   const roleRepo = container.resolve<IRoleRepository>(TOKENS.IRoleRepository);
   const authService = container.resolve<IAuthService>(TOKENS.IAuthService);
   const userRepo = container.resolve<IUserRepository>(TOKENS.IUserRepository);
+  const providerRepo = container.resolve<IAuthProviderRepository>(TOKENS.IAuthProviderRepository);
 
   // POST /api/v1/auth/setup — First-run setup: seed roles and create admin user
   // Only works when no users exist in the system
@@ -35,9 +37,10 @@ export async function setupRoutes(server: FastifyInstance) {
       return { data: null, error: parsed.error.issues.map(i => i.message).join('. ') };
     }
 
-    // Seed default roles
+    // Seed default roles and OAuth provider placeholders
     await roleRepo.seedDefaults();
-    server.log.info('Default roles seeded');
+    await providerRepo.seedDefaults();
+    server.log.info('Default roles and auth providers seeded');
 
     // Create organization if name provided
     let organizationId: string | undefined;

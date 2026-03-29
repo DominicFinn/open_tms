@@ -154,6 +154,12 @@ export async function authRoutes(server: FastifyInstance) {
       return { data: null, error: 'User not found' };
     }
 
+    // OAuth-only users can't change password this way
+    if (!user.passwordHash) {
+      reply.code(400);
+      return { data: null, error: 'Password change not available for OAuth accounts' };
+    }
+
     // Verify current password
     const valid = await passwordService.verify(parsed.data.currentPassword, user.passwordHash);
     if (!valid) {

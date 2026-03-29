@@ -2,13 +2,15 @@ import { PrismaClient, User } from '@prisma/client';
 
 export interface CreateUserDTO {
   email: string;
-  passwordHash: string;
+  passwordHash?: string; // Null for OAuth-only users
   firstName: string;
   lastName: string;
   organizationId?: string;
   customerId?: string;
   phone?: string;
   timezone?: string;
+  authProvider?: string;
+  authProviderId?: string;
 }
 
 export interface UpdateUserDTO {

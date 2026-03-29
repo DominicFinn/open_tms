@@ -109,6 +109,11 @@ export class AuthService implements IAuthService {
       return { success: false, error: `Account locked. Try again in ${minutesLeft} minute(s)` };
     }
 
+    // OAuth-only users can't log in with password
+    if (!user.passwordHash) {
+      return { success: false, error: 'This account uses OAuth sign-in. Please use the appropriate sign-in provider.' };
+    }
+
     // Verify password
     const valid = await this.passwordService.verify(input.password, user.passwordHash);
     if (!valid) {
