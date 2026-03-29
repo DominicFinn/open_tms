@@ -5,6 +5,7 @@ import { ILocationsRepository } from '../repositories/LocationsRepository.js';
 import { IShipmentAssignmentService } from '../services/ShipmentAssignmentService.js';
 import { ICSVImportService } from '../services/CSVImportService.js';
 import { IOrderDeliveryService } from '../services/OrderDeliveryService.js';
+import { IOrderConversionService } from '../services/OrderConversionService.js';
 import { IOrganizationRepository } from '../repositories/OrganizationRepository.js';
 import { container, TOKENS } from '../di/index.js';
 
@@ -102,6 +103,7 @@ export async function orderRoutes(server: FastifyInstance) {
   const assignmentService = container.resolve<IShipmentAssignmentService>(TOKENS.IShipmentAssignmentService);
   const csvImportService = container.resolve<ICSVImportService>(TOKENS.ICSVImportService);
   const deliveryService = container.resolve<IOrderDeliveryService>(TOKENS.IOrderDeliveryService);
+  const conversionService = container.resolve<IOrderConversionService>(TOKENS.IOrderConversionService);
   const orgRepo = container.resolve<IOrganizationRepository>(TOKENS.IOrganizationRepository);
 
   // Get all orders
@@ -772,6 +774,74 @@ export async function orderRoutes(server: FastifyInstance) {
     } catch (err: any) {
       reply.code(400);
       return { data: null, error: err.message || 'Failed to update orders for stop' };
+    }
+  });
+
+  // Check compatibility of orders for batch conversion
+  server.post('/api/v1/orders/check-compatibility', async (req: FastifyRequest, reply: FastifyReply) => {
+    const body = z.object({
+      orderIds: z.array(z.string().uuid()).min(1)
+    }).parse((req as any).body);
+
+    try {
+      const result = await conversionService.checkCompatibility(body.orderIds);
+      return { data: result, error: null };
+    } catch (err: any) {
+      reply.code(400);
+      return { data: null, error: err.message || 'Failed to check compatibility' };
+    }
+  });
+
+  // Batch convert orders to shipment(s)
+  server.post('/api/v1/orders/batch-convert', async (req: FastifyRequest, reply: FastifyReply) => {
+    const body = z.object({
+      orderIds: z.array(z.string().uuid()).min(1),
+      mode: z.enum(['combine', 'individual'])
+    }).parse((req as any).body);
+
+    try {
+      const result = await conversionService.batchConvert(body.orderIds, { mode: body.mode });
+
+      if (!result.success && result.shipmentIds.length === 0) {
+        reply.code(400);
+        return { data: result, error: result.message };
+      }
+
+      return { data: result, error: null };
+    } catch (err: any) {
+      reply.code(500);
+      return { data: null, error: err.message || 'Failed to batch convert orders' };
+    }
+  });
+
+  // Split order into multiple shipments
+  server.post('/api/v1/orders/:id/split-to-shipments', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const body = z.object({
+      groups: z.array(z.object({
+        trackableUnitIds: z.array(z.string().uuid()),
+        legacyItemIds: z.array(z.string().uuid())
+      })).min(2)
+    }).parse((req as any).body);
+
+    try {
+      const order = await ordersRepo.findById(id);
+      if (!order) {
+        reply.code(404);
+        return { data: null, error: 'Order not found' };
+      }
+
+      const result = await conversionService.splitOrder(id, body.groups);
+
+      if (!result.success) {
+        reply.code(400);
+        return { data: result, error: result.message };
+      }
+
+      return { data: result, error: null };
+    } catch (err: any) {
+      reply.code(500);
+      return { data: null, error: err.message || 'Failed to split order' };
     }
   });
 

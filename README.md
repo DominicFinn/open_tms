@@ -27,6 +27,7 @@ I'm outlining a roadmap. It's high level. It can be ticketed up as it goes along
 - **Carrier & Lane Management** - Define carriers, lanes, multi-stop routes, and carrier assignments
 - **Order Management** - Full order lifecycle with trackable units (pallets, totes, boxes) and line items
 - **Shipment Tracking** - Complete shipment lifecycle management with status tracking
+- **Order-to-Shipment Conversion** - Combine multiple orders into one shipment, split large orders across multiple shipments, or convert individually with a conversion wizard
 - **CSV Import** - Bulk order creation from CSV files with automatic customer/location matching
 - **EDI Integration** - X12 850 Purchase Order import, partner configuration, SFTP auto-collection
 - **Customer API** - External REST API for customers to create and track orders programmatically
@@ -263,6 +264,9 @@ docker build -t open-tms-frontend ./frontend
 - `DELETE /api/v1/orders/:id` - Archive order
 - `POST /api/v1/orders/:id/assign-to-shipment` - Auto-assign order to a shipment via lane matching
 - `POST /api/v1/orders/:id/convert-to-shipment` - Convert order directly to a shipment
+- `POST /api/v1/orders/check-compatibility` - Check if orders can be combined into one shipment
+- `POST /api/v1/orders/batch-convert` - Batch convert orders (combine into one or convert individually)
+- `POST /api/v1/orders/:id/split-to-shipments` - Split one order into multiple shipments
 - `POST /api/v1/orders/:id/delivery-status` - Update delivery status
 - `POST /api/v1/orders/:id/mark-delivered` - Mark order as delivered
 - `POST /api/v1/orders/import/csv` - Bulk import orders from CSV
