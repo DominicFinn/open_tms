@@ -12,6 +12,8 @@ Open TMS uses a queue-based architecture for all integration processing. This en
 - [Inbound Webhook Processing](#inbound-webhook-processing)
 - [Authentication](#authentication)
 - [Adapter Interfaces](#adapter-interfaces)
+- [Monitoring & Operations Dashboard](#monitoring--operations-dashboard)
+- [Dead Letter Queues](#dead-letter-queues)
 - [Cloud-Native Queue Alternatives](#cloud-native-queue-alternatives)
 - [Configuration](#configuration)
 - [Troubleshooting](#troubleshooting)
@@ -243,6 +245,87 @@ interface ITrackingAdapter {
 ```
 
 Implementation: `GenericWebhookTrackingAdapter`
+
+## Monitoring & Operations Dashboard
+
+The Integrations sub-app (`/integrations`) provides a real-time operations dashboard for monitoring all data flowing in and out of the system.
+
+### Dashboard Features
+
+- **Queue Health Summary** — Live counts of queued, processing, and dead-letter jobs across all queues
+- **Data Flow Activity Chart** — Stacked bar chart showing inbound/outbound success and error rates per hour (24h, 48h, 72h, 7d ranges)
+- **Queue Status Table** — Per-queue breakdown with queued, active, deferred, and dead-letter counts
+- **Auto-refresh** — Dashboard polls every 15 seconds for near-real-time visibility
+
+### Monitoring API Endpoints
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/api/v1/queues/stats` | GET | Stats for all queues (queued, active, deferred, failed counts) |
+| `/api/v1/queues/:name/stats` | GET | Stats for a specific queue |
+| `/api/v1/queues/:name/jobs` | GET | Peek at jobs without consuming (query: `state=queued\|active\|failed`, `limit=20`) |
+| `/api/v1/queues/activity` | GET | Hourly activity buckets for charts (query: `hours=24`) |
+| `/api/v1/queues/:name/purge-dlq` | POST | Purge all jobs from a queue's dead letter queue |
+| `/api/v1/queues/:name/retry-failed` | POST | Move dead-letter jobs back to the main queue for retry |
+
+### IQueueAdapter Monitoring Interface
+
+The `IQueueAdapter` interface includes monitoring methods that cloud-native adapters must implement:
+
+```typescript
+interface IQueueAdapter {
+  // ... publish/subscribe methods ...
+
+  // Monitoring
+  getQueueStats(queueName: string): Promise<QueueStats>;
+  getAllQueueStats(): Promise<QueueStats[]>;
+  peekJobs(queueName: string, state: 'queued' | 'active' | 'failed', limit?: number): Promise<QueueJob[]>;
+
+  // Dead letter / management
+  purgeQueue(queueName: string): Promise<number>;
+  retryFailedJobs(queueName: string): Promise<number>;
+}
+```
+
+For cloud-native implementations:
+- **AWS SQS**: Use `GetQueueAttributes` for `ApproximateNumberOfMessages*`, DLQ source queue for failed count
+- **GCP Pub/Sub**: Use Cloud Monitoring API for `subscription/num_undelivered_messages`
+- **Azure Service Bus**: Use `ServiceBusAdministrationClient.getQueueRuntimeProperties()`
+
+## Dead Letter Queues
+
+Every queue automatically gets a companion dead letter queue (DLQ) named `<queue>.dead`:
+
+| Main Queue | Dead Letter Queue |
+|---|---|
+| `outbound.carrier` | `outbound.carrier.dead` |
+| `outbound.tracking` | `outbound.tracking.dead` |
+| `inbound.webhook` | `inbound.webhook.dead` |
+
+### How Jobs End Up in the DLQ
+
+When a job fails after all retry attempts (3 retries with exponential backoff), pg-boss automatically moves it to the dead letter queue. The DLQ has:
+
+- **No retries** — Jobs stay in the DLQ until manually addressed
+- **30-day retention** — Failed jobs are kept for 30 days (vs 7 days for completed jobs)
+
+### Managing Dead Letter Jobs
+
+From the Integrations Dashboard:
+
+1. **Retry** — Moves all DLQ jobs back to the main queue for another round of processing. Use this after fixing the root cause (e.g., the external API is back online).
+
+2. **Purge** — Permanently deletes all DLQ jobs. Use this when the jobs are no longer relevant (e.g., test data, or the integration has been reconfigured).
+
+### Alerting
+
+The dashboard highlights dead letter counts in red. A non-zero DLQ count indicates:
+- An external system is down (carrier API, tracking platform)
+- Authentication credentials have expired
+- The integration URL has changed
+- A bug in the worker logic
+
+Check the `OutboundIntegrationLog` or `WebhookLog` tables for specific error messages.
 
 ## Cloud-Native Queue Alternatives
 

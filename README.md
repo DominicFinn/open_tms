@@ -32,7 +32,8 @@ I'm outlining a roadmap. It's high level. It can be ticketed up as it goes along
 - **Customer API** - External REST API for customers to create and track orders programmatically
 - **Webhooks** - Receive GPS/location updates from IoT devices with automatic shipment matching
 - **Outbound Integrations** - EDI 856 ASN and JSON payload delivery to carrier and tracking systems
-- **Queue Processing** - pg-boss powered async processing with carrier/tracking workers and retry
+- **Queue Processing** - pg-boss powered async processing with carrier/tracking workers, retry, and dead letter queues
+- **Integration Dashboard** - Real-time ops dashboard with activity charts, queue monitoring, and DLQ management
 - **Interactive Maps** - OpenStreetMap integration for shipment visualization
 
 ### 🎨 Modern UI/UX
@@ -323,6 +324,14 @@ Customer-facing API for programmatic order creation and tracking. Requires a cus
 - `POST /api/v1/outbound-integrations/:id/test` - Test integration delivery
 - `GET /api/v1/outbound-integration-logs` - List outbound transmission logs
 
+#### Queue Monitoring
+- `GET /api/v1/queues/stats` - Get stats for all queues (queued, active, deferred, dead-letter)
+- `GET /api/v1/queues/:name/stats` - Get stats for a specific queue
+- `GET /api/v1/queues/:name/jobs` - Peek at jobs (query: state, limit)
+- `GET /api/v1/queues/activity` - Hourly activity data for charts (query: hours)
+- `POST /api/v1/queues/:name/purge-dlq` - Purge dead letter queue
+- `POST /api/v1/queues/:name/retry-failed` - Retry failed jobs from DLQ
+
 #### Organization Settings
 - `GET /api/v1/organization/settings` - Get org settings (tracking mode, units)
 - `PUT /api/v1/organization/settings` - Update org settings
@@ -331,7 +340,7 @@ Customer-facing API for programmatic order creation and tracking. Requires a cus
 - **[Customer API Guide](./docs/CUSTOMER_API_GUIDE.md)** - External API for programmatic order creation
 - **[CSV Import Guide](./docs/CSV_IMPORT_GUIDE.md)** - Bulk order import from CSV files
 - **[EDI Import Guide](./docs/EDI_IMPORT_GUIDE.md)** - X12 850 import, partner config, SFTP collection
-- **[Queue Integration Guide](./docs/QUEUE_INTEGRATION_GUIDE.md)** - Queue architecture, carrier/tracking adapters, cloud-native alternatives
+- **[Queue Integration Guide](./docs/QUEUE_INTEGRATION_GUIDE.md)** - Queue architecture, monitoring, DLQ, cloud-native alternatives
 - **[EDI Collector Service](./edi-collector/README.md)** - Automated SFTP polling for EDI files
 
 ### Interactive API Documentation
