@@ -4,6 +4,14 @@ import swagger from '@fastify/swagger';
 import swaggerUI from '@fastify/swagger-ui';
 import prismaPlugin from './plugins/prisma.js';
 import { registerDependencies } from './di/index.js';
+import { container } from './di/container.js';
+import { TOKENS } from './di/tokens.js';
+import { IQueueAdapter } from './queue/IQueueAdapter.js';
+import { QUEUES } from './queue/events.js';
+import { createOutboundCarrierWorker } from './workers/outboundCarrierWorker.js';
+import { createOutboundTrackingWorker } from './workers/outboundTrackingWorker.js';
+import { createInboundWebhookWorker } from './workers/inboundWebhookWorker.js';
+import { OrderDeliveryService } from './services/OrderDeliveryService.js';
 import { customerRoutes } from './routes/customers.js';
 import { carrierRoutes } from './routes/carriers.js';
 import { locationRoutes } from './routes/locations.js';
@@ -72,6 +80,27 @@ async function start() {
   await server.register(ediImportRoutes);
   await server.register(ediPartnerRoutes);
   await server.register(ediFileRoutes);
+
+  // Start queue and register workers
+  try {
+    const queue = container.resolve<IQueueAdapter>(TOKENS.IQueueAdapter);
+    await queue.start();
+    server.log.info('Queue adapter started');
+
+    const deliveryService = new OrderDeliveryService(server.prisma);
+    await queue.subscribe(QUEUES.OUTBOUND_CARRIER, createOutboundCarrierWorker(server.prisma));
+    await queue.subscribe(QUEUES.OUTBOUND_TRACKING, createOutboundTrackingWorker(server.prisma));
+    await queue.subscribe(QUEUES.INBOUND_WEBHOOK, createInboundWebhookWorker(server.prisma, deliveryService));
+    server.log.info('Queue workers registered');
+
+    // Graceful shutdown
+    server.addHook('onClose', async () => {
+      server.log.info('Stopping queue adapter...');
+      await queue.stop();
+    });
+  } catch (err) {
+    server.log.warn('Queue adapter failed to start, running without queue processing: ' + (err as Error).message);
+  }
 
   // Start the server with automatic port retry
   const preferredPort = Number(process.env.PORT || 3001);

@@ -7,6 +7,9 @@ interface OutboundIntegration {
   url: string;
   description?: string | null;
   active: boolean;
+  integrationType: 'carrier' | 'tracking';
+  payloadFormat: 'edi_856' | 'json';
+  carrierMatch?: string | null;
   senderId?: string | null;
   receiverId?: string | null;
   interchangeControlNumber?: string | null;
@@ -31,6 +34,9 @@ export default function OutboundIntegrations() {
     url: '',
     description: '',
     active: true,
+    integrationType: 'carrier' as 'carrier' | 'tracking',
+    payloadFormat: 'edi_856' as 'edi_856' | 'json',
+    carrierMatch: '',
     senderId: '',
     receiverId: '',
     interchangeControlNumber: '',
@@ -80,6 +86,9 @@ export default function OutboundIntegrations() {
         url: formData.url.trim(),
         description: formData.description.trim() || undefined,
         active: formData.active,
+        integrationType: formData.integrationType,
+        payloadFormat: formData.payloadFormat,
+        carrierMatch: formData.carrierMatch.trim() || undefined,
         senderId: formData.senderId.trim() || undefined,
         receiverId: formData.receiverId.trim() || undefined,
         interchangeControlNumber: formData.interchangeControlNumber.trim() || undefined,
@@ -129,6 +138,9 @@ export default function OutboundIntegrations() {
       url: integration.url,
       description: integration.description || '',
       active: integration.active,
+      integrationType: integration.integrationType || 'carrier',
+      payloadFormat: integration.payloadFormat || 'edi_856',
+      carrierMatch: integration.carrierMatch || '',
       senderId: integration.senderId || '',
       receiverId: integration.receiverId || '',
       interchangeControlNumber: integration.interchangeControlNumber || '',
@@ -188,6 +200,9 @@ export default function OutboundIntegrations() {
       url: '',
       description: '',
       active: true,
+      integrationType: 'carrier',
+      payloadFormat: 'edi_856',
+      carrierMatch: '',
       senderId: '',
       receiverId: '',
       interchangeControlNumber: '',
@@ -262,6 +277,47 @@ export default function OutboundIntegrations() {
               <label>Description</label>
             </div>
 
+            <h3 style={{ gridColumn: '1 / -1', marginTop: 'var(--spacing-2)' }}>Integration Type</h3>
+
+            <div className="input-wrapper">
+              <select
+                value={formData.integrationType}
+                onChange={(e) => setFormData({ ...formData, integrationType: e.target.value as any })}
+                className="input"
+              >
+                <option value="carrier">Carrier</option>
+                <option value="tracking">Tracking</option>
+              </select>
+              <label>Type</label>
+            </div>
+
+            <div className="input-wrapper">
+              <select
+                value={formData.payloadFormat}
+                onChange={(e) => setFormData({ ...formData, payloadFormat: e.target.value as any })}
+                className="input"
+              >
+                <option value="edi_856">EDI 856</option>
+                <option value="json">JSON</option>
+              </select>
+              <label>Payload Format</label>
+            </div>
+
+            {formData.integrationType === 'carrier' && (
+              <div className="input-wrapper" style={{ gridColumn: '1 / -1' }}>
+                <input
+                  type="text"
+                  value={formData.carrierMatch}
+                  onChange={(e) => setFormData({ ...formData, carrierMatch: e.target.value })}
+                  className="input"
+                  placeholder="e.g., FedEx* or DHL*"
+                />
+                <label>Carrier Match Pattern (optional, blank = all carriers)</label>
+              </div>
+            )}
+
+            {formData.payloadFormat === 'edi_856' && (
+              <>
             <h3 style={{ gridColumn: '1 / -1', marginTop: 'var(--spacing-2)' }}>EDI Configuration (Optional)</h3>
 
             <div className="input-wrapper">
@@ -296,6 +352,8 @@ export default function OutboundIntegrations() {
               />
               <label>Interchange Control Number Prefix</label>
             </div>
+              </>
+            )}
 
             <h3 style={{ gridColumn: '1 / -1', marginTop: 'var(--spacing-2)' }}>Authentication</h3>
 
@@ -395,6 +453,7 @@ export default function OutboundIntegrations() {
             <thead>
               <tr>
                 <th>Name</th>
+                <th>Type</th>
                 <th>URL</th>
                 <th>Status</th>
                 <th>Logs</th>
@@ -412,6 +471,14 @@ export default function OutboundIntegrations() {
                         {integration.description}
                       </div>
                     )}
+                  </td>
+                  <td>
+                    <span className={`badge ${integration.integrationType === 'tracking' ? 'badge-info' : 'badge-warning'}`}>
+                      {integration.integrationType === 'tracking' ? 'Tracking' : 'Carrier'}
+                    </span>
+                    <div style={{ fontSize: '11px', color: 'var(--color-grey)', marginTop: '2px' }}>
+                      {integration.payloadFormat === 'json' ? 'JSON' : 'EDI 856'}
+                    </div>
                   </td>
                   <td>
                     <code style={{ fontSize: '12px', color: 'var(--color-grey)' }}>

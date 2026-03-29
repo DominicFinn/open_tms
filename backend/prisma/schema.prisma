@@ -573,16 +573,22 @@ model OutboundIntegration {
   receiverId  String?  // ISA08 - Receiver ID
   interchangeControlNumber String? // ISA13 - Control number prefix
   
+  // Integration type and format
+  integrationType  String   @default("carrier")  // "carrier" | "tracking"
+  payloadFormat    String   @default("edi_856")   // "edi_856" | "json"
+  carrierMatch     String?  // Carrier name pattern to match (e.g., "FedEx*")
+
   // Authentication (optional)
   authType    String?  // "none", "basic", "bearer", "api_key"
   authHeader  String?  // Header name for auth (e.g., "X-API-Key")
   authValue   String?  // Encrypted/hashed auth value
-  
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   logs        OutboundIntegrationLog[]
 
   @@index([active])
+  @@index([active, integrationType])
   @@index([createdAt])
 }
 

@@ -24,4 +24,5 @@ export const TOKENS = {
   // Infrastructure tokens
   PrismaClient: Symbol.for('PrismaClient'),
   IFileStorageProvider: Symbol.for('IFileStorageProvider'),
+  IQueueAdapter: Symbol.for('IQueueAdapter'),
 } as const;
