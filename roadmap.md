@@ -70,13 +70,13 @@
   - ✅ Shared authentication helpers (basic, bearer, api_key)
 
 ## **Phase 3: Platform Foundations, Documentation & Compliance**
-- **User Management & Authentication** 🔲
-  - User accounts with login, password management
-  - SSO/OAuth support (Google, Microsoft)
-  - Roles & permissions (admin, dispatcher, warehouse, read-only)
-  - Session management (JWT-based)
-  - Multi-tenancy support (extend existing Organization model)
-  - User attribution on audit trail events
+- **User Management & Authentication** ✅
+  - ✅ User accounts with login, password management
+  - ✅ SSO/OAuth support (Google, Microsoft)
+  - ✅ Roles & permissions (admin, dispatcher, warehouse, read-only)
+  - ✅ Session management (JWT-based)
+  - Multi-tenancy support (extend existing Organization model) 🔲
+  - User attribution on audit trail events 🔲
 - **Document Templates** 🔲
   - Auto-generate Bills of Lading, labels, customs forms.
   - PDF generation with prefilled shipment details.
@@ -232,7 +232,7 @@
 ---
 
 🔥 **Priorities:**
-- **Immediate:** Begin **Phase 3** — start with User Management & Auth, then Documentation & Theming.
+- **Immediate:** Continue **Phase 3** — User Management & Auth complete; proceed with Document Templates, Document Management, Theming & Custom Fields.
 - **Short term:** Deliver **Phase 4** (notifications, triage centre, live tracking) for operational visibility.
 - **Medium term:** Deliver **Phase 5–6** (IoT + cold chain compliance) → unique differentiator.
 - **Long term:** **Phase 7–9** (financials, portals, N8N integration, AI agents) to scale and differentiate.
