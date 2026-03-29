@@ -1,5 +1,9 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { container } from '../di/container.js';
+import { TOKENS } from '../di/tokens.js';
+import { IQueueAdapter } from '../queue/IQueueAdapter.js';
+import { QUEUES } from '../queue/events.js';
 
 // Note: In production, auth values should be encrypted, not hashed
 // For now, we store them as-is but redact in responses
@@ -69,6 +73,9 @@ export async function outboundIntegrationRoutes(server: FastifyInstance) {
       url: z.string().url(),
       description: z.string().optional(),
       active: z.boolean().default(true),
+      integrationType: z.enum(['carrier', 'tracking']).default('carrier'),
+      payloadFormat: z.enum(['edi_856', 'json']).default('edi_856'),
+      carrierMatch: z.string().optional(),
       senderId: z.string().optional(),
       receiverId: z.string().optional(),
       interchangeControlNumber: z.string().optional(),
@@ -89,6 +96,9 @@ export async function outboundIntegrationRoutes(server: FastifyInstance) {
         url: body.url,
         description: body.description,
         active: body.active,
+        integrationType: body.integrationType,
+        payloadFormat: body.payloadFormat,
+        carrierMatch: body.carrierMatch,
         senderId: body.senderId,
         receiverId: body.receiverId,
         interchangeControlNumber: body.interchangeControlNumber,
@@ -116,6 +126,9 @@ export async function outboundIntegrationRoutes(server: FastifyInstance) {
       url: z.string().url().optional(),
       description: z.string().optional(),
       active: z.boolean().optional(),
+      integrationType: z.enum(['carrier', 'tracking']).optional(),
+      payloadFormat: z.enum(['edi_856', 'json']).optional(),
+      carrierMatch: z.string().nullable().optional(),
       senderId: z.string().optional(),
       receiverId: z.string().optional(),
       interchangeControlNumber: z.string().optional(),
@@ -190,14 +203,50 @@ export async function outboundIntegrationRoutes(server: FastifyInstance) {
       return { data: null, error: 'Outbound integration not found' };
     }
 
-    // This would trigger a test send - for now just return success
-    // In a real implementation, you'd generate a test EDI 856 and send it
-    return {
-      data: {
-        message: 'Test functionality coming soon',
-        integrationId: id
-      },
-      error: null
-    };
+    // Publish a test event to the appropriate queue
+    try {
+      const queue = container.resolve<IQueueAdapter>(TOKENS.IQueueAdapter);
+      const queueName = integration.integrationType === 'tracking'
+        ? QUEUES.OUTBOUND_TRACKING
+        : QUEUES.OUTBOUND_CARRIER;
+
+      // Find a recent shipment to use for testing
+      const recentShipment = await server.prisma.shipment.findFirst({
+        where: { archived: false },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      if (!recentShipment) {
+        return {
+          data: null,
+          error: 'No shipments found to test with. Create a shipment first.'
+        };
+      }
+
+      await queue.publish(queueName, {
+        type: 'shipment.test',
+        payload: {
+          shipmentId: recentShipment.id,
+          eventType: 'created',
+          shipmentReference: recentShipment.reference,
+          carrierId: recentShipment.carrierId || undefined,
+        },
+      });
+
+      return {
+        data: {
+          message: 'Test event published to queue',
+          integrationId: id,
+          shipmentReference: recentShipment.reference,
+          queue: queueName,
+        },
+        error: null
+      };
+    } catch (err: any) {
+      return {
+        data: null,
+        error: 'Failed to publish test event: ' + err.message,
+      };
+    }
   });
 }

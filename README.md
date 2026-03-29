@@ -24,8 +24,16 @@ I'm outlining a roadmap. It's high level. It can be ticketed up as it goes along
 ### 🎯 Core Functionality
 - **Customer Management** - Create, edit, and manage customer information
 - **Location Management** - Handle warehouses, distribution centers, and retail locations
+- **Carrier & Lane Management** - Define carriers, lanes, multi-stop routes, and carrier assignments
+- **Order Management** - Full order lifecycle with trackable units (pallets, totes, boxes) and line items
 - **Shipment Tracking** - Complete shipment lifecycle management with status tracking
-- **Real-time Updates** - Live data synchronization across the application
+- **CSV Import** - Bulk order creation from CSV files with automatic customer/location matching
+- **EDI Integration** - X12 850 Purchase Order import, partner configuration, SFTP auto-collection
+- **Customer API** - External REST API for customers to create and track orders programmatically
+- **Webhooks** - Receive GPS/location updates from IoT devices with automatic shipment matching
+- **Outbound Integrations** - EDI 856 ASN and JSON payload delivery to carrier and tracking systems
+- **Queue Processing** - pg-boss powered async processing with carrier/tracking workers, retry, and dead letter queues
+- **Integration Dashboard** - Real-time ops dashboard with activity charts, queue monitoring, and DLQ management
 - **Interactive Maps** - OpenStreetMap integration for shipment visualization
 
 ### 🎨 Modern UI/UX
@@ -52,7 +60,22 @@ I'm outlining a roadmap. It's high level. It can be ticketed up as it goes along
 │   Frontend      │    │   Backend       │    │   Database      │
 │   React + Vite  │◄──►│   Fastify API   │◄──►│   PostgreSQL    │
 │   TypeScript    │    │   TypeScript    │    │   Prisma ORM    │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
+└─────────────────┘    └────────┬────────┘    └─────────────────┘
+                                │
+                    ┌───────────┼───────────┐
+                    │           │           │
+               ┌────▼────┐ ┌───▼───┐ ┌─────▼─────┐
+               │ pg-boss │ │ HTTP  │ │   EDI     │
+               │ Queue   │ │       │ │ Collector │
+               │ Workers │ │       │ │ SFTP      │
+               └────┬────┘ └───┬───┘ └───────────┘
+                    │          │
+              ┌─────▼────┐ ┌──▼──────────┐
+              │ Carrier  │ │ Tracking    │
+              │ APIs     │ │ Platforms   │
+              │ (DHL,    │ │ (Project44, │
+              │  FedEx)  │ │  SysLoco)   │
+              └──────────┘ └─────────────┘
 ```
 
 ### Backend Architecture
@@ -203,18 +226,125 @@ docker build -t open-tms-frontend ./frontend
 - `GET /api/v1/locations` - List all locations
 - `POST /api/v1/locations` - Create new location
 - `GET /api/v1/locations/:id` - Get location details
+- `GET /api/v1/locations/search?q=` - Search locations by name
 - `PUT /api/v1/locations/:id` - Update location
 - `DELETE /api/v1/locations/:id` - Archive location
 
+#### Carriers
+- `GET /api/v1/carriers` - List all carriers
+- `POST /api/v1/carriers` - Create new carrier
+- `GET /api/v1/carriers/:id` - Get carrier details
+- `PUT /api/v1/carriers/:id` - Update carrier
+- `DELETE /api/v1/carriers/:id` - Archive carrier
+
+#### Lanes
+- `GET /api/v1/lanes` - List all lanes
+- `POST /api/v1/lanes` - Create lane with optional stops
+- `GET /api/v1/lanes/:id` - Get lane details with stops and carriers
+- `PUT /api/v1/lanes/:id` - Update lane
+- `DELETE /api/v1/lanes/:id` - Archive lane
+- `POST /api/v1/lanes/:id/customers` - Add customer to lane
+- `POST /api/v1/lanes/:id/carriers` - Add carrier to lane
+- `POST /api/v1/lanes/:id/carriers/:carrierId/assign` - Assign carrier to lane
+
 #### Shipments
 - `GET /api/v1/shipments` - List all shipments
-- `POST /api/v1/shipments` - Create new shipment
-- `GET /api/v1/shipments/:id` - Get shipment details
+- `POST /api/v1/shipments` - Create shipment (lane-based or direct origin/destination)
+- `GET /api/v1/shipments/:id` - Get shipment details with all relationships
+- `GET /api/v1/shipments/:id/events` - Get shipment events
 - `PUT /api/v1/shipments/:id` - Update shipment
 - `DELETE /api/v1/shipments/:id` - Archive shipment
 
+#### Orders
+- `GET /api/v1/orders` - List all orders
+- `POST /api/v1/orders` - Create new order with trackable units and line items
+- `GET /api/v1/orders/:id` - Get order details
+- `PUT /api/v1/orders/:id` - Update order
+- `DELETE /api/v1/orders/:id` - Archive order
+- `POST /api/v1/orders/:id/assign-to-shipment` - Auto-assign order to a shipment via lane matching
+- `POST /api/v1/orders/:id/convert-to-shipment` - Convert order directly to a shipment
+- `POST /api/v1/orders/:id/delivery-status` - Update delivery status
+- `POST /api/v1/orders/:id/mark-delivered` - Mark order as delivered
+- `POST /api/v1/orders/import/csv` - Bulk import orders from CSV
+- `POST /api/v1/orders/import/edi` - Import orders from EDI X12 850
+- `POST /api/v1/orders/import/edi/preview` - Preview EDI content without creating orders
+
+#### Trackable Units (sub-resources of Orders)
+- `POST /api/v1/orders/:id/trackable-units` - Add trackable unit
+- `PUT /api/v1/orders/:orderId/trackable-units/:unitId` - Update trackable unit
+- `DELETE /api/v1/orders/:orderId/trackable-units/:unitId` - Remove trackable unit
+- `POST /api/v1/orders/:orderId/trackable-units/:unitId/line-items` - Add line item
+- `POST /api/v1/orders/:orderId/trackable-units/merge` - Merge two units
+- `POST /api/v1/orders/:orderId/trackable-units/:unitId/split` - Split a unit
+
+#### Pending Lane Requests
+- `GET /api/v1/pending-lane-requests` - List all pending lane requests
+- `GET /api/v1/pending-lane-requests/status/:status` - Filter by status
+- `POST /api/v1/pending-lane-requests/:id/approve` - Approve request
+- `POST /api/v1/pending-lane-requests/:id/reject` - Reject request
+
+#### EDI Partners
+- `GET /api/v1/edi-partners` - List EDI trading partners
+- `POST /api/v1/edi-partners` - Create EDI partner with SFTP configuration
+- `GET /api/v1/edi-partners/:id` - Get partner details
+- `PUT /api/v1/edi-partners/:id` - Update partner configuration
+- `DELETE /api/v1/edi-partners/:id` - Delete partner
+
+#### EDI Files
+- `GET /api/v1/edi-files` - List processed EDI files (filter by `?status=`, `?partnerId=`)
+- `GET /api/v1/edi-files/:id` - Get file details (`?includeContent=true` for raw content)
+- `POST /api/v1/edi-files/:id/reprocess` - Reprocess a failed file
+- `GET /api/v1/edi-files/stats` - Processing statistics
+
+#### Customer API (External Integration)
+
+Customer-facing API for programmatic order creation and tracking. Requires a customer-scoped API key. See the [Customer API Guide](./docs/CUSTOMER_API_GUIDE.md) for full integration details.
+
+**Authentication:** Pass your API key via `x-api-key` header or `Authorization: Bearer <key>`.
+
+- `POST /api/v1/customer-api/orders` - Create an order
+- `GET /api/v1/customer-api/orders` - List your orders (supports `?status=`, `?limit=`, `?offset=`)
+- `GET /api/v1/customer-api/orders/:id` - Get order details
+- `GET /api/v1/customer-api/orders/:id/status` - Lightweight status check
+
+**Rate Limiting:** 100 requests/minute per IP. Returns `429` when exceeded.
+
+#### API Keys
+- `GET /api/v1/api-keys` - List all API keys
+- `POST /api/v1/api-keys` - Create new API key (optional `customerId` to scope to a customer)
+- `PUT /api/v1/api-keys/:id` - Update key name/status
+- `DELETE /api/v1/api-keys/:id` - Delete key
+
+#### Webhooks & Outbound Integrations
+- `POST /api/v1/webhook` - Receive GPS/location updates from IoT devices (requires API key)
+- `GET /api/v1/webhook-logs` - List webhook event logs with filtering
+- `GET /api/v1/webhook-logs/stats` - Webhook statistics
+- `GET /api/v1/outbound-integrations` - List outbound EDI integrations
+- `POST /api/v1/outbound-integrations` - Create outbound integration (EDI 856 ASN)
+- `POST /api/v1/outbound-integrations/:id/test` - Test integration delivery
+- `GET /api/v1/outbound-integration-logs` - List outbound transmission logs
+
+#### Queue Monitoring
+- `GET /api/v1/queues/stats` - Get stats for all queues (queued, active, deferred, dead-letter)
+- `GET /api/v1/queues/:name/stats` - Get stats for a specific queue
+- `GET /api/v1/queues/:name/jobs` - Peek at jobs (query: state, limit)
+- `GET /api/v1/queues/activity` - Hourly activity data for charts (query: hours)
+- `POST /api/v1/queues/:name/purge-dlq` - Purge dead letter queue
+- `POST /api/v1/queues/:name/retry-failed` - Retry failed jobs from DLQ
+
+#### Organization Settings
+- `GET /api/v1/organization/settings` - Get org settings (tracking mode, units)
+- `PUT /api/v1/organization/settings` - Update org settings
+
+### Integration Guides
+- **[Customer API Guide](./docs/CUSTOMER_API_GUIDE.md)** - External API for programmatic order creation
+- **[CSV Import Guide](./docs/CSV_IMPORT_GUIDE.md)** - Bulk order import from CSV files
+- **[EDI Import Guide](./docs/EDI_IMPORT_GUIDE.md)** - X12 850 import, partner config, SFTP collection
+- **[Queue Integration Guide](./docs/QUEUE_INTEGRATION_GUIDE.md)** - Queue architecture, monitoring, DLQ, cloud-native alternatives
+- **[EDI Collector Service](./edi-collector/README.md)** - Automated SFTP polling for EDI files
+
 ### Interactive API Documentation
-Visit http://localhost:3001/docs for the complete Swagger/OpenAPI documentation.
+Visit http://localhost:3001/docs for the complete Swagger/OpenAPI documentation with full request/response schemas for all endpoints.
 
 ## 🛠️ Technology Stack
 
@@ -257,24 +387,35 @@ open_tms/
 │   │   ├── routes/         # HTTP route handlers
 │   │   ├── repositories/   # Data access layer (Repository Pattern)
 │   │   ├── di/             # Dependency Injection container
-│   │   │   ├── container.ts   # DI container implementation
-│   │   │   ├── tokens.ts      # Dependency tokens
-│   │   │   └── registry.ts    # Dependency registration
-│   │   ├── services/       # Business logic services
+│   │   ├── services/       # Business logic (CSV import, EDI parsing, etc.)
+│   │   ├── middleware/     # Auth middleware (API key validation)
+│   │   ├── storage/        # File storage adapters (pluggable interface)
 │   │   └── plugins/        # Fastify plugins
 │   ├── prisma/             # Database schema and migrations
 │   └── Dockerfile          # Backend container
 ├── frontend/               # React application
 │   ├── src/
-│   │   ├── pages/          # Page components
-│   │   ├── layout.tsx      # App layout
-│   │   └── theme.css       # Material Design styles
+│   │   ├── pages/          # Page components (27 pages)
+│   │   ├── layout.tsx      # App layout with navigation
+│   │   └── theme.css       # Material Design 3 styles
 │   └── Dockerfile          # Frontend container
+├── edi-collector/           # SFTP EDI collection service
+│   ├── src/
+│   │   ├── index.ts        # Entry point
+│   │   ├── collector.ts    # SFTP download + backend upload
+│   │   ├── scheduler.ts    # Per-partner polling scheduler
+│   │   └── config.ts       # Config from backend API
+│   └── Dockerfile          # Collector container
+├── webhook-service/         # Standalone webhook receiver (GCP)
 ├── packages/
 │   └── shared/             # Shared TypeScript types
 ├── terraform/              # Infrastructure as Code
 ├── .github/workflows/      # CI/CD pipelines
-└── docs/                   # Documentation
+├── docs/                   # Integration guides
+│   ├── CUSTOMER_API_GUIDE.md
+│   ├── CSV_IMPORT_GUIDE.md
+│   └── EDI_IMPORT_GUIDE.md
+└── docker-compose.yml       # Full stack: db + backend + frontend + edi-collector
 ```
 
 ### Backend Code Organization

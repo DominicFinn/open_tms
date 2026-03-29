@@ -25,6 +25,10 @@ export async function apiKeyRoutes(server: FastifyInstance) {
         name: true,
         keyPrefix: true,
         active: true,
+        customerId: true,
+        customer: {
+          select: { id: true, name: true }
+        },
         lastUsedAt: true,
         createdAt: true,
         updatedAt: true,
@@ -41,7 +45,8 @@ export async function apiKeyRoutes(server: FastifyInstance) {
   // Create new API key
   server.post('/api/v1/api-keys', async (req: FastifyRequest, reply: FastifyReply) => {
     const body = z.object({
-      name: z.string().min(1).max(100)
+      name: z.string().min(1).max(100),
+      customerId: z.string().uuid().optional()
     }).parse((req as any).body);
 
     const { key, keyHash, keyPrefix } = generateApiKey();
@@ -51,13 +56,18 @@ export async function apiKeyRoutes(server: FastifyInstance) {
         name: body.name,
         keyHash,
         keyPrefix,
-        active: true
+        active: true,
+        customerId: body.customerId || null
       },
       select: {
         id: true,
         name: true,
         keyPrefix: true,
         active: true,
+        customerId: true,
+        customer: {
+          select: { id: true, name: true }
+        },
         createdAt: true,
         updatedAt: true
       }

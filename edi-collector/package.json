@@ -1,0 +1,24 @@
+{
+  "name": "edi-collector",
+  "version": "1.0.0",
+  "description": "SFTP collector service for EDI files — polls partner SFTP servers and forwards to Open TMS backend",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "ssh2-sftp-client": "^11.0.0",
+    "node-cron": "^3.0.3",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@types/ssh2-sftp-client": "^9.0.4",
+    "@types/node-cron": "^3.0.11",
+    "@types/node": "^20.11.0",
+    "typescript": "^5.5.0",
+    "tsx": "^4.7.0"
+  }
+}

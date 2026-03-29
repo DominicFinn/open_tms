@@ -1,7 +1,8 @@
 
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Layout } from './layout';
+import { IntegrationsLayout } from './integrations-layout';
 import Dashboard from './pages/Dashboard';
 import Customers from './pages/Customers';
 import CreateCustomer from './pages/CreateCustomer';
@@ -26,50 +27,79 @@ import ApiKeys from './pages/ApiKeys';
 import WebhookLogs from './pages/WebhookLogs';
 import OutboundIntegrations from './pages/OutboundIntegrations';
 import OutboundIntegrationLogs from './pages/OutboundIntegrationLogs';
+import OrderImportEDI from './pages/OrderImportEDI';
+import EdiPartners from './pages/EdiPartners';
+import EdiFiles from './pages/EdiFiles';
+import IntegrationsDashboard from './pages/IntegrationsDashboard';
 import './theme.css';
 
 const root = createRoot(document.getElementById('root')!);
 root.render(
   <BrowserRouter>
-    <Layout>
-      <Routes>
-        <Route path="/" element={<Dashboard />} />
+    <Routes>
+      {/* Operations (main TMS app) */}
+      <Route element={<Layout><Routes><Route path="*" element={null} /></Routes></Layout>}>
+      </Route>
 
-        <Route path="/customers" element={<Customers />} />
-        <Route path="/customers/create" element={<CreateCustomer />} />
-        <Route path="/customers/:id/edit" element={<CreateCustomer />} />
+      {/* Integrations sub-app */}
+      <Route path="/integrations" element={<IntegrationsLayout />}>
+        <Route index element={<IntegrationsDashboard />} />
+        <Route path="api-keys" element={<ApiKeys />} />
+        <Route path="webhook-logs" element={<WebhookLogs />} />
+        <Route path="outbound" element={<OutboundIntegrations />} />
+        <Route path="outbound-logs" element={<OutboundIntegrationLogs />} />
+        <Route path="edi-partners" element={<EdiPartners />} />
+        <Route path="edi-files" element={<EdiFiles />} />
+      </Route>
 
-        <Route path="/carriers" element={<Carriers />} />
-        <Route path="/carriers/create" element={<CreateCarrier />} />
-        <Route path="/carriers/:id/edit" element={<CreateCarrier />} />
+      {/* Operations routes - wrapped in Layout */}
+      <Route path="/*" element={
+        <Layout>
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
 
-        <Route path="/locations" element={<Locations />} />
-        <Route path="/locations/create" element={<CreateLocation />} />
-        <Route path="/locations/:id/edit" element={<CreateLocation />} />
+            <Route path="/customers" element={<Customers />} />
+            <Route path="/customers/create" element={<CreateCustomer />} />
+            <Route path="/customers/:id/edit" element={<CreateCustomer />} />
 
-        <Route path="/lanes" element={<Lanes />} />
-        <Route path="/lanes/create" element={<CreateLane />} />
-        <Route path="/lanes/:id/edit" element={<CreateLane />} />
-        <Route path="/lanes/:id" element={<LaneDetails />} />
+            <Route path="/carriers" element={<Carriers />} />
+            <Route path="/carriers/create" element={<CreateCarrier />} />
+            <Route path="/carriers/:id/edit" element={<CreateCarrier />} />
 
-        <Route path="/orders" element={<Orders />} />
-        <Route path="/orders/create" element={<CreateOrder />} />
-        <Route path="/orders/import/csv" element={<OrderImportCSV />} />
-        <Route path="/orders/:id" element={<OrderDetails />} />
-        <Route path="/orders/:id/edit" element={<EditOrder />} />
+            <Route path="/locations" element={<Locations />} />
+            <Route path="/locations/create" element={<CreateLocation />} />
+            <Route path="/locations/:id/edit" element={<CreateLocation />} />
 
-        <Route path="/shipments" element={<Shipments />} />
-        <Route path="/shipments/create" element={<CreateShipment />} />
-        <Route path="/shipments/:id/edit" element={<CreateShipment />} />
-        <Route path="/shipments/:id" element={<ShipmentDetails />} />
-        
-        <Route path="/pending-lane-requests" element={<PendingLaneRequests />} />
-        <Route path="/settings" element={<Settings />} />
-        <Route path="/api-keys" element={<ApiKeys />} />
-        <Route path="/webhook-logs" element={<WebhookLogs />} />
-        <Route path="/outbound-integrations" element={<OutboundIntegrations />} />
-        <Route path="/outbound-integration-logs" element={<OutboundIntegrationLogs />} />
-      </Routes>
-    </Layout>
+            <Route path="/lanes" element={<Lanes />} />
+            <Route path="/lanes/create" element={<CreateLane />} />
+            <Route path="/lanes/:id/edit" element={<CreateLane />} />
+            <Route path="/lanes/:id" element={<LaneDetails />} />
+
+            <Route path="/orders" element={<Orders />} />
+            <Route path="/orders/create" element={<CreateOrder />} />
+            <Route path="/orders/import/csv" element={<OrderImportCSV />} />
+            <Route path="/orders/import/edi" element={<OrderImportEDI />} />
+            <Route path="/orders/:id" element={<OrderDetails />} />
+            <Route path="/orders/:id/edit" element={<EditOrder />} />
+
+            <Route path="/shipments" element={<Shipments />} />
+            <Route path="/shipments/create" element={<CreateShipment />} />
+            <Route path="/shipments/:id/edit" element={<CreateShipment />} />
+            <Route path="/shipments/:id" element={<ShipmentDetails />} />
+
+            <Route path="/pending-lane-requests" element={<PendingLaneRequests />} />
+            <Route path="/settings" element={<Settings />} />
+
+            {/* Redirects from old integration URLs */}
+            <Route path="/api-keys" element={<Navigate to="/integrations/api-keys" replace />} />
+            <Route path="/webhook-logs" element={<Navigate to="/integrations/webhook-logs" replace />} />
+            <Route path="/outbound-integrations" element={<Navigate to="/integrations/outbound" replace />} />
+            <Route path="/outbound-integration-logs" element={<Navigate to="/integrations/outbound-logs" replace />} />
+            <Route path="/edi-partners" element={<Navigate to="/integrations/edi-partners" replace />} />
+            <Route path="/edi-files" element={<Navigate to="/integrations/edi-files" replace />} />
+          </Routes>
+        </Layout>
+      } />
+    </Routes>
   </BrowserRouter>
 );

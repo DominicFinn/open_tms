@@ -179,6 +179,10 @@ export default function Orders() {
               <span className="material-icons" style={{ fontSize: '18px' }}>upload_file</span>
               Import CSV
             </Link>
+            <Link to="/orders/import/edi" className="button button-outline">
+              <span className="material-icons" style={{ fontSize: '18px' }}>swap_horiz</span>
+              Import EDI
+            </Link>
           </div>
         </div>
 

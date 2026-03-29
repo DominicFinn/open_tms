@@ -8,8 +8,8 @@ import { IOrderDeliveryService } from '../services/OrderDeliveryService.js';
 import { IOrganizationRepository } from '../repositories/OrganizationRepository.js';
 import { container, TOKENS } from '../di/index.js';
 
-// Validation schemas
-const lineItemSchema = z.object({
+// Validation schemas (exported for reuse by customerApi.ts)
+export const lineItemSchema = z.object({
   sku: z.string().min(1),
   description: z.string().optional(),
   quantity: z.number().int().positive(),
@@ -23,7 +23,7 @@ const lineItemSchema = z.object({
   temperature: z.string().optional()
 });
 
-const trackableUnitSchema = z.object({
+export const trackableUnitSchema = z.object({
   identifier: z.string().min(1),
   unitType: z.string().min(1),
   customTypeName: z.string().optional(),
@@ -32,7 +32,7 @@ const trackableUnitSchema = z.object({
   lineItems: z.array(lineItemSchema).min(1, 'Each trackable unit must have at least one line item')
 });
 
-const createOrderSchema = z.object({
+export const createOrderSchema = z.object({
   orderNumber: z.string().min(1),
   poNumber: z.string().optional(),
   customerId: z.string().uuid(),
@@ -417,6 +417,60 @@ export async function orderRoutes(server: FastifyInstance) {
     return { data: auditLogs, error: null };
   });
 
+  // Get status timeline for order
+  server.get('/api/v1/orders/:id/status-timeline', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+
+    const order = await ordersRepo.findById(id);
+    if (!order) {
+      reply.code(404);
+      return { data: null, error: 'Order not found' };
+    }
+
+    // Fetch audit logs relevant to status changes
+    const auditLogs = await (ordersRepo as any).prisma.auditLog.findMany({
+      where: {
+        orderId: id,
+        action: {
+          in: ['delivery_status_changed', 'exception_resolved', 'created', 'status_changed']
+        }
+      },
+      orderBy: { createdAt: 'asc' }
+    });
+
+    // Build timeline: start with creation event, then audit log entries
+    const timeline: any[] = [];
+
+    // Always include the order creation event
+    timeline.push({
+      id: `created-${(order as any).id}`,
+      timestamp: (order as any).createdAt,
+      action: 'created',
+      description: `Order created via ${(order as any).importSource || 'manual'}`,
+      fromStatus: null,
+      toStatus: 'unassigned',
+      method: (order as any).importSource || 'manual',
+      actor: null
+    });
+
+    // Add audit log entries
+    for (const log of auditLogs) {
+      const changes = log.changes as any;
+      timeline.push({
+        id: log.id,
+        timestamp: log.createdAt,
+        action: log.action,
+        description: log.description,
+        fromStatus: changes?.before?.deliveryStatus || null,
+        toStatus: changes?.after?.deliveryStatus || null,
+        method: changes?.after?.deliveryMethod || null,
+        actor: log.userId || null
+      });
+    }
+
+    return { data: timeline, error: null };
+  });
+
   // Merge trackable units
   server.post('/api/v1/orders/:orderId/trackable-units/merge', async (req: FastifyRequest, reply: FastifyReply) => {
     const { orderId } = req.params as { orderId: string };
@@ -571,15 +625,8 @@ export async function orderRoutes(server: FastifyInstance) {
     }
   });
 
-  // EDI Import endpoint (placeholder)
-  server.post('/api/v1/orders/import/edi', async (req: FastifyRequest, reply: FastifyReply) => {
-    // TODO: Implement EDI parsing (X12/EDIFACT) and order creation
-    reply.code(501);
-    return {
-      data: null,
-      error: 'EDI import not yet implemented. Coming soon!'
-    };
-  });
+  // EDI Import endpoint — handled by ediImport.ts route module
+  // POST /api/v1/orders/import/edi and POST /api/v1/orders/import/edi/preview
 
   // Assign order to shipment based on matching lane
   server.post('/api/v1/orders/:id/assign-to-shipment', async (req: FastifyRequest, reply: FastifyReply) => {

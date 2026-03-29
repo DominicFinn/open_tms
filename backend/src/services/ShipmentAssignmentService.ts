@@ -112,10 +112,53 @@ export class ShipmentAssignmentService implements IShipmentAssignmentService {
       }
     });
 
-    // Update order status
+    // Create or find delivery stop for this order's destination
+    let deliveryStop = await this.prisma.shipmentStop.findFirst({
+      where: {
+        shipmentId: shipment.id,
+        locationId: order.destinationId!
+      }
+    });
+
+    if (!deliveryStop) {
+      const maxSeq = await this.prisma.shipmentStop.aggregate({
+        where: { shipmentId: shipment.id },
+        _max: { sequenceNumber: true }
+      });
+      deliveryStop = await this.prisma.shipmentStop.create({
+        data: {
+          shipmentId: shipment.id,
+          locationId: order.destinationId!,
+          sequenceNumber: (maxSeq._max.sequenceNumber || 0) + 1,
+          stopType: 'delivery',
+          status: 'pending'
+        }
+      });
+    }
+
+    // Update order status and delivery status
     await this.prisma.order.update({
       where: { id: orderId },
-      data: { status: 'assigned' }
+      data: {
+        status: 'assigned',
+        deliveryStatus: 'assigned',
+        deliveryStopId: deliveryStop.id
+      }
+    });
+
+    // Audit log
+    await this.prisma.auditLog.create({
+      data: {
+        entityType: 'order',
+        entityId: orderId,
+        orderId,
+        action: 'delivery_status_changed',
+        description: `Order assigned to shipment ${shipment.reference}, delivery status set to assigned`,
+        changes: {
+          before: { deliveryStatus: order.deliveryStatus, status: order.status },
+          after: { deliveryStatus: 'assigned', status: 'assigned' }
+        },
+      }
     });
 
     return {

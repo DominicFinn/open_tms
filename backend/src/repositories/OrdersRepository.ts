@@ -107,6 +107,7 @@ export interface IOrdersRepository {
   all(): Promise<OrderWithRelations[]>;
   findById(id: string): Promise<OrderWithRelations | null>;
   findByOrderNumber(orderNumber: string): Promise<OrderWithRelations | null>;
+  findByCustomerId(customerId: string, options?: { status?: string; limit?: number; offset?: number }): Promise<OrderWithRelations[]>;
   create(data: CreateOrderDTO): Promise<OrderWithRelations>;
   update(id: string, data: UpdateOrderDTO): Promise<Order>;
   archive(id: string): Promise<Order>;
@@ -179,6 +180,59 @@ export class OrdersRepository implements IOrdersRepository {
         }
       },
       orderBy: { createdAt: 'desc' }
+    }) as Promise<OrderWithRelations[]>;
+  }
+
+  async findByCustomerId(customerId: string, options?: { status?: string; limit?: number; offset?: number }): Promise<OrderWithRelations[]> {
+    const where: any = { customerId, archived: false };
+    if (options?.status) {
+      where.status = options.status;
+    }
+    return this.prisma.order.findMany({
+      where,
+      include: {
+        customer: {
+          select: {
+            id: true,
+            name: true,
+            contactEmail: true
+          }
+        },
+        origin: {
+          select: {
+            id: true,
+            name: true,
+            address1: true,
+            city: true,
+            state: true,
+            country: true
+          }
+        },
+        destination: {
+          select: {
+            id: true,
+            name: true,
+            address1: true,
+            city: true,
+            state: true,
+            country: true
+          }
+        },
+        trackableUnits: {
+          include: {
+            lineItems: true
+          },
+          orderBy: { sequenceNumber: 'asc' }
+        },
+        lineItems: {
+          where: {
+            trackableUnitId: null
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' },
+      take: options?.limit || 50,
+      skip: options?.offset || 0
     }) as Promise<OrderWithRelations[]>;
   }
 
@@ -582,10 +636,40 @@ export class OrdersRepository implements IOrdersRepository {
         }
       });
 
-      // Update order status
+      // Create delivery stop for destination
+      const deliveryStop = await tx.shipmentStop.create({
+        data: {
+          shipmentId: shipment.id,
+          locationId: order.destinationId!,
+          sequenceNumber: 1,
+          stopType: 'delivery',
+          status: 'pending'
+        }
+      });
+
+      // Update order status and delivery status
       await tx.order.update({
         where: { id: orderId },
-        data: { status: 'converted' }
+        data: {
+          status: 'converted',
+          deliveryStatus: 'assigned',
+          deliveryStopId: deliveryStop.id
+        }
+      });
+
+      // Audit log
+      await tx.auditLog.create({
+        data: {
+          entityType: 'order',
+          entityId: orderId,
+          orderId,
+          action: 'delivery_status_changed',
+          description: 'Order converted to shipment, delivery status set to assigned',
+          changes: {
+            before: { deliveryStatus: 'unassigned', status: order.status },
+            after: { deliveryStatus: 'assigned', status: 'converted' }
+          },
+        }
       });
 
       return { shipmentId: shipment.id };

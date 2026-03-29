@@ -1,77 +1,9 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { createHash } from 'crypto';
-
-// Helper to hash API keys
-function hashApiKey(key: string): string {
-  return createHash('sha256').update(key).digest('hex');
-}
-
-// API Key authentication middleware
-async function authenticateApiKey(server: FastifyInstance, req: FastifyRequest, reply: FastifyReply): Promise<{ apiKeyId: string | null; error: string | null }> {
-  const apiKeyHeader = (req.headers['x-api-key'] as string) || 
-                       (req.headers['authorization'] as string)?.replace('Bearer ', '');
-
-  if (!apiKeyHeader) {
-    reply.code(401);
-    return { apiKeyId: null, error: 'API key required. Please provide x-api-key header or Authorization Bearer token.' };
-  }
-
-  const keyHash = hashApiKey(apiKeyHeader);
-  const apiKey = await server.prisma.apiKey.findUnique({
-    where: { keyHash },
-    select: {
-      id: true,
-      active: true
-    }
-  });
-
-  if (!apiKey || !apiKey.active) {
-    reply.code(403);
-    return { apiKeyId: null, error: 'Invalid or inactive API key.' };
-  }
-
-  // Update last used
-  await server.prisma.apiKey.update({
-    where: { id: apiKey.id },
-    data: { lastUsedAt: new Date() }
-  });
-
-  return { apiKeyId: apiKey.id, error: null };
-}
-
-// Helper to redact API key from headers
-function redactApiKey(headers: any): any {
-  const redacted = { ...headers };
-  if (redacted['x-api-key']) {
-    redacted['x-api-key'] = '[REDACTED]';
-  }
-  if (redacted['authorization']) {
-    redacted['authorization'] = redacted['authorization'].replace(/Bearer .+/, 'Bearer [REDACTED]');
-  }
-  return redacted;
-}
-
-// Simple in-memory rate limiting
-const requestCounts = new Map<string, { count: number; resetTime: number }>();
-const RATE_LIMIT = 100; // requests per minute
-const WINDOW_MS = 60 * 1000; // 1 minute
-
-function checkRateLimit(ip: string): boolean {
-  const now = Date.now();
-  const userLimit = requestCounts.get(ip);
-  
-  if (!userLimit || now > userLimit.resetTime) {
-    requestCounts.set(ip, { count: 1, resetTime: now + WINDOW_MS });
-    return true;
-  }
-  
-  if (userLimit.count >= RATE_LIMIT) {
-    return false;
-  }
-  
-  userLimit.count++;
-  return true;
-}
+import { authenticateApiKey, checkRateLimit, redactApiKey } from '../middleware/apiKeyAuth.js';
+import { container } from '../di/container.js';
+import { TOKENS } from '../di/tokens.js';
+import { IQueueAdapter } from '../queue/IQueueAdapter.js';
+import { QUEUES } from '../queue/events.js';
 
 export async function webhookRoutes(server: FastifyInstance) {
   // Webhook endpoint
@@ -194,7 +126,7 @@ export async function webhookRoutes(server: FastifyInstance) {
       const locationSummary = location?.summary;
       const hasLocation = !!(lat && lng);
 
-      // Create initial log entry
+      // Create log entry with 'queued' status
       const logEntry = await server.prisma.webhookLog.create({
         data: {
           apiKeyId: apiKeyId ?? null,
@@ -211,117 +143,50 @@ export async function webhookRoutes(server: FastifyInstance) {
           lng: lng ?? null,
           rawPayload: body as any,
           receivedAt: timestamp,
-          status: 'pending',
+          status: 'queued',
           shipmentFound: false,
           shipmentUpdated: false
         } as any
       });
       webhookLogId = logEntry.id;
 
-      // Skip events that don't have location data
-      if (!hasLocation) {
-        const responseBody = {
-          success: true,
-          message: 'Event received but skipped - no location data',
-          timestamp: timestamp.toISOString(),
-          data: {
-            deviceName,
-            eventType
-          }
-        };
-
+      // Publish to queue for async processing
+      try {
+        const queue = container.resolve<IQueueAdapter>(TOKENS.IQueueAdapter);
+        await queue.publish(QUEUES.INBOUND_WEBHOOK, {
+          type: 'webhook.received',
+          payload: {
+            webhookLogId: logEntry.id,
+            rawPayload: body,
+            apiKeyId: apiKeyId!,
+            ipAddress: ip,
+          },
+        });
+      } catch (queueErr) {
+        server.log.warn('Queue publish failed, webhook will not be processed: ' + (queueErr as Error).message);
         await server.prisma.webhookLog.update({
           where: { id: webhookLogId },
           data: {
-            status: 'skipped',
-            shipmentFound: false,
-            shipmentUpdated: false,
-            responseCode: 200,
-            responseBody,
-            processedAt: new Date()
+            status: 'error',
+            errorMessage: 'Failed to queue for processing: ' + (queueErr as Error).message,
+            processedAt: new Date(),
           }
         });
-
-        return responseBody;
       }
 
-      // Find shipment by reference (device name matches shipment reference)
-      const shipment = await server.prisma.shipment.findFirst({
-        where: {
-          reference: deviceName,
-          archived: false
-        }
-      });
-
-      if (!shipment) {
-        const responseBody = {
-          error: 'Shipment not found',
-          deviceName,
-          message: `No active shipment found with reference: ${deviceName}`
-        };
-
-        await server.prisma.webhookLog.update({
-          where: { id: webhookLogId },
-          data: {
-            status: 'not_found',
-            shipmentFound: false,
-            shipmentUpdated: false,
-            responseCode: 404,
-            responseBody,
-            processedAt: new Date()
-          }
-        });
-
-        reply.code(404);
-        return responseBody;
-      }
-
-      // Create shipment event
-      const shipmentEvent = await server.prisma.shipmentEvent.create({
-        data: {
-          shipmentId: shipment.id,
-          eventType,
-          deviceId,
-          deviceName,
-          lat: lat!,
-          lng: lng!,
-          address,
-          locationSummary,
-          rawPayload: body,
-          eventTime: new Date(eventTime)
-        }
-      });
-
-      const responseBody = {
+      // Return 202 Accepted immediately — processing happens async via queue worker
+      reply.code(202);
+      return {
         success: true,
-        message: 'Webhook processed and shipment event created',
+        message: 'Webhook received and queued for processing',
         timestamp: timestamp.toISOString(),
+        webhookLogId: logEntry.id,
         data: {
-          eventId: shipmentEvent.id,
-          shipmentId: shipment.id,
-          shipmentReference: shipment.reference,
+          deviceName,
           eventType,
-          location: { lat, lng, address }
+          hasLocation,
         }
       };
-
-      // Update log with success
-      await server.prisma.webhookLog.update({
-        where: { id: webhookLogId },
-        data: {
-          status: 'success',
-          shipmentFound: true,
-          shipmentUpdated: true,
-          shipmentId: shipment.id,
-          shipmentReference: shipment.reference,
-          shipmentEventId: shipmentEvent.id,
-          responseCode: 200,
-          responseBody,
-          processedAt: new Date()
-        }
-      });
-
-      return responseBody;
 
     } catch (error: any) {
       console.error('Error processing webhook:', error);

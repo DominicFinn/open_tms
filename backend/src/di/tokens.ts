@@ -18,7 +18,11 @@ export const TOKENS = {
   IShipmentAssignmentService: Symbol.for('IShipmentAssignmentService'),
   ICSVImportService: Symbol.for('ICSVImportService'),
   IOrderDeliveryService: Symbol.for('IOrderDeliveryService'),
+  IEDI850ParseService: Symbol.for('IEDI850ParseService'),
+  IEdiImportService: Symbol.for('IEdiImportService'),
 
   // Infrastructure tokens
   PrismaClient: Symbol.for('PrismaClient'),
+  IFileStorageProvider: Symbol.for('IFileStorageProvider'),
+  IQueueAdapter: Symbol.for('IQueueAdapter'),
 } as const;

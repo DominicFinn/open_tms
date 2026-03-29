@@ -1,6 +1,9 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { OutboundIntegrationService } from '../services/OutboundIntegrationService.js';
+import { container } from '../di/container.js';
+import { TOKENS } from '../di/tokens.js';
+import { IQueueAdapter } from '../queue/IQueueAdapter.js';
+import { QUEUES } from '../queue/events.js';
 
 export async function shipmentRoutes(server: FastifyInstance) {
   // Get all shipments
@@ -108,11 +111,20 @@ export async function shipmentRoutes(server: FastifyInstance) {
       }
     });
 
-    // Trigger outbound integration (fire and forget)
-    const outboundService = new OutboundIntegrationService(server.prisma);
-    outboundService.sendShipmentNotification(created as any).catch(error => {
-      server.log.error('Failed to send outbound integration:', error);
-    });
+    // Publish to queue for outbound integrations
+    try {
+      const queue = container.resolve<IQueueAdapter>(TOKENS.IQueueAdapter);
+      const eventPayload = {
+        shipmentId: created.id,
+        eventType: 'created' as const,
+        shipmentReference: created.reference,
+        carrierId: created.carrierId || undefined,
+      };
+      await queue.publish(QUEUES.OUTBOUND_CARRIER, { type: 'shipment.created', payload: eventPayload });
+      await queue.publish(QUEUES.OUTBOUND_TRACKING, { type: 'shipment.created', payload: eventPayload });
+    } catch (err) {
+      server.log.warn('Failed to publish shipment events to queue: ' + (err as Error).message);
+    }
 
     reply.code(201);
     return { data: created, error: null };
@@ -155,6 +167,36 @@ export async function shipmentRoutes(server: FastifyInstance) {
         events: {
           orderBy: {
             eventTime: 'desc'
+          }
+        },
+        stops: {
+          include: {
+            location: true,
+            orders: {
+              select: {
+                id: true,
+                orderNumber: true,
+                deliveryStatus: true,
+                status: true,
+                customer: { select: { name: true } }
+              }
+            }
+          },
+          orderBy: {
+            sequenceNumber: 'asc'
+          }
+        },
+        orderShipments: {
+          include: {
+            order: {
+              select: {
+                id: true,
+                orderNumber: true,
+                status: true,
+                deliveryStatus: true,
+                customer: { select: { name: true } }
+              }
+            }
           }
         }
       }

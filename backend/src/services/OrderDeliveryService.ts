@@ -86,6 +86,26 @@ export class OrderDeliveryService implements IOrderDeliveryService {
       }
     });
 
+    // Write audit log for delivery status change
+    await this.prisma.auditLog.create({
+      data: {
+        entityType: 'order',
+        entityId: update.orderId,
+        orderId: update.orderId,
+        action: 'delivery_status_changed',
+        description: `Delivery status changed from ${order.deliveryStatus} to ${update.deliveryStatus}${update.deliveryMethod ? ` via ${update.deliveryMethod}` : ''}`,
+        changes: {
+          before: { deliveryStatus: order.deliveryStatus },
+          after: {
+            deliveryStatus: update.deliveryStatus,
+            ...(update.deliveryMethod && { deliveryMethod: update.deliveryMethod }),
+            ...(update.exceptionType && { exceptionType: update.exceptionType }),
+          }
+        },
+        userId: update.deliveryConfirmedBy || undefined,
+      }
+    });
+
     return updatedOrder;
   }
 
@@ -141,7 +161,7 @@ export class OrderDeliveryService implements IOrderDeliveryService {
       throw new Error('Order is not in exception status');
     }
 
-    return this.prisma.order.update({
+    const updated = await this.prisma.order.update({
       where: { id: orderId },
       data: {
         deliveryStatus: 'in_transit',
@@ -156,6 +176,23 @@ export class OrderDeliveryService implements IOrderDeliveryService {
         deliveryStop: true
       }
     });
+
+    await this.prisma.auditLog.create({
+      data: {
+        entityType: 'order',
+        entityId: orderId,
+        orderId,
+        action: 'exception_resolved',
+        description: `Exception resolved, status changed from exception to in_transit${notes ? `: ${notes}` : ''}`,
+        changes: {
+          before: { deliveryStatus: 'exception', exceptionType: order.exceptionType },
+          after: { deliveryStatus: 'in_transit' }
+        },
+        userId: resolvedBy || undefined,
+      }
+    });
+
+    return updated;
   }
 
   /**
@@ -198,6 +235,7 @@ export class OrderDeliveryService implements IOrderDeliveryService {
 
     // If stop is completed, mark all orders at this stop as delivered
     if (status === 'completed') {
+      const affectedOrders = stop.orders;
       const updateResult = await this.prisma.order.updateMany({
         where: {
           deliveryStopId: shipmentStopId,
@@ -214,11 +252,31 @@ export class OrderDeliveryService implements IOrderDeliveryService {
         }
       });
 
+      // Audit log for each affected order
+      for (const o of affectedOrders) {
+        await this.prisma.auditLog.create({
+          data: {
+            entityType: 'order',
+            entityId: o.id,
+            orderId: o.id,
+            action: 'delivery_status_changed',
+            description: `Order delivered at stop (${stop.location?.name || 'unknown'}) via ${method}`,
+            changes: {
+              before: { deliveryStatus: o.deliveryStatus },
+              after: { deliveryStatus: 'delivered' }
+            },
+          }
+        });
+      }
+
       return updateResult.count;
     }
 
     // If stop is in_progress or arrived, mark orders as in_transit
     if (status === 'arrived' || status === 'in_progress') {
+      const affectedOrders = stop.orders.filter(
+        (o: any) => o.deliveryStatus === 'assigned' || o.deliveryStatus === 'unassigned'
+      );
       const updateResult = await this.prisma.order.updateMany({
         where: {
           deliveryStopId: shipmentStopId,
@@ -232,6 +290,22 @@ export class OrderDeliveryService implements IOrderDeliveryService {
           updatedAt: new Date()
         }
       });
+
+      for (const o of affectedOrders) {
+        await this.prisma.auditLog.create({
+          data: {
+            entityType: 'order',
+            entityId: o.id,
+            orderId: o.id,
+            action: 'delivery_status_changed',
+            description: `Order in transit — stop ${status} (${stop.location?.name || 'unknown'}) via ${method}`,
+            changes: {
+              before: { deliveryStatus: o.deliveryStatus },
+              after: { deliveryStatus: 'in_transit' }
+            },
+          }
+        });
+      }
 
       return updateResult.count;
     }
