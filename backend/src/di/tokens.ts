@@ -20,6 +20,7 @@ export const TOKENS = {
   IOrderDeliveryService: Symbol.for('IOrderDeliveryService'),
   IEDI850ParseService: Symbol.for('IEDI850ParseService'),
   IEdiImportService: Symbol.for('IEdiImportService'),
+  IOrderConversionService: Symbol.for('IOrderConversionService'),
 
   // Infrastructure tokens
   PrismaClient: Symbol.for('PrismaClient'),

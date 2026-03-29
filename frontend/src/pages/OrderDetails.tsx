@@ -138,6 +138,15 @@ export default function OrderDetails() {
   const [error, setError] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
+  // Split modal state
+  const [showSplitModal, setShowSplitModal] = useState(false);
+  const [splitGroups, setSplitGroups] = useState<{ trackableUnitIds: string[]; legacyItemIds: string[] }[]>([
+    { trackableUnitIds: [], legacyItemIds: [] },
+    { trackableUnitIds: [], legacyItemIds: [] }
+  ]);
+  const [splitLoading, setSplitLoading] = useState(false);
+  const [splitError, setSplitError] = useState<string | null>(null);
+
   useEffect(() => {
     loadOrder();
     loadTimeline();
@@ -357,6 +366,96 @@ export default function OrderDetails() {
     }
   };
 
+  const openSplitModal = () => {
+    if (!order) return;
+    // Initialize with 2 groups, all items unassigned
+    setSplitGroups([
+      { trackableUnitIds: [], legacyItemIds: [] },
+      { trackableUnitIds: [], legacyItemIds: [] }
+    ]);
+    setSplitError(null);
+    setShowSplitModal(true);
+  };
+
+  const addSplitGroup = () => {
+    setSplitGroups(prev => [...prev, { trackableUnitIds: [], legacyItemIds: [] }]);
+  };
+
+  const removeSplitGroup = (index: number) => {
+    if (splitGroups.length <= 2) return;
+    setSplitGroups(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const assignUnitToGroup = (unitId: string, groupIndex: number) => {
+    setSplitGroups(prev => {
+      const next = prev.map(g => ({
+        trackableUnitIds: g.trackableUnitIds.filter(id => id !== unitId),
+        legacyItemIds: [...g.legacyItemIds]
+      }));
+      next[groupIndex].trackableUnitIds.push(unitId);
+      return next;
+    });
+  };
+
+  const assignLegacyItemToGroup = (itemId: string, groupIndex: number) => {
+    setSplitGroups(prev => {
+      const next = prev.map(g => ({
+        trackableUnitIds: [...g.trackableUnitIds],
+        legacyItemIds: g.legacyItemIds.filter(id => id !== itemId)
+      }));
+      next[groupIndex].legacyItemIds.push(itemId);
+      return next;
+    });
+  };
+
+  const handleSplitOrder = async () => {
+    if (!order) return;
+
+    // Validate all items are assigned
+    const allAssignedUnits = splitGroups.flatMap(g => g.trackableUnitIds);
+    const allAssignedLegacy = splitGroups.flatMap(g => g.legacyItemIds);
+    const totalUnits = order.trackableUnits.length;
+    const totalLegacy = order.lineItems.length;
+
+    if (allAssignedUnits.length + allAssignedLegacy.length === 0) {
+      setSplitError('Assign items to shipment groups before splitting.');
+      return;
+    }
+
+    // Check each group has at least one item
+    const emptyGroups = splitGroups.filter(g => g.trackableUnitIds.length === 0 && g.legacyItemIds.length === 0);
+    if (emptyGroups.length > 0) {
+      setSplitError('Each shipment group must have at least one item.');
+      return;
+    }
+
+    setSplitLoading(true);
+    setSplitError(null);
+
+    try {
+      const response = await fetch(`${API_URL}/api/v1/orders/${order.id}/split-to-shipments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ groups: splitGroups })
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.data?.success) {
+        setSplitError(result.error || result.data?.message || 'Failed to split order');
+        return;
+      }
+
+      setShowSplitModal(false);
+      alert(`Order split into ${result.data.shipmentIds.length} shipments successfully!`);
+      loadOrder();
+    } catch (err: any) {
+      setSplitError(err.message || 'Failed to split order');
+    } finally {
+      setSplitLoading(false);
+    }
+  };
+
   const getStatusChip = (status: string) => (
     <span className={statusChipClass[status] || 'chip chip-primary'}>
       {status.replace(/_/g, ' ')}
@@ -495,6 +594,16 @@ export default function OrderDetails() {
                       <span className="material-icons" style={{ fontSize: '16px' }}>local_shipping</span>
                       Manual Convert
                     </button>
+                    {(order.trackableUnits.length > 1 || order.lineItems.length > 1 ||
+                      (order.trackableUnits.length > 0 && order.lineItems.length > 0)) && (
+                      <button
+                        onClick={openSplitModal}
+                        className="button button-sm button-outline no-print"
+                      >
+                        <span className="material-icons" style={{ fontSize: '16px' }}>call_split</span>
+                        Split to Shipments
+                      </button>
+                    )}
                   </>
                 )}
               </>
@@ -929,6 +1038,252 @@ export default function OrderDetails() {
           </div>
         </div>
       </div>
+
+      {/* Split Order Modal */}
+      {showSplitModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: 'var(--spacing-2)'
+        }}>
+          <div style={{
+            backgroundColor: 'var(--surface)',
+            borderRadius: 'var(--border-radius-md, 12px)',
+            padding: 'var(--spacing-3)',
+            maxWidth: '800px',
+            width: '100%',
+            maxHeight: '85vh',
+            overflowY: 'auto',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.2)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-2)' }}>
+              <h2 style={{ margin: 0 }}>
+                <span className="material-icons" style={{ verticalAlign: 'middle', marginRight: '8px' }}>call_split</span>
+                Split Order into Shipments
+              </h2>
+              <button onClick={() => setShowSplitModal(false)} className="button button-sm button-outline">
+                <span className="material-icons" style={{ fontSize: '18px' }}>close</span>
+              </button>
+            </div>
+
+            <p className="text-muted" style={{ marginBottom: 'var(--spacing-2)' }}>
+              Assign trackable units and items to different shipment groups. Each group becomes a separate shipment.
+            </p>
+
+            {splitError && (
+              <div className="alert alert-error" style={{ marginBottom: 'var(--spacing-2)' }}>
+                <span className="material-icons">error</span>
+                {splitError}
+              </div>
+            )}
+
+            {/* Shipment Groups */}
+            {splitGroups.map((group, gIdx) => (
+              <div key={gIdx} style={{
+                border: '2px solid var(--outline-variant)',
+                borderRadius: 'var(--border-radius-sm)',
+                padding: 'var(--spacing-2)',
+                marginBottom: 'var(--spacing-1)',
+                backgroundColor: 'var(--surface-container)'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-1)' }}>
+                  <h4 style={{ margin: 0 }}>
+                    <span className="material-icons" style={{ fontSize: '18px', verticalAlign: 'middle' }}>local_shipping</span>
+                    {' '}Shipment {gIdx + 1}
+                    <span className="text-sm text-muted" style={{ fontWeight: 'normal', marginLeft: '8px' }}>
+                      ({group.trackableUnitIds.length} units, {group.legacyItemIds.length} items)
+                    </span>
+                  </h4>
+                  {splitGroups.length > 2 && (
+                    <button
+                      onClick={() => removeSplitGroup(gIdx)}
+                      className="button button-sm button-outline"
+                      title="Remove group"
+                    >
+                      <span className="material-icons" style={{ fontSize: '16px' }}>delete</span>
+                    </button>
+                  )}
+                </div>
+
+                {group.trackableUnitIds.length === 0 && group.legacyItemIds.length === 0 && (
+                  <div className="text-muted text-sm" style={{ fontStyle: 'italic', padding: '8px 0' }}>
+                    No items assigned. Use dropdowns below to assign items.
+                  </div>
+                )}
+
+                {group.trackableUnitIds.map(uid => {
+                  const unit = order.trackableUnits.find(u => u.id === uid);
+                  if (!unit) return null;
+                  return (
+                    <div key={uid} style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '6px 8px',
+                      backgroundColor: 'var(--surface)',
+                      borderRadius: 'var(--border-radius-sm)',
+                      marginBottom: '4px',
+                      border: '1px solid var(--outline-variant)'
+                    }}>
+                      <span className="material-icons" style={{ fontSize: '16px', color: 'var(--color-primary)' }}>inventory_2</span>
+                      <span style={{ fontWeight: '500', flex: 1 }}>
+                        {unit.identifier}
+                        <span className="text-sm text-muted" style={{ fontWeight: 'normal', marginLeft: '8px' }}>
+                          {unit.unitType} - {unit.lineItems.length} items
+                        </span>
+                      </span>
+                    </div>
+                  );
+                })}
+
+                {group.legacyItemIds.map(lid => {
+                  const item = order.lineItems.find(i => i.id === lid);
+                  if (!item) return null;
+                  return (
+                    <div key={lid} style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '6px 8px',
+                      backgroundColor: 'var(--surface)',
+                      borderRadius: 'var(--border-radius-sm)',
+                      marginBottom: '4px',
+                      border: '1px solid var(--outline-variant)'
+                    }}>
+                      <span className="material-icons" style={{ fontSize: '16px', color: 'var(--color-primary)' }}>widgets</span>
+                      <span style={{ fontWeight: '500', flex: 1 }}>
+                        {item.sku}
+                        <span className="text-sm text-muted" style={{ fontWeight: 'normal', marginLeft: '8px' }}>
+                          qty: {item.quantity}{item.weight ? ` - ${item.weight}kg` : ''}
+                        </span>
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+
+            <button onClick={addSplitGroup} className="button button-sm button-outline" style={{ marginBottom: 'var(--spacing-2)' }}>
+              <span className="material-icons" style={{ fontSize: '16px' }}>add</span>
+              Add Shipment Group
+            </button>
+
+            {/* Assignment Controls */}
+            <div style={{
+              border: '1px solid var(--outline-variant)',
+              borderRadius: 'var(--border-radius-sm)',
+              padding: 'var(--spacing-2)',
+              marginBottom: 'var(--spacing-2)'
+            }}>
+              <h4 style={{ margin: '0 0 var(--spacing-1) 0' }}>Assign Items to Groups</h4>
+
+              {/* Trackable Units */}
+              {order.trackableUnits.map(unit => {
+                const assignedGroup = splitGroups.findIndex(g => g.trackableUnitIds.includes(unit.id));
+                return (
+                  <div key={unit.id} style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    padding: '8px',
+                    borderBottom: '1px solid var(--outline-variant)'
+                  }}>
+                    <span className="material-icons" style={{ fontSize: '18px' }}>inventory_2</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: '500' }}>{unit.identifier}</div>
+                      <div className="text-sm text-muted">
+                        {unit.customTypeName || unit.unitType} - {unit.lineItems.length} items
+                      </div>
+                    </div>
+                    <select
+                      value={assignedGroup >= 0 ? assignedGroup : ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val !== '') assignUnitToGroup(unit.id, parseInt(val));
+                      }}
+                      className="input"
+                      style={{ width: '160px', margin: 0 }}
+                    >
+                      <option value="">Unassigned</option>
+                      {splitGroups.map((_, idx) => (
+                        <option key={idx} value={idx}>Shipment {idx + 1}</option>
+                      ))}
+                    </select>
+                  </div>
+                );
+              })}
+
+              {/* Legacy Items */}
+              {order.lineItems.map(item => {
+                const assignedGroup = splitGroups.findIndex(g => g.legacyItemIds.includes(item.id));
+                return (
+                  <div key={item.id} style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    padding: '8px',
+                    borderBottom: '1px solid var(--outline-variant)'
+                  }}>
+                    <span className="material-icons" style={{ fontSize: '18px' }}>widgets</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: '500' }}>{item.sku}</div>
+                      <div className="text-sm text-muted">
+                        Qty: {item.quantity}{item.weight ? ` - ${item.weight}kg` : ''}
+                      </div>
+                    </div>
+                    <select
+                      value={assignedGroup >= 0 ? assignedGroup : ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val !== '') assignLegacyItemToGroup(item.id, parseInt(val));
+                      }}
+                      className="input"
+                      style={{ width: '160px', margin: 0 }}
+                    >
+                      <option value="">Unassigned</option>
+                      {splitGroups.map((_, idx) => (
+                        <option key={idx} value={idx}>Shipment {idx + 1}</option>
+                      ))}
+                    </select>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Actions */}
+            <div style={{ display: 'flex', gap: 'var(--spacing-1)', justifyContent: 'flex-end', borderTop: '1px solid var(--outline-variant)', paddingTop: 'var(--spacing-2)' }}>
+              <button onClick={() => setShowSplitModal(false)} className="button button-outline">
+                Cancel
+              </button>
+              <button
+                onClick={handleSplitOrder}
+                className="button button-primary"
+                disabled={splitLoading}
+              >
+                {splitLoading ? (
+                  <>
+                    <div className="loading-spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }}></div>
+                    Splitting...
+                  </>
+                ) : (
+                  <>
+                    <span className="material-icons" style={{ fontSize: '18px' }}>call_split</span>
+                    Split into {splitGroups.length} Shipments
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

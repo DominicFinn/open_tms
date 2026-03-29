@@ -58,7 +58,7 @@
 - **Order to Shipment Workflow** ✅
   - ✅ Queue of pending orders waiting for conversion
   - ✅ Auto-match orders to lanes/carriers
-  - 🔲 Combine or split orders into shipments
+  - ✅ Combine or split orders into shipments
 - **Custom Fields**
   - Allow configurable fields for customers, shipments, and items.  
 

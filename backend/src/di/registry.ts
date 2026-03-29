@@ -19,6 +19,7 @@ import { CSVImportService } from '../services/CSVImportService.js';
 import { OrderDeliveryService } from '../services/OrderDeliveryService.js';
 import { EDI850ParseService } from '../services/EDI850ParseService.js';
 import { EdiImportService } from '../services/EdiImportService.js';
+import { OrderConversionService } from '../services/OrderConversionService.js';
 import { DatabaseFileStorage } from '../storage/DatabaseFileStorage.js';
 import { PgBossQueueAdapter } from '../queue/PgBossQueueAdapter.js';
 
@@ -78,6 +79,10 @@ export function registerDependencies(prisma: PrismaClient): void {
 
   container.singleton(TOKENS.IOrderDeliveryService).toFactory(() => {
     return new OrderDeliveryService(container.resolve(TOKENS.PrismaClient));
+  });
+
+  container.singleton(TOKENS.IOrderConversionService).toFactory(() => {
+    return new OrderConversionService(container.resolve(TOKENS.PrismaClient));
   });
 
   // File storage provider (default: database)
