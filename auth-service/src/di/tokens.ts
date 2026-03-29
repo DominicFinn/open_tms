@@ -1,0 +1,9 @@
+export const TOKENS = {
+  PrismaClient: Symbol.for('PrismaClient'),
+  IUserRepository: Symbol.for('IUserRepository'),
+  IRoleRepository: Symbol.for('IRoleRepository'),
+  ISessionRepository: Symbol.for('ISessionRepository'),
+  IAuthService: Symbol.for('IAuthService'),
+  IPasswordService: Symbol.for('IPasswordService'),
+  ITokenService: Symbol.for('ITokenService'),
+} as const;

@@ -20,6 +20,7 @@ model Customer {
   orders       Order[]
   apiKeys      ApiKey[]
   ediPartners  EdiPartner[]
+  users        User[]
 }
 
 model Location {
@@ -405,6 +406,8 @@ model Organization {
   // Metadata
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
+
+  users               User[]
 }
 
 model TrackableUnit {
@@ -448,9 +451,10 @@ model AuditLog {
   description String   // Human-readable description
   changes     Json?    // JSON object with before/after values
 
-  // User tracking (placeholder for future authentication)
+  // User tracking
+  user        User?    @relation("AuditUser", fields: [userId], references: [id])
   userId      String?  // User who performed the action
-  userName    String?  // Name of the user
+  userName    String?  // Name of the user (denormalized for display)
 
   // Metadata
   ipAddress   String?
@@ -674,6 +678,91 @@ model EdiPartner {
   @@index([customerId])
   @@index([active])
 }
+
+// ─── Auth Models ─────────────────────────────────────────────────────────────
+
+model User {
+  id             String   @id @default(uuid())
+  email          String   @unique
+  passwordHash   String
+  firstName      String
+  lastName       String
+  active         Boolean  @default(true)
+
+  // Organization
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  organizationId String?
+
+  // Optional link to customer (for customer-portal users)
+  customer       Customer? @relation(fields: [customerId], references: [id])
+  customerId     String?
+
+  // Profile
+  avatarUrl      String?
+  phone          String?
+  timezone       String   @default("UTC")
+
+  // Auth metadata
+  lastLoginAt    DateTime?
+  passwordChangedAt DateTime?
+  failedLoginAttempts Int  @default(0)
+  lockedUntil    DateTime?
+
+  // Timestamps
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relationships
+  roles          UserRole[]
+  sessions       Session[]
+  auditLogs      AuditLog[] @relation("AuditUser")
+
+  @@index([email])
+  @@index([organizationId])
+  @@index([customerId])
+  @@index([active])
+}
+
+model Role {
+  id          String   @id @default(uuid())
+  name        String   @unique // admin, dispatcher, warehouse, readonly, customer
+  description String?
+  permissions Json     // Array of permission strings e.g. ["shipments:read", "shipments:write", "orders:*"]
+  isSystem    Boolean  @default(false) // System roles can't be deleted
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users       UserRole[]
+}
+
+model UserRole {
+  id        String   @id @default(uuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  roleId    String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, roleId])
+  @@index([userId])
+  @@index([roleId])
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId       String
+  tokenHash    String   @unique // SHA-256 hash of the refresh token
+  userAgent    String?
+  ipAddress    String?
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// ─── EDI Models ──────────────────────────────────────────────────────────────
 
 model EdiFile {
   id              String   @id @default(uuid())
