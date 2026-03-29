@@ -1,0 +1,32 @@
+{
+  "name": "@open-tms/auth-service",
+  "version": "0.1.0",
+  "description": "Authentication and authorization service for Open TMS — manages users, roles, sessions, and JWT tokens",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "prisma:generate": "prisma generate --schema=../backend/prisma/schema.prisma"
+  },
+  "dependencies": {
+    "@fastify/cors": "^8.4.2",
+    "@fastify/swagger": "^8.14.0",
+    "@fastify/swagger-ui": "^1.0.0",
+    "@prisma/client": "^5.18.0",
+    "fastify": "^4.28.1",
+    "fastify-plugin": "^4.5.1",
+    "bcrypt": "^5.1.1",
+    "jsonwebtoken": "^9.0.2",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^5.0.2",
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/node": "^20.0.0",
+    "prisma": "^5.22.0",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.2"
+  }
+}
