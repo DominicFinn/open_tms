@@ -71,6 +71,16 @@
   - Begin audit trail for shipment events.  
 
 ## **Phase 4: Live Tracking & Exception Management**
+- **Queue-Based Integration System** ✅
+  - ✅ pg-boss queue engine (PostgreSQL-backed, zero infrastructure)
+  - ✅ Platform-agnostic IQueueAdapter interface for cloud alternatives (SQS, Pub/Sub, Service Bus)
+  - ✅ Outbound carrier worker — EDI 856 and JSON adapters, carrier match patterns
+  - ✅ Outbound tracking worker — register shipments with tracking platforms
+  - ✅ Inbound webhook worker — async processing with 202 Accepted
+  - ✅ Automatic retry with exponential backoff (3 attempts)
+  - ✅ Integration type support: carrier vs tracking
+  - ✅ Payload format support: EDI 856 vs JSON
+  - ✅ Shared authentication helpers (basic, bearer, api_key)
 - **Driver Mobile App** 🔲
   - Mobile app for drivers to update order/shipment status in the field
   - Delivery confirmation with signature capture
@@ -86,7 +96,7 @@
   - Store timestamps, current location.
 - **Exceptions**
   - Alerts for delays, route deviations, failed deliveries.
-  - Dashboard for exception triage.  
+  - Dashboard for exception triage.
 
 ## **Phase 5: IoT Integration (System Loco)**
 - **Device–Shipment Linking**

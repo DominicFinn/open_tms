@@ -31,7 +31,8 @@ I'm outlining a roadmap. It's high level. It can be ticketed up as it goes along
 - **EDI Integration** - X12 850 Purchase Order import, partner configuration, SFTP auto-collection
 - **Customer API** - External REST API for customers to create and track orders programmatically
 - **Webhooks** - Receive GPS/location updates from IoT devices with automatic shipment matching
-- **Outbound Integrations** - EDI 856 ASN generation and delivery to external systems
+- **Outbound Integrations** - EDI 856 ASN and JSON payload delivery to carrier and tracking systems
+- **Queue Processing** - pg-boss powered async processing with carrier/tracking workers and retry
 - **Interactive Maps** - OpenStreetMap integration for shipment visualization
 
 ### 🎨 Modern UI/UX
@@ -59,13 +60,21 @@ I'm outlining a roadmap. It's high level. It can be ticketed up as it goes along
 │   React + Vite  │◄──►│   Fastify API   │◄──►│   PostgreSQL    │
 │   TypeScript    │    │   TypeScript    │    │   Prisma ORM    │
 └─────────────────┘    └────────┬────────┘    └─────────────────┘
-                                ▲
-                                │ HTTP
-                       ┌────────┴────────┐
-                       │  EDI Collector   │
-                       │  SFTP Polling    │
-                       │  Node.js         │
-                       └─────────────────┘
+                                │
+                    ┌───────────┼───────────┐
+                    │           │           │
+               ┌────▼────┐ ┌───▼───┐ ┌─────▼─────┐
+               │ pg-boss │ │ HTTP  │ │   EDI     │
+               │ Queue   │ │       │ │ Collector │
+               │ Workers │ │       │ │ SFTP      │
+               └────┬────┘ └───┬───┘ └───────────┘
+                    │          │
+              ┌─────▼────┐ ┌──▼──────────┐
+              │ Carrier  │ │ Tracking    │
+              │ APIs     │ │ Platforms   │
+              │ (DHL,    │ │ (Project44, │
+              │  FedEx)  │ │  SysLoco)   │
+              └──────────┘ └─────────────┘
 ```
 
 ### Backend Architecture
@@ -322,6 +331,7 @@ Customer-facing API for programmatic order creation and tracking. Requires a cus
 - **[Customer API Guide](./docs/CUSTOMER_API_GUIDE.md)** - External API for programmatic order creation
 - **[CSV Import Guide](./docs/CSV_IMPORT_GUIDE.md)** - Bulk order import from CSV files
 - **[EDI Import Guide](./docs/EDI_IMPORT_GUIDE.md)** - X12 850 import, partner config, SFTP collection
+- **[Queue Integration Guide](./docs/QUEUE_INTEGRATION_GUIDE.md)** - Queue architecture, carrier/tracking adapters, cloud-native alternatives
 - **[EDI Collector Service](./edi-collector/README.md)** - Automated SFTP polling for EDI files
 
 ### Interactive API Documentation
