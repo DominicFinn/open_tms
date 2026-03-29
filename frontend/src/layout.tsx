@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import AppSwitcher from './components/AppSwitcher';
+import AppBar from './components/AppBar';
 import './theme.css';
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -70,30 +70,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         />
       )}
 
-      <header className="app-bar">
-        <div className="app-bar-left">
-          <button
-            className="icon-btn mobile-menu-btn"
-            onClick={toggleMobileMenu}
-            aria-label="Toggle menu"
-          >
-            <span className="material-icons">menu</span>
-          </button>
-          <div className="app-bar-title">
-            <span className="material-icons">local_shipping</span>
-            Open TMS
-          </div>
-        </div>
-        <div className="app-bar-actions">
-          <button className="icon-btn">
-            <span className="material-icons">notifications</span>
-          </button>
-          <button className="icon-btn">
-            <span className="material-icons">account_circle</span>
-          </button>
-          <AppSwitcher />
-        </div>
-      </header>
+      <AppBar title="Open TMS" icon="local_shipping" onToggleMobileMenu={toggleMobileMenu} />
       <main className="main">{children}</main>
     </>
   );

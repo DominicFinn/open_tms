@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import AppSwitcher from './components/AppSwitcher';
+import AppBar from './components/AppBar';
 import './theme.css';
 
 export function IntegrationsLayout() {
@@ -65,30 +65,7 @@ export function IntegrationsLayout() {
         <div className="mobile-overlay" onClick={closeMobileMenu} />
       )}
 
-      <header className="app-bar">
-        <div className="app-bar-left">
-          <button
-            className="icon-btn mobile-menu-btn"
-            onClick={toggleMobileMenu}
-            aria-label="Toggle menu"
-          >
-            <span className="material-icons">menu</span>
-          </button>
-          <div className="app-bar-title">
-            <span className="material-icons">hub</span>
-            Integrations
-          </div>
-        </div>
-        <div className="app-bar-actions">
-          <button className="icon-btn">
-            <span className="material-icons">notifications</span>
-          </button>
-          <button className="icon-btn">
-            <span className="material-icons">account_circle</span>
-          </button>
-          <AppSwitcher />
-        </div>
-      </header>
+      <AppBar title="Integrations" icon="hub" onToggleMobileMenu={toggleMobileMenu} />
       <main className="main">
         <Outlet />
       </main>
