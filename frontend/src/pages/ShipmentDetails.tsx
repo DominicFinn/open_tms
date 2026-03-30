@@ -127,6 +127,7 @@ export default function ShipmentDetails() {
   const [shipment, setShipment] = React.useState<Shipment | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
+  const [generating, setGenerating] = React.useState<string | null>(null);
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
 
@@ -150,6 +151,29 @@ export default function ShipmentDetails() {
   useEffect(() => {
     loadShipment();
   }, [id]);
+
+  const handleGenerateDoc = async (type: 'bol' | 'customs') => {
+    if (!id) return;
+    setGenerating(type);
+    try {
+      const response = await fetch(`${API_URL}/api/v1/documents/generate/${type}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shipmentId: id }),
+      });
+      const result = await response.json();
+      if (result.error) {
+        alert(`Error: ${result.error}`);
+        return;
+      }
+      // Download the generated document
+      window.open(`${API_URL}/api/v1/documents/${result.data.id}/download`, '_blank');
+    } catch {
+      alert(`Failed to generate ${type === 'bol' ? 'Bill of Lading' : 'Customs Form'}`);
+    } finally {
+      setGenerating(null);
+    }
+  };
 
   const handleUpdateStop = async (stopId: string, status: string) => {
     try {
@@ -407,10 +431,22 @@ export default function ShipmentDetails() {
       <div className="card" style={{ marginBottom: 'var(--spacing-3)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-2)' }}>
           <h2>Shipment Details: {shipment.reference}</h2>
-          <Link to="/shipments" className="button outlined">
-            <span className="material-icons" style={{ fontSize: '18px' }}>arrow_back</span>
-            Back to Shipments
-          </Link>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <button onClick={() => handleGenerateDoc('bol')} disabled={generating !== null}
+              className="button outlined" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <span className="material-icons" style={{ fontSize: '18px' }}>description</span>
+              {generating === 'bol' ? 'Generating...' : 'Generate BOL'}
+            </button>
+            <button onClick={() => handleGenerateDoc('customs')} disabled={generating !== null}
+              className="button outlined" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <span className="material-icons" style={{ fontSize: '18px' }}>public</span>
+              {generating === 'customs' ? 'Generating...' : 'Customs Form'}
+            </button>
+            <Link to="/shipments" className="button outlined">
+              <span className="material-icons" style={{ fontSize: '18px' }}>arrow_back</span>
+              Back to Shipments
+            </Link>
+          </div>
         </div>
         
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '24px' }}>

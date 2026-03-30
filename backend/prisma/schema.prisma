@@ -403,6 +403,9 @@ model Organization {
   weightUnit          String   @default("kg") // "kg" or "lb"
   dimUnit             String   @default("cm") // "cm" or "in"
 
+  // BOL sequence counter for auto-numbering
+  bolSequenceNumber   Int      @default(0)
+
   // Metadata
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
@@ -827,5 +830,73 @@ model EdiFile {
   @@index([partnerId])
   @@index([status])
   @@index([fileHash])
+  @@index([createdAt])
+}
+
+// ─── Document Models ────────────────────────────────────────────────────────
+
+model DocumentTemplate {
+  id              String   @id @default(uuid())
+  name            String                        // "Standard BOL", "International Customs"
+  documentType    String                        // "bol", "label", "customs", "daily_report"
+  description     String?
+
+  // Template content — HTML with Handlebars placeholders
+  htmlTemplate    String
+
+  // Configuration — JSON blob for type-specific settings
+  config          Json?                         // e.g. { "pageSize": "letter", "orientation": "portrait" }
+
+  // Metadata
+  isDefault       Boolean  @default(false)      // One default per documentType
+  active          Boolean  @default(true)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  documents       GeneratedDocument[]
+
+  @@index([documentType])
+  @@index([active])
+}
+
+model GeneratedDocument {
+  id              String   @id @default(uuid())
+
+  // What kind of document
+  documentType    String                        // "bol", "label", "customs", "daily_report", "attachment"
+  documentNumber  String?                       // Auto-generated BOL number, etc.
+  fileName        String                        // "BOL-20260329-0001.pdf"
+  mimeType        String   @default("application/pdf")
+  fileSize        Int?                          // bytes
+
+  // Storage — binary content
+  fileContent     Bytes
+
+  // Template used (null for attachments/uploads)
+  template        DocumentTemplate? @relation(fields: [templateId], references: [id])
+  templateId      String?
+
+  // Entity associations (polymorphic — at least one should be set)
+  shipmentId      String?
+  orderId         String?
+  carrierId       String?
+  customerId      String?
+
+  // Who generated/uploaded it
+  generatedBy     String?                       // userId
+
+  // Metadata
+  metadata        Json?                         // Snapshot of data used to generate
+  notes           String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([shipmentId])
+  @@index([orderId])
+  @@index([carrierId])
+  @@index([customerId])
+  @@index([documentType])
   @@index([createdAt])
 }

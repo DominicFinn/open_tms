@@ -70,28 +70,31 @@
   - ✅ Shared authentication helpers (basic, bearer, api_key)
 
 ## **Phase 3: Platform Foundations, Documentation & Compliance**
-- **User Management & Authentication** 🔲
-  - User accounts with login, password management
-  - SSO/OAuth support (Google, Microsoft)
-  - Roles & permissions (admin, dispatcher, warehouse, read-only)
-  - Session management (JWT-based)
-  - Multi-tenancy support (extend existing Organization model)
-  - User attribution on audit trail events
-- **Document Templates** 🔲
-  - Auto-generate Bills of Lading, labels, customs forms.
-  - PDF generation with prefilled shipment details.
-  - Document template management UI (create/edit templates)
-- **Document Management** 🔲
-  - Store and archive generated docs.
-  - Document upload/attachment on any entity (shipments, orders, carriers)
-  - Electronic signature capture for delivery confirmation
-  - Begin audit trail for shipment events.
+- **User Management & Authentication** ✅
+  - ✅ User accounts with login, password management
+  - ✅ SSO/OAuth support (Google, Microsoft)
+  - ✅ Roles & permissions (admin, dispatcher, warehouse, read-only)
+  - ✅ Session management (JWT-based)
+  - Multi-tenancy support (extend existing Organization model) 🔲
+  - User attribution on audit trail events 🔲
+- **Document Templates** ✅
+  - ✅ Auto-generate Bills of Lading, shipping labels, customs forms
+  - ✅ PDF generation with prefilled shipment details (pdf-lib)
+  - ✅ Document template management UI (create/edit Handlebars templates)
+  - ✅ Daily operations report (Excel export with 5 sheets: summary, shipments, orders, stop schedule, exceptions)
+- **Document Management** (partial)
+  - ✅ Store and archive generated docs (GeneratedDocument model)
+  - ✅ Document download and listing with filters
+  - Document upload/attachment on any entity (shipments, orders, carriers) 🔲
+  - Electronic signature capture for delivery confirmation 🔲
+  - Begin audit trail for shipment events 🔲
 - **Theming & White-labeling** 🔲
   - Extract core CSS custom properties into database-stored theme config
   - Theme Settings UI page (color palette, typography, spacing overrides)
   - Logo upload and organization branding (leveraging existing IFileStorageProvider)
   - Email header/footer branding configuration
   - Runtime theme application via CSS variable injection
+  - Document templates should inherit branding (logo, colors) once theming is implemented
 - **Custom Fields** 🔲
   - Allow configurable fields for customers, shipments, and items.
 
@@ -232,7 +235,7 @@
 ---
 
 🔥 **Priorities:**
-- **Immediate:** Begin **Phase 3** — start with User Management & Auth, then Documentation & Theming.
+- **Immediate:** Continue **Phase 3** — User Management & Auth complete; proceed with Document Templates, Document Management, Theming & Custom Fields.
 - **Short term:** Deliver **Phase 4** (notifications, triage centre, live tracking) for operational visibility.
 - **Medium term:** Deliver **Phase 5–6** (IoT + cold chain compliance) → unique differentiator.
 - **Long term:** **Phase 7–9** (financials, portals, N8N integration, AI agents) to scale and differentiate.

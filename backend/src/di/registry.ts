@@ -20,6 +20,10 @@ import { OrderDeliveryService } from '../services/OrderDeliveryService.js';
 import { EDI850ParseService } from '../services/EDI850ParseService.js';
 import { EdiImportService } from '../services/EdiImportService.js';
 import { OrderConversionService } from '../services/OrderConversionService.js';
+import { DocumentTemplateRepository } from '../repositories/DocumentTemplateRepository.js';
+import { GeneratedDocumentRepository } from '../repositories/GeneratedDocumentRepository.js';
+import { DocumentGenerationService } from '../services/DocumentGenerationService.js';
+import { DailyReportService } from '../services/DailyReportService.js';
 import { DatabaseFileStorage } from '../storage/DatabaseFileStorage.js';
 import { PgBossQueueAdapter } from '../queue/PgBossQueueAdapter.js';
 
@@ -83,6 +87,28 @@ export function registerDependencies(prisma: PrismaClient): void {
 
   container.singleton(TOKENS.IOrderConversionService).toFactory(() => {
     return new OrderConversionService(container.resolve(TOKENS.PrismaClient));
+  });
+
+  // Document repositories
+  container.singleton(TOKENS.IDocumentTemplateRepository).toFactory(() => {
+    return new DocumentTemplateRepository(container.resolve(TOKENS.PrismaClient));
+  });
+
+  container.singleton(TOKENS.IGeneratedDocumentRepository).toFactory(() => {
+    return new GeneratedDocumentRepository(container.resolve(TOKENS.PrismaClient));
+  });
+
+  // Document services
+  container.singleton(TOKENS.IDocumentGenerationService).toFactory(() => {
+    return new DocumentGenerationService(
+      container.resolve(TOKENS.PrismaClient),
+      container.resolve(TOKENS.IDocumentTemplateRepository),
+      container.resolve(TOKENS.IGeneratedDocumentRepository),
+    );
+  });
+
+  container.singleton(TOKENS.IDailyReportService).toFactory(() => {
+    return new DailyReportService(container.resolve(TOKENS.PrismaClient));
   });
 
   // File storage provider (default: database)

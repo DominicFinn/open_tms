@@ -137,6 +137,7 @@ export default function OrderDetails() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [generatingLabels, setGeneratingLabels] = useState(false);
 
   // Split modal state
   const [showSplitModal, setShowSplitModal] = useState(false);
@@ -228,6 +229,28 @@ export default function OrderDetails() {
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleGenerateLabels = async () => {
+    if (!order) return;
+    setGeneratingLabels(true);
+    try {
+      const response = await fetch(`${API_URL}/api/v1/documents/generate/labels`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId: order.id }),
+      });
+      const result = await response.json();
+      if (result.error) {
+        alert(`Error: ${result.error}`);
+        return;
+      }
+      window.open(`${API_URL}/api/v1/documents/${result.data.id}/download`, '_blank');
+    } catch {
+      alert('Failed to generate labels');
+    } finally {
+      setGeneratingLabels(false);
+    }
   };
 
   const handleExportCSV = () => {
@@ -555,6 +578,14 @@ export default function OrderDetails() {
           </div>
           <div style={{ display: 'flex', gap: 'var(--spacing-1)', alignItems: 'center', flexWrap: 'wrap' }}>
             {getStatusChip(order.status)}
+            <button
+              onClick={handleGenerateLabels}
+              disabled={generatingLabels}
+              className="button button-sm button-outline no-print"
+            >
+              <span className="material-icons" style={{ fontSize: '16px' }}>label</span>
+              {generatingLabels ? 'Generating...' : 'Labels'}
+            </button>
             <button
               onClick={handleExportCSV}
               className="button button-sm button-outline no-print"
