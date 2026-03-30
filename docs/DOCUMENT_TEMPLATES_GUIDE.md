@@ -1,6 +1,6 @@
-# Document Templates & Reports Guide
+# Document Templates, Reports & File Storage Guide
 
-This guide covers the Open TMS document generation system: Bills of Lading, shipping labels, customs forms, daily operations reports, and template management.
+This guide covers the Open TMS document generation system, file storage, and attachments: Bills of Lading, shipping labels, customs forms, daily operations reports, template management, S3-compatible file storage, and file attachments on any entity.
 
 ## Overview
 
@@ -11,24 +11,36 @@ The document system provides:
 - **Daily operations report** as Excel workbook with 5 sheets
 - **Template management** UI for customizing document layouts
 - **Document storage** with download and listing
+- **S3-compatible file storage** (AWS S3, MinIO, Azure Blob S3 compat) with database fallback
+- **File attachments** on any entity (shipments, orders, carriers, customers, locations)
 
 Base URL: `http://localhost:3001` (main backend)
+
+Interactive API docs: `http://localhost:3001/docs` (Swagger UI)
 
 ## Table of Contents
 
 - [Quick Start](#quick-start)
+- [File Storage Setup](#file-storage-setup)
+  - [MinIO (Local Development)](#minio-local-development)
+  - [AWS S3](#aws-s3)
+  - [Azure Blob Storage](#azure-blob-storage)
+  - [Database Fallback](#database-fallback)
 - [Document Types](#document-types)
   - [Bill of Lading](#bill-of-lading)
   - [Shipping Labels](#shipping-labels)
   - [Customs Form](#customs-form)
   - [Daily Operations Report](#daily-operations-report)
+- [File Attachments](#file-attachments)
 - [API Reference](#api-reference)
   - [Document Generation](#document-generation)
   - [Generated Documents](#generated-documents)
   - [Document Templates](#document-templates)
   - [Daily Report](#daily-report)
+  - [Attachments](#attachments-api)
 - [Template Customization](#template-customization)
 - [Frontend Pages](#frontend-pages)
+- [Architecture](#architecture)
 
 ---
 
@@ -56,6 +68,85 @@ curl http://localhost:3001/api/v1/documents/<document-uuid>/download -o BOL.pdf
 
 ```bash
 curl "http://localhost:3001/api/v1/reports/daily?date=2026-03-30&format=xlsx" -o report.xlsx
+```
+
+---
+
+## File Storage Setup
+
+Open TMS uses an S3-compatible file storage provider for all binary content (generated PDFs, uploaded attachments). When S3 is not configured, it falls back to storing content in the PostgreSQL database.
+
+### MinIO (Local Development)
+
+MinIO is included in `docker-compose.yml` and is the recommended local development setup.
+
+**1. Start MinIO:**
+
+```bash
+docker-compose up -d minio
+```
+
+MinIO console is available at `http://localhost:9001` (login: `minioadmin` / `minioadmin`).
+
+**2. Create the bucket:**
+
+Via MinIO console (http://localhost:9001) or the mc CLI:
+
+```bash
+# Install mc (MinIO client) if not already installed
+# brew install minio/stable/mc  (macOS)
+# or download from https://min.io/docs/minio/linux/reference/minio-mc.html
+
+mc alias set local http://localhost:9000 minioadmin minioadmin
+mc mb local/open-tms
+```
+
+**3. Set environment variables** (already set in docker-compose for the backend service):
+
+```env
+S3_ENDPOINT=http://localhost:9000
+S3_BUCKET=open-tms
+S3_ACCESS_KEY_ID=minioadmin
+S3_SECRET_ACCESS_KEY=minioadmin
+S3_REGION=us-east-1
+S3_FORCE_PATH_STYLE=true
+```
+
+### AWS S3
+
+```env
+S3_ENDPOINT=https://s3.us-east-1.amazonaws.com
+S3_BUCKET=your-bucket-name
+S3_ACCESS_KEY_ID=your-access-key
+S3_SECRET_ACCESS_KEY=your-secret-key
+S3_REGION=us-east-1
+S3_FORCE_PATH_STYLE=false
+```
+
+### Azure Blob Storage
+
+Azure Blob supports an S3 compatibility layer:
+
+```env
+S3_ENDPOINT=https://your-account.blob.core.windows.net
+S3_BUCKET=your-container
+S3_ACCESS_KEY_ID=your-storage-account
+S3_SECRET_ACCESS_KEY=your-storage-key
+S3_REGION=us-east-1
+S3_FORCE_PATH_STYLE=true
+```
+
+### Database Fallback
+
+If no `S3_ENDPOINT` and `S3_BUCKET` environment variables are set, the system automatically falls back to storing binary content in the `BinaryStore` PostgreSQL table. This requires no extra infrastructure and works out of the box, but is not recommended for production with large file volumes.
+
+### Storage Key Convention
+
+Files are stored with structured keys:
+
+```
+attachments/{entityType}/{entityId}/{uuid}-{filename}
+documents/{documentType}/{entityId}/{filename}
 ```
 
 ---
@@ -141,7 +232,28 @@ An Excel workbook for ops managers to print at the start of each day. Contains 5
 
 ---
 
+## File Attachments
+
+File attachments can be added to any entity in the system: shipments, orders, carriers, customers, and locations. Files are stored via the configured storage provider (S3 or database).
+
+**Supported use cases:**
+- Attach packing lists, rate confirmations, or POD photos to shipments
+- Attach purchase orders or customs paperwork to orders
+- Attach insurance certificates or contracts to carriers
+- Attach agreements or compliance docs to customers
+- Attach photos or permits to locations
+
+**Upload limits:**
+- Maximum file size: 50 MB
+- Any file type accepted (stored with original MIME type)
+
+**Frontend:** The `AttachmentPanel` component is available on Shipment Details and Order Details pages. It supports drag-and-drop upload, download, and delete.
+
+---
+
 ## API Reference
+
+All endpoints return the standard `{ data, error }` envelope. Full interactive API docs are available at `/docs` (Swagger UI).
 
 ### Document Generation
 
@@ -253,6 +365,80 @@ PUT /api/v1/document-templates/:id
 DELETE /api/v1/document-templates/:id
 ```
 
+### Attachments API
+
+#### List Attachments
+
+```
+GET /api/v1/attachments?entityType=shipment&entityId=<uuid>
+```
+
+Both `entityType` and `entityId` are required. Valid entity types: `shipment`, `order`, `carrier`, `customer`, `location`.
+
+**Response:**
+
+```json
+{
+  "data": [
+    {
+      "id": "...",
+      "entityType": "shipment",
+      "entityId": "...",
+      "fileName": "packing-list.pdf",
+      "mimeType": "application/pdf",
+      "fileSize": 45230,
+      "storageBackend": "s3",
+      "description": null,
+      "createdAt": "2026-03-30T10:00:00.000Z"
+    }
+  ],
+  "error": null
+}
+```
+
+#### Upload Attachment
+
+```
+POST /api/v1/attachments
+Content-Type: multipart/form-data
+```
+
+Form fields:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `file` | file | Yes | The file to upload (max 50 MB) |
+| `entityType` | string | Yes | `shipment`, `order`, `carrier`, `customer`, or `location` |
+| `entityId` | string (UUID) | Yes | ID of the entity to attach to |
+| `description` | string | No | Optional description |
+
+**curl example:**
+
+```bash
+curl -X POST http://localhost:3001/api/v1/attachments \
+  -F "file=@packing-list.pdf" \
+  -F "entityType=shipment" \
+  -F "entityId=<shipment-uuid>"
+```
+
+**Response:** `201` with the created attachment record.
+
+#### Download Attachment
+
+```
+GET /api/v1/attachments/:id/download
+```
+
+Returns the binary file with appropriate `Content-Type` and `Content-Disposition` headers.
+
+#### Delete Attachment
+
+```
+DELETE /api/v1/attachments/:id
+```
+
+Removes both the database record and the stored file from S3/storage.
+
 ### Daily Report
 
 #### Get Report Summary
@@ -328,3 +514,74 @@ The built-in templates are used as fallback when no custom default template exis
 | **Order Details** | `/orders/:id` | "Labels" button added for generating shipping labels |
 
 All pages are accessible from the sidebar navigation.
+
+---
+
+## Architecture
+
+### Storage Provider System
+
+The file storage system uses a **provider pattern** with two layers:
+
+| Interface | Purpose | Implementations |
+|-----------|---------|----------------|
+| `IFileStorageProvider` | String content (EDI files) | `DatabaseFileStorage` |
+| `IBinaryStorageProvider` | Binary content (PDFs, uploads) | `S3FileStorage`, `DatabaseBinaryStorage` |
+
+The `IBinaryStorageProvider` is selected at startup based on environment variables:
+- If `S3_ENDPOINT` and `S3_BUCKET` are set → `S3FileStorage`
+- Otherwise → `DatabaseBinaryStorage` (stores in `BinaryStore` PostgreSQL table)
+
+### Key Files
+
+```
+backend/src/
+  storage/
+    IBinaryStorageProvider.ts    # Binary storage interface
+    S3FileStorage.ts             # S3-compatible implementation (@aws-sdk/client-s3)
+    DatabaseBinaryStorage.ts     # PostgreSQL fallback
+    IFileStorageProvider.ts      # String storage interface (EDI)
+    DatabaseFileStorage.ts       # EDI file storage
+  repositories/
+    AttachmentRepository.ts      # Attachment CRUD
+    GeneratedDocumentRepository.ts # Document metadata + content
+  routes/
+    attachments.ts               # File upload/download/list/delete endpoints
+    documents.ts                 # Template CRUD + document generation + download
+    dailyReport.ts               # Daily report summary + Excel download
+  services/
+    DocumentGenerationService.ts # PDF generation (pdf-lib + Handlebars)
+    DailyReportService.ts        # Excel report generation (exceljs)
+  di/
+    tokens.ts                    # DI tokens (IBinaryStorageProvider, IAttachmentRepository)
+    registry.ts                  # Env-based storage provider selection
+```
+
+### Data Flow
+
+**Document Generation:**
+1. API request (e.g., `POST /documents/generate/bol`) triggers `DocumentGenerationService`
+2. Service loads shipment data, renders Handlebars template, generates PDF via `pdf-lib`
+3. PDF stored via `IBinaryStorageProvider` (S3 key: `documents/bol/{shipmentId}/{filename}`)
+4. Metadata stored in `GeneratedDocument` table with `storageKey` and `storageBackend`
+
+**File Upload:**
+1. Multipart upload to `POST /attachments` with `entityType`, `entityId`, and file
+2. File stored via `IBinaryStorageProvider` (S3 key: `attachments/{entityType}/{entityId}/{uuid}-{filename}`)
+3. Metadata stored in `Attachment` table
+
+**File Download:**
+1. Request to `GET /attachments/:id/download` or `GET /documents/:id/download`
+2. System looks up the `storageKey` and `storageBackend`
+3. Retrieves binary content from S3 or database
+4. Returns file with proper `Content-Type` and `Content-Disposition` headers
+
+### E-Signatures (Deferred)
+
+Electronic signature capture has been deliberately deferred. Simple canvas-based signatures are not legally binding. When implemented, this will use an adapter pattern with pluggable providers:
+
+- **DocuSign** — industry standard for legally binding e-signatures
+- **Adobe Sign** — alternative provider
+- **Wet signature** workflows — print, sign, scan/photo upload
+
+The `ShipmentStop` model already has `signatureUrl`, `photoUrls`, and `proofOfDelivery` fields ready for this integration.

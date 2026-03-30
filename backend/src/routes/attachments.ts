@@ -8,13 +8,62 @@ import { IBinaryStorageProvider } from '../storage/IBinaryStorageProvider.js';
 const VALID_ENTITY_TYPES = ['shipment', 'order', 'carrier', 'customer', 'location'];
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
 
+const attachmentObject = {
+  type: 'object',
+  properties: {
+    id: { type: 'string', format: 'uuid' },
+    entityType: { type: 'string', enum: VALID_ENTITY_TYPES },
+    entityId: { type: 'string', format: 'uuid' },
+    fileName: { type: 'string' },
+    mimeType: { type: 'string' },
+    fileSize: { type: 'integer' },
+    storageBackend: { type: 'string', enum: ['s3', 'database'] },
+    uploadedBy: { type: 'string', nullable: true },
+    description: { type: 'string', nullable: true },
+    createdAt: { type: 'string', format: 'date-time' },
+    updatedAt: { type: 'string', format: 'date-time' },
+  },
+} as const;
+
+const errorResponse = {
+  type: 'object',
+  properties: {
+    data: { type: 'object', nullable: true },
+    error: { type: 'string' },
+  },
+} as const;
+
 export async function attachmentRoutes(server: FastifyInstance) {
   const attachmentRepo = container.resolve<IAttachmentRepository>(TOKENS.IAttachmentRepository);
   const storageProvider = container.resolve<IBinaryStorageProvider>(TOKENS.IBinaryStorageProvider);
   const storageBackend = process.env.S3_ENDPOINT && process.env.S3_BUCKET ? 's3' : 'database';
 
   // GET /api/v1/attachments?entityType=X&entityId=Y
-  server.get('/api/v1/attachments', async (req, reply) => {
+  server.get('/api/v1/attachments', {
+    schema: {
+      description: 'List file attachments for a specific entity. Both entityType and entityId are required.',
+      tags: ['Attachments'],
+      querystring: {
+        type: 'object',
+        required: ['entityType', 'entityId'],
+        properties: {
+          entityType: { type: 'string', enum: VALID_ENTITY_TYPES, description: 'Entity type to list attachments for' },
+          entityId: { type: 'string', format: 'uuid', description: 'Entity ID to list attachments for' },
+        },
+      },
+      response: {
+        200: {
+          description: 'List of attachments',
+          type: 'object',
+          properties: {
+            data: { type: 'array', items: attachmentObject },
+            error: { type: 'object', nullable: true },
+          },
+        },
+        400: errorResponse,
+      },
+    },
+  }, async (req, reply) => {
     const { entityType, entityId } = req.query as { entityType?: string; entityId?: string };
 
     if (!entityType || !entityId) {
@@ -32,7 +81,24 @@ export async function attachmentRoutes(server: FastifyInstance) {
   });
 
   // POST /api/v1/attachments — multipart upload
-  server.post('/api/v1/attachments', async (req, reply) => {
+  server.post('/api/v1/attachments', {
+    schema: {
+      description: 'Upload a file attachment to an entity. Send as multipart/form-data with fields: file (the file), entityType, entityId, and optionally description. Maximum file size: 50 MB.',
+      tags: ['Attachments'],
+      consumes: ['multipart/form-data'],
+      response: {
+        201: {
+          description: 'Attachment created',
+          type: 'object',
+          properties: {
+            data: attachmentObject,
+            error: { type: 'object', nullable: true },
+          },
+        },
+        400: errorResponse,
+      },
+    },
+  }, async (req, reply) => {
     const data = await req.file();
     if (!data) {
       reply.code(400);
@@ -88,7 +154,21 @@ export async function attachmentRoutes(server: FastifyInstance) {
   });
 
   // GET /api/v1/attachments/:id/download
-  server.get('/api/v1/attachments/:id/download', async (req, reply) => {
+  server.get('/api/v1/attachments/:id/download', {
+    schema: {
+      description: 'Download an attachment file. Returns the binary file with appropriate Content-Type and Content-Disposition headers.',
+      tags: ['Attachments'],
+      params: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', format: 'uuid', description: 'Attachment ID' },
+        },
+      },
+      response: {
+        404: errorResponse,
+      },
+    },
+  }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const attachment = await attachmentRepo.findById(id);
     if (!attachment) {
@@ -104,7 +184,29 @@ export async function attachmentRoutes(server: FastifyInstance) {
   });
 
   // DELETE /api/v1/attachments/:id
-  server.delete('/api/v1/attachments/:id', async (req, reply) => {
+  server.delete('/api/v1/attachments/:id', {
+    schema: {
+      description: 'Delete an attachment. Removes both the database record and the stored file.',
+      tags: ['Attachments'],
+      params: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', format: 'uuid', description: 'Attachment ID' },
+        },
+      },
+      response: {
+        200: {
+          description: 'Attachment deleted',
+          type: 'object',
+          properties: {
+            data: { type: 'object', properties: { message: { type: 'string' } } },
+            error: { type: 'object', nullable: true },
+          },
+        },
+        404: errorResponse,
+      },
+    },
+  }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const attachment = await attachmentRepo.findById(id);
     if (!attachment) {
