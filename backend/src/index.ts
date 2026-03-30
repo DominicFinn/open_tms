@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import multipart from '@fastify/multipart';
 import swagger from '@fastify/swagger';
 import swaggerUI from '@fastify/swagger-ui';
 import prismaPlugin from './plugins/prisma.js';
@@ -34,11 +35,13 @@ import { ediFileRoutes } from './routes/ediFiles.js';
 import { queueMonitoringRoutes } from './routes/queueMonitoring.js';
 import { documentRoutes } from './routes/documents.js';
 import { dailyReportRoutes } from './routes/dailyReport.js';
+import { attachmentRoutes } from './routes/attachments.js';
 
 const server = Fastify({ logger: true });
 
 async function start() {
   await server.register(cors, { origin: true });
+  await server.register(multipart, { limits: { fileSize: 50 * 1024 * 1024 } });
   await server.register(swagger, {
     openapi: {
       info: { title: 'Open TMS API', version: '0.1.0' },
@@ -86,6 +89,7 @@ async function start() {
   await server.register(queueMonitoringRoutes);
   await server.register(documentRoutes);
   await server.register(dailyReportRoutes);
+  await server.register(attachmentRoutes);
 
   // Start queue and register workers
   try {

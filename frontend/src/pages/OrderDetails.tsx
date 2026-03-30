@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { API_URL } from '../api';
+import AttachmentPanel from '../components/AttachmentPanel';
 
 interface OrderLineItem {
   id: string;
@@ -1315,6 +1316,9 @@ export default function OrderDetails() {
           </div>
         </div>
       )}
+
+      {/* Attachments */}
+      {id && <AttachmentPanel entityType="order" entityId={id} />}
     </div>
   );
 }

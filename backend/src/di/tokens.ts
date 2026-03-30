@@ -28,8 +28,12 @@ export const TOKENS = {
   IDocumentGenerationService: Symbol.for('IDocumentGenerationService'),
   IDailyReportService: Symbol.for('IDailyReportService'),
 
+  // Attachment tokens
+  IAttachmentRepository: Symbol.for('IAttachmentRepository'),
+
   // Infrastructure tokens
   PrismaClient: Symbol.for('PrismaClient'),
   IFileStorageProvider: Symbol.for('IFileStorageProvider'),
+  IBinaryStorageProvider: Symbol.for('IBinaryStorageProvider'),
   IQueueAdapter: Symbol.for('IQueueAdapter'),
 } as const;

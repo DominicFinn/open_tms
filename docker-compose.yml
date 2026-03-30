@@ -17,8 +17,15 @@ services:
     environment:
       DATABASE_URL: postgres://tms:tms@db:5432/tms
       NODE_ENV: development
+      S3_ENDPOINT: http://minio:9000
+      S3_BUCKET: open-tms
+      S3_ACCESS_KEY_ID: minioadmin
+      S3_SECRET_ACCESS_KEY: minioadmin
+      S3_REGION: us-east-1
+      S3_FORCE_PATH_STYLE: "true"
     depends_on:
       - db
+      - minio
     ports:
       - "3001:3001"
   frontend:
@@ -31,6 +38,17 @@ services:
       - backend
     ports:
       - "8080:80"
+  minio:
+    image: minio/minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio-data:/data
   edi-collector:
     build: ./edi-collector
     environment:
@@ -43,3 +61,4 @@ services:
     restart: unless-stopped
 volumes:
   db-data:
+  minio-data:

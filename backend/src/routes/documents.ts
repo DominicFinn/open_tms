@@ -5,6 +5,7 @@ import { TOKENS } from '../di/tokens.js';
 import { IDocumentTemplateRepository } from '../repositories/DocumentTemplateRepository.js';
 import { IGeneratedDocumentRepository } from '../repositories/GeneratedDocumentRepository.js';
 import { IDocumentGenerationService } from '../services/DocumentGenerationService.js';
+import { IBinaryStorageProvider } from '../storage/IBinaryStorageProvider.js';
 
 const createTemplateSchema = z.object({
   name: z.string().min(1),
@@ -43,6 +44,7 @@ export async function documentRoutes(server: FastifyInstance) {
   const templateRepo = container.resolve<IDocumentTemplateRepository>(TOKENS.IDocumentTemplateRepository);
   const docRepo = container.resolve<IGeneratedDocumentRepository>(TOKENS.IGeneratedDocumentRepository);
   const docService = container.resolve<IDocumentGenerationService>(TOKENS.IDocumentGenerationService);
+  const storageProvider = container.resolve<IBinaryStorageProvider>(TOKENS.IBinaryStorageProvider);
 
   // ── Template CRUD ─────────────────────────────────────────────────────
 
@@ -201,10 +203,22 @@ export async function documentRoutes(server: FastifyInstance) {
       return { data: null, error: 'Document not found' };
     }
 
+    let content: Buffer;
+    if (doc.storageKey && doc.storageBackend !== 'database') {
+      // Retrieve from external storage (S3/MinIO)
+      content = await storageProvider.retrieve(doc.storageKey);
+    } else if (doc.fileContent) {
+      // Legacy: inline DB storage
+      content = doc.fileContent;
+    } else {
+      reply.code(404);
+      return { data: null, error: 'Document content not found' };
+    }
+
     reply.header('Content-Type', doc.mimeType);
     reply.header('Content-Disposition', `attachment; filename="${doc.fileName}"`);
-    reply.header('Content-Length', doc.fileContent.length);
-    return reply.send(doc.fileContent);
+    reply.header('Content-Length', content.length);
+    return reply.send(content);
   });
 
   // DELETE /api/v1/documents/:id
@@ -214,6 +228,11 @@ export async function documentRoutes(server: FastifyInstance) {
     if (!doc) {
       reply.code(404);
       return { data: null, error: 'Document not found' };
+    }
+
+    // Clean up external storage if applicable
+    if (doc.storageKey) {
+      try { await storageProvider.delete(doc.storageKey); } catch { /* best effort */ }
     }
 
     await docRepo.delete(id);

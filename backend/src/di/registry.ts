@@ -25,6 +25,9 @@ import { GeneratedDocumentRepository } from '../repositories/GeneratedDocumentRe
 import { DocumentGenerationService } from '../services/DocumentGenerationService.js';
 import { DailyReportService } from '../services/DailyReportService.js';
 import { DatabaseFileStorage } from '../storage/DatabaseFileStorage.js';
+import { DatabaseBinaryStorage } from '../storage/DatabaseBinaryStorage.js';
+import { S3FileStorage } from '../storage/S3FileStorage.js';
+import { AttachmentRepository } from '../repositories/AttachmentRepository.js';
 import { PgBossQueueAdapter } from '../queue/PgBossQueueAdapter.js';
 
 /**
@@ -104,6 +107,7 @@ export function registerDependencies(prisma: PrismaClient): void {
       container.resolve(TOKENS.PrismaClient),
       container.resolve(TOKENS.IDocumentTemplateRepository),
       container.resolve(TOKENS.IGeneratedDocumentRepository),
+      container.resolve(TOKENS.IBinaryStorageProvider),
     );
   });
 
@@ -111,9 +115,34 @@ export function registerDependencies(prisma: PrismaClient): void {
     return new DailyReportService(container.resolve(TOKENS.PrismaClient));
   });
 
-  // File storage provider (default: database)
+  // File storage provider for EDI (string-based, default: database)
   container.singleton(TOKENS.IFileStorageProvider).toFactory(() => {
     return new DatabaseFileStorage(container.resolve(TOKENS.PrismaClient));
+  });
+
+  // Binary storage provider for documents/attachments (S3 or database fallback)
+  const s3Endpoint = process.env.S3_ENDPOINT;
+  const s3Bucket = process.env.S3_BUCKET;
+  if (s3Endpoint && s3Bucket) {
+    container.singleton(TOKENS.IBinaryStorageProvider).toFactory(() => {
+      return new S3FileStorage({
+        endpoint: s3Endpoint,
+        bucket: s3Bucket,
+        region: process.env.S3_REGION || 'us-east-1',
+        accessKeyId: process.env.S3_ACCESS_KEY_ID || '',
+        secretAccessKey: process.env.S3_SECRET_ACCESS_KEY || '',
+        forcePathStyle: process.env.S3_FORCE_PATH_STYLE !== 'false',
+      });
+    });
+  } else {
+    container.singleton(TOKENS.IBinaryStorageProvider).toFactory(() => {
+      return new DatabaseBinaryStorage(container.resolve(TOKENS.PrismaClient));
+    });
+  }
+
+  // Attachment repository
+  container.singleton(TOKENS.IAttachmentRepository).toFactory(() => {
+    return new AttachmentRepository(container.resolve(TOKENS.PrismaClient));
   });
 
   // Queue adapter

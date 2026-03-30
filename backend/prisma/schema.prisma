@@ -833,6 +833,36 @@ model EdiFile {
   @@index([createdAt])
 }
 
+// ─── Binary Storage (fallback when S3 not configured) ───────────────────────
+
+model BinaryStore {
+  key       String   @id       // S3-style key path e.g. "attachments/shipment/abc/file.pdf"
+  content   Bytes
+  size      Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ─── Attachment Models ──────────────────────────────────────────────────────
+
+model Attachment {
+  id              String   @id @default(uuid())
+  entityType      String                        // "shipment", "order", "carrier", "customer", "location"
+  entityId        String
+  fileName        String
+  mimeType        String
+  fileSize        Int
+  storageKey      String                        // S3 key or BinaryStore key
+  storageBackend  String   @default("s3")       // "s3" or "database"
+  uploadedBy      String?                       // userId
+  description     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
 // ─── Document Models ────────────────────────────────────────────────────────
 
 model DocumentTemplate {
@@ -870,8 +900,10 @@ model GeneratedDocument {
   mimeType        String   @default("application/pdf")
   fileSize        Int?                          // bytes
 
-  // Storage — binary content
-  fileContent     Bytes
+  // Storage — binary content (optional: new docs use external storage via storageKey)
+  fileContent     Bytes?
+  storageKey      String?                       // S3/storage key for external storage
+  storageBackend  String   @default("database") // "s3" or "database"
 
   // Template used (null for attachments/uploads)
   template        DocumentTemplate? @relation(fields: [templateId], references: [id])

@@ -3,6 +3,7 @@ import Handlebars from 'handlebars';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { IDocumentTemplateRepository } from '../repositories/DocumentTemplateRepository.js';
 import { IGeneratedDocumentRepository, CreateGeneratedDocumentDTO } from '../repositories/GeneratedDocumentRepository.js';
+import { IBinaryStorageProvider } from '../storage/IBinaryStorageProvider.js';
 import { defaultBolTemplate } from './templates/bolTemplate.js';
 import { defaultLabelTemplate } from './templates/labelTemplate.js';
 import { defaultCustomsTemplate } from './templates/customsTemplate.js';
@@ -27,11 +28,15 @@ function formatDate(d: Date | null | undefined): string {
  * This is lightweight and works in any environment without Chrome/puppeteer.
  */
 export class DocumentGenerationService implements IDocumentGenerationService {
+  private storageBackend: string;
+
   constructor(
     private prisma: PrismaClient,
     private templateRepo: IDocumentTemplateRepository,
     private docRepo: IGeneratedDocumentRepository,
+    private storageProvider?: IBinaryStorageProvider,
   ) {
+    this.storageBackend = process.env.S3_ENDPOINT && process.env.S3_BUCKET ? 's3' : 'database';
     // Register Handlebars helpers
     Handlebars.registerHelper('eq', (a: any, b: any) => a === b);
   }
@@ -125,19 +130,22 @@ export class DocumentGenerationService implements IDocumentGenerationService {
     const pdfBytes = await this.htmlToPdf(html, `Bill of Lading - ${bolNumber}`);
 
     const fileName = `${bolNumber}.pdf`;
-    const doc = await this.docRepo.create({
+    const buffer = Buffer.from(pdfBytes);
+    const storageKey = `documents/bol/${shipmentId}/${fileName}`;
+
+    const doc = await this.storeDocument({
       documentType: 'bol',
       documentNumber: bolNumber,
       fileName,
       mimeType: 'application/pdf',
       fileSize: pdfBytes.length,
-      fileContent: Buffer.from(pdfBytes),
+      fileContent: buffer,
       templateId,
       shipmentId,
       customerId: shipment.customerId,
       generatedBy: userId,
       metadata: data,
-    });
+    }, storageKey);
 
     return { id: doc.id, fileName };
   }
@@ -176,18 +184,21 @@ export class DocumentGenerationService implements IDocumentGenerationService {
     const pdfBytes = await this.htmlToPdf(html, `Labels - ${order.orderNumber}`);
 
     const fileName = `Labels-${order.orderNumber}.pdf`;
-    const doc = await this.docRepo.create({
+    const buffer = Buffer.from(pdfBytes);
+    const storageKey = `documents/label/${orderId}/${fileName}`;
+
+    const doc = await this.storeDocument({
       documentType: 'label',
       fileName,
       mimeType: 'application/pdf',
       fileSize: pdfBytes.length,
-      fileContent: Buffer.from(pdfBytes),
+      fileContent: buffer,
       templateId,
       orderId,
       customerId: order.customerId,
       generatedBy: userId,
       metadata: data,
-    });
+    }, storageKey);
 
     return { id: doc.id, fileName };
   }
@@ -235,20 +246,48 @@ export class DocumentGenerationService implements IDocumentGenerationService {
     const pdfBytes = await this.htmlToPdf(html, `Customs Form - ${shipment.reference}`);
 
     const fileName = `Customs-${shipment.reference}.pdf`;
-    const doc = await this.docRepo.create({
+    const buffer = Buffer.from(pdfBytes);
+    const storageKey = `documents/customs/${shipmentId}/${fileName}`;
+
+    const doc = await this.storeDocument({
       documentType: 'customs',
       fileName,
       mimeType: 'application/pdf',
       fileSize: pdfBytes.length,
-      fileContent: Buffer.from(pdfBytes),
+      fileContent: buffer,
       templateId,
       shipmentId,
       customerId: shipment.customerId,
       generatedBy: userId,
       metadata: data,
-    });
+    }, storageKey);
 
     return { id: doc.id, fileName };
+  }
+
+  /**
+   * Store document content via IBinaryStorageProvider (if available) or inline in DB.
+   * When a storage provider is configured, fileContent is not stored in the DB row.
+   */
+  private async storeDocument(
+    dto: CreateGeneratedDocumentDTO,
+    storageKey: string,
+  ) {
+    if (this.storageProvider && dto.fileContent) {
+      // Store binary in external storage, keep only metadata in DB
+      await this.storageProvider.store(storageKey, dto.fileContent);
+      return this.docRepo.create({
+        ...dto,
+        fileContent: undefined as any, // Don't store binary in DB
+        storageKey,
+        storageBackend: this.storageBackend,
+      });
+    }
+    // Fallback: store binary inline in DB (original behavior)
+    return this.docRepo.create({
+      ...dto,
+      storageBackend: 'database',
+    });
   }
 
   private async getTemplateHtml(documentType: string, templateId?: string): Promise<string> {

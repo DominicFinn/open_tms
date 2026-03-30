@@ -85,8 +85,16 @@
 - **Document Management** (partial)
   - ✅ Store and archive generated docs (GeneratedDocument model)
   - ✅ Document download and listing with filters
-  - Document upload/attachment on any entity (shipments, orders, carriers) 🔲
+  - ✅ S3-compatible file storage provider (AWS S3, MinIO, Azure Blob S3 compat)
+  - ✅ IBinaryStorageProvider interface with S3 and database fallback implementations
+  - ✅ File attachments on any entity (shipments, orders, carriers, customers, locations)
+  - ✅ Multipart file upload with drag-and-drop UI
+  - ✅ MinIO integration for local development (docker-compose)
+  - ✅ Generated documents now stored via external storage provider (not inline in DB)
   - Electronic signature capture for delivery confirmation 🔲
+    - **Deferred**: Requires a legally binding signature system — simple canvas signatures are not sufficient
+    - Will implement as adapter pattern with pluggable providers (DocuSign, Adobe Sign, or similar)
+    - Consider both e-signature and wet signature workflows
   - Begin audit trail for shipment events 🔲
 - **Theming & White-labeling** 🔲
   - Extract core CSS custom properties into database-stored theme config

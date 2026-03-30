@@ -6,7 +6,9 @@ export interface CreateGeneratedDocumentDTO {
   fileName: string;
   mimeType?: string;
   fileSize?: number;
-  fileContent: Buffer;
+  fileContent?: Buffer;
+  storageKey?: string;
+  storageBackend?: string;
   templateId?: string;
   shipmentId?: string;
   orderId?: string;
@@ -34,6 +36,8 @@ const metadataSelect = {
   fileName: true,
   mimeType: true,
   fileSize: true,
+  storageKey: true,
+  storageBackend: true,
   templateId: true,
   shipmentId: true,
   orderId: true,
