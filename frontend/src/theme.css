@@ -9,7 +9,9 @@
                  .button-success | .button-danger | .icon-btn
    Forms:        .text-field | .text-field.field-error | .field-hint
                  .input-wrapper (alias of .text-field)
-                 .check-field (checkbox/radio)
+                 .check-field (checkbox/radio with MD3 styling)
+                 .switch > input + .slider (toggle switch)
+                 .range-field > input[type=range] (range slider)
                  .form-grid | .col-span-2
                  .form-section + .form-section-title
                  .form-actions
@@ -774,16 +776,24 @@ input[type="radio"] {
   color: var(--error);
 }
 
-/* Select — arrow icon + always-floated label */
+/* Select — polished dropdown with custom arrow */
 .text-field select,
 .input-wrapper select {
   appearance: none;
-  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e");
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236F797A' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e");
   background-repeat: no-repeat;
   background-position: right 12px center;
-  background-size: 16px;
-  padding-right: 36px;
+  background-size: 18px;
+  padding-right: 40px;
   cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s, background-color 0.15s;
+}
+
+.text-field select:hover,
+.input-wrapper select:hover {
+  border-color: var(--on-surface);
+  background-color: color-mix(in srgb, var(--surface-container-low) 95%, var(--on-surface));
 }
 
 .text-field select:invalid,
@@ -800,36 +810,157 @@ input[type="radio"] {
 .input-wrapper select option {
   color: var(--on-surface);
   background-color: var(--surface);
-  padding: 8px;
+  padding: 10px 12px;
+  font-size: 0.9375rem;
+}
+
+.text-field select option:checked,
+.input-wrapper select option:checked {
+  background-color: color-mix(in srgb, var(--primary) 12%, var(--surface));
 }
 
 /* ============================================================
-   CHECKBOX / RADIO — canonical pattern
+   CHECKBOX — Material Design 3 custom checkbox
    JSX: <label className="check-field">
            <input type="checkbox" checked={x} onChange={h} />
            <span>Label text</span>
          </label>
    ============================================================ */
 .check-field {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   cursor: pointer;
   user-select: none;
   margin-bottom: var(--spacing-1);
   color: var(--on-surface);
   font-size: 0.9375rem;
+  line-height: 1.4;
+  position: relative;
 }
 
-.check-field input[type="checkbox"],
-.check-field input[type="radio"] {
-  width: 18px;
-  height: 18px;
-  accent-color: var(--primary);
+.check-field:hover {
+  color: var(--on-surface);
+}
+
+.check-field input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--outline);
+  border-radius: 4px;
+  background-color: transparent;
   cursor: pointer;
   flex-shrink: 0;
-  margin-bottom: 0;
+  margin: 0;
   padding: 0;
+  position: relative;
+  transition: background-color 0.2s, border-color 0.2s, box-shadow 0.2s;
+}
+
+.check-field input[type="checkbox"]:hover {
+  border-color: var(--on-surface);
+  box-shadow: 0 0 0 8px color-mix(in srgb, var(--on-surface) 8%, transparent);
+  border-radius: 4px;
+}
+
+.check-field input[type="checkbox"]:checked {
+  background-color: var(--primary);
+  border-color: var(--primary);
+}
+
+.check-field input[type="checkbox"]:checked:hover {
+  box-shadow: 0 0 0 8px color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
+.check-field input[type="checkbox"]:checked::after {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 1px;
+  width: 6px;
+  height: 11px;
+  border: solid var(--on-primary);
+  border-width: 0 2.5px 2.5px 0;
+  transform: rotate(45deg);
+}
+
+.check-field input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.check-field input[type="checkbox"]:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+.check-field input[type="checkbox"]:disabled + span {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+/* ============================================================
+   RADIO — Material Design 3 custom radio button
+   JSX: <label className="check-field">
+           <input type="radio" name="group" value="x" ... />
+           <span>Label text</span>
+         </label>
+   ============================================================ */
+.check-field input[type="radio"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--outline);
+  border-radius: 50%;
+  background-color: transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+  margin: 0;
+  padding: 0;
+  position: relative;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.check-field input[type="radio"]:hover {
+  border-color: var(--on-surface);
+  box-shadow: 0 0 0 8px color-mix(in srgb, var(--on-surface) 8%, transparent);
+}
+
+.check-field input[type="radio"]:checked {
+  border-color: var(--primary);
+}
+
+.check-field input[type="radio"]:checked:hover {
+  box-shadow: 0 0 0 8px color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
+.check-field input[type="radio"]:checked::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: var(--primary);
+}
+
+.check-field input[type="radio"]:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.check-field input[type="radio"]:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+.check-field input[type="radio"]:disabled + span {
+  opacity: 0.38;
+  cursor: not-allowed;
 }
 
 /* ============================================================
@@ -1170,56 +1301,230 @@ h3 {
 }
 
 /* ============================================================
-   APPLE-STYLE SWITCH
+   TOGGLE SWITCH — Material Design 3
+   JSX: <label className="switch">
+           <input type="checkbox" checked={x} onChange={h} />
+           <span className="slider"></span>
+           <span>Label text (optional)</span>
+         </label>
    ============================================================ */
 .switch {
   position: relative;
-  display: inline-block;
-  width: 52px;
-  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 0.9375rem;
+  color: var(--on-surface);
 }
 
 .switch input {
+  position: absolute;
   opacity: 0;
   width: 0;
   height: 0;
 }
 
 .slider {
-  position: absolute;
-  cursor: pointer;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  position: relative;
+  display: inline-block;
+  width: 52px;
+  height: 32px;
   background-color: var(--surface-variant);
-  transition: 0.4s;
+  border: 2px solid var(--outline);
   border-radius: 16px;
+  transition: background-color 0.2s, border-color 0.2s;
+  flex-shrink: 0;
 }
 
 .slider:before {
   position: absolute;
   content: "";
-  height: 28px;
-  width: 28px;
-  left: 2px;
-  bottom: 2px;
+  height: 16px;
+  width: 16px;
+  left: 6px;
+  top: 50%;
+  transform: translateY(-50%);
   background-color: var(--outline);
-  transition: 0.4s;
+  transition: transform 0.2s cubic-bezier(0.2, 0, 0, 1), width 0.2s, height 0.2s, left 0.2s, background-color 0.2s;
   border-radius: 50%;
+}
+
+.switch:hover .slider:before {
+  width: 20px;
+  height: 20px;
+  left: 4px;
+}
+
+.switch:active .slider:before {
+  width: 24px;
+  height: 24px;
+  left: 2px;
 }
 
 input:checked + .slider {
   background-color: var(--primary);
+  border-color: var(--primary);
 }
 
 input:checked + .slider:before {
   background-color: var(--on-primary);
-  transform: translateX(20px);
+  width: 24px;
+  height: 24px;
+  left: 2px;
+  transform: translateY(-50%) translateX(20px);
+}
+
+.switch:hover input:checked + .slider:before {
+  width: 26px;
+  height: 26px;
+  left: 1px;
+}
+
+.switch:active input:checked + .slider:before {
+  width: 28px;
+  height: 28px;
+  left: 0;
+}
+
+input:focus-visible + .slider {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 
 input:disabled + .slider {
-  opacity: 0.5;
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+.switch:has(input:disabled) {
+  cursor: not-allowed;
+}
+
+/* ============================================================
+   RANGE SLIDER — Material Design 3
+   JSX: <div className="range-field">
+           <label>Volume</label>
+           <input type="range" min="0" max="100" value={v} onChange={h} />
+           <div className="range-value">{v}</div>
+         </div>
+   ============================================================ */
+.range-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: var(--spacing-2);
+}
+
+.range-field label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--on-surface-variant);
+}
+
+.range-field .range-value {
+  font-size: 0.8125rem;
+  color: var(--on-surface);
+  font-weight: 500;
+  text-align: right;
+}
+
+.range-field .range-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-1);
+}
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--surface-variant);
+  outline: none;
+  margin: 12px 0;
+  padding: 0;
+  border: none;
+  cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--primary);
+  cursor: pointer;
+  border: none;
+  box-shadow: var(--shadow-1);
+  transition: box-shadow 0.2s, transform 0.15s;
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--primary);
+  cursor: pointer;
+  border: none;
+  box-shadow: var(--shadow-1);
+  transition: box-shadow 0.2s, transform 0.15s;
+}
+
+input[type="range"]:hover::-webkit-slider-thumb {
+  box-shadow: 0 0 0 8px color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
+input[type="range"]:hover::-moz-range-thumb {
+  box-shadow: 0 0 0 8px color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
+input[type="range"]:active::-webkit-slider-thumb {
+  transform: scale(1.1);
+  box-shadow: 0 0 0 12px color-mix(in srgb, var(--primary) 16%, transparent);
+}
+
+input[type="range"]:active::-moz-range-thumb {
+  transform: scale(1.1);
+  box-shadow: 0 0 0 12px color-mix(in srgb, var(--primary) 16%, transparent);
+}
+
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--surface-variant);
+}
+
+input[type="range"]::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--surface-variant);
+}
+
+input[type="range"]::-moz-range-progress {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--primary);
+}
+
+input[type="range"]:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+input[type="range"]:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+input[type="range"]:disabled::-webkit-slider-thumb {
+  cursor: not-allowed;
+}
+
+input[type="range"]:disabled::-moz-range-thumb {
   cursor: not-allowed;
 }
 

@@ -39,6 +39,7 @@ import DailyReport from './pages/DailyReport';
 import CustomFields from './pages/CustomFields';
 import AdminDashboard from './pages/AdminDashboard';
 import ThemeSettings from './pages/ThemeSettings';
+import StyleGuide from './pages/StyleGuide';
 import './theme.css';
 
 const root = createRoot(document.getElementById('root')!);
@@ -64,6 +65,7 @@ root.render(
           <Route path="theme" element={<ThemeSettings />} />
           <Route path="document-templates" element={<DocumentTemplates />} />
           <Route path="custom-fields" element={<CustomFields />} />
+          <Route path="style-guide" element={<StyleGuide />} />
         </Route>
 
         {/* Operations routes - wrapped in Layout */}

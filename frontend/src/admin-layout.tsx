@@ -47,6 +47,12 @@ export function AdminLayout() {
             <span className="material-icons">tune</span>
             Custom Fields
           </NavLink>
+
+          <div className="sidebar-section-label">Developer</div>
+          <NavLink to="/admin/style-guide" onClick={closeMobileMenu}>
+            <span className="material-icons">style</span>
+            Style Guide
+          </NavLink>
         </nav>
       </aside>
 
