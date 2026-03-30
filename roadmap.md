@@ -231,7 +231,46 @@
   - OAuth/API key authentication for N8N callbacks into Open TMS
   - Pre-built workflow templates (e.g., auto-notify on exception, escalate delayed shipments)
 
-## **Phase 9: Intelligence & Optimization**
+## **Phase 9: Routes & Maps Insights**
+- **Map Provider Integration** 🔲
+  - Pluggable map provider interface (Google Maps, Mapbox, HERE, OpenStreetMap fallback)
+  - Admin settings page: API key management for map providers (Admin > Settings > Map Provider)
+  - Provider capabilities matrix — routing, traffic, geocoding, satellite imagery vary per provider
+  - API key storage encrypted at rest, usage metering and quota alerts
+- **Route Overhaul** 🔲
+  - Redesign route model: routes as first-class entities separate from lanes
+  - Route builder UI: drag-and-drop waypoints, reordering, named route variants per lane
+  - Multi-modal route support: road, rail, ocean, air legs within a single route
+  - Route versioning — keep history of route changes for audit and comparison
+  - Route templates: save and reuse common route patterns
+  - Associate routes with lanes, carriers, and service level agreements
+- **Traffic & Conditions Analysis** 🔲
+  - Google Maps Directions API / Routes API integration for real-time traffic-aware routing
+  - Background route analysis: cron job evaluates active lanes for congestion, incidents, construction
+  - Historical traffic pattern learning — recommend best departure windows per lane
+  - Alternative route suggestions when primary route is degraded
+  - Cost-of-delay calculations: fuel, driver hours, detention risk
+- **Live Route Monitoring & ETA** 🔲
+  - Active shipment route monitoring via scheduled cron (configurable interval, e.g. every 5 min)
+  - Event-driven interrupts: real-time location ingestion from IoT/GPS triggers immediate recalculation
+  - ETA engine: combines current position + traffic + historical data + weather for arrival predictions
+  - ETA confidence scoring (high/medium/low) based on data quality and variability
+  - Progressive ETA refinement — accuracy improves as shipment approaches destination
+  - ETA breach detection: alert when projected ETA exceeds delivery window
+  - Customer-facing ETA updates: push updated ETAs to customer portal and via notifications
+- **Route Intelligence & Triage** 🔲
+  - Automatic alert generation when route deviates from plan (geofence corridor breach)
+  - Feed alerts into Triage Centre / Control Tower (Phase 4) for human or AI agent review
+  - AI agent integration (Phase 9b): agent evaluates route alerts, suggests reroutes or customer comms
+  - Carrier performance impact: route adherence feeds into carrier scoring
+  - Post-delivery route analysis: compare planned vs actual, identify systemic issues
+- **Route Optimization** 🔲
+  - Suggest optimal routes based on cost, transit time, traffic, and historical performance
+  - Multi-stop optimization (TSP solver) for shipments with many waypoints
+  - Fuel cost estimation per route variant
+  - Carbon footprint calculation per route for sustainability reporting
+
+## **Phase 9b: Intelligence & AI**
 - **AI Triage Agent** 🔲
   - AgentConfig model: configurable prompts, LLM provider settings (LLM-independent)
   - AgentConversation model: context stored in database, not tied to any specific LLM
@@ -240,18 +279,53 @@
   - Background monitoring service: watches shipments, issues, and user feedback
   - Self-improving prompts: track agent suggestions vs human overrides, auto-refine prompts
   - Agent action execution via N8N workflow integration (Phase 8)
-- **Route Management** 🔲
-  - Create/manage routes (point-to-point, multi-stop).
-  - Associate routes with lanes, locations and carriers.
-- **Route Optimization** 🔲
-  - Suggest best routes based on cost, history, traffic.
-- **ETA Prediction** 🔲
-  - Use ML models on IoT + shipment history.
 - **Carrier & Lane Performance Scoring** 🔲
-  - On-time %, damage %, excursion rate.
+  - On-time %, damage %, excursion rate
+  - Route adherence scoring from Phase 9 data
+  - Trend analysis and carrier ranking
 - **Advanced Analytics** 🔲
   - Predictive dashboards, trend analysis
   - Visual reports for operations and finance
+
+## **Phase 9c: Data Providers & External Feeds**
+- **Data Provider Framework** 🔲
+  - Pluggable data provider interface in Integrations app (Admin > Integrations > Data Providers)
+  - Provider configuration: API keys, polling intervals, geographic scope, data retention
+  - Polling engine: scheduled fetch with configurable intervals per provider (cron-based via pg-boss)
+  - Data normalization layer: each provider's raw format mapped to canonical internal models
+  - Provider health monitoring: track uptime, latency, error rates per feed
+  - Cost tracking per provider (many charge per API call)
+- **Weather Data** 🔲
+  - Weather feed integration (OpenWeatherMap, Tomorrow.io, NOAA, Visual Crossing)
+  - Current conditions + forecasts along active routes
+  - Severe weather alerts: storms, flooding, ice, extreme heat linked to affected shipments
+  - Weather impact scoring on ETAs — feed into ETA engine (Phase 9)
+  - Historical weather correlation with delivery performance
+- **Maritime / Ocean Data** 🔲
+  - AIS vessel tracking feeds (MarineTraffic, VesselFinder, Spire Maritime)
+  - Port congestion and berth availability data
+  - Container tracking for intermodal shipments
+  - Ocean transit ETA based on vessel speed and route
+  - Port delay alerts fed into Triage Centre
+- **Aviation / Air Cargo Data** 🔲
+  - Flight tracking feeds (FlightAware, Flightradar24, OAG)
+  - Air cargo milestone tracking (booked, tendered, departed, arrived, delivered)
+  - Airport congestion and customs delay data
+  - Air cargo capacity and rate indices
+- **Rail Data** 🔲
+  - Rail carrier tracking feeds (where available — varies by region)
+  - Intermodal terminal status and dwell times
+  - Rail network disruption alerts
+- **Traffic & Road Conditions** 🔲
+  - Real-time traffic feeds beyond Google Maps (TomTom, HERE, Waze data where available)
+  - Road closure and construction databases
+  - Border crossing wait times (for cross-border lanes)
+  - Truck-specific restrictions (bridge heights, weight limits, hazmat routes)
+- **Market & Rate Data** 🔲
+  - Spot rate indices (DAT, Truckstop/ITS, Freightos for ocean/air)
+  - Fuel price feeds by region
+  - Capacity indicators and demand forecasting data
+  - Feed into quoting engine (Phase 7) for competitive rate benchmarking
 
 ## **Phase 10: Advanced Operations**
 - **Load Planning & Consolidation** 🔲
@@ -273,5 +347,6 @@
 - **Immediate:** Continue **Phase 3** — User Management & Auth complete; proceed with Document Templates, Document Management, Theming & Custom Fields.
 - **Short term:** Deliver **Phase 4** (notifications, triage centre, live tracking) for operational visibility.
 - **Medium term:** Deliver **Phase 5–6** (IoT + cold chain compliance) → unique differentiator.
-- **Long term:** **Phase 7–9** (financials, portals, N8N integration, AI agents) to scale and differentiate.
+- **Long term:** **Phase 7–8** (financials, portals, N8N integration) to scale platform.
+- **Strategic:** **Phase 9–9c** (routes & maps, AI agents, data providers) — the intelligence layer that turns Open TMS from a record system into a decision system.
 - **Future:** **Phase 10** (advanced operations) for enterprise depth.
