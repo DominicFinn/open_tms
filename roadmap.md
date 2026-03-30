@@ -92,6 +92,7 @@
   - ✅ MinIO integration for local development (docker-compose)
   - ✅ Generated documents now stored via external storage provider (not inline in DB)
   - ✅ Opaque storage keys (UUID-based, no customer/entity info in storage paths) for security
+    - ⚠️ Open decision: opaque UUIDs won't suit SharePoint/network drive providers where users expect browsable folder structures. Key format may need to be per-provider if file-system-based storage is added later.
   - ✅ Default 10-year retention period on all files and generated documents
   - Data export capability 🔲 (low priority — bulk export of documents/attachments per entity)
   - Electronic signature capture for delivery confirmation 🔲

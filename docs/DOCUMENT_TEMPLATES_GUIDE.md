@@ -150,6 +150,8 @@ All files are stored with **opaque, UUID-based keys** (e.g., `files/550e8400-e29
 
 This is a deliberate security design: even if someone gains read access to the S3 bucket, they cannot correlate files to customers, shipments, or any other entity. The mapping from storage key to entity is maintained only in the PostgreSQL database.
 
+> **Note — future storage providers:** The opaque UUID key approach works well for S3-compatible object stores but would not be compatible with a SharePoint or network drive integration where users expect human-readable folder structures and filenames for browsing. If a SharePoint/OneDrive/Google Drive provider is added in future, the storage key strategy will need to be revisited — likely with a per-provider key format (opaque for S3, structured for file-system-based providers). This is an open architectural decision tracked on the roadmap.
+
 ### Retention Policy
 
 All files (attachments and generated documents) have a **default retention period of 10 years** from creation. The `retentionExpiresAt` field is set automatically:
