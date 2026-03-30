@@ -31,6 +31,8 @@ import { AttachmentRepository } from '../repositories/AttachmentRepository.js';
 import { CustomFieldService } from '../services/CustomFieldService.js';
 import { PgBossQueueAdapter } from '../queue/PgBossQueueAdapter.js';
 import { PgBossEventBus } from '../events/PgBossEventBus.js';
+import { SmtpEmailService } from '../services/SmtpEmailService.js';
+import { ConsoleEmailService } from '../services/ConsoleEmailService.js';
 
 /**
  * Register all application dependencies
@@ -151,6 +153,26 @@ export function registerDependencies(prisma: PrismaClient): void {
   container.singleton(TOKENS.ICustomFieldService).toFactory(() => {
     return new CustomFieldService(container.resolve(TOKENS.PrismaClient));
   });
+
+  // Email service — env-based provider selection
+  const emailProvider = process.env.EMAIL_PROVIDER || 'console';
+  if (emailProvider === 'smtp') {
+    container.singleton(TOKENS.IEmailService).toFactory(() => {
+      return new SmtpEmailService({
+        host: process.env.SMTP_HOST || 'localhost',
+        port: Number(process.env.SMTP_PORT || 587),
+        secure: process.env.SMTP_SECURE === 'true',
+        user: process.env.SMTP_USER || '',
+        password: process.env.SMTP_PASSWORD || '',
+        fromEmail: process.env.EMAIL_FROM_ADDRESS || 'noreply@opentms.local',
+        fromName: process.env.EMAIL_FROM_NAME || 'Open TMS',
+      });
+    });
+  } else {
+    container.singleton(TOKENS.IEmailService).toFactory(() => {
+      return new ConsoleEmailService();
+    });
+  }
 
   // Queue adapter
   container.singleton(TOKENS.IQueueAdapter).toFactory(() => {

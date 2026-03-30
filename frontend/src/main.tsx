@@ -39,6 +39,8 @@ import DailyReport from './pages/DailyReport';
 import CustomFields from './pages/CustomFields';
 import AdminDashboard from './pages/AdminDashboard';
 import ThemeSettings from './pages/ThemeSettings';
+import EmailSettings from './pages/EmailSettings';
+import EmailTemplatesPage from './pages/EmailTemplates';
 import StyleGuide from './pages/StyleGuide';
 import './theme.css';
 
@@ -63,6 +65,8 @@ root.render(
           <Route index element={<AdminDashboard />} />
           <Route path="settings" element={<Settings />} />
           <Route path="theme" element={<ThemeSettings />} />
+          <Route path="email" element={<EmailSettings />} />
+          <Route path="email-templates" element={<EmailTemplatesPage />} />
           <Route path="document-templates" element={<DocumentTemplates />} />
           <Route path="custom-fields" element={<CustomFields />} />
           <Route path="style-guide" element={<StyleGuide />} />

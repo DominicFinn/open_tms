@@ -4,6 +4,8 @@ import { useNavigate } from 'react-router-dom';
 const cards = [
   { title: 'Settings', description: 'Organization name, units of measure, and general configuration', icon: 'settings', path: '/admin/settings' },
   { title: 'Theme & Branding', description: 'Customize colors, upload logo, and brand your TMS', icon: 'palette', path: '/admin/theme' },
+  { title: 'Email Settings', description: 'Configure SMTP, SendGrid, or SES for email notifications', icon: 'mail', path: '/admin/email' },
+  { title: 'Email Templates', description: 'Customize email content for shipment and order events', icon: 'drafts', path: '/admin/email-templates' },
   { title: 'Document Templates', description: 'Manage BOL, invoice, and other document templates', icon: 'article', path: '/admin/document-templates' },
   { title: 'Custom Fields', description: 'Define custom fields for shipments, orders, and other entities', icon: 'tune', path: '/admin/custom-fields' },
 ];

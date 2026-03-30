@@ -28,6 +28,9 @@ import { createOutboundCarrierWorker } from './workers/outboundCarrierWorker.js'
 import { createOutboundTrackingWorker } from './workers/outboundTrackingWorker.js';
 import { createInboundWebhookWorker } from './workers/inboundWebhookWorker.js';
 import { OrderDeliveryService } from './services/OrderDeliveryService.js';
+import { IEmailService } from './services/IEmailService.js';
+import { SmtpEmailService } from './services/SmtpEmailService.js';
+import { ConsoleEmailService } from './services/ConsoleEmailService.js';
 
 const WORKER_MODE = process.env.WORKER_MODE || 'all';
 
@@ -57,8 +60,27 @@ async function startWorker() {
 
   // Event handlers (audit, notifications, email, webhooks, triage)
   if (WORKER_MODE === 'all' || WORKER_MODE === 'events') {
+    // Create email service for the worker
+    const emailProvider = process.env.EMAIL_PROVIDER || 'console';
+    let emailService: IEmailService;
+    if (emailProvider === 'smtp') {
+      emailService = new SmtpEmailService({
+        host: process.env.SMTP_HOST || 'localhost',
+        port: Number(process.env.SMTP_PORT || 587),
+        secure: process.env.SMTP_SECURE === 'true',
+        user: process.env.SMTP_USER || '',
+        password: process.env.SMTP_PASSWORD || '',
+        fromEmail: process.env.EMAIL_FROM_ADDRESS || 'noreply@opentms.local',
+        fromName: process.env.EMAIL_FROM_NAME || 'Open TMS',
+      });
+      console.log(`[Worker] Email service: SMTP (${process.env.SMTP_HOST}:${process.env.SMTP_PORT})`);
+    } else {
+      emailService = new ConsoleEmailService();
+      console.log('[Worker] Email service: console (emails logged to stdout)');
+    }
+
     const eventBus = new PgBossEventBus(prisma, queue);
-    await registerEventHandlers(eventBus, prisma);
+    await registerEventHandlers(eventBus, prisma, emailService);
     await eventBus.start();
     console.log('[Worker] Event handlers registered and started');
   }

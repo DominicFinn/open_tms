@@ -6,21 +6,28 @@
 import { PrismaClient } from '@prisma/client';
 import { IEventBus } from './IEventBus.js';
 import { IEventHandler } from './IEventHandler.js';
+import { IEmailService } from '../services/IEmailService.js';
 import { AuditHandler } from './handlers/AuditHandler.js';
 import { InAppNotificationHandler } from './handlers/InAppNotificationHandler.js';
+import { EmailHandler } from './handlers/EmailHandler.js';
 
 export async function registerEventHandlers(
   eventBus: IEventBus,
-  prisma: PrismaClient
+  prisma: PrismaClient,
+  emailService?: IEmailService
 ): Promise<void> {
   const handlers: IEventHandler[] = [
     new AuditHandler(),
     new InAppNotificationHandler(prisma),
     // Future handlers:
-    // new EmailHandler(prisma, emailService),
     // new WebhookHandler(prisma),
     // new TriageHandler(prisma),
   ];
+
+  // Add email handler if email service is available
+  if (emailService) {
+    handlers.push(new EmailHandler(prisma, emailService));
+  }
 
   for (const handler of handlers) {
     await eventBus.subscribe(

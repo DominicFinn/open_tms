@@ -38,6 +38,16 @@ export function AdminLayout() {
             Theme & Branding
           </NavLink>
 
+          <div className="sidebar-section-label">Notifications</div>
+          <NavLink to="/admin/email" onClick={closeMobileMenu}>
+            <span className="material-icons">mail</span>
+            Email Settings
+          </NavLink>
+          <NavLink to="/admin/email-templates" onClick={closeMobileMenu}>
+            <span className="material-icons">drafts</span>
+            Email Templates
+          </NavLink>
+
           <div className="sidebar-section-label">Configuration</div>
           <NavLink to="/admin/document-templates" onClick={closeMobileMenu}>
             <span className="material-icons">article</span>

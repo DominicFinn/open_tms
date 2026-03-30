@@ -40,6 +40,8 @@ import { customFieldRoutes } from './routes/customFields.js';
 import { themeRoutes } from './routes/theme.js';
 import { notificationRoutes } from './routes/notifications.js';
 import { eventRoutes } from './routes/events.js';
+import { emailSettingsRoutes } from './routes/emailSettings.js';
+import { emailTemplateRoutes } from './routes/emailTemplates.js';
 
 const server = Fastify({ logger: true });
 
@@ -98,6 +100,8 @@ async function start() {
   await server.register(themeRoutes);
   await server.register(notificationRoutes);
   await server.register(eventRoutes);
+  await server.register(emailSettingsRoutes);
+  await server.register(emailTemplateRoutes);
 
   // Start queue adapter (needed for publishing events, even if workers run elsewhere)
   try {

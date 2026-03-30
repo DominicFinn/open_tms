@@ -34,6 +34,9 @@ export const TOKENS = {
   // Custom fields tokens
   ICustomFieldService: Symbol.for('ICustomFieldService'),
 
+  // Email tokens
+  IEmailService: Symbol.for('IEmailService'),
+
   // Infrastructure tokens
   PrismaClient: Symbol.for('PrismaClient'),
   IFileStorageProvider: Symbol.for('IFileStorageProvider'),

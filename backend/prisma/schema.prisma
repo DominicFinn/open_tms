@@ -434,11 +434,23 @@ model Organization {
   themeConfig         Json?                       // Full CSS custom property overrides (see ThemeConfig)
   themeUpdatedAt      DateTime?                   // Used for cache invalidation
 
+  // Email Configuration
+  emailProvider       String   @default("console") // "smtp" | "sendgrid" | "ses" | "console"
+  smtpHost            String?
+  smtpPort            Int?
+  smtpSecure          Boolean  @default(false)
+  smtpUser            String?
+  smtpPassword        String?                      // Encrypted at rest in production
+  emailFromAddress    String?                      // Default "from" address
+  emailFromName       String?                      // Default "from" display name
+  emailEnabled        Boolean  @default(false)     // Global kill switch
+
   // Metadata
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
   users               User[]
+  emailTemplates      EmailTemplate[]
 }
 
 model TrackableUnit {
@@ -1122,4 +1134,32 @@ model UserNotificationPreference {
   updatedAt     DateTime @updatedAt
 
   @@unique([userId, eventCategory])
+}
+
+// ─── Email Templates ─────────────────────────────────────────────
+
+model EmailTemplate {
+  id              String   @id @default(uuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id])
+
+  // Template identification
+  name            String                         // "Shipment Status Update", "Delivery Confirmation"
+  eventType       String                         // Event type this template handles: "shipment.status_changed", "shipment.delivered", etc.
+  description     String?
+
+  // Content (Handlebars)
+  subject         String                         // Subject line template: "Shipment {{shipmentReference}} — {{newStatus}}"
+  htmlBody        String                         // HTML body with Handlebars placeholders
+  textBody        String?                        // Plain-text fallback (auto-generated from HTML if null)
+
+  // State
+  active          Boolean  @default(true)
+  isDefault       Boolean  @default(false)       // System-provided default template
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([organizationId, eventType])          // One template per event type per org
+  @@index([eventType])
 }
