@@ -327,7 +327,47 @@
   - Capacity indicators and demand forecasting data
   - Feed into quoting engine (Phase 7) for competitive rate benchmarking
 
-## **Phase 10: Advanced Operations**
+## **Phase 10: SRE, Observability & Operations**
+- **Queue Monitoring & Alerting** 🔲
+  - Dashboard for queue sizes, processing rates, and lag per handler (evt.audit, evt.email, etc.)
+  - Configurable alerting thresholds: queue depth > N, processing latency > Xms, DLQ items > 0
+  - Alert channels: email, in-app notification, webhook (dogfood the event system)
+  - Historical queue metrics: track throughput and latency over time, identify bottlenecks
+  - Auto-scaling recommendations: "queue X has been backed up for 30 min, consider adding a worker"
+- **Metrics & Observability** 🔲
+  - Prometheus-compatible `/metrics` endpoint on API and worker processes
+  - Key metrics: request rate, response time (p50/p95/p99), error rate, queue depth, active jobs, connection pool utilization
+  - Grafana dashboard templates (shipped as JSON, importable)
+  - OpenTelemetry traces: request → event publish → handler execution, end-to-end latency
+  - Structured JSON logging with correlation IDs (trace a single user action across API + worker)
+- **Health Checks & Liveness** 🔲
+  - API: existing `/health` endpoint enhanced with dependency checks (database, pg-boss, S3)
+  - Worker: lightweight HTTP health endpoint (port 3002) for Docker/k8s liveness probes
+  - Readiness checks: worker reports "ready" only after connecting to pg-boss and registering handlers
+  - Docker Compose healthcheck configuration for automatic restart on failure
+- **Connection Pool Management** 🔲
+  - PgBouncer service in docker-compose for production deployments (connection multiplexing)
+  - Pool utilization metrics exposed via Prometheus
+  - Alerting when pool utilization exceeds 80%
+  - Documented pool sizing guide per deployment size (small/medium/large)
+- **Error Tracking & Dead Letter Queues** 🔲
+  - DLQ dashboard: view failed jobs with full payload, error stack, retry history
+  - One-click retry or bulk retry from DLQ (already partially exists in queue monitoring API)
+  - DLQ alerting: immediate notification when a job fails all retries
+  - Error classification: transient (retry) vs permanent (alert and park)
+  - Integration with error tracking services (Sentry, Rollbar) as pluggable providers
+- **Deployment & Rollback** 🔲
+  - Blue/green deployment guide for zero-downtime API + worker updates
+  - Database migration safety: backward-compatible migration patterns documented
+  - Worker drain: graceful shutdown waits for in-flight jobs before container stop
+  - Rollback playbook: step-by-step recovery procedures for common failure modes
+- **Capacity Planning** 🔲
+  - Documented sizing guide: small (1 API + 1 worker), medium (1 API + 3 workers), large (2 API + 5 workers + PgBouncer)
+  - Connection budget calculator based on deployment profile
+  - Resource limit recommendations per container (CPU, memory) based on workload patterns
+  - Load testing scripts and baseline benchmarks
+
+## **Phase 11: Advanced Operations**
 - **Load Planning & Consolidation** 🔲
   - Multi-order load building and optimization
   - Load board for available capacity
@@ -349,4 +389,5 @@
 - **Medium term:** Deliver **Phase 5–6** (IoT + cold chain compliance) → unique differentiator.
 - **Long term:** **Phase 7–8** (financials, portals, N8N integration) to scale platform.
 - **Strategic:** **Phase 9–9c** (routes & maps, AI agents, data providers) — the intelligence layer that turns Open TMS from a record system into a decision system.
-- **Future:** **Phase 10** (advanced operations) for enterprise depth.
+- **Operational:** **Phase 10** (SRE & observability) — ship early pieces (health checks, structured logging, queue dashboard) alongside Phase 4, then build out fully as deployment complexity grows.
+- **Future:** **Phase 11** (advanced operations) for enterprise depth.
