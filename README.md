@@ -59,27 +59,40 @@ I'm outlining a roadmap. It's high level. It can be ticketed up as it goes along
 ## 🏗️ Architecture
 
 ```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Frontend      │    │   Backend       │    │   Database      │
-│   React + Vite  │◄──►│   Fastify API   │◄──►│   PostgreSQL    │
-│   TypeScript    │    │   TypeScript    │    │   Prisma ORM    │
-└─────────────────┘    └────────┬────────┘    └─────────────────┘
-                                │
-                    ┌───────────┼───────────┐
-                    │           │           │
-               ┌────▼────┐ ┌───▼───┐ ┌─────▼─────┐
-               │ pg-boss │ │ HTTP  │ │   EDI     │
-               │ Queue   │ │       │ │ Collector │
-               │ Workers │ │       │ │ SFTP      │
-               └────┬────┘ └───┬───┘ └───────────┘
-                    │          │
-              ┌─────▼────┐ ┌──▼──────────┐
-              │ Carrier  │ │ Tracking    │
-              │ APIs     │ │ Platforms   │
-              │ (DHL,    │ │ (Project44, │
-              │  FedEx)  │ │  SysLoco)   │
-              └──────────┘ └─────────────┘
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│   Frontend      │     │   API Server    │     │   PostgreSQL    │
+│   React + Vite  │◄───►│   Fastify       │◄───►│   + pg-boss     │
+│   TypeScript    │     │   (index.ts)    │     │   queues        │
+└─────────────────┘     └────────┬────────┘     └────────┬────────┘
+                                 │ publishes              │ consumes
+                                 │ events                 │ jobs
+                                 ▼                        │
+                        ┌─────────────────┐               │
+                        │  Event Bus      │               │
+                        │  (pg-boss       │               │
+                        │   fan-out)      │───────────────┘
+                        └─────────────────┘
+                                 │
+          ┌──────────────────────┼──────────────────────┐
+          │                      │                      │
+  ┌───────▼───────┐    ┌────────▼────────┐    ┌────────▼────────┐
+  │  Worker 1     │    │  Worker 2       │    │  Worker N       │
+  │  (worker.ts)  │    │  (worker.ts)    │    │  (worker.ts)    │
+  │  Docker       │    │  Docker         │    │  Docker         │
+  │               │    │                 │    │                 │
+  │ • Audit       │    │ • Email         │    │ • Outbound      │
+  │ • Webhook     │    │ • In-app notif  │    │   carrier       │
+  │ • Triage      │    │ • Notifications │    │ • Tracking      │
+  └───────┬───────┘    └────────┬────────┘    └────────┬────────┘
+          │                     │                      │
+          ▼                     ▼                      ▼
+  ┌──────────────┐    ┌──────────────┐       ┌──────────────┐
+  │ External     │    │ SMTP /       │       │ Carrier APIs │
+  │ Webhooks     │    │ SendGrid     │       │ (DHL, FedEx) │
+  └──────────────┘    └──────────────┘       └──────────────┘
 ```
+
+**Key principle**: The API server only handles HTTP requests and publishes events. All background processing runs in **separate worker containers** with their own database connection pools — so workers never starve the API of resources. See [Event Architecture Plan](./docs/EVENT_ARCHITECTURE_PLAN.md) for the full design.
 
 ### Backend Architecture
 
@@ -130,6 +143,8 @@ This script will:
 - ✅ Generate Prisma client
 - ✅ Start the backend server
 - ✅ Start the frontend development server
+
+> **Note**: The run script starts workers embedded in the API process for simplicity. For production, run workers in separate containers — see [Running Workers](#-running-workers) below.
 
 #### Manual Setup
 
@@ -206,13 +221,104 @@ Complete production setup with monitoring and security:
 Simple containerized deployment:
 
 ```bash
-# Build and run with Docker Compose
+# Build and run with Docker Compose (includes worker)
 docker compose up --build -d
 
 # Or build individual services
 docker build -t open-tms-backend ./backend
 docker build -t open-tms-frontend ./frontend
 ```
+
+### 🔧 Running Workers
+
+The system uses **event-driven background workers** for sending emails, firing webhooks, creating audit logs, auto-triaging exceptions, and processing integrations. Workers run in separate Docker containers from the API server so they don't compete for resources.
+
+#### How It Works
+
+- The **API server** (`backend/src/index.ts`) handles HTTP requests and publishes domain events to PostgreSQL-backed queues (pg-boss).
+- The **worker process** (`backend/src/worker.ts`) runs in a separate container, picks up events from those queues, and executes handlers (email, notifications, webhooks, audit, triage).
+- Each worker container has its own database connection pool, so a burst of email sends can't starve the API of connections.
+- pg-boss ensures each job is processed exactly once, even with multiple worker instances.
+
+#### Quick Start (Development)
+
+For local development, the `run.sh` script runs workers embedded in the API process — no extra setup needed.
+
+#### Docker Compose (Recommended for Production)
+
+```bash
+# Start everything: db, API, frontend, MinIO, EDI collector, and 1 worker
+docker compose up --build -d
+```
+
+The `docker-compose.yml` includes a `worker` service that automatically starts alongside the API. You don't need to configure anything extra for a standard deployment.
+
+#### Scaling Workers
+
+For higher throughput, scale the worker containers:
+
+```bash
+# Run 3 worker instances (each gets its own connection pool and resources)
+docker compose up --scale worker=3 -d
+```
+
+For heterogeneous scaling (different container types for different workloads), you can set the `WORKER_MODE` environment variable:
+
+| Mode | What it processes |
+|------|------------------|
+| `all` (default) | Event handlers + integration workers |
+| `events` | Only event handlers (email, notifications, audit, triage, webhooks) |
+| `integrations` | Only outbound carrier, tracking, and webhook workers |
+
+To run dedicated containers per mode, add separate service definitions in `docker-compose.override.yml`:
+
+```yaml
+services:
+  worker-events:
+    extends:
+      service: worker
+    environment:
+      WORKER_MODE: events
+  worker-integrations:
+    extends:
+      service: worker
+    environment:
+      WORKER_MODE: integrations
+```
+
+Then scale independently:
+
+```bash
+docker compose up --scale worker-events=3 --scale worker-integrations=1 -d
+```
+
+#### Resource Limits
+
+Each worker container is capped at **512 MB memory** and **0.5 CPU** by default (configured in `docker-compose.yml` under `deploy.resources.limits`). Adjust these based on your workload.
+
+#### Connection Pool Budget
+
+PostgreSQL defaults to 100 connections. Here's the math:
+
+| Component | Instances | Connections Each | Total |
+|-----------|-----------|-----------------|-------|
+| API server | 1 | 10 | 10 |
+| Worker | 3 | 5 | 15 |
+| pg-boss overhead | — | — | ~7 |
+| **Total** | | | **~32** |
+
+This leaves plenty of headroom. For larger deployments (10+ workers), add [PgBouncer](https://www.pgbouncer.org/) as a connection multiplexer.
+
+#### Monitoring
+
+Worker containers log to stdout. Use `docker compose logs worker -f` to tail worker output.
+
+For a deeper look at queue health, the API exposes queue monitoring endpoints:
+- `GET /api/v1/queues/stats` — queue sizes, active/completed/failed counts
+- `GET /api/v1/queues/:name/stats` — stats for a specific queue
+- `GET /api/v1/queues/activity` — hourly activity data for dashboards
+
+See the full architecture design in [Event Architecture Plan](./docs/EVENT_ARCHITECTURE_PLAN.md).
 
 ## 📚 API Documentation
 
