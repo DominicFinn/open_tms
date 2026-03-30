@@ -109,6 +109,17 @@
   --border-radius:            var(--border-radius-sm);
   --radius-medium:            var(--border-radius-md);
   --radius-large:             var(--border-radius-lg);
+
+  /* Overlay & Modal */
+  --overlay-bg:               rgba(0, 0, 0, 0.5);
+  --modal-shadow:             0 8px 32px rgba(0, 0, 0, 0.2);
+  --interactive-bg-subtle:    rgba(255, 255, 255, 0.1);
+
+  /* Map / Chart marker colors */
+  --marker-origin:            #4CAF50;
+  --marker-destination:       #F44336;
+  --marker-stop:              #FF9800;
+  --marker-default:           #2196F3;
 }
 
 @media (prefers-color-scheme: dark) {

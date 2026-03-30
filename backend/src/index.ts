@@ -37,6 +37,7 @@ import { documentRoutes } from './routes/documents.js';
 import { dailyReportRoutes } from './routes/dailyReport.js';
 import { attachmentRoutes } from './routes/attachments.js';
 import { customFieldRoutes } from './routes/customFields.js';
+import { themeRoutes } from './routes/theme.js';
 
 const server = Fastify({ logger: true });
 
@@ -92,6 +93,7 @@ async function start() {
   await server.register(dailyReportRoutes);
   await server.register(attachmentRoutes);
   await server.register(customFieldRoutes);
+  await server.register(themeRoutes);
 
   // Start queue and register workers
   try {

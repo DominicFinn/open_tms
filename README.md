@@ -41,6 +41,8 @@ I'm outlining a roadmap. It's high level. It can be ticketed up as it goes along
 - **Material Design 3** - Beautiful, consistent design system
 - **Responsive Design** - Works perfectly on desktop, tablet, and mobile
 - **Dark/Light Themes** - Automatic theme switching based on system preferences
+- **Custom Theming** - Admin-configurable color overrides stored in DB, applied per session with cache invalidation
+- **Logo Upload** - Organization logo displayed in nav bar and on generated documents (PNG, JPEG, SVG, WebP)
 - **Loading States** - Smooth user experience with proper feedback
 - **Error Handling** - Graceful error management and user notifications
 
@@ -399,9 +401,13 @@ open_tms/
 │   └── Dockerfile          # Backend container
 ├── frontend/               # React application
 │   ├── src/
-│   │   ├── pages/          # Page components (27 pages)
-│   │   ├── layout.tsx      # App layout with navigation
-│   │   └── theme.css       # Material Design 3 styles
+│   │   ├── pages/          # Page components
+│   │   ├── components/     # Reusable components (AppBar, AppSwitcher, etc.)
+│   │   ├── layout.tsx      # Operations app layout
+│   │   ├── integrations-layout.tsx  # Integrations app layout
+│   │   ├── admin-layout.tsx # Admin app layout
+│   │   ├── ThemeProvider.tsx # Theme context — loads DB theme, caches per session
+│   │   └── theme.css       # Material Design 3 CSS custom properties
 │   └── Dockerfile          # Frontend container
 ├── edi-collector/           # SFTP EDI collection service
 │   ├── src/
@@ -524,6 +530,35 @@ container.singleton(TOKENS.ICustomersRepository)
 - **Floating labels** and smooth animations
 - **Loading states** and error handling
 - **Confirmation dialogs** for destructive actions
+
+## 🎨 Frontend Theming
+
+The frontend uses a **CSS custom properties** system based on Material Design 3 tokens. All colors are defined in `frontend/src/theme.css` and must never be hardcoded in components.
+
+### Architecture
+
+1. **`theme.css`** defines all CSS custom properties (`:root` block) — canonical color tokens, aliases, spacing, shadows, overlays, and map marker colors.
+2. **`ThemeProvider.tsx`** is a React context that loads theme overrides from `GET /api/v1/theme` on mount. Overrides are applied to `document.documentElement.style` and cached in `sessionStorage` using `themeUpdatedAt` for invalidation.
+3. **`useTheme()` hook** provides `hasLogo`, `logoUrl`, `themeUpdatedAt`, and `reloadTheme()` to any component.
+4. **Admin > Theme & Branding** page lets admins customize colors via color pickers with live preview and upload an organization logo.
+
+### Rules for Contributors
+
+- **Never hardcode colors** in components — always use `var(--token-name)` in CSS or inline styles.
+- **Never import colors from JS** — all color values come from CSS custom properties.
+- **Use existing aliases** (`--color-primary`, `--color-error`, `--overlay-bg`, `--marker-origin`, etc.) rather than referencing raw tokens directly.
+- **For new color needs**, add a CSS variable to `theme.css` first, then reference it.
+- **Modal overlays** use `var(--overlay-bg)`, **modal shadows** use `var(--modal-shadow)`.
+- **Map markers** use `var(--marker-origin)`, `var(--marker-destination)`, `var(--marker-stop)`, `var(--marker-default)`.
+
+### Multi-App Layout
+
+The frontend has three "apps" selectable via the AppSwitcher:
+- **Operations** (`/`) — Shipments, orders, lanes, carriers, customers
+- **Integrations** (`/integrations`) — API keys, webhooks, EDI
+- **Admin** (`/admin`) — Settings, theme, document templates, custom fields
+
+Each app has its own layout component (`layout.tsx`, `integrations-layout.tsx`, `admin-layout.tsx`) with a dedicated sidebar.
 
 ## 🔒 Security Features
 

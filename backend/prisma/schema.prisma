@@ -428,6 +428,12 @@ model Organization {
   // BOL sequence counter for auto-numbering
   bolSequenceNumber   Int      @default(0)
 
+  // Theme & Branding
+  logoStorageKey      String?                     // Opaque key for logo in IBinaryStorageProvider
+  logoMimeType        String?                     // "image/png", "image/svg+xml", etc.
+  themeConfig         Json?                       // Full CSS custom property overrides (see ThemeConfig)
+  themeUpdatedAt      DateTime?                   // Used for cache invalidation
+
   // Metadata
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt

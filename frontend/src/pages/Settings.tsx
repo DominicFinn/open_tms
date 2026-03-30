@@ -206,7 +206,7 @@ export default function Settings() {
 
               <div style={{
                 padding: 'var(--spacing-2)',
-                backgroundColor: 'white',
+                backgroundColor: 'var(--surface-container-lowest)',
                 borderRadius: '4px',
                 border: '1px solid var(--color-border)'
               }}>

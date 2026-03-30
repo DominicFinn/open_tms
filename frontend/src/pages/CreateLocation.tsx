@@ -103,7 +103,7 @@ export default function CreateLocation() {
               cursor: 'pointer',
               padding: '4px 8px',
               borderRadius: '4px',
-              backgroundColor: 'rgba(255, 255, 255, 0.1)'
+              backgroundColor: 'var(--interactive-bg-subtle)'
             }}
           >
             Back to Locations

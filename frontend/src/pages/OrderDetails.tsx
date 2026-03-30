@@ -1079,7 +1079,7 @@ export default function OrderDetails() {
           left: 0,
           right: 0,
           bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.5)',
+          backgroundColor: 'var(--overlay-bg)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -1094,7 +1094,7 @@ export default function OrderDetails() {
             width: '100%',
             maxHeight: '85vh',
             overflowY: 'auto',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.2)'
+            boxShadow: 'var(--modal-shadow)'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-2)' }}>
               <h2 style={{ margin: 0 }}>

@@ -250,7 +250,7 @@ export default function LocationSearch({
             backgroundColor: 'var(--surface)',
             border: '1px solid var(--outline)',
             borderRadius: '0 0 8px 8px',
-            boxShadow: '0 4px 8px rgba(0, 0, 0, 0.1)',
+            boxShadow: 'var(--shadow-1)',
             zIndex: 1000,
             maxHeight: '200px',
             overflowY: 'auto'
@@ -307,7 +307,7 @@ export default function LocationSearch({
             backgroundColor: 'var(--surface)',
             border: '1px solid var(--outline)',
             borderRadius: '0 0 8px 8px',
-            boxShadow: '0 4px 8px rgba(0, 0, 0, 0.1)',
+            boxShadow: 'var(--shadow-1)',
             zIndex: 1000,
             padding: '12px 16px',
             color: 'var(--on-surface-variant)',

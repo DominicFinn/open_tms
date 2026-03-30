@@ -100,13 +100,19 @@
     - Will implement as adapter pattern with pluggable providers (DocuSign, Adobe Sign, or similar)
     - Consider both e-signature and wet signature workflows
   - Begin audit trail for shipment events 🔲
-- **Theming & White-labeling** 🔲
-  - Extract core CSS custom properties into database-stored theme config
-  - Theme Settings UI page (color palette, typography, spacing overrides)
-  - Logo upload and organization branding (leveraging existing IFileStorageProvider)
-  - Email header/footer branding configuration
-  - Runtime theme application via CSS variable injection
-  - Document templates should inherit branding (logo, colors) once theming is implemented
+- **Theming & White-labeling** ✅
+  - ✅ CSS custom properties stored as JSON in Organization.themeConfig
+  - ✅ Theme API (GET/PUT/DELETE) with CSS variable key allowlist and color validation
+  - ✅ ThemeProvider context — loads theme on mount, caches in sessionStorage, invalidates via themeUpdatedAt
+  - ✅ Theme Settings UI page with color pickers, live preview, and reset-to-defaults
+  - ✅ Logo upload (PNG/JPEG/SVG/WebP, max 2MB) via IBinaryStorageProvider
+  - ✅ Logo displayed in AppBar navigation across all apps
+  - ✅ Admin app created with dedicated layout, sidebar, and AppSwitcher entry
+  - ✅ Settings, document templates, and custom fields moved to Admin app
+  - ✅ Hardcoded colors replaced with CSS variables across all frontend components
+  - ✅ CLAUDE.md created with frontend theming conventions
+  - Email header/footer branding configuration 🔲
+  - Document templates should inherit branding (logo, colors) 🔲
 - **Custom Fields** ✅
   - ✅ Configurable fields for shipments, orders, carriers, customers, and locations
   - ✅ Field types: text, decimal, integer, date, boolean, single-select list, multi-select list
