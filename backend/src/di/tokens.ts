@@ -39,4 +39,5 @@ export const TOKENS = {
   IFileStorageProvider: Symbol.for('IFileStorageProvider'),
   IBinaryStorageProvider: Symbol.for('IBinaryStorageProvider'),
   IQueueAdapter: Symbol.for('IQueueAdapter'),
+  IEventBus: Symbol.for('IEventBus'),
 } as const;

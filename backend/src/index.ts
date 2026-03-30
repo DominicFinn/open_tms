@@ -38,6 +38,8 @@ import { dailyReportRoutes } from './routes/dailyReport.js';
 import { attachmentRoutes } from './routes/attachments.js';
 import { customFieldRoutes } from './routes/customFields.js';
 import { themeRoutes } from './routes/theme.js';
+import { notificationRoutes } from './routes/notifications.js';
+import { eventRoutes } from './routes/events.js';
 
 const server = Fastify({ logger: true });
 
@@ -94,18 +96,26 @@ async function start() {
   await server.register(attachmentRoutes);
   await server.register(customFieldRoutes);
   await server.register(themeRoutes);
+  await server.register(notificationRoutes);
+  await server.register(eventRoutes);
 
-  // Start queue and register workers
+  // Start queue adapter (needed for publishing events, even if workers run elsewhere)
   try {
     const queue = container.resolve<IQueueAdapter>(TOKENS.IQueueAdapter);
     await queue.start();
     server.log.info('Queue adapter started');
 
-    const deliveryService = new OrderDeliveryService(server.prisma);
-    await queue.subscribe(QUEUES.OUTBOUND_CARRIER, createOutboundCarrierWorker(server.prisma));
-    await queue.subscribe(QUEUES.OUTBOUND_TRACKING, createOutboundTrackingWorker(server.prisma));
-    await queue.subscribe(QUEUES.INBOUND_WEBHOOK, createInboundWebhookWorker(server.prisma, deliveryService));
-    server.log.info('Queue workers registered');
+    // Register embedded workers ONLY if no separate worker container is running.
+    // Set DISABLE_EMBEDDED_WORKERS=true when using `docker compose up` with the worker service.
+    if (process.env.DISABLE_EMBEDDED_WORKERS !== 'true') {
+      const deliveryService = new OrderDeliveryService(server.prisma);
+      await queue.subscribe(QUEUES.OUTBOUND_CARRIER, createOutboundCarrierWorker(server.prisma));
+      await queue.subscribe(QUEUES.OUTBOUND_TRACKING, createOutboundTrackingWorker(server.prisma));
+      await queue.subscribe(QUEUES.INBOUND_WEBHOOK, createInboundWebhookWorker(server.prisma, deliveryService));
+      server.log.info('Embedded queue workers registered (set DISABLE_EMBEDDED_WORKERS=true to use separate worker container)');
+    } else {
+      server.log.info('Embedded workers disabled — using separate worker container');
+    }
 
     // Graceful shutdown
     server.addHook('onClose', async () => {

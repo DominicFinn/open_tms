@@ -1037,3 +1037,89 @@ model CustomFieldAudit {
   @@index([entityType])
   @@index([createdAt])
 }
+
+// ============================================================
+// Domain Events — immutable event store
+// ============================================================
+
+model DomainEventLog {
+  id          String   @id
+  type        String                          // "shipment.status_changed", "order.created", etc.
+  timestamp   String                          // ISO-8601 when the event occurred
+  orgId       String                          // Organization scope
+  actorId     String?                         // User or system that caused the event
+  entityType  String                          // "shipment", "order", "carrier", etc.
+  entityId    String                          // PK of the changed entity
+  payload     Json                            // Event-specific data
+  metadata    Json                            // correlationId, causationId, source, schemaVersion
+  createdAt   DateTime @default(now())
+
+  @@index([type])
+  @@index([entityType, entityId])
+  @@index([orgId])
+  @@index([timestamp])
+  @@index([createdAt])
+}
+
+// ============================================================
+// Notifications — in-app notification inbox
+// ============================================================
+
+model Notification {
+  id          String   @id @default(uuid())
+  userId      String
+  orgId       String
+  title       String                          // "Shipment SH-0042 Exception"
+  body        String                          // Descriptive message
+  category    String                          // "shipment_update", "order_update", "exception", "triage", "system"
+  severity    String   @default("info")       // "info", "warning", "error", "success"
+  entityType  String?                         // Link to source entity
+  entityId    String?
+  actionUrl   String?                         // Deep link: "/shipments/abc-123"
+  eventId     String?                         // Reference to DomainEventLog.id
+  eventType   String?                         // "shipment.exception"
+  read        Boolean  @default(false)
+  readAt      DateTime?
+  dismissed   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([userId, read])
+  @@index([userId, createdAt])
+  @@index([orgId])
+}
+
+// ============================================================
+// Event Subscriptions — org-level rules for event routing
+// ============================================================
+
+model EventSubscription {
+  id           String   @id @default(uuid())
+  orgId        String
+  name         String                         // "Email on shipment exceptions"
+  active       Boolean  @default(true)
+  eventPattern String                         // "shipment.exception", "order.*", "*"
+  handlerType  String                         // "email", "inapp", "webhook"
+  config       Json                           // Handler-specific: template, recipients, URL, etc.
+  entityFilter Json?                          // Optional: filter by entity properties
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([orgId, active])
+  @@index([eventPattern])
+}
+
+// ============================================================
+// User Notification Preferences — per-user channel settings
+// ============================================================
+
+model UserNotificationPreference {
+  id            String   @id @default(uuid())
+  userId        String
+  eventCategory String                        // "shipment_updates", "exceptions", "triage", "system"
+  emailEnabled  Boolean  @default(true)
+  inAppEnabled  Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([userId, eventCategory])
+}

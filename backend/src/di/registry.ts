@@ -30,6 +30,7 @@ import { S3FileStorage } from '../storage/S3FileStorage.js';
 import { AttachmentRepository } from '../repositories/AttachmentRepository.js';
 import { CustomFieldService } from '../services/CustomFieldService.js';
 import { PgBossQueueAdapter } from '../queue/PgBossQueueAdapter.js';
+import { PgBossEventBus } from '../events/PgBossEventBus.js';
 
 /**
  * Register all application dependencies
@@ -155,6 +156,14 @@ export function registerDependencies(prisma: PrismaClient): void {
   container.singleton(TOKENS.IQueueAdapter).toFactory(() => {
     const dbUrl = process.env.DATABASE_URL || '';
     return new PgBossQueueAdapter(dbUrl);
+  });
+
+  // Event bus (publish-only in API server, full processing in worker)
+  container.singleton(TOKENS.IEventBus).toFactory(() => {
+    return new PgBossEventBus(
+      container.resolve(TOKENS.PrismaClient),
+      container.resolve(TOKENS.IQueueAdapter)
+    );
   });
 
   // EDI services

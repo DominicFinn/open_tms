@@ -4,6 +4,7 @@ import { container } from '../di/container.js';
 import { TOKENS } from '../di/tokens.js';
 import { IQueueAdapter } from '../queue/IQueueAdapter.js';
 import { QUEUES } from '../queue/events.js';
+import { IEventBus, EVENT_TYPES, createEvent } from '../events/index.js';
 
 export async function shipmentRoutes(server: FastifyInstance) {
   // Get all shipments
@@ -124,6 +125,30 @@ export async function shipmentRoutes(server: FastifyInstance) {
       await queue.publish(QUEUES.OUTBOUND_TRACKING, { type: 'shipment.created', payload: eventPayload });
     } catch (err) {
       server.log.warn('Failed to publish shipment events to queue: ' + (err as Error).message);
+    }
+
+    // Publish domain event
+    try {
+      const eventBus = container.resolve<IEventBus>(TOKENS.IEventBus);
+      // Look up org from customer
+      const customer = await server.prisma.customer.findUnique({ where: { id: body.customerId }, select: { id: true } });
+      const org = await server.prisma.organization.findFirst({ select: { id: true } });
+      await eventBus.publish(createEvent({
+        type: EVENT_TYPES.SHIPMENT_CREATED,
+        orgId: org?.id || 'default',
+        entityType: 'shipment',
+        entityId: created.id,
+        payload: {
+          shipmentReference: created.reference,
+          customerId: body.customerId,
+          originId: finalOriginId,
+          destinationId: finalDestinationId,
+          status: 'draft',
+        },
+        source: 'api',
+      }));
+    } catch (err) {
+      server.log.warn('Failed to publish domain event: ' + (err as Error).message);
     }
 
     reply.code(201);
@@ -289,6 +314,8 @@ export async function shipmentRoutes(server: FastifyInstance) {
       updateData.destinationId = lane.destinationId;
     }
 
+    const previousStatus = shipment.status;
+
     const updated = await server.prisma.shipment.update({
       where: { id },
       data: updateData,
@@ -299,6 +326,29 @@ export async function shipmentRoutes(server: FastifyInstance) {
         lane: updateData.laneId ? { include: { origin: true, destination: true } } : false
       }
     });
+
+    // Publish domain events for status changes
+    if (body.status && body.status !== previousStatus) {
+      try {
+        const eventBus = container.resolve<IEventBus>(TOKENS.IEventBus);
+        const org = await server.prisma.organization.findFirst({ select: { id: true } });
+        await eventBus.publish(createEvent({
+          type: EVENT_TYPES.SHIPMENT_STATUS_CHANGED,
+          orgId: org?.id || 'default',
+          entityType: 'shipment',
+          entityId: id,
+          payload: {
+            previousStatus,
+            newStatus: body.status,
+            shipmentReference: updated.reference,
+          },
+          source: 'api',
+        }));
+      } catch (err) {
+        server.log.warn('Failed to publish status change event: ' + (err as Error).message);
+      }
+    }
+
     return { data: updated, error: null };
   });
 
