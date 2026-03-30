@@ -140,14 +140,25 @@ S3_FORCE_PATH_STYLE=true
 
 If no `S3_ENDPOINT` and `S3_BUCKET` environment variables are set, the system automatically falls back to storing binary content in the `BinaryStore` PostgreSQL table. This requires no extra infrastructure and works out of the box, but is not recommended for production with large file volumes.
 
-### Storage Key Convention
+### Storage Key Security
 
-Files are stored with structured keys:
+All files are stored with **opaque, UUID-based keys** (e.g., `files/550e8400-e29b-41d4-a716-446655440000`). Storage keys contain:
 
-```
-attachments/{entityType}/{entityId}/{uuid}-{filename}
-documents/{documentType}/{entityId}/{filename}
-```
+- **No entity IDs** — you cannot determine which customer, shipment, or order a file belongs to from the key
+- **No filenames** — original filenames are stored only in the database and served via `Content-Disposition` headers on download
+- **No entity types** — no indication of what the file is attached to
+
+This is a deliberate security design: even if someone gains read access to the S3 bucket, they cannot correlate files to customers, shipments, or any other entity. The mapping from storage key to entity is maintained only in the PostgreSQL database.
+
+### Retention Policy
+
+All files (attachments and generated documents) have a **default retention period of 10 years** from creation. The `retentionExpiresAt` field is set automatically:
+
+- Attachments: set at upload time
+- Generated documents: set at generation time
+- Existing records: backfilled to `createdAt + 10 years` via migration
+
+Set `retentionExpiresAt` to `null` for indefinite retention. Retention cleanup is not yet automated — this field supports future cleanup jobs or compliance queries.
 
 ---
 

@@ -77,6 +77,7 @@ const documentMetaObject = {
     generatedBy: { type: 'string', nullable: true },
     metadata: { type: 'object', nullable: true },
     notes: { type: 'string', nullable: true },
+    retentionExpiresAt: { type: 'string', format: 'date-time', nullable: true, description: 'Retention expiry date (default: 10 years from generation)' },
     createdAt: { type: 'string', format: 'date-time' },
     updatedAt: { type: 'string', format: 'date-time' },
   },

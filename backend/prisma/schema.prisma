@@ -849,18 +849,20 @@ model Attachment {
   id              String   @id @default(uuid())
   entityType      String                        // "shipment", "order", "carrier", "customer", "location"
   entityId        String
-  fileName        String
+  fileName        String                        // Original filename (for Content-Disposition only)
   mimeType        String
   fileSize        Int
-  storageKey      String                        // S3 key or BinaryStore key
+  storageKey      String                        // Opaque UUID-based key — no entity info or filenames
   storageBackend  String   @default("s3")       // "s3" or "database"
   uploadedBy      String?                       // userId
   description     String?
+  retentionExpiresAt DateTime?                  // Default: 10 years from creation. Null = indefinite.
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
   @@index([entityType, entityId])
   @@index([createdAt])
+  @@index([retentionExpiresAt])
 }
 
 // ─── Document Models ────────────────────────────────────────────────────────
@@ -902,7 +904,7 @@ model GeneratedDocument {
 
   // Storage — binary content (optional: new docs use external storage via storageKey)
   fileContent     Bytes?
-  storageKey      String?                       // S3/storage key for external storage
+  storageKey      String?                       // Opaque UUID-based key — no entity info or filenames
   storageBackend  String   @default("database") // "s3" or "database"
 
   // Template used (null for attachments/uploads)
@@ -922,6 +924,9 @@ model GeneratedDocument {
   metadata        Json?                         // Snapshot of data used to generate
   notes           String?
 
+  // Retention
+  retentionExpiresAt DateTime?                  // Default: 10 years from creation. Null = indefinite.
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -931,4 +936,5 @@ model GeneratedDocument {
   @@index([customerId])
   @@index([documentType])
   @@index([createdAt])
+  @@index([retentionExpiresAt])
 }

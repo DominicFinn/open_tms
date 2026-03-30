@@ -91,6 +91,9 @@
   - ✅ Multipart file upload with drag-and-drop UI
   - ✅ MinIO integration for local development (docker-compose)
   - ✅ Generated documents now stored via external storage provider (not inline in DB)
+  - ✅ Opaque storage keys (UUID-based, no customer/entity info in storage paths) for security
+  - ✅ Default 10-year retention period on all files and generated documents
+  - Data export capability 🔲 (low priority — bulk export of documents/attachments per entity)
   - Electronic signature capture for delivery confirmation 🔲
     - **Deferred**: Requires a legally binding signature system — simple canvas signatures are not sufficient
     - Will implement as adapter pattern with pluggable providers (DocuSign, Adobe Sign, or similar)

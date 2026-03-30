@@ -17,6 +17,7 @@ export interface CreateGeneratedDocumentDTO {
   generatedBy?: string;
   metadata?: any;
   notes?: string;
+  retentionExpiresAt?: Date;
 }
 
 export interface IGeneratedDocumentRepository {
@@ -46,6 +47,7 @@ const metadataSelect = {
   generatedBy: true,
   metadata: true,
   notes: true,
+  retentionExpiresAt: true,
   createdAt: true,
   updatedAt: true,
 } as const;

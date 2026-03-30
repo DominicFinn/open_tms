@@ -20,6 +20,7 @@ const attachmentObject = {
     storageBackend: { type: 'string', enum: ['s3', 'database'] },
     uploadedBy: { type: 'string', nullable: true },
     description: { type: 'string', nullable: true },
+    retentionExpiresAt: { type: 'string', format: 'date-time', nullable: true, description: 'Retention expiry date (default: 10 years from upload)' },
     createdAt: { type: 'string', format: 'date-time' },
     updatedAt: { type: 'string', format: 'date-time' },
   },
@@ -128,8 +129,13 @@ export async function attachmentRoutes(server: FastifyInstance) {
 
     const fileName = data.filename;
     const mimeType = data.mimetype || 'application/octet-stream';
-    const fileId = randomUUID();
-    const storageKey = `attachments/${entityType}/${entityId}/${fileId}-${fileName}`;
+    // Opaque storage key — no entity info, filenames, or customer data in the path.
+    // The original filename is stored in the DB and served via Content-Disposition only.
+    const storageKey = `files/${randomUUID()}`;
+
+    // Default retention: 10 years from now
+    const retentionExpiresAt = new Date();
+    retentionExpiresAt.setFullYear(retentionExpiresAt.getFullYear() + 10);
 
     // Store in S3 or database
     await storageProvider.store(storageKey, fileBuffer, {
@@ -147,6 +153,7 @@ export async function attachmentRoutes(server: FastifyInstance) {
       storageKey,
       storageBackend,
       description,
+      retentionExpiresAt,
     });
 
     reply.code(201);

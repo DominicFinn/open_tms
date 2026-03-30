@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { randomUUID } from 'crypto';
 import Handlebars from 'handlebars';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { IDocumentTemplateRepository } from '../repositories/DocumentTemplateRepository.js';
@@ -131,7 +132,8 @@ export class DocumentGenerationService implements IDocumentGenerationService {
 
     const fileName = `${bolNumber}.pdf`;
     const buffer = Buffer.from(pdfBytes);
-    const storageKey = `documents/bol/${shipmentId}/${fileName}`;
+    // Opaque key — no entity info or filenames in storage path
+    const storageKey = `files/${randomUUID()}`;
 
     const doc = await this.storeDocument({
       documentType: 'bol',
@@ -185,7 +187,7 @@ export class DocumentGenerationService implements IDocumentGenerationService {
 
     const fileName = `Labels-${order.orderNumber}.pdf`;
     const buffer = Buffer.from(pdfBytes);
-    const storageKey = `documents/label/${orderId}/${fileName}`;
+    const storageKey = `files/${randomUUID()}`;
 
     const doc = await this.storeDocument({
       documentType: 'label',
@@ -247,7 +249,7 @@ export class DocumentGenerationService implements IDocumentGenerationService {
 
     const fileName = `Customs-${shipment.reference}.pdf`;
     const buffer = Buffer.from(pdfBytes);
-    const storageKey = `documents/customs/${shipmentId}/${fileName}`;
+    const storageKey = `files/${randomUUID()}`;
 
     const doc = await this.storeDocument({
       documentType: 'customs',
@@ -273,6 +275,10 @@ export class DocumentGenerationService implements IDocumentGenerationService {
     dto: CreateGeneratedDocumentDTO,
     storageKey: string,
   ) {
+    // Default retention: 10 years
+    const retentionExpiresAt = new Date();
+    retentionExpiresAt.setFullYear(retentionExpiresAt.getFullYear() + 10);
+
     if (this.storageProvider && dto.fileContent) {
       // Store binary in external storage, keep only metadata in DB
       await this.storageProvider.store(storageKey, dto.fileContent);
@@ -281,12 +287,14 @@ export class DocumentGenerationService implements IDocumentGenerationService {
         fileContent: undefined as any, // Don't store binary in DB
         storageKey,
         storageBackend: this.storageBackend,
+        retentionExpiresAt,
       });
     }
     // Fallback: store binary inline in DB (original behavior)
     return this.docRepo.create({
       ...dto,
       storageBackend: 'database',
+      retentionExpiresAt,
     });
   }
 

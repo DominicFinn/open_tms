@@ -10,6 +10,7 @@ export interface CreateAttachmentDTO {
   storageBackend: string;
   uploadedBy?: string;
   description?: string;
+  retentionExpiresAt?: Date;
 }
 
 export interface IAttachmentRepository {
