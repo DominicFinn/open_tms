@@ -25,7 +25,14 @@ import { GeneratedDocumentRepository } from '../repositories/GeneratedDocumentRe
 import { DocumentGenerationService } from '../services/DocumentGenerationService.js';
 import { DailyReportService } from '../services/DailyReportService.js';
 import { DatabaseFileStorage } from '../storage/DatabaseFileStorage.js';
+import { DatabaseBinaryStorage } from '../storage/DatabaseBinaryStorage.js';
+import { S3FileStorage } from '../storage/S3FileStorage.js';
+import { AttachmentRepository } from '../repositories/AttachmentRepository.js';
+import { CustomFieldService } from '../services/CustomFieldService.js';
 import { PgBossQueueAdapter } from '../queue/PgBossQueueAdapter.js';
+import { PgBossEventBus } from '../events/PgBossEventBus.js';
+import { SmtpEmailService } from '../services/SmtpEmailService.js';
+import { ConsoleEmailService } from '../services/ConsoleEmailService.js';
 
 /**
  * Register all application dependencies
@@ -104,6 +111,7 @@ export function registerDependencies(prisma: PrismaClient): void {
       container.resolve(TOKENS.PrismaClient),
       container.resolve(TOKENS.IDocumentTemplateRepository),
       container.resolve(TOKENS.IGeneratedDocumentRepository),
+      container.resolve(TOKENS.IBinaryStorageProvider),
     );
   });
 
@@ -111,15 +119,73 @@ export function registerDependencies(prisma: PrismaClient): void {
     return new DailyReportService(container.resolve(TOKENS.PrismaClient));
   });
 
-  // File storage provider (default: database)
+  // File storage provider for EDI (string-based, default: database)
   container.singleton(TOKENS.IFileStorageProvider).toFactory(() => {
     return new DatabaseFileStorage(container.resolve(TOKENS.PrismaClient));
   });
+
+  // Binary storage provider for documents/attachments (S3 or database fallback)
+  const s3Endpoint = process.env.S3_ENDPOINT;
+  const s3Bucket = process.env.S3_BUCKET;
+  if (s3Endpoint && s3Bucket) {
+    container.singleton(TOKENS.IBinaryStorageProvider).toFactory(() => {
+      return new S3FileStorage({
+        endpoint: s3Endpoint,
+        bucket: s3Bucket,
+        region: process.env.S3_REGION || 'us-east-1',
+        accessKeyId: process.env.S3_ACCESS_KEY_ID || '',
+        secretAccessKey: process.env.S3_SECRET_ACCESS_KEY || '',
+        forcePathStyle: process.env.S3_FORCE_PATH_STYLE !== 'false',
+      });
+    });
+  } else {
+    container.singleton(TOKENS.IBinaryStorageProvider).toFactory(() => {
+      return new DatabaseBinaryStorage(container.resolve(TOKENS.PrismaClient));
+    });
+  }
+
+  // Attachment repository
+  container.singleton(TOKENS.IAttachmentRepository).toFactory(() => {
+    return new AttachmentRepository(container.resolve(TOKENS.PrismaClient));
+  });
+
+  // Custom fields
+  container.singleton(TOKENS.ICustomFieldService).toFactory(() => {
+    return new CustomFieldService(container.resolve(TOKENS.PrismaClient));
+  });
+
+  // Email service — env-based provider selection
+  const emailProvider = process.env.EMAIL_PROVIDER || 'console';
+  if (emailProvider === 'smtp') {
+    container.singleton(TOKENS.IEmailService).toFactory(() => {
+      return new SmtpEmailService({
+        host: process.env.SMTP_HOST || 'localhost',
+        port: Number(process.env.SMTP_PORT || 587),
+        secure: process.env.SMTP_SECURE === 'true',
+        user: process.env.SMTP_USER || '',
+        password: process.env.SMTP_PASSWORD || '',
+        fromEmail: process.env.EMAIL_FROM_ADDRESS || 'noreply@opentms.local',
+        fromName: process.env.EMAIL_FROM_NAME || 'Open TMS',
+      });
+    });
+  } else {
+    container.singleton(TOKENS.IEmailService).toFactory(() => {
+      return new ConsoleEmailService();
+    });
+  }
 
   // Queue adapter
   container.singleton(TOKENS.IQueueAdapter).toFactory(() => {
     const dbUrl = process.env.DATABASE_URL || '';
     return new PgBossQueueAdapter(dbUrl);
+  });
+
+  // Event bus (publish-only in API server, full processing in worker)
+  container.singleton(TOKENS.IEventBus).toFactory(() => {
+    return new PgBossEventBus(
+      container.resolve(TOKENS.PrismaClient),
+      container.resolve(TOKENS.IQueueAdapter)
+    );
   });
 
   // EDI services

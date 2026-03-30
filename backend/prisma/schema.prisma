@@ -21,6 +21,10 @@ model Customer {
   apiKeys      ApiKey[]
   ediPartners  EdiPartner[]
   users        User[]
+
+  // Custom fields
+  customFieldVersionId String?              // Version of custom field definitions used
+  customFieldValues    Json?                // { "fieldKey": value, ... }
 }
 
 model Location {
@@ -48,6 +52,10 @@ model Location {
   pendingLaneRequestsAsOrigin PendingLaneRequest[] @relation("PendingLaneOrigin")
   pendingLaneRequestsAsDestination PendingLaneRequest[] @relation("PendingLaneDestination")
   shipmentStops  ShipmentStop[] // Multi-stop shipment support
+
+  // Custom fields
+  customFieldVersionId String?
+  customFieldValues    Json?
 }
 
 model Shipment {
@@ -76,6 +84,10 @@ model Shipment {
   orderShipments OrderShipment[]
   stops         ShipmentStop[] // Multi-stop route support
   outboundLogs  OutboundIntegrationLog[] // Outbound integration logs
+
+  // Custom fields
+  customFieldVersionId String?
+  customFieldValues    Json?
 }
 
 model ShipmentStop {
@@ -167,6 +179,10 @@ model Carrier {
   drivers      Driver[]
   laneCarriers LaneCarrier[]
   shipments    Shipment[]
+
+  // Custom fields
+  customFieldVersionId String?
+  customFieldValues    Json?
 }
 
 model Vehicle {
@@ -350,6 +366,10 @@ model Order {
 
   // Pending lane requests
   pendingLaneRequests   PendingLaneRequest[]
+
+  // Custom fields
+  customFieldVersionId String?
+  customFieldValues    Json?
 }
 
 model OrderLineItem {
@@ -399,18 +419,38 @@ model Organization {
   trackableUnitType   String   @default("box") // "pallet", "tote", "box", "stillage", "custom"
   customUnitName      String?  // Used when trackableUnitType is "custom"
 
-  // Unit of Measure Configuration
-  weightUnit          String   @default("kg") // "kg" or "lb"
-  dimUnit             String   @default("cm") // "cm" or "in"
+  // Unit of Measure Configuration (system-level defaults)
+  weightUnit          String   @default("kg")   // "kg" or "lb"
+  dimUnit             String   @default("cm")   // "cm" or "in"
+  temperatureUnit     String   @default("C")    // "C" or "F"
+  distanceUnit        String   @default("km")   // "km" or "mi"
 
   // BOL sequence counter for auto-numbering
   bolSequenceNumber   Int      @default(0)
+
+  // Theme & Branding
+  logoStorageKey      String?                     // Opaque key for logo in IBinaryStorageProvider
+  logoMimeType        String?                     // "image/png", "image/svg+xml", etc.
+  themeConfig         Json?                       // Full CSS custom property overrides (see ThemeConfig)
+  themeUpdatedAt      DateTime?                   // Used for cache invalidation
+
+  // Email Configuration
+  emailProvider       String   @default("console") // "smtp" | "sendgrid" | "ses" | "console"
+  smtpHost            String?
+  smtpPort            Int?
+  smtpSecure          Boolean  @default(false)
+  smtpUser            String?
+  smtpPassword        String?                      // Encrypted at rest in production
+  emailFromAddress    String?                      // Default "from" address
+  emailFromName       String?                      // Default "from" display name
+  emailEnabled        Boolean  @default(false)     // Global kill switch
 
   // Metadata
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
   users               User[]
+  emailTemplates      EmailTemplate[]
 }
 
 model TrackableUnit {
@@ -709,6 +749,12 @@ model User {
   phone          String?
   timezone       String   @default("UTC")
 
+  // Unit of measure preferences (null = use organization default)
+  weightUnit     String?                    // "kg" or "lb"
+  dimUnit        String?                    // "cm" or "in"
+  temperatureUnit String?                   // "C" or "F"
+  distanceUnit   String?                    // "km" or "mi"
+
   // Auth metadata
   lastLoginAt    DateTime?
   passwordChangedAt DateTime?
@@ -833,6 +879,38 @@ model EdiFile {
   @@index([createdAt])
 }
 
+// ─── Binary Storage (fallback when S3 not configured) ───────────────────────
+
+model BinaryStore {
+  key       String   @id       // S3-style key path e.g. "attachments/shipment/abc/file.pdf"
+  content   Bytes
+  size      Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ─── Attachment Models ──────────────────────────────────────────────────────
+
+model Attachment {
+  id              String   @id @default(uuid())
+  entityType      String                        // "shipment", "order", "carrier", "customer", "location"
+  entityId        String
+  fileName        String                        // Original filename (for Content-Disposition only)
+  mimeType        String
+  fileSize        Int
+  storageKey      String                        // Opaque UUID-based key — no entity info or filenames
+  storageBackend  String   @default("s3")       // "s3" or "database"
+  uploadedBy      String?                       // userId
+  description     String?
+  retentionExpiresAt DateTime?                  // Default: 10 years from creation. Null = indefinite.
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@index([retentionExpiresAt])
+}
+
 // ─── Document Models ────────────────────────────────────────────────────────
 
 model DocumentTemplate {
@@ -870,8 +948,10 @@ model GeneratedDocument {
   mimeType        String   @default("application/pdf")
   fileSize        Int?                          // bytes
 
-  // Storage — binary content
-  fileContent     Bytes
+  // Storage — binary content (optional: new docs use external storage via storageKey)
+  fileContent     Bytes?
+  storageKey      String?                       // Opaque UUID-based key — no entity info or filenames
+  storageBackend  String   @default("database") // "s3" or "database"
 
   // Template used (null for attachments/uploads)
   template        DocumentTemplate? @relation(fields: [templateId], references: [id])
@@ -890,6 +970,9 @@ model GeneratedDocument {
   metadata        Json?                         // Snapshot of data used to generate
   notes           String?
 
+  // Retention
+  retentionExpiresAt DateTime?                  // Default: 10 years from creation. Null = indefinite.
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -899,4 +982,184 @@ model GeneratedDocument {
   @@index([customerId])
   @@index([documentType])
   @@index([createdAt])
+  @@index([retentionExpiresAt])
+}
+
+// ─── Custom Fields (Versioned) ──────────────────────────────────────────────
+
+model CustomFieldVersion {
+  id          String   @id @default(uuid())
+  entityType  String                        // "shipment", "order", "carrier", "customer", "location"
+  version     Int                           // Auto-incremented per entityType
+  description String?                       // E.g., "Added invoice number field"
+  createdBy   String?                       // userId who created this version
+  active      Boolean  @default(true)       // Only one active version per entityType
+
+  createdAt   DateTime @default(now())
+
+  fields      CustomFieldDefinition[]
+
+  @@unique([entityType, version])
+  @@index([entityType, active])
+}
+
+model CustomFieldDefinition {
+  id          String   @id @default(uuid())
+  version     CustomFieldVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  versionId   String
+
+  // Field identity
+  fieldKey    String                        // Machine-readable key, e.g. "invoice_number" (stable across versions)
+  label       String                        // Display label, e.g. "Invoice Number"
+  description String?                       // Help text shown to users
+
+  // Field type and configuration
+  fieldType   String                        // "text", "decimal", "integer", "date", "boolean", "list", "multi_list"
+  required    Boolean  @default(false)
+  defaultValue String?                      // Stored as string, parsed by type
+
+  // Type-specific configuration (JSON)
+  config      Json?                         // {
+                                            //   text: { minLength, maxLength, formatMask, pattern }
+                                            //   decimal: { minValue, maxValue, decimalPlaces }
+                                            //   integer: { minValue, maxValue }
+                                            //   list/multi_list: { options: ["opt1","opt2",...] }
+                                            //   date: { minDate, maxDate }
+                                            // }
+
+  // Display
+  displayOrder Int     @default(0)          // Sort order in forms/views
+
+  createdAt   DateTime @default(now())
+
+  @@unique([versionId, fieldKey])
+  @@index([versionId])
+}
+
+model CustomFieldAudit {
+  id          String   @id @default(uuid())
+  entityType  String
+  action      String                        // "version_created", "field_added", "field_modified", "field_removed"
+  versionId   String?                       // New version ID
+  previousVersionId String?                 // Previous version ID
+  changes     Json?                         // Details of what changed
+  performedBy String?                       // userId
+  createdAt   DateTime @default(now())
+
+  @@index([entityType])
+  @@index([createdAt])
+}
+
+// ============================================================
+// Domain Events — immutable event store
+// ============================================================
+
+model DomainEventLog {
+  id          String   @id
+  type        String                          // "shipment.status_changed", "order.created", etc.
+  timestamp   String                          // ISO-8601 when the event occurred
+  orgId       String                          // Organization scope
+  actorId     String?                         // User or system that caused the event
+  entityType  String                          // "shipment", "order", "carrier", etc.
+  entityId    String                          // PK of the changed entity
+  payload     Json                            // Event-specific data
+  metadata    Json                            // correlationId, causationId, source, schemaVersion
+  createdAt   DateTime @default(now())
+
+  @@index([type])
+  @@index([entityType, entityId])
+  @@index([orgId])
+  @@index([timestamp])
+  @@index([createdAt])
+}
+
+// ============================================================
+// Notifications — in-app notification inbox
+// ============================================================
+
+model Notification {
+  id          String   @id @default(uuid())
+  userId      String
+  orgId       String
+  title       String                          // "Shipment SH-0042 Exception"
+  body        String                          // Descriptive message
+  category    String                          // "shipment_update", "order_update", "exception", "triage", "system"
+  severity    String   @default("info")       // "info", "warning", "error", "success"
+  entityType  String?                         // Link to source entity
+  entityId    String?
+  actionUrl   String?                         // Deep link: "/shipments/abc-123"
+  eventId     String?                         // Reference to DomainEventLog.id
+  eventType   String?                         // "shipment.exception"
+  read        Boolean  @default(false)
+  readAt      DateTime?
+  dismissed   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([userId, read])
+  @@index([userId, createdAt])
+  @@index([orgId])
+}
+
+// ============================================================
+// Event Subscriptions — org-level rules for event routing
+// ============================================================
+
+model EventSubscription {
+  id           String   @id @default(uuid())
+  orgId        String
+  name         String                         // "Email on shipment exceptions"
+  active       Boolean  @default(true)
+  eventPattern String                         // "shipment.exception", "order.*", "*"
+  handlerType  String                         // "email", "inapp", "webhook"
+  config       Json                           // Handler-specific: template, recipients, URL, etc.
+  entityFilter Json?                          // Optional: filter by entity properties
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([orgId, active])
+  @@index([eventPattern])
+}
+
+// ============================================================
+// User Notification Preferences — per-user channel settings
+// ============================================================
+
+model UserNotificationPreference {
+  id            String   @id @default(uuid())
+  userId        String
+  eventCategory String                        // "shipment_updates", "exceptions", "triage", "system"
+  emailEnabled  Boolean  @default(true)
+  inAppEnabled  Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([userId, eventCategory])
+}
+
+// ─── Email Templates ─────────────────────────────────────────────
+
+model EmailTemplate {
+  id              String   @id @default(uuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id])
+
+  // Template identification
+  name            String                         // "Shipment Status Update", "Delivery Confirmation"
+  eventType       String                         // Event type this template handles: "shipment.status_changed", "shipment.delivered", etc.
+  description     String?
+
+  // Content (Handlebars)
+  subject         String                         // Subject line template: "Shipment {{shipmentReference}} — {{newStatus}}"
+  htmlBody        String                         // HTML body with Handlebars placeholders
+  textBody        String?                        // Plain-text fallback (auto-generated from HTML if null)
+
+  // State
+  active          Boolean  @default(true)
+  isDefault       Boolean  @default(false)       // System-provided default template
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([organizationId, eventType])          // One template per event type per org
+  @@index([eventType])
 }

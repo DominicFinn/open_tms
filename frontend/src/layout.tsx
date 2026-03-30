@@ -63,15 +63,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <span className="material-icons">assessment</span>
             Daily Report
           </NavLink>
-          <div style={{ borderTop: '1px solid var(--color-border)', margin: 'var(--spacing-1) 0' }}></div>
-          <NavLink to="/settings" onClick={closeMobileMenu}>
-            <span className="material-icons">settings</span>
-            Settings
-          </NavLink>
-          <NavLink to="/settings/document-templates" onClick={closeMobileMenu}>
-            <span className="material-icons">article</span>
-            Document Templates
-          </NavLink>
         </nav>
       </aside>
 

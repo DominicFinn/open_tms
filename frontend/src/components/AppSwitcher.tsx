@@ -24,6 +24,13 @@ const apps: AppOption[] = [
     icon: 'hub',
     basePath: '/integrations',
   },
+  {
+    id: 'admin',
+    name: 'Admin',
+    description: 'Settings, theme, templates & fields',
+    icon: 'admin_panel_settings',
+    basePath: '/admin',
+  },
 ];
 
 export default function AppSwitcher() {
@@ -32,7 +39,11 @@ export default function AppSwitcher() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const currentApp = location.pathname.startsWith('/integrations') ? 'integrations' : 'operations';
+  const currentApp = location.pathname.startsWith('/admin')
+    ? 'admin'
+    : location.pathname.startsWith('/integrations')
+      ? 'integrations'
+      : 'operations';
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {

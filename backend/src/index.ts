@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import multipart from '@fastify/multipart';
 import swagger from '@fastify/swagger';
 import swaggerUI from '@fastify/swagger-ui';
 import prismaPlugin from './plugins/prisma.js';
@@ -34,11 +35,19 @@ import { ediFileRoutes } from './routes/ediFiles.js';
 import { queueMonitoringRoutes } from './routes/queueMonitoring.js';
 import { documentRoutes } from './routes/documents.js';
 import { dailyReportRoutes } from './routes/dailyReport.js';
+import { attachmentRoutes } from './routes/attachments.js';
+import { customFieldRoutes } from './routes/customFields.js';
+import { themeRoutes } from './routes/theme.js';
+import { notificationRoutes } from './routes/notifications.js';
+import { eventRoutes } from './routes/events.js';
+import { emailSettingsRoutes } from './routes/emailSettings.js';
+import { emailTemplateRoutes } from './routes/emailTemplates.js';
 
 const server = Fastify({ logger: true });
 
 async function start() {
   await server.register(cors, { origin: true });
+  await server.register(multipart, { limits: { fileSize: 50 * 1024 * 1024 } });
   await server.register(swagger, {
     openapi: {
       info: { title: 'Open TMS API', version: '0.1.0' },
@@ -86,18 +95,31 @@ async function start() {
   await server.register(queueMonitoringRoutes);
   await server.register(documentRoutes);
   await server.register(dailyReportRoutes);
+  await server.register(attachmentRoutes);
+  await server.register(customFieldRoutes);
+  await server.register(themeRoutes);
+  await server.register(notificationRoutes);
+  await server.register(eventRoutes);
+  await server.register(emailSettingsRoutes);
+  await server.register(emailTemplateRoutes);
 
-  // Start queue and register workers
+  // Start queue adapter (needed for publishing events, even if workers run elsewhere)
   try {
     const queue = container.resolve<IQueueAdapter>(TOKENS.IQueueAdapter);
     await queue.start();
     server.log.info('Queue adapter started');
 
-    const deliveryService = new OrderDeliveryService(server.prisma);
-    await queue.subscribe(QUEUES.OUTBOUND_CARRIER, createOutboundCarrierWorker(server.prisma));
-    await queue.subscribe(QUEUES.OUTBOUND_TRACKING, createOutboundTrackingWorker(server.prisma));
-    await queue.subscribe(QUEUES.INBOUND_WEBHOOK, createInboundWebhookWorker(server.prisma, deliveryService));
-    server.log.info('Queue workers registered');
+    // Register embedded workers ONLY if no separate worker container is running.
+    // Set DISABLE_EMBEDDED_WORKERS=true when using `docker compose up` with the worker service.
+    if (process.env.DISABLE_EMBEDDED_WORKERS !== 'true') {
+      const deliveryService = new OrderDeliveryService(server.prisma);
+      await queue.subscribe(QUEUES.OUTBOUND_CARRIER, createOutboundCarrierWorker(server.prisma));
+      await queue.subscribe(QUEUES.OUTBOUND_TRACKING, createOutboundTrackingWorker(server.prisma));
+      await queue.subscribe(QUEUES.INBOUND_WEBHOOK, createInboundWebhookWorker(server.prisma, deliveryService));
+      server.log.info('Embedded queue workers registered (set DISABLE_EMBEDDED_WORKERS=true to use separate worker container)');
+    } else {
+      server.log.info('Embedded workers disabled — using separate worker container');
+    }
 
     // Graceful shutdown
     server.addHook('onClose', async () => {

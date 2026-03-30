@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { API_URL } from '../api';
+import AttachmentPanel from '../components/AttachmentPanel';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -890,6 +891,9 @@ export default function ShipmentDetails() {
             </table>
           </div>
         )}
+
+        {/* Attachments */}
+        {id && <AttachmentPanel entityType="shipment" entityId={id} />}
       </div>
     </div>
   );

@@ -5,6 +5,7 @@ import { TOKENS } from '../di/tokens.js';
 import { IDocumentTemplateRepository } from '../repositories/DocumentTemplateRepository.js';
 import { IGeneratedDocumentRepository } from '../repositories/GeneratedDocumentRepository.js';
 import { IDocumentGenerationService } from '../services/DocumentGenerationService.js';
+import { IBinaryStorageProvider } from '../storage/IBinaryStorageProvider.js';
 
 const createTemplateSchema = z.object({
   name: z.string().min(1),
@@ -39,21 +40,107 @@ const generateCustomsSchema = z.object({
   templateId: z.string().uuid().optional(),
 });
 
+// ── Swagger schema fragments ───────────────────────────────────────────────
+
+const templateObject = {
+  type: 'object',
+  properties: {
+    id: { type: 'string', format: 'uuid' },
+    name: { type: 'string' },
+    documentType: { type: 'string', enum: ['bol', 'label', 'customs', 'daily_report'] },
+    description: { type: 'string', nullable: true },
+    htmlTemplate: { type: 'string' },
+    config: { type: 'object', nullable: true },
+    isDefault: { type: 'boolean' },
+    active: { type: 'boolean' },
+    createdAt: { type: 'string', format: 'date-time' },
+    updatedAt: { type: 'string', format: 'date-time' },
+  },
+} as const;
+
+const documentMetaObject = {
+  type: 'object',
+  properties: {
+    id: { type: 'string', format: 'uuid' },
+    documentType: { type: 'string', enum: ['bol', 'label', 'customs', 'daily_report', 'attachment'] },
+    documentNumber: { type: 'string', nullable: true },
+    fileName: { type: 'string' },
+    mimeType: { type: 'string' },
+    fileSize: { type: 'integer', nullable: true },
+    storageKey: { type: 'string', nullable: true },
+    storageBackend: { type: 'string', enum: ['s3', 'database'] },
+    templateId: { type: 'string', nullable: true },
+    shipmentId: { type: 'string', nullable: true },
+    orderId: { type: 'string', nullable: true },
+    carrierId: { type: 'string', nullable: true },
+    customerId: { type: 'string', nullable: true },
+    generatedBy: { type: 'string', nullable: true },
+    metadata: { type: 'object', nullable: true },
+    notes: { type: 'string', nullable: true },
+    retentionExpiresAt: { type: 'string', format: 'date-time', nullable: true, description: 'Retention expiry date (default: 10 years from generation)' },
+    createdAt: { type: 'string', format: 'date-time' },
+    updatedAt: { type: 'string', format: 'date-time' },
+  },
+} as const;
+
+const generatedResult = {
+  type: 'object',
+  properties: {
+    id: { type: 'string', format: 'uuid' },
+    fileName: { type: 'string' },
+  },
+} as const;
+
+const errorResponse = {
+  type: 'object',
+  properties: {
+    data: { type: 'object', nullable: true },
+    error: { type: 'string' },
+  },
+} as const;
+
+const idParam = {
+  type: 'object',
+  properties: {
+    id: { type: 'string', format: 'uuid', description: 'Resource ID' },
+  },
+} as const;
+
 export async function documentRoutes(server: FastifyInstance) {
   const templateRepo = container.resolve<IDocumentTemplateRepository>(TOKENS.IDocumentTemplateRepository);
   const docRepo = container.resolve<IGeneratedDocumentRepository>(TOKENS.IGeneratedDocumentRepository);
   const docService = container.resolve<IDocumentGenerationService>(TOKENS.IDocumentGenerationService);
+  const storageProvider = container.resolve<IBinaryStorageProvider>(TOKENS.IBinaryStorageProvider);
 
   // ── Template CRUD ─────────────────────────────────────────────────────
 
-  // GET /api/v1/document-templates
-  server.get('/api/v1/document-templates', async () => {
+  server.get('/api/v1/document-templates', {
+    schema: {
+      description: 'List all document templates.',
+      tags: ['Document Templates'],
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            data: { type: 'array', items: templateObject },
+            error: { type: 'object', nullable: true },
+          },
+        },
+      },
+    },
+  }, async () => {
     const templates = await templateRepo.all();
     return { data: templates, error: null };
   });
 
-  // GET /api/v1/document-templates/:id
-  server.get('/api/v1/document-templates/:id', async (req, reply) => {
+  server.get('/api/v1/document-templates/:id', {
+    schema: {
+      description: 'Get a single document template by ID.',
+      tags: ['Document Templates'],
+      params: idParam,
+      response: { 200: { type: 'object', properties: { data: templateObject, error: { type: 'object', nullable: true } } }, 404: errorResponse },
+    },
+  }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const template = await templateRepo.findById(id);
     if (!template) {
@@ -63,8 +150,25 @@ export async function documentRoutes(server: FastifyInstance) {
     return { data: template, error: null };
   });
 
-  // POST /api/v1/document-templates
-  server.post('/api/v1/document-templates', async (req, reply) => {
+  server.post('/api/v1/document-templates', {
+    schema: {
+      description: 'Create a new document template. Templates use Handlebars syntax for variable substitution in HTML.',
+      tags: ['Document Templates'],
+      body: {
+        type: 'object',
+        required: ['name', 'documentType', 'htmlTemplate'],
+        properties: {
+          name: { type: 'string', description: 'Template name (e.g., "International BOL")' },
+          documentType: { type: 'string', enum: ['bol', 'label', 'customs', 'daily_report'], description: 'Document type this template is for' },
+          description: { type: 'string', description: 'Optional description' },
+          htmlTemplate: { type: 'string', description: 'HTML with Handlebars placeholders (e.g., {{bolNumber}})' },
+          config: { type: 'object', description: 'Type-specific configuration JSON' },
+          isDefault: { type: 'boolean', description: 'Set as default template for this document type' },
+        },
+      },
+      response: { 201: { type: 'object', properties: { data: templateObject, error: { type: 'object', nullable: true } } }, 400: errorResponse },
+    },
+  }, async (req, reply) => {
     const parsed = createTemplateSchema.safeParse(req.body);
     if (!parsed.success) {
       reply.code(400);
@@ -76,8 +180,25 @@ export async function documentRoutes(server: FastifyInstance) {
     return { data: template, error: null };
   });
 
-  // PUT /api/v1/document-templates/:id
-  server.put('/api/v1/document-templates/:id', async (req, reply) => {
+  server.put('/api/v1/document-templates/:id', {
+    schema: {
+      description: 'Update an existing document template.',
+      tags: ['Document Templates'],
+      params: idParam,
+      body: {
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+          description: { type: 'string' },
+          htmlTemplate: { type: 'string' },
+          config: { type: 'object' },
+          isDefault: { type: 'boolean' },
+          active: { type: 'boolean' },
+        },
+      },
+      response: { 200: { type: 'object', properties: { data: templateObject, error: { type: 'object', nullable: true } } }, 404: errorResponse },
+    },
+  }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const parsed = updateTemplateSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -95,8 +216,17 @@ export async function documentRoutes(server: FastifyInstance) {
     return { data: updated, error: null };
   });
 
-  // DELETE /api/v1/document-templates/:id
-  server.delete('/api/v1/document-templates/:id', async (req, reply) => {
+  server.delete('/api/v1/document-templates/:id', {
+    schema: {
+      description: 'Delete a document template.',
+      tags: ['Document Templates'],
+      params: idParam,
+      response: {
+        200: { type: 'object', properties: { data: { type: 'object', properties: { message: { type: 'string' } } }, error: { type: 'object', nullable: true } } },
+        404: errorResponse,
+      },
+    },
+  }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const existing = await templateRepo.findById(id);
     if (!existing) {
@@ -110,8 +240,25 @@ export async function documentRoutes(server: FastifyInstance) {
 
   // ── Document Generation ───────────────────────────────────────────────
 
-  // POST /api/v1/documents/generate/bol
-  server.post('/api/v1/documents/generate/bol', async (req, reply) => {
+  server.post('/api/v1/documents/generate/bol', {
+    schema: {
+      description: 'Generate a Bill of Lading PDF for a shipment. The BOL number is auto-incremented per organization. The generated document is stored via the configured storage provider (S3 or database).',
+      tags: ['Document Generation'],
+      body: {
+        type: 'object',
+        required: ['shipmentId'],
+        properties: {
+          shipmentId: { type: 'string', format: 'uuid', description: 'Shipment to generate BOL for' },
+          templateId: { type: 'string', format: 'uuid', description: 'Custom template ID (uses default if omitted)' },
+        },
+      },
+      response: {
+        201: { type: 'object', properties: { data: generatedResult, error: { type: 'object', nullable: true } } },
+        400: errorResponse,
+        500: errorResponse,
+      },
+    },
+  }, async (req, reply) => {
     const parsed = generateBolSchema.safeParse(req.body);
     if (!parsed.success) {
       reply.code(400);
@@ -128,8 +275,25 @@ export async function documentRoutes(server: FastifyInstance) {
     }
   });
 
-  // POST /api/v1/documents/generate/labels
-  server.post('/api/v1/documents/generate/labels', async (req, reply) => {
+  server.post('/api/v1/documents/generate/labels', {
+    schema: {
+      description: 'Generate shipping labels PDF for an order. Creates one label per trackable unit.',
+      tags: ['Document Generation'],
+      body: {
+        type: 'object',
+        required: ['orderId'],
+        properties: {
+          orderId: { type: 'string', format: 'uuid', description: 'Order with trackable units to label' },
+          templateId: { type: 'string', format: 'uuid', description: 'Custom template ID' },
+        },
+      },
+      response: {
+        201: { type: 'object', properties: { data: generatedResult, error: { type: 'object', nullable: true } } },
+        400: errorResponse,
+        500: errorResponse,
+      },
+    },
+  }, async (req, reply) => {
     const parsed = generateLabelsSchema.safeParse(req.body);
     if (!parsed.success) {
       reply.code(400);
@@ -146,8 +310,25 @@ export async function documentRoutes(server: FastifyInstance) {
     }
   });
 
-  // POST /api/v1/documents/generate/customs
-  server.post('/api/v1/documents/generate/customs', async (req, reply) => {
+  server.post('/api/v1/documents/generate/customs', {
+    schema: {
+      description: 'Generate a customs/commercial invoice PDF for a shipment. Includes blank fields for HS codes, declared values, and other customs data not yet in the schema.',
+      tags: ['Document Generation'],
+      body: {
+        type: 'object',
+        required: ['shipmentId'],
+        properties: {
+          shipmentId: { type: 'string', format: 'uuid', description: 'Shipment for customs form' },
+          templateId: { type: 'string', format: 'uuid', description: 'Custom template ID' },
+        },
+      },
+      response: {
+        201: { type: 'object', properties: { data: generatedResult, error: { type: 'object', nullable: true } } },
+        400: errorResponse,
+        500: errorResponse,
+      },
+    },
+  }, async (req, reply) => {
     const parsed = generateCustomsSchema.safeParse(req.body);
     if (!parsed.success) {
       reply.code(400);
@@ -166,8 +347,23 @@ export async function documentRoutes(server: FastifyInstance) {
 
   // ── Generated Documents ───────────────────────────────────────────────
 
-  // GET /api/v1/documents
-  server.get('/api/v1/documents', async (req) => {
+  server.get('/api/v1/documents', {
+    schema: {
+      description: 'List generated documents with optional filters. Returns metadata only (no binary content).',
+      tags: ['Generated Documents'],
+      querystring: {
+        type: 'object',
+        properties: {
+          shipmentId: { type: 'string', format: 'uuid', description: 'Filter by shipment' },
+          orderId: { type: 'string', format: 'uuid', description: 'Filter by order' },
+          documentType: { type: 'string', enum: ['bol', 'label', 'customs', 'daily_report'], description: 'Filter by document type' },
+        },
+      },
+      response: {
+        200: { type: 'object', properties: { data: { type: 'array', items: documentMetaObject }, error: { type: 'object', nullable: true } } },
+      },
+    },
+  }, async (req) => {
     const { shipmentId, orderId, documentType } = req.query as {
       shipmentId?: string;
       orderId?: string;
@@ -178,8 +374,17 @@ export async function documentRoutes(server: FastifyInstance) {
     return { data: docs, error: null };
   });
 
-  // GET /api/v1/documents/:id
-  server.get('/api/v1/documents/:id', async (req, reply) => {
+  server.get('/api/v1/documents/:id', {
+    schema: {
+      description: 'Get document metadata by ID. Does not include the binary file content — use /download for that.',
+      tags: ['Generated Documents'],
+      params: idParam,
+      response: {
+        200: { type: 'object', properties: { data: documentMetaObject, error: { type: 'object', nullable: true } } },
+        404: errorResponse,
+      },
+    },
+  }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const doc = await docRepo.findById(id);
     if (!doc) {
@@ -192,8 +397,16 @@ export async function documentRoutes(server: FastifyInstance) {
     return { data: metadata, error: null };
   });
 
-  // GET /api/v1/documents/:id/download
-  server.get('/api/v1/documents/:id/download', async (req, reply) => {
+  server.get('/api/v1/documents/:id/download', {
+    schema: {
+      description: 'Download a generated document file. Retrieves from S3 or database depending on storage backend. Returns the binary file with appropriate Content-Type and Content-Disposition headers.',
+      tags: ['Generated Documents'],
+      params: idParam,
+      response: {
+        404: errorResponse,
+      },
+    },
+  }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const doc = await docRepo.findById(id);
     if (!doc) {
@@ -201,19 +414,45 @@ export async function documentRoutes(server: FastifyInstance) {
       return { data: null, error: 'Document not found' };
     }
 
+    let content: Buffer;
+    if (doc.storageKey && doc.storageBackend !== 'database') {
+      // Retrieve from external storage (S3/MinIO)
+      content = await storageProvider.retrieve(doc.storageKey);
+    } else if (doc.fileContent) {
+      // Legacy: inline DB storage
+      content = doc.fileContent;
+    } else {
+      reply.code(404);
+      return { data: null, error: 'Document content not found' };
+    }
+
     reply.header('Content-Type', doc.mimeType);
     reply.header('Content-Disposition', `attachment; filename="${doc.fileName}"`);
-    reply.header('Content-Length', doc.fileContent.length);
-    return reply.send(doc.fileContent);
+    reply.header('Content-Length', content.length);
+    return reply.send(content);
   });
 
-  // DELETE /api/v1/documents/:id
-  server.delete('/api/v1/documents/:id', async (req, reply) => {
+  server.delete('/api/v1/documents/:id', {
+    schema: {
+      description: 'Delete a generated document. Removes both the database record and the stored file from S3/storage.',
+      tags: ['Generated Documents'],
+      params: idParam,
+      response: {
+        200: { type: 'object', properties: { data: { type: 'object', properties: { message: { type: 'string' } } }, error: { type: 'object', nullable: true } } },
+        404: errorResponse,
+      },
+    },
+  }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const doc = await docRepo.findById(id);
     if (!doc) {
       reply.code(404);
       return { data: null, error: 'Document not found' };
+    }
+
+    // Clean up external storage if applicable
+    if (doc.storageKey) {
+      try { await storageProvider.delete(doc.storageKey); } catch { /* best effort */ }
     }
 
     await docRepo.delete(id);
