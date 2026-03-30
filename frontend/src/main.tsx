@@ -31,6 +31,9 @@ import OrderImportEDI from './pages/OrderImportEDI';
 import EdiPartners from './pages/EdiPartners';
 import EdiFiles from './pages/EdiFiles';
 import IntegrationsDashboard from './pages/IntegrationsDashboard';
+import Documents from './pages/Documents';
+import DocumentTemplates from './pages/DocumentTemplates';
+import DailyReport from './pages/DailyReport';
 import './theme.css';
 
 const root = createRoot(document.getElementById('root')!);
@@ -88,7 +91,10 @@ root.render(
             <Route path="/shipments/:id" element={<ShipmentDetails />} />
 
             <Route path="/pending-lane-requests" element={<PendingLaneRequests />} />
+            <Route path="/documents" element={<Documents />} />
+            <Route path="/reports/daily" element={<DailyReport />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/settings/document-templates" element={<DocumentTemplates />} />
 
             {/* Redirects from old integration URLs */}
             <Route path="/api-keys" element={<Navigate to="/integrations/api-keys" replace />} />

@@ -19,9 +19,12 @@
     "@fastify/swagger": "^8.14.0",
     "@fastify/swagger-ui": "^1.0.0",
     "@prisma/client": "^5.18.0",
+    "exceljs": "^4.4.0",
     "fastify": "^4.28.1",
     "fastify-plugin": "^4.5.1",
+    "handlebars": "^4.7.9",
     "node-x12": "^1.7.1",
+    "pdf-lib": "^1.17.1",
     "pg-boss": "^12.14.0",
     "prisma": "^5.22.0",
     "zod": "^3.23.8"

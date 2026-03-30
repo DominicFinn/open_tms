@@ -77,21 +77,24 @@
   - ✅ Session management (JWT-based)
   - Multi-tenancy support (extend existing Organization model) 🔲
   - User attribution on audit trail events 🔲
-- **Document Templates** 🔲
-  - Auto-generate Bills of Lading, labels, customs forms.
-  - PDF generation with prefilled shipment details.
-  - Document template management UI (create/edit templates)
-- **Document Management** 🔲
-  - Store and archive generated docs.
-  - Document upload/attachment on any entity (shipments, orders, carriers)
-  - Electronic signature capture for delivery confirmation
-  - Begin audit trail for shipment events.
+- **Document Templates** ✅
+  - ✅ Auto-generate Bills of Lading, shipping labels, customs forms
+  - ✅ PDF generation with prefilled shipment details (pdf-lib)
+  - ✅ Document template management UI (create/edit Handlebars templates)
+  - ✅ Daily operations report (Excel export with 5 sheets: summary, shipments, orders, stop schedule, exceptions)
+- **Document Management** (partial)
+  - ✅ Store and archive generated docs (GeneratedDocument model)
+  - ✅ Document download and listing with filters
+  - Document upload/attachment on any entity (shipments, orders, carriers) 🔲
+  - Electronic signature capture for delivery confirmation 🔲
+  - Begin audit trail for shipment events 🔲
 - **Theming & White-labeling** 🔲
   - Extract core CSS custom properties into database-stored theme config
   - Theme Settings UI page (color palette, typography, spacing overrides)
   - Logo upload and organization branding (leveraging existing IFileStorageProvider)
   - Email header/footer branding configuration
   - Runtime theme application via CSS variable injection
+  - Document templates should inherit branding (logo, colors) once theming is implemented
 - **Custom Fields** 🔲
   - Allow configurable fields for customers, shipments, and items.
 

@@ -22,6 +22,12 @@ export const TOKENS = {
   IEdiImportService: Symbol.for('IEdiImportService'),
   IOrderConversionService: Symbol.for('IOrderConversionService'),
 
+  // Document tokens
+  IDocumentTemplateRepository: Symbol.for('IDocumentTemplateRepository'),
+  IGeneratedDocumentRepository: Symbol.for('IGeneratedDocumentRepository'),
+  IDocumentGenerationService: Symbol.for('IDocumentGenerationService'),
+  IDailyReportService: Symbol.for('IDailyReportService'),
+
   // Infrastructure tokens
   PrismaClient: Symbol.for('PrismaClient'),
   IFileStorageProvider: Symbol.for('IFileStorageProvider'),

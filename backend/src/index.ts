@@ -32,6 +32,8 @@ import { ediImportRoutes } from './routes/ediImport.js';
 import { ediPartnerRoutes } from './routes/ediPartners.js';
 import { ediFileRoutes } from './routes/ediFiles.js';
 import { queueMonitoringRoutes } from './routes/queueMonitoring.js';
+import { documentRoutes } from './routes/documents.js';
+import { dailyReportRoutes } from './routes/dailyReport.js';
 
 const server = Fastify({ logger: true });
 
@@ -82,6 +84,8 @@ async function start() {
   await server.register(ediPartnerRoutes);
   await server.register(ediFileRoutes);
   await server.register(queueMonitoringRoutes);
+  await server.register(documentRoutes);
+  await server.register(dailyReportRoutes);
 
   // Start queue and register workers
   try {
