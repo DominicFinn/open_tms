@@ -27,6 +27,8 @@ export default function Settings() {
   const [customUnitName, setCustomUnitName] = useState('');
   const [weightUnit, setWeightUnit] = useState<'kg' | 'lb'>('kg');
   const [dimUnit, setDimUnit] = useState<'cm' | 'in'>('cm');
+  const [temperatureUnit, setTemperatureUnit] = useState<'C' | 'F'>('C');
+  const [distanceUnit, setDistanceUnit] = useState<'km' | 'mi'>('km');
 
   useEffect(() => {
     loadSettings();
@@ -52,10 +54,14 @@ export default function Settings() {
         setCustomUnitName(result.data.customUnitName || '');
         setWeightUnit(result.data.weightUnit || 'kg');
         setDimUnit(result.data.dimUnit || 'cm');
+        setTemperatureUnit(result.data.temperatureUnit || 'C');
+        setDistanceUnit(result.data.distanceUnit || 'km');
       } else {
         // If no data but successful response, use defaults
         setWeightUnit('kg');
         setDimUnit('cm');
+        setTemperatureUnit('C');
+        setDistanceUnit('km');
       }
     } catch (err: any) {
       const errorMessage = err.message?.includes('Failed to fetch') || err.message?.includes('NetworkError')
@@ -66,6 +72,8 @@ export default function Settings() {
       // Still allow editing with defaults even if load fails
       setWeightUnit('kg');
       setDimUnit('cm');
+      setTemperatureUnit('C');
+      setDistanceUnit('km');
     } finally {
       setLoading(false);
     }
@@ -90,7 +98,9 @@ export default function Settings() {
         trackingMode,
         trackableUnitType,
         weightUnit,
-        dimUnit
+        dimUnit,
+        temperatureUnit,
+        distanceUnit
       };
 
       if (trackableUnitType === 'custom') {
@@ -281,6 +291,22 @@ export default function Settings() {
               <label>Default Dimension Unit</label>
             </div>
 
+            <div className="input-wrapper" style={{ gridColumn: '1 / -1' }}>
+              <select value={temperatureUnit} onChange={(e) => setTemperatureUnit(e.target.value as 'C' | 'F')} className="input" required>
+                <option value="C">Celsius (°C)</option>
+                <option value="F">Fahrenheit (°F)</option>
+              </select>
+              <label>Default Temperature Unit</label>
+            </div>
+
+            <div className="input-wrapper" style={{ gridColumn: '1 / -1' }}>
+              <select value={distanceUnit} onChange={(e) => setDistanceUnit(e.target.value as 'km' | 'mi')} className="input" required>
+                <option value="km">Kilometers (km)</option>
+                <option value="mi">Miles (mi)</option>
+              </select>
+              <label>Default Distance Unit</label>
+            </div>
+
             <div className="alert alert-warning" style={{ gridColumn: '1 / -1' }}>
               <span className="material-icons">warning</span>
               <div>
@@ -331,6 +357,18 @@ export default function Settings() {
               <strong>Default Dimension Unit:</strong>{' '}
               <span className="chip chip-primary" style={{ marginLeft: '4px' }}>
                 {dimUnit === 'cm' ? 'Centimeters (cm)' : 'Inches (in)'}
+              </span>
+            </div>
+            <div>
+              <strong>Default Temperature Unit:</strong>{' '}
+              <span className="chip chip-primary" style={{ marginLeft: '4px' }}>
+                {temperatureUnit === 'C' ? 'Celsius (°C)' : 'Fahrenheit (°F)'}
+              </span>
+            </div>
+            <div>
+              <strong>Default Distance Unit:</strong>{' '}
+              <span className="chip chip-primary" style={{ marginLeft: '4px' }}>
+                {distanceUnit === 'km' ? 'Kilometers (km)' : 'Miles (mi)'}
               </span>
             </div>
             <div style={{ padding: 'var(--spacing-2)', backgroundColor: 'var(--surface-container)', borderRadius: 'var(--border-radius-sm)', fontSize: '0.9375rem' }}>

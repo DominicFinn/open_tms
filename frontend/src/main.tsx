@@ -34,6 +34,7 @@ import IntegrationsDashboard from './pages/IntegrationsDashboard';
 import Documents from './pages/Documents';
 import DocumentTemplates from './pages/DocumentTemplates';
 import DailyReport from './pages/DailyReport';
+import CustomFields from './pages/CustomFields';
 import './theme.css';
 
 const root = createRoot(document.getElementById('root')!);
@@ -95,6 +96,7 @@ root.render(
             <Route path="/reports/daily" element={<DailyReport />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/settings/document-templates" element={<DocumentTemplates />} />
+            <Route path="/settings/custom-fields" element={<CustomFields />} />
 
             {/* Redirects from old integration URLs */}
             <Route path="/api-keys" element={<Navigate to="/integrations/api-keys" replace />} />

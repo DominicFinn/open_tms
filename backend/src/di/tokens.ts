@@ -31,6 +31,9 @@ export const TOKENS = {
   // Attachment tokens
   IAttachmentRepository: Symbol.for('IAttachmentRepository'),
 
+  // Custom fields tokens
+  ICustomFieldService: Symbol.for('ICustomFieldService'),
+
   // Infrastructure tokens
   PrismaClient: Symbol.for('PrismaClient'),
   IFileStorageProvider: Symbol.for('IFileStorageProvider'),

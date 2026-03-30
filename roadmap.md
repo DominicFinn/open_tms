@@ -107,8 +107,25 @@
   - Email header/footer branding configuration
   - Runtime theme application via CSS variable injection
   - Document templates should inherit branding (logo, colors) once theming is implemented
-- **Custom Fields** 🔲
-  - Allow configurable fields for customers, shipments, and items.
+- **Custom Fields** ✅
+  - ✅ Configurable fields for shipments, orders, carriers, customers, and locations
+  - ✅ Field types: text, decimal, integer, date, boolean, single-select list, multi-select list
+  - ✅ Field configuration: required, format mask, default value, min/max, regex validation, decimal places
+  - ✅ Versioned field definitions — entity records save data against a specific version so old records aren't broken by schema changes
+  - ✅ Audit trail on custom field definition changes (CustomFieldAudit model)
+  - ✅ Server-side validation of custom field values
+  - ✅ Management UI at /settings/custom-fields with version history
+  - ✅ Reusable CustomFieldRenderer component for entity forms (edit + read-only modes)
+- **Units of Measure** ✅
+  - ✅ System-level defaults (admin-set): temperature (°F/°C), distance (miles/km), weight (lbs/kg), dimensions (in/cm)
+  - ✅ User-level overrides: each user selects preferred units (null = use org default)
+  - ✅ Conversion utilities (backend stores canonical metric, converts on display)
+  - ✅ Settings UI updated with temperature and distance unit selectors
+- **Multi-Language Support** 🔲
+  - Language files (JSON) for UI translations
+  - User-selectable language preference
+  - Backend error messages and labels in language files
+  - RTL layout support for applicable languages
 
 ## **Phase 4: Notifications, Tracking & Exception Management**
 - **Emails & Notifications** 🔲

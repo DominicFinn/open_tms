@@ -72,6 +72,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <span className="material-icons">article</span>
             Document Templates
           </NavLink>
+          <NavLink to="/settings/custom-fields" onClick={closeMobileMenu}>
+            <span className="material-icons">tune</span>
+            Custom Fields
+          </NavLink>
         </nav>
       </aside>
 

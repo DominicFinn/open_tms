@@ -21,6 +21,10 @@ model Customer {
   apiKeys      ApiKey[]
   ediPartners  EdiPartner[]
   users        User[]
+
+  // Custom fields
+  customFieldVersionId String?              // Version of custom field definitions used
+  customFieldValues    Json?                // { "fieldKey": value, ... }
 }
 
 model Location {
@@ -48,6 +52,10 @@ model Location {
   pendingLaneRequestsAsOrigin PendingLaneRequest[] @relation("PendingLaneOrigin")
   pendingLaneRequestsAsDestination PendingLaneRequest[] @relation("PendingLaneDestination")
   shipmentStops  ShipmentStop[] // Multi-stop shipment support
+
+  // Custom fields
+  customFieldVersionId String?
+  customFieldValues    Json?
 }
 
 model Shipment {
@@ -76,6 +84,10 @@ model Shipment {
   orderShipments OrderShipment[]
   stops         ShipmentStop[] // Multi-stop route support
   outboundLogs  OutboundIntegrationLog[] // Outbound integration logs
+
+  // Custom fields
+  customFieldVersionId String?
+  customFieldValues    Json?
 }
 
 model ShipmentStop {
@@ -167,6 +179,10 @@ model Carrier {
   drivers      Driver[]
   laneCarriers LaneCarrier[]
   shipments    Shipment[]
+
+  // Custom fields
+  customFieldVersionId String?
+  customFieldValues    Json?
 }
 
 model Vehicle {
@@ -350,6 +366,10 @@ model Order {
 
   // Pending lane requests
   pendingLaneRequests   PendingLaneRequest[]
+
+  // Custom fields
+  customFieldVersionId String?
+  customFieldValues    Json?
 }
 
 model OrderLineItem {
@@ -399,9 +419,11 @@ model Organization {
   trackableUnitType   String   @default("box") // "pallet", "tote", "box", "stillage", "custom"
   customUnitName      String?  // Used when trackableUnitType is "custom"
 
-  // Unit of Measure Configuration
-  weightUnit          String   @default("kg") // "kg" or "lb"
-  dimUnit             String   @default("cm") // "cm" or "in"
+  // Unit of Measure Configuration (system-level defaults)
+  weightUnit          String   @default("kg")   // "kg" or "lb"
+  dimUnit             String   @default("cm")   // "cm" or "in"
+  temperatureUnit     String   @default("C")    // "C" or "F"
+  distanceUnit        String   @default("km")   // "km" or "mi"
 
   // BOL sequence counter for auto-numbering
   bolSequenceNumber   Int      @default(0)
@@ -709,6 +731,12 @@ model User {
   phone          String?
   timezone       String   @default("UTC")
 
+  // Unit of measure preferences (null = use organization default)
+  weightUnit     String?                    // "kg" or "lb"
+  dimUnit        String?                    // "cm" or "in"
+  temperatureUnit String?                   // "C" or "F"
+  distanceUnit   String?                    // "km" or "mi"
+
   // Auth metadata
   lastLoginAt    DateTime?
   passwordChangedAt DateTime?
@@ -937,4 +965,69 @@ model GeneratedDocument {
   @@index([documentType])
   @@index([createdAt])
   @@index([retentionExpiresAt])
+}
+
+// ─── Custom Fields (Versioned) ──────────────────────────────────────────────
+
+model CustomFieldVersion {
+  id          String   @id @default(uuid())
+  entityType  String                        // "shipment", "order", "carrier", "customer", "location"
+  version     Int                           // Auto-incremented per entityType
+  description String?                       // E.g., "Added invoice number field"
+  createdBy   String?                       // userId who created this version
+  active      Boolean  @default(true)       // Only one active version per entityType
+
+  createdAt   DateTime @default(now())
+
+  fields      CustomFieldDefinition[]
+
+  @@unique([entityType, version])
+  @@index([entityType, active])
+}
+
+model CustomFieldDefinition {
+  id          String   @id @default(uuid())
+  version     CustomFieldVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  versionId   String
+
+  // Field identity
+  fieldKey    String                        // Machine-readable key, e.g. "invoice_number" (stable across versions)
+  label       String                        // Display label, e.g. "Invoice Number"
+  description String?                       // Help text shown to users
+
+  // Field type and configuration
+  fieldType   String                        // "text", "decimal", "integer", "date", "boolean", "list", "multi_list"
+  required    Boolean  @default(false)
+  defaultValue String?                      // Stored as string, parsed by type
+
+  // Type-specific configuration (JSON)
+  config      Json?                         // {
+                                            //   text: { minLength, maxLength, formatMask, pattern }
+                                            //   decimal: { minValue, maxValue, decimalPlaces }
+                                            //   integer: { minValue, maxValue }
+                                            //   list/multi_list: { options: ["opt1","opt2",...] }
+                                            //   date: { minDate, maxDate }
+                                            // }
+
+  // Display
+  displayOrder Int     @default(0)          // Sort order in forms/views
+
+  createdAt   DateTime @default(now())
+
+  @@unique([versionId, fieldKey])
+  @@index([versionId])
+}
+
+model CustomFieldAudit {
+  id          String   @id @default(uuid())
+  entityType  String
+  action      String                        // "version_created", "field_added", "field_modified", "field_removed"
+  versionId   String?                       // New version ID
+  previousVersionId String?                 // Previous version ID
+  changes     Json?                         // Details of what changed
+  performedBy String?                       // userId
+  createdAt   DateTime @default(now())
+
+  @@index([entityType])
+  @@index([createdAt])
 }

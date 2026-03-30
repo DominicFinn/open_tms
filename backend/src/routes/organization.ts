@@ -9,7 +9,9 @@ const updateSettingsSchema = z.object({
   trackableUnitType: z.enum(['pallet', 'tote', 'box', 'stillage', 'custom']).optional(),
   customUnitName: z.string().optional(),
   weightUnit: z.enum(['kg', 'lb']).optional(),
-  dimUnit: z.enum(['cm', 'in']).optional()
+  dimUnit: z.enum(['cm', 'in']).optional(),
+  temperatureUnit: z.enum(['C', 'F']).optional(),
+  distanceUnit: z.enum(['km', 'mi']).optional(),
 });
 
 export async function organizationRoutes(server: FastifyInstance) {

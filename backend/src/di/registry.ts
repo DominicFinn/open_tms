@@ -28,6 +28,7 @@ import { DatabaseFileStorage } from '../storage/DatabaseFileStorage.js';
 import { DatabaseBinaryStorage } from '../storage/DatabaseBinaryStorage.js';
 import { S3FileStorage } from '../storage/S3FileStorage.js';
 import { AttachmentRepository } from '../repositories/AttachmentRepository.js';
+import { CustomFieldService } from '../services/CustomFieldService.js';
 import { PgBossQueueAdapter } from '../queue/PgBossQueueAdapter.js';
 
 /**
@@ -143,6 +144,11 @@ export function registerDependencies(prisma: PrismaClient): void {
   // Attachment repository
   container.singleton(TOKENS.IAttachmentRepository).toFactory(() => {
     return new AttachmentRepository(container.resolve(TOKENS.PrismaClient));
+  });
+
+  // Custom fields
+  container.singleton(TOKENS.ICustomFieldService).toFactory(() => {
+    return new CustomFieldService(container.resolve(TOKENS.PrismaClient));
   });
 
   // Queue adapter
