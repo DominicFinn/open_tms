@@ -14,11 +14,13 @@ export interface CreateShipmentDTO {
   deliveryDate?: string;
   items?: any[];
   status?: string;
+  proNumber?: string;
 }
 
 export interface UpdateShipmentDTO {
   reference?: string;
   status?: string;
+  proNumber?: string;
   pickupDate?: string;
   deliveryDate?: string;
   customerId?: string;
