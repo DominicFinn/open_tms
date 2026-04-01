@@ -415,11 +415,11 @@ export async function documentRoutes(server: FastifyInstance) {
     }
 
     let content: Buffer;
-    if (doc.storageKey && doc.storageBackend !== 'database') {
-      // Retrieve from external storage (S3/MinIO)
+    if (doc.storageKey && storageProvider) {
+      // Retrieve from storage provider (S3/MinIO or DatabaseBinaryStorage)
       content = await storageProvider.retrieve(doc.storageKey);
     } else if (doc.fileContent) {
-      // Legacy: inline DB storage
+      // Legacy: inline DB storage (no storageKey)
       content = doc.fileContent;
     } else {
       reply.code(404);
