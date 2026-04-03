@@ -24,6 +24,7 @@ export default function Locations() {
   const [filteredLocations, setFilteredLocations] = React.useState<Location[]>([]);
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
+  const [loadError, setLoadError] = React.useState<string | null>(null);
   const [viewMode, setViewMode] = React.useState<'list' | 'map'>('list');
 
   // Filter state
@@ -33,12 +34,14 @@ export default function Locations() {
 
   const loadLocations = async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const response = await fetch(API_URL + '/api/v1/locations');
       const result = await response.json();
       setLocations(result.data || []);
     } catch (error) {
       console.error('Failed to load locations:', error);
+      setLoadError('Failed to load locations. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -206,6 +209,10 @@ export default function Locations() {
             </div>
           )}
         </div>
+
+        {loadError && (
+          <div className="alert alert-error" style={{ marginBottom: 'var(--spacing-2)' }}>{loadError}</div>
+        )}
 
         {viewMode === 'list' ? (
           <div className="table-container">
