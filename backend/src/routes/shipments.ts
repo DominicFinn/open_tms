@@ -43,6 +43,7 @@ export async function shipmentRoutes(server: FastifyInstance) {
       destinationId: z.string().uuid().optional(),
       pickupDate: z.string().datetime().optional(),
       deliveryDate: z.string().datetime().optional(),
+      proNumber: z.string().optional(),
       items: z.array(z.object({
         sku: z.string(),
         description: z.string().optional(),
@@ -266,6 +267,7 @@ export async function shipmentRoutes(server: FastifyInstance) {
       customerId: z.string().uuid().optional(),
       laneId: z.string().uuid().optional(),
       carrierId: z.string().uuid().nullable().optional(), // Manual carrier assignment
+      proNumber: z.string().nullable().optional(),
       originId: z.string().uuid().optional(),
       destinationId: z.string().uuid().optional(),
       items: z.array(z.object({

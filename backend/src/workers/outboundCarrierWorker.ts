@@ -99,6 +99,13 @@ export function createOutboundCarrierWorker(prisma: PrismaClient) {
         });
 
         if (result.success) {
+          const proValue = result.carrierReference || result.trackingNumber;
+          if (proValue && !shipment.proNumber) {
+            await prisma.shipment.update({
+              where: { id: shipment.id },
+              data: { proNumber: proValue },
+            });
+          }
           console.log(`[CarrierWorker] ${eventType} sent to ${integration.name} for ${shipment.reference}`);
         } else {
           console.warn(`[CarrierWorker] Failed: ${integration.name} — ${result.errorMessage}`);

@@ -35,6 +35,7 @@ interface Shipment {
   laneId?: string;
   originId: string;
   destinationId: string;
+  proNumber?: string | null;
   archived: boolean;
   archivedAt?: string;
   createdAt: string;
@@ -94,6 +95,7 @@ export default function Shipments() {
     if (searchTerm) {
       filtered = filtered.filter(shipment =>
         shipment.reference.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (shipment.proNumber && shipment.proNumber.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (shipment.customer && shipment.customer.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (shipment.origin && shipment.origin.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (shipment.destination && shipment.destination.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
@@ -157,7 +159,7 @@ export default function Shipments() {
               onChange={e => setSearchTerm(e.target.value)}
               placeholder=" "
             />
-            <label>Search by reference, customer, lane…</label>
+            <label>Search by reference, PRO #, customer, lane…</label>
           </div>
 
           <div className="text-field">
@@ -218,6 +220,7 @@ export default function Shipments() {
             <thead>
               <tr>
                 <th>Reference</th>
+                <th>PRO #</th>
                 <th>Customer</th>
                 <th>Origin / Lane</th>
                 <th>Destination</th>
@@ -230,7 +233,7 @@ export default function Shipments() {
             <tbody>
               {filteredShipments.length === 0 ? (
                 <tr>
-                  <td colSpan={8} style={{ textAlign: 'center', padding: 'var(--spacing-4)', color: 'var(--on-surface-variant)' }}>
+                  <td colSpan={9} style={{ textAlign: 'center', padding: 'var(--spacing-4)', color: 'var(--on-surface-variant)' }}>
                     {hasActiveFilters ? 'No shipments match your current filters' : 'No shipments found'}
                   </td>
                 </tr>
@@ -249,6 +252,7 @@ export default function Shipments() {
                       {s.reference}
                     </Link>
                   </td>
+                  <td>{s.proNumber || '—'}</td>
                   <td>{s.customer?.name || s.customerId}</td>
                   <td>
                     {s.lane ? (

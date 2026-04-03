@@ -455,6 +455,7 @@ export default function ShipmentDetails() {
             <h3>Basic Information</h3>
             <div style={{ display: 'grid', gap: '8px' }}>
               <div><strong>Reference:</strong> {shipment.reference}</div>
+              <div><strong>PRO Number:</strong> {shipment.proNumber || '—'}</div>
               <div><strong>Status:</strong> <span className={`chip ${
                 shipment.status === 'delivered' ? 'chip-success' : 
                 shipment.status === 'in_transit' ? 'chip-warning' : 

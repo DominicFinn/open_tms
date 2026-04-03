@@ -64,6 +64,7 @@ model Shipment {
   status        String   @default("draft")
   pickupDate    DateTime?
   deliveryDate  DateTime?
+  proNumber     String?
   items         Json?
   archived      Boolean  @default(false)
   archivedAt    DateTime?

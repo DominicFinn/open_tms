@@ -35,6 +35,7 @@ interface Shipment {
   laneId?: string;
   originId: string;
   destinationId: string;
+  proNumber?: string | null;
   archived: boolean;
   archivedAt?: string;
   createdAt: string;
@@ -56,6 +57,7 @@ export default function ShipmentCreationForm({
 }: ShipmentCreationFormProps) {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [reference, setReference] = useState('');
+  const [proNumber, setProNumber] = useState('');
   const [customerId, setCustomerId] = useState('');
   const [useLane, setUseLane] = useState(true);
   const [laneId, setLaneId] = useState('');
@@ -71,6 +73,7 @@ export default function ShipmentCreationForm({
   useEffect(() => {
     if (editingShipment) {
       setReference(editingShipment.reference);
+      setProNumber(editingShipment.proNumber || '');
       setCustomerId(editingShipment.customerId);
 
       // Determine route type based on whether laneId exists
@@ -109,6 +112,7 @@ export default function ShipmentCreationForm({
 
   const clearForm = () => {
     setReference('');
+    setProNumber('');
     setCustomerId('');
     setUseLane(true);
     setLaneId('');
@@ -162,6 +166,7 @@ export default function ShipmentCreationForm({
     try {
       const shipmentData = {
         reference,
+        proNumber: proNumber || undefined,
         customerId,
         ...(useLane
           ? { laneId }
@@ -236,6 +241,15 @@ export default function ShipmentCreationForm({
               disabled={loading}
             />
             <label>Reference</label>
+          </div>
+          <div className="text-field">
+            <input
+              value={proNumber}
+              onChange={e => setProNumber(e.target.value)}
+              placeholder=" "
+              disabled={loading}
+            />
+            <label>PRO Number (optional)</label>
           </div>
           <div className="text-field">
             <select
