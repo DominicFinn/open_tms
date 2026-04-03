@@ -49,6 +49,10 @@ export function AdminLayout() {
           </NavLink>
 
           <div className="sidebar-section-label">Configuration</div>
+          <NavLink to="/admin/maps" onClick={closeMobileMenu}>
+            <span className="material-icons">map</span>
+            Maps & Geocoding
+          </NavLink>
           <NavLink to="/admin/document-templates" onClick={closeMobileMenu}>
             <span className="material-icons">article</span>
             Document Templates

@@ -19,7 +19,8 @@
    Status:       .chip .chip-{success|warning|error|info|primary|secondary}
                  .chip-outline
    Feedback:     .alert .alert-{error|success|info|warning}
-                 .loading-spinner
+                 .loading-spinner | .loading-spinner.small
+                 .loading-spinner-page (full-page centering wrapper)
    Modal:        .modal-backdrop > .modal-card
    ============================================================ */
 
@@ -1186,6 +1187,7 @@ input[type="radio"] {
 /* ============================================================
    LOADING SPINNER
    JSX: <div className="loading-spinner" />
+   Full-page center: <div className="loading-spinner-page"><div className="loading-spinner" /></div>
    ============================================================ */
 .loading-spinner {
   width: 32px;
@@ -1194,13 +1196,23 @@ input[type="radio"] {
   border-top-color: var(--primary);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
-  display: inline-block;
+  display: block;
+  margin: 0 auto;
 }
 
 .loading-spinner.small {
   width: 20px;
   height: 20px;
   border-width: 2px;
+  display: inline-block;
+  margin: 0;
+}
+
+.loading-spinner-page {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 60vh;
 }
 
 /* ============================================================

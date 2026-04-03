@@ -325,7 +325,13 @@ export class DocumentGenerationService implements IDocumentGenerationService {
   async htmlToPdf(html: string, title: string): Promise<Uint8Array> {
     const doc = await PDFDocument.create();
     doc.setTitle(title);
-    doc.setCreator('Open TMS');
+    // Use org name for document creator metadata
+    let creatorName = 'Open TMS';
+    try {
+      const org = await this.prisma.organization.findFirst({ select: { name: true } });
+      if (org?.name && org.name !== 'Default Organization') creatorName = org.name;
+    } catch { /* use fallback */ }
+    doc.setCreator(creatorName);
 
     const font = await doc.embedFont(StandardFonts.Helvetica);
     const boldFont = await doc.embedFont(StandardFonts.HelveticaBold);

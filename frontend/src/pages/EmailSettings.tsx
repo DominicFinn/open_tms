@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { API_URL } from '../api';
+import { useTheme } from '../ThemeProvider';
 
 interface EmailConfig {
   emailProvider: string;
@@ -14,6 +15,7 @@ interface EmailConfig {
 }
 
 export default function EmailSettings() {
+  const { systemName } = useTheme();
   const [config, setConfig] = useState<EmailConfig>({
     emailProvider: 'console',
     smtpHost: '',
@@ -91,11 +93,7 @@ export default function EmailSettings() {
   };
 
   if (loading) {
-    return (
-      <div style={{ padding: '24px' }}>
-        <div className="loading-spinner" />
-      </div>
-    );
+    return <div className="loading-spinner-page"><div className="loading-spinner" /></div>;
   }
 
   return (
@@ -103,7 +101,7 @@ export default function EmailSettings() {
       <div className="page-header">
         <h1>Email Settings</h1>
         <p style={{ color: 'var(--on-surface-variant)', margin: '4px 0 0' }}>
-          Configure how Open TMS sends email notifications.
+          Configure how {systemName} sends email notifications.
         </p>
       </div>
 

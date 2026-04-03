@@ -5,6 +5,7 @@ import { Layout } from './layout';
 import { IntegrationsLayout } from './integrations-layout';
 import { AdminLayout } from './admin-layout';
 import { ThemeProvider } from './ThemeProvider';
+import { MapProvider } from './MapProvider';
 import Dashboard from './pages/Dashboard';
 import Customers from './pages/Customers';
 import CreateCustomer from './pages/CreateCustomer';
@@ -42,12 +43,14 @@ import ThemeSettings from './pages/ThemeSettings';
 import EmailSettings from './pages/EmailSettings';
 import EmailTemplatesPage from './pages/EmailTemplates';
 import StyleGuide from './pages/StyleGuide';
+import MapsSettings from './pages/MapsSettings';
 import './theme.css';
 
 const root = createRoot(document.getElementById('root')!);
 root.render(
   <BrowserRouter>
     <ThemeProvider>
+      <MapProvider>
       <Routes>
         {/* Integrations sub-app */}
         <Route path="/integrations" element={<IntegrationsLayout />}>
@@ -69,6 +72,7 @@ root.render(
           <Route path="email-templates" element={<EmailTemplatesPage />} />
           <Route path="document-templates" element={<DocumentTemplates />} />
           <Route path="custom-fields" element={<CustomFields />} />
+          <Route path="maps" element={<MapsSettings />} />
           <Route path="style-guide" element={<StyleGuide />} />
         </Route>
 
@@ -127,6 +131,7 @@ root.render(
           </Layout>
         } />
       </Routes>
+      </MapProvider>
     </ThemeProvider>
   </BrowserRouter>
 );

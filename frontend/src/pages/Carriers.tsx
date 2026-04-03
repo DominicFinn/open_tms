@@ -20,6 +20,7 @@ interface Carrier {
   archivedAt?: string;
   createdAt: string;
   updatedAt: string;
+  validationTier?: string;
 }
 
 export default function Carriers() {
@@ -187,6 +188,7 @@ export default function Carriers() {
                 <th>Name</th>
                 <th>MC Number</th>
                 <th>DOT Number</th>
+                <th>Validation</th>
                 <th>Contact</th>
                 <th>Location</th>
                 <th>Actions</th>
@@ -195,7 +197,7 @@ export default function Carriers() {
             <tbody>
               {filteredCarriers.length === 0 ? (
                 <tr>
-                  <td colSpan={6} style={{ textAlign: 'center', padding: 'var(--spacing-4)', color: 'var(--on-surface-variant)' }}>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: 'var(--spacing-4)', color: 'var(--on-surface-variant)' }}>
                     {hasActiveFilters ? 'No carriers match your current filters' : 'No carriers found'}
                   </td>
                 </tr>
@@ -205,6 +207,17 @@ export default function Carriers() {
                     <td>{c.name}</td>
                     <td>{c.mcNumber || '—'}</td>
                     <td>{c.dotNumber || '—'}</td>
+                    <td>
+                      {c.validationTier === 'tier3' ? (
+                        <span className="chip chip-success">Tier 3</span>
+                      ) : c.validationTier === 'tier2' ? (
+                        <span className="chip chip-primary">Tier 2</span>
+                      ) : c.validationTier === 'tier1' ? (
+                        <span className="chip chip-info">Tier 1</span>
+                      ) : (
+                        <span className="chip chip-warning">Unvalidated</span>
+                      )}
+                    </td>
                     <td>
                       {c.contactName && <div>{c.contactName}</div>}
                       {c.contactEmail && <div style={{ fontSize: '0.875rem', color: 'var(--on-surface-variant)' }}>{c.contactEmail}</div>}

@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import AppBar from './components/AppBar';
+import { useTheme } from './ThemeProvider';
 import './theme.css';
 
 export function Layout({ children }: { children: React.ReactNode }) {
+  const { systemName } = useTheme();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const toggleMobileMenu = () => {
@@ -19,7 +21,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <aside className={`sidebar ${mobileMenuOpen ? 'sidebar-mobile-open' : ''}`}>
         <div className="sidebar-brand">
           <span className="material-icons" style={{ fontSize: '24px' }}>local_shipping</span>
-          Open TMS
+          {systemName}
         </div>
         <nav className="sidebar-nav">
           <NavLink to="/" end onClick={closeMobileMenu}>
@@ -74,7 +76,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         />
       )}
 
-      <AppBar title="Open TMS" icon="local_shipping" onToggleMobileMenu={toggleMobileMenu} />
+      <AppBar title={systemName} icon="local_shipping" onToggleMobileMenu={toggleMobileMenu} />
       <main className="main">{children}</main>
     </>
   );

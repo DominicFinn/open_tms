@@ -72,8 +72,4 @@ ALTER TABLE "Order" ADD COLUMN "customFieldValues" JSONB;
 ALTER TABLE "Organization" ADD COLUMN "temperatureUnit" TEXT NOT NULL DEFAULT 'C';
 ALTER TABLE "Organization" ADD COLUMN "distanceUnit" TEXT NOT NULL DEFAULT 'km';
 
--- User-level UoM preferences (null = use org default)
-ALTER TABLE "User" ADD COLUMN "weightUnit" TEXT;
-ALTER TABLE "User" ADD COLUMN "dimUnit" TEXT;
-ALTER TABLE "User" ADD COLUMN "temperatureUnit" TEXT;
-ALTER TABLE "User" ADD COLUMN "distanceUnit" TEXT;
+-- Note: User-level UoM preferences are managed by the auth-service schema

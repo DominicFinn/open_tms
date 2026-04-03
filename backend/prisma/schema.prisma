@@ -180,6 +180,17 @@ model Carrier {
   laneCarriers LaneCarrier[]
   shipments    Shipment[]
 
+  // Carrier Validation (SOP-CL-001)
+  validationTier            String?    // "tier1" | "tier2" | "tier3" | null
+  registrationChecked       Boolean    @default(false)
+  insuranceDocReceived      Boolean    @default(false)
+  insuranceVerified         Boolean    @default(false)
+  identityConfirmed         Boolean    @default(false)
+  complianceChecked         Boolean    @default(false)
+  validationNotes           String?
+  validatedAt               DateTime?
+  validatedBy               String?
+
   // Custom fields
   customFieldVersionId String?
   customFieldValues    Json?
@@ -433,6 +444,9 @@ model Organization {
   logoMimeType        String?                     // "image/png", "image/svg+xml", etc.
   themeConfig         Json?                       // Full CSS custom property overrides (see ThemeConfig)
   themeUpdatedAt      DateTime?                   // Used for cache invalidation
+
+  // Maps & Geocoding
+  googleMapsApiKey    String?   // Google Maps API key for Places + Geocoding
 
   // Email Configuration
   emailProvider       String   @default("console") // "smtp" | "sendgrid" | "ses" | "console"

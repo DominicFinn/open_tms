@@ -82,6 +82,7 @@ export async function themeRoutes(server: FastifyInstance) {
         themeConfig: org.themeConfig,
         themeUpdatedAt: org.themeUpdatedAt,
         hasLogo: !!org.logoStorageKey,
+        systemName: org.name || 'Open TMS',
       },
       error: null,
     };

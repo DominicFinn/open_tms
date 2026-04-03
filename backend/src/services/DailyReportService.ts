@@ -63,7 +63,13 @@ export class DailyReportService implements IDailyReportService {
     const exceptions = orders.filter(o => o.deliveryStatus === 'exception');
 
     const workbook = new ExcelJS.Workbook();
-    workbook.creator = 'Open TMS';
+    // Use org name for workbook creator metadata
+    let creatorName = 'Open TMS';
+    try {
+      const org = await this.prisma.organization.findFirst({ select: { name: true } });
+      if (org?.name && org.name !== 'Default Organization') creatorName = org.name;
+    } catch { /* use fallback */ }
+    workbook.creator = creatorName;
     workbook.created = new Date();
 
     // --- Sheet 1: Summary ---

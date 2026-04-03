@@ -1,8 +1,10 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTheme } from '../ThemeProvider';
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const { systemName } = useTheme();
 
   const handleCardClick = (path: string) => {
     navigate(path);
@@ -11,7 +13,7 @@ export default function Dashboard() {
   return (
     <div>
       <div className="card">
-        <h2>Welcome to Open TMS</h2>
+        <h2>Welcome to {systemName}</h2>
         <p>The lightweight open source Transport Management System.</p>
         <p>Click on any card below to get started, or use the sidebar navigation.</p>
         <h3>Help needed</h3>

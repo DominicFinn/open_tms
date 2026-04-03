@@ -36,6 +36,8 @@ I'm outlining a roadmap. It's high level. It can be ticketed up as it goes along
 - **Queue Processing** - pg-boss powered async processing with carrier/tracking workers, retry, and dead letter queues
 - **Integration Dashboard** - Real-time ops dashboard with activity charts, queue monitoring, and DLQ management
 - **Interactive Maps** - OpenStreetMap integration for shipment visualization
+- **Authentication & Authorization** - Standalone auth service with JWT tokens, OAuth 2.0 (Google/Microsoft), RBAC with fine-grained permissions, and account lockout protection
+- **Email Service** - Pluggable email with SMTP and console providers, Handlebars templates, admin-configurable settings, and per-organization overrides
 
 ### 🎨 Modern UI/UX
 - **Material Design 3** - Beautiful, consistent design system
@@ -63,33 +65,39 @@ I'm outlining a roadmap. It's high level. It can be ticketed up as it goes along
 │   Frontend      │     │   API Server    │     │   PostgreSQL    │
 │   React + Vite  │◄───►│   Fastify       │◄───►│   + pg-boss     │
 │   TypeScript    │     │   (index.ts)    │     │   queues        │
-└─────────────────┘     └────────┬────────┘     └────────┬────────┘
-                                 │ publishes              │ consumes
-                                 │ events                 │ jobs
-                                 ▼                        │
-                        ┌─────────────────┐               │
-                        │  Event Bus      │               │
-                        │  (pg-boss       │               │
-                        │   fan-out)      │───────────────┘
-                        └─────────────────┘
-                                 │
-          ┌──────────────────────┼──────────────────────┐
-          │                      │                      │
-  ┌───────▼───────┐    ┌────────▼────────┐    ┌────────▼────────┐
-  │  Worker 1     │    │  Worker 2       │    │  Worker N       │
-  │  (worker.ts)  │    │  (worker.ts)    │    │  (worker.ts)    │
-  │  Docker       │    │  Docker         │    │  Docker         │
-  │               │    │                 │    │                 │
-  │ • Audit       │    │ • Email         │    │ • Outbound      │
-  │ • Webhook     │    │ • In-app notif  │    │   carrier       │
-  │ • Triage      │    │ • Notifications │    │ • Tracking      │
-  └───────┬───────┘    └────────┬────────┘    └────────┬────────┘
-          │                     │                      │
-          ▼                     ▼                      ▼
-  ┌──────────────┐    ┌──────────────┐       ┌──────────────┐
-  │ External     │    │ SMTP /       │       │ Carrier APIs │
-  │ Webhooks     │    │ SendGrid     │       │ (DHL, FedEx) │
-  └──────────────┘    └──────────────┘       └──────────────┘
+└────────┬────────┘     └────────┬────────┘     └────────┬────────┘
+         │                       │ publishes              │ consumes
+         │                       │ events                 │ jobs
+         │                       ▼                        │
+         │              ┌─────────────────┐               │
+         │              │  Event Bus      │               │
+         │              │  (pg-boss       │               │
+         │              │   fan-out)      │───────────────┘
+         │              └─────────────────┘
+         │                       │
+         │    ┌──────────────────┼──────────────────────┐
+         │    │                  │                      │
+         │  ┌─▼─────────────┐ ┌─▼───────────────┐ ┌───▼────────────┐
+         │  │  Worker 1     │ │  Worker 2       │ │  Worker N      │
+         │  │  (worker.ts)  │ │  (worker.ts)    │ │  (worker.ts)   │
+         │  │               │ │                 │ │                │
+         │  │ • Audit       │ │ • Email         │ │ • Outbound     │
+         │  │ • Webhook     │ │ • In-app notif  │ │   carrier      │
+         │  │ • Triage      │ │ • Notifications │ │ • Tracking     │
+         │  └───────┬───────┘ └────────┬────────┘ └───────┬────────┘
+         │          │                  │                   │
+         │          ▼                  ▼                   ▼
+         │  ┌──────────────┐  ┌──────────────┐   ┌──────────────┐
+         │  │ External     │  │ SMTP /       │   │ Carrier APIs │
+         │  │ Webhooks     │  │ SendGrid     │   │ (DHL, FedEx) │
+         │  └──────────────┘  └──────────────┘   └──────────────┘
+         │
+         │  ┌─────────────────┐
+         └─►│  Auth Service   │
+            │  Fastify :3002  │
+            │  JWT + OAuth    │
+            │  RBAC           │
+            └─────────────────┘
 ```
 
 **Key principle**: The API server only handles HTTP requests and publishes events. All background processing runs in **separate worker containers** with their own database connection pools — so workers never starve the API of resources. See [Event Architecture Plan](./docs/EVENT_ARCHITECTURE_PLAN.md) for the full design.
@@ -227,7 +235,16 @@ docker compose up --build -d
 # Or build individual services
 docker build -t open-tms-backend ./backend
 docker build -t open-tms-frontend ./frontend
+docker build -t open-tms-auth ./auth-service
 ```
+
+> **Note**: The auth-service is not yet included in `docker-compose.yml`. Build and run it separately with:
+> ```bash
+> docker run -d -p 3002:3002 \
+>   -e DATABASE_URL=postgres://tms:tms@host.docker.internal:55432/tms \
+>   -e JWT_SECRET=your-secret \
+>   open-tms-auth
+> ```
 
 ### 🔧 Running Workers
 
@@ -319,6 +336,39 @@ For a deeper look at queue health, the API exposes queue monitoring endpoints:
 - `GET /api/v1/queues/activity` — hourly activity data for dashboards
 
 See the full architecture design in [Event Architecture Plan](./docs/EVENT_ARCHITECTURE_PLAN.md).
+
+### 📧 Email Configuration
+
+The backend includes a pluggable email service. By default it uses a console provider that logs emails to stdout. For production, configure SMTP:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `EMAIL_PROVIDER` | `console` | `smtp` or `console` |
+| `SMTP_HOST` | `localhost` | SMTP server hostname |
+| `SMTP_PORT` | `587` | SMTP server port |
+| `SMTP_SECURE` | `false` | Use TLS (`true` for port 465) |
+| `SMTP_USER` | — | SMTP authentication username |
+| `SMTP_PASSWORD` | — | SMTP authentication password |
+| `EMAIL_FROM_ADDRESS` | `noreply@opentms.local` | Default sender address |
+| `EMAIL_FROM_NAME` | `Open TMS` | Default sender display name |
+
+Email settings can also be managed per-organization via the Admin UI or the `PUT /api/v1/email/settings` endpoint.
+
+### 🔐 Auth Service Configuration
+
+The auth-service runs as a standalone Fastify service on port 3002.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DATABASE_URL` | — | PostgreSQL connection string (shared with backend) |
+| `AUTH_PORT` | `3002` | Port for the auth service |
+| `JWT_SECRET` | `open-tms-dev-secret-change-in-production` | Secret for signing JWTs |
+| `JWT_ACCESS_EXPIRES_IN` | `900` | Access token TTL in seconds (15 min) |
+| `JWT_REFRESH_EXPIRES_IN` | `604800` | Refresh token TTL in seconds (7 days) |
+| `AUTH_SERVICE_URL` | `http://localhost:3002` | Base URL for OAuth callbacks |
+| `FRONTEND_URL` | `http://localhost:5173` | Frontend URL for OAuth redirects |
+
+On first run, call `POST /api/v1/auth/setup` to seed default roles (admin, dispatcher, warehouse, readonly, customer) and create the initial admin user.
 
 ## 📚 API Documentation
 
@@ -522,6 +572,16 @@ open_tms/
 │   │   ├── scheduler.ts    # Per-partner polling scheduler
 │   │   └── config.ts       # Config from backend API
 │   └── Dockerfile          # Collector container
+├── auth-service/            # Standalone authentication & authorization service
+│   ├── src/
+│   │   ├── index.ts        # Entry point (Fastify, port 3002)
+│   │   ├── services/       # Auth, Token, OAuth, Password services
+│   │   ├── repositories/   # User, Role, Session, AuthProvider repos
+│   │   ├── routes/         # Auth, users, roles, setup, OAuth endpoints
+│   │   ├── middleware/      # JWT verification middleware
+│   │   └── di/             # Dependency injection container
+│   ├── Dockerfile          # Auth service container
+│   └── entrypoint.sh       # Runs migrations on startup
 ├── webhook-service/         # Standalone webhook receiver (GCP)
 ├── packages/
 │   └── shared/             # Shared TypeScript types

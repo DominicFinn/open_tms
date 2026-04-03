@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { API_URL } from '../api';
+import MapPicker from './MapPicker';
+import { GeocodingResult } from '../services/geocoding';
 
 interface Location {
   id: string;
@@ -269,6 +271,30 @@ export default function LocationCreationForm({
               <label>Country</label>
             </div>
           </div>
+        </div>
+
+        {/* Map Picker */}
+        <div style={{ marginBottom: 'var(--spacing-2)' }}>
+          <h3 style={{ marginBottom: 'var(--spacing-1)', fontSize: '1.1rem' }}>
+            Map Location
+          </h3>
+          <MapPicker
+            lat={lat ? parseFloat(lat) : undefined}
+            lng={lng ? parseFloat(lng) : undefined}
+            height="350px"
+            showSearch={true}
+            onLocationSelected={(result: GeocodingResult) => {
+              // Always set coordinates
+              setLat(result.lat.toFixed(6));
+              setLng(result.lng.toFixed(6));
+              // Only fill address fields if currently empty
+              if (!address1 && result.address1) setAddress1(result.address1);
+              if (!city && result.city) setCity(result.city);
+              if (!state && result.state) setState(result.state);
+              if (!postalCode && result.postalCode) setPostalCode(result.postalCode);
+              if (!country && result.country) setCountry(result.country);
+            }}
+          />
         </div>
 
         {/* Coordinates */}

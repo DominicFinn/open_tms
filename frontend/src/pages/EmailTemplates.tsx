@@ -190,11 +190,7 @@ export default function EmailTemplatesPage() {
   const missingTypes = supportedTypes.filter((t) => !existingTypes.has(t));
 
   if (loading) {
-    return (
-      <div style={{ padding: '24px' }}>
-        <div className="loading-spinner" />
-      </div>
-    );
+    return <div className="loading-spinner-page"><div className="loading-spinner" /></div>;
   }
 
   // Editor view

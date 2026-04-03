@@ -19,6 +19,15 @@ interface Carrier {
   archivedAt?: string;
   createdAt: string;
   updatedAt: string;
+  validationTier?: string;
+  registrationChecked?: boolean;
+  insuranceDocReceived?: boolean;
+  insuranceVerified?: boolean;
+  identityConfirmed?: boolean;
+  complianceChecked?: boolean;
+  validationNotes?: string;
+  validatedAt?: string;
+  validatedBy?: string;
 }
 
 interface CarrierCreationFormProps {
@@ -46,6 +55,13 @@ export default function CarrierCreationForm({
   const [state, setState] = useState('');
   const [postalCode, setPostalCode] = useState('');
   const [country, setCountry] = useState('USA');
+  const [validationTier, setValidationTier] = useState('');
+  const [registrationChecked, setRegistrationChecked] = useState(false);
+  const [insuranceDocReceived, setInsuranceDocReceived] = useState(false);
+  const [insuranceVerified, setInsuranceVerified] = useState(false);
+  const [identityConfirmed, setIdentityConfirmed] = useState(false);
+  const [complianceChecked, setComplianceChecked] = useState(false);
+  const [validationNotes, setValidationNotes] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -64,6 +80,13 @@ export default function CarrierCreationForm({
       setState(editingCarrier.state || '');
       setPostalCode(editingCarrier.postalCode || '');
       setCountry(editingCarrier.country || 'USA');
+      setValidationTier(editingCarrier.validationTier || '');
+      setRegistrationChecked(editingCarrier.registrationChecked || false);
+      setInsuranceDocReceived(editingCarrier.insuranceDocReceived || false);
+      setInsuranceVerified(editingCarrier.insuranceVerified || false);
+      setIdentityConfirmed(editingCarrier.identityConfirmed || false);
+      setComplianceChecked(editingCarrier.complianceChecked || false);
+      setValidationNotes(editingCarrier.validationNotes || '');
     } else {
       clearForm();
     }
@@ -82,6 +105,13 @@ export default function CarrierCreationForm({
     setState('');
     setPostalCode('');
     setCountry('USA');
+    setValidationTier('');
+    setRegistrationChecked(false);
+    setInsuranceDocReceived(false);
+    setInsuranceVerified(false);
+    setIdentityConfirmed(false);
+    setComplianceChecked(false);
+    setValidationNotes('');
     setError(null);
   };
 
@@ -110,7 +140,7 @@ export default function CarrierCreationForm({
     setError(null);
 
     try {
-      const carrierData = {
+      const carrierData: Record<string, any> = {
         name: name.trim(),
         mcNumber: mcNumber.trim() || undefined,
         dotNumber: dotNumber.trim() || undefined,
@@ -122,8 +152,19 @@ export default function CarrierCreationForm({
         city: city.trim() || undefined,
         state: state.trim() || undefined,
         postalCode: postalCode.trim() || undefined,
-        country: country.trim() || undefined
+        country: country.trim() || undefined,
+        validationTier: validationTier || undefined,
+        registrationChecked,
+        insuranceDocReceived,
+        insuranceVerified,
+        identityConfirmed,
+        complianceChecked,
+        validationNotes: validationNotes.trim() || undefined,
       };
+      // Set validatedAt if any check is done
+      if (registrationChecked || insuranceDocReceived || insuranceVerified || identityConfirmed || complianceChecked) {
+        carrierData.validatedAt = new Date().toISOString();
+      }
 
       const url = editingCarrier
         ? `${API_URL}/api/v1/carriers/${editingCarrier.id}`
@@ -318,6 +359,129 @@ export default function CarrierCreationForm({
             />
             <label>Country (optional)</label>
           </div>
+        </div>
+
+        {/* Carrier Validation Checklist */}
+        <div style={{ marginBottom: 'var(--spacing-3)' }}>
+          <h3 style={{ marginBottom: 'var(--spacing-2)', fontSize: '1rem' }}>Carrier Validation</h3>
+
+          <div className="alert alert-warning" style={{ marginBottom: 'var(--spacing-2)' }}>
+            <span className="material-icons" style={{ fontSize: '18px', verticalAlign: 'middle', marginRight: '8px' }}>warning</span>
+            Carrier fraud and impersonation is a serious risk. Before engaging any carrier, complete the validation checks below.
+            These checks must be performed outside this system using the linked resources.
+          </div>
+
+          {/* Tier Selection */}
+          <div className="text-field" style={{ marginBottom: 'var(--spacing-2)', maxWidth: '400px' }}>
+            <select value={validationTier} onChange={e => setValidationTier(e.target.value)} disabled={loading}>
+              <option value="">No validation tier</option>
+              <option value="tier1">Tier 1 — Basic</option>
+              <option value="tier2">Tier 2 — Verified</option>
+              <option value="tier3">Tier 3 — High-Risk / High-Value</option>
+            </select>
+            <label>Validation Tier</label>
+          </div>
+
+          {/* Checkboxes */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-2)' }}>
+            <label className="check-field" style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', cursor: 'pointer' }}>
+              <input type="checkbox" checked={registrationChecked} onChange={e => setRegistrationChecked(e.target.checked)} disabled={loading} style={{ marginTop: '2px' }} />
+              <div>
+                <div style={{ fontWeight: 500 }}>Registration verified</div>
+                <div style={{ fontSize: '0.8125rem', color: 'var(--on-surface-variant)' }}>
+                  UK: <a href="https://www.gov.uk/manage-vehicle-operator-licence" target="_blank" rel="noopener noreferrer">GOV.UK O-Licence</a> |
+                  US: <a href="https://safer.fmcsa.dot.gov/" target="_blank" rel="noopener noreferrer">FMCSA SAFER</a> |
+                  EU: National registry + <a href="https://ec.europa.eu/taxation_customs/vies/" target="_blank" rel="noopener noreferrer">VIES VAT</a>
+                </div>
+              </div>
+            </label>
+
+            <label className="check-field" style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', cursor: 'pointer' }}>
+              <input type="checkbox" checked={insuranceDocReceived} onChange={e => setInsuranceDocReceived(e.target.checked)} disabled={loading} style={{ marginTop: '2px' }} />
+              <div>
+                <div style={{ fontWeight: 500 }}>Insurance documents received</div>
+                <div style={{ fontSize: '0.8125rem', color: 'var(--on-surface-variant)' }}>
+                  Goods in transit / cargo insurance + public liability. Check coverage values and expiry dates.
+                </div>
+              </div>
+            </label>
+
+            <label className="check-field" style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', cursor: 'pointer' }}>
+              <input type="checkbox" checked={insuranceVerified} onChange={e => setInsuranceVerified(e.target.checked)} disabled={loading} style={{ marginTop: '2px' }} />
+              <div>
+                <div style={{ fontWeight: 500 }}>Insurance verified with provider</div>
+                <div style={{ fontSize: '0.8125rem', color: 'var(--on-surface-variant)' }}>
+                  Contacted insurer directly to confirm policy is active and covers shipment values.
+                </div>
+              </div>
+            </label>
+
+            <label className="check-field" style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', cursor: 'pointer' }}>
+              <input type="checkbox" checked={identityConfirmed} onChange={e => setIdentityConfirmed(e.target.checked)} disabled={loading} style={{ marginTop: '2px' }} />
+              <div>
+                <div style={{ fontWeight: 500 }}>Identity confirmed</div>
+                <div style={{ fontSize: '0.8125rem', color: 'var(--on-surface-variant)' }}>
+                  Called carrier using publicly listed phone number. Verified email domain matches company. Checked for red flags (new company, domain mismatch, urgent change requests).
+                </div>
+              </div>
+            </label>
+
+            <label className="check-field" style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', cursor: 'pointer' }}>
+              <input type="checkbox" checked={complianceChecked} onChange={e => setComplianceChecked(e.target.checked)} disabled={loading} style={{ marginTop: '2px' }} />
+              <div>
+                <div style={{ fontWeight: 500 }}>Compliance & safety checked</div>
+                <div style={{ fontSize: '0.8125rem', color: 'var(--on-surface-variant)' }}>
+                  UK: <a href="https://www.gov.uk/check-vehicle-operator-compliance-risk-score" target="_blank" rel="noopener noreferrer">OCRS score</a> |
+                  US: <a href="https://safer.fmcsa.dot.gov/" target="_blank" rel="noopener noreferrer">FMCSA safety rating</a> |
+                  EU: National enforcement records. No suspensions/revocations.
+                </div>
+              </div>
+            </label>
+          </div>
+
+          {/* Validation Notes */}
+          <div className="text-field" style={{ marginTop: 'var(--spacing-2)' }}>
+            <textarea
+              value={validationNotes}
+              onChange={e => setValidationNotes(e.target.value)}
+              placeholder=" "
+              rows={3}
+              disabled={loading}
+              style={{ resize: 'vertical' }}
+            />
+            <label>Validation Notes (optional)</label>
+          </div>
+
+          {/* Tier Requirements Guide */}
+          {validationTier && (
+            <div style={{
+              marginTop: 'var(--spacing-2)',
+              padding: 'var(--spacing-2)',
+              backgroundColor: 'var(--surface-container-low)',
+              borderRadius: '6px',
+              fontSize: '0.8125rem',
+              color: 'var(--on-surface-variant)',
+            }}>
+              <strong>Requirements for {validationTier === 'tier1' ? 'Tier 1 (Basic)' : validationTier === 'tier2' ? 'Tier 2 (Verified)' : 'Tier 3 (High-Risk/High-Value)'}:</strong>
+              <ul style={{ margin: '4px 0 0', paddingLeft: '20px' }}>
+                <li>Registration verified + Insurance documents received</li>
+                {(validationTier === 'tier2' || validationTier === 'tier3') && (
+                  <>
+                    <li>Insurance verified with provider</li>
+                    <li>Identity confirmed</li>
+                    <li>Previous successful shipment history</li>
+                  </>
+                )}
+                {validationTier === 'tier3' && (
+                  <>
+                    <li>Full compliance & safety check</li>
+                    <li>Driver/vehicle pre-confirmed</li>
+                    <li>Live tracking capability</li>
+                  </>
+                )}
+              </ul>
+            </div>
+          )}
         </div>
 
         {/* Error Message */}

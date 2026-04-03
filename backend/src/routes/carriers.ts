@@ -38,7 +38,16 @@ export async function carrierRoutes(server: FastifyInstance) {
         city: z.string().optional(),
         state: z.string().optional(),
         postalCode: z.string().optional(),
-        country: z.string().optional()
+        country: z.string().optional(),
+        validationTier: z.string().optional(),
+        registrationChecked: z.boolean().optional(),
+        insuranceDocReceived: z.boolean().optional(),
+        insuranceVerified: z.boolean().optional(),
+        identityConfirmed: z.boolean().optional(),
+        complianceChecked: z.boolean().optional(),
+        validationNotes: z.string().optional(),
+        validatedAt: z.string().datetime().optional(),
+        validatedBy: z.string().optional()
       })
       .parse((req as any).body);
     const created = await carriersRepo.create(body);
@@ -61,7 +70,16 @@ export async function carrierRoutes(server: FastifyInstance) {
       city: z.string().optional(),
       state: z.string().optional(),
       postalCode: z.string().optional(),
-      country: z.string().optional()
+      country: z.string().optional(),
+      validationTier: z.string().optional(),
+      registrationChecked: z.boolean().optional(),
+      insuranceDocReceived: z.boolean().optional(),
+      insuranceVerified: z.boolean().optional(),
+      identityConfirmed: z.boolean().optional(),
+      complianceChecked: z.boolean().optional(),
+      validationNotes: z.string().optional(),
+      validatedAt: z.string().datetime().optional(),
+      validatedBy: z.string().optional()
     }).parse((req as any).body);
 
     const carrier = await carriersRepo.findById(id);

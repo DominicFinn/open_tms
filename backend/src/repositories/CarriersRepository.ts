@@ -13,6 +13,15 @@ export interface CreateCarrierDTO {
   state?: string;
   postalCode?: string;
   country?: string;
+  validationTier?: string;
+  registrationChecked?: boolean;
+  insuranceDocReceived?: boolean;
+  insuranceVerified?: boolean;
+  identityConfirmed?: boolean;
+  complianceChecked?: boolean;
+  validationNotes?: string;
+  validatedAt?: string;
+  validatedBy?: string;
 }
 
 export interface UpdateCarrierDTO {
@@ -28,6 +37,15 @@ export interface UpdateCarrierDTO {
   state?: string;
   postalCode?: string;
   country?: string;
+  validationTier?: string;
+  registrationChecked?: boolean;
+  insuranceDocReceived?: boolean;
+  insuranceVerified?: boolean;
+  identityConfirmed?: boolean;
+  complianceChecked?: boolean;
+  validationNotes?: string;
+  validatedAt?: string;
+  validatedBy?: string;
 }
 
 export interface ICarriersRepository {

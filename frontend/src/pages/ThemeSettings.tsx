@@ -64,11 +64,14 @@ function normalizeHex(val: string): string {
 }
 
 export default function ThemeSettings() {
-  const { hasLogo, logoUrl, reloadTheme } = useTheme();
+  const { hasLogo, logoUrl, reloadTheme, systemName: currentSystemName } = useTheme();
   const [themeConfig, setThemeConfig] = useState<Record<string, string>>({});
   const [originalConfig, setOriginalConfig] = useState<Record<string, string>>({});
+  const [systemName, setSystemName] = useState('');
+  const [originalSystemName, setOriginalSystemName] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingName, setSavingName] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -79,11 +82,19 @@ export default function ThemeSettings() {
 
   async function loadTheme() {
     try {
-      const res = await fetch(`${API_URL}/api/v1/theme`);
-      const result = await res.json();
-      if (result.data?.themeConfig) {
-        setThemeConfig(result.data.themeConfig);
-        setOriginalConfig(result.data.themeConfig);
+      const [themeRes, orgRes] = await Promise.all([
+        fetch(`${API_URL}/api/v1/theme`),
+        fetch(`${API_URL}/api/v1/organization/settings`),
+      ]);
+      const themeResult = await themeRes.json();
+      if (themeResult.data?.themeConfig) {
+        setThemeConfig(themeResult.data.themeConfig);
+        setOriginalConfig(themeResult.data.themeConfig);
+      }
+      const orgResult = await orgRes.json();
+      if (orgResult.data?.name) {
+        setSystemName(orgResult.data.name);
+        setOriginalSystemName(orgResult.data.name);
       }
     } catch {
       setMessage({ type: 'error', text: 'Failed to load theme configuration' });
@@ -202,7 +213,7 @@ export default function ThemeSettings() {
   const hasChanges = JSON.stringify(themeConfig) !== JSON.stringify(originalConfig);
 
   if (loading) {
-    return <div className="loading-spinner" style={{ margin: '2rem auto' }} />;
+    return <div className="loading-spinner-page"><div className="loading-spinner" /></div>;
   }
 
   return (
@@ -229,6 +240,54 @@ export default function ThemeSettings() {
           {message.text}
         </div>
       )}
+
+      {/* System Name */}
+      <div className="card" style={{ marginBottom: 'var(--spacing-3)' }}>
+        <h2 style={{ marginTop: 0 }}>System Name</h2>
+        <p style={{ color: 'var(--on-surface-variant)' }}>
+          Customize the name shown in the navigation bar, dashboard, emails, and generated documents. Default is "Open TMS".
+        </p>
+        <div style={{ display: 'flex', gap: 'var(--spacing-1)', alignItems: 'flex-end' }}>
+          <div className="text-field" style={{ flex: 1, maxWidth: '400px' }}>
+            <input
+              type="text"
+              value={systemName}
+              onChange={(e) => setSystemName(e.target.value)}
+              placeholder=" "
+            />
+            <label>System Name</label>
+          </div>
+          <button
+            className="button"
+            disabled={savingName || systemName === originalSystemName || !systemName.trim()}
+            onClick={async () => {
+              setSavingName(true);
+              setMessage(null);
+              try {
+                const res = await fetch(`${API_URL}/api/v1/organization/settings`, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ name: systemName.trim() }),
+                });
+                const result = await res.json();
+                if (result.error) {
+                  setMessage({ type: 'error', text: result.error });
+                } else {
+                  setOriginalSystemName(systemName.trim());
+                  reloadTheme();
+                  setMessage({ type: 'success', text: 'System name updated' });
+                }
+              } catch {
+                setMessage({ type: 'error', text: 'Failed to update system name' });
+              } finally {
+                setSavingName(false);
+              }
+            }}
+          >
+            {savingName ? 'Saving...' : 'Save Name'}
+          </button>
+        </div>
+      </div>
 
       {/* Logo Section */}
       <div className="card" style={{ marginBottom: 'var(--spacing-3)' }}>

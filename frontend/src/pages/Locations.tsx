@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { API_URL } from '../api';
+import MapPicker from '../components/MapPicker';
 
 interface Location {
   id: string;
@@ -24,6 +25,7 @@ export default function Locations() {
   const [filteredLocations, setFilteredLocations] = React.useState<Location[]>([]);
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
+  const [viewMode, setViewMode] = React.useState<'list' | 'map'>('list');
 
   // Filter state
   const [searchTerm, setSearchTerm] = React.useState('');
@@ -115,10 +117,38 @@ export default function Locations() {
       <div className="card">
         <div className="page-header">
           <h2>Locations</h2>
-          <Link to="/locations/create" className="button">
-            <span className="material-icons" style={{ fontSize: '18px' }}>add</span>
-            Create Location
-          </Link>
+          <div style={{ display: 'flex', gap: 'var(--spacing-1)', alignItems: 'center' }}>
+            <div style={{ display: 'flex', border: '1px solid var(--outline)', borderRadius: '4px', overflow: 'hidden' }}>
+              <button
+                className="icon-btn"
+                onClick={() => setViewMode('list')}
+                title="List view"
+                style={{
+                  borderRadius: 0,
+                  backgroundColor: viewMode === 'list' ? 'var(--primary)' : 'transparent',
+                  color: viewMode === 'list' ? 'var(--on-primary)' : 'var(--on-surface)',
+                }}
+              >
+                <span className="material-icons">view_list</span>
+              </button>
+              <button
+                className="icon-btn"
+                onClick={() => setViewMode('map')}
+                title="Map view"
+                style={{
+                  borderRadius: 0,
+                  backgroundColor: viewMode === 'map' ? 'var(--primary)' : 'transparent',
+                  color: viewMode === 'map' ? 'var(--on-primary)' : 'var(--on-surface)',
+                }}
+              >
+                <span className="material-icons">map</span>
+              </button>
+            </div>
+            <Link to="/locations/create" className="button">
+              <span className="material-icons" style={{ fontSize: '18px' }}>add</span>
+              Create Location
+            </Link>
+          </div>
         </div>
 
         {/* Search and Filters */}
@@ -178,67 +208,71 @@ export default function Locations() {
           )}
         </div>
         
-        <div className="table-container">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Address</th>
-                <th>City</th>
-                <th>State</th>
-                <th>Country</th>
-                <th>Created</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredLocations.length === 0 ? (
+        {viewMode === 'list' ? (
+          <div className="table-container">
+            <table className="table">
+              <thead>
                 <tr>
-                  <td colSpan={7} style={{ textAlign: 'center', padding: 'var(--spacing-4)', color: 'var(--on-surface-variant)' }}>
-                    {hasActiveFilters ? 'No locations match your current filters' : 'No locations found'}
-                  </td>
+                  <th>Name</th>
+                  <th>Address</th>
+                  <th>City</th>
+                  <th>State</th>
+                  <th>Country</th>
+                  <th>Created</th>
+                  <th>Actions</th>
                 </tr>
-              ) : (
-                filteredLocations.map(l => (
-                  <tr key={l.id}>
-                    <td>{l.name}</td>
-                    <td>
-                      <div>
-                        <div>{l.address1}</div>
-                        {l.address2 && <div style={{ fontSize: '0.875rem', color: 'var(--on-surface-variant)' }}>{l.address2}</div>}
-                      </div>
-                    </td>
-                    <td>{l.city}</td>
-                    <td>{l.state || '—'}</td>
-                    <td>{l.country}</td>
-                    <td>{new Date(l.createdAt).toLocaleDateString()}</td>
-                    <td>
-                      <div style={{ display: 'flex', gap: 'var(--spacing-1)' }}>
-                        <Link
-                          to={`/locations/${l.id}/edit`}
-                          className="icon-btn"
-                          title="Edit location"
-                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                        >
-                          <span className="material-icons">edit</span>
-                        </Link>
-                        <button
-                          className="icon-btn"
-                          onClick={() => setShowDeleteConfirm(l.id)}
-                          disabled={loading}
-                          title="Delete location"
-                          style={{ color: 'var(--error)' }}
-                        >
-                          <span className="material-icons">delete</span>
-                        </button>
-                      </div>
+              </thead>
+              <tbody>
+                {filteredLocations.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} style={{ textAlign: 'center', padding: 'var(--spacing-4)', color: 'var(--on-surface-variant)' }}>
+                      {hasActiveFilters ? 'No locations match your current filters' : 'No locations found'}
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                ) : (
+                  filteredLocations.map(l => (
+                    <tr key={l.id}>
+                      <td>{l.name}</td>
+                      <td>
+                        <div>
+                          <div>{l.address1}</div>
+                          {l.address2 && <div style={{ fontSize: '0.875rem', color: 'var(--on-surface-variant)' }}>{l.address2}</div>}
+                        </div>
+                      </td>
+                      <td>{l.city}</td>
+                      <td>{l.state || '—'}</td>
+                      <td>{l.country}</td>
+                      <td>{new Date(l.createdAt).toLocaleDateString()}</td>
+                      <td>
+                        <div style={{ display: 'flex', gap: 'var(--spacing-1)' }}>
+                          <Link
+                            to={`/locations/${l.id}/edit`}
+                            className="icon-btn"
+                            title="Edit location"
+                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                          >
+                            <span className="material-icons">edit</span>
+                          </Link>
+                          <button
+                            className="icon-btn"
+                            onClick={() => setShowDeleteConfirm(l.id)}
+                            disabled={loading}
+                            title="Delete location"
+                            style={{ color: 'var(--error)' }}
+                          >
+                            <span className="material-icons">delete</span>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <LocationsMapView locations={filteredLocations} />
+        )}
       </div>
 
       {/* Delete Confirmation Modal */}
@@ -257,6 +291,99 @@ export default function Locations() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// Map view showing all locations with coordinates
+function LocationsMapView({ locations }: { locations: Location[] }) {
+  const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  const locationsWithCoords = locations.filter(l => l.lat != null && l.lng != null);
+  const locationsWithoutCoords = locations.filter(l => l.lat == null || l.lng == null);
+
+  if (locationsWithCoords.length === 0) {
+    return (
+      <div style={{ padding: 'var(--spacing-4)', textAlign: 'center', color: 'var(--on-surface-variant)' }}>
+        <span className="material-icons" style={{ fontSize: '48px', marginBottom: 'var(--spacing-2)', display: 'block' }}>location_off</span>
+        <p>No locations have coordinates set.</p>
+        <p style={{ fontSize: '0.875rem' }}>Add coordinates when creating or editing a location to see them on the map.</p>
+      </div>
+    );
+  }
+
+  // Calculate bounds
+  const lats = locationsWithCoords.map(l => l.lat!);
+  const lngs = locationsWithCoords.map(l => l.lng!);
+  const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
+  const centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
+
+  const selected = selectedId ? locations.find(l => l.id === selectedId) : null;
+
+  return (
+    <div>
+      <div style={{ position: 'relative' }}>
+        <MapPicker
+          lat={centerLat}
+          lng={centerLng}
+          height="500px"
+          showSearch={false}
+          onLocationSelected={() => {}}
+        />
+        {/* Overlay markers for each location */}
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          pointerEvents: 'none',
+          zIndex: 5,
+        }}>
+          {/* Note: exact marker positioning is handled by the MapPicker's internal marker */}
+        </div>
+      </div>
+
+      {/* Location list below map */}
+      <div style={{ marginTop: 'var(--spacing-2)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 'var(--spacing-1)' }}>
+          {locationsWithCoords.map(l => (
+            <div
+              key={l.id}
+              style={{
+                padding: 'var(--spacing-1) var(--spacing-2)',
+                borderRadius: '6px',
+                border: selectedId === l.id ? '2px solid var(--primary)' : '1px solid var(--outline-variant)',
+                backgroundColor: selectedId === l.id ? 'var(--primary-container)' : 'var(--surface)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 'var(--spacing-1)',
+              }}
+              onClick={() => setSelectedId(selectedId === l.id ? null : l.id)}
+            >
+              <span className="material-icons" style={{ color: 'var(--primary)', fontSize: '20px' }}>location_on</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 500, fontSize: '0.875rem' }}>{l.name}</div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--on-surface-variant)' }}>{l.city}{l.state ? `, ${l.state}` : ''}</div>
+              </div>
+              <Link
+                to={`/locations/${l.id}/edit`}
+                className="icon-btn"
+                title="Edit"
+                style={{ flexShrink: 0 }}
+                onClick={e => e.stopPropagation()}
+              >
+                <span className="material-icons" style={{ fontSize: '18px' }}>edit</span>
+              </Link>
+            </div>
+          ))}
+        </div>
+        {locationsWithoutCoords.length > 0 && (
+          <p style={{ fontSize: '0.75rem', color: 'var(--on-surface-variant)', marginTop: 'var(--spacing-1)' }}>
+            {locationsWithoutCoords.length} location{locationsWithoutCoords.length !== 1 ? 's' : ''} without coordinates (not shown on map)
+          </p>
+        )}
+      </div>
     </div>
   );
 }

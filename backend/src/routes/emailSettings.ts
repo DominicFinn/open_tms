@@ -145,7 +145,7 @@ export async function emailSettingsRoutes(server: FastifyInstance) {
           <h2>Email Configuration Test</h2>
           <p>This is a test email from <strong>${org.name}</strong>.</p>
           <p>If you received this, your email configuration is working correctly.</p>
-          <p style="color:#757575;font-size:12px;">Sent via Open TMS</p>
+          <p style="color:#757575;font-size:12px;">Sent via ${org.name || 'Open TMS'}</p>
         `,
         text: `Email Configuration Test\n\nThis is a test email from ${org.name}.\nIf you received this, your email configuration is working correctly.`,
         from: org.emailFromName

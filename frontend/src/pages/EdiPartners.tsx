@@ -174,7 +174,7 @@ export default function EdiPartners() {
   };
 
   if (loading && partners.length === 0) {
-    return <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--spacing-4)' }}><div className="loading-spinner"></div></div>;
+    return <div className="loading-spinner-page"><div className="loading-spinner" /></div>;
   }
 
   return (
