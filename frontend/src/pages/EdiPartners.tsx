@@ -141,7 +141,7 @@ export default function EdiPartners() {
       sftpHost: partner.sftpHost || '',
       sftpPort: partner.sftpPort,
       sftpUsername: partner.sftpUsername || '',
-      sftpPassword: partner.sftpPassword || '',
+      sftpPassword: '',  // Don't pre-fill redacted password; leave blank to keep existing
       sftpRemoteDir: partner.sftpRemoteDir,
       sftpFilePattern: partner.sftpFilePattern,
       pollingEnabled: partner.pollingEnabled,
