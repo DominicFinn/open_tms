@@ -78,3 +78,5 @@ nbdist/
 .nb-gradle/
 
 deploy-personal.sh
+
+resources/

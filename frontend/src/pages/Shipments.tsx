@@ -303,6 +303,14 @@ export default function Shipments() {
                   <td>
                     <div style={{ display: 'flex', gap: 'var(--spacing-1)' }}>
                       <Link
+                        to={`/shipments/${s.id}`}
+                        className="icon-btn"
+                        title="View shipment"
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                      >
+                        <span className="material-icons">visibility</span>
+                      </Link>
+                      <Link
                         to={`/shipments/${s.id}/edit`}
                         className="icon-btn"
                         title="Edit shipment"
@@ -310,8 +318,8 @@ export default function Shipments() {
                       >
                         <span className="material-icons">edit</span>
                       </Link>
-                      <button 
-                        className="icon-btn" 
+                      <button
+                        className="icon-btn"
                         onClick={() => setShowDeleteConfirm(s.id)}
                         disabled={loading}
                         title="Delete shipment"

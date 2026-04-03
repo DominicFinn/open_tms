@@ -1,7 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { API_URL } from '../api';
-import MapPicker from '../components/MapPicker';
 
 interface Location {
   id: string;
@@ -207,7 +206,7 @@ export default function Locations() {
             </div>
           )}
         </div>
-        
+
         {viewMode === 'list' ? (
           <div className="table-container">
             <table className="table">
@@ -295,11 +294,102 @@ export default function Locations() {
   );
 }
 
-// Map view showing all locations with coordinates
+// Map view showing all locations with coordinates using Leaflet
 function LocationsMapView({ locations }: { locations: Location[] }) {
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  const mapContainerRef = React.useRef<HTMLDivElement>(null);
+  const mapInstanceRef = React.useRef<any>(null);
+  const markersRef = React.useRef<Map<string, any>>(new Map());
   const locationsWithCoords = locations.filter(l => l.lat != null && l.lng != null);
   const locationsWithoutCoords = locations.filter(l => l.lat == null || l.lng == null);
+
+  React.useEffect(() => {
+    if (locationsWithCoords.length === 0 || !mapContainerRef.current) return;
+
+    let cancelled = false;
+
+    const initMap = async () => {
+      const L = await import('leaflet');
+      await import('leaflet/dist/leaflet.css');
+
+      if (cancelled || !mapContainerRef.current) return;
+
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+      }
+
+      const map = L.map(mapContainerRef.current).setView([0, 0], 2);
+      mapInstanceRef.current = map;
+
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(map);
+
+      const markers: any[] = [];
+      const newMarkerMap = new Map<string, any>();
+
+      locationsWithCoords.forEach(loc => {
+        const marker = L.marker([loc.lat!, loc.lng!], {
+          icon: L.divIcon({
+            className: 'custom-marker',
+            html: `<div style="
+              background-color: var(--marker-origin);
+              color: white;
+              border-radius: 50%;
+              width: 30px;
+              height: 30px;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              font-size: 16px;
+              border: 2px solid white;
+              box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            "><span class="material-icons" style="font-size:18px">location_on</span></div>`,
+            iconSize: [30, 30],
+            iconAnchor: [15, 15]
+          })
+        }).addTo(map);
+
+        marker.bindPopup(`
+          <b>${loc.name}</b><br>
+          ${loc.address1}<br>
+          ${loc.city}${loc.state ? `, ${loc.state}` : ''} ${loc.postalCode || ''}<br>
+          ${loc.country}
+        `);
+
+        markers.push(marker);
+        newMarkerMap.set(loc.id, marker);
+      });
+
+      markersRef.current = newMarkerMap;
+
+      if (markers.length > 0) {
+        const group = (L as any).featureGroup(markers);
+        map.fitBounds(group.getBounds().pad(0.1));
+      }
+    };
+
+    initMap();
+
+    return () => {
+      cancelled = true;
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+    };
+  }, [locationsWithCoords.length]);
+
+  const handleCardClick = (loc: Location) => {
+    const newId = selectedId === loc.id ? null : loc.id;
+    setSelectedId(newId);
+
+    if (newId && mapInstanceRef.current && loc.lat && loc.lng) {
+      mapInstanceRef.current.setView([loc.lat, loc.lng], 14, { animate: true });
+      const marker = markersRef.current.get(loc.id);
+      if (marker) marker.openPopup();
+    }
+  };
 
   if (locationsWithCoords.length === 0) {
     return (
@@ -311,37 +401,17 @@ function LocationsMapView({ locations }: { locations: Location[] }) {
     );
   }
 
-  // Calculate bounds
-  const lats = locationsWithCoords.map(l => l.lat!);
-  const lngs = locationsWithCoords.map(l => l.lng!);
-  const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
-  const centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
-
-  const selected = selectedId ? locations.find(l => l.id === selectedId) : null;
-
   return (
     <div>
-      <div style={{ position: 'relative' }}>
-        <MapPicker
-          lat={centerLat}
-          lng={centerLng}
-          height="500px"
-          showSearch={false}
-          onLocationSelected={() => {}}
-        />
-        {/* Overlay markers for each location */}
-        <div style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          pointerEvents: 'none',
-          zIndex: 5,
-        }}>
-          {/* Note: exact marker positioning is handled by the MapPicker's internal marker */}
-        </div>
-      </div>
+      <div
+        ref={mapContainerRef}
+        style={{
+          height: '500px',
+          width: '100%',
+          borderRadius: '8px',
+          border: '1px solid var(--outline-variant)',
+        }}
+      />
 
       {/* Location list below map */}
       <div style={{ marginTop: 'var(--spacing-2)' }}>
@@ -359,7 +429,7 @@ function LocationsMapView({ locations }: { locations: Location[] }) {
                 alignItems: 'center',
                 gap: 'var(--spacing-1)',
               }}
-              onClick={() => setSelectedId(selectedId === l.id ? null : l.id)}
+              onClick={() => handleCardClick(l)}
             >
               <span className="material-icons" style={{ color: 'var(--primary)', fontSize: '20px' }}>location_on</span>
               <div style={{ flex: 1, minWidth: 0 }}>
