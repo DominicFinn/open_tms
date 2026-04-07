@@ -33,6 +33,9 @@ import { PgBossQueueAdapter } from '../queue/PgBossQueueAdapter.js';
 import { PgBossEventBus } from '../events/PgBossEventBus.js';
 import { SmtpEmailService } from '../services/SmtpEmailService.js';
 import { ConsoleEmailService } from '../services/ConsoleEmailService.js';
+import { CommandBus } from '../commands/CommandBus.js';
+import { CreateOrderCommandHandler } from '../commands/orders/CreateOrderCommand.js';
+import { CreateShipmentCommandHandler } from '../commands/shipments/CreateShipmentCommand.js';
 
 /**
  * Register all application dependencies
@@ -201,5 +204,18 @@ export function registerDependencies(prisma: PrismaClient): void {
       container.resolve(TOKENS.ICustomersRepository),
       container.resolve(TOKENS.ILocationsRepository)
     );
+  });
+
+  // Command bus — register command handlers
+  container.singleton(TOKENS.ICommandBus).toFactory(() => {
+    const bus = new CommandBus();
+    const prisma = container.resolve<PrismaClient>(TOKENS.PrismaClient);
+    const eventBus = container.resolve<import('../events/IEventBus.js').IEventBus>(TOKENS.IEventBus);
+    const queue = container.resolve<import('../queue/IQueueAdapter.js').IQueueAdapter>(TOKENS.IQueueAdapter);
+
+    bus.register(new CreateOrderCommandHandler(prisma, eventBus));
+    bus.register(new CreateShipmentCommandHandler(prisma, eventBus, queue));
+
+    return bus;
   });
 }

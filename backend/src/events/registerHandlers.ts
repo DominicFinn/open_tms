@@ -10,6 +10,8 @@ import { IEmailService } from '../services/IEmailService.js';
 import { AuditHandler } from './handlers/AuditHandler.js';
 import { InAppNotificationHandler } from './handlers/InAppNotificationHandler.js';
 import { EmailHandler } from './handlers/EmailHandler.js';
+import { OrderProjection } from './projections/OrderProjection.js';
+import { ShipmentProjection } from './projections/ShipmentProjection.js';
 
 export async function registerEventHandlers(
   eventBus: IEventBus,
@@ -19,6 +21,9 @@ export async function registerEventHandlers(
   const handlers: IEventHandler[] = [
     new AuditHandler(),
     new InAppNotificationHandler(prisma),
+    // CQRS read model projections
+    new OrderProjection(prisma),
+    new ShipmentProjection(prisma),
     // Future handlers:
     // new WebhookHandler(prisma),
     // new TriageHandler(prisma),

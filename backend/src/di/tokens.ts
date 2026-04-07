@@ -37,6 +37,9 @@ export const TOKENS = {
   // Email tokens
   IEmailService: Symbol.for('IEmailService'),
 
+  // Command bus
+  ICommandBus: Symbol.for('ICommandBus'),
+
   // Infrastructure tokens
   PrismaClient: Symbol.for('PrismaClient'),
   IFileStorageProvider: Symbol.for('IFileStorageProvider'),

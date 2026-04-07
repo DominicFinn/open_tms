@@ -1178,3 +1178,82 @@ model EmailTemplate {
   @@unique([organizationId, eventType])          // One template per event type per org
   @@index([eventType])
 }
+
+// ─── CQRS Read Models ───────────────────────────────────────────
+// Denormalized projections built from domain events.
+// These tables are populated by projection handlers (OrderProjection, ShipmentProjection)
+// and serve GET/list endpoints without joins.
+
+model OrderReadModel {
+  id                    String    @id                // Same as Order.id
+  orgId                 String
+  orderNumber           String    @unique
+  poNumber              String?
+  status                String                       // pending, validated, converted, assigned, etc.
+  deliveryStatus        String                       // unassigned, assigned, in_transit, delivered, exception
+  customerName          String
+  customerId            String
+  originName            String?
+  originCity            String?
+  originState           String?
+  destinationName       String?
+  destinationCity       String?
+  destinationState      String?
+  shipmentReference     String?
+  shipmentId            String?
+  carrierName           String?
+  serviceLevel          String?
+  temperatureRequired   Boolean   @default(false)
+  hazmat                Boolean   @default(false)
+  trackableUnitCount    Int       @default(0)
+  lineItemCount         Int       @default(0)
+  totalWeight           Float?
+  requestedDeliveryDate DateTime?
+  deliveredAt           DateTime?
+  exceptionType         String?
+  importSource          String?
+  createdAt             DateTime
+  updatedAt             DateTime
+
+  @@index([orgId])
+  @@index([status])
+  @@index([deliveryStatus])
+  @@index([customerId])
+  @@index([createdAt])
+  @@index([shipmentId])
+}
+
+model ShipmentReadModel {
+  id                String    @id                    // Same as Shipment.id
+  orgId             String
+  reference         String    @unique
+  status            String                           // draft, in_transit, delivered, etc.
+  customerName      String
+  customerId        String
+  originName        String?
+  originCity        String?
+  originState       String?
+  destinationName   String?
+  destinationCity   String?
+  destinationState  String?
+  carrierName       String?
+  carrierId         String?
+  laneName          String?
+  laneId            String?
+  proNumber         String?
+  pickupDate        DateTime?
+  deliveryDate      DateTime?
+  orderCount        Int       @default(0)
+  stopCount         Int       @default(0)
+  currentLat        Float?
+  currentLng        Float?
+  lastLocationAt    DateTime?
+  createdAt         DateTime
+  updatedAt         DateTime
+
+  @@index([orgId])
+  @@index([status])
+  @@index([customerId])
+  @@index([carrierId])
+  @@index([createdAt])
+}
