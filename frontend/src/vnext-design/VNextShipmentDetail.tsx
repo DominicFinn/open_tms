@@ -90,9 +90,11 @@ export default function VNextShipmentDetail() {
       L.polyline(allCoords, { color: cOrigin, weight: 4 }).addTo(map);
       map.fitBounds(L.latLngBounds(allCoords).pad(0.1));
     } else if (allCoords.length === 1) {
-      // Only one point — zoom into it
       map.setView(allCoords[0], 12);
     }
+
+    // Fix tile rendering when container isn't fully laid out yet
+    setTimeout(() => map.invalidateSize(), 100);
 
     return () => { map.remove(); };
   }, [shipment, hasAnyCoords]);

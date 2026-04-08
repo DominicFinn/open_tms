@@ -83,6 +83,7 @@ export default function VNextShipments() {
     }).addTo(map);
     markersRef.current = L.layerGroup().addTo(map);
     mapInstance.current = map;
+    setTimeout(() => map.invalidateSize(), 100);
     return () => { map.remove(); mapInstance.current = null; markersRef.current = null; };
   }, []);
 

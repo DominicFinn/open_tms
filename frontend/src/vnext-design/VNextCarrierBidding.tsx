@@ -126,6 +126,7 @@ export default function VNextCarrierBidding() {
     L.marker(selectedLane.destCoords, { icon: dIcon }).addTo(map).bindPopup(`<strong>Destination</strong><br/>${selectedLane.dest}`);
 
     map.fitBounds(L.latLngBounds([selectedLane.originCoords, selectedLane.destCoords]).pad(0.3));
+    setTimeout(() => map.invalidateSize(), 100);
     mapInstance.current = map;
 
     return () => { map.remove(); mapInstance.current = null; };
