@@ -125,8 +125,9 @@
   --marker-default:           #2196F3;
 }
 
+/* Dark mode: user choice via data-theme="dark", or OS preference as fallback */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     /* Dark Theme Colors */
     --primary: #FFE312;
     --on-primary: #000000;
@@ -170,6 +171,51 @@
     --surface-container-highest: #323536;
     --outline-variant: #3F484A;
   }
+}
+
+/* Explicit dark override (user toggled dark on a light-OS system) */
+:root[data-theme="dark"] {
+  --primary: #FFE312;
+  --on-primary: #000000;
+  --primary-container: #FFE312;
+  --on-primary-container: #000000;
+  --secondary: #FFE312;
+  --on-secondary: #000000;
+  --secondary-container: #FFF2B0;
+  --on-secondary-container: #191C1D;
+  --tertiary: #CFBCFF;
+  --on-tertiary: #381E72;
+  --tertiary-container: #4F378A;
+  --on-tertiary-container: #E9DDFF;
+  --error: #FFB4A9;
+  --on-error: #690002;
+  --error-container: #930003;
+  --on-error-container: #FFDAD5;
+  --success: #27e51c;
+  --on-success: #013a00;
+  --success-container: #015300;
+  --on-success-container: #77ff61;
+  --warning: #ffb870;
+  --on-warning: #4a2800;
+  --warning-container: #693c00;
+  --on-warning-container: #ffdcbe;
+  --info: #4fd8eb;
+  --on-info: #00363d;
+  --info-container: #004f58;
+  --on-info-container: #97f0ff;
+  --outline: #FFE312;
+  --background: #191C1D;
+  --on-background: #E1E3E3;
+  --surface: #101415;
+  --on-surface: #C4C7C7;
+  --surface-variant: #3F484A;
+  --on-surface-variant: #BFC8CA;
+  --surface-container-lowest: #0B0F0F;
+  --surface-container-low: #191C1D;
+  --surface-container: #1D2021;
+  --surface-container-high: #272B2B;
+  --surface-container-highest: #323536;
+  --outline-variant: #3F484A;
 }
 
 * {

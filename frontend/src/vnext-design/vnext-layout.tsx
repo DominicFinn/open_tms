@@ -1,9 +1,36 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import './vnext.css';
 
+function useThemeMode() {
+  const [mode, setMode] = useState<'light' | 'dark' | 'system'>(() => {
+    return (localStorage.getItem('theme-mode') as 'light' | 'dark' | 'system') || 'system';
+  });
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (mode === 'system') {
+      root.removeAttribute('data-theme');
+      localStorage.removeItem('theme-mode');
+    } else {
+      root.setAttribute('data-theme', mode);
+      localStorage.setItem('theme-mode', mode);
+    }
+  }, [mode]);
+
+  const cycle = () => {
+    setMode(prev => prev === 'light' ? 'dark' : prev === 'dark' ? 'system' : 'light');
+  };
+
+  const icon = mode === 'light' ? 'light_mode' : mode === 'dark' ? 'dark_mode' : 'brightness_auto';
+  const label = mode === 'light' ? 'Light' : mode === 'dark' ? 'Dark' : 'System';
+
+  return { mode, cycle, icon, label };
+}
+
 export default function VNextLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const theme = useThemeMode();
 
   return (
     <div className="vn-shell">
@@ -121,6 +148,9 @@ export default function VNextLayout() {
             </button>
             <button title="Help">
               <span className="material-icons">help_outline</span>
+            </button>
+            <button title={`Theme: ${theme.label}`} onClick={theme.cycle}>
+              <span className="material-icons">{theme.icon}</span>
             </button>
             <button title="Settings">
               <span className="material-icons">settings</span>
