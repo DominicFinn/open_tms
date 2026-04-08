@@ -43,6 +43,12 @@ import VNextOrderDetail from './vnext-design/VNextOrderDetail';
 import VNextPendingLaneRequests from './vnext-design/VNextPendingLaneRequests';
 import VNextOrderImportCSV from './vnext-design/VNextOrderImportCSV';
 import VNextOrderImportEDI from './vnext-design/VNextOrderImportEDI';
+import VNextThemeSettings from './vnext-design/VNextThemeSettings';
+import VNextEmailSettings from './vnext-design/VNextEmailSettings';
+import VNextEmailTemplates from './vnext-design/VNextEmailTemplates';
+import VNextDocumentTemplates from './vnext-design/VNextDocumentTemplates';
+import VNextCustomFields from './vnext-design/VNextCustomFields';
+import VNextMapsSettings from './vnext-design/VNextMapsSettings';
 
 import './theme.css';
 
@@ -103,6 +109,12 @@ root.render(
 
           {/* Settings */}
           <Route path="settings" element={<VNextSettings />} />
+          <Route path="settings/theme" element={<VNextThemeSettings />} />
+          <Route path="settings/email" element={<VNextEmailSettings />} />
+          <Route path="settings/email-templates" element={<VNextEmailTemplates />} />
+          <Route path="settings/document-templates" element={<VNextDocumentTemplates />} />
+          <Route path="settings/custom-fields" element={<VNextCustomFields />} />
+          <Route path="settings/maps" element={<VNextMapsSettings />} />
 
           {/* Integrations (sub-layout with tabs) */}
           <Route path="integrations" element={<VNextIntegrationsLayout />}>
