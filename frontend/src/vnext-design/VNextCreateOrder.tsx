@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { API_URL } from '../api';
 
 interface LineItem {
   id: number;
@@ -12,6 +13,8 @@ interface LineItem {
 let nextLineId = 2;
 
 export default function VNextCreateOrder() {
+  const navigate = useNavigate();
+
   const [customer, setCustomer] = useState('');
   const [poNumber, setPoNumber] = useState('');
   const [orderDate, setOrderDate] = useState('');
@@ -24,10 +27,58 @@ export default function VNextCreateOrder() {
   const [tempControl, setTempControl] = useState('ambient');
   const [hazmat, setHazmat] = useState(false);
   const [specialInstructions, setSpecialInstructions] = useState('');
+  const [notes, setNotes] = useState('');
 
   const [lineItems, setLineItems] = useState<LineItem[]>([
     { id: 1, sku: '', description: '', quantity: '', weight: '' },
   ]);
+
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [locations, setLocations] = useState<any[]>([]);
+  const [submitError, setSubmitError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    Promise.all([
+      fetch(`${API_URL}/api/v1/customers`).then(r => r.json()),
+      fetch(`${API_URL}/api/v1/locations`).then(r => r.json()),
+    ]).then(([cRes, lRes]) => {
+      setCustomers(cRes.data || []);
+      setLocations(lRes.data || []);
+    }).catch(() => {});
+  }, []);
+
+  const handleSubmit = async () => {
+    setSubmitError('');
+    setSubmitting(true);
+    try {
+      const body: any = {
+        poNumber, customerId: customer, originId: originLocation, destinationId: destLocation,
+        requestedPickupDate: orderDate || undefined, requestedDeliveryDate: requestedDelivery || undefined,
+        serviceLevel: serviceLevel || undefined,
+        temperatureControl: tempControl, requiresHazmat: hazmat,
+        lineItems: lineItems.filter(li => li.sku || li.description).map(li => ({
+          sku: li.sku, description: li.description,
+          quantity: li.quantity ? parseInt(li.quantity) : undefined,
+          weight: li.weight ? parseFloat(li.weight) : undefined,
+        })),
+        specialInstructions, notes, importSource: 'manual',
+      };
+      const res = await fetch(`${API_URL}/api/v1/orders`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error('Failed to create order');
+      const json = await res.json();
+      if (json.error) throw new Error(json.error);
+      navigate('/orders');
+    } catch (err: any) {
+      setSubmitError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const addLineItem = () => {
     setLineItems(prev => [...prev, { id: nextLineId++, sku: '', description: '', quantity: '', weight: '' }]);
@@ -67,11 +118,7 @@ export default function VNextCreateOrder() {
                 <label className="vn-field-label">Customer</label>
                 <select className="vn-select" value={customer} onChange={e => setCustomer(e.target.value)}>
                   <option value="">Select customer...</option>
-                  <option value="acme">Acme Corp</option>
-                  <option value="global">Global Widgets</option>
-                  <option value="techstart">TechStart Inc</option>
-                  <option value="freshfoods">FreshFoods LLC</option>
-                  <option value="industrial">Industrial Co</option>
+                  {customers.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
               <div className="vn-field">
@@ -108,22 +155,14 @@ export default function VNextCreateOrder() {
                 <label className="vn-field-label">Origin Location</label>
                 <select className="vn-select" value={originLocation} onChange={e => setOriginLocation(e.target.value)}>
                   <option value="">Select origin...</option>
-                  <option value="chi">Chicago Distribution Center</option>
-                  <option value="la">Los Angeles Terminal</option>
-                  <option value="atl">Atlanta Hub</option>
-                  <option value="nyc">New York Cross-Dock</option>
-                  <option value="den">Denver Cold Storage</option>
+                  {locations.map((l: any) => <option key={l.id} value={l.id}>{l.name} — {l.city}, {l.state}</option>)}
                 </select>
               </div>
               <div className="vn-field">
                 <label className="vn-field-label">Destination Location</label>
                 <select className="vn-select" value={destLocation} onChange={e => setDestLocation(e.target.value)}>
                   <option value="">Select destination...</option>
-                  <option value="dal">Dallas Warehouse</option>
-                  <option value="phx">Phoenix Staging Area</option>
-                  <option value="mia">Miami Import Yard</option>
-                  <option value="sea">Seattle Port Facility</option>
-                  <option value="min">Minneapolis Yard</option>
+                  {locations.map((l: any) => <option key={l.id} value={l.id}>{l.name} — {l.city}, {l.state}</option>)}
                 </select>
               </div>
             </div>
@@ -212,12 +251,14 @@ export default function VNextCreateOrder() {
             </div>
           </div>
 
+          {submitError && <div className="vn-alert vn-alert-error" style={{ marginBottom: 16 }}>{submitError}</div>}
+
           {/* Form Actions */}
           <div className="vn-form-actions">
             <Link to="/orders" className="vn-btn vn-btn-outline">Cancel</Link>
-            <button className="vn-btn vn-btn-primary">
+            <button className="vn-btn vn-btn-primary" onClick={handleSubmit} disabled={submitting}>
               <span className="material-icons">add</span>
-              Create Order
+              {submitting ? 'Creating...' : 'Create Order'}
             </button>
           </div>
 

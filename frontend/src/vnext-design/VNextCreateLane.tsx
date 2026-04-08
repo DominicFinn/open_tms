@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { API_URL } from '../api';
 
 interface Stop {
   id: number;
@@ -7,23 +8,13 @@ interface Stop {
   order: number;
 }
 
-const DEMO_LOCATIONS = [
-  { value: '', label: 'Select location...' },
-  { value: 'chicago', label: 'Chicago, IL' },
-  { value: 'dallas', label: 'Dallas, TX' },
-  { value: 'losangeles', label: 'Los Angeles, CA' },
-  { value: 'atlanta', label: 'Atlanta, GA' },
-  { value: 'newyork', label: 'New York, NY' },
-  { value: 'denver', label: 'Denver, CO' },
-  { value: 'houston', label: 'Houston, TX' },
-  { value: 'seattle', label: 'Seattle, WA' },
-  { value: 'phoenix', label: 'Phoenix, AZ' },
-  { value: 'miami', label: 'Miami, FL' },
-];
-
 let stopIdCounter = 0;
 
 export default function VNextCreateLane() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const isEdit = Boolean(id);
+
   const [origin, setOrigin] = useState('');
   const [destination, setDestination] = useState('');
   const [distance, setDistance] = useState('');
@@ -34,8 +25,72 @@ export default function VNextCreateLane() {
   const [notes, setNotes] = useState('');
   const [stops, setStops] = useState<Stop[]>([]);
 
-  const originLabel = DEMO_LOCATIONS.find(l => l.value === origin)?.label || '';
-  const destLabel = DEMO_LOCATIONS.find(l => l.value === destination)?.label || '';
+  const [apiLocations, setApiLocations] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    fetch(`${API_URL}/api/v1/locations`).then(r => r.json())
+      .then(json => setApiLocations(json.data || []))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!id) return;
+    setLoading(true);
+    fetch(`${API_URL}/api/v1/lanes/${id}`)
+      .then(r => { if (!r.ok) throw new Error('Failed to load'); return r.json(); })
+      .then(json => {
+        const l = json.data;
+        if (!l) return;
+        setOrigin(l.originId || '');
+        setDestination(l.destinationId || '');
+        setDistance(l.distance != null ? String(l.distance) : '');
+        setNotes(l.notes || '');
+        setServiceLevel(l.serviceLevel || 'FTL');
+        if (l.stops && l.stops.length > 0) {
+          setStops(l.stops.map((s: any, i: number) => {
+            stopIdCounter += 1;
+            return { id: stopIdCounter, location: s.locationId || '', order: s.order || i + 1 };
+          }));
+        }
+      })
+      .catch(err => setSubmitError(err.message))
+      .finally(() => setLoading(false));
+  }, [id]);
+
+  const handleSubmit = async () => {
+    setSubmitError('');
+    setSubmitting(true);
+    try {
+      const body: any = {
+        originId: origin, destinationId: destination,
+        distance: distance ? parseFloat(distance) : undefined,
+        notes, serviceLevel,
+        stops: stops.filter(s => s.location).map(s => ({ locationId: s.location, order: s.order })),
+      };
+      const url = isEdit ? `${API_URL}/api/v1/lanes/${id}` : `${API_URL}/api/v1/lanes`;
+      const res = await fetch(url, {
+        method: isEdit ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error('Failed to save lane');
+      const json = await res.json();
+      if (json.error) throw new Error(json.error);
+      navigate('/lanes');
+    } catch (err: any) {
+      setSubmitError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (loading) return <div className="loading-spinner" style={{ margin: '2rem auto' }} />;
+
+  const originLabel = apiLocations.find(l => l.id === origin)?.name || '';
+  const destLabel = apiLocations.find(l => l.id === destination)?.name || '';
 
   const addStop = () => {
     stopIdCounter += 1;
@@ -57,9 +112,9 @@ export default function VNextCreateLane() {
           <div style={{ fontSize: 13, color: 'var(--on-surface-variant)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
             <Link to="/lanes" style={{ color: 'var(--primary)', textDecoration: 'none' }}>Lanes</Link>
             <span className="material-icons" style={{ fontSize: 16 }}>chevron_right</span>
-            <span>New Lane</span>
+            <span>{isEdit ? 'Edit Lane' : 'New Lane'}</span>
           </div>
-          <h1>New Lane</h1>
+          <h1>{isEdit ? 'Edit Lane' : 'New Lane'}</h1>
         </div>
       </div>
 
@@ -76,16 +131,18 @@ export default function VNextCreateLane() {
               <div className="vn-field">
                 <label className="vn-field-label">Origin Location</label>
                 <select className="vn-select" value={origin} onChange={e => setOrigin(e.target.value)}>
-                  {DEMO_LOCATIONS.map(loc => (
-                    <option key={loc.value} value={loc.value}>{loc.label}</option>
+                  <option value="">Select origin...</option>
+                  {apiLocations.map((loc: any) => (
+                    <option key={loc.id} value={loc.id}>{loc.name} — {loc.city}, {loc.state}</option>
                   ))}
                 </select>
               </div>
               <div className="vn-field">
                 <label className="vn-field-label">Destination Location</label>
                 <select className="vn-select" value={destination} onChange={e => setDestination(e.target.value)}>
-                  {DEMO_LOCATIONS.map(loc => (
-                    <option key={loc.value} value={loc.value}>{loc.label}</option>
+                  <option value="">Select destination...</option>
+                  {apiLocations.map((loc: any) => (
+                    <option key={loc.id} value={loc.id}>{loc.name} — {loc.city}, {loc.state}</option>
                   ))}
                 </select>
               </div>
@@ -100,7 +157,7 @@ export default function VNextCreateLane() {
                 </div>
                 <div className="vn-route-line" style={{ flex: 1, height: 2, backgroundColor: 'var(--outline-variant)' }} />
                 {stops.length > 0 && stops.map((stop, i) => {
-                  const stopLabel = DEMO_LOCATIONS.find(l => l.value === stop.location)?.label || `Stop ${i + 1}`;
+                  const stopLabel = apiLocations.find(l => l.id === stop.location)?.name || `Stop ${i + 1}`;
                   return (
                     <React.Fragment key={stop.id}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -180,8 +237,9 @@ export default function VNextCreateLane() {
                 <div className="vn-field" style={{ flex: 1 }}>
                   <label className="vn-field-label">Location</label>
                   <select className="vn-select" value={stop.location} onChange={e => updateStop(stop.id, 'location', e.target.value)}>
-                    {DEMO_LOCATIONS.map(loc => (
-                      <option key={loc.value} value={loc.value}>{loc.label}</option>
+                    <option value="">Select location...</option>
+                    {apiLocations.map((loc: any) => (
+                      <option key={loc.id} value={loc.id}>{loc.name} — {loc.city}, {loc.state}</option>
                     ))}
                   </select>
                 </div>
@@ -208,12 +266,14 @@ export default function VNextCreateLane() {
         </div>
       </div>
 
+      {submitError && <div className="vn-alert vn-alert-error" style={{ marginBottom: 16 }}>{submitError}</div>}
+
       {/* Form Actions */}
       <div className="vn-form-actions">
         <Link to="/lanes" className="vn-btn vn-btn-outline">Cancel</Link>
-        <button className="vn-btn vn-btn-primary">
+        <button className="vn-btn vn-btn-primary" onClick={handleSubmit} disabled={submitting}>
           <span className="material-icons">save</span>
-          Create Lane
+          {submitting ? 'Saving...' : isEdit ? 'Update Lane' : 'Create Lane'}
         </button>
       </div>
     </>

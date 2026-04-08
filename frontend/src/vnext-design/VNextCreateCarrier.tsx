@@ -1,7 +1,12 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { API_URL } from '../api';
 
 export default function VNextCreateCarrier() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const isEdit = Boolean(id);
+
   const [name, setName] = useState('');
   const [mcNumber, setMcNumber] = useState('');
   const [dotNumber, setDotNumber] = useState('');
@@ -25,6 +30,61 @@ export default function VNextCreateCarrier() {
   const [insuranceAmount, setInsuranceAmount] = useState('');
   const [expiryDate, setExpiryDate] = useState('');
   const [notes, setNotes] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!id) return;
+    setLoading(true);
+    fetch(`${API_URL}/api/v1/carriers/${id}`)
+      .then(r => { if (!r.ok) throw new Error('Failed to load'); return r.json(); })
+      .then(json => {
+        const c = json.data;
+        if (!c) return;
+        setName(c.name || '');
+        setMcNumber(c.mcNumber || '');
+        setDotNumber(c.dotNumber || '');
+        setContactName(c.contactName || '');
+        setEmail(c.contactEmail || '');
+        setPhone(c.contactPhone || '');
+        setAddress1(c.address1 || '');
+        setAddress2(c.address2 || '');
+        setCity(c.city || '');
+        setState(c.state || '');
+        setPostalCode(c.postalCode || '');
+        setCountry(c.country || 'US');
+      })
+      .catch(err => setSubmitError(err.message))
+      .finally(() => setLoading(false));
+  }, [id]);
+
+  const handleSubmit = async () => {
+    setSubmitError('');
+    setSubmitting(true);
+    try {
+      const body: any = {
+        name, mcNumber, dotNumber, contactName, contactEmail: email, contactPhone: phone,
+        address1, address2, city, state, postalCode, country,
+      };
+      const url = isEdit ? `${API_URL}/api/v1/carriers/${id}` : `${API_URL}/api/v1/carriers`;
+      const res = await fetch(url, {
+        method: isEdit ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error('Failed to save carrier');
+      const json = await res.json();
+      if (json.error) throw new Error(json.error);
+      navigate('/carriers');
+    } catch (err: any) {
+      setSubmitError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (loading) return <div className="loading-spinner" style={{ margin: '2rem auto' }} />;
 
   const toggleEquipment = (key: string) => {
     setEquipment(prev => ({ ...prev, [key]: !prev[key] }));
@@ -37,9 +97,9 @@ export default function VNextCreateCarrier() {
           <div style={{ fontSize: 13, color: 'var(--on-surface-variant)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
             <Link to="/carriers" style={{ color: 'var(--primary)', textDecoration: 'none' }}>Carriers</Link>
             <span className="material-icons" style={{ fontSize: 16 }}>chevron_right</span>
-            <span>New Carrier</span>
+            <span>{isEdit ? 'Edit Carrier' : 'New Carrier'}</span>
           </div>
-          <h1>New Carrier</h1>
+          <h1>{isEdit ? 'Edit Carrier' : 'New Carrier'}</h1>
         </div>
       </div>
 
@@ -191,12 +251,14 @@ export default function VNextCreateCarrier() {
         </div>
       </div>
 
+      {submitError && <div className="vn-alert vn-alert-error" style={{ marginBottom: 16 }}>{submitError}</div>}
+
       {/* Form Actions */}
       <div className="vn-form-actions">
         <Link to="/carriers" className="vn-btn vn-btn-outline">Cancel</Link>
-        <button className="vn-btn vn-btn-primary">
+        <button className="vn-btn vn-btn-primary" onClick={handleSubmit} disabled={submitting}>
           <span className="material-icons">save</span>
-          Save Carrier
+          {submitting ? 'Saving...' : isEdit ? 'Update Carrier' : 'Save Carrier'}
         </button>
       </div>
     </>

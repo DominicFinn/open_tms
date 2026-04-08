@@ -39,6 +39,10 @@ import VNextOutboundIntegrations from './vnext-design/VNextOutboundIntegrations'
 import VNextOutboundLogs from './vnext-design/VNextOutboundLogs';
 import VNextEdiPartners from './vnext-design/VNextEdiPartners';
 import VNextEdiFiles from './vnext-design/VNextEdiFiles';
+import VNextOrderDetail from './vnext-design/VNextOrderDetail';
+import VNextPendingLaneRequests from './vnext-design/VNextPendingLaneRequests';
+import VNextOrderImportCSV from './vnext-design/VNextOrderImportCSV';
+import VNextOrderImportEDI from './vnext-design/VNextOrderImportEDI';
 
 import './theme.css';
 
@@ -61,6 +65,12 @@ root.render(
           {/* Orders */}
           <Route path="orders" element={<VNextOrders />} />
           <Route path="orders/create" element={<VNextCreateOrder />} />
+          <Route path="orders/import/csv" element={<VNextOrderImportCSV />} />
+          <Route path="orders/import/edi" element={<VNextOrderImportEDI />} />
+          <Route path="orders/:id" element={<VNextOrderDetail />} />
+
+          {/* Pending Lane Requests */}
+          <Route path="pending-lane-requests" element={<VNextPendingLaneRequests />} />
 
           {/* Issues & Carrier Bidding */}
           <Route path="issues" element={<VNextIssueKanban />} />

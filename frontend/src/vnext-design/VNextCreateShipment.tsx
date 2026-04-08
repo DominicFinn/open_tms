@@ -1,7 +1,12 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { API_URL } from '../api';
 
 export default function VNextCreateShipment() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const isEdit = Boolean(id);
+
   const [customer, setCustomer] = useState('');
   const [reference, setReference] = useState('');
   const [mode, setMode] = useState('');
@@ -26,6 +31,75 @@ export default function VNextCreateShipment() {
   const [hazmat, setHazmat] = useState(false);
 
   const [notes, setNotes] = useState('');
+  const [laneId, setLaneId] = useState('');
+
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [locations, setLocations] = useState<any[]>([]);
+  const [lanes, setLanes] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    Promise.all([
+      fetch(`${API_URL}/api/v1/customers`).then(r => r.json()),
+      fetch(`${API_URL}/api/v1/locations`).then(r => r.json()),
+      fetch(`${API_URL}/api/v1/lanes`).then(r => r.json()),
+    ]).then(([cRes, lRes, laRes]) => {
+      setCustomers(cRes.data || []);
+      setLocations(lRes.data || []);
+      setLanes(laRes.data || []);
+    }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!id) return;
+    setLoading(true);
+    fetch(`${API_URL}/api/v1/shipments/${id}`)
+      .then(r => { if (!r.ok) throw new Error('Failed to load'); return r.json(); })
+      .then(json => {
+        const s = json.data;
+        if (!s) return;
+        setCustomer(s.customerId || '');
+        setReference(s.reference || '');
+        setProNumber(s.proNumber || '');
+        setOriginLocation(s.originId || '');
+        setDestLocation(s.destinationId || '');
+        setPickupDate(s.pickupDate ? s.pickupDate.slice(0, 10) : '');
+        setDeliveryDate(s.deliveryDate ? s.deliveryDate.slice(0, 10) : '');
+        setLaneId(s.laneId || '');
+      })
+      .catch(err => setSubmitError(err.message))
+      .finally(() => setLoading(false));
+  }, [id]);
+
+  const handleSubmit = async () => {
+    setSubmitError('');
+    setSubmitting(true);
+    try {
+      const body: any = {
+        reference, proNumber, customerId: customer, originId: originLocation, destinationId: destLocation,
+        laneId: laneId || undefined, status: 'draft',
+        pickupDate: pickupDate || undefined, deliveryDate: deliveryDate || undefined,
+      };
+      const url = isEdit ? `${API_URL}/api/v1/shipments/${id}` : `${API_URL}/api/v1/shipments`;
+      const res = await fetch(url, {
+        method: isEdit ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error('Failed to save shipment');
+      const json = await res.json();
+      if (json.error) throw new Error(json.error);
+      navigate('/shipments');
+    } catch (err: any) {
+      setSubmitError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (loading) return <div className="loading-spinner" style={{ margin: '2rem auto' }} />;
 
   return (
     <>
@@ -33,9 +107,9 @@ export default function VNextCreateShipment() {
         <div>
           <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>
             <Link to="/shipments" style={{ color: 'var(--color-primary)', textDecoration: 'none' }}>Shipments</Link>
-            {' '}&gt; New Shipment
+            {' '}&gt; {isEdit ? 'Edit Shipment' : 'New Shipment'}
           </p>
-          <h1>New Shipment</h1>
+          <h1>{isEdit ? 'Edit Shipment' : 'New Shipment'}</h1>
         </div>
       </div>
 
@@ -53,11 +127,7 @@ export default function VNextCreateShipment() {
                 <label className="vn-field-label">Customer</label>
                 <select className="vn-select" value={customer} onChange={e => setCustomer(e.target.value)}>
                   <option value="">Select customer...</option>
-                  <option value="acme">Acme Corp</option>
-                  <option value="global">Global Widgets</option>
-                  <option value="techstart">TechStart Inc</option>
-                  <option value="freshfoods">FreshFoods LLC</option>
-                  <option value="industrial">Industrial Co</option>
+                  {customers.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
               <div className="vn-field">
@@ -90,11 +160,7 @@ export default function VNextCreateShipment() {
                 <label className="vn-field-label">Location</label>
                 <select className="vn-select" value={originLocation} onChange={e => setOriginLocation(e.target.value)}>
                   <option value="">Select origin...</option>
-                  <option value="chi">Chicago Distribution Center</option>
-                  <option value="la">Los Angeles Terminal</option>
-                  <option value="atl">Atlanta Hub</option>
-                  <option value="nyc">New York Cross-Dock</option>
-                  <option value="den">Denver Cold Storage</option>
+                  {locations.map((l: any) => <option key={l.id} value={l.id}>{l.name} — {l.city}, {l.state}</option>)}
                 </select>
               </div>
               <div className="vn-field">
@@ -123,11 +189,7 @@ export default function VNextCreateShipment() {
                 <label className="vn-field-label">Location</label>
                 <select className="vn-select" value={destLocation} onChange={e => setDestLocation(e.target.value)}>
                   <option value="">Select destination...</option>
-                  <option value="dal">Dallas Warehouse</option>
-                  <option value="phx">Phoenix Staging Area</option>
-                  <option value="mia">Miami Import Yard</option>
-                  <option value="sea">Seattle Port Facility</option>
-                  <option value="min">Minneapolis Yard</option>
+                  {locations.map((l: any) => <option key={l.id} value={l.id}>{l.name} — {l.city}, {l.state}</option>)}
                 </select>
               </div>
               <div className="vn-field">
@@ -204,16 +266,14 @@ export default function VNextCreateShipment() {
             </div>
           </div>
 
+          {submitError && <div className="vn-alert vn-alert-error" style={{ marginBottom: 16 }}>{submitError}</div>}
+
           {/* Form Actions */}
           <div className="vn-form-actions">
             <Link to="/shipments" className="vn-btn vn-btn-outline">Cancel</Link>
-            <button className="vn-btn vn-btn-outline">
-              <span className="material-icons">save</span>
-              Save Draft
-            </button>
-            <button className="vn-btn vn-btn-primary">
-              <span className="material-icons">add</span>
-              Create Shipment
+            <button className="vn-btn vn-btn-primary" onClick={handleSubmit} disabled={submitting}>
+              <span className="material-icons">{isEdit ? 'save' : 'add'}</span>
+              {submitting ? 'Saving...' : isEdit ? 'Update Shipment' : 'Create Shipment'}
             </button>
           </div>
 

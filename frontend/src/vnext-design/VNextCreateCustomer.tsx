@@ -1,7 +1,12 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { API_URL } from '../api';
 
 export default function VNextCreateCustomer() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const isEdit = Boolean(id);
+
   const [companyName, setCompanyName] = useState('');
   const [industry, setIndustry] = useState('');
   const [contactName, setContactName] = useState('');
@@ -12,6 +17,48 @@ export default function VNextCreateCustomer() {
   const [currency, setCurrency] = useState('USD');
   const [defaultMode, setDefaultMode] = useState('FTL');
   const [notes, setNotes] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!id) return;
+    setLoading(true);
+    fetch(`${API_URL}/api/v1/customers/${id}`)
+      .then(r => { if (!r.ok) throw new Error('Failed to load'); return r.json(); })
+      .then(json => {
+        const c = json.data;
+        if (!c) return;
+        setCompanyName(c.name || '');
+        setEmail(c.contactEmail || '');
+      })
+      .catch(err => setSubmitError(err.message))
+      .finally(() => setLoading(false));
+  }, [id]);
+
+  const handleSubmit = async () => {
+    setSubmitError('');
+    setSubmitting(true);
+    try {
+      const body: any = { name: companyName, contactEmail: email };
+      const url = isEdit ? `${API_URL}/api/v1/customers/${id}` : `${API_URL}/api/v1/customers`;
+      const res = await fetch(url, {
+        method: isEdit ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error('Failed to save customer');
+      const json = await res.json();
+      if (json.error) throw new Error(json.error);
+      navigate('/customers');
+    } catch (err: any) {
+      setSubmitError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (loading) return <div className="loading-spinner" style={{ margin: '2rem auto' }} />;
 
   return (
     <>
@@ -20,9 +67,9 @@ export default function VNextCreateCustomer() {
           <div style={{ fontSize: 13, color: 'var(--on-surface-variant)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
             <Link to="/customers" style={{ color: 'var(--primary)', textDecoration: 'none' }}>Customers</Link>
             <span className="material-icons" style={{ fontSize: 16 }}>chevron_right</span>
-            <span>New Customer</span>
+            <span>{isEdit ? 'Edit Customer' : 'New Customer'}</span>
           </div>
-          <h1>New Customer</h1>
+          <h1>{isEdit ? 'Edit Customer' : 'New Customer'}</h1>
         </div>
       </div>
 
@@ -131,12 +178,14 @@ export default function VNextCreateCustomer() {
         </div>
       </div>
 
+      {submitError && <div className="vn-alert vn-alert-error" style={{ marginBottom: 16 }}>{submitError}</div>}
+
       {/* Form Actions */}
       <div className="vn-form-actions">
         <Link to="/customers" className="vn-btn vn-btn-outline">Cancel</Link>
-        <button className="vn-btn vn-btn-primary">
+        <button className="vn-btn vn-btn-primary" onClick={handleSubmit} disabled={submitting}>
           <span className="material-icons">save</span>
-          Create Customer
+          {submitting ? 'Saving...' : isEdit ? 'Update Customer' : 'Create Customer'}
         </button>
       </div>
     </>

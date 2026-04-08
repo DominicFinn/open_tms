@@ -1,7 +1,12 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { API_URL } from '../api';
 
 export default function VNextCreateLocation() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const isEdit = Boolean(id);
+
   const [name, setName] = useState('');
   const [address1, setAddress1] = useState('');
   const [address2, setAddress2] = useState('');
@@ -16,6 +21,59 @@ export default function VNextCreateLocation() {
   const [contactName, setContactName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!id) return;
+    setLoading(true);
+    fetch(`${API_URL}/api/v1/locations/${id}`)
+      .then(r => { if (!r.ok) throw new Error('Failed to load'); return r.json(); })
+      .then(json => {
+        const l = json.data;
+        if (!l) return;
+        setName(l.name || '');
+        setAddress1(l.address1 || '');
+        setAddress2(l.address2 || '');
+        setCity(l.city || '');
+        setState(l.state || '');
+        setPostalCode(l.postalCode || '');
+        setCountry(l.country || '');
+        setLatitude(l.lat != null ? String(l.lat) : '');
+        setLongitude(l.lng != null ? String(l.lng) : '');
+      })
+      .catch(err => setSubmitError(err.message))
+      .finally(() => setLoading(false));
+  }, [id]);
+
+  const handleSubmit = async () => {
+    setSubmitError('');
+    setSubmitting(true);
+    try {
+      const body: any = {
+        name, address1, address2, city, state, postalCode, country,
+        lat: latitude ? parseFloat(latitude) : undefined,
+        lng: longitude ? parseFloat(longitude) : undefined,
+      };
+      const url = isEdit ? `${API_URL}/api/v1/locations/${id}` : `${API_URL}/api/v1/locations`;
+      const res = await fetch(url, {
+        method: isEdit ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error('Failed to save location');
+      const json = await res.json();
+      if (json.error) throw new Error(json.error);
+      navigate('/locations');
+    } catch (err: any) {
+      setSubmitError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (loading) return <div className="loading-spinner" style={{ margin: '2rem auto' }} />;
 
   return (
     <>
@@ -23,9 +81,9 @@ export default function VNextCreateLocation() {
         <div>
           <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>
             <Link to="/locations" style={{ color: 'var(--color-primary)', textDecoration: 'none' }}>Locations</Link>
-            {' '}&gt; New Location
+            {' '}&gt; {isEdit ? 'Edit Location' : 'New Location'}
           </p>
-          <h1>New Location</h1>
+          <h1>{isEdit ? 'Edit Location' : 'New Location'}</h1>
         </div>
       </div>
 
@@ -138,12 +196,14 @@ export default function VNextCreateLocation() {
             </div>
           </div>
 
+          {submitError && <div className="vn-alert vn-alert-error" style={{ marginBottom: 16 }}>{submitError}</div>}
+
           {/* Form Actions */}
           <div className="vn-form-actions">
             <Link to="/locations" className="vn-btn vn-btn-outline">Cancel</Link>
-            <button className="vn-btn vn-btn-primary">
+            <button className="vn-btn vn-btn-primary" onClick={handleSubmit} disabled={submitting}>
               <span className="material-icons">save</span>
-              Save Location
+              {submitting ? 'Saving...' : isEdit ? 'Update Location' : 'Save Location'}
             </button>
           </div>
 

@@ -1,19 +1,39 @@
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
-
-const CARRIERS = [
-  { name: 'Swift Transport', price: '$2,850', serviceLevel: 'Standard', assigned: true },
-  { name: 'Midwest Freight Co', price: '$3,100', serviceLevel: 'Expedited', assigned: false },
-];
-
-const RECENT_SHIPMENTS = [
-  { ref: 'SHP-4821', status: 'In Transit', statusColor: 'info', pickup: 'Apr 6, 2026', delivery: 'Apr 8, 2026' },
-  { ref: 'SHP-4790', status: 'Delivered', statusColor: 'success', pickup: 'Mar 28, 2026', delivery: 'Mar 30, 2026' },
-  { ref: 'SHP-4755', status: 'Delivered', statusColor: 'success', pickup: 'Mar 15, 2026', delivery: 'Mar 17, 2026' },
-];
+import React, { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { API_URL } from '../api';
 
 export default function VNextLaneDetail() {
+  const { id } = useParams();
   const navigate = useNavigate();
+  const [lane, setLane] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!id) return;
+    setLoading(true);
+    fetch(`${API_URL}/api/v1/lanes/${id}`)
+      .then(res => {
+        if (!res.ok) throw new Error('Failed to load lane');
+        return res.json();
+      })
+      .then(json => {
+        if (json.error) throw new Error(json.error);
+        setLane(json.data);
+      })
+      .catch(err => setError(err.message))
+      .finally(() => setLoading(false));
+  }, [id]);
+
+  if (loading) return <div className="loading-spinner" style={{ margin: '2rem auto' }} />;
+  if (error) return <div className="vn-alert vn-alert-error" style={{ margin: '2rem' }}>{error}</div>;
+  if (!lane) return <div className="vn-alert vn-alert-error" style={{ margin: '2rem' }}>Lane not found</div>;
+
+  const origin = lane.origin || {};
+  const destination = lane.destination || {};
+  const carriers = lane.laneCarriers || [];
+  const stops = lane.stops || [];
+  const laneName = lane.name || `${origin.city || '?'}, ${origin.state || '?'} → ${destination.city || '?'}, ${destination.state || '?'}`;
 
   return (
     <>
@@ -23,14 +43,14 @@ export default function VNextLaneDetail() {
           <span className="material-icons">arrow_back</span>
           Lanes
         </button>
-        <span style={{ color: 'var(--on-surface-variant)', fontSize: 13 }}>/ Chicago, IL → Dallas, TX</span>
+        <span style={{ color: 'var(--on-surface-variant)', fontSize: 13 }}>/ {laneName}</span>
       </div>
 
       {/* Page Header */}
       <div className="vn-page-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-          <h1>Chicago, IL → Dallas, TX</h1>
-          <span className="vn-chip vn-chip-success">Active</span>
+          <h1>{laneName}</h1>
+          <span className={`vn-chip vn-chip-${lane.status === 'active' ? 'success' : 'secondary'}`}>{lane.status || 'Unknown'}</span>
         </div>
         <div className="vn-page-actions">
           <button className="vn-btn vn-btn-outline vn-btn-sm">
@@ -59,8 +79,8 @@ export default function VNextLaneDetail() {
           }}>
             <div style={{ textAlign: 'center', color: 'var(--on-surface-variant)' }}>
               <span className="material-icons" style={{ fontSize: 48, opacity: 0.4 }}>map</span>
-              <div style={{ fontSize: 14, marginTop: 8 }}>Lane Route: Chicago, IL → St. Louis, MO → Dallas, TX</div>
-              <div style={{ fontSize: 12, marginTop: 4 }}>632 miles</div>
+              <div style={{ fontSize: 14, marginTop: 8 }}>Lane Route: {laneName}</div>
+              <div style={{ fontSize: 12, marginTop: 4 }}>{lane.distance ? `${lane.distance} miles` : ''}</div>
             </div>
           </div>
 
@@ -85,11 +105,14 @@ export default function VNextLaneDetail() {
                     </tr>
                   </thead>
                   <tbody>
-                    {CARRIERS.map((c, i) => (
+                    {carriers.length === 0 && (
+                      <tr><td colSpan={4} style={{ textAlign: 'center', color: 'var(--on-surface-variant)', padding: 24 }}>No carriers assigned</td></tr>
+                    )}
+                    {carriers.map((c: any, i: number) => (
                       <tr key={i}>
-                        <td><span style={{ fontWeight: 500 }}>{c.name}</span></td>
-                        <td>{c.price}</td>
-                        <td>{c.serviceLevel}</td>
+                        <td><span style={{ fontWeight: 500 }}>{c.carrier?.name || '—'}{c.carrier?.mcNumber ? ` (${c.carrier.mcNumber})` : ''}</span></td>
+                        <td>{c.price != null ? `${c.currency || '$'}${c.price}` : '—'}</td>
+                        <td>{c.serviceLevel || '—'}</td>
                         <td>
                           {c.assigned
                             ? <span className="vn-chip vn-chip-success">Assigned</span>
@@ -125,14 +148,11 @@ export default function VNextLaneDetail() {
                     </tr>
                   </thead>
                   <tbody>
-                    {RECENT_SHIPMENTS.map((s, i) => (
-                      <tr key={i} style={{ cursor: 'pointer' }} onClick={() => navigate('/shipments/' + s.ref)}>
-                        <td><span className="vn-table-id">{s.ref}</span></td>
-                        <td><span className={`vn-chip vn-chip-${s.statusColor}`}>{s.status}</span></td>
-                        <td style={{ fontSize: 13 }}>{s.pickup}</td>
-                        <td style={{ fontSize: 13 }}>{s.delivery}</td>
-                      </tr>
-                    ))}
+                    <tr>
+                      <td colSpan={4} style={{ textAlign: 'center', color: 'var(--on-surface-variant)', padding: 24 }}>
+                        {lane._count?.shipments != null ? `${lane._count.shipments} shipment(s) on this lane` : 'No shipment data available'}
+                      </td>
+                    </tr>
                   </tbody>
                 </table>
               </div>
@@ -147,10 +167,10 @@ export default function VNextLaneDetail() {
             <div className="vn-card-header"><h2>Lane Info</h2></div>
             <div className="vn-card-body">
               <div className="vn-info-grid">
-                <div className="vn-info-item"><label>Distance</label><span>632 miles</span></div>
-                <div className="vn-info-item"><label>Status</label><span>Active</span></div>
-                <div className="vn-info-item"><label>Service Level</label><span>Standard FTL</span></div>
-                <div className="vn-info-item"><label>Created</label><span>Jan 15, 2026</span></div>
+                <div className="vn-info-item"><label>Distance</label><span>{lane.distance ? `${lane.distance} miles` : '—'}</span></div>
+                <div className="vn-info-item"><label>Status</label><span>{lane.status || '—'}</span></div>
+                <div className="vn-info-item"><label>Service Level</label><span>{lane.serviceLevel || '—'}</span></div>
+                <div className="vn-info-item"><label>Notes</label><span>{lane.notes || '—'}</span></div>
               </div>
             </div>
           </div>
@@ -163,10 +183,10 @@ export default function VNextLaneDetail() {
                 <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--on-surface)' }}>Origin</span>
               </div>
               <div className="vn-info-item" style={{ marginBottom: 8 }}>
-                <label>Facility</label><span>Acme Chicago Warehouse</span>
+                <label>Facility</label><span>{origin.name || '—'}</span>
               </div>
               <div className="vn-info-item">
-                <label>Address</label><span>1400 S Cicero Ave, Chicago, IL 60804</span>
+                <label>Address</label><span>{[origin.city, origin.state].filter(Boolean).join(', ') || '—'}</span>
               </div>
             </div>
           </div>
@@ -179,10 +199,10 @@ export default function VNextLaneDetail() {
                 <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--on-surface)' }}>Destination</span>
               </div>
               <div className="vn-info-item" style={{ marginBottom: 8 }}>
-                <label>Facility</label><span>Acme Dallas DC</span>
+                <label>Facility</label><span>{destination.name || '—'}</span>
               </div>
               <div className="vn-info-item">
-                <label>Address</label><span>2200 N Stemmons Fwy, Dallas, TX 75207</span>
+                <label>Address</label><span>{[destination.city, destination.state].filter(Boolean).join(', ') || '—'}</span>
               </div>
             </div>
           </div>
@@ -191,19 +211,21 @@ export default function VNextLaneDetail() {
           <div className="vn-card">
             <div className="vn-card-header"><h2>Stops</h2></div>
             <div className="vn-card-body">
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-                <div style={{
-                  width: 24, height: 24, borderRadius: '50%',
-                  background: 'var(--warning)', color: 'var(--on-warning, #fff)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 12, fontWeight: 700, flexShrink: 0,
-                }}>1</div>
-                <div>
-                  <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--on-surface)' }}>St. Louis, MO</div>
-                  <div style={{ fontSize: 12, color: 'var(--on-surface-variant)', marginTop: 2 }}>Consolidation Yard</div>
-                  <div style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>297 mi from origin</div>
+              {stops.length === 0 && <p style={{ color: 'var(--on-surface-variant)', fontSize: 13 }}>No intermediate stops.</p>}
+              {stops.map((stop: any, i: number) => (
+                <div key={stop.id || i} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: i < stops.length - 1 ? 12 : 0 }}>
+                  <div style={{
+                    width: 24, height: 24, borderRadius: '50%',
+                    background: 'var(--warning)', color: 'var(--on-warning, #fff)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 12, fontWeight: 700, flexShrink: 0,
+                  }}>{i + 1}</div>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--on-surface)' }}>{stop.location?.name || stop.name || `Stop ${i + 1}`}</div>
+                    <div style={{ fontSize: 12, color: 'var(--on-surface-variant)', marginTop: 2 }}>{stop.location?.city || stop.city || ''}{stop.location?.state || stop.state ? `, ${stop.location?.state || stop.state}` : ''}</div>
+                  </div>
                 </div>
-              </div>
+              ))}
             </div>
           </div>
         </div>
