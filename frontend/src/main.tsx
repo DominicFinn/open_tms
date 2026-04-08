@@ -52,6 +52,7 @@ import VNextOrders from './vnext-design/VNextOrders';
 import VNextIssueKanban from './vnext-design/VNextIssueKanban';
 import VNextCarriers from './vnext-design/VNextCarriers';
 import VNextCarrierBidding from './vnext-design/VNextCarrierBidding';
+import VNextStyleGuide from './vnext-design/VNextStyleGuide';
 import './theme.css';
 
 const root = createRoot(document.getElementById('root')!);
@@ -93,6 +94,7 @@ root.render(
           <Route path="issues" element={<VNextIssueKanban />} />
           <Route path="carriers" element={<VNextCarriers />} />
           <Route path="carrier-bidding" element={<VNextCarrierBidding />} />
+          <Route path="style-guide" element={<VNextStyleGuide />} />
         </Route>
 
         {/* Operations routes - wrapped in Layout */}

@@ -60,6 +60,12 @@ export default function VNextLayout() {
             <span className="material-icons">assessment</span>
             Daily Report
           </NavLink>
+
+          <div className="vn-sidebar-section">Development</div>
+          <NavLink to="/vnext/style-guide" onClick={() => setSidebarOpen(false)}>
+            <span className="material-icons">palette</span>
+            Style Guide
+          </NavLink>
         </nav>
       </aside>
 
