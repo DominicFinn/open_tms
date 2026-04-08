@@ -28,49 +28,49 @@ export default function VNextShipmentDetail() {
       .finally(() => setLoading(false));
   }, [id]);
 
+  const hasOriginCoords = !!(shipment?.origin?.lat && shipment?.origin?.lng);
+  const hasDestCoords = !!(shipment?.destination?.lat && shipment?.destination?.lng);
+  const hasAnyCoords = hasOriginCoords || hasDestCoords;
+
   useEffect(() => {
-    if (!mapRef.current || !shipment) return;
+    if (!mapRef.current || !shipment || !hasAnyCoords) return;
     const origin = shipment.origin;
     const destination = shipment.destination;
-    if (!origin?.lat || !origin?.lng || !destination?.lat || !destination?.lng) return;
 
-    const routeCoords: [number, number][] = [
-      [origin.lat, origin.lng],
-      ...(shipment.stops || []).filter((s: any) => s.lat && s.lng).map((s: any) => [s.lat, s.lng] as [number, number]),
-      [destination.lat, destination.lng],
-    ];
-
-    const map = L.map(mapRef.current, { zoomControl: true, attributionControl: false }).setView([37.5, -93], 5);
+    const map = L.map(mapRef.current, { zoomControl: true, attributionControl: false });
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { maxZoom: 19 }).addTo(map);
 
-    // Read marker colours from CSS custom properties
     const cs = getComputedStyle(document.documentElement);
     const cOrigin = cs.getPropertyValue('--marker-origin').trim();
     const cDest = cs.getPropertyValue('--marker-destination').trim();
     const cStop = cs.getPropertyValue('--marker-stop').trim();
     const cDefault = cs.getPropertyValue('--marker-default').trim();
 
-    // Route line
-    L.polyline(routeCoords, { color: cDefault, weight: 3, opacity: 0.7, dashArray: '8 4' }).addTo(map);
-
-    // Traveled portion
-    L.polyline(routeCoords, { color: cOrigin, weight: 4 }).addTo(map);
+    const allCoords: [number, number][] = [];
 
     // Origin marker
-    const originIcon = L.divIcon({
-      className: '',
-      html: `<div style="width:20px;height:20px;border-radius:50%;background:${cOrigin};border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;"><div style="width:6px;height:6px;border-radius:50%;background:white;"></div></div>`,
-      iconSize: [20, 20], iconAnchor: [10, 10],
-    });
-    L.marker(routeCoords[0], { icon: originIcon }).addTo(map).bindPopup(`<strong>Origin</strong><br/>${origin.city || ''}, ${origin.state || ''}`);
+    if (hasOriginCoords) {
+      const coord: [number, number] = [origin.lat, origin.lng];
+      allCoords.push(coord);
+      const originIcon = L.divIcon({
+        className: '',
+        html: `<div style="width:20px;height:20px;border-radius:50%;background:${cOrigin};border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;"><div style="width:6px;height:6px;border-radius:50%;background:white;"></div></div>`,
+        iconSize: [20, 20], iconAnchor: [10, 10],
+      });
+      L.marker(coord, { icon: originIcon }).addTo(map).bindPopup(`<strong>Origin</strong><br/>${origin.city || ''}, ${origin.state || ''}`);
+    }
 
     // Destination marker
-    const destIcon = L.divIcon({
-      className: '',
-      html: `<div style="width:20px;height:20px;border-radius:50%;background:${cDest};border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;"><div style="width:6px;height:6px;border-radius:50%;background:white;"></div></div>`,
-      iconSize: [20, 20], iconAnchor: [10, 10],
-    });
-    L.marker(routeCoords[routeCoords.length - 1], { icon: destIcon }).addTo(map).bindPopup(`<strong>Destination</strong><br/>${destination.city || ''}, ${destination.state || ''}`);
+    if (hasDestCoords) {
+      const coord: [number, number] = [destination.lat, destination.lng];
+      allCoords.push(coord);
+      const destIcon = L.divIcon({
+        className: '',
+        html: `<div style="width:20px;height:20px;border-radius:50%;background:${cDest};border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;"><div style="width:6px;height:6px;border-radius:50%;background:white;"></div></div>`,
+        iconSize: [20, 20], iconAnchor: [10, 10],
+      });
+      L.marker(coord, { icon: destIcon }).addTo(map).bindPopup(`<strong>Destination</strong><br/>${destination.city || ''}, ${destination.state || ''}`);
+    }
 
     // Stop markers
     const stopIcon = L.divIcon({
@@ -79,13 +79,23 @@ export default function VNextShipmentDetail() {
       iconSize: [16, 16], iconAnchor: [8, 8],
     });
     (shipment.stops || []).filter((s: any) => s.lat && s.lng).forEach((s: any) => {
-      L.marker([s.lat, s.lng], { icon: stopIcon }).addTo(map).bindPopup(`<strong>Stop</strong><br/>${s.city || ''}, ${s.state || ''}`);
+      const coord: [number, number] = [s.lat, s.lng];
+      allCoords.push(coord);
+      L.marker(coord, { icon: stopIcon }).addTo(map).bindPopup(`<strong>Stop</strong><br/>${s.city || ''}, ${s.state || ''}`);
     });
 
-    map.fitBounds(L.latLngBounds(routeCoords).pad(0.1));
+    // Route line between all points
+    if (allCoords.length >= 2) {
+      L.polyline(allCoords, { color: cDefault, weight: 3, opacity: 0.7, dashArray: '8 4' }).addTo(map);
+      L.polyline(allCoords, { color: cOrigin, weight: 4 }).addTo(map);
+      map.fitBounds(L.latLngBounds(allCoords).pad(0.1));
+    } else if (allCoords.length === 1) {
+      // Only one point — zoom into it
+      map.setView(allCoords[0], 12);
+    }
 
     return () => { map.remove(); };
-  }, [shipment]);
+  }, [shipment, hasAnyCoords]);
 
   if (loading) return <div className="loading-spinner" style={{ margin: '2rem auto' }} />;
   if (error) return <div className="vn-alert vn-alert-error" style={{ margin: '2rem' }}>{error}</div>;
@@ -135,7 +145,39 @@ export default function VNextShipmentDetail() {
       </div>
 
       {/* Map */}
-      <div ref={mapRef} className="vn-map tall" style={{ marginBottom: 24 }} />
+      {hasAnyCoords ? (
+        <div ref={mapRef} className="vn-map tall" style={{ marginBottom: 24 }} />
+      ) : (
+        <div className="vn-map tall" style={{
+          marginBottom: 24,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          position: 'relative',
+          overflow: 'hidden',
+        }}>
+          {/* Faint map background placeholder */}
+          <img
+            src="https://basemaps.cartocdn.com/light_all/4/4/6.png"
+            alt=""
+            style={{
+              position: 'absolute',
+              inset: 0,
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              opacity: 0.15,
+              filter: 'grayscale(100%)',
+              pointerEvents: 'none',
+            }}
+          />
+          <div style={{ textAlign: 'center', color: 'var(--on-surface-variant)', position: 'relative', zIndex: 1 }}>
+            <span className="material-icons" style={{ fontSize: 48, opacity: 0.4, display: 'block', marginBottom: 8 }}>map</span>
+            <div style={{ fontSize: 14, fontWeight: 500 }}>No coordinates to plot yet</div>
+            <div style={{ fontSize: 13, marginTop: 4 }}>Add coordinates to the origin or destination location to see the route map</div>
+          </div>
+        </div>
+      )}
 
       {/* Route Progress */}
       <div className="vn-card" style={{ marginBottom: 24 }}>
