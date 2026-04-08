@@ -66,6 +66,14 @@ import VNextCreateLocation from './vnext-design/VNextCreateLocation';
 import VNextCreateCarrier from './vnext-design/VNextCreateCarrier';
 import VNextCreateCustomer from './vnext-design/VNextCreateCustomer';
 import VNextCreateLane from './vnext-design/VNextCreateLane';
+import VNextIntegrationsLayout from './vnext-design/VNextIntegrationsLayout';
+import VNextIntegrationsDashboard from './vnext-design/VNextIntegrationsDashboard';
+import VNextApiKeys from './vnext-design/VNextApiKeys';
+import VNextWebhookLogs from './vnext-design/VNextWebhookLogs';
+import VNextOutboundIntegrations from './vnext-design/VNextOutboundIntegrations';
+import VNextOutboundLogs from './vnext-design/VNextOutboundLogs';
+import VNextEdiPartners from './vnext-design/VNextEdiPartners';
+import VNextEdiFiles from './vnext-design/VNextEdiFiles';
 import './theme.css';
 
 const root = createRoot(document.getElementById('root')!);
@@ -121,6 +129,15 @@ root.render(
           <Route path="orders/create" element={<VNextCreateOrder />} />
           <Route path="carriers/create" element={<VNextCreateCarrier />} />
           <Route path="style-guide" element={<VNextStyleGuide />} />
+          <Route path="integrations" element={<VNextIntegrationsLayout />}>
+            <Route index element={<VNextIntegrationsDashboard />} />
+            <Route path="api-keys" element={<VNextApiKeys />} />
+            <Route path="webhook-logs" element={<VNextWebhookLogs />} />
+            <Route path="outbound" element={<VNextOutboundIntegrations />} />
+            <Route path="outbound-logs" element={<VNextOutboundLogs />} />
+            <Route path="edi-partners" element={<VNextEdiPartners />} />
+            <Route path="edi-files" element={<VNextEdiFiles />} />
+          </Route>
         </Route>
 
         {/* Operations routes - wrapped in Layout */}

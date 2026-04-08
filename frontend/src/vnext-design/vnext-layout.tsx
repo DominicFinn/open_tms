@@ -65,6 +65,20 @@ export default function VNextLayout() {
             Daily Report
           </NavLink>
 
+          <div className="vn-sidebar-section">Integrations</div>
+          <NavLink to="/vnext/integrations" end onClick={() => setSidebarOpen(false)}>
+            <span className="material-icons">hub</span>
+            Overview
+          </NavLink>
+          <NavLink to="/vnext/integrations/api-keys" onClick={() => setSidebarOpen(false)}>
+            <span className="material-icons">vpn_key</span>
+            API Keys
+          </NavLink>
+          <NavLink to="/vnext/integrations/edi-partners" onClick={() => setSidebarOpen(false)}>
+            <span className="material-icons">swap_horiz</span>
+            EDI Partners
+          </NavLink>
+
           <div className="vn-sidebar-section">Admin</div>
           <NavLink to="/vnext/settings" onClick={() => setSidebarOpen(false)}>
             <span className="material-icons">settings</span>
