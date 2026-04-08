@@ -42,6 +42,10 @@ export default function VNextLayout() {
             <span className="material-icons">gavel</span>
             Carrier Bidding
           </NavLink>
+          <NavLink to="/vnext/customers" onClick={() => setSidebarOpen(false)}>
+            <span className="material-icons">people</span>
+            Customers
+          </NavLink>
           <NavLink to="/vnext/locations" onClick={() => setSidebarOpen(false)}>
             <span className="material-icons">location_on</span>
             Locations
@@ -52,13 +56,19 @@ export default function VNextLayout() {
           </NavLink>
 
           <div className="vn-sidebar-section">Reports</div>
-          <NavLink to="/vnext" end onClick={() => setSidebarOpen(false)}>
-            <span className="material-icons">analytics</span>
-            Analytics
+          <NavLink to="/vnext/documents" onClick={() => setSidebarOpen(false)}>
+            <span className="material-icons">description</span>
+            Documents
           </NavLink>
-          <NavLink to="/vnext" end onClick={() => setSidebarOpen(false)}>
+          <NavLink to="/vnext/daily-report" onClick={() => setSidebarOpen(false)}>
             <span className="material-icons">assessment</span>
             Daily Report
+          </NavLink>
+
+          <div className="vn-sidebar-section">Admin</div>
+          <NavLink to="/vnext/settings" onClick={() => setSidebarOpen(false)}>
+            <span className="material-icons">settings</span>
+            Settings
           </NavLink>
 
           <div className="vn-sidebar-section">Development</div>

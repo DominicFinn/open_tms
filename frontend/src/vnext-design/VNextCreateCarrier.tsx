@@ -1,0 +1,204 @@
+import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
+
+export default function VNextCreateCarrier() {
+  const [name, setName] = useState('');
+  const [mcNumber, setMcNumber] = useState('');
+  const [dotNumber, setDotNumber] = useState('');
+  const [contactName, setContactName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [address1, setAddress1] = useState('');
+  const [address2, setAddress2] = useState('');
+  const [city, setCity] = useState('');
+  const [state, setState] = useState('');
+  const [postalCode, setPostalCode] = useState('');
+  const [country, setCountry] = useState('US');
+  const [equipment, setEquipment] = useState<Record<string, boolean>>({
+    dryVan: false,
+    reefer: false,
+    flatbed: false,
+    tanker: false,
+    intermodal: false,
+  });
+  const [serviceMode, setServiceMode] = useState('FTL');
+  const [insuranceAmount, setInsuranceAmount] = useState('');
+  const [expiryDate, setExpiryDate] = useState('');
+  const [notes, setNotes] = useState('');
+
+  const toggleEquipment = (key: string) => {
+    setEquipment(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  return (
+    <>
+      <div className="vn-page-header">
+        <div>
+          <div style={{ fontSize: 13, color: 'var(--on-surface-variant)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+            <Link to="/vnext/carriers" style={{ color: 'var(--primary)', textDecoration: 'none' }}>Carriers</Link>
+            <span className="material-icons" style={{ fontSize: 16 }}>chevron_right</span>
+            <span>New Carrier</span>
+          </div>
+          <h1>New Carrier</h1>
+        </div>
+      </div>
+
+      <div className="vn-card">
+        <div className="vn-card-body" style={{ padding: 0 }}>
+
+          {/* Company Information */}
+          <div className="vn-form-section">
+            <div className="vn-form-section-title">
+              <span className="material-icons">business</span>
+              Company Information
+            </div>
+            <div className="vn-form-grid">
+              <div className="vn-field">
+                <label className="vn-field-label">Name</label>
+                <input className="vn-input" type="text" placeholder="Carrier name" value={name} onChange={e => setName(e.target.value)} />
+              </div>
+              <div className="vn-field">
+                <label className="vn-field-label">MC Number</label>
+                <input className="vn-input" type="text" placeholder="MC-000000" value={mcNumber} onChange={e => setMcNumber(e.target.value)} />
+              </div>
+              <div className="vn-field">
+                <label className="vn-field-label">DOT Number</label>
+                <input className="vn-input" type="text" placeholder="0000000" value={dotNumber} onChange={e => setDotNumber(e.target.value)} />
+              </div>
+            </div>
+          </div>
+
+          {/* Contact */}
+          <div className="vn-form-section">
+            <div className="vn-form-section-title">
+              <span className="material-icons">person</span>
+              Contact
+            </div>
+            <div className="vn-form-grid">
+              <div className="vn-field">
+                <label className="vn-field-label">Contact Name</label>
+                <input className="vn-input" type="text" placeholder="Full name" value={contactName} onChange={e => setContactName(e.target.value)} />
+              </div>
+              <div className="vn-field">
+                <label className="vn-field-label">Email</label>
+                <input className="vn-input" type="email" placeholder="email@example.com" value={email} onChange={e => setEmail(e.target.value)} />
+              </div>
+              <div className="vn-field">
+                <label className="vn-field-label">Phone</label>
+                <input className="vn-input" type="tel" placeholder="(555) 000-0000" value={phone} onChange={e => setPhone(e.target.value)} />
+              </div>
+            </div>
+          </div>
+
+          {/* Address */}
+          <div className="vn-form-section">
+            <div className="vn-form-section-title">
+              <span className="material-icons">location_on</span>
+              Address
+            </div>
+            <div className="vn-form-grid">
+              <div className="vn-field vn-col-span-2">
+                <label className="vn-field-label">Address 1</label>
+                <input className="vn-input" type="text" placeholder="Street address" value={address1} onChange={e => setAddress1(e.target.value)} />
+              </div>
+              <div className="vn-field vn-col-span-2">
+                <label className="vn-field-label">Address 2</label>
+                <input className="vn-input" type="text" placeholder="Suite, unit, etc." value={address2} onChange={e => setAddress2(e.target.value)} />
+              </div>
+              <div className="vn-field">
+                <label className="vn-field-label">City</label>
+                <input className="vn-input" type="text" placeholder="City" value={city} onChange={e => setCity(e.target.value)} />
+              </div>
+              <div className="vn-field">
+                <label className="vn-field-label">State</label>
+                <input className="vn-input" type="text" placeholder="State / Province" value={state} onChange={e => setState(e.target.value)} />
+              </div>
+              <div className="vn-field">
+                <label className="vn-field-label">Postal Code</label>
+                <input className="vn-input" type="text" placeholder="00000" value={postalCode} onChange={e => setPostalCode(e.target.value)} />
+              </div>
+              <div className="vn-field">
+                <label className="vn-field-label">Country</label>
+                <select className="vn-select" value={country} onChange={e => setCountry(e.target.value)}>
+                  <option value="US">United States</option>
+                  <option value="CA">Canada</option>
+                  <option value="MX">Mexico</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Equipment & Capabilities */}
+          <div className="vn-form-section">
+            <div className="vn-form-section-title">
+              <span className="material-icons">local_shipping</span>
+              Equipment &amp; Capabilities
+            </div>
+            <div className="vn-form-grid">
+              <div className="vn-field vn-col-span-2">
+                <label className="vn-field-label">Equipment Types</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginTop: 4 }}>
+                  {[
+                    { key: 'dryVan', label: 'Dry Van' },
+                    { key: 'reefer', label: 'Reefer' },
+                    { key: 'flatbed', label: 'Flatbed' },
+                    { key: 'tanker', label: 'Tanker' },
+                    { key: 'intermodal', label: 'Intermodal' },
+                  ].map(eq => (
+                    <label key={eq.key} className="vn-checkbox">
+                      <input type="checkbox" checked={equipment[eq.key]} onChange={() => toggleEquipment(eq.key)} />
+                      <span>{eq.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div className="vn-field vn-col-span-2">
+                <label className="vn-field-label">Service Mode</label>
+                <div style={{ display: 'flex', gap: 16, marginTop: 4 }}>
+                  {['FTL', 'LTL', 'Both'].map(mode => (
+                    <label key={mode} className="vn-radio">
+                      <input type="radio" name="serviceMode" value={mode} checked={serviceMode === mode} onChange={e => setServiceMode(e.target.value)} />
+                      <span>{mode}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Insurance */}
+          <div className="vn-form-section">
+            <div className="vn-form-section-title">
+              <span className="material-icons">verified_user</span>
+              Insurance
+            </div>
+            <div className="vn-form-grid">
+              <div className="vn-field">
+                <label className="vn-field-label">Insurance Amount</label>
+                <input className="vn-input" type="number" placeholder="1000000" value={insuranceAmount} onChange={e => setInsuranceAmount(e.target.value)} />
+              </div>
+              <div className="vn-field">
+                <label className="vn-field-label">Expiry Date</label>
+                <input className="vn-input" type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)} />
+              </div>
+              <div className="vn-field vn-col-span-2">
+                <label className="vn-field-label">Notes</label>
+                <textarea className="vn-textarea" rows={3} placeholder="Additional insurance notes..." value={notes} onChange={e => setNotes(e.target.value)} />
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      {/* Form Actions */}
+      <div className="vn-form-actions">
+        <Link to="/vnext/carriers" className="vn-btn vn-btn-outline">Cancel</Link>
+        <button className="vn-btn vn-btn-primary">
+          <span className="material-icons">save</span>
+          Save Carrier
+        </button>
+      </div>
+    </>
+  );
+}

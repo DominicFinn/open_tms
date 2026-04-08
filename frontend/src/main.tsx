@@ -53,6 +53,19 @@ import VNextIssueKanban from './vnext-design/VNextIssueKanban';
 import VNextCarriers from './vnext-design/VNextCarriers';
 import VNextCarrierBidding from './vnext-design/VNextCarrierBidding';
 import VNextStyleGuide from './vnext-design/VNextStyleGuide';
+import VNextLocations from './vnext-design/VNextLocations';
+import VNextLanes from './vnext-design/VNextLanes';
+import VNextLaneDetail from './vnext-design/VNextLaneDetail';
+import VNextCustomers from './vnext-design/VNextCustomers';
+import VNextDocuments from './vnext-design/VNextDocuments';
+import VNextDailyReport from './vnext-design/VNextDailyReport';
+import VNextSettings from './vnext-design/VNextSettings';
+import VNextCreateShipment from './vnext-design/VNextCreateShipment';
+import VNextCreateOrder from './vnext-design/VNextCreateOrder';
+import VNextCreateLocation from './vnext-design/VNextCreateLocation';
+import VNextCreateCarrier from './vnext-design/VNextCreateCarrier';
+import VNextCreateCustomer from './vnext-design/VNextCreateCustomer';
+import VNextCreateLane from './vnext-design/VNextCreateLane';
 import './theme.css';
 
 const root = createRoot(document.getElementById('root')!);
@@ -94,6 +107,19 @@ root.render(
           <Route path="issues" element={<VNextIssueKanban />} />
           <Route path="carriers" element={<VNextCarriers />} />
           <Route path="carrier-bidding" element={<VNextCarrierBidding />} />
+          <Route path="locations" element={<VNextLocations />} />
+          <Route path="locations/create" element={<VNextCreateLocation />} />
+          <Route path="lanes" element={<VNextLanes />} />
+          <Route path="lanes/create" element={<VNextCreateLane />} />
+          <Route path="lanes/:id" element={<VNextLaneDetail />} />
+          <Route path="customers" element={<VNextCustomers />} />
+          <Route path="customers/create" element={<VNextCreateCustomer />} />
+          <Route path="documents" element={<VNextDocuments />} />
+          <Route path="daily-report" element={<VNextDailyReport />} />
+          <Route path="settings" element={<VNextSettings />} />
+          <Route path="shipments/create" element={<VNextCreateShipment />} />
+          <Route path="orders/create" element={<VNextCreateOrder />} />
+          <Route path="carriers/create" element={<VNextCreateCarrier />} />
           <Route path="style-guide" element={<VNextStyleGuide />} />
         </Route>
 
