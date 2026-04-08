@@ -1,22 +1,78 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { API_URL } from '../api';
 
-const QUEUES = [
-  { name: 'events', queued: 4, active: 1, deadLetter: 0 },
-  { name: 'outbound', queued: 8, active: 2, deadLetter: 1 },
-  { name: 'edi-polling', queued: 0, active: 0, deadLetter: 0 },
-];
-
-const ACTIVITY = [
-  { icon: 'check_circle', color: 'var(--success)', text: 'EDI 850 processed from Acme Corp', time: '2 min ago' },
-  { icon: 'error', color: 'var(--error)', text: 'Outbound 856 failed to FedEx endpoint', time: '8 min ago' },
-  { icon: 'vpn_key', color: 'var(--info)', text: "API key 'Production' authenticated", time: '12 min ago' },
-  { icon: 'check_circle', color: 'var(--success)', text: 'Webhook delivered to Customer ERP', time: '15 min ago' },
-  { icon: 'info', color: 'var(--info)', text: 'EDI polling cycle completed — 0 new messages', time: '20 min ago' },
-  { icon: 'error', color: 'var(--error)', text: 'DHL Carrier Feed connection timeout', time: '34 min ago' },
-];
+interface QueueStats {
+  name: string;
+  queued: number;
+  active: number;
+  deadLetter: number;
+}
 
 export default function VNextIntegrationsDashboard() {
+  const [apiKeys, setApiKeys] = useState<any[]>([]);
+  const [integrations, setIntegrations] = useState<any[]>([]);
+  const [ediPartners, setEdiPartners] = useState<any[]>([]);
+  const [queues, setQueues] = useState<QueueStats[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  async function loadData() {
+    setLoading(true);
+    setError('');
+    try {
+      const [keysRes, intRes, ediRes] = await Promise.all([
+        fetch(`${API_URL}/api/v1/api-keys`),
+        fetch(`${API_URL}/api/v1/outbound-integrations`),
+        fetch(`${API_URL}/api/v1/edi-partners`),
+      ]);
+
+      if (!keysRes.ok || !intRes.ok || !ediRes.ok) {
+        setError('Failed to load some integration data');
+      }
+
+      const keysData = keysRes.ok ? await keysRes.json() : { data: [] };
+      const intData = intRes.ok ? await intRes.json() : { data: [] };
+      const ediData = ediRes.ok ? await ediRes.json() : { data: [] };
+
+      setApiKeys(keysData.data || []);
+      setIntegrations(intData.data || []);
+      setEdiPartners(ediData.data || []);
+
+      // Optionally try queue stats
+      try {
+        const qRes = await fetch(`${API_URL}/api/v1/queues/stats`);
+        if (qRes.ok) {
+          const qData = await qRes.json();
+          setQueues(qData.data || []);
+        }
+      } catch {
+        // Queue stats endpoint may not exist — that's fine
+      }
+    } catch (e: any) {
+      setError(e.message || 'Failed to load data');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const activeKeys = apiKeys.filter((k: any) => k.active !== false).length;
+  const activeIntegrations = integrations.filter((i: any) => i.active !== false).length;
+  const totalQueueDepth = queues.reduce((sum, q) => sum + (q.queued || 0), 0);
+  const totalDeadLetter = queues.reduce((sum, q) => sum + (q.deadLetter || 0), 0);
+
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', padding: '48px' }}>
+        <div className="loading-spinner" />
+      </div>
+    );
+  }
+
   return (
     <>
       <div className="vn-page-header">
@@ -26,6 +82,12 @@ export default function VNextIntegrationsDashboard() {
         </div>
       </div>
 
+      {error && (
+        <div className="alert alert-error" style={{ marginBottom: 16 }}>
+          {error}
+        </div>
+      )}
+
       {/* Stats */}
       <div className="vn-stats">
         <div className="vn-stat">
@@ -33,7 +95,7 @@ export default function VNextIntegrationsDashboard() {
             <span className="material-icons">extension</span>
           </div>
           <div>
-            <div className="vn-stat-value">9</div>
+            <div className="vn-stat-value">{activeIntegrations}</div>
             <div className="vn-stat-label">Active Integrations</div>
           </div>
         </div>
@@ -42,7 +104,7 @@ export default function VNextIntegrationsDashboard() {
             <span className="material-icons">vpn_key</span>
           </div>
           <div>
-            <div className="vn-stat-value">6</div>
+            <div className="vn-stat-value">{apiKeys.length}</div>
             <div className="vn-stat-label">API Keys</div>
           </div>
         </div>
@@ -51,7 +113,7 @@ export default function VNextIntegrationsDashboard() {
             <span className="material-icons">queue</span>
           </div>
           <div>
-            <div className="vn-stat-value">12</div>
+            <div className="vn-stat-value">{totalQueueDepth}</div>
             <div className="vn-stat-label">Queue Depth</div>
           </div>
         </div>
@@ -60,7 +122,7 @@ export default function VNextIntegrationsDashboard() {
             <span className="material-icons">error</span>
           </div>
           <div>
-            <div className="vn-stat-value">3</div>
+            <div className="vn-stat-value">{totalDeadLetter}</div>
             <div className="vn-stat-label">Failed</div>
           </div>
         </div>
@@ -69,7 +131,7 @@ export default function VNextIntegrationsDashboard() {
             <span className="material-icons">swap_horiz</span>
           </div>
           <div>
-            <div className="vn-stat-value">5</div>
+            <div className="vn-stat-value">{ediPartners.length}</div>
             <div className="vn-stat-label">EDI Partners</div>
           </div>
         </div>
@@ -83,37 +145,45 @@ export default function VNextIntegrationsDashboard() {
             <h2>Queue Status</h2>
           </div>
           <div className="vn-card-body" style={{ padding: 0 }}>
-            <div className="vn-table-wrap">
-              <table className="vn-table">
-                <thead>
-                  <tr>
-                    <th>Queue Name</th>
-                    <th style={{ textAlign: 'right' }}>Queued</th>
-                    <th style={{ textAlign: 'right' }}>Active</th>
-                    <th style={{ textAlign: 'right' }}>Dead Letter</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {QUEUES.map(q => (
-                    <tr key={q.name}>
-                      <td style={{ fontFamily: 'monospace', fontWeight: 500 }}>{q.name}</td>
-                      <td style={{ textAlign: 'right' }}>{q.queued}</td>
-                      <td style={{ textAlign: 'right' }}>{q.active}</td>
-                      <td style={{ textAlign: 'right', color: q.deadLetter > 0 ? 'var(--error)' : undefined, fontWeight: q.deadLetter > 0 ? 600 : undefined }}>
-                        {q.deadLetter}
-                      </td>
-                      <td>
-                        <button className="vn-btn vn-btn-outline" style={{ fontSize: 12, padding: '4px 10px' }}>
-                          <span className="material-icons" style={{ fontSize: 14 }}>replay</span>
-                          Retry
-                        </button>
-                      </td>
+            {queues.length === 0 ? (
+              <div className="vn-empty">
+                <span className="material-icons">queue</span>
+                <h3>No queue data available</h3>
+                <p>Queue statistics are not currently available.</p>
+              </div>
+            ) : (
+              <div className="vn-table-wrap">
+                <table className="vn-table">
+                  <thead>
+                    <tr>
+                      <th>Queue Name</th>
+                      <th style={{ textAlign: 'right' }}>Queued</th>
+                      <th style={{ textAlign: 'right' }}>Active</th>
+                      <th style={{ textAlign: 'right' }}>Dead Letter</th>
+                      <th>Actions</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {queues.map(q => (
+                      <tr key={q.name}>
+                        <td style={{ fontFamily: 'monospace', fontWeight: 500 }}>{q.name}</td>
+                        <td style={{ textAlign: 'right' }}>{q.queued}</td>
+                        <td style={{ textAlign: 'right' }}>{q.active}</td>
+                        <td style={{ textAlign: 'right', color: q.deadLetter > 0 ? 'var(--error)' : undefined, fontWeight: q.deadLetter > 0 ? 600 : undefined }}>
+                          {q.deadLetter}
+                        </td>
+                        <td>
+                          <button className="vn-btn vn-btn-outline" style={{ fontSize: 12, padding: '4px 10px' }}>
+                            <span className="material-icons" style={{ fontSize: 14 }}>replay</span>
+                            Retry
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
 
@@ -124,15 +194,34 @@ export default function VNextIntegrationsDashboard() {
           </div>
           <div className="vn-card-body">
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {ACTIVITY.map((a, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
-                  <span className="material-icons" style={{ fontSize: 20, color: a.color, marginTop: 2 }}>{a.icon}</span>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 14, color: 'var(--on-surface)' }}>{a.text}</div>
-                    <div style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>{a.time}</div>
-                  </div>
+              {integrations.length === 0 && apiKeys.length === 0 && ediPartners.length === 0 ? (
+                <div style={{ fontSize: 14, color: 'var(--on-surface-variant)', textAlign: 'center', padding: '24px 0' }}>
+                  No recent activity to display.
                 </div>
-              ))}
+              ) : (
+                <>
+                  {apiKeys.slice(0, 3).map((k: any) => (
+                    <div key={`key-${k.id}`} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                      <span className="material-icons" style={{ fontSize: 20, color: 'var(--info)', marginTop: 2 }}>vpn_key</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 14, color: 'var(--on-surface)' }}>API key &apos;{k.name}&apos; {k.active !== false ? 'active' : 'inactive'}</div>
+                        <div style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>Created {new Date(k.createdAt).toLocaleDateString()}</div>
+                      </div>
+                    </div>
+                  ))}
+                  {integrations.slice(0, 3).map((i: any) => (
+                    <div key={`int-${i.id}`} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                      <span className="material-icons" style={{ fontSize: 20, color: i.active !== false ? 'var(--success)' : 'var(--error)', marginTop: 2 }}>
+                        {i.active !== false ? 'check_circle' : 'error'}
+                      </span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 14, color: 'var(--on-surface)' }}>{i.name} — {i.active !== false ? 'active' : 'inactive'}</div>
+                        <div style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>{i.type || 'Integration'}</div>
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
             </div>
           </div>
         </div>

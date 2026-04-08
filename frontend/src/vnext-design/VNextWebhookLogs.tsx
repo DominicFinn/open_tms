@@ -1,33 +1,76 @@
-import React, { useState } from 'react';
-
-const LOGS = [
-  { id: 1, time: 'Apr 8, 2026 09:14:32', device: 'GPS Tracker #401', apiKey: 'Production Webhook', status: 'Success', statusColor: 'success', shipment: 'SHP-4821', hasLocation: true, updated: true },
-  { id: 2, time: 'Apr 8, 2026 09:12:05', device: 'Mobile App - Driver J. Smith', apiKey: 'Mobile App', status: 'Success', statusColor: 'success', shipment: 'SHP-4819', hasLocation: true, updated: true },
-  { id: 3, time: 'Apr 8, 2026 09:10:41', device: 'ERP System', apiKey: 'ERP Integration', status: 'Error', statusColor: 'error', shipment: 'SHP-4818', hasLocation: false, updated: false },
-  { id: 4, time: 'Apr 8, 2026 09:08:17', device: 'GPS Tracker #402', apiKey: 'Production Webhook', status: 'Success', statusColor: 'success', shipment: 'SHP-4817', hasLocation: true, updated: true },
-  { id: 5, time: 'Apr 8, 2026 09:05:59', device: 'Customer Portal', apiKey: 'Customer Portal', status: 'Skipped', statusColor: 'warning', shipment: null, hasLocation: false, updated: false },
-  { id: 6, time: 'Apr 8, 2026 09:03:22', device: 'GPS Tracker #401', apiKey: 'Production Webhook', status: 'Success', statusColor: 'success', shipment: 'SHP-4821', hasLocation: true, updated: true },
-  { id: 7, time: 'Apr 8, 2026 09:01:10', device: 'Staging Test Runner', apiKey: 'Staging Webhook', status: 'Not Found', statusColor: 'error', shipment: 'SHP-9999', hasLocation: false, updated: false },
-  { id: 8, time: 'Apr 8, 2026 08:58:44', device: 'Mobile App - Driver L. Chen', apiKey: 'Mobile App', status: 'Success', statusColor: 'success', shipment: 'SHP-4820', hasLocation: true, updated: true },
-  { id: 9, time: 'Apr 8, 2026 08:55:01', device: 'ERP System', apiKey: 'ERP Integration', status: 'Success', statusColor: 'success', shipment: 'SHP-4816', hasLocation: false, updated: true },
-  { id: 10, time: 'Apr 8, 2026 08:52:38', device: 'GPS Tracker #403', apiKey: 'Production Webhook', status: 'Error', statusColor: 'error', shipment: 'SHP-4815', hasLocation: true, updated: false },
-];
+import React, { useState, useEffect } from 'react';
+import { API_URL } from '../api';
 
 export default function VNextWebhookLogs() {
+  const [logs, setLogs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [dateRange, setDateRange] = useState('24h');
+  const [stats, setStats] = useState<{ total: number; successful: number; errors: number; updates: number }>({
+    total: 0, successful: 0, errors: 0, updates: 0,
+  });
 
-  const filtered = LOGS.filter(l => {
-    if (statusFilter !== 'all') {
-      const map: Record<string, string> = { success: 'Success', error: 'Error', skipped: 'Skipped', notfound: 'Not Found' };
-      if (l.status !== map[statusFilter]) return false;
+  useEffect(() => {
+    loadLogs();
+  }, [page, statusFilter]);
+
+  useEffect(() => {
+    loadStats();
+  }, []);
+
+  async function loadStats() {
+    try {
+      const res = await fetch(`${API_URL}/api/v1/webhook-logs/stats`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json.data) setStats(json.data);
+      }
+    } catch {
+      // Stats endpoint may not exist, derive from data if needed
     }
-    if (search) {
-      const q = search.toLowerCase();
-      return l.device.toLowerCase().includes(q) || (l.shipment && l.shipment.toLowerCase().includes(q)) || l.apiKey.toLowerCase().includes(q);
+  }
+
+  async function loadLogs() {
+    setLoading(true);
+    setError('');
+    try {
+      const params = new URLSearchParams({ page: String(page), limit: '50' });
+      if (statusFilter !== 'all') params.set('status', statusFilter);
+      const res = await fetch(`${API_URL}/api/v1/webhook-logs?${params}`);
+      if (!res.ok) throw new Error('Failed to load webhook logs');
+      const json = await res.json();
+      const data = json.data || [];
+      setLogs(Array.isArray(data) ? data : data.items || []);
+      if (data.totalPages) setTotalPages(data.totalPages);
+      else if (data.total) setTotalPages(Math.ceil(data.total / 50));
+      else if (json.meta?.totalPages) setTotalPages(json.meta.totalPages);
+
+      // Derive stats from data if stats endpoint didn't work
+      if (stats.total === 0 && Array.isArray(data) && data.length > 0) {
+        setStats({
+          total: data.length,
+          successful: data.filter((l: any) => l.status === 'Success' || l.statusCode < 400).length,
+          errors: data.filter((l: any) => l.status === 'Error' || (l.statusCode && l.statusCode >= 400)).length,
+          updates: data.filter((l: any) => l.updated).length,
+        });
+      }
+    } catch (e: any) {
+      setError(e.message || 'Failed to load webhook logs');
+    } finally {
+      setLoading(false);
     }
-    return true;
+  }
+
+  const filtered = logs.filter(l => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return (l.device || '').toLowerCase().includes(q)
+      || (l.shipmentId || l.shipment || '').toLowerCase().includes(q)
+      || (l.apiKeyName || l.apiKey || '').toLowerCase().includes(q);
   });
 
   return (
@@ -38,6 +81,12 @@ export default function VNextWebhookLogs() {
         </div>
       </div>
 
+      {error && (
+        <div className="alert alert-error" style={{ marginBottom: 16 }}>
+          {error}
+        </div>
+      )}
+
       {/* Stats */}
       <div className="vn-stats">
         <div className="vn-stat">
@@ -45,7 +94,7 @@ export default function VNextWebhookLogs() {
             <span className="material-icons">list_alt</span>
           </div>
           <div>
-            <div className="vn-stat-value">2,341</div>
+            <div className="vn-stat-value">{stats.total.toLocaleString()}</div>
             <div className="vn-stat-label">Total</div>
           </div>
         </div>
@@ -54,7 +103,7 @@ export default function VNextWebhookLogs() {
             <span className="material-icons">check_circle</span>
           </div>
           <div>
-            <div className="vn-stat-value">2,198</div>
+            <div className="vn-stat-value">{stats.successful.toLocaleString()}</div>
             <div className="vn-stat-label">Successful</div>
           </div>
         </div>
@@ -63,7 +112,7 @@ export default function VNextWebhookLogs() {
             <span className="material-icons">error</span>
           </div>
           <div>
-            <div className="vn-stat-value">89</div>
+            <div className="vn-stat-value">{stats.errors.toLocaleString()}</div>
             <div className="vn-stat-label">Errors</div>
           </div>
         </div>
@@ -72,7 +121,7 @@ export default function VNextWebhookLogs() {
             <span className="material-icons">update</span>
           </div>
           <div>
-            <div className="vn-stat-value">1,847</div>
+            <div className="vn-stat-value">{stats.updates.toLocaleString()}</div>
             <div className="vn-stat-label">Updates</div>
           </div>
         </div>
@@ -90,7 +139,7 @@ export default function VNextWebhookLogs() {
               onChange={e => setSearch(e.target.value)}
               style={{ width: 200 }}
             />
-            <select className="vn-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+            <select className="vn-select" value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1); }}>
               <option value="all">All Statuses</option>
               <option value="success">Success</option>
               <option value="error">Error</option>
@@ -106,68 +155,94 @@ export default function VNextWebhookLogs() {
           </div>
         </div>
         <div className="vn-card-body" style={{ padding: 0 }}>
-          <div className="vn-table-wrap">
-            <table className="vn-table">
-              <thead>
-                <tr>
-                  <th>Time</th>
-                  <th>Device</th>
-                  <th>Status</th>
-                  <th>Shipment</th>
-                  <th>Location</th>
-                  <th>Updated</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map(l => (
-                  <tr
-                    key={l.id}
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => console.log('Open detail for log', l.id, l)}
-                  >
-                    <td style={{ fontSize: 13, fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{l.time}</td>
-                    <td>
-                      <div style={{ fontWeight: 500 }}>{l.device}</div>
-                      <div style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>{l.apiKey}</div>
-                    </td>
-                    <td>
-                      <span className={`vn-chip ${l.statusColor}`}>{l.status}</span>
-                    </td>
-                    <td>
-                      {l.shipment ? (
-                        <span style={{ fontWeight: 500 }}>{l.shipment}</span>
-                      ) : (
-                        <span style={{ color: 'var(--on-surface-variant)' }}>&mdash;</span>
-                      )}
-                    </td>
-                    <td>
-                      {l.hasLocation ? (
-                        <span className="material-icons" style={{ fontSize: 18, color: 'var(--success)' }}>location_on</span>
-                      ) : (
-                        <span style={{ color: 'var(--on-surface-variant)' }}>&mdash;</span>
-                      )}
-                    </td>
-                    <td>
-                      {l.updated ? (
-                        <span className="material-icons" style={{ fontSize: 18, color: 'var(--success)' }}>check_circle</span>
-                      ) : (
-                        <span style={{ color: 'var(--on-surface-variant)' }}>&mdash;</span>
-                      )}
-                    </td>
+          {loading ? (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '48px' }}>
+              <div className="loading-spinner" />
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="vn-empty">
+              <span className="material-icons">list_alt</span>
+              <h3>No webhook logs found</h3>
+              <p>Logs will appear here when webhooks are received.</p>
+            </div>
+          ) : (
+            <div className="vn-table-wrap">
+              <table className="vn-table">
+                <thead>
+                  <tr>
+                    <th>Time</th>
+                    <th>Device</th>
+                    <th>Status</th>
+                    <th>Shipment</th>
+                    <th>Location</th>
+                    <th>Updated</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {filtered.map(l => (
+                    <tr
+                      key={l.id}
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => console.log('Open detail for log', l.id, l)}
+                    >
+                      <td style={{ fontSize: 13, fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
+                        {l.createdAt ? new Date(l.createdAt).toLocaleString() : l.time || '—'}
+                      </td>
+                      <td>
+                        <div style={{ fontWeight: 500 }}>{l.device || l.source || '—'}</div>
+                        <div style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>{l.apiKeyName || l.apiKey || ''}</div>
+                      </td>
+                      <td>
+                        <span className={`vn-chip ${l.statusCode && l.statusCode < 400 ? 'success' : l.statusCode && l.statusCode >= 400 ? 'error' : l.status === 'Success' ? 'success' : l.status === 'Error' ? 'error' : 'warning'}`}>
+                          {l.status || (l.statusCode ? (l.statusCode < 400 ? 'Success' : 'Error') : '—')}
+                        </span>
+                      </td>
+                      <td>
+                        {(l.shipmentId || l.shipment) ? (
+                          <span style={{ fontWeight: 500 }}>{l.shipmentId || l.shipment}</span>
+                        ) : (
+                          <span style={{ color: 'var(--on-surface-variant)' }}>&mdash;</span>
+                        )}
+                      </td>
+                      <td>
+                        {l.hasLocation || l.latitude ? (
+                          <span className="material-icons" style={{ fontSize: 18, color: 'var(--success)' }}>location_on</span>
+                        ) : (
+                          <span style={{ color: 'var(--on-surface-variant)' }}>&mdash;</span>
+                        )}
+                      </td>
+                      <td>
+                        {l.updated ? (
+                          <span className="material-icons" style={{ fontSize: 18, color: 'var(--success)' }}>check_circle</span>
+                        ) : (
+                          <span style={{ color: 'var(--on-surface-variant)' }}>&mdash;</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
         {/* Pagination */}
         <div className="vn-card-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderTop: '1px solid var(--outline-variant)' }}>
-          <button className="vn-btn vn-btn-outline" style={{ fontSize: 13 }}>
+          <button
+            className="vn-btn vn-btn-outline"
+            style={{ fontSize: 13 }}
+            disabled={page <= 1}
+            onClick={() => setPage(p => Math.max(1, p - 1))}
+          >
             <span className="material-icons" style={{ fontSize: 16 }}>chevron_left</span>
             Previous
           </button>
-          <span style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>Page 1 of 47</span>
-          <button className="vn-btn vn-btn-outline" style={{ fontSize: 13 }}>
+          <span style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>Page {page} of {totalPages}</span>
+          <button
+            className="vn-btn vn-btn-outline"
+            style={{ fontSize: 13 }}
+            disabled={page >= totalPages}
+            onClick={() => setPage(p => p + 1)}
+          >
             Next
             <span className="material-icons" style={{ fontSize: 16 }}>chevron_right</span>
           </button>

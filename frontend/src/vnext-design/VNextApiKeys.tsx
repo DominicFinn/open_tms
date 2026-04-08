@@ -1,21 +1,102 @@
-import React, { useState } from 'react';
-
-const API_KEYS = [
-  { id: 1, name: 'Production Webhook', prefix: 'otms_prod_8f3a', status: 'Active', statusColor: 'success', lastUsed: 'Apr 8, 2026 09:14', created: 'Jan 15, 2026', webhooks: 1204 },
-  { id: 2, name: 'Staging Webhook', prefix: 'otms_stg_2c91', status: 'Active', statusColor: 'success', lastUsed: 'Apr 8, 2026 08:42', created: 'Feb 3, 2026', webhooks: 847 },
-  { id: 3, name: 'Mobile App', prefix: 'otms_mob_5d7e', status: 'Active', statusColor: 'success', lastUsed: 'Apr 7, 2026 22:10', created: 'Mar 1, 2026', webhooks: 0 },
-  { id: 4, name: 'ERP Integration', prefix: 'otms_erp_a1b4', status: 'Active', statusColor: 'success', lastUsed: 'Apr 8, 2026 09:01', created: 'Nov 20, 2025', webhooks: 290 },
-  { id: 5, name: 'Customer Portal', prefix: 'otms_cust_7f2c', status: 'Active', statusColor: 'success', lastUsed: 'Apr 6, 2026 14:33', created: 'Dec 8, 2025', webhooks: 0 },
-  { id: 6, name: 'Legacy System', prefix: 'otms_leg_9e0d', status: 'Inactive', statusColor: 'error', lastUsed: 'Feb 14, 2026 11:20', created: 'Jun 5, 2025', webhooks: 0 },
-];
+import React, { useState, useEffect } from 'react';
+import { API_URL } from '../api';
 
 export default function VNextApiKeys() {
+  const [keys, setKeys] = useState<any[]>([]);
   const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [newKeyName, setNewKeyName] = useState('');
+  const [showCreate, setShowCreate] = useState(false);
+  const [createdKey, setCreatedKey] = useState('');
+  const [creating, setCreating] = useState(false);
 
-  const filtered = API_KEYS.filter(k => {
+  useEffect(() => {
+    loadKeys();
+  }, []);
+
+  async function loadKeys() {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch(`${API_URL}/api/v1/api-keys`);
+      if (!res.ok) throw new Error('Failed to load API keys');
+      const json = await res.json();
+      setKeys(json.data || []);
+    } catch (e: any) {
+      setError(e.message || 'Failed to load API keys');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function createKey() {
+    if (!newKeyName.trim()) return;
+    setCreating(true);
+    setError('');
+    try {
+      const res = await fetch(`${API_URL}/api/v1/api-keys`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newKeyName.trim() }),
+      });
+      if (!res.ok) throw new Error('Failed to create API key');
+      const json = await res.json();
+      const created = json.data;
+      if (created?.key) {
+        setCreatedKey(created.key);
+      }
+      setNewKeyName('');
+      setShowCreate(false);
+      await loadKeys();
+    } catch (e: any) {
+      setError(e.message || 'Failed to create API key');
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function toggleKey(k: any) {
+    setError('');
+    try {
+      const res = await fetch(`${API_URL}/api/v1/api-keys/${k.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ active: !k.active }),
+      });
+      if (!res.ok) throw new Error('Failed to update API key');
+      await loadKeys();
+    } catch (e: any) {
+      setError(e.message || 'Failed to update API key');
+    }
+  }
+
+  async function deleteKey(id: string) {
+    if (!confirm('Are you sure you want to delete this API key?')) return;
+    setError('');
+    try {
+      const res = await fetch(`${API_URL}/api/v1/api-keys/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete API key');
+      await loadKeys();
+    } catch (e: any) {
+      setError(e.message || 'Failed to delete API key');
+    }
+  }
+
+  const filtered = keys.filter(k => {
     if (!search) return true;
-    return k.name.toLowerCase().includes(search.toLowerCase());
+    return k.name?.toLowerCase().includes(search.toLowerCase());
   });
+
+  const activeCount = keys.filter(k => k.active !== false).length;
+
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', padding: '48px' }}>
+        <div className="loading-spinner" />
+      </div>
+    );
+  }
 
   return (
     <>
@@ -24,12 +105,84 @@ export default function VNextApiKeys() {
           <h1>API Keys</h1>
         </div>
         <div className="vn-page-actions">
-          <button className="vn-btn vn-btn-primary">
+          <button className="vn-btn vn-btn-primary" onClick={() => setShowCreate(true)}>
             <span className="material-icons">add</span>
             Create API Key
           </button>
         </div>
       </div>
+
+      {error && (
+        <div className="alert alert-error" style={{ marginBottom: 16 }}>
+          {error}
+        </div>
+      )}
+
+      {createdKey && (
+        <div className="alert alert-success" style={{ marginBottom: 16 }}>
+          <div style={{ marginBottom: 8 }}>
+            <strong>API Key Created!</strong> Copy it now — it will not be shown again.
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <code style={{
+              fontFamily: 'monospace',
+              fontSize: 14,
+              background: 'var(--surface-container)',
+              padding: '8px 12px',
+              borderRadius: 4,
+              flex: 1,
+              wordBreak: 'break-all',
+            }}>
+              {createdKey}
+            </code>
+            <button
+              className="vn-btn vn-btn-outline"
+              onClick={() => {
+                navigator.clipboard?.writeText(createdKey);
+              }}
+            >
+              <span className="material-icons" style={{ fontSize: 18 }}>content_copy</span>
+              Copy
+            </button>
+            <button
+              className="vn-btn vn-btn-outline"
+              onClick={() => setCreatedKey('')}
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showCreate && (
+        <div className="vn-card" style={{ marginBottom: 16 }}>
+          <div className="vn-card-header">
+            <h2>Create New API Key</h2>
+          </div>
+          <div className="vn-card-body">
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input
+                className="vn-input"
+                placeholder="Key name (e.g. Production Webhook)"
+                value={newKeyName}
+                onChange={e => setNewKeyName(e.target.value)}
+                style={{ flex: 1 }}
+                onKeyDown={e => e.key === 'Enter' && createKey()}
+              />
+              <button
+                className="vn-btn vn-btn-primary"
+                onClick={createKey}
+                disabled={creating || !newKeyName.trim()}
+              >
+                {creating ? 'Creating...' : 'Create'}
+              </button>
+              <button className="vn-btn vn-btn-outline" onClick={() => { setShowCreate(false); setNewKeyName(''); }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="vn-stats">
@@ -38,7 +191,7 @@ export default function VNextApiKeys() {
             <span className="material-icons">vpn_key</span>
           </div>
           <div>
-            <div className="vn-stat-value">8</div>
+            <div className="vn-stat-value">{keys.length}</div>
             <div className="vn-stat-label">Total Keys</div>
           </div>
         </div>
@@ -47,17 +200,8 @@ export default function VNextApiKeys() {
             <span className="material-icons">check_circle</span>
           </div>
           <div>
-            <div className="vn-stat-value">6</div>
+            <div className="vn-stat-value">{activeCount}</div>
             <div className="vn-stat-label">Active</div>
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon info">
-            <span className="material-icons">webhook</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">2,341</div>
-            <div className="vn-stat-label">Total Webhooks</div>
           </div>
         </div>
       </div>
@@ -82,11 +226,11 @@ export default function VNextApiKeys() {
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
             }}>
-              https://api.opentms.com/v1/webhooks/inbound
+              {API_URL}/api/v1/webhooks/inbound
             </div>
             <button
               className="vn-btn vn-btn-outline"
-              onClick={() => navigator.clipboard?.writeText('https://api.opentms.com/v1/webhooks/inbound')}
+              onClick={() => navigator.clipboard?.writeText(`${API_URL}/api/v1/webhooks/inbound`)}
             >
               <span className="material-icons" style={{ fontSize: 18 }}>content_copy</span>
               Copy
@@ -136,7 +280,6 @@ export default function VNextApiKeys() {
                     <th>Status</th>
                     <th>Last Used</th>
                     <th>Created</th>
-                    <th style={{ textAlign: 'right' }}>Webhooks</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
@@ -152,23 +295,32 @@ export default function VNextApiKeys() {
                           padding: '2px 6px',
                           borderRadius: 4,
                         }}>
-                          {k.prefix}...
+                          {k.prefix || k.key?.slice(0, 12) || '****'}...
                         </code>
                       </td>
                       <td>
-                        <span className={`vn-chip ${k.statusColor}`}>{k.status}</span>
+                        <span className={`vn-chip ${k.active !== false ? 'success' : 'error'}`}>
+                          {k.active !== false ? 'Active' : 'Inactive'}
+                        </span>
                       </td>
-                      <td style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>{k.lastUsed}</td>
-                      <td style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>{k.created}</td>
-                      <td style={{ textAlign: 'right' }}>{k.webhooks.toLocaleString()}</td>
+                      <td style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>
+                        {k.lastUsedAt ? new Date(k.lastUsedAt).toLocaleString() : 'Never'}
+                      </td>
+                      <td style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>
+                        {k.createdAt ? new Date(k.createdAt).toLocaleDateString() : '—'}
+                      </td>
                       <td>
                         <div style={{ display: 'flex', gap: '4px' }}>
-                          <button className="vn-btn-icon" title={k.status === 'Active' ? 'Deactivate' : 'Activate'}>
+                          <button
+                            className="vn-btn-icon"
+                            title={k.active !== false ? 'Deactivate' : 'Activate'}
+                            onClick={() => toggleKey(k)}
+                          >
                             <span className="material-icons" style={{ fontSize: 18 }}>
-                              {k.status === 'Active' ? 'toggle_on' : 'toggle_off'}
+                              {k.active !== false ? 'toggle_on' : 'toggle_off'}
                             </span>
                           </button>
-                          <button className="vn-btn-icon" title="Delete">
+                          <button className="vn-btn-icon" title="Delete" onClick={() => deleteKey(k.id)}>
                             <span className="material-icons" style={{ fontSize: 18, color: 'var(--error)' }}>delete</span>
                           </button>
                         </div>
