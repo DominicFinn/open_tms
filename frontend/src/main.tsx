@@ -44,6 +44,14 @@ import EmailSettings from './pages/EmailSettings';
 import EmailTemplatesPage from './pages/EmailTemplates';
 import StyleGuide from './pages/StyleGuide';
 import MapsSettings from './pages/MapsSettings';
+import VNextLayout from './vnext-design/vnext-layout';
+import VNextDashboard from './vnext-design/VNextDashboard';
+import VNextShipments from './vnext-design/VNextShipments';
+import VNextShipmentDetail from './vnext-design/VNextShipmentDetail';
+import VNextOrders from './vnext-design/VNextOrders';
+import VNextIssueKanban from './vnext-design/VNextIssueKanban';
+import VNextCarriers from './vnext-design/VNextCarriers';
+import VNextCarrierBidding from './vnext-design/VNextCarrierBidding';
 import './theme.css';
 
 const root = createRoot(document.getElementById('root')!);
@@ -74,6 +82,17 @@ root.render(
           <Route path="custom-fields" element={<CustomFields />} />
           <Route path="maps" element={<MapsSettings />} />
           <Route path="style-guide" element={<StyleGuide />} />
+        </Route>
+
+        {/* V-Next Design Prototype */}
+        <Route path="/vnext" element={<VNextLayout />}>
+          <Route index element={<VNextDashboard />} />
+          <Route path="shipments" element={<VNextShipments />} />
+          <Route path="shipments/:id" element={<VNextShipmentDetail />} />
+          <Route path="orders" element={<VNextOrders />} />
+          <Route path="issues" element={<VNextIssueKanban />} />
+          <Route path="carriers" element={<VNextCarriers />} />
+          <Route path="carrier-bidding" element={<VNextCarrierBidding />} />
         </Route>
 
         {/* Operations routes - wrapped in Layout */}
