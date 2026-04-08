@@ -419,7 +419,7 @@ function ThemeTab() {
             <button
               style={{
                 background: primaryColor,
-                color: '#fff',
+                color: 'var(--on-primary)',
                 border: 'none',
                 borderRadius: '8px',
                 padding: '8px 20px',

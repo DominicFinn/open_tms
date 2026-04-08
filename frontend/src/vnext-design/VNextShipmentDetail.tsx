@@ -32,17 +32,24 @@ export default function VNextShipmentDetail() {
     const map = L.map(mapRef.current, { zoomControl: true, attributionControl: false }).setView([37.5, -93], 5);
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { maxZoom: 19 }).addTo(map);
 
+    // Read marker colours from CSS custom properties
+    const cs = getComputedStyle(document.documentElement);
+    const cOrigin = cs.getPropertyValue('--marker-origin').trim();
+    const cDest = cs.getPropertyValue('--marker-destination').trim();
+    const cStop = cs.getPropertyValue('--marker-stop').trim();
+    const cDefault = cs.getPropertyValue('--marker-default').trim();
+
     // Route line
-    L.polyline(ROUTE_COORDS, { color: '#2196F3', weight: 3, opacity: 0.7, dashArray: '8 4' }).addTo(map);
+    L.polyline(ROUTE_COORDS, { color: cDefault, weight: 3, opacity: 0.7, dashArray: '8 4' }).addTo(map);
 
     // Traveled portion
     const traveled = ROUTE_COORDS.slice(0, 4);
-    L.polyline(traveled, { color: '#4CAF50', weight: 4 }).addTo(map);
+    L.polyline(traveled, { color: cOrigin, weight: 4 }).addTo(map);
 
     // Origin marker
     const originIcon = L.divIcon({
       className: '',
-      html: `<div style="width:20px;height:20px;border-radius:50%;background:#4CAF50;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;"><div style="width:6px;height:6px;border-radius:50%;background:white;"></div></div>`,
+      html: `<div style="width:20px;height:20px;border-radius:50%;background:${cOrigin};border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;"><div style="width:6px;height:6px;border-radius:50%;background:white;"></div></div>`,
       iconSize: [20, 20], iconAnchor: [10, 10],
     });
     L.marker(ROUTE_COORDS[0], { icon: originIcon }).addTo(map).bindPopup('<strong>Origin</strong><br/>Chicago, IL');
@@ -50,7 +57,7 @@ export default function VNextShipmentDetail() {
     // Destination marker
     const destIcon = L.divIcon({
       className: '',
-      html: `<div style="width:20px;height:20px;border-radius:50%;background:#F44336;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;"><div style="width:6px;height:6px;border-radius:50%;background:white;"></div></div>`,
+      html: `<div style="width:20px;height:20px;border-radius:50%;background:${cDest};border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;"><div style="width:6px;height:6px;border-radius:50%;background:white;"></div></div>`,
       iconSize: [20, 20], iconAnchor: [10, 10],
     });
     L.marker(ROUTE_COORDS[ROUTE_COORDS.length - 1], { icon: destIcon }).addTo(map).bindPopup('<strong>Destination</strong><br/>Dallas, TX');
@@ -58,7 +65,7 @@ export default function VNextShipmentDetail() {
     // Stop marker
     const stopIcon = L.divIcon({
       className: '',
-      html: `<div style="width:16px;height:16px;border-radius:50%;background:#FF9800;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3);"></div>`,
+      html: `<div style="width:16px;height:16px;border-radius:50%;background:${cStop};border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3);"></div>`,
       iconSize: [16, 16], iconAnchor: [8, 8],
     });
     L.marker(ROUTE_COORDS[1], { icon: stopIcon }).addTo(map).bindPopup('<strong>Stop</strong><br/>St. Louis, MO');
@@ -66,7 +73,7 @@ export default function VNextShipmentDetail() {
     // Current position (animated)
     const currentIcon = L.divIcon({
       className: '',
-      html: `<div style="position:relative;"><div style="width:18px;height:18px;border-radius:50%;background:#2196F3;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3);"></div><div style="position:absolute;top:-3px;left:-3px;width:24px;height:24px;border-radius:50%;border:2px solid #2196F3;animation:vn-pulse 2s infinite;"></div></div>`,
+      html: `<div style="position:relative;"><div style="width:18px;height:18px;border-radius:50%;background:${cDefault};border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3);"></div><div style="position:absolute;top:-3px;left:-3px;width:24px;height:24px;border-radius:50%;border:2px solid ${cDefault};animation:vn-pulse 2s infinite;"></div></div>`,
       iconSize: [18, 18], iconAnchor: [9, 9],
     });
     L.marker(ROUTE_COORDS[3], { icon: currentIcon }).addTo(map).bindPopup('<strong>Current Position</strong><br/>Oklahoma City, OK<br/><em>265 mi to destination</em>');

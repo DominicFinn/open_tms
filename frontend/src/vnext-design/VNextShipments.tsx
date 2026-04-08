@@ -39,7 +39,14 @@ export default function VNextShipments() {
     }).addTo(map);
 
     SHIPMENTS.forEach(s => {
-      const color = s.statusColor === 'info' ? '#2196F3' : s.statusColor === 'success' ? '#4CAF50' : s.statusColor === 'warning' ? '#FF9800' : s.statusColor === 'error' ? '#F44336' : '#9E9E9E';
+      const cs = getComputedStyle(document.documentElement);
+      const colorMap: Record<string, string> = {
+        info: cs.getPropertyValue('--marker-default').trim(),
+        success: cs.getPropertyValue('--marker-origin').trim(),
+        warning: cs.getPropertyValue('--marker-stop').trim(),
+        error: cs.getPropertyValue('--marker-destination').trim(),
+      };
+      const color = colorMap[s.statusColor] || cs.getPropertyValue('--outline-variant').trim();
       const icon = L.divIcon({
         className: '',
         html: `<div style="width:14px;height:14px;border-radius:50%;background:${color};border:3px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.3);"></div>`,
