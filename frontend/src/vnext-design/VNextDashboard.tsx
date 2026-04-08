@@ -16,7 +16,7 @@ export default function VNextDashboard() {
             <span className="material-icons">download</span>
             Export
           </button>
-          <button className="vn-btn vn-btn-primary" onClick={() => navigate('/vnext/shipments')}>
+          <button className="vn-btn vn-btn-primary" onClick={() => navigate('/shipments')}>
             <span className="material-icons">add</span>
             New Shipment
           </button>
@@ -25,7 +25,7 @@ export default function VNextDashboard() {
 
       {/* Stats */}
       <div className="vn-stats">
-        <div className="vn-stat" style={{ cursor: 'pointer' }} onClick={() => navigate('/vnext/shipments')}>
+        <div className="vn-stat" style={{ cursor: 'pointer' }} onClick={() => navigate('/shipments')}>
           <div className="vn-stat-icon primary">
             <span className="material-icons">local_shipping</span>
           </div>
@@ -38,7 +38,7 @@ export default function VNextDashboard() {
             </div>
           </div>
         </div>
-        <div className="vn-stat" style={{ cursor: 'pointer' }} onClick={() => navigate('/vnext/orders')}>
+        <div className="vn-stat" style={{ cursor: 'pointer' }} onClick={() => navigate('/orders')}>
           <div className="vn-stat-icon info">
             <span className="material-icons">receipt_long</span>
           </div>
@@ -51,7 +51,7 @@ export default function VNextDashboard() {
             </div>
           </div>
         </div>
-        <div className="vn-stat" style={{ cursor: 'pointer' }} onClick={() => navigate('/vnext/issues')}>
+        <div className="vn-stat" style={{ cursor: 'pointer' }} onClick={() => navigate('/issues')}>
           <div className="vn-stat-icon error">
             <span className="material-icons">warning</span>
           </div>
@@ -64,7 +64,7 @@ export default function VNextDashboard() {
             </div>
           </div>
         </div>
-        <div className="vn-stat" style={{ cursor: 'pointer' }} onClick={() => navigate('/vnext/carrier-bidding')}>
+        <div className="vn-stat" style={{ cursor: 'pointer' }} onClick={() => navigate('/carrier-bidding')}>
           <div className="vn-stat-icon warning">
             <span className="material-icons">gavel</span>
           </div>
@@ -98,7 +98,7 @@ export default function VNextDashboard() {
         <div className="vn-card">
           <div className="vn-card-header">
             <h2>Recent Shipments</h2>
-            <button className="vn-btn vn-btn-ghost vn-btn-sm" onClick={() => navigate('/vnext/shipments')}>
+            <button className="vn-btn vn-btn-ghost vn-btn-sm" onClick={() => navigate('/shipments')}>
               View All
               <span className="material-icons">arrow_forward</span>
             </button>
@@ -120,7 +120,7 @@ export default function VNextDashboard() {
                     { id: 'SHP-4819', from: 'Atlanta, GA', to: 'Miami, FL', status: 'Pickup', color: 'warning' },
                     { id: 'SHP-4818', from: 'New York, NY', to: 'Boston, MA', status: 'Booked', color: 'secondary' },
                   ].map(s => (
-                    <tr key={s.id} onClick={() => navigate('/vnext/shipments/SHP-4821')}>
+                    <tr key={s.id} onClick={() => navigate('/shipments/SHP-4821')}>
                       <td><span className="vn-table-id">{s.id}</span></td>
                       <td>
                         <div style={{ fontSize: 13 }}>{s.from}</div>
@@ -139,7 +139,7 @@ export default function VNextDashboard() {
         <div className="vn-card">
           <div className="vn-card-header">
             <h2>Active Issues</h2>
-            <button className="vn-btn vn-btn-ghost vn-btn-sm" onClick={() => navigate('/vnext/issues')}>
+            <button className="vn-btn vn-btn-ghost vn-btn-sm" onClick={() => navigate('/issues')}>
               View Board
               <span className="material-icons">arrow_forward</span>
             </button>

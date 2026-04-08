@@ -198,7 +198,7 @@ export default function VNextShipments() {
             </thead>
             <tbody>
               {filtered.map(s => (
-                <tr key={s.id} onClick={() => navigate(`/vnext/shipments/${s.id}`)}>
+                <tr key={s.id} onClick={() => navigate(`/shipments/${s.id}`)}>
                   <td><span className="vn-table-id">{s.id}</span></td>
                   <td>{s.customer}</td>
                   <td>

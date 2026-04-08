@@ -46,7 +46,7 @@ export default function VNextCreateOrder() {
       <div className="vn-page-header">
         <div>
           <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>
-            <Link to="/vnext/orders" style={{ color: 'var(--color-primary)', textDecoration: 'none' }}>Orders</Link>
+            <Link to="/orders" style={{ color: 'var(--color-primary)', textDecoration: 'none' }}>Orders</Link>
             {' '}&gt; New Order
           </p>
           <h1>New Order</h1>
@@ -214,7 +214,7 @@ export default function VNextCreateOrder() {
 
           {/* Form Actions */}
           <div className="vn-form-actions">
-            <Link to="/vnext/orders" className="vn-btn vn-btn-outline">Cancel</Link>
+            <Link to="/orders" className="vn-btn vn-btn-outline">Cancel</Link>
             <button className="vn-btn vn-btn-primary">
               <span className="material-icons">add</span>
               Create Order

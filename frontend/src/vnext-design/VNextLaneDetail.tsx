@@ -19,7 +19,7 @@ export default function VNextLaneDetail() {
     <>
       {/* Breadcrumb */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-        <button className="vn-btn vn-btn-ghost vn-btn-sm" onClick={() => navigate('/vnext')}>
+        <button className="vn-btn vn-btn-ghost vn-btn-sm" onClick={() => navigate('/lanes')}>
           <span className="material-icons">arrow_back</span>
           Lanes
         </button>
@@ -126,7 +126,7 @@ export default function VNextLaneDetail() {
                   </thead>
                   <tbody>
                     {RECENT_SHIPMENTS.map((s, i) => (
-                      <tr key={i} style={{ cursor: 'pointer' }} onClick={() => navigate('/vnext/shipments/' + s.ref)}>
+                      <tr key={i} style={{ cursor: 'pointer' }} onClick={() => navigate('/shipments/' + s.ref)}>
                         <td><span className="vn-table-id">{s.ref}</span></td>
                         <td><span className={`vn-chip vn-chip-${s.statusColor}`}>{s.status}</span></td>
                         <td style={{ fontSize: 13 }}>{s.pickup}</td>

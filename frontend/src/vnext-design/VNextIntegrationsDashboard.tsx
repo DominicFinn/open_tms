@@ -145,19 +145,19 @@ export default function VNextIntegrationsDashboard() {
         </div>
         <div className="vn-card-body">
           <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-            <Link to="/vnext/integrations/api-keys" className="vn-btn vn-btn-outline">
+            <Link to="/integrations/api-keys" className="vn-btn vn-btn-outline">
               <span className="material-icons">vpn_key</span>
               Manage API Keys
             </Link>
-            <Link to="/vnext/integrations/outbound" className="vn-btn vn-btn-outline">
+            <Link to="/integrations/outbound" className="vn-btn vn-btn-outline">
               <span className="material-icons">send</span>
               Outbound Integrations
             </Link>
-            <Link to="/vnext/integrations/webhook-logs" className="vn-btn vn-btn-outline">
+            <Link to="/integrations/webhook-logs" className="vn-btn vn-btn-outline">
               <span className="material-icons">list_alt</span>
               Webhook Logs
             </Link>
-            <Link to="/vnext/integrations/edi-partners" className="vn-btn vn-btn-outline">
+            <Link to="/integrations/edi-partners" className="vn-btn vn-btn-outline">
               <span className="material-icons">swap_horiz</span>
               EDI Partners
             </Link>

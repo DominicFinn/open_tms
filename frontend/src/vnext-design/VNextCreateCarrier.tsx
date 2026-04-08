@@ -35,7 +35,7 @@ export default function VNextCreateCarrier() {
       <div className="vn-page-header">
         <div>
           <div style={{ fontSize: 13, color: 'var(--on-surface-variant)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
-            <Link to="/vnext/carriers" style={{ color: 'var(--primary)', textDecoration: 'none' }}>Carriers</Link>
+            <Link to="/carriers" style={{ color: 'var(--primary)', textDecoration: 'none' }}>Carriers</Link>
             <span className="material-icons" style={{ fontSize: 16 }}>chevron_right</span>
             <span>New Carrier</span>
           </div>
@@ -193,7 +193,7 @@ export default function VNextCreateCarrier() {
 
       {/* Form Actions */}
       <div className="vn-form-actions">
-        <Link to="/vnext/carriers" className="vn-btn vn-btn-outline">Cancel</Link>
+        <Link to="/carriers" className="vn-btn vn-btn-outline">Cancel</Link>
         <button className="vn-btn vn-btn-primary">
           <span className="material-icons">save</span>
           Save Carrier

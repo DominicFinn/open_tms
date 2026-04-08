@@ -18,7 +18,7 @@ export default function VNextCreateCustomer() {
       <div className="vn-page-header">
         <div>
           <div style={{ fontSize: 13, color: 'var(--on-surface-variant)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
-            <Link to="/vnext/customers" style={{ color: 'var(--primary)', textDecoration: 'none' }}>Customers</Link>
+            <Link to="/customers" style={{ color: 'var(--primary)', textDecoration: 'none' }}>Customers</Link>
             <span className="material-icons" style={{ fontSize: 16 }}>chevron_right</span>
             <span>New Customer</span>
           </div>
@@ -133,7 +133,7 @@ export default function VNextCreateCustomer() {
 
       {/* Form Actions */}
       <div className="vn-form-actions">
-        <Link to="/vnext/customers" className="vn-btn vn-btn-outline">Cancel</Link>
+        <Link to="/customers" className="vn-btn vn-btn-outline">Cancel</Link>
         <button className="vn-btn vn-btn-primary">
           <span className="material-icons">save</span>
           Create Customer

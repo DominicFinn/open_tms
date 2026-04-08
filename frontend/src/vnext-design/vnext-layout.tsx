@@ -15,78 +15,78 @@ export default function VNextLayout() {
         </div>
         <nav className="vn-sidebar-nav">
           <div className="vn-sidebar-section">Operations</div>
-          <NavLink to="/vnext" end onClick={() => setSidebarOpen(false)}>
+          <NavLink to="/" end onClick={() => setSidebarOpen(false)}>
             <span className="material-icons">space_dashboard</span>
             Dashboard
           </NavLink>
-          <NavLink to="/vnext/shipments" onClick={() => setSidebarOpen(false)}>
+          <NavLink to="/shipments" onClick={() => setSidebarOpen(false)}>
             <span className="material-icons">local_shipping</span>
             Shipments
           </NavLink>
-          <NavLink to="/vnext/orders" onClick={() => setSidebarOpen(false)}>
+          <NavLink to="/orders" onClick={() => setSidebarOpen(false)}>
             <span className="material-icons">receipt_long</span>
             Orders
           </NavLink>
-          <NavLink to="/vnext/issues" onClick={() => setSidebarOpen(false)}>
+          <NavLink to="/issues" onClick={() => setSidebarOpen(false)}>
             <span className="material-icons">bug_report</span>
             Issues
             <span className="vn-badge">5</span>
           </NavLink>
 
           <div className="vn-sidebar-section">Network</div>
-          <NavLink to="/vnext/carriers" onClick={() => setSidebarOpen(false)}>
+          <NavLink to="/carriers" onClick={() => setSidebarOpen(false)}>
             <span className="material-icons">airport_shuttle</span>
             Carriers
           </NavLink>
-          <NavLink to="/vnext/carrier-bidding" onClick={() => setSidebarOpen(false)}>
+          <NavLink to="/carrier-bidding" onClick={() => setSidebarOpen(false)}>
             <span className="material-icons">gavel</span>
             Carrier Bidding
           </NavLink>
-          <NavLink to="/vnext/customers" onClick={() => setSidebarOpen(false)}>
+          <NavLink to="/customers" onClick={() => setSidebarOpen(false)}>
             <span className="material-icons">people</span>
             Customers
           </NavLink>
-          <NavLink to="/vnext/locations" onClick={() => setSidebarOpen(false)}>
+          <NavLink to="/locations" onClick={() => setSidebarOpen(false)}>
             <span className="material-icons">location_on</span>
             Locations
           </NavLink>
-          <NavLink to="/vnext/lanes" onClick={() => setSidebarOpen(false)}>
+          <NavLink to="/lanes" onClick={() => setSidebarOpen(false)}>
             <span className="material-icons">route</span>
             Lanes
           </NavLink>
 
           <div className="vn-sidebar-section">Reports</div>
-          <NavLink to="/vnext/documents" onClick={() => setSidebarOpen(false)}>
+          <NavLink to="/documents" onClick={() => setSidebarOpen(false)}>
             <span className="material-icons">description</span>
             Documents
           </NavLink>
-          <NavLink to="/vnext/daily-report" onClick={() => setSidebarOpen(false)}>
+          <NavLink to="/reports/daily" onClick={() => setSidebarOpen(false)}>
             <span className="material-icons">assessment</span>
             Daily Report
           </NavLink>
 
           <div className="vn-sidebar-section">Integrations</div>
-          <NavLink to="/vnext/integrations" end onClick={() => setSidebarOpen(false)}>
+          <NavLink to="/integrations" end onClick={() => setSidebarOpen(false)}>
             <span className="material-icons">hub</span>
             Overview
           </NavLink>
-          <NavLink to="/vnext/integrations/api-keys" onClick={() => setSidebarOpen(false)}>
+          <NavLink to="/integrations/api-keys" onClick={() => setSidebarOpen(false)}>
             <span className="material-icons">vpn_key</span>
             API Keys
           </NavLink>
-          <NavLink to="/vnext/integrations/edi-partners" onClick={() => setSidebarOpen(false)}>
+          <NavLink to="/integrations/edi-partners" onClick={() => setSidebarOpen(false)}>
             <span className="material-icons">swap_horiz</span>
             EDI Partners
           </NavLink>
 
           <div className="vn-sidebar-section">Admin</div>
-          <NavLink to="/vnext/settings" onClick={() => setSidebarOpen(false)}>
+          <NavLink to="/settings" onClick={() => setSidebarOpen(false)}>
             <span className="material-icons">settings</span>
             Settings
           </NavLink>
 
           <div className="vn-sidebar-section">Development</div>
-          <NavLink to="/vnext/style-guide" onClick={() => setSidebarOpen(false)}>
+          <NavLink to="/style-guide" onClick={() => setSidebarOpen(false)}>
             <span className="material-icons">palette</span>
             Style Guide
           </NavLink>

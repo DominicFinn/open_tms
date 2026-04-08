@@ -87,7 +87,7 @@ export default function VNextShipmentDetail() {
     <>
       {/* Breadcrumb & Actions */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-        <button className="vn-btn vn-btn-ghost vn-btn-sm" onClick={() => navigate('/vnext/shipments')}>
+        <button className="vn-btn vn-btn-ghost vn-btn-sm" onClick={() => navigate('/shipments')}>
           <span className="material-icons">arrow_back</span>
           Shipments
         </button>

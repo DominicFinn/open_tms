@@ -175,7 +175,7 @@ export default function VNextOrders() {
                   <td>
                     <div style={{ display: 'flex', gap: 4 }}>
                       {o.status === 'Ready to Ship' && (
-                        <button className="vn-btn vn-btn-primary vn-btn-sm" onClick={() => navigate('/vnext/carrier-bidding')}>
+                        <button className="vn-btn vn-btn-primary vn-btn-sm" onClick={() => navigate('/carrier-bidding')}>
                           <span className="material-icons">local_shipping</span>
                           Ship
                         </button>

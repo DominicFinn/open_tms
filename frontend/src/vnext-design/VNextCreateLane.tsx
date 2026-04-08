@@ -55,7 +55,7 @@ export default function VNextCreateLane() {
       <div className="vn-page-header">
         <div>
           <div style={{ fontSize: 13, color: 'var(--on-surface-variant)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
-            <Link to="/vnext/lanes" style={{ color: 'var(--primary)', textDecoration: 'none' }}>Lanes</Link>
+            <Link to="/lanes" style={{ color: 'var(--primary)', textDecoration: 'none' }}>Lanes</Link>
             <span className="material-icons" style={{ fontSize: 16 }}>chevron_right</span>
             <span>New Lane</span>
           </div>
@@ -210,7 +210,7 @@ export default function VNextCreateLane() {
 
       {/* Form Actions */}
       <div className="vn-form-actions">
-        <Link to="/vnext/lanes" className="vn-btn vn-btn-outline">Cancel</Link>
+        <Link to="/lanes" className="vn-btn vn-btn-outline">Cancel</Link>
         <button className="vn-btn vn-btn-primary">
           <span className="material-icons">save</span>
           Create Lane

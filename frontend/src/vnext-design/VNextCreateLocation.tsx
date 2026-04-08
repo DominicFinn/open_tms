@@ -22,7 +22,7 @@ export default function VNextCreateLocation() {
       <div className="vn-page-header">
         <div>
           <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>
-            <Link to="/vnext/locations" style={{ color: 'var(--color-primary)', textDecoration: 'none' }}>Locations</Link>
+            <Link to="/locations" style={{ color: 'var(--color-primary)', textDecoration: 'none' }}>Locations</Link>
             {' '}&gt; New Location
           </p>
           <h1>New Location</h1>
@@ -140,7 +140,7 @@ export default function VNextCreateLocation() {
 
           {/* Form Actions */}
           <div className="vn-form-actions">
-            <Link to="/vnext/locations" className="vn-btn vn-btn-outline">Cancel</Link>
+            <Link to="/locations" className="vn-btn vn-btn-outline">Cancel</Link>
             <button className="vn-btn vn-btn-primary">
               <span className="material-icons">save</span>
               Save Location

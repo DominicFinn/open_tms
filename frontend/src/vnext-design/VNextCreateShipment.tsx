@@ -32,7 +32,7 @@ export default function VNextCreateShipment() {
       <div className="vn-page-header">
         <div>
           <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>
-            <Link to="/vnext/shipments" style={{ color: 'var(--color-primary)', textDecoration: 'none' }}>Shipments</Link>
+            <Link to="/shipments" style={{ color: 'var(--color-primary)', textDecoration: 'none' }}>Shipments</Link>
             {' '}&gt; New Shipment
           </p>
           <h1>New Shipment</h1>
@@ -206,7 +206,7 @@ export default function VNextCreateShipment() {
 
           {/* Form Actions */}
           <div className="vn-form-actions">
-            <Link to="/vnext/shipments" className="vn-btn vn-btn-outline">Cancel</Link>
+            <Link to="/shipments" className="vn-btn vn-btn-outline">Cancel</Link>
             <button className="vn-btn vn-btn-outline">
               <span className="material-icons">save</span>
               Save Draft
