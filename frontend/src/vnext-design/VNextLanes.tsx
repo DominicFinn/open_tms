@@ -1,43 +1,83 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { API_URL } from '../api';
 
-const LANES = [
-  { id: 'LN-001', origin: 'Chicago, IL', dest: 'Dallas, TX', distance: 1290, carriers: 4, shipments: 86, status: 'Active', statusColor: 'success' },
-  { id: 'LN-002', origin: 'Los Angeles, CA', dest: 'Phoenix, AZ', distance: 598, carriers: 2, shipments: 42, status: 'Active', statusColor: 'success' },
-  { id: 'LN-003', origin: 'Atlanta, GA', dest: 'Miami, FL', distance: 1062, carriers: 3, shipments: 64, status: 'Active', statusColor: 'success' },
-  { id: 'LN-004', origin: 'New York, NY', dest: 'Boston, MA', distance: 346, carriers: 2, shipments: 38, status: 'Active', statusColor: 'success' },
-  { id: 'LN-005', origin: 'Denver, CO', dest: 'Salt Lake City, UT', distance: 812, carriers: 1, shipments: 21, status: 'Active', statusColor: 'success' },
-  { id: 'LN-006', origin: 'Seattle, WA', dest: 'Portland, OR', distance: 280, carriers: 2, shipments: 29, status: 'Inactive', statusColor: 'error' },
-  { id: 'LN-007', origin: 'Houston, TX', dest: 'San Antonio, TX', distance: 317, carriers: 3, shipments: 55, status: 'Active', statusColor: 'success' },
-  { id: 'LN-008', origin: 'Minneapolis, MN', dest: 'Milwaukee, WI', distance: 539, carriers: 1, shipments: 12, status: 'Inactive', statusColor: 'error' },
-];
-
-const stats = {
-  total: LANES.length,
-  active: LANES.filter(l => l.status === 'Active').length,
-  avgDistance: Math.round(LANES.reduce((s, l) => s + l.distance, 0) / LANES.length),
-  topLane: LANES.reduce((top, l) => l.shipments > top.shipments ? l : top, LANES[0]),
-};
+interface Lane {
+  id: string;
+  name: string;
+  originId: string;
+  destinationId: string;
+  origin: { name: string; city: string; state: string };
+  destination: { name: string; city: string; state: string };
+  distance: number | null;
+  notes: string | null;
+  status: string;
+  serviceLevel: string | null;
+  laneCarriers: any[];
+  stops: any[];
+  _count?: { shipments: number };
+}
 
 export default function VNextLanes() {
+  const [lanes, setLanes] = useState<Lane[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
-  const filtered = LANES.filter(l => {
-    if (statusFilter === 'active' && l.status !== 'Active') return false;
-    if (statusFilter === 'inactive' && l.status !== 'Inactive') return false;
+  useEffect(() => {
+    async function fetchLanes() {
+      try {
+        const res = await fetch(`${API_URL}/api/v1/lanes`);
+        if (!res.ok) throw new Error(`Failed to fetch lanes (${res.status})`);
+        const json = await res.json();
+        setLanes(json.data || []);
+      } catch (err: any) {
+        setError(err.message || 'Failed to load lanes');
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchLanes();
+  }, []);
+
+  const stats = {
+    total: lanes.length,
+    active: lanes.filter(l => l.status === 'ACTIVE').length,
+    avgDistance: lanes.length > 0 ? Math.round(lanes.reduce((s, l) => s + (l.distance || 0), 0) / lanes.length) : 0,
+    totalCarriers: lanes.reduce((s, l) => s + (l.laneCarriers?.length || 0), 0),
+  };
+
+  const filtered = lanes.filter(l => {
+    if (statusFilter === 'active' && l.status !== 'ACTIVE') return false;
+    if (statusFilter === 'inactive' && l.status === 'ACTIVE') return false;
     if (search) {
       const q = search.toLowerCase();
-      return l.origin.toLowerCase().includes(q) || l.dest.toLowerCase().includes(q) || l.id.toLowerCase().includes(q);
+      const originLabel = `${l.origin?.city || ''}, ${l.origin?.state || ''}`;
+      const destLabel = `${l.destination?.city || ''}, ${l.destination?.state || ''}`;
+      return originLabel.toLowerCase().includes(q) || destLabel.toLowerCase().includes(q) || (l.name || '').toLowerCase().includes(q);
     }
     return true;
   });
+
+  if (loading) {
+    return (
+      <div className="vn-empty">
+        <span className="material-icons" style={{ animation: 'spin 1s linear infinite' }}>refresh</span>
+        <h3>Loading...</h3>
+      </div>
+    );
+  }
+
+  if (error) {
+    return <div className="vn-alert vn-alert-error">{error}</div>;
+  }
 
   return (
     <>
       <div className="vn-page-header">
         <div>
           <h1>Lanes</h1>
-          <p>{LANES.length} lanes configured</p>
+          <p>{lanes.length} lanes configured</p>
         </div>
         <div className="vn-page-actions">
           <button className="vn-btn vn-btn-primary">
@@ -71,10 +111,10 @@ export default function VNextLanes() {
           </div>
         </div>
         <div className="vn-stat">
-          <div className="vn-stat-icon warning"><span className="material-icons">emoji_events</span></div>
+          <div className="vn-stat-icon warning"><span className="material-icons">local_shipping</span></div>
           <div>
-            <div className="vn-stat-value">{stats.topLane.shipments}</div>
-            <div className="vn-stat-label">Top Lane ({stats.topLane.origin.split(',')[0]})</div>
+            <div className="vn-stat-value">{stats.totalCarriers}</div>
+            <div className="vn-stat-label">Carriers Assigned</div>
           </div>
         </div>
       </div>
@@ -95,7 +135,7 @@ export default function VNextLanes() {
           <select className="vn-filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
             <option value="all">All Statuses ({stats.total})</option>
             <option value="active">Active ({stats.active})</option>
-            <option value="inactive">Inactive ({LANES.filter(l => l.status === 'Inactive').length})</option>
+            <option value="inactive">Inactive ({lanes.filter(l => l.status !== 'ACTIVE').length})</option>
           </select>
         </div>
 
@@ -121,15 +161,15 @@ export default function VNextLanes() {
                         <span className="vn-route-dot destination" style={{ width: 10, height: 10 }} />
                       </div>
                       <div>
-                        <span style={{ fontWeight: 600, color: 'var(--on-surface)', fontSize: 14 }}>{l.origin} &rarr; {l.dest}</span>
-                        <div className="vn-table-secondary">{l.id}</div>
+                        <span style={{ fontWeight: 600, color: 'var(--on-surface)', fontSize: 14 }}>{l.origin?.city}, {l.origin?.state} &rarr; {l.destination?.city}, {l.destination?.state}</span>
+                        <div className="vn-table-secondary">{l.name || l.id}</div>
                       </div>
                     </div>
                   </td>
-                  <td style={{ fontSize: 13, fontWeight: 600 }}>{l.distance.toLocaleString()} km</td>
-                  <td style={{ fontSize: 13 }}>{l.carriers}</td>
-                  <td style={{ fontSize: 13, fontWeight: 600 }}>{l.shipments}</td>
-                  <td><span className={`vn-chip vn-chip-${l.statusColor}`}>{l.status}</span></td>
+                  <td style={{ fontSize: 13, fontWeight: 600 }}>{l.distance ? `${l.distance.toLocaleString()} km` : '—'}</td>
+                  <td style={{ fontSize: 13 }}>{l.laneCarriers?.length || 0}</td>
+                  <td style={{ fontSize: 13, fontWeight: 600 }}>{l._count?.shipments ?? 0}</td>
+                  <td><span className={`vn-chip vn-chip-${l.status === 'ACTIVE' ? 'success' : 'error'}`}>{l.status === 'ACTIVE' ? 'Active' : 'Inactive'}</span></td>
                 </tr>
               ))}
               {filtered.length === 0 && (

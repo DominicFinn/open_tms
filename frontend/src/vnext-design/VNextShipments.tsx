@@ -1,65 +1,120 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import L from 'leaflet';
+import { API_URL } from '../api';
 
-const SHIPMENTS = [
-  { id: 'SHP-4821', customer: 'Acme Corp', origin: 'Chicago, IL', dest: 'Dallas, TX', carrier: 'Swift Transport', mode: 'FTL', status: 'In Transit', statusColor: 'info', pickup: 'Apr 6', delivery: 'Apr 8', weight: '42,000 lbs', lat: 37.5, lng: -95.7 },
-  { id: 'SHP-4820', customer: 'Global Widgets', origin: 'Los Angeles, CA', dest: 'Phoenix, AZ', carrier: 'Desert Freight', mode: 'LTL', status: 'Delivered', statusColor: 'success', pickup: 'Apr 5', delivery: 'Apr 6', weight: '12,500 lbs', lat: 33.45, lng: -112.07 },
-  { id: 'SHP-4819', customer: 'TechStart Inc', origin: 'Atlanta, GA', dest: 'Miami, FL', carrier: 'Southeast Express', mode: 'FTL', status: 'At Pickup', statusColor: 'warning', pickup: 'Apr 7', delivery: 'Apr 9', weight: '38,200 lbs', lat: 33.749, lng: -84.388 },
-  { id: 'SHP-4818', customer: 'FreshFoods LLC', origin: 'New York, NY', dest: 'Boston, MA', carrier: 'NorthEast Carriers', mode: 'Reefer', status: 'Booked', statusColor: 'secondary', pickup: 'Apr 8', delivery: 'Apr 9', weight: '28,000 lbs', lat: 40.713, lng: -74.006 },
-  { id: 'SHP-4817', customer: 'Industrial Co', origin: 'Denver, CO', dest: 'Salt Lake City, UT', carrier: 'Mountain Haul', mode: 'Flatbed', status: 'In Transit', statusColor: 'info', pickup: 'Apr 5', delivery: 'Apr 7', weight: '55,000 lbs', lat: 39.739, lng: -104.99 },
-  { id: 'SHP-4816', customer: 'Acme Corp', origin: 'Seattle, WA', dest: 'Portland, OR', carrier: 'Pacific Lines', mode: 'LTL', status: 'In Transit', statusColor: 'info', pickup: 'Apr 6', delivery: 'Apr 7', weight: '8,200 lbs', lat: 47.606, lng: -122.332 },
-  { id: 'SHP-4815', customer: 'RetailMax', origin: 'Houston, TX', dest: 'San Antonio, TX', carrier: 'Lone Star Freight', mode: 'FTL', status: 'Delivered', statusColor: 'success', pickup: 'Apr 4', delivery: 'Apr 5', weight: '33,500 lbs', lat: 29.76, lng: -95.37 },
-  { id: 'SHP-4814', customer: 'BioPharm Inc', origin: 'Minneapolis, MN', dest: 'Milwaukee, WI', carrier: 'Midwest Transit', mode: 'Reefer', status: 'Issue', statusColor: 'error', pickup: 'Apr 5', delivery: 'Apr 6', weight: '15,000 lbs', lat: 44.978, lng: -93.265 },
-  { id: 'SHP-4813', customer: 'AutoParts Plus', origin: 'Detroit, MI', dest: 'Columbus, OH', carrier: 'Great Lakes Haul', mode: 'FTL', status: 'In Transit', statusColor: 'info', pickup: 'Apr 6', delivery: 'Apr 7', weight: '44,000 lbs', lat: 42.331, lng: -83.046 },
-  { id: 'SHP-4812', customer: 'FreshFoods LLC', origin: 'Nashville, TN', dest: 'Charlotte, NC', carrier: 'Southern Express', mode: 'FTL', status: 'Booked', statusColor: 'secondary', pickup: 'Apr 8', delivery: 'Apr 10', weight: '29,800 lbs', lat: 36.163, lng: -86.781 },
-];
+interface Shipment {
+  id: string;
+  reference?: string;
+  status: string;
+  pickupDate?: string;
+  deliveryDate?: string;
+  proNumber?: string;
+  customer?: { name: string };
+  origin?: { name: string; city: string; state: string; lat?: number; lng?: number };
+  destination?: { name: string; city: string; state: string };
+  lane?: { name: string };
+  carrier?: { name: string };
+}
 
-const statusCounts = {
-  all: SHIPMENTS.length,
-  transit: SHIPMENTS.filter(s => s.status === 'In Transit').length,
-  delivered: SHIPMENTS.filter(s => s.status === 'Delivered').length,
-  booked: SHIPMENTS.filter(s => s.status === 'Booked').length,
-  issue: SHIPMENTS.filter(s => s.status === 'Issue').length,
-};
+function statusColor(status: string): string {
+  const s = status?.toLowerCase().replace(/[_ ]/g, '');
+  if (s === 'intransit') return 'info';
+  if (s === 'delivered') return 'success';
+  if (s === 'booked' || s === 'atpickup') return 'warning';
+  if (s === 'issue' || s === 'exception') return 'error';
+  return 'secondary';
+}
+
+function formatDate(d?: string): string {
+  if (!d) return '—';
+  const date = new Date(d);
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
 
 export default function VNextShipments() {
   const navigate = useNavigate();
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<L.Map | null>(null);
+  const markersRef = useRef<L.LayerGroup | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [viewMode, setViewMode] = useState<'table' | 'map'>('table');
+  const [shipments, setShipments] = useState<Shipment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
+  // Fetch shipments from API
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoading(true);
+        const res = await fetch(`${API_URL}/api/v1/shipments`);
+        if (!res.ok) throw new Error(`Failed to load shipments (${res.status})`);
+        const json = await res.json();
+        if (!cancelled) {
+          setShipments(json.data || []);
+          setError('');
+        }
+      } catch (err: any) {
+        if (!cancelled) setError(err.message || 'Failed to load shipments');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const statusCounts = {
+    all: shipments.length,
+    transit: shipments.filter(s => s.status?.toLowerCase().replace(/[_ ]/g, '') === 'intransit').length,
+    delivered: shipments.filter(s => s.status?.toLowerCase() === 'delivered').length,
+    booked: shipments.filter(s => s.status?.toLowerCase() === 'booked').length,
+    issue: shipments.filter(s => ['issue', 'exception'].includes(s.status?.toLowerCase())).length,
+  };
+
+  // Initialize map
   useEffect(() => {
     if (!mapRef.current || mapInstance.current) return;
     const map = L.map(mapRef.current, { zoomControl: true, attributionControl: false }).setView([39.5, -98.5], 4);
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
       maxZoom: 19,
     }).addTo(map);
+    markersRef.current = L.layerGroup().addTo(map);
+    mapInstance.current = map;
+    return () => { map.remove(); mapInstance.current = null; markersRef.current = null; };
+  }, []);
 
-    SHIPMENTS.forEach(s => {
+  // Update map markers when shipments change
+  useEffect(() => {
+    if (!markersRef.current) return;
+    markersRef.current.clearLayers();
+    shipments.forEach(s => {
+      const lat = s.origin?.lat;
+      const lng = s.origin?.lng;
+      if (lat == null || lng == null) return;
       const cs = getComputedStyle(document.documentElement);
+      const sc = statusColor(s.status);
       const colorMap: Record<string, string> = {
         info: cs.getPropertyValue('--marker-default').trim(),
         success: cs.getPropertyValue('--marker-origin').trim(),
         warning: cs.getPropertyValue('--marker-stop').trim(),
         error: cs.getPropertyValue('--marker-destination').trim(),
       };
-      const color = colorMap[s.statusColor] || cs.getPropertyValue('--outline-variant').trim();
+      const color = colorMap[sc] || cs.getPropertyValue('--outline-variant').trim();
       const icon = L.divIcon({
         className: '',
         html: `<div style="width:14px;height:14px;border-radius:50%;background:${color};border:3px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.3);"></div>`,
         iconSize: [14, 14],
         iconAnchor: [7, 7],
       });
-      L.marker([s.lat, s.lng], { icon }).addTo(map)
-        .bindPopup(`<strong>${s.id}</strong><br/>${s.origin} → ${s.dest}<br/><em>${s.status}</em>`);
+      const originLabel = s.origin ? `${s.origin.city}, ${s.origin.state}` : '';
+      const destLabel = s.destination ? `${s.destination.city}, ${s.destination.state}` : '';
+      L.marker([lat, lng], { icon }).addTo(markersRef.current!)
+        .bindPopup(`<strong>${s.reference || s.id}</strong><br/>${originLabel} → ${destLabel}<br/><em>${s.status}</em>`);
     });
-
-    mapInstance.current = map;
-    return () => { map.remove(); mapInstance.current = null; };
-  }, []);
+  }, [shipments]);
 
   // Resize map when switching to map view
   useEffect(() => {
@@ -68,24 +123,42 @@ export default function VNextShipments() {
     }
   }, [viewMode]);
 
-  const filtered = SHIPMENTS.filter(s => {
-    if (statusFilter === 'transit' && s.status !== 'In Transit') return false;
-    if (statusFilter === 'delivered' && s.status !== 'Delivered') return false;
-    if (statusFilter === 'booked' && s.status !== 'Booked') return false;
-    if (statusFilter === 'issue' && s.status !== 'Issue') return false;
+  const filtered = shipments.filter(s => {
+    const sNorm = s.status?.toLowerCase().replace(/[_ ]/g, '');
+    if (statusFilter === 'transit' && sNorm !== 'intransit') return false;
+    if (statusFilter === 'delivered' && sNorm !== 'delivered') return false;
+    if (statusFilter === 'booked' && sNorm !== 'booked') return false;
+    if (statusFilter === 'issue' && !['issue', 'exception'].includes(s.status?.toLowerCase())) return false;
     if (search) {
       const q = search.toLowerCase();
-      return s.id.toLowerCase().includes(q) || s.customer.toLowerCase().includes(q) || s.origin.toLowerCase().includes(q) || s.dest.toLowerCase().includes(q) || s.carrier.toLowerCase().includes(q);
+      const customerName = s.customer?.name?.toLowerCase() || '';
+      const originLabel = s.origin ? `${s.origin.city}, ${s.origin.state}`.toLowerCase() : '';
+      const destLabel = s.destination ? `${s.destination.city}, ${s.destination.state}`.toLowerCase() : '';
+      const carrierName = s.carrier?.name?.toLowerCase() || '';
+      const ref = (s.reference || s.id || '').toLowerCase();
+      return ref.includes(q) || customerName.includes(q) || originLabel.includes(q) || destLabel.includes(q) || carrierName.includes(q);
     }
     return true;
   });
+
+  if (loading) {
+    return (
+      <div className="vn-empty"><span className="material-icons" style={{animation:'spin 1s linear infinite'}}>refresh</span><h3>Loading...</h3></div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="vn-alert vn-alert-error"><span className="material-icons">error</span><div className="vn-alert-content">{error}</div></div>
+    );
+  }
 
   return (
     <>
       <div className="vn-page-header">
         <div>
           <h1>Shipments</h1>
-          <p>{SHIPMENTS.length} total shipments</p>
+          <p>{shipments.length} total shipments</p>
         </div>
         <div className="vn-page-actions">
           <button className="vn-btn vn-btn-outline">
@@ -189,34 +262,34 @@ export default function VNextShipments() {
                 <th>Customer</th>
                 <th>Route</th>
                 <th>Carrier</th>
-                <th>Mode</th>
+                <th>Lane</th>
                 <th>Pickup</th>
                 <th>Delivery</th>
-                <th>Weight</th>
+                <th>PRO #</th>
                 <th>Status</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map(s => (
                 <tr key={s.id} onClick={() => navigate(`/shipments/${s.id}`)}>
-                  <td><span className="vn-table-id">{s.id}</span></td>
-                  <td>{s.customer}</td>
+                  <td><span className="vn-table-id">{s.reference || s.id}</span></td>
+                  <td>{s.customer?.name || '—'}</td>
                   <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <span className="vn-route-dot origin" style={{ width: 8, height: 8 }} />
-                      <span style={{ fontSize: 13 }}>{s.origin}</span>
+                      <span style={{ fontSize: 13 }}>{s.origin ? `${s.origin.city}, ${s.origin.state}` : '—'}</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
                       <span className="vn-route-dot destination" style={{ width: 8, height: 8 }} />
-                      <span style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>{s.dest}</span>
+                      <span style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>{s.destination ? `${s.destination.city}, ${s.destination.state}` : '—'}</span>
                     </div>
                   </td>
-                  <td style={{ fontSize: 13 }}>{s.carrier}</td>
-                  <td><span className="vn-chip vn-chip-secondary">{s.mode}</span></td>
-                  <td style={{ fontSize: 13, whiteSpace: 'nowrap' }}>{s.pickup}</td>
-                  <td style={{ fontSize: 13, whiteSpace: 'nowrap' }}>{s.delivery}</td>
-                  <td style={{ fontSize: 13 }}>{s.weight}</td>
-                  <td><span className={`vn-chip vn-chip-${s.statusColor}`}>{s.status}</span></td>
+                  <td style={{ fontSize: 13 }}>{s.carrier?.name || '—'}</td>
+                  <td>{s.lane ? <span className="vn-chip vn-chip-secondary">{s.lane.name}</span> : '—'}</td>
+                  <td style={{ fontSize: 13, whiteSpace: 'nowrap' }}>{formatDate(s.pickupDate)}</td>
+                  <td style={{ fontSize: 13, whiteSpace: 'nowrap' }}>{formatDate(s.deliveryDate)}</td>
+                  <td style={{ fontSize: 13 }}>{s.proNumber || '—'}</td>
+                  <td><span className={`vn-chip vn-chip-${statusColor(s.status)}`}>{s.status}</span></td>
                 </tr>
               ))}
               {filtered.length === 0 && (

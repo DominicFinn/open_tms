@@ -1,30 +1,68 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { API_URL } from '../api';
 
-const DOCUMENTS = [
-  { name: 'BOL-SHP4821.pdf', type: 'BOL', typeColor: 'info', icon: 'description', entity: 'SHP-4821', size: '245 KB', created: 'Apr 6, 2026' },
-  { name: 'Customs-MX-20260405.pdf', type: 'Customs', typeColor: 'warning', icon: 'description', entity: 'SHP-4819', size: '1.2 MB', created: 'Apr 5, 2026' },
-  { name: 'Rate-Confirmation-4821.pdf', type: 'Attachment', typeColor: 'secondary', icon: 'attach_file', entity: 'SHP-4821', size: '128 KB', created: 'Apr 5, 2026' },
-  { name: 'POD-SHP4820.jpg', type: 'Attachment', typeColor: 'secondary', icon: 'image', entity: 'SHP-4820', size: '3.8 MB', created: 'Apr 6, 2026' },
-  { name: 'BOL-SHP4818.pdf', type: 'BOL', typeColor: 'info', icon: 'description', entity: 'SHP-4818', size: '210 KB', created: 'Apr 4, 2026' },
-  { name: 'Customs-CA-20260402.pdf', type: 'Customs', typeColor: 'warning', icon: 'description', entity: 'SHP-4815', size: '980 KB', created: 'Apr 2, 2026' },
-  { name: 'Insurance-Certificate.pdf', type: 'Attachment', typeColor: 'secondary', icon: 'attach_file', entity: 'Swift Transport', size: '340 KB', created: 'Mar 30, 2026' },
-  { name: 'BOL-SHP4812.pdf', type: 'BOL', typeColor: 'info', icon: 'description', entity: 'SHP-4812', size: '198 KB', created: 'Mar 28, 2026' },
-  { name: 'Packing-List-4819.xlsx', type: 'Attachment', typeColor: 'secondary', icon: 'attach_file', entity: 'SHP-4819', size: '56 KB', created: 'Apr 5, 2026' },
-  { name: 'Customs-EU-20260325.pdf', type: 'Customs', typeColor: 'warning', icon: 'description', entity: 'SHP-4808', size: '1.5 MB', created: 'Mar 25, 2026' },
-];
+function formatFileSize(bytes: number): string {
+  if (!bytes) return 'N/A';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
-const typeCounts = {
-  all: DOCUMENTS.length,
-  bol: DOCUMENTS.filter(d => d.type === 'BOL').length,
-  customs: DOCUMENTS.filter(d => d.type === 'Customs').length,
-  attachment: DOCUMENTS.filter(d => d.type === 'Attachment').length,
-};
+function docTypeLabel(documentType: string): { type: string; typeColor: string } {
+  switch ((documentType || '').toLowerCase()) {
+    case 'bol': return { type: 'BOL', typeColor: 'info' };
+    case 'customs': return { type: 'Customs', typeColor: 'warning' };
+    default: return { type: 'Attachment', typeColor: 'secondary' };
+  }
+}
+
+function docIcon(mimeType: string): string {
+  if (mimeType && mimeType.startsWith('image/')) return 'image';
+  return 'description';
+}
 
 export default function VNextDocuments() {
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  const filtered = DOCUMENTS.filter(d => {
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchDocs() {
+      try {
+        const res = await fetch(`${API_URL}/api/v1/documents`);
+        if (!res.ok) throw new Error('Failed to load documents');
+        const json = await res.json();
+        if (!cancelled) setDocuments(json.data || []);
+      } catch (e: any) {
+        if (!cancelled) setError(e.message || 'Failed to load documents');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    fetchDocs();
+    return () => { cancelled = true; };
+  }, []);
+
+  const mappedDocs = documents.map((d: any) => {
+    const { type, typeColor } = docTypeLabel(d.documentType);
+    const icon = docIcon(d.mimeType);
+    const entity = d.shipmentId ? `SHP-${d.shipmentId}` : d.orderId ? `ORD-${d.orderId}` : d.carrierId ? `Carrier-${d.carrierId}` : 'N/A';
+    const size = formatFileSize(d.fileSize);
+    const created = d.createdAt ? new Date(d.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A';
+    return { ...d, type, typeColor, icon, entity, size, created, name: d.fileName || d.documentNumber || 'Untitled' };
+  });
+
+  const typeCounts = {
+    all: mappedDocs.length,
+    bol: mappedDocs.filter((d: any) => d.type === 'BOL').length,
+    customs: mappedDocs.filter((d: any) => d.type === 'Customs').length,
+    attachment: mappedDocs.filter((d: any) => d.type === 'Attachment').length,
+  };
+
+  const filtered = mappedDocs.filter((d: any) => {
     if (typeFilter === 'bol' && d.type !== 'BOL') return false;
     if (typeFilter === 'customs' && d.type !== 'Customs') return false;
     if (typeFilter === 'attachment' && d.type !== 'Attachment') return false;
@@ -34,6 +72,25 @@ export default function VNextDocuments() {
     }
     return true;
   });
+
+  if (loading) {
+    return (
+      <div className="vn-empty">
+        <span className="material-icons" style={{ animation: 'spin 1s linear infinite' }}>refresh</span>
+        <h3>Loading...</h3>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="vn-empty">
+        <span className="material-icons" style={{ color: 'var(--error)' }}>error</span>
+        <h3>Error</h3>
+        <p>{error}</p>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -152,9 +209,11 @@ export default function VNextDocuments() {
                     <td style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>{doc.size}</td>
                     <td style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>{doc.created}</td>
                     <td>
-                      <button className="vn-btn-icon" title="Download">
-                        <span className="material-icons" style={{ fontSize: 18 }}>download</span>
-                      </button>
+                      <a href={`${API_URL}/api/v1/documents/${doc.id}/download`} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
+                        <button className="vn-btn-icon" title="Download">
+                          <span className="material-icons" style={{ fontSize: 18 }}>download</span>
+                        </button>
+                      </a>
                     </td>
                   </tr>
                 ))}

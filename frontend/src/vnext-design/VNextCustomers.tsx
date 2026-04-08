@@ -1,22 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { API_URL } from '../api';
 
-const CUSTOMERS = [
-  { id: 'CUS-001', name: 'Acme Corp', contact: 'John Smith', email: 'john@acmecorp.com', shipments: 128, revenue: 485000, status: 'Active', statusColor: 'success' },
-  { id: 'CUS-002', name: 'Global Widgets', contact: 'Sarah Lee', email: 'sarah@globalwidgets.com', shipments: 74, revenue: 312000, status: 'Active', statusColor: 'success' },
-  { id: 'CUS-003', name: 'TechStart Inc', contact: 'Mike Chen', email: 'mike@techstart.io', shipments: 45, revenue: 198000, status: 'Active', statusColor: 'success' },
-  { id: 'CUS-004', name: 'FreshFoods LLC', contact: 'Amy Rivera', email: 'amy@freshfoods.com', shipments: 92, revenue: 410000, status: 'Active', statusColor: 'success' },
-  { id: 'CUS-005', name: 'Industrial Co', contact: 'Bob Torres', email: 'bob@industrial.com', shipments: 61, revenue: 275000, status: 'Active', statusColor: 'success' },
-  { id: 'CUS-006', name: 'RetailMax', contact: 'Lisa Park', email: 'lisa@retailmax.com', shipments: 33, revenue: 142000, status: 'Inactive', statusColor: 'error' },
-  { id: 'CUS-007', name: 'BioPharm Inc', contact: 'Dan Miller', email: 'dan@biopharminc.com', shipments: 56, revenue: 389000, status: 'Active', statusColor: 'success' },
-  { id: 'CUS-008', name: 'AutoParts Plus', contact: 'Karen Wu', email: 'karen@autopartsplus.com', shipments: 18, revenue: 67000, status: 'Inactive', statusColor: 'error' },
-];
-
-const stats = {
-  total: CUSTOMERS.length,
-  active: CUSTOMERS.filter(c => c.status === 'Active').length,
-  totalRevenue: CUSTOMERS.reduce((s, c) => s + c.revenue, 0),
-  avgOrderValue: Math.round(CUSTOMERS.reduce((s, c) => s + c.revenue, 0) / CUSTOMERS.reduce((s, c) => s + c.shipments, 0)),
-};
+interface Customer {
+  id: string;
+  name: string;
+  contactEmail: string | null;
+  archived: boolean;
+  _count?: { shipments: number; orders: number };
+}
 
 function formatCurrency(val: number) {
   if (val >= 1000000) return `$${(val / 1000000).toFixed(1)}M`;
@@ -25,26 +16,65 @@ function formatCurrency(val: number) {
 }
 
 export default function VNextCustomers() {
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
 
-  const filtered = CUSTOMERS.filter(c => {
-    if (statusFilter === 'active' && c.status !== 'Active') return false;
-    if (statusFilter === 'inactive' && c.status !== 'Inactive') return false;
+  useEffect(() => {
+    async function fetchCustomers() {
+      try {
+        const res = await fetch(`${API_URL}/api/v1/customers`);
+        if (!res.ok) throw new Error(`Failed to fetch customers (${res.status})`);
+        const json = await res.json();
+        setCustomers(json.data || []);
+      } catch (err: any) {
+        setError(err.message || 'Failed to load customers');
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchCustomers();
+  }, []);
+
+  const stats = {
+    total: customers.length,
+    active: customers.filter(c => !c.archived).length,
+    totalShipments: customers.reduce((s, c) => s + (c._count?.shipments || 0), 0),
+    totalOrders: customers.reduce((s, c) => s + (c._count?.orders || 0), 0),
+  };
+
+  const filtered = customers.filter(c => {
+    if (statusFilter === 'active' && c.archived) return false;
+    if (statusFilter === 'inactive' && !c.archived) return false;
     if (search) {
       const q = search.toLowerCase();
-      return c.name.toLowerCase().includes(q) || c.contact.toLowerCase().includes(q) || c.email.toLowerCase().includes(q);
+      return c.name.toLowerCase().includes(q) || (c.contactEmail || '').toLowerCase().includes(q);
     }
     return true;
   });
+
+  if (loading) {
+    return (
+      <div className="vn-empty">
+        <span className="material-icons" style={{ animation: 'spin 1s linear infinite' }}>refresh</span>
+        <h3>Loading...</h3>
+      </div>
+    );
+  }
+
+  if (error) {
+    return <div className="vn-alert vn-alert-error">{error}</div>;
+  }
 
   return (
     <>
       <div className="vn-page-header">
         <div>
           <h1>Customers</h1>
-          <p>{CUSTOMERS.length} customers in your account</p>
+          <p>{customers.length} customers in your account</p>
         </div>
         <div className="vn-page-actions">
           <button className="vn-btn vn-btn-primary">
@@ -71,17 +101,17 @@ export default function VNextCustomers() {
           </div>
         </div>
         <div className="vn-stat">
-          <div className="vn-stat-icon info"><span className="material-icons">payments</span></div>
+          <div className="vn-stat-icon info"><span className="material-icons">local_shipping</span></div>
           <div>
-            <div className="vn-stat-value">{formatCurrency(stats.totalRevenue)}</div>
-            <div className="vn-stat-label">Total Revenue</div>
+            <div className="vn-stat-value">{stats.totalShipments}</div>
+            <div className="vn-stat-label">Total Shipments</div>
           </div>
         </div>
         <div className="vn-stat">
           <div className="vn-stat-icon warning"><span className="material-icons">receipt_long</span></div>
           <div>
-            <div className="vn-stat-value">{formatCurrency(stats.avgOrderValue)}</div>
-            <div className="vn-stat-label">Avg Order Value</div>
+            <div className="vn-stat-value">{stats.totalOrders}</div>
+            <div className="vn-stat-label">Total Orders</div>
           </div>
         </div>
       </div>
@@ -102,7 +132,7 @@ export default function VNextCustomers() {
           <select className="vn-filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
             <option value="all">All Statuses ({stats.total})</option>
             <option value="active">Active ({stats.active})</option>
-            <option value="inactive">Inactive ({CUSTOMERS.filter(c => c.status === 'Inactive').length})</option>
+            <option value="inactive">Inactive ({customers.filter(c => c.archived).length})</option>
           </select>
           <div style={{ display: 'flex', border: '1px solid var(--outline-variant)', borderRadius: 'var(--border-radius-sm)', overflow: 'hidden' }}>
             <button
@@ -140,27 +170,23 @@ export default function VNextCustomers() {
                   <div style={{ flex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <span style={{ fontSize: 16, fontWeight: 600, color: 'var(--on-surface)' }}>{c.name}</span>
-                      <span className={`vn-chip vn-chip-${c.statusColor}`}>{c.status}</span>
+                      <span className={`vn-chip vn-chip-${c.archived ? 'error' : 'success'}`}>{c.archived ? 'Inactive' : 'Active'}</span>
                     </div>
                     <div style={{ fontSize: 13, color: 'var(--on-surface-variant)', marginTop: 2 }}>
                       <span className="material-icons" style={{ fontSize: 14, verticalAlign: 'text-bottom', marginRight: 4 }}>mail</span>
-                      {c.email}
+                      {c.contactEmail || '—'}
                     </div>
                   </div>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, paddingTop: 14, borderTop: '1px solid var(--outline-variant)' }}>
                   <div>
-                    <div style={{ fontSize: 12, color: 'var(--on-surface-variant)', marginBottom: 2 }}>Contact</div>
-                    <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--on-surface)' }}>{c.contact}</div>
+                    <div style={{ fontSize: 12, color: 'var(--on-surface-variant)', marginBottom: 2 }}>Shipments</div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--on-surface)' }}>{c._count?.shipments ?? 0}</div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 12, color: 'var(--on-surface-variant)', marginBottom: 2 }}>Shipments</div>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--on-surface)' }}>{c.shipments}</div>
-                  </div>
-                  <div style={{ gridColumn: '1 / -1' }}>
-                    <div style={{ fontSize: 12, color: 'var(--on-surface-variant)', marginBottom: 2 }}>Revenue</div>
-                    <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--primary)' }}>{formatCurrency(c.revenue)}</div>
+                    <div style={{ fontSize: 12, color: 'var(--on-surface-variant)', marginBottom: 2 }}>Orders</div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--on-surface)' }}>{c._count?.orders ?? 0}</div>
                   </div>
                 </div>
               </div>
@@ -186,9 +212,9 @@ export default function VNextCustomers() {
               <thead>
                 <tr>
                   <th>Name</th>
-                  <th>Contact</th>
+                  <th>Email</th>
                   <th>Shipments</th>
-                  <th>Revenue</th>
+                  <th>Orders</th>
                   <th>Status</th>
                 </tr>
               </thead>
@@ -211,12 +237,11 @@ export default function VNextCustomers() {
                       </div>
                     </td>
                     <td>
-                      <div style={{ fontSize: 13 }}>{c.contact}</div>
-                      <div className="vn-table-secondary">{c.email}</div>
+                      <div className="vn-table-secondary">{c.contactEmail || '—'}</div>
                     </td>
-                    <td style={{ fontSize: 13, fontWeight: 600 }}>{c.shipments}</td>
-                    <td style={{ fontSize: 13, fontWeight: 600, color: 'var(--primary)' }}>{formatCurrency(c.revenue)}</td>
-                    <td><span className={`vn-chip vn-chip-${c.statusColor}`}>{c.status}</span></td>
+                    <td style={{ fontSize: 13, fontWeight: 600 }}>{c._count?.shipments ?? 0}</td>
+                    <td style={{ fontSize: 13, fontWeight: 600, color: 'var(--primary)' }}>{c._count?.orders ?? 0}</td>
+                    <td><span className={`vn-chip vn-chip-${c.archived ? 'error' : 'success'}`}>{c.archived ? 'Inactive' : 'Active'}</span></td>
                   </tr>
                 ))}
                 {filtered.length === 0 && (

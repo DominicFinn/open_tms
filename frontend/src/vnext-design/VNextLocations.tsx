@@ -1,45 +1,79 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { API_URL } from '../api';
 
-const LOCATIONS = [
-  { id: 'LOC-001', name: 'Chicago Distribution Center', address: '1400 W Carroll Ave', city: 'Chicago', state: 'IL', country: 'US', lat: 41.8827, lng: -87.6588, status: 'Active', statusColor: 'success' },
-  { id: 'LOC-002', name: 'Dallas Warehouse', address: '2500 Irving Blvd', city: 'Dallas', state: 'TX', country: 'US', lat: 32.7942, lng: -96.8289, status: 'Active', statusColor: 'success' },
-  { id: 'LOC-003', name: 'Los Angeles Terminal', address: '800 E 7th St', city: 'Los Angeles', state: 'CA', country: 'US', lat: 34.0375, lng: -118.2428, status: 'Active', statusColor: 'success' },
-  { id: 'LOC-004', name: 'Atlanta Hub', address: '3200 Peachtree Rd NE', city: 'Atlanta', state: 'GA', country: 'US', lat: 33.8440, lng: -84.3620, status: 'Active', statusColor: 'success' },
-  { id: 'LOC-005', name: 'New York Cross-Dock', address: '55 Water St', city: 'New York', state: 'NY', country: 'US', lat: 40.7033, lng: -74.0099, status: 'Active', statusColor: 'success' },
-  { id: 'LOC-006', name: 'Denver Cold Storage', address: '4700 Brighton Blvd', city: 'Denver', state: 'CO', country: 'US', lat: 39.7793, lng: -104.9713, status: 'Active', statusColor: 'success' },
-  { id: 'LOC-007', name: 'Seattle Port Facility', address: '1000 Alaskan Way', city: 'Seattle', state: 'WA', country: 'US', lat: 47.6062, lng: -122.3405, status: 'Archived', statusColor: 'error' },
-  { id: 'LOC-008', name: 'Miami Import Yard', address: '2200 NW 21st Terrace', city: 'Miami', state: 'FL', country: 'US', lat: 25.7985, lng: -80.2278, status: 'Active', statusColor: 'success' },
-  { id: 'LOC-009', name: 'Phoenix Staging Area', address: '1601 W Jackson St', city: 'Phoenix', state: 'AZ', country: 'US', lat: 33.4342, lng: -112.0880, status: 'Active', statusColor: 'success' },
-  { id: 'LOC-010', name: 'Minneapolis Yard (Old)', address: '100 N 6th St', city: 'Minneapolis', state: 'MN', country: 'US', lat: null, lng: null, status: 'Archived', statusColor: 'error' },
-];
-
-const stats = {
-  total: LOCATIONS.length,
-  active: LOCATIONS.filter(l => l.status === 'Active').length,
-  withCoords: LOCATIONS.filter(l => l.lat !== null && l.lng !== null).length,
-  archived: LOCATIONS.filter(l => l.status === 'Archived').length,
-};
+interface Location {
+  id: string;
+  name: string;
+  address1: string;
+  address2?: string;
+  city: string;
+  state: string;
+  postalCode?: string;
+  country: string;
+  lat: number | null;
+  lng: number | null;
+  archived: boolean;
+}
 
 export default function VNextLocations() {
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [countryFilter, setCountryFilter] = useState('all');
   const [viewMode, setViewMode] = useState<'table' | 'map'>('table');
 
-  const filtered = LOCATIONS.filter(l => {
+  useEffect(() => {
+    async function fetchLocations() {
+      try {
+        const res = await fetch(`${API_URL}/api/v1/locations`);
+        if (!res.ok) throw new Error(`Failed to fetch locations (${res.status})`);
+        const json = await res.json();
+        setLocations(json.data || []);
+      } catch (err: any) {
+        setError(err.message || 'Failed to load locations');
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchLocations();
+  }, []);
+
+  const stats = {
+    total: locations.length,
+    active: locations.filter(l => !l.archived).length,
+    withCoords: locations.filter(l => l.lat != null && l.lng != null).length,
+    archived: locations.filter(l => l.archived).length,
+  };
+
+  const filtered = locations.filter(l => {
     if (countryFilter !== 'all' && l.country !== countryFilter) return false;
     if (search) {
       const q = search.toLowerCase();
-      return l.name.toLowerCase().includes(q) || l.city.toLowerCase().includes(q) || l.state.toLowerCase().includes(q) || l.address.toLowerCase().includes(q);
+      return l.name.toLowerCase().includes(q) || l.city.toLowerCase().includes(q) || l.state.toLowerCase().includes(q) || (l.address1 || '').toLowerCase().includes(q);
     }
     return true;
   });
+
+  if (loading) {
+    return (
+      <div className="vn-empty">
+        <span className="material-icons" style={{ animation: 'spin 1s linear infinite' }}>refresh</span>
+        <h3>Loading...</h3>
+      </div>
+    );
+  }
+
+  if (error) {
+    return <div className="vn-alert vn-alert-error">{error}</div>;
+  }
 
   return (
     <>
       <div className="vn-page-header">
         <div>
           <h1>Locations</h1>
-          <p>{LOCATIONS.length} locations managed</p>
+          <p>{locations.length} locations managed</p>
         </div>
         <div className="vn-page-actions">
           <button className="vn-btn vn-btn-primary">
@@ -148,7 +182,7 @@ export default function VNextLocations() {
                       <span style={{ fontWeight: 600, color: 'var(--on-surface)' }}>{l.name}</span>
                       <div className="vn-table-secondary">{l.id}</div>
                     </td>
-                    <td style={{ fontSize: 13 }}>{l.address}</td>
+                    <td style={{ fontSize: 13 }}>{l.address1}{l.address2 ? `, ${l.address2}` : ''}</td>
                     <td style={{ fontSize: 13 }}>{l.city}, {l.state}</td>
                     <td><span className="vn-chip vn-chip-secondary">{l.country}</span></td>
                     <td>
@@ -160,7 +194,7 @@ export default function VNextLocations() {
                         <span style={{ fontSize: 12, color: 'var(--on-surface-variant)', fontStyle: 'italic' }}>No coordinates</span>
                       )}
                     </td>
-                    <td><span className={`vn-chip vn-chip-${l.statusColor}`}>{l.status}</span></td>
+                    <td><span className={`vn-chip vn-chip-${l.archived ? 'error' : 'success'}`}>{l.archived ? 'Archived' : 'Active'}</span></td>
                   </tr>
                 ))}
                 {filtered.length === 0 && (
