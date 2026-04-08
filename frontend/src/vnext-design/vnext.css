@@ -128,11 +128,14 @@
   flex: 1;
   max-width: 480px;
   position: relative;
+  display: flex;
+  align-items: center;
 }
 
 .vn-topbar-search input {
   width: 100%;
-  padding: 8px 12px 8px 40px;
+  height: 36px;
+  padding: 0 12px 0 40px;
   border: 1px solid var(--outline-variant);
   border-radius: var(--border-radius-full);
   background: var(--surface-container);
@@ -140,6 +143,7 @@
   font-size: 14px;
   outline: none;
   transition: border-color 0.15s;
+  box-sizing: border-box;
 }
 
 .vn-topbar-search input:focus {
@@ -152,7 +156,9 @@
   top: 50%;
   transform: translateY(-50%);
   font-size: 20px;
+  line-height: 1;
   color: var(--on-surface-variant);
+  pointer-events: none;
 }
 
 .vn-topbar-actions {
@@ -555,23 +561,24 @@
 /* ── Filters Bar ──────────────────────────────────────────── */
 .vn-filters {
   display: flex;
+  align-items: center;
   gap: 8px;
-  padding: 16px 20px;
+  padding: 12px 20px;
   border-bottom: 1px solid var(--outline-variant);
   flex-wrap: wrap;
-  align-items: center;
 }
 
 .vn-filter-input {
-  padding: 8px 12px 8px 36px;
+  padding: 7px 12px 7px 36px;
   border: 1px solid var(--outline-variant);
   border-radius: var(--border-radius-sm);
   background: var(--surface-container);
   color: var(--on-surface);
   font-size: 13px;
   outline: none;
-  min-width: 220px;
+  width: 200px;
   transition: border-color 0.15s;
+  box-sizing: border-box;
 }
 
 .vn-filter-input:focus {
@@ -580,6 +587,8 @@
 
 .vn-filter-group {
   position: relative;
+  display: flex;
+  align-items: center;
 }
 
 .vn-filter-group .material-icons {
@@ -588,11 +597,13 @@
   top: 50%;
   transform: translateY(-50%);
   font-size: 18px;
+  line-height: 1;
   color: var(--on-surface-variant);
+  pointer-events: none;
 }
 
 .vn-filter-select {
-  padding: 8px 32px 8px 12px;
+  padding: 7px 32px 7px 12px;
   border: 1px solid var(--outline-variant);
   border-radius: var(--border-radius-sm);
   background: var(--surface-container);
@@ -600,6 +611,7 @@
   font-size: 13px;
   outline: none;
   appearance: none;
+  width: auto;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236F797A' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 10px center;
@@ -616,6 +628,9 @@
 }
 
 .vn-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 12px 20px;
   font-size: 14px;
   font-weight: 500;
@@ -628,6 +643,11 @@
   white-space: nowrap;
   transition: all 0.15s;
   font-family: inherit;
+}
+
+.vn-tab .material-icons {
+  font-size: 18px;
+  line-height: 1;
 }
 
 .vn-tab:hover {
@@ -1123,7 +1143,7 @@
   }
 
   .vn-filter-input {
-    min-width: 0;
+    width: 100%;
   }
 
   .vn-bid-card {
