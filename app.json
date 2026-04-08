@@ -1,0 +1,28 @@
+{
+  "name": "open-tms",
+  "description": "Open-source Transportation Management System — Fastify backend, React frontend, PostgreSQL database",
+  "repository": "https://github.com/dominicfinn/open_tms",
+  "logo": "",
+  "keywords": ["tms", "logistics", "transportation", "shipping", "fastify", "react"],
+  "env": {
+    "DATABASE_URL": {
+      "description": "PostgreSQL connection string (created by setup-database.sh)",
+      "required": true
+    },
+    "JWT_SECRET": {
+      "description": "Secret key for JWT token signing",
+      "generator": "secret"
+    },
+    "NODE_ENV": {
+      "description": "Node environment",
+      "value": "production"
+    },
+    "PORT": {
+      "description": "Backend server port",
+      "value": "3001"
+    }
+  },
+  "scripts": {
+    "postdeploy": "echo 'Run ./deploy.sh <PROJECT_ID> <REGION> to deploy both backend and frontend to Cloud Run'"
+  }
+}
