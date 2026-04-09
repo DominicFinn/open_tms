@@ -1,86 +1,294 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+import { API_URL } from '../api';
 
-const EVENTS = [
-  { time: 'Apr 7, 2:45 PM', title: 'Position Update', desc: 'Truck near Oklahoma City, OK — 265 mi remaining', location: 'Oklahoma City, OK', dot: 'info', lat: 35.47, lng: -97.52 },
-  { time: 'Apr 7, 10:20 AM', title: 'Position Update', desc: 'Truck near Springfield, MO', location: 'Springfield, MO', dot: 'info', lat: 37.21, lng: -93.29 },
-  { time: 'Apr 7, 6:00 AM', title: 'Departed Facility', desc: 'Left consolidation yard in St. Louis', location: 'St. Louis, MO', dot: 'primary', lat: 38.63, lng: -90.20 },
-  { time: 'Apr 6, 8:30 PM', title: 'Arrived at Stop', desc: 'Consolidation stop — 2 pallets added', location: 'St. Louis, MO', dot: 'warning', lat: 38.63, lng: -90.20 },
-  { time: 'Apr 6, 3:15 PM', title: 'Picked Up', desc: 'Loaded 24 pallets — driver signed BOL', location: 'Chicago, IL', dot: 'success', lat: 41.88, lng: -87.63 },
-  { time: 'Apr 6, 1:00 PM', title: 'Driver Arrived at Pickup', desc: 'Driver checked in at dock 12', location: 'Chicago, IL', dot: 'info', lat: 41.88, lng: -87.63 },
-  { time: 'Apr 6, 9:00 AM', title: 'Dispatched', desc: 'Carrier confirmed — driver assigned: Mike R.', location: '', dot: 'primary', lat: 0, lng: 0 },
-  { time: 'Apr 5, 4:30 PM', title: 'Booked', desc: 'Tender accepted by Swift Transport @ $2,850', location: '', dot: 'success', lat: 0, lng: 0 },
-];
+function ShipmentTempChart({ readings }: { readings: any[] }) {
+  const temps = readings.filter(r => r.temperature != null);
+  if (temps.length < 2) return <div className="vn-empty"><span className="material-icons">thermostat</span><h3>Not enough data</h3></div>;
 
-const ROUTE_COORDS: [number, number][] = [
-  [41.88, -87.63], // Chicago
-  [38.63, -90.20], // St Louis
-  [37.21, -93.29], // Springfield
-  [35.47, -97.52], // OKC
-  [32.78, -96.80], // Dallas
-];
+  const w = 600, h = 200, pad = 40;
+  const minT = Math.min(...temps.map(r => r.temperature));
+  const maxT = Math.max(...temps.map(r => r.temperature));
+  const range = maxT - minT || 1;
+
+  const points = temps.map((r: any, i: number) => ({
+    x: pad + (i / (temps.length - 1)) * (w - pad * 2),
+    y: pad + (1 - (r.temperature - minT) / range) * (h - pad * 2),
+    alert: r.isAlert,
+  }));
+
+  const line = points.map((p: any, i: number) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ');
+
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} style={{ width: '100%', height: 'auto' }}>
+      <text x={pad} y={pad - 10} fill="var(--on-surface-variant)" fontSize="11">{maxT.toFixed(1)}°</text>
+      <text x={pad} y={h - pad + 16} fill="var(--on-surface-variant)" fontSize="11">{minT.toFixed(1)}°</text>
+      <line x1={pad} y1={pad} x2={pad} y2={h - pad} stroke="var(--outline-variant)" strokeWidth="1" />
+      <line x1={pad} y1={h - pad} x2={w - pad} y2={h - pad} stroke="var(--outline-variant)" strokeWidth="1" />
+      <path d={line} fill="none" stroke="var(--primary)" strokeWidth="2" />
+      {points.map((p: any, i: number) => (
+        <circle key={i} cx={p.x} cy={p.y} r={p.alert ? 5 : 3}
+          fill={p.alert ? 'var(--error)' : 'var(--primary)'} />
+      ))}
+    </svg>
+  );
+}
+
+function TelemetryTab({ shipmentId }: { shipmentId: string }) {
+  const [telemetry, setTelemetry] = useState<any>(null);
+  const [tLoading, setTLoading] = useState(true);
+  const [tError, setTError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        setTLoading(true);
+        const res = await fetch(`${API_URL}/api/v1/shipments/${shipmentId}/telemetry`);
+        if (!res.ok) throw new Error(`Failed to load telemetry (${res.status})`);
+        const json = await res.json();
+        if (json.error) throw new Error(json.error);
+        if (!cancelled) {
+          setTelemetry(json.data);
+          setTError('');
+        }
+      } catch (err: any) {
+        if (!cancelled) setTError(err.message || 'Failed to load telemetry');
+      } finally {
+        if (!cancelled) setTLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [shipmentId]);
+
+  if (tLoading) {
+    return <div className="vn-empty"><span className="material-icons" style={{ animation: 'spin 1s linear infinite' }}>refresh</span><h3>Loading telemetry...</h3></div>;
+  }
+
+  if (tError) {
+    return <div className="vn-alert vn-alert-error"><span className="material-icons">error</span><div className="vn-alert-content">{tError}</div></div>;
+  }
+
+  if (!telemetry) {
+    return <div className="vn-empty"><span className="material-icons">thermostat</span><h3>No telemetry data</h3></div>;
+  }
+
+  const readings: any[] = telemetry.readings || [];
+  const alerts = readings.filter((r: any) => r.isAlert);
+  const tempsWithValues = readings.filter((r: any) => r.temperature != null);
+  const avgTemp = tempsWithValues.length > 0
+    ? (tempsWithValues.reduce((sum: number, r: any) => sum + r.temperature, 0) / tempsWithValues.length).toFixed(1)
+    : '—';
+  const latestBattery = readings.length > 0 && readings[0].batteryLevel != null
+    ? `${readings[0].batteryLevel}%`
+    : '—';
+
+  return (
+    <>
+      {/* Summary Cards */}
+      <div className="vn-stats-row" style={{ marginBottom: 24 }}>
+        <div className="vn-stat-card">
+          <div className="vn-stat-icon" style={{ background: 'var(--primary-container)', color: 'var(--primary)' }}>
+            <span className="material-icons">sensors</span>
+          </div>
+          <div className="vn-stat-content">
+            <span className="vn-stat-value">{readings.length}</span>
+            <span className="vn-stat-label">Reading Count</span>
+          </div>
+        </div>
+        <div className="vn-stat-card">
+          <div className="vn-stat-icon" style={{ background: 'var(--error-container, rgba(255,0,0,0.1))', color: 'var(--error)' }}>
+            <span className="material-icons">warning</span>
+          </div>
+          <div className="vn-stat-content">
+            <span className="vn-stat-value">{alerts.length}</span>
+            <span className="vn-stat-label">Alerts</span>
+          </div>
+        </div>
+        <div className="vn-stat-card">
+          <div className="vn-stat-icon" style={{ background: 'var(--primary-container)', color: 'var(--primary)' }}>
+            <span className="material-icons">thermostat</span>
+          </div>
+          <div className="vn-stat-content">
+            <span className="vn-stat-value">{avgTemp}{avgTemp !== '—' ? '°' : ''}</span>
+            <span className="vn-stat-label">Avg Temp</span>
+          </div>
+        </div>
+        <div className="vn-stat-card">
+          <div className="vn-stat-icon" style={{ background: 'var(--success-container, rgba(0,200,83,0.1))', color: 'var(--success)' }}>
+            <span className="material-icons">battery_full</span>
+          </div>
+          <div className="vn-stat-content">
+            <span className="vn-stat-value">{latestBattery}</span>
+            <span className="vn-stat-label">Latest Battery</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Temperature Chart */}
+      <div className="vn-card" style={{ marginBottom: 24 }}>
+        <div className="vn-card-header"><h2>Temperature</h2></div>
+        <div className="vn-card-body">
+          <ShipmentTempChart readings={readings} />
+        </div>
+      </div>
+
+      {/* Readings Table */}
+      <div className="vn-card">
+        <div className="vn-card-header"><h2>Recent Readings</h2></div>
+        <div className="vn-card-body vn-card-flush">
+          <div className="vn-table-wrap">
+            <table className="vn-table">
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Temp</th>
+                  <th>Humidity</th>
+                  <th>Battery</th>
+                  <th>Location</th>
+                  <th>Alert</th>
+                </tr>
+              </thead>
+              <tbody>
+                {readings.slice(0, 25).map((r: any, i: number) => (
+                  <tr key={r.id || i}>
+                    <td style={{ fontSize: 13 }}>{new Date(r.recordedAt).toLocaleString()}</td>
+                    <td>{r.temperature != null ? `${r.temperature}°` : '—'}</td>
+                    <td>{r.humidity != null ? `${r.humidity}%` : '—'}</td>
+                    <td>{r.batteryLevel != null ? `${r.batteryLevel}%` : '—'}</td>
+                    <td style={{ fontSize: 12 }}>{r.lat != null && r.lng != null ? `${r.lat.toFixed(4)}, ${r.lng.toFixed(4)}` : '—'}</td>
+                    <td>
+                      {r.isAlert
+                        ? <span className="vn-chip vn-chip-error" style={{ fontSize: 11 }}>Alert</span>
+                        : <span style={{ color: 'var(--on-surface-variant)', fontSize: 12 }}>—</span>
+                      }
+                    </td>
+                  </tr>
+                ))}
+                {readings.length === 0 && (
+                  <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--on-surface-variant)', padding: 24 }}>No readings available</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
 
 export default function VNextShipmentDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const mapRef = useRef<HTMLDivElement>(null);
   const [activeTab, setActiveTab] = useState('events');
+  const [shipment, setShipment] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    if (!mapRef.current) return;
-    const map = L.map(mapRef.current, { zoomControl: true, attributionControl: false }).setView([37.5, -93], 5);
+    if (!id) return;
+    setLoading(true);
+    fetch(`${API_URL}/api/v1/shipments/${id}`)
+      .then(res => {
+        if (!res.ok) throw new Error('Failed to load shipment');
+        return res.json();
+      })
+      .then(json => {
+        if (json.error) throw new Error(json.error);
+        setShipment(json.data);
+      })
+      .catch(err => setError(err.message))
+      .finally(() => setLoading(false));
+  }, [id]);
+
+  const hasOriginCoords = !!(shipment?.origin?.lat && shipment?.origin?.lng);
+  const hasDestCoords = !!(shipment?.destination?.lat && shipment?.destination?.lng);
+  const hasAnyCoords = hasOriginCoords || hasDestCoords;
+
+  useEffect(() => {
+    if (!mapRef.current || !shipment || !hasAnyCoords) return;
+    const origin = shipment.origin;
+    const destination = shipment.destination;
+
+    const map = L.map(mapRef.current, { zoomControl: true, attributionControl: false });
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { maxZoom: 19 }).addTo(map);
 
-    // Route line
-    L.polyline(ROUTE_COORDS, { color: '#2196F3', weight: 3, opacity: 0.7, dashArray: '8 4' }).addTo(map);
+    const cs = getComputedStyle(document.documentElement);
+    const cOrigin = cs.getPropertyValue('--marker-origin').trim();
+    const cDest = cs.getPropertyValue('--marker-destination').trim();
+    const cStop = cs.getPropertyValue('--marker-stop').trim();
+    const cDefault = cs.getPropertyValue('--marker-default').trim();
 
-    // Traveled portion
-    const traveled = ROUTE_COORDS.slice(0, 4);
-    L.polyline(traveled, { color: '#4CAF50', weight: 4 }).addTo(map);
+    const allCoords: [number, number][] = [];
 
     // Origin marker
-    const originIcon = L.divIcon({
-      className: '',
-      html: `<div style="width:20px;height:20px;border-radius:50%;background:#4CAF50;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;"><div style="width:6px;height:6px;border-radius:50%;background:white;"></div></div>`,
-      iconSize: [20, 20], iconAnchor: [10, 10],
-    });
-    L.marker(ROUTE_COORDS[0], { icon: originIcon }).addTo(map).bindPopup('<strong>Origin</strong><br/>Chicago, IL');
+    if (hasOriginCoords) {
+      const coord: [number, number] = [origin.lat, origin.lng];
+      allCoords.push(coord);
+      const originIcon = L.divIcon({
+        className: '',
+        html: `<div style="width:20px;height:20px;border-radius:50%;background:${cOrigin};border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;"><div style="width:6px;height:6px;border-radius:50%;background:white;"></div></div>`,
+        iconSize: [20, 20], iconAnchor: [10, 10],
+      });
+      L.marker(coord, { icon: originIcon }).addTo(map).bindPopup(`<strong>Origin</strong><br/>${origin.city || ''}, ${origin.state || ''}`);
+    }
 
     // Destination marker
-    const destIcon = L.divIcon({
-      className: '',
-      html: `<div style="width:20px;height:20px;border-radius:50%;background:#F44336;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;"><div style="width:6px;height:6px;border-radius:50%;background:white;"></div></div>`,
-      iconSize: [20, 20], iconAnchor: [10, 10],
-    });
-    L.marker(ROUTE_COORDS[ROUTE_COORDS.length - 1], { icon: destIcon }).addTo(map).bindPopup('<strong>Destination</strong><br/>Dallas, TX');
+    if (hasDestCoords) {
+      const coord: [number, number] = [destination.lat, destination.lng];
+      allCoords.push(coord);
+      const destIcon = L.divIcon({
+        className: '',
+        html: `<div style="width:20px;height:20px;border-radius:50%;background:${cDest};border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;"><div style="width:6px;height:6px;border-radius:50%;background:white;"></div></div>`,
+        iconSize: [20, 20], iconAnchor: [10, 10],
+      });
+      L.marker(coord, { icon: destIcon }).addTo(map).bindPopup(`<strong>Destination</strong><br/>${destination.city || ''}, ${destination.state || ''}`);
+    }
 
-    // Stop marker
+    // Stop markers
     const stopIcon = L.divIcon({
       className: '',
-      html: `<div style="width:16px;height:16px;border-radius:50%;background:#FF9800;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3);"></div>`,
+      html: `<div style="width:16px;height:16px;border-radius:50%;background:${cStop};border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3);"></div>`,
       iconSize: [16, 16], iconAnchor: [8, 8],
     });
-    L.marker(ROUTE_COORDS[1], { icon: stopIcon }).addTo(map).bindPopup('<strong>Stop</strong><br/>St. Louis, MO');
-
-    // Current position (animated)
-    const currentIcon = L.divIcon({
-      className: '',
-      html: `<div style="position:relative;"><div style="width:18px;height:18px;border-radius:50%;background:#2196F3;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3);"></div><div style="position:absolute;top:-3px;left:-3px;width:24px;height:24px;border-radius:50%;border:2px solid #2196F3;animation:vn-pulse 2s infinite;"></div></div>`,
-      iconSize: [18, 18], iconAnchor: [9, 9],
+    (shipment.stops || []).filter((s: any) => s.lat && s.lng).forEach((s: any) => {
+      const coord: [number, number] = [s.lat, s.lng];
+      allCoords.push(coord);
+      L.marker(coord, { icon: stopIcon }).addTo(map).bindPopup(`<strong>Stop</strong><br/>${s.city || ''}, ${s.state || ''}`);
     });
-    L.marker(ROUTE_COORDS[3], { icon: currentIcon }).addTo(map).bindPopup('<strong>Current Position</strong><br/>Oklahoma City, OK<br/><em>265 mi to destination</em>');
 
-    map.fitBounds(L.latLngBounds(ROUTE_COORDS).pad(0.1));
+    // Route line between all points
+    if (allCoords.length >= 2) {
+      L.polyline(allCoords, { color: cDefault, weight: 3, opacity: 0.7, dashArray: '8 4' }).addTo(map);
+      L.polyline(allCoords, { color: cOrigin, weight: 4 }).addTo(map);
+      map.fitBounds(L.latLngBounds(allCoords).pad(0.1));
+    } else if (allCoords.length === 1) {
+      map.setView(allCoords[0], 12);
+    }
+
+    // Fix tile rendering when container isn't fully laid out yet
+    setTimeout(() => map.invalidateSize(), 100);
 
     return () => { map.remove(); };
-  }, []);
+  }, [shipment, hasAnyCoords]);
+
+  if (loading) return <div className="loading-spinner" style={{ margin: '2rem auto' }} />;
+  if (error) return <div className="vn-alert vn-alert-error" style={{ margin: '2rem' }}>{error}</div>;
+  if (!shipment) return <div className="vn-alert vn-alert-error" style={{ margin: '2rem' }}>Shipment not found</div>;
+
+  const origin = shipment.origin || {};
+  const destination = shipment.destination || {};
+  const events = shipment.events || [];
+  const orders = shipment.orderShipments || [];
 
   return (
     <>
       {/* Breadcrumb & Actions */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-        <button className="vn-btn vn-btn-ghost vn-btn-sm" onClick={() => navigate('/vnext/shipments')}>
+        <button className="vn-btn vn-btn-ghost vn-btn-sm" onClick={() => navigate('/shipments')}>
           <span className="material-icons">arrow_back</span>
           Shipments
         </button>
@@ -88,10 +296,10 @@ export default function VNextShipmentDetail() {
 
       <div className="vn-page-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-          <h1>{id || 'SHP-4821'}</h1>
+          <h1>{shipment.reference || id}</h1>
           <span className="vn-chip vn-chip-info">
             <span className="vn-live-dot" style={{ width: 8, height: 8, marginRight: 2 }} />
-            In Transit
+            {shipment.status || 'Unknown'}
           </span>
         </div>
         <div className="vn-page-actions">
@@ -115,14 +323,46 @@ export default function VNextShipmentDetail() {
       </div>
 
       {/* Map */}
-      <div ref={mapRef} className="vn-map tall" style={{ marginBottom: 24 }} />
+      {hasAnyCoords ? (
+        <div ref={mapRef} className="vn-map tall" style={{ marginBottom: 24 }} />
+      ) : (
+        <div className="vn-map tall" style={{
+          marginBottom: 24,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          position: 'relative',
+          overflow: 'hidden',
+        }}>
+          {/* Faint map background placeholder */}
+          <img
+            src="https://basemaps.cartocdn.com/light_all/4/4/6.png"
+            alt=""
+            style={{
+              position: 'absolute',
+              inset: 0,
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              opacity: 0.15,
+              filter: 'grayscale(100%)',
+              pointerEvents: 'none',
+            }}
+          />
+          <div style={{ textAlign: 'center', color: 'var(--on-surface-variant)', position: 'relative', zIndex: 1 }}>
+            <span className="material-icons" style={{ fontSize: 48, opacity: 0.4, display: 'block', marginBottom: 8 }}>map</span>
+            <div style={{ fontSize: 14, fontWeight: 500 }}>No coordinates to plot yet</div>
+            <div style={{ fontSize: 13, marginTop: 4 }}>Add coordinates to the origin or destination location to see the route map</div>
+          </div>
+        </div>
+      )}
 
       {/* Route Progress */}
       <div className="vn-card" style={{ marginBottom: 24 }}>
         <div className="vn-card-body">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-            <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--on-surface)' }}>Chicago, IL → Dallas, TX</span>
-            <span style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>632 mi total · 265 mi remaining · ETA Apr 8 10:00 AM</span>
+            <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--on-surface)' }}>{origin.city}, {origin.state} → {destination.city}, {destination.state}</span>
+            <span style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>{shipment.deliveryDate ? `ETA ${new Date(shipment.deliveryDate).toLocaleDateString()}` : ''}</span>
           </div>
           <div className="vn-progress" style={{ height: 8 }}>
             <div className="vn-progress-bar success" style={{ width: '58%' }} />
@@ -130,10 +370,10 @@ export default function VNextShipmentDetail() {
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <span className="vn-route-dot origin" />
-              <span style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>Chicago, IL — Picked up Apr 6 3:15 PM</span>
+              <span style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>{origin.city}, {origin.state}{shipment.pickupDate ? ` — ${new Date(shipment.pickupDate).toLocaleDateString()}` : ''}</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>Dallas, TX — ETA Apr 8 10:00 AM</span>
+              <span style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>{destination.city}, {destination.state}{shipment.deliveryDate ? ` — ${new Date(shipment.deliveryDate).toLocaleDateString()}` : ''}</span>
               <span className="vn-route-dot destination" />
             </div>
           </div>
@@ -148,6 +388,10 @@ export default function VNextShipmentDetail() {
             <button className={`vn-tab ${activeTab === 'documents' ? 'active' : ''}`} onClick={() => setActiveTab('documents')}>Documents</button>
             <button className={`vn-tab ${activeTab === 'financials' ? 'active' : ''}`} onClick={() => setActiveTab('financials')}>Financials</button>
             <button className={`vn-tab ${activeTab === 'notes' ? 'active' : ''}`} onClick={() => setActiveTab('notes')}>Notes</button>
+            <button className={`vn-tab ${activeTab === 'telemetry' ? 'active' : ''}`} onClick={() => setActiveTab('telemetry')}>
+              <span className="material-icons" style={{ fontSize: 16, marginRight: 4, verticalAlign: 'middle' }}>thermostat</span>
+              Telemetry
+            </button>
           </div>
 
           {/* Events Timeline */}
@@ -168,12 +412,13 @@ export default function VNextShipmentDetail() {
               </div>
               <div className="vn-card-body">
                 <div className="vn-timeline">
-                  {EVENTS.map((ev, i) => (
-                    <div className="vn-timeline-item" key={i}>
-                      <div className={`vn-timeline-dot ${ev.dot}`} />
-                      <div className="vn-timeline-time">{ev.time}</div>
-                      <div className="vn-timeline-title">{ev.title}</div>
-                      <div className="vn-timeline-desc">{ev.desc}</div>
+                  {events.length === 0 && <p style={{ color: 'var(--on-surface-variant)', fontSize: 13 }}>No events recorded yet.</p>}
+                  {events.map((ev: any, i: number) => (
+                    <div className="vn-timeline-item" key={ev.id || i}>
+                      <div className={`vn-timeline-dot ${ev.type === 'pickup' ? 'success' : ev.type === 'delivery' ? 'primary' : 'info'}`} />
+                      <div className="vn-timeline-time">{ev.occurredAt ? new Date(ev.occurredAt).toLocaleString() : ''}</div>
+                      <div className="vn-timeline-title">{ev.type || ev.title || 'Event'}</div>
+                      <div className="vn-timeline-desc">{ev.description || ev.notes || ''}</div>
                       {ev.location && (
                         <div className="vn-timeline-location">
                           <span className="material-icons">place</span>
@@ -265,6 +510,10 @@ export default function VNextShipmentDetail() {
               </div>
             </div>
           )}
+
+          {activeTab === 'telemetry' && (
+            <TelemetryTab shipmentId={id!} />
+          )}
         </div>
 
         {/* Sidebar */}
@@ -274,14 +523,16 @@ export default function VNextShipmentDetail() {
             <div className="vn-card-header"><h2>Details</h2></div>
             <div className="vn-card-body">
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                <div className="vn-info-item"><label>Customer</label><span>Acme Corp</span></div>
-                <div className="vn-info-item"><label>Carrier</label><span>Swift Transport</span></div>
-                <div className="vn-info-item"><label>Driver</label><span>Mike R. · (555) 123-4567</span></div>
-                <div className="vn-info-item"><label>Equipment</label><span>53' Dry Van</span></div>
-                <div className="vn-info-item"><label>Mode</label><span>FTL</span></div>
-                <div className="vn-info-item"><label>Weight</label><span>42,000 lbs (24 pallets)</span></div>
-                <div className="vn-info-item"><label>Commodity</label><span>General Merchandise</span></div>
-                <div className="vn-info-item"><label>Reference</label><span>PO-2026-8841</span></div>
+                <div className="vn-info-item"><label>Customer</label><span>{shipment.customer?.name || '—'}</span></div>
+                <div className="vn-info-item"><label>Carrier</label><span>{shipment.carrier?.name || '—'}</span></div>
+                <div className="vn-info-item"><label>PRO Number</label><span>{shipment.proNumber || '—'}</span></div>
+                <div className="vn-info-item"><label>Status</label><span>{shipment.status || '—'}</span></div>
+                <div className="vn-info-item"><label>Pickup Date</label><span>{shipment.pickupDate ? new Date(shipment.pickupDate).toLocaleDateString() : '—'}</span></div>
+                <div className="vn-info-item"><label>Delivery Date</label><span>{shipment.deliveryDate ? new Date(shipment.deliveryDate).toLocaleDateString() : '—'}</span></div>
+                <div className="vn-info-item"><label>Lane</label><span>{shipment.lane?.name || '—'}</span></div>
+                {orders.length > 0 && (
+                  <div className="vn-info-item"><label>Orders</label><span>{orders.map((os: any) => os.order?.orderNumber).filter(Boolean).join(', ') || '—'}</span></div>
+                )}
               </div>
             </div>
           </div>
@@ -294,13 +545,13 @@ export default function VNextShipmentDetail() {
                 <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--on-surface)' }}>Origin</span>
               </div>
               <div className="vn-info-item" style={{ marginBottom: 8 }}>
-                <label>Facility</label><span>Acme Chicago Warehouse</span>
+                <label>Facility</label><span>{origin.name || '—'}</span>
               </div>
               <div className="vn-info-item" style={{ marginBottom: 8 }}>
-                <label>Address</label><span>1400 S Cicero Ave, Chicago, IL 60804</span>
+                <label>Address</label><span>{[origin.address1, origin.city, origin.state].filter(Boolean).join(', ') || '—'}</span>
               </div>
               <div className="vn-info-item">
-                <label>Pickup Window</label><span>Apr 6, 1:00 PM – 5:00 PM</span>
+                <label>Pickup Date</label><span>{shipment.pickupDate ? new Date(shipment.pickupDate).toLocaleDateString() : '—'}</span>
               </div>
             </div>
           </div>
@@ -313,13 +564,13 @@ export default function VNextShipmentDetail() {
                 <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--on-surface)' }}>Destination</span>
               </div>
               <div className="vn-info-item" style={{ marginBottom: 8 }}>
-                <label>Facility</label><span>Acme Dallas DC</span>
+                <label>Facility</label><span>{destination.name || '—'}</span>
               </div>
               <div className="vn-info-item" style={{ marginBottom: 8 }}>
-                <label>Address</label><span>2200 N Stemmons Fwy, Dallas, TX 75207</span>
+                <label>Address</label><span>{[destination.address1, destination.city, destination.state].filter(Boolean).join(', ') || '—'}</span>
               </div>
               <div className="vn-info-item">
-                <label>Delivery Window</label><span>Apr 8, 8:00 AM – 12:00 PM</span>
+                <label>Delivery Date</label><span>{shipment.deliveryDate ? new Date(shipment.deliveryDate).toLocaleDateString() : '—'}</span>
               </div>
             </div>
           </div>

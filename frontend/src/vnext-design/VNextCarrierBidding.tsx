@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 
 interface Bid {
   carrier: string;
@@ -98,15 +99,21 @@ export default function VNextCarrierBidding() {
     const map = L.map(mapRef.current, { zoomControl: true, attributionControl: false }).setView([39.5, -98.5], 4);
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { maxZoom: 19 }).addTo(map);
 
+    // Read marker colours from CSS custom properties
+    const cs = getComputedStyle(document.documentElement);
+    const cOrigin = cs.getPropertyValue('--marker-origin').trim();
+    const cDest = cs.getPropertyValue('--marker-destination').trim();
+    const cDefault = cs.getPropertyValue('--marker-default').trim();
+
     // Route line
     L.polyline([selectedLane.originCoords, selectedLane.destCoords], {
-      color: '#2196F3', weight: 3, opacity: 0.6, dashArray: '10 6',
+      color: cDefault, weight: 3, opacity: 0.6, dashArray: '10 6',
     }).addTo(map);
 
     // Origin
     const oIcon = L.divIcon({
       className: '',
-      html: `<div style="width:20px;height:20px;border-radius:50%;background:#4CAF50;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;"><div style="width:6px;height:6px;border-radius:50%;background:white;"></div></div>`,
+      html: `<div style="width:20px;height:20px;border-radius:50%;background:${cOrigin};border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;"><div style="width:6px;height:6px;border-radius:50%;background:white;"></div></div>`,
       iconSize: [20, 20], iconAnchor: [10, 10],
     });
     L.marker(selectedLane.originCoords, { icon: oIcon }).addTo(map).bindPopup(`<strong>Origin</strong><br/>${selectedLane.origin}`);
@@ -114,12 +121,13 @@ export default function VNextCarrierBidding() {
     // Dest
     const dIcon = L.divIcon({
       className: '',
-      html: `<div style="width:20px;height:20px;border-radius:50%;background:#F44336;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;"><div style="width:6px;height:6px;border-radius:50%;background:white;"></div></div>`,
+      html: `<div style="width:20px;height:20px;border-radius:50%;background:${cDest};border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;"><div style="width:6px;height:6px;border-radius:50%;background:white;"></div></div>`,
       iconSize: [20, 20], iconAnchor: [10, 10],
     });
     L.marker(selectedLane.destCoords, { icon: dIcon }).addTo(map).bindPopup(`<strong>Destination</strong><br/>${selectedLane.dest}`);
 
     map.fitBounds(L.latLngBounds([selectedLane.originCoords, selectedLane.destCoords]).pad(0.3));
+    setTimeout(() => map.invalidateSize(), 100);
     mapInstance.current = map;
 
     return () => { map.remove(); mapInstance.current = null; };
