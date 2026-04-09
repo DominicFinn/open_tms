@@ -95,7 +95,7 @@
     - ⚠️ Open decision: opaque UUIDs won't suit SharePoint/network drive providers where users expect browsable folder structures. Key format may need to be per-provider if file-system-based storage is added later.
   - ✅ Default 10-year retention period on all files and generated documents
   - Data export capability 🔲 (low priority — bulk export of documents/attachments per entity)
-  - Begin audit trail for shipment events 🔲
+  - Begin audit trail for shipment events → moved to **Phase 9a** (Audit Review & Compliance Trail)
 - **Theming & White-labeling** ✅
   - ✅ CSS custom properties stored as JSON in Organization.themeConfig
   - ✅ Theme API (GET/PUT/DELETE) with CSS variable key allowlist and color validation
@@ -270,6 +270,26 @@
   - Fuel cost estimation per route variant
   - Carbon footprint calculation per route for sustainability reporting
 
+## **Phase 9a: Audit Review & Compliance Trail**
+- **Audit Trail Review UI** 🔲
+  - Searchable, filterable audit log viewer (Admin > Audit Log)
+  - Filter by entity type, action, user, date range
+  - Timeline view per entity (shipment, order, carrier, customer)
+  - Export audit records (CSV/PDF) for compliance reviews
+- **Shipment Event Audit Trail** 🔲
+  - Complete event history on shipment detail page (status changes, assignments, document generation, stop updates)
+  - Order-level audit trail on order detail page
+  - Visual timeline with user attribution and timestamps
+- **Audit Data Integrity** 🔲
+  - Immutable audit records — no update or delete API for audit entries
+  - Checksums or hash chains on DomainEventLog for tamper evidence
+  - Retention policy enforcement (configurable per org, default 7 years)
+- **Compliance Reporting** 🔲
+  - Scheduled audit summary reports (daily/weekly digest of changes)
+  - User activity reports (actions per user over time period)
+  - Data access logging for sensitive fields (PII, financial data)
+  - Pre-built report templates for SOC 2, ISO 27001 evidence gathering
+
 ## **Phase 9b: Intelligence & AI**
 - **AI Triage Agent** 🔲
   - AgentConfig model: configurable prompts, LLM provider settings (LLM-independent)
@@ -388,6 +408,6 @@
 - **Short term:** Deliver **Phase 4** (notifications, triage centre, live tracking) for operational visibility.
 - **Medium term:** Deliver **Phase 5–6** (IoT + cold chain compliance) → unique differentiator.
 - **Long term:** **Phase 7–8** (financials, portals, N8N integration) to scale platform.
-- **Strategic:** **Phase 9–9c** (routes & maps, AI agents, data providers) — the intelligence layer that turns Open TMS from a record system into a decision system.
+- **Strategic:** **Phase 9–9c** (routes & maps, audit review, AI agents, data providers) — the intelligence layer that turns Open TMS from a record system into a decision system. Phase 9a (audit review) lands before agentic work to ensure compliance foundations are solid.
 - **Operational:** **Phase 10** (SRE & observability) — ship early pieces (health checks, structured logging, queue dashboard) alongside Phase 4, then build out fully as deployment complexity grows.
 - **Future:** **Phase 11** (advanced operations) for enterprise depth.
