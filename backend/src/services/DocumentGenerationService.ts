@@ -345,120 +345,305 @@ export class DocumentGenerationService implements IDocumentGenerationService {
 
   /**
    * Convert rendered HTML to PDF using pdf-lib.
-   * Strips HTML tags and lays out text line-by-line.
-   * Supports basic structure: headings (bold, larger), tables (tab-separated), paragraphs.
+   * Parses block-level HTML (headings, tables, paragraphs) and renders with
+   * proper column-aligned tables, inline bold, <br/> line breaks, and word wrapping.
    */
   async htmlToPdf(html: string, title: string): Promise<Uint8Array> {
-    const doc = await PDFDocument.create();
-    doc.setTitle(title);
+    const pdfDoc = await PDFDocument.create();
+    pdfDoc.setTitle(title);
     // Use org name for document creator metadata
     let creatorName = 'Open TMS';
     try {
       const org = await this.prisma.organization.findFirst({ select: { name: true } });
       if (org?.name && org.name !== 'Default Organization') creatorName = org.name;
     } catch { /* use fallback */ }
-    doc.setCreator(creatorName);
+    pdfDoc.setCreator(creatorName);
 
-    const font = await doc.embedFont(StandardFonts.Helvetica);
-    const boldFont = await doc.embedFont(StandardFonts.HelveticaBold);
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-    const pageWidth = 612; // US Letter
-    const pageHeight = 792;
-    const margin = 50;
-    const lineHeight = 14;
-    const maxWidth = pageWidth - 2 * margin;
+    const PW = 612; // US Letter
+    const PH = 792;
+    const M = 50;   // margin
+    const CW = PW - 2 * M; // content width
 
-    let page = doc.addPage([pageWidth, pageHeight]);
-    let y = pageHeight - margin;
+    let page = pdfDoc.addPage([PW, PH]);
+    let y = PH - M;
 
-    const addLine = (text: string, fontSize: number, isBold = false) => {
-      if (y < margin + lineHeight) {
-        page = doc.addPage([pageWidth, pageHeight]);
-        y = pageHeight - margin;
+    // ── Utilities ──────────────────────────────────────────────────────────
+
+    // Replace characters outside WinAnsi encoding that would crash drawText
+    const sanitize = (t: string) => t
+      .replace(/[\u2018\u2019\u2032]/g, "'")
+      .replace(/[\u201C\u201D\u2033]/g, '"')
+      .replace(/\u2013/g, '-')
+      .replace(/\u2014/g, '--')
+      .replace(/\u2026/g, '...')
+      .replace(/[^\t\n\x20-\x7E\xA0-\xFF]/g, '');
+
+    const stripHtml = (s: string) => sanitize(
+      s.replace(/<[^>]+>/g, '')
+       .replace(/&amp;/g, '&')
+       .replace(/&lt;/g, '<')
+       .replace(/&gt;/g, '>')
+       .replace(/&nbsp;/g, ' ')
+       .replace(/&quot;/g, '"')
+       .replace(/&#39;/g, "'")
+       .replace(/\s+/g, ' ')
+       .trim()
+    );
+
+    const fontFor = (bold: boolean) => bold ? boldFont : font;
+
+    const wrapLines = (text: string, size: number, bold: boolean, maxW: number): string[] => {
+      if (!text) return [''];
+      const f = fontFor(bold);
+      const words = text.split(' ');
+      const result: string[] = [];
+      let line = '';
+      for (const w of words) {
+        const test = line ? `${line} ${w}` : w;
+        if (f.widthOfTextAtSize(test, size) > maxW && line) {
+          result.push(line);
+          line = w;
+        } else {
+          line = test;
+        }
       }
-      page.drawText(text, {
-        x: margin,
-        y,
-        size: fontSize,
-        font: isBold ? boldFont : font,
-        color: rgb(0, 0, 0),
-        maxWidth,
-      });
-      y -= fontSize + 4;
+      if (line) result.push(line);
+      return result.length ? result : [''];
     };
 
-    const addSeparator = () => {
-      if (y < margin + lineHeight) {
-        page = doc.addPage([pageWidth, pageHeight]);
-        y = pageHeight - margin;
+    // ── Drawing primitives ─────────────────────────────────────────────────
+
+    const ensureSpace = (needed: number) => {
+      if (y - needed < M) {
+        page = pdfDoc.addPage([PW, PH]);
+        y = PH - M;
       }
+    };
+
+    const drawTextAt = (text: string, x: number, yy: number, size: number, bold: boolean) => {
+      if (text) {
+        page.drawText(sanitize(text), {
+          x, y: yy, size,
+          font: fontFor(bold),
+          color: rgb(0, 0, 0),
+        });
+      }
+    };
+
+    // Draw word-wrapped text block at current y; returns total height consumed
+    const drawBlock = (text: string, x: number, size: number, bold: boolean, maxW: number): number => {
+      const lh = size + 4;
+      const lines = wrapLines(text, size, bold, maxW);
+      const totalH = lines.length * lh;
+      ensureSpace(totalH);
+      for (const l of lines) {
+        drawTextAt(l, x, y, size, bold);
+        y -= lh;
+      }
+      return totalH;
+    };
+
+    const drawHRule = (grey = 0.7, thickness = 0.5) => {
+      ensureSpace(8);
       page.drawLine({
-        start: { x: margin, y },
-        end: { x: pageWidth - margin, y },
-        thickness: 0.5,
-        color: rgb(0.7, 0.7, 0.7),
+        start: { x: M, y },
+        end: { x: PW - M, y },
+        thickness,
+        color: rgb(grey, grey, grey),
       });
       y -= 8;
     };
 
-    // Parse HTML into lines
-    const lines = html
-      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-      .split(/(<h[1-3][^>]*>.*?<\/h[1-3]>|<tr[^>]*>.*?<\/tr>|<p[^>]*>.*?<\/p>|<div[^>]*>.*?<\/div>|<br\s*\/?>)/gi)
-      .filter(Boolean);
+    // ── Inline bold/regular segments ───────────────────────────────────────
 
-    for (const segment of lines) {
-      const stripped = segment
-        .replace(/<th[^>]*>/gi, '')
-        .replace(/<\/th>/gi, '\t')
-        .replace(/<td[^>]*>/gi, '')
-        .replace(/<\/td>/gi, '\t')
-        .replace(/<[^>]+>/g, '')
-        .replace(/&amp;/g, '&')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&nbsp;/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
+    type Seg = { text: string; bold: boolean };
 
-      if (!stripped) continue;
+    const parseInline = (raw: string): Seg[] => {
+      const segs: Seg[] = [];
+      const parts = raw.split(/(<(?:strong|b)>[\s\S]*?<\/(?:strong|b)>)/gi);
+      for (const p of parts) {
+        const isBold = /^<(?:strong|b)>/i.test(p);
+        const text = stripHtml(p);
+        if (text) segs.push({ text, bold: isBold });
+      }
+      return segs;
+    };
 
-      if (/<h1/i.test(segment)) {
-        y -= 6;
-        addLine(stripped, 18, true);
-        addSeparator();
-      } else if (/<h2/i.test(segment)) {
-        y -= 4;
-        addLine(stripped, 14, true);
-      } else if (/<h3/i.test(segment)) {
-        y -= 2;
-        addLine(stripped, 12, true);
-      } else if (/<tr/i.test(segment)) {
-        // Table row - render tab-separated values
-        const cells = stripped.split('\t').filter(Boolean);
-        const cellText = cells.join('  |  ');
-        addLine(cellText, 10);
-      } else {
-        // Regular text - wrap long lines
-        const words = stripped.split(' ');
-        let currentLine = '';
-        for (const word of words) {
-          const testLine = currentLine ? `${currentLine} ${word}` : word;
-          const testWidth = font.widthOfTextAtSize(testLine, 10);
-          if (testWidth > maxWidth && currentLine) {
-            addLine(currentLine, 10);
-            currentLine = word;
-          } else {
-            currentLine = testLine;
+    // Draw inline segments left-to-right; returns width used
+    const drawInline = (segs: Seg[], x: number, yy: number, size: number, maxW: number): number => {
+      let xOff = 0;
+      const spaceW = font.widthOfTextAtSize(' ', size);
+      for (let i = 0; i < segs.length; i++) {
+        if (!segs[i].text) continue;
+        if (i > 0 && xOff > 0) xOff += spaceW;
+        const f = fontFor(segs[i].bold);
+        const w = f.widthOfTextAtSize(segs[i].text, size);
+        if (xOff + w > maxW) {
+          // Truncate last segment to fit
+          let truncated = segs[i].text;
+          while (truncated.length > 1 && f.widthOfTextAtSize(truncated, size) > maxW - xOff) {
+            truncated = truncated.slice(0, -1);
+          }
+          drawTextAt(truncated, x + xOff, yy, size, segs[i].bold);
+          xOff += f.widthOfTextAtSize(truncated, size);
+          break;
+        }
+        drawTextAt(segs[i].text, x + xOff, yy, size, segs[i].bold);
+        xOff += w;
+      }
+      return xOff;
+    };
+
+    // ── Table rendering ────────────────────────────────────────────────────
+
+    type CellData = { lines: Seg[][] };
+
+    const parseCell = (cellHtml: string): CellData => {
+      const parts = cellHtml.split(/<br\s*\/?>/gi);
+      const lines = parts
+        .map(p => parseInline(p))
+        .filter(segs => segs.length > 0);
+      return { lines: lines.length ? lines : [[{ text: '', bold: false }]] };
+    };
+
+    const renderTable = (tableHtml: string) => {
+      const rows: { cells: CellData[]; isHeader: boolean }[] = [];
+      const trRe = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+      let trMatch;
+      while ((trMatch = trRe.exec(tableHtml)) !== null) {
+        const rowHtml = trMatch[1];
+        const isHeader = /<th/i.test(rowHtml);
+        const cellRe = /<(?:td|th)[^>]*>([\s\S]*?)<\/(?:td|th)>/gi;
+        const cells: CellData[] = [];
+        let cellMatch;
+        while ((cellMatch = cellRe.exec(rowHtml)) !== null) {
+          cells.push(parseCell(cellMatch[1]));
+        }
+        if (cells.length > 0) rows.push({ cells, isHeader });
+      }
+      if (rows.length === 0) return;
+
+      const colCount = Math.max(...rows.map(r => r.cells.length));
+      const colW = CW / colCount;
+      const cellPad = 4;
+      const fontSize = 9;
+      const cellLH = fontSize + 3;
+
+      for (const row of rows) {
+        // Row height = tallest cell
+        const maxLines = Math.max(...row.cells.map(c => c.lines.length));
+        const rowH = maxLines * cellLH + 6;
+
+        ensureSpace(rowH);
+
+        // Header row background
+        if (row.isHeader) {
+          page.drawRectangle({
+            x: M,
+            y: y - rowH + cellLH,
+            width: CW,
+            height: rowH,
+            color: rgb(0.93, 0.93, 0.93),
+          });
+        }
+
+        // Draw cells
+        for (let c = 0; c < row.cells.length; c++) {
+          const cell = row.cells[c];
+          const cellX = M + c * colW + cellPad;
+          const cellMaxW = colW - 2 * cellPad;
+          let lineY = y;
+          for (const segs of cell.lines) {
+            drawInline(segs, cellX, lineY, fontSize, cellMaxW);
+            lineY -= cellLH;
           }
         }
-        if (currentLine) {
-          addLine(currentLine, 10);
+
+        y -= rowH;
+
+        // Light row border
+        page.drawLine({
+          start: { x: M, y: y + 4 },
+          end: { x: PW - M, y: y + 4 },
+          thickness: 0.25,
+          color: rgb(0.85, 0.85, 0.85),
+        });
+      }
+      y -= 4;
+    };
+
+    // ── Paragraph rendering ────────────────────────────────────────────────
+
+    const renderParagraph = (pHtml: string) => {
+      const inner = pHtml.replace(/<\/?p[^>]*>/gi, '');
+      const brLines = inner.split(/<br\s*\/?>/gi);
+      const lh = 14;
+
+      for (const raw of brLines) {
+        const segs = parseInline(raw);
+        if (segs.length === 0) continue;
+        const totalText = segs.map(s => s.text).join('');
+        if (!totalText.trim()) continue;
+
+        if (segs.length === 1) {
+          // Single segment — use word wrapping
+          drawBlock(segs[0].text, M, 10, segs[0].bold, CW);
+        } else {
+          // Mixed bold/regular — render inline
+          ensureSpace(lh);
+          drawInline(segs, M, y, 10, CW);
+          y -= lh;
         }
+      }
+      y -= 2;
+    };
+
+    // ── Main HTML → block parsing ──────────────────────────────────────────
+
+    // Normalize: collapse newlines so multiline tags are matched as one block
+    const norm = html
+      .replace(/<style[\s\S]*?<\/style>/gi, '')
+      .replace(/<script[\s\S]*?<\/script>/gi, '')
+      .replace(/\r?\n/g, ' ')
+      .replace(/\s+/g, ' ');
+
+    // Match top-level block elements in document order
+    const blockRe = /<(h[1-3]|table|p|div)(\s[^>]*)?>[\s\S]*?<\/\1>/gi;
+    let blockMatch;
+    while ((blockMatch = blockRe.exec(norm)) !== null) {
+      const tag = blockMatch[1].toLowerCase();
+      const blockHtml = blockMatch[0];
+
+      if (tag === 'h1') {
+        const text = stripHtml(blockHtml);
+        if (!text) continue;
+        y -= 12;
+        drawBlock(text, M, 18, true, CW);
+        drawHRule();
+      } else if (tag === 'h2') {
+        const text = stripHtml(blockHtml);
+        if (!text) continue;
+        y -= 10;
+        drawBlock(text, M, 14, true, CW);
+        y -= 2;
+      } else if (tag === 'h3') {
+        const text = stripHtml(blockHtml);
+        if (!text) continue;
+        y -= 6;
+        drawBlock(text, M, 12, true, CW);
+      } else if (tag === 'table') {
+        renderTable(blockHtml);
+      } else if (tag === 'p') {
+        renderParagraph(blockHtml);
+      } else if (tag === 'div') {
+        const text = stripHtml(blockHtml);
+        if (text) drawBlock(text, M, 10, false, CW);
       }
     }
 
-    return doc.save();
+    return pdfDoc.save();
   }
 }
