@@ -205,68 +205,81 @@
   right: 0;
   background: var(--surface-container-lowest);
   border: 1px solid var(--outline-variant);
-  border-radius: var(--border-radius-md, 16px);
-  box-shadow: var(--shadow-2, 0 8px 32px rgba(0, 0, 0, 0.2));
-  padding: 20px;
+  border-radius: 20px;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.25);
+  padding: 24px;
   z-index: 300;
-  min-width: 280px;
+  width: 340px;
   animation: vn-slide-up 0.15s ease-out;
 }
 
 .vn-app-grid-panel h3 {
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--on-surface-variant);
-  margin: 0 0 16px;
-  text-align: center;
+  color: var(--on-surface);
+  margin: 0 0 20px;
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 .vn-app-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+  gap: 16px;
 }
 
 .vn-app-grid-tile {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 12px 8px;
-  border-radius: var(--border-radius-sm);
-  cursor: pointer;
-  border: 2px solid transparent;
+  gap: 10px;
+  padding: 0;
+  border: none;
   background: none;
+  cursor: pointer;
   color: var(--on-surface);
   font-family: inherit;
-  transition: background 0.15s, border-color 0.15s;
+  transition: transform 0.15s;
 }
 
 .vn-app-grid-tile:hover {
-  background: var(--surface-container);
+  transform: scale(1.05);
 }
 
-.vn-app-grid-tile.active {
-  background: color-mix(in srgb, var(--primary) 10%, transparent);
-  border-color: var(--primary);
+.vn-app-grid-tile:hover .vn-app-grid-icon {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
 }
 
-.vn-app-grid-tile .material-icons {
+.vn-app-grid-icon {
+  width: 72px;
+  height: 72px;
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-container-high);
+  transition: box-shadow 0.15s, background 0.15s;
+}
+
+.vn-app-grid-tile.active .vn-app-grid-icon {
+  background: var(--primary);
+}
+
+.vn-app-grid-icon .material-icons {
   font-size: 32px;
-  color: var(--on-surface-variant);
+  color: var(--on-surface);
 }
 
-.vn-app-grid-tile.active .material-icons {
-  color: var(--primary);
+.vn-app-grid-tile.active .vn-app-grid-icon .material-icons {
+  color: var(--on-primary);
 }
 
-.vn-app-grid-tile span:last-child {
-  font-size: 11px;
+.vn-app-grid-label {
+  font-size: 12px;
   font-weight: 500;
   text-align: center;
   line-height: 1.2;
+  color: var(--on-surface);
 }
 
 .vn-app-grid-backdrop {

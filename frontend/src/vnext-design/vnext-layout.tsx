@@ -209,8 +209,10 @@ export default function VNextLayout() {
                           className={`vn-app-grid-tile ${app.key === activeAppKey ? 'active' : ''}`}
                           onClick={() => switchApp(app)}
                         >
-                          <span className="material-icons">{app.icon}</span>
-                          <span>{app.label}</span>
+                          <div className="vn-app-grid-icon">
+                            <span className="material-icons">{app.icon}</span>
+                          </div>
+                          <span className="vn-app-grid-label">{app.label}</span>
                         </button>
                       ))}
                     </div>
