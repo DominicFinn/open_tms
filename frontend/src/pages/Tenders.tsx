@@ -33,20 +33,32 @@ const statusColors: Record<string, string> = {
   expired: 'error',
 };
 
+interface Carrier {
+  id: string;
+  name: string;
+}
+
 export default function Tenders() {
   const [tenders, setTenders] = useState<Tender[]>([]);
+  const [carriers, setCarriers] = useState<Carrier[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('');
+  const [carrierFilter, setCarrierFilter] = useState('');
   const navigate = useNavigate();
 
   useEffect(() => {
+    fetch(`${API_URL}/api/v1/carriers`).then(r => r.json()).then(j => setCarriers(j.data || []));
+  }, []);
+
+  useEffect(() => {
     fetchTenders();
-  }, [statusFilter]);
+  }, [statusFilter, carrierFilter]);
 
   async function fetchTenders() {
     setLoading(true);
     const params = new URLSearchParams();
     if (statusFilter) params.set('status', statusFilter);
+    if (carrierFilter) params.set('carrierId', carrierFilter);
     const res = await fetch(`${API_URL}/api/v1/tenders?${params}`);
     const json = await res.json();
     setTenders(json.data || []);
@@ -69,7 +81,7 @@ export default function Tenders() {
       </div>
 
       <div className="card" style={{ marginBottom: 'var(--spacing-3)' }}>
-        <div style={{ display: 'flex', gap: 'var(--spacing-2)', alignItems: 'center', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 'var(--spacing-2)', alignItems: 'center', flexWrap: 'wrap', marginBottom: 'var(--spacing-1)' }}>
           <label style={{ fontWeight: 500, fontSize: '14px' }}>Status:</label>
           {['', 'draft', 'open', 'evaluating', 'awarded', 'cancelled', 'expired'].map(s => (
             <button
@@ -81,6 +93,25 @@ export default function Tenders() {
               {s || 'All'}
             </button>
           ))}
+        </div>
+        <div style={{ display: 'flex', gap: 'var(--spacing-2)', alignItems: 'center' }}>
+          <label style={{ fontWeight: 500, fontSize: '14px' }}>Carrier:</label>
+          <select
+            className="text-field"
+            style={{ width: 'auto', minWidth: '200px', padding: '4px 8px', fontSize: '13px' }}
+            value={carrierFilter}
+            onChange={e => setCarrierFilter(e.target.value)}
+          >
+            <option value="">All Carriers</option>
+            {carriers.map(c => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+          {carrierFilter && (
+            <button className="button-outline" style={{ padding: '4px 12px', fontSize: '13px' }} onClick={() => setCarrierFilter('')}>
+              Clear
+            </button>
+          )}
         </div>
       </div>
 

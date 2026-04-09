@@ -19,12 +19,13 @@ export async function tenderRoutes(server: FastifyInstance) {
           status: { type: 'string' },
           strategy: { type: 'string' },
           shipmentId: { type: 'string' },
+          carrierId: { type: 'string' },
         },
       },
     },
   }, async (req: FastifyRequest, _reply: FastifyReply) => {
-    const { status, strategy, shipmentId } = req.query as any;
-    const tenders = await tenderRepo.findAll({ status, strategy, shipmentId });
+    const { status, strategy, shipmentId, carrierId } = req.query as any;
+    const tenders = await tenderRepo.findAll({ status, strategy, shipmentId, carrierId });
     return { data: tenders, error: null };
   });
 

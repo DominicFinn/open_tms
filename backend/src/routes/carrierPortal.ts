@@ -186,4 +186,41 @@ export async function carrierPortalRoutes(server: FastifyInstance) {
     const bids = await tenderRepo.findBidsByCarrierId(carrierId);
     return { data: bids, error: null };
   });
+
+  // View all tender offers (full history: won, lost, expired, declined, etc.)
+  server.get('/api/v1/carrier-portal/history', {
+    schema: { tags: ['Carrier Portal'], summary: 'View full tender history for this carrier' },
+    preHandler: [authenticateCarrierJWT],
+  }, async (req: FastifyRequest, _reply: FastifyReply) => {
+    const carrierId = (req as any).carrierUser.carrierId;
+    const offers = await tenderRepo.findAllOffersForCarrier(carrierId);
+
+    // Enrich each offer with an outcome label
+    const history = offers.map((offer: any) => {
+      let outcome: string;
+      const bid = offer.bids?.[0];
+      if (bid?.status === 'accepted') outcome = 'won';
+      else if (bid?.status === 'rejected') outcome = 'lost';
+      else if (bid?.status === 'submitted') outcome = 'pending';
+      else if (offer.status === 'expired') outcome = 'expired';
+      else if (offer.status === 'cancelled') outcome = 'cancelled';
+      else if (offer.status === 'sent' || offer.status === 'viewed') outcome = 'active';
+      else outcome = offer.status;
+
+      return {
+        ...offer,
+        outcome,
+        bidRate: bid?.rate ?? null,
+        bidStatus: bid?.status ?? null,
+        tenderStatus: offer.tender?.status,
+        tenderReference: offer.tender?.reference,
+        route: offer.tender?.shipment
+          ? `${offer.tender.shipment.origin.city}${offer.tender.shipment.origin.state ? ', ' + offer.tender.shipment.origin.state : ''} → ${offer.tender.shipment.destination.city}${offer.tender.shipment.destination.state ? ', ' + offer.tender.shipment.destination.state : ''}`
+          : null,
+        customerName: offer.tender?.shipment?.customer?.name ?? null,
+      };
+    });
+
+    return { data: history, error: null };
+  });
 }

@@ -37,6 +37,7 @@ export interface TenderFilters {
   status?: string;
   strategy?: string;
   shipmentId?: string;
+  carrierId?: string;
 }
 
 // Full tender with relations
@@ -76,6 +77,7 @@ export interface ITenderRepository {
   findOfferById(id: string): Promise<TenderOffer | null>;
   findOffersByTenderId(tenderId: string): Promise<TenderOffer[]>;
   findActiveOffersForCarrier(carrierId: string): Promise<(TenderOffer & { tender: TenderWithRelations })[]>;
+  findAllOffersForCarrier(carrierId: string): Promise<any[]>;
   updateOffer(id: string, data: Partial<TenderOffer>): Promise<TenderOffer>;
   findExpiredOffers(): Promise<TenderOffer[]>;
 
@@ -129,6 +131,9 @@ export class TenderRepository implements ITenderRepository {
     if (filters?.status) where.status = filters.status;
     if (filters?.strategy) where.strategy = filters.strategy;
     if (filters?.shipmentId) where.shipmentId = filters.shipmentId;
+    if (filters?.carrierId) {
+      where.offers = { some: { carrierId: filters.carrierId } };
+    }
 
     return this.prisma.tender.findMany({
       where,
@@ -196,6 +201,27 @@ export class TenderRepository implements ITenderRepository {
         },
       },
       orderBy: { sentAt: 'desc' },
+    });
+  }
+
+  async findAllOffersForCarrier(carrierId: string): Promise<any[]> {
+    return this.prisma.tenderOffer.findMany({
+      where: { carrierId },
+      include: {
+        bids: true,
+        tender: {
+          include: {
+            shipment: {
+              include: {
+                customer: { select: { id: true, name: true } },
+                origin: { select: { id: true, name: true, city: true, state: true } },
+                destination: { select: { id: true, name: true, city: true, state: true } },
+              },
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
     });
   }
 

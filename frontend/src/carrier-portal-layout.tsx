@@ -59,6 +59,20 @@ export function CarrierPortalLayout() {
             Dashboard
           </NavLink>
           <NavLink
+            to="/carrier-portal/history"
+            style={({ isActive }) => ({
+              padding: '6px 12px',
+              borderRadius: 'var(--radius-sm)',
+              textDecoration: 'none',
+              fontSize: '14px',
+              fontWeight: isActive ? 600 : 400,
+              color: isActive ? 'var(--color-primary)' : 'var(--color-text)',
+              background: isActive ? 'var(--color-primary-light)' : 'transparent',
+            })}
+          >
+            Tender History
+          </NavLink>
+          <NavLink
             to="/carrier-portal/bids"
             style={({ isActive }) => ({
               padding: '6px 12px',

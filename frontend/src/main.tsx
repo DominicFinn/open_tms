@@ -60,6 +60,7 @@ import CarrierLogin from './pages/carrier-portal/CarrierLogin';
 import CarrierDashboard from './pages/carrier-portal/CarrierDashboard';
 import CarrierTenderView from './pages/carrier-portal/CarrierTenderView';
 import CarrierBidHistory from './pages/carrier-portal/CarrierBidHistory';
+import CarrierTenderHistory from './pages/carrier-portal/CarrierTenderHistory';
 import './theme.css';
 
 const root = createRoot(document.getElementById('root')!);
@@ -97,6 +98,7 @@ root.render(
         <Route path="/carrier-portal" element={<CarrierPortalLayout />}>
           <Route index element={<CarrierDashboard />} />
           <Route path="tenders/:id" element={<CarrierTenderView />} />
+          <Route path="history" element={<CarrierTenderHistory />} />
           <Route path="bids" element={<CarrierBidHistory />} />
         </Route>
 
