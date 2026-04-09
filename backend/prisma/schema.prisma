@@ -85,6 +85,8 @@ model Shipment {
   orderShipments OrderShipment[]
   stops         ShipmentStop[] // Multi-stop route support
   outboundLogs  OutboundIntegrationLog[] // Outbound integration logs
+  deviceAssignments DeviceAssignment[]    // IoT device assignments
+  sensorReadings    SensorReading[]       // Sensor telemetry data
 
   // Custom fields
   customFieldVersionId String?
@@ -378,6 +380,10 @@ model Order {
 
   // Pending lane requests
   pendingLaneRequests   PendingLaneRequest[]
+
+  // IoT device tracking
+  deviceAssignments     DeviceAssignment[]
+  sensorReadings        SensorReading[]
 
   // Custom fields
   customFieldVersionId String?
@@ -1176,5 +1182,126 @@ model EmailTemplate {
   updatedAt       DateTime @updatedAt
 
   @@unique([organizationId, eventType])          // One template per event type per org
+  @@index([eventType])
+}
+
+// ============================================================
+// IoT Device Tracking
+// ============================================================
+
+model Device {
+  id              String    @id @default(uuid())
+  externalId      String    @unique               // Provider device ID (e.g., System Loco ObjectId)
+  displayId       String?                         // User-friendly ID (e.g., "HG-00012345")
+  name            String                          // Device name — used for shipment/order matching
+  provider        String    @default("system_loco")
+  model           String?                         // Device model (e.g., "HGx")
+  firmware        String?
+  labels          Json?                           // string[] of device tags/labels
+  status          String    @default("active")    // active, inactive, retired
+  batteryLevel    Int?
+  lastSeenAt      DateTime?
+  lastLat         Float?
+  lastLng         Float?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  assignments     DeviceAssignment[]
+  sensorReadings  SensorReading[]
+  deviceEvents    DeviceEvent[]
+
+  @@index([name])
+  @@index([provider])
+  @@index([status])
+}
+
+model DeviceAssignment {
+  id              String    @id @default(uuid())
+  device          Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  deviceId        String
+  shipment        Shipment? @relation(fields: [shipmentId], references: [id], onDelete: SetNull)
+  shipmentId      String?
+  order           Order?    @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  orderId         String?
+  trackableUnitId String?
+  active          Boolean   @default(true)
+  assignedAt      DateTime  @default(now())
+  unassignedAt    DateTime?
+
+  @@index([deviceId, active])
+  @@index([shipmentId])
+  @@index([orderId])
+}
+
+model SensorReading {
+  id              String    @id @default(uuid())
+  device          Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  deviceId        String
+  shipment        Shipment? @relation(fields: [shipmentId], references: [id], onDelete: SetNull)
+  shipmentId      String?
+  order           Order?    @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  orderId         String?
+  eventTime       DateTime                        // When the reading occurred
+
+  // Sensor values (nullable — only populated when present)
+  temperature     Float?
+  humidity        Float?
+  lightLevel      Int?
+  batteryLevel    Int?
+  batteryVoltage  Float?
+  impactG         Float?
+  tiltAngle       Float?
+  movement        String?                         // "stationary" | "moving"
+
+  // Location at time of reading
+  lat             Float?
+  lng             Float?
+  address         String?
+
+  // Thresholds (from device config, for context)
+  tempMin         Float?
+  tempMax         Float?
+  lightMin        Int?
+  lightMax        Int?
+
+  // Alert
+  isAlert         Boolean   @default(false)
+  alertType       String?                         // "temperature" | "impact" | "light" | "tip" | "battery"
+
+  rawPayload      Json?
+  createdAt       DateTime  @default(now())
+
+  @@index([deviceId, eventTime])
+  @@index([shipmentId, eventTime])
+  @@index([orderId, eventTime])
+  @@index([isAlert])
+}
+
+model DeviceEvent {
+  id              String    @id @default(uuid())
+  device          Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  deviceId        String
+  shipmentId      String?
+  orderId         String?
+
+  externalEventId String?   @unique               // System Loco event ID (for dedup)
+  eventType       String                          // temperature, impact, drop, tip, zoneChange, firmware, charging, etc.
+  category        String                          // "event" | "warning" | "info"
+
+  startTime       DateTime
+  endTime         DateTime?
+
+  lat             Float?
+  lng             Float?
+  address         String?
+  zoneName        String?
+
+  message         String?
+  payload         Json?                           // Full type-specific payload
+
+  createdAt       DateTime  @default(now())
+
+  @@index([deviceId, startTime])
+  @@index([shipmentId])
   @@index([eventType])
 }
