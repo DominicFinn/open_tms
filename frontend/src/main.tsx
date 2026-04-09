@@ -61,6 +61,7 @@ import CarrierDashboard from './pages/carrier-portal/CarrierDashboard';
 import CarrierTenderView from './pages/carrier-portal/CarrierTenderView';
 import CarrierBidHistory from './pages/carrier-portal/CarrierBidHistory';
 import CarrierTenderHistory from './pages/carrier-portal/CarrierTenderHistory';
+import CarrierProfile from './pages/carrier-portal/CarrierProfile';
 import './theme.css';
 
 const root = createRoot(document.getElementById('root')!);
@@ -100,6 +101,7 @@ root.render(
           <Route path="tenders/:id" element={<CarrierTenderView />} />
           <Route path="history" element={<CarrierTenderHistory />} />
           <Route path="bids" element={<CarrierBidHistory />} />
+          <Route path="profile" element={<CarrierProfile />} />
         </Route>
 
         {/* V-Next Design Prototype */}

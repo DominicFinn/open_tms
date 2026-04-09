@@ -4,6 +4,8 @@ import { ICarrierUserRepository } from '../repositories/CarrierUserRepository.js
 const JWT_SECRET = process.env.JWT_SECRET || 'open-tms-dev-secret-change-in-production';
 const CARRIER_JWT_ISSUER = 'open-tms-carrier';
 const TOKEN_EXPIRY_HOURS = 24;
+const MAX_FAILED_ATTEMPTS = 5;
+const LOCKOUT_MINUTES = 15;
 
 export interface CarrierJWTPayload {
   sub: string;
@@ -28,20 +30,43 @@ export interface LoginResult {
   };
 }
 
+export interface PasswordValidation {
+  valid: boolean;
+  errors: string[];
+}
+
 export interface ICarrierAuthService {
   register(carrierId: string, email: string, password: string, name: string, role?: string): Promise<any>;
   login(email: string, password: string): Promise<LoginResult>;
   changePassword(userId: string, oldPassword: string, newPassword: string): Promise<void>;
+  adminResetPassword(userId: string, newPassword: string): Promise<void>;
+  validatePasswordStrength(password: string): PasswordValidation;
   verifyToken(token: string): CarrierJWTPayload;
 }
+
+// In-memory failed attempt tracking (per email)
+// In production, this would use Redis or a DB column
+const failedAttempts = new Map<string, { count: number; lockedUntil: Date | null }>();
 
 export class CarrierAuthService implements ICarrierAuthService {
   constructor(private carrierUserRepo: ICarrierUserRepository) {}
 
+  validatePasswordStrength(password: string): PasswordValidation {
+    const errors: string[] = [];
+    if (password.length < 8) errors.push('Password must be at least 8 characters');
+    if (password.length > 128) errors.push('Password must be less than 128 characters');
+    if (!/[A-Z]/.test(password)) errors.push('Password must contain at least one uppercase letter');
+    if (!/[a-z]/.test(password)) errors.push('Password must contain at least one lowercase letter');
+    if (!/[0-9]/.test(password)) errors.push('Password must contain at least one number');
+    return { valid: errors.length === 0, errors };
+  }
+
   async register(carrierId: string, email: string, password: string, name: string, role?: string) {
-    // Check if email already exists
     const existing = await this.carrierUserRepo.findByEmail(email);
     if (existing) throw new Error('Email already registered');
+
+    const validation = this.validatePasswordStrength(password);
+    if (!validation.valid) throw new Error(validation.errors.join('; '));
 
     const passwordHash = await this.hashPassword(password);
     return this.carrierUserRepo.create({
@@ -54,12 +79,36 @@ export class CarrierAuthService implements ICarrierAuthService {
   }
 
   async login(email: string, password: string): Promise<LoginResult> {
+    // Check lockout
+    const attempts = failedAttempts.get(email);
+    if (attempts?.lockedUntil && attempts.lockedUntil > new Date()) {
+      const minutesLeft = Math.ceil((attempts.lockedUntil.getTime() - Date.now()) / 60000);
+      throw new Error(`Account is temporarily locked. Try again in ${minutesLeft} minutes.`);
+    }
+
     const user = await this.carrierUserRepo.findByEmail(email);
-    if (!user) throw new Error('Invalid email or password');
+    if (!user) {
+      this.recordFailedAttempt(email);
+      throw new Error('Invalid email or password');
+    }
     if (!user.active) throw new Error('Account is deactivated');
 
     const valid = await this.verifyPassword(password, user.passwordHash);
-    if (!valid) throw new Error('Invalid email or password');
+    if (!valid) {
+      this.recordFailedAttempt(email);
+      const current = failedAttempts.get(email);
+      const remaining = MAX_FAILED_ATTEMPTS - (current?.count || 0);
+      if (remaining <= 0) {
+        throw new Error(`Account is temporarily locked due to too many failed attempts. Try again in ${LOCKOUT_MINUTES} minutes.`);
+      }
+      if (remaining <= 2) {
+        throw new Error(`Invalid email or password. ${remaining} attempt(s) remaining before lockout.`);
+      }
+      throw new Error('Invalid email or password');
+    }
+
+    // Clear failed attempts on successful login
+    failedAttempts.delete(email);
 
     // Update last login
     await this.carrierUserRepo.updateLastLogin(user.id);
@@ -93,8 +142,25 @@ export class CarrierAuthService implements ICarrierAuthService {
     const valid = await this.verifyPassword(oldPassword, user.passwordHash);
     if (!valid) throw new Error('Current password is incorrect');
 
+    const validation = this.validatePasswordStrength(newPassword);
+    if (!validation.valid) throw new Error(validation.errors.join('; '));
+
     const newHash = await this.hashPassword(newPassword);
     await this.carrierUserRepo.updatePassword(userId, newHash);
+  }
+
+  async adminResetPassword(userId: string, newPassword: string): Promise<void> {
+    const user = await this.carrierUserRepo.findById(userId);
+    if (!user) throw new Error('User not found');
+
+    const validation = this.validatePasswordStrength(newPassword);
+    if (!validation.valid) throw new Error(validation.errors.join('; '));
+
+    const newHash = await this.hashPassword(newPassword);
+    await this.carrierUserRepo.updatePassword(userId, newHash);
+
+    // Clear any lockout for this user's email
+    failedAttempts.delete(user.email);
   }
 
   verifyToken(token: string): CarrierJWTPayload {
@@ -103,7 +169,6 @@ export class CarrierAuthService implements ICarrierAuthService {
 
     const [headerB64, payloadB64, signatureB64] = parts;
 
-    // Verify HMAC SHA-256 signature
     const expectedSig = createHmac('sha256', JWT_SECRET)
       .update(`${headerB64}.${payloadB64}`)
       .digest('base64url');
@@ -126,6 +191,15 @@ export class CarrierAuthService implements ICarrierAuthService {
   }
 
   // ── Private helpers ──
+
+  private recordFailedAttempt(email: string): void {
+    const current = failedAttempts.get(email) || { count: 0, lockedUntil: null };
+    current.count += 1;
+    if (current.count >= MAX_FAILED_ATTEMPTS) {
+      current.lockedUntil = new Date(Date.now() + LOCKOUT_MINUTES * 60 * 1000);
+    }
+    failedAttempts.set(email, current);
+  }
 
   private generateToken(claims: Omit<CarrierJWTPayload, 'iat' | 'exp' | 'iss'>): string {
     const now = Math.floor(Date.now() / 1000);
@@ -155,7 +229,6 @@ export class CarrierAuthService implements ICarrierAuthService {
     const [salt, hash] = storedHash.split(':');
     if (!salt || !hash) return false;
     const computed = createHmac('sha256', salt).update(password).digest('hex');
-    // Use timing-safe comparison
     try {
       return timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(computed, 'hex'));
     } catch {

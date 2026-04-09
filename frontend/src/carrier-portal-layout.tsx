@@ -86,6 +86,20 @@ export function CarrierPortalLayout() {
           >
             Bid History
           </NavLink>
+          <NavLink
+            to="/carrier-portal/profile"
+            style={({ isActive }) => ({
+              padding: '6px 12px',
+              borderRadius: 'var(--radius-sm)',
+              textDecoration: 'none',
+              fontSize: '14px',
+              fontWeight: isActive ? 600 : 400,
+              color: isActive ? 'var(--color-primary)' : 'var(--color-text)',
+              background: isActive ? 'var(--color-primary-light)' : 'transparent',
+            })}
+          >
+            Profile
+          </NavLink>
           <div style={{ borderLeft: '1px solid var(--color-border)', height: '24px', margin: '0 8px' }} />
           <span style={{ fontSize: '13px', color: 'var(--color-text-secondary)' }}>{user.email}</span>
           <button className="button-outline" style={{ padding: '4px 12px', fontSize: '12px' }} onClick={handleLogout}>

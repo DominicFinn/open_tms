@@ -61,6 +61,37 @@ export async function carrierPortalRoutes(server: FastifyInstance) {
     };
   });
 
+  // Change password
+  server.post('/api/v1/carrier-portal/change-password', {
+    schema: {
+      tags: ['Carrier Portal'],
+      summary: 'Change own password',
+      body: {
+        type: 'object',
+        required: ['currentPassword', 'newPassword'],
+        properties: {
+          currentPassword: { type: 'string' },
+          newPassword: { type: 'string', minLength: 8 },
+        },
+      },
+    },
+    preHandler: [authenticateCarrierJWT],
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const userId = (req as any).carrierUser.sub;
+    const { currentPassword, newPassword } = z.object({
+      currentPassword: z.string().min(1),
+      newPassword: z.string().min(8),
+    }).parse((req as any).body);
+
+    try {
+      await authService.changePassword(userId, currentPassword, newPassword);
+      return { data: { changed: true }, error: null };
+    } catch (err: any) {
+      reply.code(400);
+      return { data: null, error: err.message };
+    }
+  });
+
   // List active tenders for this carrier
   server.get('/api/v1/carrier-portal/tenders', {
     schema: { tags: ['Carrier Portal'], summary: 'List active tenders for this carrier' },

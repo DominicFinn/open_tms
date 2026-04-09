@@ -90,6 +90,34 @@ export async function carrierUserRoutes(server: FastifyInstance) {
     }
   });
 
+  // Admin reset password for carrier user
+  server.post('/api/v1/carriers/:carrierId/users/:id/reset-password', {
+    schema: {
+      tags: ['Carrier Users'],
+      summary: 'Reset password for a carrier user (admin)',
+      body: {
+        type: 'object',
+        required: ['newPassword'],
+        properties: {
+          newPassword: { type: 'string', minLength: 8 },
+        },
+      },
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { carrierId: string; id: string };
+    const { newPassword } = z.object({
+      newPassword: z.string().min(8),
+    }).parse((req as any).body);
+
+    try {
+      await authService.adminResetPassword(id, newPassword);
+      return { data: { reset: true }, error: null };
+    } catch (err: any) {
+      reply.code(400);
+      return { data: null, error: err.message };
+    }
+  });
+
   // Deactivate carrier user
   server.delete('/api/v1/carriers/:carrierId/users/:id', {
     schema: {
