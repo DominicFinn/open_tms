@@ -800,7 +800,7 @@ export async function orderRoutes(server: FastifyInstance) {
     }).parse((req as any).body);
 
     try {
-      const result = await conversionService.batchConvert(body.orderIds, { mode: body.mode });
+      const result = await conversionService.batchConvert(body.orderIds, { mode: body.mode }, req.user?.sub);
 
       if (!result.success && result.shipmentIds.length === 0) {
         reply.code(400);
@@ -831,7 +831,7 @@ export async function orderRoutes(server: FastifyInstance) {
         return { data: null, error: 'Order not found' };
       }
 
-      const result = await conversionService.splitOrder(id, body.groups);
+      const result = await conversionService.splitOrder(id, body.groups, req.user?.sub);
 
       if (!result.success) {
         reply.code(400);

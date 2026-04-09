@@ -17,7 +17,7 @@ export async function registerEventHandlers(
   emailService?: IEmailService
 ): Promise<void> {
   const handlers: IEventHandler[] = [
-    new AuditHandler(),
+    new AuditHandler(prisma),
     new InAppNotificationHandler(prisma),
     // Future handlers:
     // new WebhookHandler(prisma),

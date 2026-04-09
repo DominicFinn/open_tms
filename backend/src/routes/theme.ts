@@ -257,4 +257,107 @@ export async function themeRoutes(server: FastifyInstance) {
     }
     return { data: { message: 'Logo removed' }, error: null };
   });
+
+  // GET /api/v1/theme/email-branding — get custom email header/footer HTML
+  server.get('/api/v1/theme/email-branding', {
+    schema: {
+      description: 'Get the custom email header and footer HTML used in notification emails.',
+      tags: ['Theme'],
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            data: {
+              type: 'object',
+              properties: {
+                emailHeaderHtml: { type: 'string', nullable: true },
+                emailFooterHtml: { type: 'string', nullable: true },
+              },
+            },
+            error: { type: 'object', nullable: true },
+          },
+        },
+      },
+    },
+  }, async () => {
+    const org = await prisma.organization.findFirst({
+      select: { emailHeaderHtml: true, emailFooterHtml: true },
+    });
+    return {
+      data: {
+        emailHeaderHtml: org?.emailHeaderHtml || null,
+        emailFooterHtml: org?.emailFooterHtml || null,
+      },
+      error: null,
+    };
+  });
+
+  // PUT /api/v1/theme/email-branding — save custom email header/footer HTML
+  server.put('/api/v1/theme/email-branding', {
+    schema: {
+      description: 'Update the custom email header and footer HTML. Pass null to reset to defaults. HTML is sanitized to email-safe tags.',
+      tags: ['Theme'],
+      body: {
+        type: 'object',
+        properties: {
+          emailHeaderHtml: { type: 'string', nullable: true },
+          emailFooterHtml: { type: 'string', nullable: true },
+        },
+      },
+      response: {
+        200: { type: 'object', properties: { data: { type: 'object' }, error: { type: 'object', nullable: true } } },
+        400: errorResponse,
+      },
+    },
+  }, async (req, reply) => {
+    const body = req.body as { emailHeaderHtml?: string | null; emailFooterHtml?: string | null };
+    const MAX_HTML_LENGTH = 10000;
+
+    if (body.emailHeaderHtml && body.emailHeaderHtml.length > MAX_HTML_LENGTH) {
+      reply.code(400);
+      return { data: null, error: `Email header HTML too long. Maximum ${MAX_HTML_LENGTH} characters.` };
+    }
+    if (body.emailFooterHtml && body.emailFooterHtml.length > MAX_HTML_LENGTH) {
+      reply.code(400);
+      return { data: null, error: `Email footer HTML too long. Maximum ${MAX_HTML_LENGTH} characters.` };
+    }
+
+    const org = await prisma.organization.findFirst();
+    if (!org) {
+      reply.code(404);
+      return { data: null, error: 'Organization not found' };
+    }
+
+    const updated = await prisma.organization.update({
+      where: { id: org.id },
+      data: {
+        emailHeaderHtml: body.emailHeaderHtml || null,
+        emailFooterHtml: body.emailFooterHtml || null,
+        themeUpdatedAt: new Date(),
+      },
+      select: { emailHeaderHtml: true, emailFooterHtml: true },
+    });
+
+    return { data: updated, error: null };
+  });
+
+  // DELETE /api/v1/theme/email-branding — reset email branding to defaults
+  server.delete('/api/v1/theme/email-branding', {
+    schema: {
+      description: 'Reset email header and footer to defaults (removes custom HTML).',
+      tags: ['Theme'],
+      response: {
+        200: { type: 'object', properties: { data: { type: 'object', properties: { message: { type: 'string' } } }, error: { type: 'object', nullable: true } } },
+      },
+    },
+  }, async () => {
+    const org = await prisma.organization.findFirst();
+    if (org) {
+      await prisma.organization.update({
+        where: { id: org.id },
+        data: { emailHeaderHtml: null, emailFooterHtml: null, themeUpdatedAt: new Date() },
+      });
+    }
+    return { data: { message: 'Email branding reset to defaults' }, error: null };
+  });
 }

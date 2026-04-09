@@ -45,8 +45,8 @@ export interface CompatibilityCheck {
 
 export interface IOrderConversionService {
   checkCompatibility(orderIds: string[]): Promise<CompatibilityCheck>;
-  batchConvert(orderIds: string[], options: BatchConvertOptions): Promise<BatchConvertResult>;
-  splitOrder(orderId: string, groups: SplitGroup[]): Promise<SplitOrderResult>;
+  batchConvert(orderIds: string[], options: BatchConvertOptions, userId?: string): Promise<BatchConvertResult>;
+  splitOrder(orderId: string, groups: SplitGroup[], userId?: string): Promise<SplitOrderResult>;
 }
 
 export class OrderConversionService implements IOrderConversionService {
@@ -157,26 +157,27 @@ export class OrderConversionService implements IOrderConversionService {
 
   async batchConvert(
     orderIds: string[],
-    options: BatchConvertOptions
+    options: BatchConvertOptions,
+    userId?: string
   ): Promise<BatchConvertResult> {
     if (orderIds.length === 0) {
       return { success: false, shipmentIds: [], errors: ['No orders specified'], message: 'No orders specified' };
     }
 
     if (options.mode === 'individual') {
-      return this.convertIndividually(orderIds);
+      return this.convertIndividually(orderIds, userId);
     }
 
-    return this.combineIntoShipment(orderIds);
+    return this.combineIntoShipment(orderIds, userId);
   }
 
-  private async convertIndividually(orderIds: string[]): Promise<BatchConvertResult> {
+  private async convertIndividually(orderIds: string[], userId?: string): Promise<BatchConvertResult> {
     const shipmentIds: string[] = [];
     const errors: string[] = [];
 
     for (const orderId of orderIds) {
       try {
-        const result = await this.convertSingleOrder(orderId);
+        const result = await this.convertSingleOrder(orderId, userId);
         shipmentIds.push(result.shipmentId);
       } catch (err: any) {
         errors.push(`Order ${orderId}: ${err.message}`);
@@ -194,7 +195,7 @@ export class OrderConversionService implements IOrderConversionService {
     };
   }
 
-  private async convertSingleOrder(orderId: string): Promise<{ shipmentId: string }> {
+  private async convertSingleOrder(orderId: string, userId?: string): Promise<{ shipmentId: string }> {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
       include: {
@@ -265,6 +266,7 @@ export class OrderConversionService implements IOrderConversionService {
             before: { deliveryStatus: order.deliveryStatus, status: order.status },
             after: { deliveryStatus: 'assigned', status: 'converted' },
           },
+          userId,
         },
       });
 
@@ -272,7 +274,7 @@ export class OrderConversionService implements IOrderConversionService {
     });
   }
 
-  private async combineIntoShipment(orderIds: string[]): Promise<BatchConvertResult> {
+  private async combineIntoShipment(orderIds: string[], userId?: string): Promise<BatchConvertResult> {
     // Validate compatibility first
     const check = await this.checkCompatibility(orderIds);
     if (!check.compatible) {
@@ -380,6 +382,7 @@ export class OrderConversionService implements IOrderConversionService {
                 after: { deliveryStatus: 'assigned', status: 'converted' },
                 batchOrderIds: orderIds,
               },
+              userId,
             },
           });
         }
@@ -403,7 +406,7 @@ export class OrderConversionService implements IOrderConversionService {
     }
   }
 
-  async splitOrder(orderId: string, groups: SplitGroup[]): Promise<SplitOrderResult> {
+  async splitOrder(orderId: string, groups: SplitGroup[], userId?: string): Promise<SplitOrderResult> {
     if (groups.length < 2) {
       return {
         success: false,
@@ -599,6 +602,7 @@ export class OrderConversionService implements IOrderConversionService {
               splitShipmentIds: ids,
               splitGroups: groups.length,
             },
+            userId,
           },
         });
 

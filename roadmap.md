@@ -76,7 +76,7 @@
   - ✅ Roles & permissions (admin, dispatcher, warehouse, read-only)
   - ✅ Session management (JWT-based)
   - Multi-tenancy support (extend existing Organization model) 🔲
-  - User attribution on audit trail events 🔲
+  - ✅ User attribution on audit trail events
 - **Document Templates** ✅
   - ✅ Auto-generate Bills of Lading, shipping labels, customs forms
   - ✅ PDF generation with prefilled shipment details (pdf-lib)
@@ -95,10 +95,6 @@
     - ⚠️ Open decision: opaque UUIDs won't suit SharePoint/network drive providers where users expect browsable folder structures. Key format may need to be per-provider if file-system-based storage is added later.
   - ✅ Default 10-year retention period on all files and generated documents
   - Data export capability 🔲 (low priority — bulk export of documents/attachments per entity)
-  - Electronic signature capture for delivery confirmation 🔲
-    - **Deferred**: Requires a legally binding signature system — simple canvas signatures are not sufficient
-    - Will implement as adapter pattern with pluggable providers (DocuSign, Adobe Sign, or similar)
-    - Consider both e-signature and wet signature workflows
   - Begin audit trail for shipment events 🔲
 - **Theming & White-labeling** ✅
   - ✅ CSS custom properties stored as JSON in Organization.themeConfig
@@ -111,8 +107,8 @@
   - ✅ Settings, document templates, and custom fields moved to Admin app
   - ✅ Hardcoded colors replaced with CSS variables across all frontend components
   - ✅ CLAUDE.md created with frontend theming conventions
-  - Email header/footer branding configuration 🔲
-  - Document templates should inherit branding (logo, colors) 🔲
+  - ✅ Email header/footer branding configuration
+  - ✅ Document templates inherit branding (logo, colors, org name)
 - **Custom Fields** ✅
   - ✅ Configurable fields for shipments, orders, carriers, customers, and locations
   - ✅ Field types: text, decimal, integer, date, boolean, single-select list, multi-select list
@@ -127,12 +123,6 @@
   - ✅ User-level overrides: each user selects preferred units (null = use org default)
   - ✅ Conversion utilities (backend stores canonical metric, converts on display)
   - ✅ Settings UI updated with temperature and distance unit selectors
-- **Multi-Language Support** 🔲
-  - Language files (JSON) for UI translations
-  - User-selectable language preference
-  - Backend error messages and labels in language files
-  - RTL layout support for applicable languages
-
 ## **Phase 4: Notifications, Tracking & Exception Management**
 - **Emails & Notifications** 🔲
   - Email service (pluggable: SMTP, SendGrid, SES) via DI container
@@ -163,6 +153,16 @@
   - Real-time GPS location tracking
   - Offline support with sync when reconnected
   - Push notifications for new assignments
+- **Electronic Signature Capture** 🔲
+  - Requires a legally binding signature system — simple canvas signatures are not sufficient
+  - Adapter pattern with pluggable providers (DocuSign, Adobe Sign, or similar)
+  - Both e-signature and wet signature workflows
+  - Integrated with driver mobile app for delivery confirmation
+- **Multi-Language Support** 🔲
+  - Language files (JSON) for UI translations
+  - User-selectable language preference
+  - Backend error messages and labels in language files
+  - RTL layout support for applicable languages
 
 ## **Phase 5: IoT Integration (System Loco)**
 - **Device–Shipment Linking** 🔲

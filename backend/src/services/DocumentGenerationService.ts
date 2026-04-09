@@ -42,6 +42,26 @@ export class DocumentGenerationService implements IDocumentGenerationService {
     Handlebars.registerHelper('eq', (a: any, b: any) => a === b);
   }
 
+  /**
+   * Load organization branding for document templates.
+   * Returns org name, primary color, and logo URL (if available).
+   */
+  private async loadBranding(): Promise<{
+    orgName: string;
+    primaryColor: string;
+    logoUrl: string | null;
+  }> {
+    const org = await this.prisma.organization.findFirst({
+      select: { name: true, themeConfig: true, logoStorageKey: true },
+    });
+    const themeConfig = org?.themeConfig as Record<string, string> | null;
+    return {
+      orgName: org?.name || 'Open TMS',
+      primaryColor: themeConfig?.['primary'] || '#1976d2',
+      logoUrl: org?.logoStorageKey ? '/api/v1/theme/logo' : null,
+    };
+  }
+
   async generateBOL(shipmentId: string, templateId?: string, userId?: string) {
     // Load shipment with all relations
     const shipment = await this.prisma.shipment.findUniqueOrThrow({
@@ -84,8 +104,10 @@ export class DocumentGenerationService implements IDocumentGenerationService {
     const allLineItems = orders.flatMap(o => o.lineItems);
     const allUnits = orders.flatMap(o => o.trackableUnits);
     const totalWeight = allLineItems.reduce((sum, li) => sum + (li.weight ?? 0), 0);
+    const branding = await this.loadBranding();
 
     const data = {
+      branding,
       bolNumber,
       date: formatDate(today),
       shipment: {
@@ -165,8 +187,10 @@ export class DocumentGenerationService implements IDocumentGenerationService {
     });
 
     const shipment = order.orderShipments[0]?.shipment;
+    const branding = await this.loadBranding();
 
     const data = {
+      branding,
       orderNumber: order.orderNumber,
       poNumber: order.poNumber || '',
       shipmentReference: shipment?.reference || '',
@@ -222,8 +246,10 @@ export class DocumentGenerationService implements IDocumentGenerationService {
     const orders = shipment.orderShipments.map(os => os.order);
     const allLineItems = orders.flatMap(o => o.lineItems);
     const totalWeight = allLineItems.reduce((sum, li) => sum + (li.weight ?? 0), 0);
+    const branding = await this.loadBranding();
 
     const data = {
+      branding,
       date: formatDate(new Date()),
       invoiceNumber: `CI-${shipment.reference}`,
       shipment: {

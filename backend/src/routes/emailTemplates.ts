@@ -194,13 +194,15 @@ export async function emailTemplateRoutes(server: FastifyInstance) {
 
     // Get org branding
     const org = await server.prisma.organization.findFirst({
-      select: { name: true, themeConfig: true },
+      select: { name: true, themeConfig: true, emailHeaderHtml: true, emailFooterHtml: true },
     });
 
     const themeConfig = org?.themeConfig as Record<string, string> | null;
     const branding = {
       orgName: org?.name || 'Open TMS',
-      primaryColor: themeConfig?.['--color-primary'] || '#1976d2',
+      primaryColor: themeConfig?.['primary'] || themeConfig?.['--color-primary'] || '#1976d2',
+      emailHeaderHtml: org?.emailHeaderHtml || undefined,
+      emailFooterHtml: org?.emailFooterHtml || undefined,
     };
 
     // Sample data for preview
