@@ -242,6 +242,10 @@
   transition: transform 0.15s;
 }
 
+.vn-app-grid-tile:hover {
+  background: none;
+}
+
 .vn-app-grid-tile:hover .vn-app-grid-icon {
   transform: translateY(-3px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
