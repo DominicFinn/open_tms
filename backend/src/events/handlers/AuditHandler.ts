@@ -40,6 +40,22 @@ function buildDescription(event: DomainEvent): string {
       return `Order ${payload.orderReference || event.entityId} delivered`;
     case 'order.exception':
       return `Order ${payload.orderReference || event.entityId} exception: ${payload.description || payload.exceptionType || 'unknown'}`;
+    case 'location.created':
+      return `Location ${payload.locationName || event.entityId} created${payload.source ? ` (via ${payload.source})` : ''}`;
+    case 'location.updated':
+      return `Location ${payload.locationName || event.entityId} updated`;
+    case 'location.archived':
+      return `Location ${payload.locationName || event.entityId} archived`;
+    case 'location.arrival_criteria_added':
+      return `Arrival criteria (${payload.criteriaType}) added to location ${payload.locationName || event.entityId}`;
+    case 'tender.created':
+      return `Tender created for shipment ${payload.shipmentReference || payload.shipmentId}`;
+    case 'tender.published':
+      return `Tender published for carrier bidding (shipment ${payload.shipmentReference || payload.shipmentId})`;
+    case 'tender.awarded':
+      return `Tender awarded to carrier ${payload.carrierId}${payload.price ? ` at ${payload.price}` : ''}`;
+    case 'tender.cancelled':
+      return `Tender cancelled for shipment ${payload.shipmentReference || payload.shipmentId}`;
     default:
       return `${entity} ${event.entityId} ${action}`;
   }

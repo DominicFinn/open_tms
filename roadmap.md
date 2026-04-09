@@ -121,6 +121,37 @@
   - ✅ User-level overrides: each user selects preferred units (null = use org default)
   - ✅ Conversion utilities (backend stores canonical metric, converts on display)
   - ✅ Settings UI updated with temperature and distance unit selectors
+## **Phase 3b: Location Arrival Criteria & Carrier Tendering**
+- **Location Auto-Creation & Arrival Criteria** 🔲
+  - Locations are always created when orders/shipments arrive (EDI, API, CSV, manual)
+  - Automatic location resolution: match by name + city, create if no match found
+  - Default geofence arrival criteria created for every new location
+  - Three arrival criteria types:
+    - **Geofence** — radius-based detection (GPS coordinates + radius in meters)
+    - **WiFi Network** — IoT device/tracker detects known WiFi SSID/BSSID at location
+    - **BLE Anchor** — Bluetooth Low Energy beacon detection (UUID, major, minor, RSSI threshold)
+  - Arrival criteria management API (CRUD per location)
+  - Configurable default geofence radius at organization level
+  - Audit events for location creation, editing, and arrival criteria changes
+- **Shipment Completion Criteria** 🔲
+  - Shipment regarded as completed when:
+    - Arrival criteria met at destination (geofence entered, WiFi seen, BLE detected)
+    - Manually completed by user
+    - Automatically completed via external API call / integration event
+  - Arrival criteria evaluation integrated with existing geofence + IoT delivery service
+- **Carrier Tendering** 🔲
+  - When a shipment has origin/destination but no lane, a tender is created
+  - Tender lifecycle: draft → published → awarded / cancelled / expired
+  - Carrier responses with pricing, transit time, and notes
+  - Award tender to carrier — automatically assigns carrier to shipment
+  - Auto-publish toggle: admin setting to auto-publish tenders for laneless shipments
+  - Manual publish option for users who want to assign carriers directly
+  - Tender audit trail via domain events
+- **Admin Settings** 🔲
+  - Auto-tender feature toggle (on/off) in organization settings
+  - Default geofence radius configuration
+  - Settings available in Admin > Settings
+
 ## **Phase 4: Notifications, Tracking & Exception Management**
 - **Emails & Notifications** 🔲
   - Email service (pluggable: SMTP, SendGrid, SES) via DI container
@@ -404,8 +435,8 @@
 ---
 
 🔥 **Priorities:**
-- **Immediate:** **Phase 3** complete — proceed to **Phase 4** (notifications, triage, tracking).
-- **Short term:** Deliver **Phase 4** (notifications, triage centre, live tracking) for operational visibility.
+- **Immediate:** **Phase 3** complete — proceed to **Phase 3b** (location arrival criteria, carrier tendering).
+- **Short term:** Deliver **Phase 3b** then **Phase 4** (notifications, triage centre, live tracking) for operational visibility.
 - **Medium term:** Deliver **Phase 5–6** (IoT + cold chain compliance) → unique differentiator.
 - **Long term:** **Phase 7–8** (financials, portals, N8N integration) to scale platform.
 - **Strategic:** **Phase 9–9c** (routes & maps, audit review, AI agents, data providers) — the intelligence layer that turns Open TMS from a record system into a decision system. Phase 9a (audit review) lands before agentic work to ensure compliance foundations are solid.

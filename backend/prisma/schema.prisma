@@ -52,6 +52,7 @@ model Location {
   pendingLaneRequestsAsOrigin PendingLaneRequest[] @relation("PendingLaneOrigin")
   pendingLaneRequestsAsDestination PendingLaneRequest[] @relation("PendingLaneDestination")
   shipmentStops  ShipmentStop[] // Multi-stop shipment support
+  arrivalCriteria ArrivalCriteria[] // Arrival criteria for this location
 
   // Custom fields
   customFieldVersionId String?
@@ -85,6 +86,7 @@ model Shipment {
   orderShipments OrderShipment[]
   stops         ShipmentStop[] // Multi-stop route support
   outboundLogs  OutboundIntegrationLog[] // Outbound integration logs
+  tender        Tender? // Carrier tender for this shipment
 
   // Custom fields
   customFieldVersionId String?
@@ -138,6 +140,107 @@ model ShipmentStop {
   @@index([status])
 }
 
+// ─── Arrival Criteria ─────────────────────────────────────────────────────────
+// Every location should have at least one arrival criteria to determine
+// when a shipment has arrived. Types: geofence, wifi, ble (Bluetooth anchor).
+
+model ArrivalCriteria {
+  id          String   @id @default(uuid())
+  location    Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  locationId  String
+
+  // Criteria type
+  criteriaType String  // "geofence", "wifi", "ble"
+
+  // Geofence criteria
+  radiusMeters Float?  // Radius in meters for geofence trigger
+  lat          Float?  // Center latitude (defaults to location lat if null)
+  lng          Float?  // Center longitude (defaults to location lng if null)
+
+  // WiFi criteria (IoT device detects a known WiFi network)
+  wifiSsid     String? // WiFi network name (SSID)
+  wifiBssid    String? // WiFi access point MAC address (BSSID) for precise identification
+
+  // BLE criteria (Bluetooth Low Energy location anchor)
+  bleUuid      String? // BLE beacon UUID
+  bleMajor     Int?    // BLE beacon major value
+  bleMinor     Int?    // BLE beacon minor value
+  bleRssiThreshold Int? // RSSI threshold for proximity detection (e.g., -70 dBm)
+
+  // Metadata
+  name         String? // Optional friendly name (e.g., "Loading Dock A WiFi")
+  active       Boolean @default(true)
+  priority     Int     @default(0) // Higher priority criteria checked first
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([locationId])
+  @@index([criteriaType])
+  @@index([locationId, active])
+}
+
+// ─── Carrier Tender ──────────────────────────────────────────────────────────
+// When a shipment has origin/destination but no lane, it can be published
+// for tender to carriers. Carriers can accept/reject/bid on tenders.
+
+model Tender {
+  id            String   @id @default(uuid())
+  shipment      Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  shipmentId    String   @unique // One active tender per shipment
+
+  // Tender status
+  status        String   @default("draft") // draft, published, awarded, cancelled, expired
+
+  // Publishing
+  publishedAt   DateTime?
+  expiresAt     DateTime? // Optional deadline for carrier responses
+  publishMethod String   @default("manual") // "manual" or "auto"
+
+  // Award
+  awardedCarrierId String?
+  awardedCarrier   Carrier? @relation(fields: [awardedCarrierId], references: [id])
+  awardedAt        DateTime?
+  awardedPrice     Float?
+  awardedCurrency  String   @default("USD")
+
+  // Notes
+  notes         String?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  responses     TenderResponse[]
+
+  @@index([status])
+  @@index([shipmentId])
+}
+
+model TenderResponse {
+  id          String   @id @default(uuid())
+  tender      Tender   @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+  tenderId    String
+  carrier     Carrier  @relation(fields: [carrierId], references: [id])
+  carrierId   String
+
+  // Response
+  status      String   @default("pending") // pending, accepted, declined, expired
+  price       Float?   // Carrier's quoted price
+  currency    String   @default("USD")
+  notes       String?
+  transitDays Int?     // Estimated transit days
+
+  respondedAt DateTime?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([tenderId, carrierId])
+  @@index([tenderId])
+  @@index([carrierId])
+  @@index([status])
+}
+
 model ShipmentEvent {
   id              String   @id @default(uuid())
   shipment        Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
@@ -180,6 +283,8 @@ model Carrier {
   drivers      Driver[]
   laneCarriers LaneCarrier[]
   shipments    Shipment[]
+  tenders      Tender[]         // Tenders awarded to this carrier
+  tenderResponses TenderResponse[] // Carrier responses to tenders
 
   // Carrier Validation (SOP-CL-001)
   validationTier            String?    // "tier1" | "tier2" | "tier3" | null
@@ -445,6 +550,10 @@ model Organization {
   logoMimeType        String?                     // "image/png", "image/svg+xml", etc.
   themeConfig         Json?                       // Full CSS custom property overrides (see ThemeConfig)
   themeUpdatedAt      DateTime?                   // Used for cache invalidation
+
+  // Carrier Tendering
+  autoTenderEnabled   Boolean  @default(false)  // Auto-publish tenders for laneless shipments
+  defaultGeofenceRadiusMeters Float @default(200) // Default geofence radius for new locations
 
   // Maps & Geocoding
   googleMapsApiKey    String?   // Google Maps API key for Places + Geocoding

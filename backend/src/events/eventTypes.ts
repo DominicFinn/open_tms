@@ -36,6 +36,21 @@ export const EVENT_TYPES = {
   CUSTOMER_UPDATED: 'customer.updated',
   CUSTOMER_ARCHIVED: 'customer.archived',
 
+  // Locations
+  LOCATION_CREATED: 'location.created',
+  LOCATION_UPDATED: 'location.updated',
+  LOCATION_ARCHIVED: 'location.archived',
+  LOCATION_ARRIVAL_CRITERIA_ADDED: 'location.arrival_criteria_added',
+  LOCATION_ARRIVAL_CRITERIA_UPDATED: 'location.arrival_criteria_updated',
+  LOCATION_ARRIVAL_CRITERIA_REMOVED: 'location.arrival_criteria_removed',
+
+  // Tenders
+  TENDER_CREATED: 'tender.created',
+  TENDER_PUBLISHED: 'tender.published',
+  TENDER_AWARDED: 'tender.awarded',
+  TENDER_CANCELLED: 'tender.cancelled',
+  TENDER_RESPONSE_RECEIVED: 'tender.response_received',
+
   // Tracking
   TRACKING_LOCATION_RECEIVED: 'tracking.location_received',
   TRACKING_GEOFENCE_ENTERED: 'tracking.geofence_entered',

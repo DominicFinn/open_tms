@@ -131,9 +131,7 @@ export async function shipmentRoutes(server: FastifyInstance) {
     // Publish domain event
     try {
       const eventBus = container.resolve<IEventBus>(TOKENS.IEventBus);
-      // Look up org from customer
-      const customer = await server.prisma.customer.findUnique({ where: { id: body.customerId }, select: { id: true } });
-      const org = await server.prisma.organization.findFirst({ select: { id: true } });
+      const org = await server.prisma.organization.findFirst({ select: { id: true, autoTenderEnabled: true } });
       await eventBus.publish(createEvent({
         type: EVENT_TYPES.SHIPMENT_CREATED,
         orgId: org?.id || 'default',
@@ -149,6 +147,32 @@ export async function shipmentRoutes(server: FastifyInstance) {
         },
         source: 'api',
       }));
+
+      // Auto-create tender for laneless shipments without a carrier
+      if (!body.laneId && !body.carrierId) {
+        const tender = await server.prisma.tender.create({
+          data: {
+            shipmentId: created.id,
+            status: org?.autoTenderEnabled ? 'published' : 'draft',
+            publishMethod: org?.autoTenderEnabled ? 'auto' : 'manual',
+            publishedAt: org?.autoTenderEnabled ? new Date() : undefined,
+          },
+        });
+
+        await eventBus.publish(createEvent({
+          type: EVENT_TYPES.TENDER_CREATED,
+          orgId: org?.id || 'default',
+          actorId: req.user?.sub,
+          entityType: 'tender',
+          entityId: tender.id,
+          payload: {
+            shipmentId: created.id,
+            shipmentReference: created.reference,
+            autoPublished: org?.autoTenderEnabled || false,
+          },
+          source: 'api',
+        }));
+      }
     } catch (err) {
       server.log.warn('Failed to publish domain event: ' + (err as Error).message);
     }
