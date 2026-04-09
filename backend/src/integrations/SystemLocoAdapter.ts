@@ -36,6 +36,7 @@ export interface ProcessingResult {
   deviceId: string;
   shipmentId: string | null;
   orderId: string | null;
+  trackableUnitId: string | null;
   shipmentEventId: string | null;
   sensorReadingId: string | null;
   deviceEventId: string | null;
@@ -66,8 +67,8 @@ export class SystemLocoAdapter {
     // 1. Upsert device
     const device = await this.upsertDevice(deviceInfo, location, payload);
 
-    // 2. Resolve shipment/order assignment
-    const { shipmentId, orderId } = await this.resolveAssignment(device.id, deviceInfo.name);
+    // 2. Resolve shipment/order/trackable unit assignment
+    const { shipmentId, orderId, trackableUnitId } = await this.resolveAssignment(device.id, deviceInfo.name);
 
     let sensorReadingId: string | null = null;
     let deviceEventId: string | null = null;
@@ -75,12 +76,12 @@ export class SystemLocoAdapter {
 
     // 3. Store sensor reading for sensor event types
     if (SENSOR_EVENT_TYPES.has(eventType)) {
-      const reading = await this.createSensorReading(device.id, shipmentId, orderId, eventTime, eventType, payload, location);
+      const reading = await this.createSensorReading(device.id, shipmentId, orderId, trackableUnitId, eventTime, eventType, payload, location);
       sensorReadingId = reading.id;
     }
 
     // 4. Store device event for all types
-    const devEvent = await this.createDeviceEvent(device.id, shipmentId, orderId, payload);
+    const devEvent = await this.createDeviceEvent(device.id, shipmentId, orderId, trackableUnitId, payload);
     deviceEventId = devEvent.id;
 
     // 5. Create ShipmentEvent for location-bearing events
@@ -93,10 +94,11 @@ export class SystemLocoAdapter {
       deviceId: device.id,
       shipmentId,
       orderId,
+      trackableUnitId,
       shipmentEventId,
       sensorReadingId,
       deviceEventId,
-      matched: !!(shipmentId || orderId),
+      matched: !!(shipmentId || orderId || trackableUnitId),
     };
   }
 
@@ -116,11 +118,11 @@ export class SystemLocoAdapter {
       device = await this.upsertDevice(deviceInfo, location, payload);
     }
 
-    // 2. Resolve shipment/order
+    // 2. Resolve shipment/order/trackable unit
     const deviceId = device?.id || null;
-    const { shipmentId, orderId } = deviceId
+    const { shipmentId, orderId, trackableUnitId } = deviceId
       ? await this.resolveAssignment(deviceId, deviceInfo.name)
-      : { shipmentId: null, orderId: null };
+      : { shipmentId: null, orderId: null, trackableUnitId: null };
 
     let sensorReadingId: string | null = null;
     let deviceEventId: string | null = null;
@@ -135,6 +137,7 @@ export class SystemLocoAdapter {
           deviceId,
           shipmentId,
           orderId,
+          trackableUnitId,
           eventTime,
           temperature: sensors.temperature != null ? Number(sensors.temperature) : null,
           batteryLevel: sensors.batteryLevel != null ? Number(sensors.batteryLevel) : null,
@@ -156,6 +159,7 @@ export class SystemLocoAdapter {
           deviceId,
           shipmentId,
           orderId,
+          trackableUnitId,
           eventTime,
           temperature: reportPayload.temperature != null ? Number(reportPayload.temperature) : null,
           impactG: reportPayload.g != null ? Number(reportPayload.g) : null,
@@ -179,6 +183,7 @@ export class SystemLocoAdapter {
             deviceId,
             shipmentId,
             orderId,
+            trackableUnitId,
             externalEventId: payload.id || null,
             eventType,
             category: 'event',
@@ -211,10 +216,11 @@ export class SystemLocoAdapter {
       deviceId: deviceId || '',
       shipmentId,
       orderId,
+      trackableUnitId,
       shipmentEventId,
       sensorReadingId,
       deviceEventId,
-      matched: !!(shipmentId || orderId),
+      matched: !!(shipmentId || orderId || trackableUnitId),
     };
   }
 
@@ -253,13 +259,13 @@ export class SystemLocoAdapter {
     });
   }
 
-  private async resolveAssignment(deviceId: string, deviceName?: string): Promise<{ shipmentId: string | null; orderId: string | null }> {
+  private async resolveAssignment(deviceId: string, deviceName?: string): Promise<{ shipmentId: string | null; orderId: string | null; trackableUnitId: string | null }> {
     // 1. Check active DeviceAssignment
     const assignment = await this.prisma.deviceAssignment.findFirst({
       where: { deviceId, active: true },
     });
     if (assignment) {
-      return { shipmentId: assignment.shipmentId, orderId: assignment.orderId };
+      return { shipmentId: assignment.shipmentId, orderId: assignment.orderId, trackableUnitId: assignment.trackableUnitId };
     }
 
     // 2. Fallback: match device name against shipment reference
@@ -267,20 +273,20 @@ export class SystemLocoAdapter {
       const shipment = await this.prisma.shipment.findFirst({
         where: { reference: deviceName, archived: false },
       });
-      if (shipment) return { shipmentId: shipment.id, orderId: null };
+      if (shipment) return { shipmentId: shipment.id, orderId: null, trackableUnitId: null };
 
       // 3. Fallback: match against order number
       const order = await this.prisma.order.findFirst({
         where: { orderNumber: deviceName, archived: false },
       });
-      if (order) return { shipmentId: null, orderId: order.id };
+      if (order) return { shipmentId: null, orderId: order.id, trackableUnitId: null };
     }
 
-    return { shipmentId: null, orderId: null };
+    return { shipmentId: null, orderId: null, trackableUnitId: null };
   }
 
   private async createSensorReading(
-    deviceId: string, shipmentId: string | null, orderId: string | null,
+    deviceId: string, shipmentId: string | null, orderId: string | null, trackableUnitId: string | null,
     eventTime: Date, eventType: string, payload: any, location: any,
   ) {
     const p = payload.payload || {};
@@ -293,6 +299,7 @@ export class SystemLocoAdapter {
         deviceId,
         shipmentId,
         orderId,
+        trackableUnitId,
         eventTime,
         temperature: p.temperature != null ? Number(p.temperature) : null,
         lightLevel: p.lightLevel != null ? Number(p.lightLevel) : null,
@@ -314,12 +321,13 @@ export class SystemLocoAdapter {
     });
   }
 
-  private async createDeviceEvent(deviceId: string, shipmentId: string | null, orderId: string | null, payload: any) {
+  private async createDeviceEvent(deviceId: string, shipmentId: string | null, orderId: string | null, trackableUnitId: string | null, payload: any) {
     return this.prisma.deviceEvent.create({
       data: {
         deviceId,
         shipmentId,
         orderId,
+        trackableUnitId,
         externalEventId: payload.id || null,
         eventType: payload.type || 'unknown',
         category: payload.category || 'event',

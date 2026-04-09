@@ -498,6 +498,10 @@ model TrackableUnit {
   barcode         String?  // Optional barcode/QR code
   notes           String?
 
+  // IoT device tracking at unit level
+  sensorReadings  SensorReading[]
+  deviceEvents    DeviceEvent[]
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -1245,6 +1249,8 @@ model SensorReading {
   shipmentId      String?
   order           Order?    @relation(fields: [orderId], references: [id], onDelete: SetNull)
   orderId         String?
+  trackableUnit   TrackableUnit? @relation(fields: [trackableUnitId], references: [id], onDelete: SetNull)
+  trackableUnitId String?
   eventTime       DateTime                        // When the reading occurred
 
   // Sensor values (nullable — only populated when present)
@@ -1278,6 +1284,7 @@ model SensorReading {
   @@index([deviceId, eventTime])
   @@index([shipmentId, eventTime])
   @@index([orderId, eventTime])
+  @@index([trackableUnitId, eventTime])
   @@index([isAlert])
 }
 
@@ -1287,6 +1294,8 @@ model DeviceEvent {
   deviceId        String
   shipmentId      String?
   orderId         String?
+  trackableUnit   TrackableUnit? @relation(fields: [trackableUnitId], references: [id], onDelete: SetNull)
+  trackableUnitId String?
 
   externalEventId String?   @unique               // System Loco event ID (for dedup)
   eventType       String                          // temperature, impact, drop, tip, zoneChange, firmware, charging, etc.
