@@ -6,6 +6,7 @@ export const defaultLabelTemplate = `
 {{#each units}}
 <div style="page-break-after: always; width: 4in; height: 6in; border: 1px solid #000; padding: 8px; font-family: monospace;">
   <div style="text-align: center; font-size: 14px; font-weight: bold; border-bottom: 2px solid #000; padding-bottom: 4px; margin-bottom: 8px;">
+    {{#if ../branding.orgName}}<span style="font-size:10px;color:{{../branding.primaryColor}};">{{../branding.orgName}}</span><br/>{{/if}}
     SHIPPING LABEL
   </div>
 

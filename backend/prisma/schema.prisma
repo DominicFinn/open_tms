@@ -449,6 +449,10 @@ model Organization {
   // Maps & Geocoding
   googleMapsApiKey    String?   // Google Maps API key for Places + Geocoding
 
+  // Email Branding
+  emailHeaderHtml     String?  // Custom HTML for email header (replaces default logo/name header)
+  emailFooterHtml     String?  // Custom HTML for email footer (replaces default "Sent by..." footer)
+
   // Email Configuration
   emailProvider       String   @default("console") // "smtp" | "sendgrid" | "ses" | "console"
   smtpHost            String?

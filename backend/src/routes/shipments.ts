@@ -137,6 +137,7 @@ export async function shipmentRoutes(server: FastifyInstance) {
       await eventBus.publish(createEvent({
         type: EVENT_TYPES.SHIPMENT_CREATED,
         orgId: org?.id || 'default',
+        actorId: req.user?.sub,
         entityType: 'shipment',
         entityId: created.id,
         payload: {
@@ -337,6 +338,7 @@ export async function shipmentRoutes(server: FastifyInstance) {
         await eventBus.publish(createEvent({
           type: EVENT_TYPES.SHIPMENT_STATUS_CHANGED,
           orgId: org?.id || 'default',
+          actorId: req.user?.sub,
           entityType: 'shipment',
           entityId: id,
           payload: {

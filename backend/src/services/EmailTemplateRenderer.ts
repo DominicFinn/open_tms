@@ -21,6 +21,8 @@ interface OrgBranding {
   orgName: string;
   logoUrl?: string;
   primaryColor?: string;
+  emailHeaderHtml?: string;
+  emailFooterHtml?: string;
 }
 
 /** Strip HTML tags for plain-text fallback */
@@ -43,9 +45,16 @@ function htmlToText(html: string): string {
 /** Wraps email content in a branded base layout */
 function wrapInBaseLayout(content: string, branding: OrgBranding): string {
   const primaryColor = branding.primaryColor || '#1976d2';
-  const logoHtml = branding.logoUrl
+
+  // Header: use custom HTML if provided, otherwise default logo/name
+  const defaultHeaderHtml = branding.logoUrl
     ? `<img src="${branding.logoUrl}" alt="${branding.orgName}" style="max-height:40px;max-width:200px;" />`
     : `<span style="font-size:18px;font-weight:600;color:${primaryColor};">${branding.orgName}</span>`;
+  const headerHtml = branding.emailHeaderHtml || defaultHeaderHtml;
+
+  // Footer: use custom HTML if provided, otherwise default
+  const defaultFooterHtml = `Sent by ${branding.orgName} via Open TMS`;
+  const footerHtml = branding.emailFooterHtml || defaultFooterHtml;
 
   return `<!DOCTYPE html>
 <html>
@@ -56,7 +65,7 @@ function wrapInBaseLayout(content: string, branding: OrgBranding): string {
       <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
         <!-- Header -->
         <tr><td style="padding:20px 24px;border-bottom:2px solid ${primaryColor};">
-          ${logoHtml}
+          ${headerHtml}
         </td></tr>
         <!-- Content -->
         <tr><td style="padding:24px;">
@@ -64,7 +73,7 @@ function wrapInBaseLayout(content: string, branding: OrgBranding): string {
         </td></tr>
         <!-- Footer -->
         <tr><td style="padding:16px 24px;border-top:1px solid #e0e0e0;color:#757575;font-size:12px;">
-          Sent by ${branding.orgName} via Open TMS
+          ${footerHtml}
         </td></tr>
       </table>
     </td></tr>
