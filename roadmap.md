@@ -69,20 +69,19 @@
   - ✅ Payload format support: EDI 856 vs JSON
   - ✅ Shared authentication helpers (basic, bearer, api_key)
 
-## **Phase 3: Platform Foundations, Documentation & Compliance**
+## **Phase 3: Platform Foundations, Documentation & Compliance** ✅
 - **User Management & Authentication** ✅
   - ✅ User accounts with login, password management
   - ✅ SSO/OAuth support (Google, Microsoft)
   - ✅ Roles & permissions (admin, dispatcher, warehouse, read-only)
   - ✅ Session management (JWT-based)
-  - Multi-tenancy support (extend existing Organization model) 🔲
   - ✅ User attribution on audit trail events
 - **Document Templates** ✅
   - ✅ Auto-generate Bills of Lading, shipping labels, customs forms
   - ✅ PDF generation with prefilled shipment details (pdf-lib)
   - ✅ Document template management UI (create/edit Handlebars templates)
   - ✅ Daily operations report (Excel export with 5 sheets: summary, shipments, orders, stop schedule, exceptions)
-- **Document Management** (partial)
+- **Document Management** ✅
   - ✅ Store and archive generated docs (GeneratedDocument model)
   - ✅ Document download and listing with filters
   - ✅ S3-compatible file storage provider (AWS S3, MinIO, Azure Blob S3 compat)
@@ -94,8 +93,7 @@
   - ✅ Opaque storage keys (UUID-based, no customer/entity info in storage paths) for security
     - ⚠️ Open decision: opaque UUIDs won't suit SharePoint/network drive providers where users expect browsable folder structures. Key format may need to be per-provider if file-system-based storage is added later.
   - ✅ Default 10-year retention period on all files and generated documents
-  - Data export capability 🔲 (low priority — bulk export of documents/attachments per entity)
-  - Begin audit trail for shipment events 🔲
+  - Begin audit trail for shipment events → moved to **Phase 9a** (Audit Review & Compliance Trail)
 - **Theming & White-labeling** ✅
   - ✅ CSS custom properties stored as JSON in Organization.themeConfig
   - ✅ Theme API (GET/PUT/DELETE) with CSS variable key allowlist and color validation
@@ -158,12 +156,6 @@
   - Adapter pattern with pluggable providers (DocuSign, Adobe Sign, or similar)
   - Both e-signature and wet signature workflows
   - Integrated with driver mobile app for delivery confirmation
-- **Multi-Language Support** 🔲
-  - Language files (JSON) for UI translations
-  - User-selectable language preference
-  - Backend error messages and labels in language files
-  - RTL layout support for applicable languages
-
 ## **Phase 5: IoT Integration (System Loco)**
 - **Device–Shipment Linking** 🔲
   - Associate IoT devices with shipments (1:1, 1:many).
@@ -179,6 +171,14 @@
     - Automatic order completion when shipment enters destination geofence
     - Enhanced triggers: geofence + light sensor = truck door opened at destination
     - Automatic status updates based on sensor data
+- **Multi-Language Support** 🔲
+  - Language files (JSON) for UI translations
+  - User-selectable language preference
+  - Backend error messages and labels in language files
+  - RTL layout support for applicable languages
+- **Data Export** 🔲
+  - Bulk export of documents/attachments per entity
+  - CSV/PDF export of shipment, order, and customer data
 
 ## **Phase 6: Cold Chain & Advanced Compliance**
 - **Cold Chain Profiles** 🔲
@@ -269,6 +269,26 @@
   - Multi-stop optimization (TSP solver) for shipments with many waypoints
   - Fuel cost estimation per route variant
   - Carbon footprint calculation per route for sustainability reporting
+
+## **Phase 9a: Audit Review & Compliance Trail**
+- **Audit Trail Review UI** 🔲
+  - Searchable, filterable audit log viewer (Admin > Audit Log)
+  - Filter by entity type, action, user, date range
+  - Timeline view per entity (shipment, order, carrier, customer)
+  - Export audit records (CSV/PDF) for compliance reviews
+- **Shipment Event Audit Trail** 🔲
+  - Complete event history on shipment detail page (status changes, assignments, document generation, stop updates)
+  - Order-level audit trail on order detail page
+  - Visual timeline with user attribution and timestamps
+- **Audit Data Integrity** 🔲
+  - Immutable audit records — no update or delete API for audit entries
+  - Checksums or hash chains on DomainEventLog for tamper evidence
+  - Retention policy enforcement (configurable per org, default 7 years)
+- **Compliance Reporting** 🔲
+  - Scheduled audit summary reports (daily/weekly digest of changes)
+  - User activity reports (actions per user over time period)
+  - Data access logging for sensitive fields (PII, financial data)
+  - Pre-built report templates for SOC 2, ISO 27001 evidence gathering
 
 ## **Phase 9b: Intelligence & AI**
 - **AI Triage Agent** 🔲
@@ -384,10 +404,16 @@
 ---
 
 🔥 **Priorities:**
-- **Immediate:** Continue **Phase 3** — User Management & Auth complete; proceed with Document Templates, Document Management, Theming & Custom Fields.
+- **Immediate:** **Phase 3** complete — proceed to **Phase 4** (notifications, triage, tracking).
 - **Short term:** Deliver **Phase 4** (notifications, triage centre, live tracking) for operational visibility.
 - **Medium term:** Deliver **Phase 5–6** (IoT + cold chain compliance) → unique differentiator.
 - **Long term:** **Phase 7–8** (financials, portals, N8N integration) to scale platform.
-- **Strategic:** **Phase 9–9c** (routes & maps, AI agents, data providers) — the intelligence layer that turns Open TMS from a record system into a decision system.
+- **Strategic:** **Phase 9–9c** (routes & maps, audit review, AI agents, data providers) — the intelligence layer that turns Open TMS from a record system into a decision system. Phase 9a (audit review) lands before agentic work to ensure compliance foundations are solid.
 - **Operational:** **Phase 10** (SRE & observability) — ship early pieces (health checks, structured logging, queue dashboard) alongside Phase 4, then build out fully as deployment complexity grows.
 - **Future:** **Phase 11** (advanced operations) for enterprise depth.
+
+---
+
+## Considerations (Outside Roadmap)
+
+- **Multi-Tenancy Support** — Extend existing Organization model for true multi-tenant isolation. Significant architectural decision: row-level security vs schema-per-tenant vs database-per-tenant. Impacts every query, every route, every permission check. Should be evaluated when there is a concrete need (multiple paying customers on a single deployment) rather than built speculatively. Current single-org model works for self-hosted and single-tenant SaaS deployments.
