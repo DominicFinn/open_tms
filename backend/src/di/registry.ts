@@ -33,6 +33,10 @@ import { PgBossQueueAdapter } from '../queue/PgBossQueueAdapter.js';
 import { PgBossEventBus } from '../events/PgBossEventBus.js';
 import { SmtpEmailService } from '../services/SmtpEmailService.js';
 import { ConsoleEmailService } from '../services/ConsoleEmailService.js';
+import { TenderRepository } from '../repositories/TenderRepository.js';
+import { CarrierUserRepository } from '../repositories/CarrierUserRepository.js';
+import { TenderService } from '../services/TenderService.js';
+import { CarrierAuthService } from '../services/CarrierAuthService.js';
 
 /**
  * Register all application dependencies
@@ -186,6 +190,26 @@ export function registerDependencies(prisma: PrismaClient): void {
       container.resolve(TOKENS.PrismaClient),
       container.resolve(TOKENS.IQueueAdapter)
     );
+  });
+
+  // Tender repositories and services
+  container.singleton(TOKENS.ITenderRepository).toFactory(() => {
+    return new TenderRepository(container.resolve(TOKENS.PrismaClient));
+  });
+
+  container.singleton(TOKENS.ICarrierUserRepository).toFactory(() => {
+    return new CarrierUserRepository(container.resolve(TOKENS.PrismaClient));
+  });
+
+  container.singleton(TOKENS.ITenderService).toFactory(() => {
+    return new TenderService(
+      container.resolve(TOKENS.ITenderRepository),
+      container.resolve(TOKENS.PrismaClient),
+    );
+  });
+
+  container.singleton(TOKENS.ICarrierAuthService).toFactory(() => {
+    return new CarrierAuthService(container.resolve(TOKENS.ICarrierUserRepository));
   });
 
   // EDI services

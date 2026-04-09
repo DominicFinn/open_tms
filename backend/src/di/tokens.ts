@@ -37,6 +37,14 @@ export const TOKENS = {
   // Email tokens
   IEmailService: Symbol.for('IEmailService'),
 
+  // Tender tokens
+  ITenderRepository: Symbol.for('ITenderRepository'),
+  ICarrierUserRepository: Symbol.for('ICarrierUserRepository'),
+  ITenderService: Symbol.for('ITenderService'),
+  ICarrierAuthService: Symbol.for('ICarrierAuthService'),
+  IEDI204Service: Symbol.for('IEDI204Service'),
+  IEDI990ParseService: Symbol.for('IEDI990ParseService'),
+
   // Infrastructure tokens
   PrismaClient: Symbol.for('PrismaClient'),
   IFileStorageProvider: Symbol.for('IFileStorageProvider'),

@@ -52,6 +52,14 @@ import VNextOrders from './vnext-design/VNextOrders';
 import VNextIssueKanban from './vnext-design/VNextIssueKanban';
 import VNextCarriers from './vnext-design/VNextCarriers';
 import VNextCarrierBidding from './vnext-design/VNextCarrierBidding';
+import Tenders from './pages/Tenders';
+import TenderDetail from './pages/TenderDetail';
+import CreateTender from './pages/CreateTender';
+import { CarrierPortalLayout } from './carrier-portal-layout';
+import CarrierLogin from './pages/carrier-portal/CarrierLogin';
+import CarrierDashboard from './pages/carrier-portal/CarrierDashboard';
+import CarrierTenderView from './pages/carrier-portal/CarrierTenderView';
+import CarrierBidHistory from './pages/carrier-portal/CarrierBidHistory';
 import './theme.css';
 
 const root = createRoot(document.getElementById('root')!);
@@ -82,6 +90,14 @@ root.render(
           <Route path="custom-fields" element={<CustomFields />} />
           <Route path="maps" element={<MapsSettings />} />
           <Route path="style-guide" element={<StyleGuide />} />
+        </Route>
+
+        {/* Carrier Portal */}
+        <Route path="/carrier-portal/login" element={<CarrierLogin />} />
+        <Route path="/carrier-portal" element={<CarrierPortalLayout />}>
+          <Route index element={<CarrierDashboard />} />
+          <Route path="tenders/:id" element={<CarrierTenderView />} />
+          <Route path="bids" element={<CarrierBidHistory />} />
         </Route>
 
         {/* V-Next Design Prototype */}
@@ -124,6 +140,10 @@ root.render(
               <Route path="/orders/import/edi" element={<OrderImportEDI />} />
               <Route path="/orders/:id" element={<OrderDetails />} />
               <Route path="/orders/:id/edit" element={<EditOrder />} />
+
+              <Route path="/tenders" element={<Tenders />} />
+              <Route path="/tenders/create" element={<CreateTender />} />
+              <Route path="/tenders/:id" element={<TenderDetail />} />
 
               <Route path="/shipments" element={<Shipments />} />
               <Route path="/shipments/create" element={<CreateShipment />} />

@@ -85,6 +85,7 @@ model Shipment {
   orderShipments OrderShipment[]
   stops         ShipmentStop[] // Multi-stop route support
   outboundLogs  OutboundIntegrationLog[] // Outbound integration logs
+  tenders       Tender[] // Carrier tenders for this shipment
 
   // Custom fields
   customFieldVersionId String?
@@ -192,9 +193,17 @@ model Carrier {
   validatedAt               DateTime?
   validatedBy               String?
 
+  // Standard Carrier Alpha Code (needed for EDI 204)
+  scacCode     String?
+
   // Custom fields
   customFieldVersionId String?
   customFieldValues    Json?
+
+  // Tendering relations
+  carrierUsers   CarrierUser[]
+  tenderOffers   TenderOffer[]
+  tenderBids     TenderBid[]
 }
 
 model Vehicle {
@@ -288,6 +297,14 @@ model LaneCarrier {
   assigned     Boolean  @default(false) // True if this carrier is assigned to the lane
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+
+  // Contract rate fields
+  rateType              String?   // "per_mile" | "flat" | "cwt"
+  contractStartDate     DateTime?
+  contractEndDate       DateTime?
+  fuelSurchargePercent  Float?
+  accessorialRates      Json?     // { "detention": 50, "lumper": 75, ... }
+  isContractRate        Boolean   @default(false)
 
   @@unique([laneId, carrierId])
 }
@@ -732,6 +749,10 @@ model EdiPartner {
 
   // Field mapping template (JSON)
   fieldMapping    Json?
+
+  // Outbound EDI tendering
+  ediTenderEnabled Boolean  @default(false) // Can send/receive EDI 204/990
+  ediOutboundDir   String?                  // SFTP directory for outbound EDI 204 files
 
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -1181,4 +1202,138 @@ model EmailTemplate {
 
   @@unique([organizationId, eventType])          // One template per event type per org
   @@index([eventType])
+}
+
+// ============================================================
+// Carrier Tendering — CarrierUser, Tender, TenderOffer, TenderBid
+// ============================================================
+
+model CarrierUser {
+  id           String   @id @default(uuid())
+  carrier      Carrier  @relation(fields: [carrierId], references: [id])
+  carrierId    String
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         String   @default("dispatcher") // "dispatcher" | "admin"
+  active       Boolean  @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenderBids   TenderBid[]
+
+  @@index([carrierId])
+  @@index([email])
+}
+
+model Tender {
+  id                    String   @id @default(uuid())
+  shipment              Shipment @relation(fields: [shipmentId], references: [id])
+  shipmentId            String
+  reference             String   @unique          // Auto-generated: "TND-001"
+
+  // Strategy & configuration
+  strategy              String   @default("broadcast") // "broadcast" | "waterfall"
+  status                String   @default("draft")     // "draft" | "open" | "evaluating" | "awarded" | "cancelled" | "expired"
+  tenderDurationMinutes Int      @default(120)         // How long carriers have to respond
+
+  // Rate information
+  targetRate            Float?                         // Target rate (what shipper hopes to pay)
+  currency              String   @default("USD")
+
+  // Shipment details for tender
+  equipmentType         String?                        // "53' Dry Van", "53' Reefer", etc.
+  notes                 String?
+  specialInstructions   String?
+
+  // Lifecycle timestamps
+  openedAt              DateTime?
+  closedAt              DateTime?
+  awardedAt             DateTime?
+
+  // Who created this tender
+  createdBy             String?                        // User ID
+
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  offers                TenderOffer[]
+  bids                  TenderBid[]
+
+  @@index([shipmentId])
+  @@index([status])
+  @@index([reference])
+  @@index([createdAt])
+}
+
+model TenderOffer {
+  id           String   @id @default(uuid())
+  tender       Tender   @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+  tenderId     String
+  carrier      Carrier  @relation(fields: [carrierId], references: [id])
+  carrierId    String
+
+  // Waterfall sequencing (1 = first choice, 2 = second, etc.)
+  sequence     Int      @default(1)
+
+  // Status tracking
+  status       String   @default("pending") // "pending" | "sent" | "viewed" | "expired" | "cancelled"
+  sentAt       DateTime?
+  expiresAt    DateTime?
+  viewedAt     DateTime?
+
+  // EDI 204 tracking
+  ediSent      Boolean  @default(false)
+  edi204Content String?                    // Stored EDI 204 document for audit trail
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  bids         TenderBid[]
+
+  @@unique([tenderId, carrierId])
+  @@index([tenderId])
+  @@index([carrierId])
+  @@index([status])
+  @@index([expiresAt])
+}
+
+model TenderBid {
+  id             String      @id @default(uuid())
+  tender         Tender      @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+  tenderId       String
+  tenderOffer    TenderOffer @relation(fields: [tenderOfferId], references: [id], onDelete: Cascade)
+  tenderOfferId  String
+  carrier        Carrier     @relation(fields: [carrierId], references: [id])
+  carrierId      String
+
+  // Bid details
+  rate           Float                            // Carrier's bid rate
+  currency       String      @default("USD")
+  transitDays    Int?                             // Estimated transit time in days
+  equipmentType  String?                          // Equipment offered
+  notes          String?                          // Carrier comments
+
+  // Status
+  status         String      @default("submitted") // "submitted" | "accepted" | "rejected" | "withdrawn" | "expired"
+  submittedAt    DateTime    @default(now())
+  respondedAt    DateTime?                        // When the bid was accepted/rejected
+
+  // Who submitted this bid
+  submittedBy    CarrierUser? @relation(fields: [submittedById], references: [id])
+  submittedById  String?                          // Null if submitted via EDI
+
+  // Source tracking
+  sourceType     String      @default("portal")  // "portal" | "edi_990" | "manual"
+  edi990Content  String?                          // Raw EDI 990 content if submitted via EDI
+
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  @@unique([tenderOfferId, carrierId])
+  @@index([tenderId])
+  @@index([carrierId])
+  @@index([status])
+  @@index([submittedAt])
 }
