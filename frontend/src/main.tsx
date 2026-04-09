@@ -62,6 +62,7 @@ import CarrierTenderView from './pages/carrier-portal/CarrierTenderView';
 import CarrierBidHistory from './pages/carrier-portal/CarrierBidHistory';
 import CarrierTenderHistory from './pages/carrier-portal/CarrierTenderHistory';
 import CarrierProfile from './pages/carrier-portal/CarrierProfile';
+import TradingPartners from './pages/TradingPartners';
 import './theme.css';
 
 const root = createRoot(document.getElementById('root')!);
@@ -77,6 +78,7 @@ root.render(
           <Route path="webhook-logs" element={<WebhookLogs />} />
           <Route path="outbound" element={<OutboundIntegrations />} />
           <Route path="outbound-logs" element={<OutboundIntegrationLogs />} />
+          <Route path="trading-partners" element={<TradingPartners />} />
           <Route path="edi-partners" element={<EdiPartners />} />
           <Route path="edi-files" element={<EdiFiles />} />
         </Route>

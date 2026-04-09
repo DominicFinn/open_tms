@@ -45,6 +45,12 @@ export const TOKENS = {
   IEDI204Service: Symbol.for('IEDI204Service'),
   IEDI990ParseService: Symbol.for('IEDI990ParseService'),
 
+  // Trading Partner / EDI Hub tokens
+  ITradingPartnerRepository: Symbol.for('ITradingPartnerRepository'),
+  IEdiRouterService: Symbol.for('IEdiRouterService'),
+  IOutboundEdiDeliveryService: Symbol.for('IOutboundEdiDeliveryService'),
+  IEDI997Service: Symbol.for('IEDI997Service'),
+
   // Infrastructure tokens
   PrismaClient: Symbol.for('PrismaClient'),
   IFileStorageProvider: Symbol.for('IFileStorageProvider'),

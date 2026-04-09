@@ -47,6 +47,7 @@ import { tenderRoutes } from './routes/tenders.js';
 import { carrierPortalRoutes } from './routes/carrierPortal.js';
 import { carrierUserRoutes } from './routes/carrierUsers.js';
 import { ediTenderRoutes } from './routes/ediTender.js';
+import { tradingPartnerRoutes } from './routes/tradingPartners.js';
 
 const server = Fastify({ logger: true });
 
@@ -112,6 +113,7 @@ async function start() {
   await server.register(carrierPortalRoutes);
   await server.register(carrierUserRoutes);
   await server.register(ediTenderRoutes);
+  await server.register(tradingPartnerRoutes);
 
   // Start queue adapter (needed for publishing events, even if workers run elsewhere)
   try {

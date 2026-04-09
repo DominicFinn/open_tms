@@ -20,6 +20,7 @@ model Customer {
   orders       Order[]
   apiKeys      ApiKey[]
   ediPartners  EdiPartner[]
+  tradingPartners TradingPartner[] @relation("CustomerTradingPartners")
   users        User[]
 
   // Custom fields
@@ -204,6 +205,7 @@ model Carrier {
   carrierUsers   CarrierUser[]
   tenderOffers   TenderOffer[]
   tenderBids     TenderBid[]
+  tradingPartners TradingPartner[] @relation("CarrierTradingPartners")
 }
 
 model Vehicle {
@@ -1202,6 +1204,150 @@ model EmailTemplate {
 
   @@unique([organizationId, eventType])          // One template per event type per org
   @@index([eventType])
+}
+
+// ============================================================
+// EDI Communication Hub — Unified Trading Partner model
+// ============================================================
+
+model TradingPartner {
+  id             String   @id @default(uuid())
+  name           String
+  active         Boolean  @default(true)
+
+  // What kind of entity is this partner?
+  entityType     String                  // "customer" | "carrier" | "3pl" | "warehouse" | "erp" | "other"
+  customerId     String?                 // Optional link to Customer
+  customer       Customer? @relation("CustomerTradingPartners", fields: [customerId], references: [id])
+  carrierId      String?                 // Optional link to Carrier
+  carrier        Carrier?  @relation("CarrierTradingPartners", fields: [carrierId], references: [id])
+
+  // ── SFTP Connection ──
+  sftpHost       String?
+  sftpPort       Int      @default(22)
+  sftpUsername   String?
+  sftpPassword   String?
+  sftpPrivateKey String?
+
+  // ── HTTP/API Connection ──
+  httpUrl        String?
+  httpAuthType   String?                 // "none" | "basic" | "bearer" | "api_key"
+  httpAuthHeader String?                 // Header name (e.g., "X-API-Key")
+  httpAuthValue  String?                 // Auth credential value
+
+  // ── EDI Envelope Config ──
+  senderId       String?                 // ISA06 — our sender ID for this partner
+  receiverId     String?                 // ISA08 — partner's receiver ID
+  ediVersion     String   @default("005010")
+
+  // ── Inbound Config ──
+  inboundEnabled     Boolean  @default(false)
+  inboundDir         String   @default("/")       // SFTP directory to poll for inbound files
+  inboundFilePattern String   @default("*.edi,*.x12")
+  pollingInterval    Int      @default(900)        // seconds (15 min default)
+  pollingCron        String?                       // Optional cron expression override
+  lastPolledAt       DateTime?
+
+  // ── Outbound Config ──
+  outboundEnabled    Boolean  @default(false)
+  outboundDir        String?                       // SFTP directory for outbound files (null = use HTTP)
+  outboundTransport  String   @default("sftp")     // "sftp" | "http"
+  outboundFileNaming String   @default("reference") // "date" | "sequence" | "reference"
+
+  // ── Legacy migration tracking ──
+  migratedFromEdiPartnerId        String?           // ID of old EdiPartner if migrated
+  migratedFromOutboundIntegrationId String?         // ID of old OutboundIntegration if migrated
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  transactions   TradingPartnerTransaction[]
+  ediLogs        EdiTransactionLog[]
+
+  @@index([entityType])
+  @@index([customerId])
+  @@index([carrierId])
+  @@index([active])
+  @@index([inboundEnabled])
+  @@index([outboundEnabled])
+}
+
+model TradingPartnerTransaction {
+  id             String         @id @default(uuid())
+  partner        TradingPartner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  partnerId      String
+
+  transactionType String                  // "850" | "855" | "856" | "204" | "990" | "214" | "210" | "997" | "810"
+  direction       String                  // "inbound" | "outbound"
+  enabled         Boolean  @default(true)
+
+  // Per-type config
+  fieldMapping    Json?                   // Custom field mappings for this transaction type
+  autoProcess     Boolean  @default(true) // Auto-create orders (850), auto-update shipments (214), etc.
+  ack997Required  Boolean  @default(true) // Send/require 997 functional acknowledgment
+
+  // Inbound file pattern override (if different from partner default)
+  filePattern     String?                 // e.g., "*.990" to override partner's default "*.edi"
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([partnerId, transactionType, direction])
+  @@index([partnerId])
+  @@index([transactionType])
+  @@index([direction])
+}
+
+model EdiTransactionLog {
+  id             String         @id @default(uuid())
+  partner        TradingPartner @relation(fields: [partnerId], references: [id])
+  partnerId      String
+
+  // What was exchanged
+  transactionType String                  // "850", "856", "204", "990", "997", etc.
+  direction       String                  // "inbound" | "outbound"
+
+  // File details
+  fileName        String?
+  fileSize        Int?
+  fileContent     String?                 // Raw EDI content (for audit)
+  fileHash        String?                 // SHA-256 for dedup
+
+  // Transport details
+  transport       String                  // "sftp" | "http"
+  url             String?                 // HTTP URL or SFTP path
+  responseCode    Int?                    // HTTP response code
+  responseBody    String?
+
+  // Processing
+  status          String   @default("pending") // "pending" | "processing" | "success" | "error" | "duplicate"
+  processedAt     DateTime?
+  errorMessage    String?
+
+  // Linked entities
+  shipmentId      String?
+  shipmentReference String?
+  orderId         String?
+  tenderId        String?
+
+  // 997 acknowledgment tracking
+  ack997Sent      Boolean  @default(false)
+  ack997Received  Boolean  @default(false)
+  ack997LogId     String?                 // Reference to the 997 log entry
+
+  // Retry
+  retryCount      Int      @default(0)
+  lastRetryAt     DateTime?
+
+  createdAt       DateTime @default(now())
+
+  @@index([partnerId])
+  @@index([transactionType])
+  @@index([direction])
+  @@index([status])
+  @@index([shipmentId])
+  @@index([fileHash])
+  @@index([createdAt])
 }
 
 // ============================================================

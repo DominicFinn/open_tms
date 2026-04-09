@@ -1,5 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { ITenderRepository, TenderWithRelations, CreateTenderBidDTO } from '../repositories/TenderRepository.js';
+import { IOutboundEdiDeliveryService } from './OutboundEdiDeliveryService.js';
+import { EDI204Service, EDI204ShipmentData } from './EDI204Service.js';
 
 export interface CreateTenderInput {
   shipmentId: string;
@@ -40,9 +42,12 @@ export interface ITenderService {
 }
 
 export class TenderService implements ITenderService {
+  private edi204Service = new EDI204Service();
+
   constructor(
     private tenderRepo: ITenderRepository,
     private prisma: PrismaClient,
+    private outboundDelivery?: IOutboundEdiDeliveryService,
   ) {}
 
   async createTender(input: CreateTenderInput): Promise<TenderWithRelations> {
@@ -102,6 +107,8 @@ export class TenderService implements ITenderService {
           sentAt: now,
           expiresAt,
         } as any);
+        // Auto-deliver EDI 204 if carrier has a trading partner configured
+        await this.autoDeliverEdi204(tender, offer);
       }
     } else {
       // Waterfall: only send to first carrier
@@ -112,6 +119,7 @@ export class TenderService implements ITenderService {
           sentAt: now,
           expiresAt,
         } as any);
+        await this.autoDeliverEdi204(tender, firstOffer);
       }
     }
 
@@ -302,6 +310,7 @@ export class TenderService implements ITenderService {
         sentAt: now,
         expiresAt,
       } as any);
+      await this.autoDeliverEdi204(tender, nextOffer);
     } else {
       // No more carriers to try — check if we have any bids
       const hasBids = tender.bids.some(b => b.status === 'submitted');
@@ -360,5 +369,86 @@ export class TenderService implements ITenderService {
     }
 
     return { tender, offer };
+  }
+
+  /**
+   * Auto-deliver EDI 204 to a carrier if they have a TradingPartner with outbound 204 enabled.
+   * Called automatically when a tender offer is sent (broadcast or waterfall).
+   */
+  private async autoDeliverEdi204(tender: TenderWithRelations, offer: any): Promise<void> {
+    if (!this.outboundDelivery) return;
+
+    try {
+      // Load shipment details for EDI 204 generation
+      const shipment: any = await this.prisma.shipment.findUnique({
+        where: { id: tender.shipmentId },
+        include: {
+          origin: true,
+          destination: true,
+          stops: { include: { location: true }, orderBy: { sequenceNumber: 'asc' } },
+        },
+      });
+      if (!shipment) return;
+
+      const carrierScac = offer.carrier?.scacCode || 'UNKN';
+      const mustRespondBy = new Date(Date.now() + tender.tenderDurationMinutes * 60 * 1000);
+
+      const edi204Data: EDI204ShipmentData = {
+        shipmentReference: shipment.reference,
+        pickupDate: shipment.pickupDate,
+        deliveryDate: shipment.deliveryDate,
+        origin: {
+          name: shipment.origin.name,
+          address1: shipment.origin.address1,
+          address2: shipment.origin.address2,
+          city: shipment.origin.city,
+          state: shipment.origin.state,
+          postalCode: shipment.origin.postalCode,
+          country: shipment.origin.country,
+        },
+        destination: {
+          name: shipment.destination.name,
+          address1: shipment.destination.address1,
+          address2: shipment.destination.address2,
+          city: shipment.destination.city,
+          state: shipment.destination.state,
+          postalCode: shipment.destination.postalCode,
+          country: shipment.destination.country,
+        },
+        carrierScac,
+        mustRespondBy,
+        equipmentType: tender.equipmentType || undefined,
+        specialInstructions: tender.specialInstructions || undefined,
+      };
+
+      const ediContent = this.edi204Service.generateEDI204(edi204Data);
+
+      // Attempt delivery via TradingPartner
+      const result = await this.outboundDelivery.deliverToCarrier(
+        offer.carrierId,
+        '204',
+        ediContent,
+        tender.reference,
+        { shipmentId: tender.shipmentId, tenderId: tender.id },
+      );
+
+      if (result?.success) {
+        // Mark the offer as EDI-sent
+        await this.tenderRepo.updateOffer(offer.id, {
+          ediSent: true,
+          edi204Content: ediContent,
+        } as any);
+      } else if (result) {
+        // Delivery attempted but failed — store content anyway for manual retry
+        await this.tenderRepo.updateOffer(offer.id, {
+          edi204Content: ediContent,
+        } as any);
+      }
+      // If result is null, carrier has no TradingPartner — that's fine, they use the web portal
+    } catch (err) {
+      // EDI delivery failure should not block the tender from opening
+      // The offer is still marked as 'sent' for the web portal
+      console.error(`Auto EDI 204 delivery failed for offer ${offer.id}:`, err);
+    }
   }
 }

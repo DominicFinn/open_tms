@@ -37,6 +37,10 @@ import { TenderRepository } from '../repositories/TenderRepository.js';
 import { CarrierUserRepository } from '../repositories/CarrierUserRepository.js';
 import { TenderService } from '../services/TenderService.js';
 import { CarrierAuthService } from '../services/CarrierAuthService.js';
+import { TradingPartnerRepository } from '../repositories/TradingPartnerRepository.js';
+import { EdiRouterService } from '../services/EdiRouterService.js';
+import { OutboundEdiDeliveryService } from '../services/OutboundEdiDeliveryService.js';
+import { EDI997Service } from '../services/EDI997Service.js';
 
 /**
  * Register all application dependencies
@@ -205,11 +209,29 @@ export function registerDependencies(prisma: PrismaClient): void {
     return new TenderService(
       container.resolve(TOKENS.ITenderRepository),
       container.resolve(TOKENS.PrismaClient),
+      container.resolve(TOKENS.IOutboundEdiDeliveryService),
     );
   });
 
   container.singleton(TOKENS.ICarrierAuthService).toFactory(() => {
     return new CarrierAuthService(container.resolve(TOKENS.ICarrierUserRepository));
+  });
+
+  // Trading Partner / EDI Hub
+  container.singleton(TOKENS.ITradingPartnerRepository).toFactory(() => {
+    return new TradingPartnerRepository(container.resolve(TOKENS.PrismaClient));
+  });
+
+  container.singleton(TOKENS.IEdiRouterService).toFactory(() => {
+    return new EdiRouterService();
+  });
+
+  container.singleton(TOKENS.IOutboundEdiDeliveryService).toFactory(() => {
+    return new OutboundEdiDeliveryService(container.resolve(TOKENS.ITradingPartnerRepository));
+  });
+
+  container.singleton(TOKENS.IEDI997Service).toFactory(() => {
+    return new EDI997Service();
   });
 
   // EDI services
