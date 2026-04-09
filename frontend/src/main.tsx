@@ -49,6 +49,8 @@ import VNextEmailTemplates from './vnext-design/VNextEmailTemplates';
 import VNextDocumentTemplates from './vnext-design/VNextDocumentTemplates';
 import VNextCustomFields from './vnext-design/VNextCustomFields';
 import VNextMapsSettings from './vnext-design/VNextMapsSettings';
+import VNextDevices from './vnext-design/VNextDevices';
+import VNextDeviceDetail from './vnext-design/VNextDeviceDetail';
 
 import './theme.css';
 
@@ -81,6 +83,10 @@ root.render(
           {/* Issues & Carrier Bidding */}
           <Route path="issues" element={<VNextIssueKanban />} />
           <Route path="carrier-bidding" element={<VNextCarrierBidding />} />
+
+          {/* Devices */}
+          <Route path="devices" element={<VNextDevices />} />
+          <Route path="devices/:id" element={<VNextDeviceDetail />} />
 
           {/* Carriers */}
           <Route path="carriers" element={<VNextCarriers />} />
