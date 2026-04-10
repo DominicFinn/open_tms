@@ -56,6 +56,13 @@ export const EVENT_TYPES = {
   TRACKING_GEOFENCE_ENTERED: 'tracking.geofence_entered',
   TRACKING_ETA_UPDATED: 'tracking.eta_updated',
 
+  // Cargo tracking & misdrop detection
+  CARGO_SCAN_RECORDED: 'cargo.scan_recorded',
+  CARGO_MISDROP_DETECTED: 'cargo.misdrop_detected',
+  CARGO_MISSING_AT_STOP: 'cargo.missing_at_stop',
+  CARGO_LEFT_ON_VEHICLE: 'cargo.left_on_vehicle',
+  CARGO_DISCREPANCY_RESOLVED: 'cargo.discrepancy_resolved',
+
   // Triage (Phase 4)
   TRIAGE_ISSUE_CREATED: 'triage.issue_created',
   TRIAGE_ISSUE_ASSIGNED: 'triage.issue_assigned',
@@ -129,6 +136,36 @@ export interface TrackingLocationReceivedPayload {
   lng: number;
   eventTime: string;
   deviceId?: string;
+}
+
+export interface CargoMisdropPayload {
+  shipmentId: string;
+  trackableUnitId: string;
+  unitIdentifier: string;
+  unitType: string;
+  discrepancyType: string;
+  expectedStop: string;
+  actualStop: string;
+  orderId: string;
+  orderNumber: string;
+}
+
+export interface CargoMissingPayload {
+  shipmentId: string;
+  trackableUnitId: string;
+  unitIdentifier: string;
+  unitType: string;
+  stopName: string;
+  orderNumber: string;
+}
+
+export interface CargoLeftOnVehiclePayload {
+  shipmentId: string;
+  trackableUnitId: string;
+  unitIdentifier: string;
+  unitType: string;
+  orderId: string;
+  orderNumber: string;
 }
 
 export interface EntityChangedPayload {

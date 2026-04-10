@@ -223,6 +223,466 @@ function TelemetryTab({ shipmentId }: { shipmentId: string }) {
   );
 }
 
+// ─── Cargo Tab ─────────────────────────────────────────────────────────────
+
+interface CargoManifest {
+  shipmentId: string;
+  stops: Array<{
+    stopId: string;
+    sequenceNumber: number;
+    locationName: string;
+    stopType: string;
+    status: string;
+    expectedUnits: ManifestUnit[];
+    scannedUnits: ManifestUnit[];
+    discrepancies: CargoDiscrepancy[];
+  }>;
+  unassignedUnits: ManifestUnit[];
+  totalExpected: number;
+  totalScanned: number;
+  totalDiscrepancies: number;
+}
+
+interface ManifestUnit {
+  id: string;
+  identifier: string;
+  unitType: string;
+  barcode: string | null;
+  condition: string;
+  currentStopId: string | null;
+  orderId: string;
+  orderNumber: string;
+  lineItemCount: number;
+  lastScannedAt: string | null;
+}
+
+interface CargoDiscrepancy {
+  id: string;
+  discrepancyType: string;
+  severity: string;
+  status: string;
+  description: string;
+  detectedAt: string;
+  resolvedAt: string | null;
+  resolution: string | null;
+  trackableUnit: { identifier: string; unitType: string; order?: { orderNumber: string } };
+  expectedStop?: { location: { name: string } };
+  actualStop?: { location: { name: string } };
+}
+
+const discrepancyTypeLabels: Record<string, string> = {
+  misdrop_early: 'Dropped Too Early',
+  misdrop_late: 'Dropped Too Late',
+  missing_at_stop: 'Missing at Stop',
+  unexpected_at_stop: 'Unexpected at Stop',
+  left_on_vehicle: 'Left on Vehicle',
+  damaged: 'Damaged',
+  wrong_destination: 'Wrong Destination',
+};
+
+const severityChip: Record<string, string> = {
+  critical: 'vn-chip vn-chip-error',
+  high: 'vn-chip vn-chip-error',
+  medium: 'vn-chip vn-chip-warning',
+  low: 'vn-chip vn-chip-info',
+};
+
+const conditionChip: Record<string, string> = {
+  good: 'vn-chip vn-chip-success',
+  damaged: 'vn-chip vn-chip-error',
+  lost: 'vn-chip vn-chip-error',
+  unknown: 'vn-chip vn-chip-warning',
+};
+
+const stopStatusIcon: Record<string, { icon: string; color: string }> = {
+  pending: { icon: 'schedule', color: 'var(--on-surface-variant)' },
+  arrived: { icon: 'location_on', color: 'var(--info)' },
+  in_progress: { icon: 'local_shipping', color: 'var(--warning)' },
+  completed: { icon: 'check_circle', color: 'var(--success)' },
+  skipped: { icon: 'skip_next', color: 'var(--on-surface-variant)' },
+};
+
+function CargoTab({ shipmentId }: { shipmentId: string }) {
+  const [manifest, setManifest] = useState<CargoManifest | null>(null);
+  const [discrepancies, setDiscrepancies] = useState<CargoDiscrepancy[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [resolving, setResolving] = useState<string | null>(null);
+
+  const loadData = useCallback(() => {
+    if (!shipmentId) return;
+    setLoading(true);
+    Promise.all([
+      fetch(`${API_URL}/api/v1/shipments/${shipmentId}/cargo-manifest`).then(r => r.json()),
+      fetch(`${API_URL}/api/v1/shipments/${shipmentId}/cargo-discrepancies`).then(r => r.json()),
+    ])
+      .then(([manifestRes, discRes]) => {
+        if (manifestRes.error) throw new Error(manifestRes.error);
+        setManifest(manifestRes.data);
+        setDiscrepancies(discRes.data || []);
+        setError('');
+      })
+      .catch(err => setError(err.message || 'Failed to load cargo data'))
+      .finally(() => setLoading(false));
+  }, [shipmentId]);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  const handleResolve = async (discId: string) => {
+    const resolution = prompt('Resolution notes:');
+    if (!resolution) return;
+    setResolving(discId);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/cargo-discrepancies/${discId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'resolved', resolution }),
+      });
+      const json = await res.json();
+      if (json.error) throw new Error(json.error);
+      loadData();
+    } catch (err: any) {
+      alert(`Failed to resolve: ${err.message}`);
+    } finally {
+      setResolving(null);
+    }
+  };
+
+  const handleInvestigate = async (discId: string) => {
+    try {
+      await fetch(`${API_URL}/api/v1/cargo-discrepancies/${discId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'investigating' }),
+      });
+      loadData();
+    } catch { /* ignore */ }
+  };
+
+  if (loading) {
+    return <div className="vn-empty"><span className="material-icons" style={{ animation: 'spin 1s linear infinite' }}>refresh</span><h3>Loading cargo data...</h3></div>;
+  }
+
+  if (error) {
+    return <div className="vn-alert vn-alert-error"><span className="material-icons">error</span><div className="vn-alert-content">{error}</div></div>;
+  }
+
+  if (!manifest || (manifest.totalExpected === 0 && manifest.unassignedUnits.length === 0)) {
+    return (
+      <div className="vn-card">
+        <div className="vn-card-body" style={{ textAlign: 'center', padding: 48 }}>
+          <span className="material-icons" style={{ fontSize: 48, opacity: 0.3, display: 'block', marginBottom: 12, color: 'var(--on-surface-variant)' }}>inventory_2</span>
+          <h3 style={{ color: 'var(--on-surface-variant)', margin: 0 }}>No trackable cargo units</h3>
+          <p style={{ color: 'var(--on-surface-variant)', fontSize: 13, marginTop: 8 }}>
+            Add trackable units (pallets, totes, boxes) to orders assigned to this shipment to enable cargo tracking.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const openDiscrepancies = discrepancies.filter(d => d.status === 'open' || d.status === 'investigating');
+
+  return (
+    <>
+      {/* Summary Stats */}
+      <div className="vn-stats-row" style={{ marginBottom: 24 }}>
+        <div className="vn-stat-card">
+          <div className="vn-stat-icon" style={{ background: 'var(--primary-container)', color: 'var(--primary)' }}>
+            <span className="material-icons">inventory_2</span>
+          </div>
+          <div className="vn-stat-content">
+            <span className="vn-stat-value">{manifest.totalExpected}</span>
+            <span className="vn-stat-label">Expected Units</span>
+          </div>
+        </div>
+        <div className="vn-stat-card">
+          <div className="vn-stat-icon" style={{ background: 'var(--success-container, rgba(0,200,83,0.1))', color: 'var(--success)' }}>
+            <span className="material-icons">qr_code_scanner</span>
+          </div>
+          <div className="vn-stat-content">
+            <span className="vn-stat-value">{manifest.totalScanned}</span>
+            <span className="vn-stat-label">Scanned / Confirmed</span>
+          </div>
+        </div>
+        <div className="vn-stat-card">
+          <div className="vn-stat-icon" style={{ background: openDiscrepancies.length > 0 ? 'var(--error-container, rgba(255,0,0,0.1))' : 'var(--surface-container)', color: openDiscrepancies.length > 0 ? 'var(--error)' : 'var(--on-surface-variant)' }}>
+            <span className="material-icons">warning</span>
+          </div>
+          <div className="vn-stat-content">
+            <span className="vn-stat-value">{openDiscrepancies.length}</span>
+            <span className="vn-stat-label">Open Issues</span>
+          </div>
+        </div>
+        <div className="vn-stat-card">
+          <div className="vn-stat-icon" style={{ background: 'var(--primary-container)', color: 'var(--primary)' }}>
+            <span className="material-icons">pin_drop</span>
+          </div>
+          <div className="vn-stat-content">
+            <span className="vn-stat-value">{manifest.stops.length}</span>
+            <span className="vn-stat-label">Delivery Stops</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Discrepancy Alerts */}
+      {openDiscrepancies.length > 0 && (
+        <div className="vn-card" style={{ marginBottom: 24, border: '1px solid var(--error)', background: 'var(--error-container, rgba(255,0,0,0.04))' }}>
+          <div className="vn-card-header" style={{ borderBottom: '1px solid var(--error)' }}>
+            <h2 style={{ color: 'var(--error)', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span className="material-icons">report_problem</span>
+              Cargo Issues ({openDiscrepancies.length})
+            </h2>
+          </div>
+          <div className="vn-card-body" style={{ padding: 0 }}>
+            {openDiscrepancies.map((disc) => (
+              <div key={disc.id} style={{
+                padding: '12px 16px',
+                borderBottom: '1px solid var(--outline-variant)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+              }}>
+                <span className="material-icons" style={{
+                  color: disc.severity === 'critical' || disc.severity === 'high' ? 'var(--error)' : 'var(--warning)',
+                  fontSize: 20,
+                  flexShrink: 0,
+                }}>
+                  {disc.discrepancyType === 'left_on_vehicle' ? 'local_shipping' :
+                   disc.discrepancyType === 'missing_at_stop' ? 'search_off' :
+                   disc.discrepancyType.startsWith('misdrop') ? 'wrong_location' : 'error'}
+                </span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <span style={{ fontWeight: 600, fontSize: 13 }}>
+                      {discrepancyTypeLabels[disc.discrepancyType] || disc.discrepancyType}
+                    </span>
+                    <span className={severityChip[disc.severity] || 'vn-chip'} style={{ fontSize: 11 }}>{disc.severity}</span>
+                    {disc.status === 'investigating' && (
+                      <span className="vn-chip vn-chip-warning" style={{ fontSize: 11 }}>Investigating</span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--on-surface-variant)', marginTop: 2 }}>
+                    {disc.description}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--on-surface-variant)', marginTop: 2 }}>
+                    Detected {new Date(disc.detectedAt).toLocaleString()}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                  {disc.status === 'open' && (
+                    <button
+                      className="vn-btn vn-btn-outline vn-btn-sm"
+                      onClick={() => handleInvestigate(disc.id)}
+                      style={{ fontSize: 12 }}
+                    >
+                      Investigate
+                    </button>
+                  )}
+                  <button
+                    className="vn-btn vn-btn-primary vn-btn-sm"
+                    onClick={() => handleResolve(disc.id)}
+                    disabled={resolving === disc.id}
+                    style={{ fontSize: 12 }}
+                  >
+                    {resolving === disc.id ? 'Resolving...' : 'Resolve'}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Per-Stop Cargo Manifest */}
+      {manifest.stops.map((stop) => {
+        const statusInfo = stopStatusIcon[stop.status] || stopStatusIcon.pending;
+        const hasIssues = stop.discrepancies.filter(d => d.status !== 'resolved' && d.status !== 'dismissed').length > 0;
+        const allDelivered = stop.status === 'completed' && stop.expectedUnits.length > 0;
+
+        return (
+          <div key={stop.stopId} className="vn-card" style={{
+            marginBottom: 16,
+            border: hasIssues ? '1px solid var(--error)' : undefined,
+          }}>
+            <div className="vn-card-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span className="material-icons" style={{ color: statusInfo.color, fontSize: 20 }}>{statusInfo.icon}</span>
+                <div>
+                  <h2 style={{ margin: 0, fontSize: 15 }}>
+                    Stop {stop.sequenceNumber} — {stop.locationName}
+                  </h2>
+                  <div style={{ fontSize: 12, color: 'var(--on-surface-variant)', marginTop: 2 }}>
+                    {stop.stopType} · {stop.status}
+                    {stop.expectedUnits.length > 0 && ` · ${stop.expectedUnits.length} unit${stop.expectedUnits.length !== 1 ? 's' : ''} expected`}
+                  </div>
+                </div>
+              </div>
+              {allDelivered && !hasIssues && (
+                <span className="vn-chip vn-chip-success" style={{ fontSize: 11 }}>
+                  <span className="material-icons" style={{ fontSize: 14, marginRight: 2 }}>check</span>
+                  All Delivered
+                </span>
+              )}
+              {hasIssues && (
+                <span className="vn-chip vn-chip-error" style={{ fontSize: 11 }}>
+                  <span className="material-icons" style={{ fontSize: 14, marginRight: 2 }}>warning</span>
+                  Issues Detected
+                </span>
+              )}
+            </div>
+
+            {stop.expectedUnits.length > 0 && (
+              <div className="vn-card-body vn-card-flush">
+                <div className="vn-table-wrap">
+                  <table className="vn-table">
+                    <thead>
+                      <tr>
+                        <th>Unit</th>
+                        <th>Type</th>
+                        <th>Order</th>
+                        <th>Items</th>
+                        <th>Condition</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {stop.expectedUnits.map((unit) => {
+                        const isAtThisStop = unit.currentStopId === stop.stopId;
+                        const isScanned = stop.scannedUnits.some(s => s.id === unit.id);
+                        const unitDisc = stop.discrepancies.find(
+                          (d: any) => d.trackableUnitId === unit.id && d.status !== 'resolved' && d.status !== 'dismissed'
+                        );
+                        let statusLabel = 'Pending';
+                        let statusClass = 'vn-chip vn-chip-secondary';
+                        if (isAtThisStop || isScanned) {
+                          statusLabel = 'Delivered';
+                          statusClass = 'vn-chip vn-chip-success';
+                        } else if (stop.status === 'completed') {
+                          statusLabel = isScanned ? 'Delivered' : 'Not confirmed';
+                          statusClass = isScanned ? 'vn-chip vn-chip-success' : 'vn-chip vn-chip-warning';
+                        } else if (stop.status === 'arrived' || stop.status === 'in_progress') {
+                          statusLabel = 'In transit';
+                          statusClass = 'vn-chip vn-chip-info';
+                        }
+                        if (unitDisc) {
+                          statusLabel = discrepancyTypeLabels[(unitDisc as any).discrepancyType] || 'Issue';
+                          statusClass = 'vn-chip vn-chip-error';
+                        }
+
+                        return (
+                          <tr key={unit.id}>
+                            <td>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <span className="material-icons" style={{ fontSize: 18, color: 'var(--on-surface-variant)' }}>
+                                  {unit.unitType === 'pallet' ? 'pallet' :
+                                   unit.unitType === 'box' ? 'inventory_2' :
+                                   unit.unitType === 'tote' ? 'shopping_basket' : 'widgets'}
+                                </span>
+                                <div>
+                                  <div style={{ fontWeight: 500, fontSize: 13 }}>{unit.identifier}</div>
+                                  {unit.barcode && <div style={{ fontSize: 11, color: 'var(--on-surface-variant)' }}>{unit.barcode}</div>}
+                                </div>
+                              </div>
+                            </td>
+                            <td style={{ fontSize: 13, textTransform: 'capitalize' }}>{unit.unitType}</td>
+                            <td>
+                              <Link to={`/orders/${unit.orderId}`} style={{ color: 'var(--primary)', fontSize: 13, textDecoration: 'none' }}>
+                                {unit.orderNumber}
+                              </Link>
+                            </td>
+                            <td style={{ fontSize: 13 }}>{unit.lineItemCount}</td>
+                            <td><span className={conditionChip[unit.condition] || 'vn-chip'} style={{ fontSize: 11 }}>{unit.condition}</span></td>
+                            <td><span className={statusClass} style={{ fontSize: 11 }}>{statusLabel}</span></td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {stop.expectedUnits.length === 0 && (
+              <div className="vn-card-body" style={{ textAlign: 'center', padding: 24, color: 'var(--on-surface-variant)', fontSize: 13 }}>
+                No cargo units assigned to this stop
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {/* Unassigned Units */}
+      {manifest.unassignedUnits.length > 0 && (
+        <div className="vn-card" style={{ marginBottom: 16, border: '1px solid var(--warning)' }}>
+          <div className="vn-card-header">
+            <h2 style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 15 }}>
+              <span className="material-icons" style={{ color: 'var(--warning)', fontSize: 20 }}>help_outline</span>
+              Unassigned Cargo ({manifest.unassignedUnits.length})
+            </h2>
+          </div>
+          <div className="vn-card-body" style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>
+            These trackable units are on this shipment but not assigned to a delivery stop.
+          </div>
+          <div className="vn-card-body vn-card-flush">
+            <div className="vn-table-wrap">
+              <table className="vn-table">
+                <thead>
+                  <tr><th>Unit</th><th>Type</th><th>Order</th><th>Items</th><th>Condition</th></tr>
+                </thead>
+                <tbody>
+                  {manifest.unassignedUnits.map((unit) => (
+                    <tr key={unit.id}>
+                      <td style={{ fontWeight: 500, fontSize: 13 }}>{unit.identifier}</td>
+                      <td style={{ fontSize: 13, textTransform: 'capitalize' }}>{unit.unitType}</td>
+                      <td>
+                        <Link to={`/orders/${unit.orderId}`} style={{ color: 'var(--primary)', fontSize: 13, textDecoration: 'none' }}>
+                          {unit.orderNumber}
+                        </Link>
+                      </td>
+                      <td style={{ fontSize: 13 }}>{unit.lineItemCount}</td>
+                      <td><span className={conditionChip[unit.condition] || 'vn-chip'} style={{ fontSize: 11 }}>{unit.condition}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Resolved Discrepancies History */}
+      {discrepancies.filter(d => d.status === 'resolved' || d.status === 'dismissed').length > 0 && (
+        <div className="vn-card">
+          <div className="vn-card-header">
+            <h2 style={{ fontSize: 15 }}>Resolved Issues</h2>
+          </div>
+          <div className="vn-card-body vn-card-flush">
+            <div className="vn-table-wrap">
+              <table className="vn-table">
+                <thead>
+                  <tr><th>Issue</th><th>Unit</th><th>Status</th><th>Resolution</th><th>Resolved</th></tr>
+                </thead>
+                <tbody>
+                  {discrepancies.filter(d => d.status === 'resolved' || d.status === 'dismissed').map((disc) => (
+                    <tr key={disc.id}>
+                      <td style={{ fontSize: 13 }}>{discrepancyTypeLabels[disc.discrepancyType] || disc.discrepancyType}</td>
+                      <td style={{ fontSize: 13 }}>{disc.trackableUnit?.identifier || '—'}</td>
+                      <td><span className="vn-chip vn-chip-success" style={{ fontSize: 11 }}>{disc.status}</span></td>
+                      <td style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>{disc.resolution || '—'}</td>
+                      <td style={{ fontSize: 12 }}>{disc.resolvedAt ? new Date(disc.resolvedAt).toLocaleString() : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 export default function VNextShipmentDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -468,6 +928,10 @@ export default function VNextShipmentDetail() {
             <button className={`vn-tab ${activeTab === 'documents' ? 'active' : ''}`} onClick={() => setActiveTab('documents')}>Documents</button>
             <button className={`vn-tab ${activeTab === 'financials' ? 'active' : ''}`} onClick={() => setActiveTab('financials')}>Financials</button>
             <button className={`vn-tab ${activeTab === 'notes' ? 'active' : ''}`} onClick={() => setActiveTab('notes')}>Notes</button>
+            <button className={`vn-tab ${activeTab === 'cargo' ? 'active' : ''}`} onClick={() => setActiveTab('cargo')}>
+              <span className="material-icons" style={{ fontSize: 16, marginRight: 4, verticalAlign: 'middle' }}>inventory_2</span>
+              Cargo
+            </button>
             <button className={`vn-tab ${activeTab === 'telemetry' ? 'active' : ''}`} onClick={() => setActiveTab('telemetry')}>
               <span className="material-icons" style={{ fontSize: 16, marginRight: 4, verticalAlign: 'middle' }}>thermostat</span>
               Telemetry
@@ -617,6 +1081,10 @@ export default function VNextShipmentDetail() {
                 </div>
               </div>
             </div>
+          )}
+
+          {activeTab === 'cargo' && (
+            <CargoTab shipmentId={id!} />
           )}
 
           {activeTab === 'telemetry' && (

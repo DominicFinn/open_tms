@@ -52,6 +52,7 @@ import { ediTenderRoutes } from './routes/ediTender.js';
 import { tradingPartnerRoutes } from './routes/tradingPartners.js';
 import deviceRoutes from './routes/devices.js';
 import telemetryRoutes from './routes/telemetry.js';
+import { cargoTrackingRoutes } from './routes/cargoTracking.js';
 
 const server = Fastify({ logger: true });
 
@@ -121,6 +122,7 @@ async function start() {
   await server.register(tradingPartnerRoutes);
   await server.register(deviceRoutes);
   await server.register(telemetryRoutes);
+  await server.register(cargoTrackingRoutes);
 
   // Start queue adapter (needed for publishing events, even if workers run elsewhere)
   try {

@@ -15,6 +15,7 @@ export const TOKENS = {
   IPendingLaneRequestsRepository: Symbol.for('IPendingLaneRequestsRepository'),
 
   IArrivalCriteriaRepository: Symbol.for('IArrivalCriteriaRepository'),
+  ICargoTrackingRepository: Symbol.for('ICargoTrackingRepository'),
 
   // Service tokens
   ILocationResolutionService: Symbol.for('ILocationResolutionService'),
@@ -25,6 +26,7 @@ export const TOKENS = {
   IEDI850ParseService: Symbol.for('IEDI850ParseService'),
   IEdiImportService: Symbol.for('IEdiImportService'),
   IOrderConversionService: Symbol.for('IOrderConversionService'),
+  ICargoReconciliationService: Symbol.for('ICargoReconciliationService'),
 
   // Document tokens
   IDocumentTemplateRepository: Symbol.for('IDocumentTemplateRepository'),

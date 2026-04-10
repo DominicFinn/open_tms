@@ -15,6 +15,7 @@ import { OrdersRepository } from '../repositories/OrdersRepository.js';
 import { OrganizationRepository } from '../repositories/OrganizationRepository.js';
 import { PendingLaneRequestsRepository } from '../repositories/PendingLaneRequestsRepository.js';
 import { ArrivalCriteriaRepository } from '../repositories/ArrivalCriteriaRepository.js';
+import { CargoTrackingRepository } from '../repositories/CargoTrackingRepository.js';
 import { LocationResolutionService } from '../services/LocationResolutionService.js';
 import { ArrivalCriteriaEvaluationService } from '../services/ArrivalCriteriaEvaluationService.js';
 import { ShipmentAssignmentService } from '../services/ShipmentAssignmentService.js';
@@ -23,6 +24,7 @@ import { OrderDeliveryService } from '../services/OrderDeliveryService.js';
 import { EDI850ParseService } from '../services/EDI850ParseService.js';
 import { EdiImportService } from '../services/EdiImportService.js';
 import { OrderConversionService } from '../services/OrderConversionService.js';
+import { CargoReconciliationService } from '../services/CargoReconciliationService.js';
 import { DocumentTemplateRepository } from '../repositories/DocumentTemplateRepository.js';
 import { GeneratedDocumentRepository } from '../repositories/GeneratedDocumentRepository.js';
 import { DocumentGenerationService } from '../services/DocumentGenerationService.js';
@@ -89,6 +91,10 @@ export function registerDependencies(prisma: PrismaClient): void {
     return new ArrivalCriteriaRepository(container.resolve(TOKENS.PrismaClient));
   });
 
+  container.singleton(TOKENS.ICargoTrackingRepository).toFactory(() => {
+    return new CargoTrackingRepository(container.resolve(TOKENS.PrismaClient));
+  });
+
   // Register services as singletons
   container.singleton(TOKENS.IShipmentAssignmentService).toFactory(() => {
     return new ShipmentAssignmentService(container.resolve(TOKENS.PrismaClient));
@@ -122,8 +128,23 @@ export function registerDependencies(prisma: PrismaClient): void {
     );
   });
 
+  // Wire up cargo reconciliation into the delivery service (post-construction to avoid circular deps)
+  {
+    const deliveryService = container.resolve<OrderDeliveryService>(TOKENS.IOrderDeliveryService);
+    const cargoService = container.resolve<CargoReconciliationService>(TOKENS.ICargoReconciliationService);
+    deliveryService.setCargoReconciliationService(cargoService);
+  }
+
   container.singleton(TOKENS.IOrderConversionService).toFactory(() => {
     return new OrderConversionService(container.resolve(TOKENS.PrismaClient));
+  });
+
+  container.singleton(TOKENS.ICargoReconciliationService).toFactory(() => {
+    return new CargoReconciliationService(
+      container.resolve(TOKENS.PrismaClient),
+      container.resolve(TOKENS.ICargoTrackingRepository),
+      container.resolve(TOKENS.IEventBus)
+    );
   });
 
   // Document repositories
