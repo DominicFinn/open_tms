@@ -17,7 +17,29 @@ I'm outlining a roadmap. It's high level. It can be ticketed up as it goes along
 
 > **🌟 Live Demo**: [Try it now!](https://open-tms-frontend-iutj2b4iaa-uc.a.run.app) | **📖 API Docs**: [View API](https://open-tms-backend-iutj2b4iaa-uc.a.run.app/docs)
 >
-> *Note: The demo URLs above are for the project maintainer's deployment. Deploy your own instance using the [Quick Demo Guide](./HOSTING-DEMO-GCP.md).*
+> *Note: The demo URLs above are for the project maintainer's deployment. Deploy your own instance using the deploy buttons below.*
+
+## Deploy
+
+Deploy your own Open TMS instance with one click:
+
+| Provider | Deploy | What you get |
+|----------|--------|--------------|
+| **DigitalOcean** | [![Deploy to DO](https://www.deploytodo.com/do-btn-blue.svg)](https://cloud.digitalocean.com/apps/new?repo=https://github.com/dominicfinn/open_tms/tree/main) | App Platform + Managed PostgreSQL |
+| **Microsoft Azure** | [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fdominicfinn%2Fopen_tms%2Fmain%2Fazuredeploy.json) | Container Apps + PostgreSQL Flexible Server |
+| **Google Cloud** | [![Open in Cloud Shell](https://gstatic.com/cloudssh/images/open-btn.svg)](https://shell.cloud.google.com/cloudshell/editor?cloudshell_git_repo=https://github.com/dominicfinn/open_tms&cloudshell_tutorial=DEPLOYMENT.md) | Cloud Run + Cloud SQL (guided setup) |
+| **AWS** | See [`cloudformation.yaml`](./cloudformation.yaml) | ECS Fargate + RDS PostgreSQL + ALB |
+| **Docker** | `docker compose up` | Local development stack |
+
+> **AWS note:** Upload `cloudformation.yaml` to an S3 bucket, then use the [Launch Stack](https://console.aws.amazon.com/cloudformation/home#/stacks/new) wizard — or deploy via CLI:
+> ```bash
+> aws cloudformation create-stack --stack-name open-tms \
+>   --template-body file://cloudformation.yaml \
+>   --parameters ParameterKey=DBPassword,ParameterValue=YourSecurePassword123 \
+>   --capabilities CAPABILITY_IAM
+> ```
+
+> **After deployment:** Visit `POST /api/v1/auth/setup` to create your initial admin user, then seed demo data via `POST /api/v1/seed`.
 
 ## ✨ Features
 
