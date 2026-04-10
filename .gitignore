@@ -79,4 +79,4 @@ nbdist/
 
 deploy-personal.sh
 
-resources/
+resources/coverage/
