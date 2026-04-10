@@ -59,6 +59,17 @@ import { ArchiveLaneCommandHandler } from '../commands/lanes/ArchiveLaneCommand.
 import { CreateIssueCommandHandler } from '../commands/issues/CreateIssueCommand.js';
 import { UpdateIssueCommandHandler } from '../commands/issues/UpdateIssueCommand.js';
 import { EscalateIssueCommandHandler } from '../commands/issues/EscalateIssueCommand.js';
+import { CreateTenderCommandHandler } from '../commands/tenders/CreateTenderCommand.js';
+import { OpenTenderCommandHandler } from '../commands/tenders/OpenTenderCommand.js';
+import { AwardTenderCommandHandler } from '../commands/tenders/AwardTenderCommand.js';
+import { CancelTenderCommandHandler } from '../commands/tenders/CancelTenderCommand.js';
+import { CreateTradingPartnerCommandHandler } from '../commands/tradingPartners/CreateTradingPartnerCommand.js';
+import { UpdateTradingPartnerCommandHandler } from '../commands/tradingPartners/UpdateTradingPartnerCommand.js';
+import { CreateDeviceCommandHandler } from '../commands/devices/CreateDeviceCommand.js';
+import { UpdateDeviceCommandHandler } from '../commands/devices/UpdateDeviceCommand.js';
+import { AssignDeviceCommandHandler } from '../commands/devices/AssignDeviceCommand.js';
+import { CreateCarrierUserCommandHandler } from '../commands/carrierUsers/CreateCarrierUserCommand.js';
+import { RecordCargoScanCommandHandler } from '../commands/cargoTracking/RecordCargoScanCommand.js';
 import { TenderRepository } from '../repositories/TenderRepository.js';
 import { CarrierUserRepository } from '../repositories/CarrierUserRepository.js';
 import { TenderService } from '../services/TenderService.js';
@@ -354,6 +365,27 @@ export function registerDependencies(prisma: PrismaClient): void {
     bus.register(new CreateIssueCommandHandler(prisma, eventBus));
     bus.register(new UpdateIssueCommandHandler(prisma, eventBus));
     bus.register(new EscalateIssueCommandHandler(prisma, eventBus));
+
+    // Tender commands
+    bus.register(new CreateTenderCommandHandler(prisma, eventBus));
+    bus.register(new OpenTenderCommandHandler(prisma, eventBus));
+    bus.register(new AwardTenderCommandHandler(prisma, eventBus));
+    bus.register(new CancelTenderCommandHandler(prisma, eventBus));
+
+    // Trading Partner commands
+    bus.register(new CreateTradingPartnerCommandHandler(prisma, eventBus));
+    bus.register(new UpdateTradingPartnerCommandHandler(prisma, eventBus));
+
+    // Device commands
+    bus.register(new CreateDeviceCommandHandler(prisma, eventBus));
+    bus.register(new UpdateDeviceCommandHandler(prisma, eventBus));
+    bus.register(new AssignDeviceCommandHandler(prisma, eventBus));
+
+    // Carrier User commands
+    bus.register(new CreateCarrierUserCommandHandler(prisma, eventBus));
+
+    // Cargo Tracking commands
+    bus.register(new RecordCargoScanCommandHandler(prisma, eventBus));
 
     return bus;
   });

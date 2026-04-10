@@ -247,6 +247,94 @@ open → in_progress → resolved → closed
 
 ---
 
+## Tenders
+
+### Commands
+
+| Command | Trigger | Events Emitted |
+|---------|---------|----------------|
+| `CreateTenderCommand` | `POST /api/v1/tenders` | `tender.created` |
+| `OpenTenderCommand` | `POST /api/v1/tenders/:id/open` | `tender.published` |
+| `AwardTenderCommand` | `POST /api/v1/tenders/:id/award` | `tender.awarded` |
+| `CancelTenderCommand` | `POST /api/v1/tenders/:id/cancel` | `tender.cancelled` |
+
+### Status Lifecycle
+
+```
+draft → open → evaluating → awarded
+                          → cancelled
+```
+
+### Side Effects
+
+| Event | What Happens |
+|-------|-------------|
+| `tender.created` | Tender + TenderOffer records created per carrier |
+| `tender.published` | All offers marked 'sent', carriers notified, EDI 204 sent if trading partner configured |
+| `tender.awarded` | Winning bid recorded, carrier assigned to shipment |
+| `tender.response_received` | Bid recorded or offer declined, waterfall auto-progresses |
+
+---
+
+## Trading Partners
+
+### Commands
+
+| Command | Trigger | Events Emitted |
+|---------|---------|----------------|
+| `CreateTradingPartnerCommand` | `POST /api/v1/trading-partners` | `trading_partner.created` |
+| `UpdateTradingPartnerCommand` | `PUT /api/v1/trading-partners/:id` | `trading_partner.updated` |
+
+---
+
+## Devices (IoT)
+
+### Commands
+
+| Command | Trigger | Events Emitted |
+|---------|---------|----------------|
+| `CreateDeviceCommand` | `POST /api/v1/devices` | `device.created` |
+| `UpdateDeviceCommand` | `PUT /api/v1/devices/:id` | `device.updated` |
+| `AssignDeviceCommand` | `POST /api/v1/devices/:id/assign` | `device.assigned` |
+
+### Side Effects
+
+| Event | What Happens |
+|-------|-------------|
+| `device.assigned` | Previous assignment deactivated, new assignment created |
+| `device.unassigned` | Assignment deactivated |
+
+---
+
+## Cargo Tracking
+
+### Commands
+
+| Command | Trigger | Events Emitted |
+|---------|---------|----------------|
+| `RecordCargoScanCommand` | `POST /api/v1/cargo-scans` | `cargo.scan_recorded` |
+
+### Auto-Generated Events (from CargoReconciliationService)
+
+| Event | Trigger |
+|-------|---------|
+| `cargo.misdrop_detected` | Scan at wrong stop |
+| `cargo.missing_at_stop` | Expected unit not scanned at stop |
+| `cargo.left_on_vehicle` | Unit not delivered after final stop |
+| `cargo.discrepancy_resolved` | Manual resolution of discrepancy |
+
+---
+
+## Carrier Users
+
+### Commands
+
+| Command | Trigger | Events Emitted |
+|---------|---------|----------------|
+| `CreateCarrierUserCommand` | `POST /api/v1/carriers/:carrierId/users` | `carrier_user.created` |
+
+---
+
 ## Read Models
 
 Read models are flat, denormalized tables optimized for list queries with zero joins.

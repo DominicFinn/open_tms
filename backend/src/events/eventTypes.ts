@@ -62,6 +62,21 @@ export const EVENT_TYPES = {
   TENDER_CANCELLED: 'tender.cancelled',
   TENDER_RESPONSE_RECEIVED: 'tender.response_received',
 
+  // Trading Partners
+  TRADING_PARTNER_CREATED: 'trading_partner.created',
+  TRADING_PARTNER_UPDATED: 'trading_partner.updated',
+
+  // Devices
+  DEVICE_CREATED: 'device.created',
+  DEVICE_UPDATED: 'device.updated',
+  DEVICE_ASSIGNED: 'device.assigned',
+  DEVICE_UNASSIGNED: 'device.unassigned',
+
+  // Carrier Users
+  CARRIER_USER_CREATED: 'carrier_user.created',
+  CARRIER_USER_UPDATED: 'carrier_user.updated',
+  CARRIER_USER_DEACTIVATED: 'carrier_user.deactivated',
+
   // Tracking
   TRACKING_LOCATION_RECEIVED: 'tracking.location_received',
   TRACKING_GEOFENCE_ENTERED: 'tracking.geofence_entered',
