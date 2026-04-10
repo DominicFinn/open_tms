@@ -43,6 +43,12 @@ export interface CreateOrderDTO {
   requestedPickupDate?: Date;
   requestedDeliveryDate?: Date;
 
+  // Service & requirements
+  serviceLevel?: string;
+  temperatureControl?: string;
+  requiresHazmat?: boolean;
+  specialRequirements?: string[];
+
   // Trackable units (new preferred way)
   trackableUnits?: CreateTrackableUnitDTO[];
 
@@ -68,6 +74,22 @@ export interface UpdateOrderDTO {
 
   requestedPickupDate?: Date;
   requestedDeliveryDate?: Date;
+
+  // Service & requirements
+  serviceLevel?: string;
+  temperatureControl?: string;
+  requiresHazmat?: boolean;
+  specialRequirements?: string[];
+
+  // Delivery tracking
+  deliveryStatus?: string;
+  deliveredAt?: Date;
+  deliveryConfirmedBy?: string;
+  deliveryMethod?: string;
+  deliveryNotes?: string;
+  exceptionType?: string;
+  exceptionNotes?: string;
+  exceptionResolvedAt?: Date;
 
   specialInstructions?: string;
   notes?: string;

@@ -99,6 +99,18 @@ const updateOrderSchema = z.object({
   destinationId: z.string().uuid().optional(),
   requestedPickupDate: z.string().datetime().optional(),
   requestedDeliveryDate: z.string().datetime().optional(),
+  serviceLevel: z.enum(['FTL', 'LTL']).optional(),
+  temperatureControl: z.enum(['ambient', 'refrigerated', 'frozen']).optional(),
+  requiresHazmat: z.boolean().optional(),
+  specialRequirements: z.array(z.string()).optional(),
+  deliveryStatus: z.string().optional(),
+  deliveredAt: z.string().datetime().optional(),
+  deliveryConfirmedBy: z.string().optional(),
+  deliveryMethod: z.string().optional(),
+  deliveryNotes: z.string().optional(),
+  exceptionType: z.string().optional(),
+  exceptionNotes: z.string().optional(),
+  exceptionResolvedAt: z.string().datetime().optional(),
   specialInstructions: z.string().optional(),
   notes: z.string().optional()
 });

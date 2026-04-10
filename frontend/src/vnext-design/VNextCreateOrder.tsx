@@ -16,6 +16,7 @@ export default function VNextCreateOrder() {
   const navigate = useNavigate();
 
   const [customer, setCustomer] = useState('');
+  const [orderNumber] = useState(() => `ORD-${Date.now().toString().slice(-8)}`);
   const [poNumber, setPoNumber] = useState('');
   const [orderDate, setOrderDate] = useState('');
   const [requestedDelivery, setRequestedDelivery] = useState('');
@@ -53,7 +54,7 @@ export default function VNextCreateOrder() {
     setSubmitting(true);
     try {
       const body: any = {
-        poNumber, customerId: customer, originId: originLocation, destinationId: destLocation,
+        orderNumber, poNumber, customerId: customer, originId: originLocation, destinationId: destLocation,
         requestedPickupDate: orderDate || undefined, requestedDeliveryDate: requestedDelivery || undefined,
         serviceLevel: serviceLevel || undefined,
         temperatureControl: tempControl, requiresHazmat: hazmat,
@@ -137,8 +138,8 @@ export default function VNextCreateOrder() {
                 <label className="vn-field-label">Service Level</label>
                 <select className="vn-select" value={serviceLevel} onChange={e => setServiceLevel(e.target.value)}>
                   <option value="">Select service level...</option>
-                  <option value="ftl">FTL</option>
-                  <option value="ltl">LTL</option>
+                  <option value="FTL">FTL</option>
+                  <option value="LTL">LTL</option>
                 </select>
               </div>
             </div>

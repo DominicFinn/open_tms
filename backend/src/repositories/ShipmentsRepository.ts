@@ -15,6 +15,11 @@ export interface CreateShipmentDTO {
   items?: any[];
   status?: string;
   proNumber?: string;
+  coldChainProfileId?: string;
+  effectiveMinTemp?: number;
+  effectiveMaxTemp?: number;
+  effectiveAlertMinTemp?: number;
+  effectiveAlertMaxTemp?: number;
 }
 
 export interface UpdateShipmentDTO {
@@ -28,6 +33,15 @@ export interface UpdateShipmentDTO {
   originId?: string;
   destinationId?: string;
   items?: any[];
+  coldChainProfileId?: string;
+  effectiveMinTemp?: number;
+  effectiveMaxTemp?: number;
+  effectiveAlertMinTemp?: number;
+  effectiveAlertMaxTemp?: number;
+  coldChainDisposition?: string;
+  dispositionSetBy?: string;
+  dispositionSetAt?: Date;
+  dispositionNotes?: string;
 }
 
 export interface IShipmentsRepository {

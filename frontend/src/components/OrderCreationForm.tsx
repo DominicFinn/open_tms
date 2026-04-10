@@ -91,6 +91,9 @@ export default function OrderCreationForm({
     temperature: 'ambient'
   });
 
+  const [serviceLevel, setServiceLevel] = useState<'FTL' | 'LTL'>('LTL');
+  const [temperatureControl, setTemperatureControl] = useState<'ambient' | 'refrigerated' | 'frozen'>('ambient');
+  const [requiresHazmat, setRequiresHazmat] = useState(false);
   const [specialInstructions, setSpecialInstructions] = useState('');
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
@@ -203,6 +206,9 @@ export default function OrderCreationForm({
         requestedPickupDate: requestedPickupDate ? new Date(requestedPickupDate).toISOString() : undefined,
         requestedDeliveryDate: requestedDeliveryDate ? new Date(requestedDeliveryDate).toISOString() : undefined,
         lineItems,
+        serviceLevel,
+        temperatureControl,
+        requiresHazmat,
         specialInstructions: specialInstructions || undefined,
         notes: notes || undefined,
         importSource: 'manual'
@@ -620,6 +626,45 @@ export default function OrderCreationForm({
           </table>
         </div>
       )}
+
+      <h3 style={{ gridColumn: '1 / -1', marginTop: 'var(--spacing-2)' }}>Service Requirements</h3>
+
+      <div className="input-wrapper">
+        <select
+          value={serviceLevel}
+          onChange={(e) => setServiceLevel(e.target.value as 'FTL' | 'LTL')}
+          className="input"
+        >
+          <option value="LTL">LTL</option>
+          <option value="FTL">FTL</option>
+        </select>
+        <label>Service Level</label>
+      </div>
+
+      <div className="input-wrapper">
+        <select
+          value={temperatureControl}
+          onChange={(e) => setTemperatureControl(e.target.value as 'ambient' | 'refrigerated' | 'frozen')}
+          className="input"
+        >
+          <option value="ambient">Ambient</option>
+          <option value="refrigerated">Refrigerated</option>
+          <option value="frozen">Frozen</option>
+        </select>
+        <label>Temperature Control</label>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={requiresHazmat}
+            onChange={(e) => setRequiresHazmat(e.target.checked)}
+            style={{ marginRight: '8px' }}
+          />
+          Requires Hazmat Handling
+        </label>
+      </div>
 
       <h3 style={{ gridColumn: '1 / -1', marginTop: 'var(--spacing-2)' }}>Additional Information</h3>
 

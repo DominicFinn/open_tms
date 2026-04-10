@@ -14,6 +14,18 @@ export interface UpdateOrderPayload {
     destinationId?: string;
     requestedPickupDate?: Date;
     requestedDeliveryDate?: Date;
+    serviceLevel?: string;
+    temperatureControl?: string;
+    requiresHazmat?: boolean;
+    specialRequirements?: string[];
+    deliveryStatus?: string;
+    deliveredAt?: Date;
+    deliveryConfirmedBy?: string;
+    deliveryMethod?: string;
+    deliveryNotes?: string;
+    exceptionType?: string;
+    exceptionNotes?: string;
+    exceptionResolvedAt?: Date;
     specialInstructions?: string;
     notes?: string;
   };
