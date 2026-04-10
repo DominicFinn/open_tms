@@ -91,6 +91,89 @@ Reference the canonical class list at the top of `theme.css`:
 - VNext pages go in `frontend/src/vnext-design/VNext*.tsx`
 - When building new features, **prefer vnext patterns** unless specifically told to use the old system
 
+## EDI Communication Hub
+
+### Architecture
+The EDI system uses a **unified Trading Partner model** (`TradingPartner`) that replaces the older separate `EdiPartner` (inbound) and `OutboundIntegration` (outbound) models. A single trading partner handles both directions and multiple EDI transaction types.
+
+### Key Models
+- **TradingPartner** — Represents any entity you exchange EDI with (customer, carrier, 3PL, ERP, etc.). Has SFTP + HTTP connection config, inbound polling config, and outbound delivery config.
+- **TradingPartnerTransaction** — Registry of which EDI types a partner supports. Each entry has: `transactionType` (850, 204, 990, etc.), `direction` (inbound/outbound), `enabled`, `autoProcess`, `ack997Required`.
+- **EdiTransactionLog** — Unified audit log for all inbound/outbound EDI files with delivery status tracking.
+
+### Supported Transaction Types
+| Code | Name | Direction | Status |
+|------|------|-----------|--------|
+| 850 | Purchase Order | Inbound | Active |
+| 856 | Advance Ship Notice | Outbound | Active |
+| 204 | Motor Carrier Load Tender | Outbound | Active |
+| 990 | Response to Load Tender | Inbound | Active |
+| 997 | Functional Acknowledgment | Both | Active |
+| 214 | Shipment Status | Both | Planned |
+| 210 | Freight Invoice | Inbound | Planned |
+
+### EDI Flow — How It Works
+1. **Inbound**: The `edi-collector` service polls SFTP directories for each TradingPartner with `inboundEnabled=true`. It downloads files, detects the transaction type from the ST segment, and routes to the correct backend endpoint (850→orders, 990→tenders).
+2. **Outbound**: The `OutboundEdiDeliveryService` writes EDI files to SFTP or POSTs via HTTP. Called automatically when tenders are opened (EDI 204) and extensible for other outbound types.
+3. **Auto-204 Delivery**: When `TenderService.openTender()` sends offers, it checks if each carrier has a TradingPartner with outbound 204 enabled. If so, generates and delivers the EDI 204 automatically via SFTP.
+
+### Adding a New EDI Transaction Type
+1. Write a parser service (for inbound) or generator service (for outbound) in `backend/src/services/`
+2. Add the transaction type to the route map in `EdiRouterService.ts`
+3. Add a backend endpoint for processing
+4. Trading partners can then add the type to their config via the UI
+
+### Key Files
+- `backend/src/repositories/TradingPartnerRepository.ts` — CRUD + query methods
+- `backend/src/services/EdiRouterService.ts` — Transaction type detection and routing
+- `backend/src/services/OutboundEdiDeliveryService.ts` — SFTP/HTTP delivery engine
+- `backend/src/services/EDI204Service.ts` — EDI 204 Motor Carrier Load Tender generator
+- `backend/src/services/EDI990ParseService.ts` — EDI 990 Response to Load Tender parser
+- `backend/src/services/EDI997Service.ts` — Functional Acknowledgment generator
+- `backend/src/services/EDI850ParseService.ts` — Purchase Order parser
+- `backend/src/services/EDI856Service.ts` — Advance Ship Notice generator
+- `backend/src/routes/tradingPartners.ts` — API routes for partner management
+- `backend/src/routes/ediTender.ts` — EDI 204 preview and 990 inbound endpoints
+- `edi-collector/src/collector.ts` — SFTP polling with multi-type routing
+- `frontend/src/pages/TradingPartners.tsx` — Partner management UI (Integrations app)
+
+### Legacy Compatibility
+The old `EdiPartner` and `OutboundIntegration` models still exist. The migration copies their data into TradingPartner. The edi-collector fetches from both endpoints during transition. Old UI pages are preserved as "(Legacy)" in the integrations nav.
+
+## Carrier Tendering
+
+### Architecture
+The tendering system supports **broadcast** (all carriers simultaneously) and **waterfall** (sequential, auto-progress on timeout/decline) strategies.
+
+### Key Models
+- **Tender** — Linked to a Shipment. Has strategy, status lifecycle (draft→open→evaluating→awarded), configurable duration, target rate.
+- **TenderOffer** — One per carrier in a tender. Tracks sent/viewed/expired status and waterfall sequence.
+- **TenderBid** — Carrier's rate submission. Can come from the web portal (`sourceType: "portal"`) or EDI 990 (`sourceType: "edi_990"`).
+- **CarrierUser** — Separate auth model for carrier portal login (not the internal User model).
+
+### Carrier Portal
+- Separate app at `/carrier-portal/` with its own layout and JWT auth (`iss: "open-tms-carrier"`)
+- Pages: login, dashboard, tender view with bid form, tender history with win/loss tracking, bid history, profile with password change
+- Auth middleware: `authenticateCarrierJWT` in `backend/src/middleware/jwtAuth.ts`
+
+### Carrier User Management
+- Admin manages carrier portal users on the carrier edit page (`CarrierUserManagement` component)
+- Password strength validation: 8+ chars, uppercase, lowercase, number
+- Account lockout: 5 failed attempts → 15 minute lockout
+- Admin password reset available (no old password required)
+
+### Key Files
+- `backend/src/services/TenderService.ts` — Core lifecycle: create, open, bid, award, cancel, waterfall progression
+- `backend/src/services/CarrierAuthService.ts` — Carrier JWT auth with lockout
+- `backend/src/routes/tenders.ts` — Admin tender CRUD and lifecycle actions
+- `backend/src/routes/carrierPortal.ts` — Carrier-facing: login, tenders, bids, history, profile
+- `backend/src/routes/carrierUsers.ts` — Admin carrier user management
+- `frontend/src/pages/Tenders.tsx` — Tender list with carrier/status filters
+- `frontend/src/pages/TenderDetail.tsx` — Bid comparison and award workflow
+- `frontend/src/pages/CreateTender.tsx` — 5-step tender creation wizard
+- `frontend/src/pages/carrier-portal/` — All carrier portal pages
+- `frontend/src/carrier-portal-layout.tsx` — Carrier portal layout
+
 ## Database
 
 - PostgreSQL via Prisma

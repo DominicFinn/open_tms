@@ -48,6 +48,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <span className="material-icons">receipt_long</span>
             Orders
           </NavLink>
+          <NavLink to="/tenders" onClick={closeMobileMenu}>
+            <span className="material-icons">gavel</span>
+            Tenders
+          </NavLink>
           <NavLink to="/shipments" onClick={closeMobileMenu}>
             <span className="material-icons">local_shipping</span>
             Shipments

@@ -52,6 +52,18 @@ import VNextMapsSettings from './vnext-design/VNextMapsSettings';
 import VNextDevices from './vnext-design/VNextDevices';
 import VNextDeviceDetail from './vnext-design/VNextDeviceDetail';
 
+// Carrier Tendering & Portal
+import Tenders from './pages/Tenders';
+import TenderDetail from './pages/TenderDetail';
+import CreateTender from './pages/CreateTender';
+import { CarrierPortalLayout } from './carrier-portal-layout';
+import CarrierLogin from './pages/carrier-portal/CarrierLogin';
+import CarrierDashboard from './pages/carrier-portal/CarrierDashboard';
+import CarrierTenderView from './pages/carrier-portal/CarrierTenderView';
+import CarrierBidHistory from './pages/carrier-portal/CarrierBidHistory';
+import CarrierTenderHistory from './pages/carrier-portal/CarrierTenderHistory';
+import CarrierProfile from './pages/carrier-portal/CarrierProfile';
+import TradingPartners from './pages/TradingPartners';
 import './theme.css';
 
 const root = createRoot(document.getElementById('root')!);
@@ -60,6 +72,17 @@ root.render(
     <ThemeProvider>
       <MapProvider>
       <Routes>
+        {/* Carrier Portal (standalone — outside main layout) */}
+        <Route path="/carrier-portal/login" element={<CarrierLogin />} />
+        <Route path="/carrier-portal" element={<CarrierPortalLayout />}>
+          <Route index element={<CarrierDashboard />} />
+          <Route path="tenders/:id" element={<CarrierTenderView />} />
+          <Route path="history" element={<CarrierTenderHistory />} />
+          <Route path="bids" element={<CarrierBidHistory />} />
+          <Route path="profile" element={<CarrierProfile />} />
+        </Route>
+
+        {/* Main app (VNext layout) */}
         <Route path="/" element={<VNextLayout />}>
           {/* Dashboard */}
           <Route index element={<VNextDashboard />} />
@@ -79,6 +102,11 @@ root.render(
 
           {/* Pending Lane Requests */}
           <Route path="pending-lane-requests" element={<VNextPendingLaneRequests />} />
+
+          {/* Tenders */}
+          <Route path="tenders" element={<Tenders />} />
+          <Route path="tenders/create" element={<CreateTender />} />
+          <Route path="tenders/:id" element={<TenderDetail />} />
 
           {/* Issues & Carrier Bidding */}
           <Route path="issues" element={<VNextIssueKanban />} />
@@ -129,6 +157,7 @@ root.render(
             <Route path="webhook-logs" element={<VNextWebhookLogs />} />
             <Route path="outbound" element={<VNextOutboundIntegrations />} />
             <Route path="outbound-logs" element={<VNextOutboundLogs />} />
+            <Route path="trading-partners" element={<TradingPartners />} />
             <Route path="edi-partners" element={<VNextEdiPartners />} />
             <Route path="edi-files" element={<VNextEdiFiles />} />
           </Route>

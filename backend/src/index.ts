@@ -43,6 +43,11 @@ import { eventRoutes } from './routes/events.js';
 import { emailSettingsRoutes } from './routes/emailSettings.js';
 import { emailTemplateRoutes } from './routes/emailTemplates.js';
 import { mapsSettingsRoutes } from './routes/mapsSettings.js';
+import { tenderRoutes } from './routes/tenders.js';
+import { carrierPortalRoutes } from './routes/carrierPortal.js';
+import { carrierUserRoutes } from './routes/carrierUsers.js';
+import { ediTenderRoutes } from './routes/ediTender.js';
+import { tradingPartnerRoutes } from './routes/tradingPartners.js';
 import deviceRoutes from './routes/devices.js';
 import telemetryRoutes from './routes/telemetry.js';
 
@@ -106,6 +111,11 @@ async function start() {
   await server.register(emailSettingsRoutes);
   await server.register(emailTemplateRoutes);
   await server.register(mapsSettingsRoutes);
+  await server.register(tenderRoutes);
+  await server.register(carrierPortalRoutes);
+  await server.register(carrierUserRoutes);
+  await server.register(ediTenderRoutes);
+  await server.register(tradingPartnerRoutes);
   await server.register(deviceRoutes);
   await server.register(telemetryRoutes);
 
