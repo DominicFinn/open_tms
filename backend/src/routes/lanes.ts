@@ -1,7 +1,19 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { randomUUID } from 'crypto';
+import { container, TOKENS } from '../di/index.js';
+import { ICommandBus } from '../commands/CommandBus.js';
+import { CREATE_LANE } from '../commands/lanes/CreateLaneCommand.js';
+import { UPDATE_LANE } from '../commands/lanes/UpdateLaneCommand.js';
+import { ARCHIVE_LANE } from '../commands/lanes/ArchiveLaneCommand.js';
 
 export async function laneRoutes(server: FastifyInstance) {
+  const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
+
+  const getOrgId = async () => {
+    const org = await server.prisma.organization.findFirst({ select: { id: true } });
+    return org?.id || 'default';
+  };
   // Get all lanes
   server.get('/api/v1/lanes', async (_req: FastifyRequest, _reply: FastifyReply) => {
     const lanes = await server.prisma.lane.findMany({
@@ -85,43 +97,34 @@ export async function laneRoutes(server: FastifyInstance) {
 
     const laneName = `${origin.city} → ${destination.city}`;
 
-    // Create lane with stops in a transaction
-    const created = await server.prisma.$transaction(async (tx: any) => {
-      // Create the lane
-      const lane = await tx.lane.create({
-        data: {
-          originId: body.originId,
-          destinationId: body.destinationId,
-          distance: body.distance,
-          notes: body.notes,
-          name: laneName
-        }
-      });
+    const result = await commandBus.dispatch({
+      type: CREATE_LANE,
+      orgId: await getOrgId(),
+      actorId: null,
+      payload: {
+        name: laneName,
+        originId: body.originId,
+        destinationId: body.destinationId,
+        distance: body.distance,
+        notes: body.notes,
+        stops: body.stops,
+      },
+      metadata: { correlationId: randomUUID(), source: 'api' },
+    });
 
-      // Create stops if any
-      if (body.stops.length > 0) {
-        await tx.laneStop.createMany({
-          data: body.stops.map(stop => ({
-            laneId: lane.id,
-            locationId: stop.locationId,
-            order: stop.order,
-            notes: stop.notes
-          }))
-        });
-      }
+    if (!result.success) {
+      reply.code(400);
+      return { data: null, error: result.error };
+    }
 
-      // Return the complete lane with relationships
-      return await tx.lane.findUnique({
-        where: { id: lane.id },
-        include: {
-          origin: true,
-          destination: true,
-          stops: {
-            include: { location: true },
-            orderBy: { order: 'asc' }
-          }
-        }
-      });
+    // Fetch complete lane with relationships for response
+    const created = await server.prisma.lane.findUnique({
+      where: { id: (result.data as any).id },
+      include: {
+        origin: true,
+        destination: true,
+        stops: { include: { location: true }, orderBy: { order: 'asc' } },
+      },
     });
 
     reply.code(201);
@@ -319,22 +322,20 @@ export async function laneRoutes(server: FastifyInstance) {
   server.delete('/api/v1/lanes/:id', async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
 
-    const lane = await server.prisma.lane.findFirst({
-      where: { id, archived: false }
+    const result = await commandBus.dispatch({
+      type: ARCHIVE_LANE,
+      orgId: await getOrgId(),
+      actorId: null,
+      payload: { id },
+      metadata: { correlationId: randomUUID(), source: 'api' },
     });
-    if (!lane) {
+
+    if (!result.success) {
       reply.code(404);
-      return { data: null, error: 'Lane not found' };
+      return { data: null, error: result.error };
     }
 
-    const archived = await server.prisma.lane.update({
-      where: { id },
-      data: {
-        archived: true,
-        archivedAt: new Date()
-      }
-    });
-    return { data: archived, error: null };
+    return { data: { id, archived: true }, error: null };
   });
 
   // Customer-Lane relationships
