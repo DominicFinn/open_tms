@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { API_URL } from '../api';
+import { getDeviceImageUrl } from './deviceImages';
 
 function ShipmentTempChart({ readings }: { readings: any[] }) {
   const temps = readings.filter(r => r.temperature != null);
@@ -85,8 +86,51 @@ function TelemetryTab({ shipmentId }: { shipmentId: string }) {
     ? `${readings[0].batteryLevel}%`
     : '—';
 
+  // Extract unique devices from readings
+  const deviceMap = new Map<string, any>();
+  readings.forEach((r: any) => {
+    if (r.device && r.device.id && !deviceMap.has(r.device.id)) {
+      deviceMap.set(r.device.id, r.device);
+    }
+  });
+  const trackerDevices = Array.from(deviceMap.values());
+
   return (
     <>
+      {/* Tracking Devices */}
+      {trackerDevices.length > 0 && (
+        <div className="vn-card" style={{ marginBottom: 24 }}>
+          <div className="vn-card-header"><h2>Tracking Devices</h2></div>
+          <div className="vn-card-body">
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
+              {trackerDevices.map((dev: any) => {
+                const imgUrl = getDeviceImageUrl(dev.model);
+                return (
+                  <div key={dev.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    padding: '12px 16px', borderRadius: 'var(--border-radius-sm)',
+                    border: '1px solid var(--outline-variant)', background: 'var(--surface-container-lowest)',
+                    minWidth: 220,
+                  }}>
+                    {imgUrl ? (
+                      <img src={imgUrl} alt={dev.model} style={{ width: 40, height: 40, objectFit: 'contain', flexShrink: 0 }} />
+                    ) : (
+                      <span className="material-icons" style={{ fontSize: 36, color: 'var(--on-surface-variant)', flexShrink: 0 }}>sensors</span>
+                    )}
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 14 }}>{dev.name || dev.displayId || 'Device'}</div>
+                      <div style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>
+                        {dev.model || 'Unknown model'}{dev.displayId ? ` · ${dev.displayId}` : ''}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Summary Cards */}
       <div className="vn-stats-row" style={{ marginBottom: 24 }}>
         <div className="vn-stat-card">

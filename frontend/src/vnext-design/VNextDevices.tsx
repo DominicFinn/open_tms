@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { API_URL } from '../api';
+import { getDeviceImageUrl } from './deviceImages';
 
 interface Device {
   id: string;
@@ -232,12 +233,22 @@ export default function VNextDevices() {
                     return (
                       <tr key={device.id}>
                         <td>
-                          <div>
-                            <div style={{ fontWeight: 600, color: 'var(--on-surface)' }}>{device.name}</div>
-                            <div style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>{device.displayId}</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                            {(() => {
+                              const imgUrl = getDeviceImageUrl(device.model);
+                              return imgUrl ? (
+                                <img src={imgUrl} alt={device.model} style={{ width: 36, height: 36, objectFit: 'contain', flexShrink: 0 }} />
+                              ) : (
+                                <span className="material-icons" style={{ fontSize: 32, color: 'var(--on-surface-variant)', flexShrink: 0 }}>sensors</span>
+                              );
+                            })()}
+                            <div>
+                              <div style={{ fontWeight: 600, color: 'var(--on-surface)' }}>{device.name}</div>
+                              <div style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>{device.displayId || device.externalId}</div>
+                            </div>
                           </div>
                         </td>
-                        <td>{device.model}</td>
+                        <td style={{ fontSize: 13 }}>{device.model || '—'}</td>
                         <td>
                           <span className={`vn-chip vn-chip-${statusChip}`}>{device.status}</span>
                         </td>

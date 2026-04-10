@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { API_URL } from '../api';
+import { getDeviceImageUrl } from './deviceImages';
 
 interface SensorReading {
   id: string;
@@ -191,10 +192,22 @@ export default function VNextDeviceDetail() {
 
       {/* Page Header */}
       <div className="vn-page-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <h1>{device.name}</h1>
-          <span className={`vn-chip vn-chip-${statusChip}`}>{device.status}</span>
-          <span className="vn-chip vn-chip-secondary">{device.model}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+          {(() => {
+            const imgUrl = getDeviceImageUrl(device.model);
+            return imgUrl ? (
+              <img src={imgUrl} alt={device.model} style={{ width: 48, height: 48, objectFit: 'contain' }} />
+            ) : (
+              <span className="material-icons" style={{ fontSize: 44, color: 'var(--on-surface-variant)' }}>sensors</span>
+            );
+          })()}
+          <div>
+            <h1>{device.name}</h1>
+            <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+              <span className={`vn-chip vn-chip-${statusChip}`}>{device.status}</span>
+              <span className="vn-chip vn-chip-secondary">{device.model}</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -297,6 +310,22 @@ export default function VNextDeviceDetail() {
 
         {/* Sidebar */}
         <div className="vn-detail-sidebar">
+          {/* Device Image */}
+          {(() => {
+            const imgUrl = getDeviceImageUrl(device.model);
+            return (
+              <div className="vn-card">
+                <div className="vn-card-body" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px 20px' }}>
+                  {imgUrl ? (
+                    <img src={imgUrl} alt={device.model} style={{ width: 80, height: 80, objectFit: 'contain' }} />
+                  ) : (
+                    <span className="material-icons" style={{ fontSize: 64, color: 'var(--on-surface-variant)', opacity: 0.5 }}>sensors</span>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Device Info */}
           <div className="vn-card">
             <div className="vn-card-header"><h2>Device Info</h2></div>
