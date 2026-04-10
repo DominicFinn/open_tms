@@ -134,28 +134,48 @@
   - RTL layout support for applicable languages
 
 ## **Phase 4: Notifications, Tracking & Exception Management**
-- **Emails & Notifications** 🔲
-  - Email service (pluggable: SMTP, SendGrid, SES) via DI container
-  - Email templates with Handlebars/Mustache (uses branding from Phase 3)
-  - Notification preferences (per-user, per-organization)
-  - Event-triggered notifications (shipment status changes, exceptions, deliveries)
-  - Notification worker (leveraging existing pg-boss queue infrastructure)
-  - In-app notification centre
-- **Triage Centre / Visibility Tower (Basic)** 🔲
-  - Trello-like kanban board for managing issues (open → investigating → resolved → closed)
-  - Issue model linked to shipments/orders with categorization
-  - Comments system on orders, shipments, and issues
-  - Issue assignment, escalation, and SLA tracking
-  - Query management for carrier/driver communication
-  - Quick actions: contact carrier, update status, add notes
-- **Live Tracking & Status** 🔲
-  - Carrier API integration (FedEx, UPS, DHL) or via middleware (EasyPost, Shippo)
-  - Update shipments automatically from carrier feeds
-  - Store timestamps, current location
-- **Exceptions** 🔲
-  - Alerts for delays, route deviations, failed deliveries
-  - Exception auto-detection from tracking data
-  - Integration with Triage Centre for exception workflow
+- **Emails & Notifications** ✅
+  - ✅ Email service (pluggable: SMTP, SendGrid, SES) via DI container
+  - ✅ Email templates with Handlebars (uses branding from Phase 3)
+  - ✅ Notification preferences (per-user, per-organization)
+  - ✅ Event-triggered notifications (shipment status changes, exceptions, deliveries)
+  - ✅ Notification worker (pg-boss queue with fan-out)
+  - ✅ In-app notification centre
+- **CQRS & Event-Driven Architecture** ✅
+  - ✅ Domain command handlers for all entities (20+ handlers)
+  - ✅ Immutable DomainEventLog event store
+  - ✅ Event bus with pg-boss fan-out, wildcard subscriptions, configurable concurrency
+  - ✅ Read model projections (Order, Shipment, Carrier, Customer, Lane, Issue)
+  - ✅ Event export API with wildcard filters, cursor pagination, and stats
+  - ✅ `/metrics` endpoint with read model lag detection
+  - ✅ Configurable handler concurrency via env vars
+  - ✅ Backfill script for populating read models from existing data
+  - ✅ 59 tests across 11 suites (commands, projections, integration)
+  - ✅ [Domain Behaviours documentation](./docs/DOMAIN_BEHAVIOURS.md)
+- **Triage Centre / Issue Management** (partial)
+  - ✅ Issue model with status lifecycle (open → in_progress → resolved → closed)
+  - ✅ Priority levels (low, medium, high, critical)
+  - ✅ Category classification (exception, delay, damage, compliance, other)
+  - ✅ Source entity linking (which shipment/order/carrier triggered it)
+  - ✅ Assignment and escalation with CQRS commands
+  - ✅ IssueReadModel projection for fast queries
+  - Trello-like kanban board UI 🔲
+  - Comments system on orders, shipments, and issues 🔲
+  - SLA tracking and breach alerts 🔲
+  - Auto-triage handler (exception events → auto-create issues) 🔲
+- **Live Tracking & Status** (partial)
+  - ✅ Inbound webhook endpoint for IoT GPS devices
+  - ✅ ShipmentEvent model with location tracking
+  - ✅ Geofencing with automatic delivery status updates
+  - ✅ ShipmentReadModel tracks currentLat/Lng/lastLocationAt
+  - Carrier API integration (FedEx, UPS, DHL) 🔲
+  - Update shipments automatically from carrier feeds 🔲
+- **Exceptions** (partial)
+  - ✅ Exception status on orders with type classification
+  - ✅ Exception resolution workflow
+  - ✅ Event-driven notifications on exceptions
+  - Alerts for route deviations 🔲
+  - Exception auto-detection from tracking data 🔲
 - **Driver Mobile App** 🔲
   - Mobile app for drivers to update order/shipment status in the field
   - Delivery confirmation with signature capture
@@ -328,18 +348,21 @@
   - Feed into quoting engine (Phase 7) for competitive rate benchmarking
 
 ## **Phase 10: SRE, Observability & Operations**
-- **Queue Monitoring & Alerting** 🔲
-  - Dashboard for queue sizes, processing rates, and lag per handler (evt.audit, evt.email, etc.)
-  - Configurable alerting thresholds: queue depth > N, processing latency > Xms, DLQ items > 0
-  - Alert channels: email, in-app notification, webhook (dogfood the event system)
-  - Historical queue metrics: track throughput and latency over time, identify bottlenecks
-  - Auto-scaling recommendations: "queue X has been backed up for 30 min, consider adding a worker"
-- **Metrics & Observability** 🔲
-  - Prometheus-compatible `/metrics` endpoint on API and worker processes
-  - Key metrics: request rate, response time (p50/p95/p99), error rate, queue depth, active jobs, connection pool utilization
-  - Grafana dashboard templates (shipped as JSON, importable)
-  - OpenTelemetry traces: request → event publish → handler execution, end-to-end latency
-  - Structured JSON logging with correlation IDs (trace a single user action across API + worker)
+- **Queue Monitoring & Alerting** (partial)
+  - ✅ Dashboard API for queue sizes and job counts (`GET /api/v1/queues/stats`)
+  - ✅ Per-queue stats, job peeking, DLQ management endpoints
+  - ✅ DLQ purge and retry via API
+  - Configurable alerting thresholds 🔲
+  - Auto-scaling recommendations 🔲
+- **Metrics & Observability** (partial)
+  - ✅ `/metrics` endpoint with read model lag detection, event throughput, queue depths
+  - ✅ Event stats endpoint (`GET /api/v1/events/stats`) — counts by type
+  - ✅ Configurable handler concurrency via env vars (PROJECTION_CONCURRENCY, AUDIT_CONCURRENCY, EMAIL_CONCURRENCY)
+  - ✅ ProjectionCheckpoint table for tracking projection processing state
+  - Prometheus-compatible format 🔲
+  - Grafana dashboard templates 🔲
+  - OpenTelemetry traces 🔲
+  - Structured JSON logging with correlation IDs 🔲
 - **Health Checks & Liveness** 🔲
   - API: existing `/health` endpoint enhanced with dependency checks (database, pg-boss, S3)
   - Worker: lightweight HTTP health endpoint (port 3002) for Docker/k8s liveness probes
@@ -384,10 +407,10 @@
 ---
 
 🔥 **Priorities:**
-- **Immediate:** Continue **Phase 3** — User Management & Auth complete; proceed with Document Templates, Document Management, Theming & Custom Fields.
-- **Short term:** Deliver **Phase 4** (notifications, triage centre, live tracking) for operational visibility.
-- **Medium term:** Deliver **Phase 5–6** (IoT + cold chain compliance) → unique differentiator.
-- **Long term:** **Phase 7–8** (financials, portals, N8N integration) to scale platform.
-- **Strategic:** **Phase 9–9c** (routes & maps, AI agents, data providers) — the intelligence layer that turns Open TMS from a record system into a decision system.
-- **Operational:** **Phase 10** (SRE & observability) — ship early pieces (health checks, structured logging, queue dashboard) alongside Phase 4, then build out fully as deployment complexity grows.
+- **Immediate:** Complete **Phase 4** — Triage Centre UI (kanban board), auto-triage handler (exception events → issues), SLA tracking. CQRS event backbone is done; now build the operational UX on top.
+- **Short term:** Deliver **Phase 5** (IoT device-shipment linking, sensor visualization) — the event pipeline is ready for high-throughput IoT ingestion.
+- **Medium term:** Deliver **Phase 6** (cold chain compliance) → unique differentiator. Events + issue system provide the audit trail and exception workflow needed for regulatory compliance.
+- **Long term:** **Phase 7–8** (financials, portals, N8N integration) to scale platform. Event export API is warehouse-ready for financial analytics.
+- **Strategic:** **Phase 9–9c** (routes & maps, AI agents, data providers) — the intelligence layer. DomainEventLog + ML pipeline readiness means AI agents can consume the full event stream.
+- **Operational:** **Phase 10** (SRE & observability) — `/metrics` endpoint and projection checkpointing are in place. Next: Prometheus format, Grafana dashboards, OpenTelemetry tracing.
 - **Future:** **Phase 11** (advanced operations) for enterprise depth.
