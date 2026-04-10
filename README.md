@@ -39,6 +39,20 @@ I'm outlining a roadmap. It's high level. It can be ticketed up as it goes along
 - **Authentication & Authorization** - Standalone auth service with JWT tokens, OAuth 2.0 (Google/Microsoft), RBAC with fine-grained permissions, and account lockout protection
 - **Email Service** - Pluggable email with SMTP and console providers, Handlebars templates, admin-configurable settings, and per-organization overrides
 
+### 🚨 Triage Control Tower
+The Triage Centre is a dedicated app for managing transportation exceptions at scale — the platform's core operational intelligence feature.
+
+- **Signal Dashboard** - Command-centre landing page showing exception category heatmap, signal-vs-noise ratio, stuck issues, recurring patterns, and resolution metrics — all color-coded with MD3 theme tokens
+- **Signal Processing** - Confidence scoring (0–100) on every issue to filter false positives from real problems. Sensor spikes that last one reading score low; sustained excursions score high. Noise issues are auto-dismissed but remain searchable
+- **Issue Kanban Board** - 4-column workflow (New → Investigating → Escalated → Resolved) with priority badges (P1–P5), signal score bars, SLA breach warnings, and noise indicators
+- **Rich Issue Detail** - Full-page view with tabs: Overview, Activity Timeline, Context (IoT sensor data, shipment events, device alerts), and Comments
+- **IoT-Driven Auto-Triage** - Sensor alerts (temperature excursions, impacts, battery failures) auto-create issues via the TriageHandler with deduplication — corroborating events boost the signal score instead of creating duplicate issues
+- **Jira-like Search** - Full-text search across all issues (open and resolved) with advanced filters, pagination, and a noise toggle
+- **Custom Boards** - Saved filter boards per customer, carrier, lane, region, or shipment type (temperature-controlled, hazmat). Like Jira boards for specialist teams
+- **Spot Check** - Manager review page for resolved issues with expandable activity timelines, so team leads can review how tickets were handled
+- **Reports** - Category/severity/priority breakdowns, signal-vs-noise analysis, SLA breach rates, per-assignee resolution metrics
+- **Agent-Friendly API** - Batch operations (transition, assign, dismiss-noise) and a dedicated `/actionable` endpoint for future N8N/LLM automation agents
+
 ### 🎨 Modern UI/UX
 - **Material Design 3** - Beautiful, consistent design system
 - **Responsive Design** - Works perfectly on desktop, tablet, and mobile
@@ -494,11 +508,38 @@ Customer-facing API for programmatic order creation and tracking. Requires a cus
 - `POST /api/v1/queues/:name/purge-dlq` - Purge dead letter queue
 - `POST /api/v1/queues/:name/retry-failed` - Retry failed jobs from DLQ
 
+#### Triage Issues
+- `GET /api/v1/issues` - List issues (filterable by status, severity, priority, category, customer, carrier, lane, region, signal score, noise, date range, full-text search)
+- `GET /api/v1/issues/stats` - Issue counts by status, priority breakdown, SLA breach count, noise count
+- `GET /api/v1/issues/signal` - Signal dashboard aggregation (category heatmap, recurring patterns, signal-vs-noise ratio)
+- `GET /api/v1/issues/spot-check` - Resolved issues with activity for manager review
+- `GET /api/v1/issues/actionable` - Agent-friendly: unassigned high-signal issues sorted by priority
+- `POST /api/v1/issues` - Create issue (manual or auto from exceptions/sensor alerts)
+- `GET /api/v1/issues/:id` - Get issue with comments and activity history
+- `PATCH /api/v1/issues/:id` - Update issue fields
+- `POST /api/v1/issues/:id/transition` - Move issue between kanban columns
+- `POST /api/v1/issues/:id/resolve` - Resolve with notes, calculates time-to-resolution
+- `POST /api/v1/issues/:id/comments` - Add comment
+- `GET /api/v1/issues/:id/timeline` - Full activity timeline (status changes, assignments, comments)
+- `GET /api/v1/issues/:id/context` - Rich context with linked shipment, order, sensor readings, device events
+- `POST /api/v1/issues/batch/transition` - Batch status transition
+- `POST /api/v1/issues/batch/assign` - Batch assignment
+- `POST /api/v1/issues/batch/dismiss-noise` - Batch noise dismissal
+
+#### Triage Boards
+- `GET /api/v1/triage-boards` - List saved boards
+- `POST /api/v1/triage-boards` - Create board with filter configuration
+- `GET /api/v1/triage-boards/:id` - Get board config
+- `PATCH /api/v1/triage-boards/:id` - Update board
+- `DELETE /api/v1/triage-boards/:id` - Delete board
+- `GET /api/v1/triage-boards/:id/issues` - Get issues matching board filters
+
 #### Organization Settings
 - `GET /api/v1/organization/settings` - Get org settings (tracking mode, units)
 - `PUT /api/v1/organization/settings` - Update org settings
 
 ### Integration Guides
+- **[Triage Control Tower Guide](./docs/TRIAGE_GUIDE.md)** - Signal processing, custom boards, IoT auto-triage, agent-friendly API
 - **[Customer API Guide](./docs/CUSTOMER_API_GUIDE.md)** - External API for programmatic order creation
 - **[CSV Import Guide](./docs/CSV_IMPORT_GUIDE.md)** - Bulk order import from CSV files
 - **[EDI Import Guide](./docs/EDI_IMPORT_GUIDE.md)** - X12 850 import, partner config, SFTP collection

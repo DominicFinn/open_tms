@@ -129,13 +129,14 @@
   - Event-triggered notifications (shipment status changes, exceptions, deliveries)
   - Notification worker (leveraging existing pg-boss queue infrastructure)
   - In-app notification centre
-- **Triage Centre / Visibility Tower (Basic)** 🔲
-  - Trello-like kanban board for managing issues (open → investigating → resolved → closed)
-  - Issue model linked to shipments/orders with categorization
-  - Comments system on orders, shipments, and issues
-  - Issue assignment, escalation, and SLA tracking
-  - Query management for carrier/driver communication
-  - Quick actions: contact carrier, update status, add notes
+- **Triage Control Tower** ✅
+  - Dedicated Triage app with Signal Dashboard, Issue Board, Search, Spot Check, Reports
+  - Signal processing with confidence scoring (0-100) and false positive reduction
+  - IoT auto-triage: sensor alerts auto-create issues with dedup and signal scoring
+  - Custom boards (saved filters per customer, carrier, lane, region, hazmat, temp-controlled)
+  - Full activity timeline, resolution metrics, SLA tracking
+  - Agent-friendly batch API for future N8N/LLM automation
+  - See [Triage Guide](./docs/TRIAGE_GUIDE.md) for full documentation
 - **Live Tracking & Status** 🔲
   - Carrier API integration (FedEx, UPS, DHL) or via middleware (EasyPost, Shippo)
   - Update shipments automatically from carrier feeds
