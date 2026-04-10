@@ -80,6 +80,7 @@ import { CreateCAPACommandHandler } from '../commands/capa/CreateCAPACommand.js'
 import { UpdateCAPACommandHandler } from '../commands/capa/UpdateCAPACommand.js';
 import { ColdChainRepository } from '../repositories/ColdChainRepository.js';
 import { ColdChainService } from '../services/ColdChainService.js';
+import { ComplianceReportService } from '../services/ComplianceReportService.js';
 import { TenderRepository } from '../repositories/TenderRepository.js';
 import { CarrierUserRepository } from '../repositories/CarrierUserRepository.js';
 import { TenderService } from '../services/TenderService.js';
@@ -288,6 +289,13 @@ export function registerDependencies(prisma: PrismaClient): void {
 
   container.singleton(TOKENS.IColdChainService).toFactory(() => {
     return new ColdChainService(container.resolve(TOKENS.PrismaClient));
+  });
+
+  container.singleton(TOKENS.IComplianceReportService).toFactory(() => {
+    return new ComplianceReportService(
+      container.resolve(TOKENS.PrismaClient),
+      container.resolve(TOKENS.IBinaryStorageProvider),
+    );
   });
 
   // Tender repositories and services

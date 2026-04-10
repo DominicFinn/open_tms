@@ -973,7 +973,7 @@ export async function coldChainRoutes(server: FastifyInstance) {
 
     try {
       const complianceService = container.resolve<any>(TOKENS.IComplianceReportService);
-      const document = await complianceService.generateReport(shipmentId);
+      const document = await complianceService.generateComplianceReport(shipmentId);
 
       reply.code(201);
       return { data: document, error: null };

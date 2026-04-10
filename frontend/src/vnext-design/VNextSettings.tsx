@@ -106,6 +106,7 @@ function GeneralTab() {
   const [dimensions, setDimensions] = useState('cm');
   const [temperature, setTemperature] = useState('C');
   const [distance, setDistance] = useState('km');
+  const [autoDeliverDocs, setAutoDeliverDocs] = useState(false);
 
   return (
     <>
@@ -184,6 +185,21 @@ function GeneralTab() {
               { value: 'mi', label: 'Miles (mi)' },
             ]}
           />
+        </VnFormGrid>
+      </VnFormSection>
+
+      <VnFormSection title="Cold Chain & Compliance" icon="thermostat">
+        <VnFormGrid>
+          <div className="vn-col-span-2">
+            <Switch
+              label="Auto-deliver shipment documents to customers on completion"
+              checked={autoDeliverDocs}
+              onChange={setAutoDeliverDocs}
+            />
+            <p style={{ fontSize: '12px', color: 'var(--on-surface-variant)', marginTop: '4px', marginLeft: '28px' }}>
+              When enabled, cold chain compliance reports and other shipment documents will be automatically sent to the customer when a shipment is delivered.
+            </p>
+          </div>
         </VnFormGrid>
       </VnFormSection>
 
