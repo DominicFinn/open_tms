@@ -50,6 +50,7 @@ export default function VNextTriageSpotCheck() {
     ? Math.round(issues.filter((i: any) => i.timeToResolution != null).reduce((s: number, i: any) => s + (i.timeToResolution || 0), 0) / Math.max(issues.filter((i: any) => i.timeToResolution != null).length, 1))
     : undefined;
   const breachCount = issues.filter(i => i.slaBreach).length;
+  const breachRate = total > 0 ? ((breachCount / total) * 100).toFixed(1) : '0.0';
 
   if (loading) return <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}><div className="loading-spinner" /></div>;
 
@@ -97,6 +98,12 @@ export default function VNextTriageSpotCheck() {
                   <span style={{ fontSize: 13 }}>{issue.title}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {issue.resolvedBy && (
+                    <span style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>
+                      <span className="material-icons" style={{ fontSize: 14, verticalAlign: 'middle', marginRight: 2 }}>person</span>
+                      {issue.resolvedBy}
+                    </span>
+                  )}
                   <span style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>{issue.activityCount} activities</span>
                   <span style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>{fmtDuration(issue.timeToResolution)}</span>
                   {issue.slaBreach && <span className="vn-chip vn-chip-error" style={{ fontSize: 10 }}>SLA</span>}
