@@ -1353,6 +1353,14 @@ model Issue {
   @@index([createdAt])
 }
 
+model ProjectionCheckpoint {
+  projectionName  String   @id
+  lastEventId     String
+  lastEventTime   DateTime
+  processedCount  Int      @default(0)
+  updatedAt       DateTime @updatedAt
+}
+
 model IssueReadModel {
   id                String    @id
   orgId             String

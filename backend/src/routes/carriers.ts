@@ -1,10 +1,22 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { randomUUID } from 'crypto';
 import { ICarriersRepository } from '../repositories/CarriersRepository.js';
 import { container, TOKENS } from '../di/index.js';
+import { ICommandBus } from '../commands/CommandBus.js';
+import { CREATE_CARRIER } from '../commands/carriers/CreateCarrierCommand.js';
+import { UPDATE_CARRIER } from '../commands/carriers/UpdateCarrierCommand.js';
+import { ARCHIVE_CARRIER } from '../commands/carriers/ArchiveCarrierCommand.js';
 
 export async function carrierRoutes(server: FastifyInstance) {
   const carriersRepo = container.resolve<ICarriersRepository>(TOKENS.ICarriersRepository);
+  const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
+
+  // Resolve org ID once
+  const getOrgId = async () => {
+    const org = await server.prisma.organization.findFirst({ select: { id: true } });
+    return org?.id || 'default';
+  };
 
   // Get all carriers
   server.get('/api/v1/carriers', async (_req: FastifyRequest, _reply: FastifyReply) => {
@@ -50,7 +62,22 @@ export async function carrierRoutes(server: FastifyInstance) {
         validatedBy: z.string().optional()
       })
       .parse((req as any).body);
-    const created = await carriersRepo.create(body);
+
+    const result = await commandBus.dispatch({
+      type: CREATE_CARRIER,
+      orgId: await getOrgId(),
+      actorId: null,
+      payload: body,
+      metadata: { correlationId: randomUUID(), source: 'api' },
+    });
+
+    if (!result.success) {
+      reply.code(400);
+      return { data: null, error: result.error };
+    }
+
+    // Fetch full carrier for response (command returns minimal data)
+    const created = await carriersRepo.findById((result.data as any).id);
     reply.code(201);
     return { data: created, error: null };
   });
@@ -82,13 +109,20 @@ export async function carrierRoutes(server: FastifyInstance) {
       validatedBy: z.string().optional()
     }).parse((req as any).body);
 
-    const carrier = await carriersRepo.findById(id);
-    if (!carrier) {
-      reply.code(404);
-      return { data: null, error: 'Carrier not found' };
+    const result = await commandBus.dispatch({
+      type: UPDATE_CARRIER,
+      orgId: await getOrgId(),
+      actorId: null,
+      payload: { id, data: body },
+      metadata: { correlationId: randomUUID(), source: 'api' },
+    });
+
+    if (!result.success) {
+      reply.code(result.error?.includes('not found') ? 404 : 400);
+      return { data: null, error: result.error };
     }
 
-    const updated = await carriersRepo.update(id, body);
+    const updated = await carriersRepo.findById(id);
     return { data: updated, error: null };
   });
 
@@ -96,13 +130,20 @@ export async function carrierRoutes(server: FastifyInstance) {
   server.delete('/api/v1/carriers/:id', async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
 
-    const carrier = await carriersRepo.findById(id);
-    if (!carrier) {
+    const result = await commandBus.dispatch({
+      type: ARCHIVE_CARRIER,
+      orgId: await getOrgId(),
+      actorId: null,
+      payload: { id },
+      metadata: { correlationId: randomUUID(), source: 'api' },
+    });
+
+    if (!result.success) {
       reply.code(404);
-      return { data: null, error: 'Carrier not found' };
+      return { data: null, error: result.error };
     }
 
-    const archived = await carriersRepo.archive(id);
+    const archived = await carriersRepo.findById(id);
     return { data: archived, error: null };
   });
 }

@@ -109,3 +109,13 @@ CREATE INDEX "IssueReadModel_status_idx" ON "IssueReadModel"("status");
 CREATE INDEX "IssueReadModel_priority_idx" ON "IssueReadModel"("priority");
 CREATE INDEX "IssueReadModel_assigneeName_idx" ON "IssueReadModel"("assigneeName");
 CREATE INDEX "IssueReadModel_createdAt_idx" ON "IssueReadModel"("createdAt");
+
+-- Projection checkpoints for tracking last processed event per projection
+CREATE TABLE "ProjectionCheckpoint" (
+    "projectionName" TEXT NOT NULL,
+    "lastEventId" TEXT NOT NULL,
+    "lastEventTime" TIMESTAMP(3) NOT NULL,
+    "processedCount" INTEGER NOT NULL DEFAULT 0,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    CONSTRAINT "ProjectionCheckpoint_pkey" PRIMARY KEY ("projectionName")
+);

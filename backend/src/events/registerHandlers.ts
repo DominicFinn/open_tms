@@ -17,6 +17,28 @@ import { CustomerProjection } from './projections/CustomerProjection.js';
 import { LaneProjection } from './projections/LaneProjection.js';
 import { IssueProjection } from './projections/IssueProjection.js';
 
+/** Read concurrency from env with a default */
+function envInt(key: string, fallback: number): number {
+  const val = process.env[key];
+  return val ? parseInt(val, 10) : fallback;
+}
+
+/**
+ * Concurrency overrides via environment variables.
+ * Set PROJECTION_CONCURRENCY, AUDIT_CONCURRENCY, or EMAIL_CONCURRENCY
+ * to tune handler throughput per worker instance.
+ */
+const CONCURRENCY_OVERRIDES: Record<string, () => number> = {
+  'audit': () => envInt('AUDIT_CONCURRENCY', 5),
+  'projection.order': () => envInt('PROJECTION_CONCURRENCY', 3),
+  'projection.shipment': () => envInt('PROJECTION_CONCURRENCY', 3),
+  'projection.carrier': () => envInt('PROJECTION_CONCURRENCY', 3),
+  'projection.customer': () => envInt('PROJECTION_CONCURRENCY', 3),
+  'projection.lane': () => envInt('PROJECTION_CONCURRENCY', 3),
+  'projection.issue': () => envInt('PROJECTION_CONCURRENCY', 3),
+  'notification.email': () => envInt('EMAIL_CONCURRENCY', 2),
+};
+
 export async function registerEventHandlers(
   eventBus: IEventBus,
   prisma: PrismaClient,
@@ -40,12 +62,19 @@ export async function registerEventHandlers(
   }
 
   for (const handler of handlers) {
+    // Apply env-based concurrency overrides
+    const options = { ...handler.options };
+    const override = CONCURRENCY_OVERRIDES[handler.name];
+    if (override) {
+      options.concurrency = override();
+    }
+
     await eventBus.subscribe(
       handler.name,
       handler.eventPatterns,
       (event) => handler.handle(event),
-      handler.options
+      options
     );
-    console.log(`[EventBus] Registered handler: ${handler.name} (patterns: ${handler.eventPatterns.join(', ')})`);
+    console.log(`[EventBus] Registered handler: ${handler.name} (concurrency: ${options.concurrency ?? 'default'}, patterns: ${handler.eventPatterns.join(', ')})`);
   }
 }
