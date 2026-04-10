@@ -79,6 +79,41 @@ Reference the canonical class list at the top of `theme.css`:
 - After schema changes: create migration SQL, run `npx prisma generate`
 - Custom fields use versioning (not migration) — old records always render against their version
 
+## CQRS & Events
+
+### Command Handlers
+- All write operations go through command handlers in `backend/src/commands/`
+- Commands execute inside `prisma.$transaction()` via `BaseCommandHandler`
+- Events are collected during execution and published AFTER transaction commits
+- Register new handlers in `backend/src/di/registry.ts` inside the CommandBus factory
+- Routes dispatch commands: `commandBus.dispatch({ type, orgId, actorId, payload, metadata })`
+
+### Events & Projections
+- Domain events defined in `backend/src/events/eventTypes.ts`
+- Projections (read model builders) in `backend/src/events/projections/`
+- Register new projections in `backend/src/events/registerHandlers.ts`
+- Read models are flat Prisma tables — no joins needed for list queries
+- Backfill script: `npx tsx backend/src/scripts/backfill-read-models.ts`
+
+### When Adding a New Entity or Feature
+**You MUST do ALL of the following — this is not optional:**
+
+1. **Command handlers** — Create/Update/Archive commands in `backend/src/commands/<entity>/`
+2. **Event types** — Add to `backend/src/events/eventTypes.ts` with schema version
+3. **Projection** — Create `<Entity>Projection.ts` in `backend/src/events/projections/` if a read model exists
+4. **Tests** — Add unit tests for command handlers AND projections in `backend/src/__tests__/`
+5. **Domain behaviours doc** — Update `docs/DOMAIN_BEHAVIOURS.md` with commands, events, and side effects
+6. **Roadmap** — Update `roadmap.md` to mark items complete or add new items
+7. **API docs** — Add Swagger/OpenAPI `schema` blocks to new endpoints
+8. **README** — Update feature list in `README.md` if adding user-facing capability
+
+### Test Requirements
+- Every command handler must have tests verifying: success case, event emission, metadata propagation, error case
+- Every projection must have tests verifying: read model creation on entity.created, field updates on entity.updated
+- Integration tests should verify command → event → projection pipeline for new entities
+- Run `cd backend && npx jest --config jest.config.cjs` to verify all tests pass before committing
+- Test utilities in `backend/src/__tests__/helpers/testUtils.ts`: `mockEventBus()`, `createTestCommand()`, `createTestEvent()`
+
 ## Git
 
 - Feature branches off main
