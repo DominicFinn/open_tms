@@ -234,7 +234,7 @@ export class OrderProjection implements IEventHandler {
       select: { weight: true },
     });
     if (items.length === 0) return null;
-    const total = items.reduce((sum, item) => sum + (item.weight ?? 0), 0);
+    const total = items.reduce((sum: number, item: { weight: number | null }) => sum + (item.weight ?? 0), 0);
     return total > 0 ? total : null;
   }
 }

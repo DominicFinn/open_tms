@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { API_URL } from '../api';
@@ -84,6 +85,7 @@ function BidStars({ rating }: { rating: number }) {
 }
 
 export default function VNextCarrierBidding() {
+  const navigate = useNavigate();
   const [lanes, setLanes] = useState<any[]>([]);
   const [selectedLane, setSelectedLane] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
@@ -164,7 +166,7 @@ export default function VNextCarrierBidding() {
             <p>0 open bid requests</p>
           </div>
           <div className="vn-page-actions">
-            <button className="vn-btn vn-btn-primary">
+            <button className="vn-btn vn-btn-primary" onClick={() => navigate('/tenders/create')}>
               <span className="material-icons">add</span>
               New Bid Request
             </button>

@@ -66,6 +66,10 @@ export default function VNextDevices() {
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [showRegister, setShowRegister] = useState(false);
+  const [regForm, setRegForm] = useState({ externalId: '', name: '', provider: 'system_loco', model: '' });
+  const [regError, setRegError] = useState('');
+  const [regSaving, setRegSaving] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -131,7 +135,7 @@ export default function VNextDevices() {
           <p>{totalCount} devices registered</p>
         </div>
         <div className="vn-page-actions">
-          <button className="vn-btn vn-btn-primary">
+          <button className="vn-btn vn-btn-primary" onClick={() => setShowRegister(true)}>
             <span className="material-icons">add</span>
             Register Device
           </button>
@@ -281,6 +285,67 @@ export default function VNextDevices() {
                   })}
                 </tbody>
               </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Register Device Modal */}
+      {showRegister && (
+        <div className="vn-modal-backdrop" onClick={() => setShowRegister(false)}>
+          <div className="vn-modal" onClick={e => e.stopPropagation()}>
+            <div className="vn-modal-header">
+              <h2>Register Device</h2>
+              <button className="vn-btn-icon" onClick={() => setShowRegister(false)}>
+                <span className="material-icons">close</span>
+              </button>
+            </div>
+            <div className="vn-modal-body">
+              {regError && <div className="vn-alert vn-alert-error" style={{ marginBottom: 16 }}>{regError}</div>}
+              <div className="vn-form-grid">
+                <div className="vn-field">
+                  <label className="vn-field-label">External ID *</label>
+                  <input className="vn-input" value={regForm.externalId} onChange={e => setRegForm(f => ({ ...f, externalId: e.target.value }))} placeholder="e.g. SL-001" />
+                </div>
+                <div className="vn-field">
+                  <label className="vn-field-label">Name *</label>
+                  <input className="vn-input" value={regForm.name} onChange={e => setRegForm(f => ({ ...f, name: e.target.value }))} placeholder="Device name" />
+                </div>
+                <div className="vn-field">
+                  <label className="vn-field-label">Provider</label>
+                  <input className="vn-input" value={regForm.provider} onChange={e => setRegForm(f => ({ ...f, provider: e.target.value }))} placeholder="system_loco" />
+                </div>
+                <div className="vn-field">
+                  <label className="vn-field-label">Model</label>
+                  <input className="vn-input" value={regForm.model} onChange={e => setRegForm(f => ({ ...f, model: e.target.value }))} placeholder="Model name" />
+                </div>
+              </div>
+            </div>
+            <div className="vn-modal-footer">
+              <button className="vn-btn vn-btn-outline" onClick={() => setShowRegister(false)}>Cancel</button>
+              <button className="vn-btn vn-btn-primary" disabled={regSaving} onClick={async () => {
+                if (!regForm.externalId || !regForm.name) { setRegError('External ID and Name are required'); return; }
+                setRegSaving(true);
+                setRegError('');
+                try {
+                  const res = await fetch(`${API_URL}/api/v1/devices`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(regForm),
+                  });
+                  if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(j.error || 'Failed to register device'); }
+                  const json = await res.json();
+                  setDevices(prev => [json.data, ...prev]);
+                  setShowRegister(false);
+                  setRegForm({ externalId: '', name: '', provider: 'system_loco', model: '' });
+                } catch (err: unknown) {
+                  setRegError(err instanceof Error ? err.message : 'Failed to register device');
+                } finally {
+                  setRegSaving(false);
+                }
+              }}>
+                {regSaving ? 'Registering...' : 'Register'}
+              </button>
             </div>
           </div>
         </div>

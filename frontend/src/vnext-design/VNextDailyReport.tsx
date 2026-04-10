@@ -92,13 +92,9 @@ export default function VNextDailyReport() {
           <p style={{ color: 'var(--on-surface-variant)', fontSize: 14, marginTop: 4 }}>{today}</p>
         </div>
         <div className="vn-page-actions">
-          <button className="vn-btn vn-btn-outline">
+          <button className="vn-btn vn-btn-outline" onClick={() => window.open(`${API_URL}/api/v1/reports/daily?date=${todayISO}&format=xlsx`, '_blank')}>
             <span className="material-icons">download</span>
-            Export PDF
-          </button>
-          <button className="vn-btn vn-btn-outline">
-            <span className="material-icons">email</span>
-            Email Report
+            Export Excel
           </button>
         </div>
       </div>

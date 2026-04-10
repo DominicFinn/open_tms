@@ -97,7 +97,10 @@ export default function VNextDashboard() {
           <p>{today}</p>
         </div>
         <div className="vn-page-actions">
-          <button className="vn-btn vn-btn-outline">
+          <button className="vn-btn vn-btn-outline" onClick={() => {
+            const todayISO = new Date().toISOString().split('T')[0];
+            window.open(`${API_URL}/api/v1/reports/daily?date=${todayISO}&format=xlsx`, '_blank');
+          }}>
             <span className="material-icons">download</span>
             Export
           </button>

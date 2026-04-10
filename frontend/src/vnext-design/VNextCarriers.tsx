@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { API_URL } from '../api';
 
 interface Carrier {
@@ -26,6 +27,7 @@ function carrierStatus(c: Carrier): { label: string; color: string } {
 
 
 export default function VNextCarriers() {
+  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState<'table' | 'cards'>('cards');
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -88,7 +90,7 @@ export default function VNextCarriers() {
               <span className="material-icons" style={{ fontSize: 20 }}>view_list</span>
             </button>
           </div>
-          <button className="vn-btn vn-btn-primary">
+          <button className="vn-btn vn-btn-primary" onClick={() => navigate('/carriers/create')}>
             <span className="material-icons">add</span>
             Add Carrier
           </button>

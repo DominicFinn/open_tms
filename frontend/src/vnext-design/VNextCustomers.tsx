@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { API_URL } from '../api';
 
 interface Customer {
@@ -16,6 +17,7 @@ function formatCurrency(val: number) {
 }
 
 export default function VNextCustomers() {
+  const navigate = useNavigate();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -77,7 +79,7 @@ export default function VNextCustomers() {
           <p>{customers.length} customers in your account</p>
         </div>
         <div className="vn-page-actions">
-          <button className="vn-btn vn-btn-primary">
+          <button className="vn-btn vn-btn-primary" onClick={() => navigate('/customers/create')}>
             <span className="material-icons">add</span>
             New Customer
           </button>

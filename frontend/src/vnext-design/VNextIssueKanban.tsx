@@ -55,6 +55,10 @@ export default function VNextIssueKanban() {
   const [filterSeverity, setFilterSeverity] = useState('all');
   const [issues, setIssues] = useState<Issue[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showCreate, setShowCreate] = useState(false);
+  const [createForm, setCreateForm] = useState({ title: '', description: '', category: 'other', priority: 'medium' });
+  const [createError, setCreateError] = useState('');
+  const [createSaving, setCreateSaving] = useState(false);
 
   useEffect(() => {
     fetch(`${API_URL}/api/v1/issues`)
@@ -100,7 +104,7 @@ export default function VNextIssueKanban() {
             <option value="medium">Medium</option>
             <option value="low">Low</option>
           </select>
-          <button className="vn-btn vn-btn-primary">
+          <button className="vn-btn vn-btn-primary" onClick={() => setShowCreate(true)}>
             <span className="material-icons">add</span>
             Report Issue
           </button>
@@ -230,6 +234,78 @@ export default function VNextIssueKanban() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Report Issue Modal */}
+      {showCreate && (
+        <div className="vn-modal-backdrop" onClick={() => setShowCreate(false)}>
+          <div className="vn-modal" onClick={e => e.stopPropagation()}>
+            <div className="vn-modal-header">
+              <h2>Report Issue</h2>
+              <button className="vn-btn-icon" onClick={() => setShowCreate(false)}>
+                <span className="material-icons">close</span>
+              </button>
+            </div>
+            <div className="vn-modal-body">
+              {createError && <div className="vn-alert vn-alert-error" style={{ marginBottom: 16 }}>{createError}</div>}
+              <div className="vn-form-grid">
+                <div className="vn-field" style={{ gridColumn: '1 / -1' }}>
+                  <label className="vn-field-label">Title *</label>
+                  <input className="vn-input" value={createForm.title} onChange={e => setCreateForm(f => ({ ...f, title: e.target.value }))} placeholder="Brief description of the issue" />
+                </div>
+                <div className="vn-field">
+                  <label className="vn-field-label">Category *</label>
+                  <select className="vn-input" value={createForm.category} onChange={e => setCreateForm(f => ({ ...f, category: e.target.value }))}>
+                    <option value="exception">Exception</option>
+                    <option value="delay">Delay</option>
+                    <option value="damage">Damage</option>
+                    <option value="compliance">Compliance</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                <div className="vn-field">
+                  <label className="vn-field-label">Priority</label>
+                  <select className="vn-input" value={createForm.priority} onChange={e => setCreateForm(f => ({ ...f, priority: e.target.value }))}>
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="critical">Critical</option>
+                  </select>
+                </div>
+                <div className="vn-field" style={{ gridColumn: '1 / -1' }}>
+                  <label className="vn-field-label">Description</label>
+                  <textarea className="vn-input" rows={3} value={createForm.description} onChange={e => setCreateForm(f => ({ ...f, description: e.target.value }))} placeholder="Details about the issue..." />
+                </div>
+              </div>
+            </div>
+            <div className="vn-modal-footer">
+              <button className="vn-btn vn-btn-outline" onClick={() => setShowCreate(false)}>Cancel</button>
+              <button className="vn-btn vn-btn-primary" disabled={createSaving} onClick={async () => {
+                if (!createForm.title) { setCreateError('Title is required'); return; }
+                setCreateSaving(true);
+                setCreateError('');
+                try {
+                  const res = await fetch(`${API_URL}/api/v1/issues`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(createForm),
+                  });
+                  if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(j.error || 'Failed to create issue'); }
+                  const json = await res.json();
+                  setIssues(prev => [json.data, ...prev]);
+                  setShowCreate(false);
+                  setCreateForm({ title: '', description: '', category: 'other', priority: 'medium' });
+                } catch (err: unknown) {
+                  setCreateError(err instanceof Error ? err.message : 'Failed to create issue');
+                } finally {
+                  setCreateSaving(false);
+                }
+              }}>
+                {createSaving ? 'Creating...' : 'Create Issue'}
+              </button>
+            </div>
           </div>
         </div>
       )}
