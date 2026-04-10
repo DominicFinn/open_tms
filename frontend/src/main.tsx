@@ -1,6 +1,10 @@
 
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+
+function LegacyIssuesRedirect() {
+  return <Navigate to="/triage/board" replace />;
+}
 import { ThemeProvider } from './ThemeProvider';
 import { MapProvider } from './MapProvider';
 
@@ -10,7 +14,13 @@ import VNextDashboard from './vnext-design/VNextDashboard';
 import VNextShipments from './vnext-design/VNextShipments';
 import VNextShipmentDetail from './vnext-design/VNextShipmentDetail';
 import VNextOrders from './vnext-design/VNextOrders';
-import VNextIssueKanban from './vnext-design/VNextIssueKanban';
+import VNextTriageDashboard from './vnext-design/VNextTriageDashboard';
+import VNextTriageBoard from './vnext-design/VNextTriageBoard';
+import VNextTriageIssueDetail from './vnext-design/VNextTriageIssueDetail';
+import VNextTriageSearch from './vnext-design/VNextTriageSearch';
+import VNextTriageSpotCheck from './vnext-design/VNextTriageSpotCheck';
+import VNextTriageReports from './vnext-design/VNextTriageReports';
+import VNextTriageBoardEditor from './vnext-design/VNextTriageBoardEditor';
 import VNextCarriers from './vnext-design/VNextCarriers';
 import VNextCarrierBidding from './vnext-design/VNextCarrierBidding';
 import VNextCustomers from './vnext-design/VNextCustomers';
@@ -80,8 +90,8 @@ root.render(
           {/* Pending Lane Requests */}
           <Route path="pending-lane-requests" element={<VNextPendingLaneRequests />} />
 
-          {/* Issues & Carrier Bidding */}
-          <Route path="issues" element={<VNextIssueKanban />} />
+          {/* Legacy redirect: /issues → /triage/board */}
+          <Route path="issues" element={<LegacyIssuesRedirect />} />
           <Route path="carrier-bidding" element={<VNextCarrierBidding />} />
 
           {/* Devices */}
@@ -121,6 +131,19 @@ root.render(
           <Route path="settings/document-templates" element={<VNextDocumentTemplates />} />
           <Route path="settings/custom-fields" element={<VNextCustomFields />} />
           <Route path="settings/maps" element={<VNextMapsSettings />} />
+
+          {/* Triage Centre (dedicated app) */}
+          <Route path="triage">
+            <Route index element={<VNextTriageDashboard />} />
+            <Route path="board" element={<VNextTriageBoard />} />
+            <Route path="board/:boardId" element={<VNextTriageBoard />} />
+            <Route path="issues/:id" element={<VNextTriageIssueDetail />} />
+            <Route path="search" element={<VNextTriageSearch />} />
+            <Route path="spot-check" element={<VNextTriageSpotCheck />} />
+            <Route path="reports" element={<VNextTriageReports />} />
+            <Route path="boards/create" element={<VNextTriageBoardEditor />} />
+            <Route path="boards/:id/edit" element={<VNextTriageBoardEditor />} />
+          </Route>
 
           {/* Integrations (sub-layout with tabs) */}
           <Route path="integrations" element={<VNextIntegrationsLayout />}>

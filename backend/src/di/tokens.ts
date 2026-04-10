@@ -33,6 +33,7 @@ export const TOKENS = {
 
   // Issue/Triage tokens
   IIssuesRepository: Symbol.for('IIssuesRepository'),
+  ITriageBoardsRepository: Symbol.for('ITriageBoardsRepository'),
 
   // Custom fields tokens
   ICustomFieldService: Symbol.for('ICustomFieldService'),

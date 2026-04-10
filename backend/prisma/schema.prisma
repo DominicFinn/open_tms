@@ -1093,13 +1093,17 @@ model Issue {
   // Kanban workflow
   status          String    @default("new")         // new, investigating, escalated, resolved, closed
   severity        String    @default("medium")      // high, medium, low
+  priority        Int       @default(3)             // 1=critical, 2=urgent, 3=normal, 4=low, 5=trivial
   category        String?                           // Pickup Delay, Documentation, Equipment, Communication, Compliance, Delivery, Billing, Freight Damage, etc.
+  tags            Json?                             // string[] for flexible labeling
 
   // Linked entities
   shipmentId      String?
   orderId         String?
   carrierId       String?
   customerId      String?
+  laneId          String?                           // Link to Lane for lane-based boards
+  region          String?                           // Derived from shipment/order destination country
 
   // Assignment & escalation
   assigneeId      String?                           // User ID of assigned person
@@ -1107,6 +1111,8 @@ model Issue {
   escalatedAt     DateTime?
   resolvedAt      DateTime?
   closedAt        DateTime?
+  resolvedBy      String?                           // User who resolved
+  resolutionNotes String?                           // How it was resolved
 
   // Source tracking (how the issue was created)
   source          String    @default("manual")      // manual, auto_exception, auto_tracking, auto_sensor
@@ -1116,20 +1122,43 @@ model Issue {
   slaDeadline     DateTime?                         // When this issue must be resolved by
   slaBreach       Boolean   @default(false)
 
+  // Resolution metrics
+  timeToFirstResponse Int?                          // Minutes from creation to first status change
+  timeToResolution    Int?                          // Minutes from creation to resolved
+
+  // Activity tracking (for spot check)
+  lastActivityAt  DateTime?                         // Updated on any comment/transition
+  activityCount   Int       @default(0)             // Number of comments + transitions
+
+  // Signal processing / false positive reduction
+  signalScore     Int       @default(50)            // 0-100 confidence score (higher = more likely real)
+  correlatedEvents Int      @default(1)             // How many source events corroborate this issue
+  isNoise         Boolean   @default(false)         // Auto-dismissed as noise
+  noiseReason     String?                           // Why it was classified as noise
+
   // Metadata
   createdBy       String?                           // User who created the issue
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
   comments        IssueComment[]
+  activities      IssueActivity[]
 
   @@index([orgId, status])
   @@index([status])
   @@index([severity])
+  @@index([priority])
   @@index([assigneeId])
   @@index([shipmentId])
   @@index([orderId])
+  @@index([customerId])
+  @@index([carrierId])
+  @@index([laneId])
+  @@index([region])
+  @@index([signalScore])
+  @@index([isNoise])
   @@index([createdAt])
+  @@index([lastActivityAt])
 }
 
 model IssueComment {
@@ -1142,6 +1171,65 @@ model IssueComment {
   createdAt   DateTime @default(now())
 
   @@index([issueId, createdAt])
+}
+
+model IssueActivity {
+  id          String   @id @default(uuid())
+  issue       Issue    @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  issueId     String
+  actorId     String?
+  actorName   String                                // Denormalized display name
+  action      String                                // created, status_changed, assigned, commented,
+                                                    // priority_changed, severity_changed, escalated,
+                                                    // resolved, noise_dismissed, signal_updated
+  details     Json?                                 // { from: "new", to: "investigating" } etc.
+  createdAt   DateTime @default(now())
+
+  @@index([issueId, createdAt])
+}
+
+// ============================================================
+// Triage Boards — saved filters / custom kanban views
+// ============================================================
+
+model TriageBoard {
+  id          String   @id @default(uuid())
+  orgId       String
+  name        String                                // "Walmart Issues", "Temperature Alerts", "EU Region"
+  description String?
+  icon        String?                               // Material icon name
+  createdBy   String?                               // User who created
+  isDefault   Boolean  @default(false)              // Show in sidebar by default
+  isShared    Boolean  @default(true)               // Visible to all org users
+
+  // Filter criteria (all optional — null = no filter on that dimension)
+  filterStatus          Json?                       // string[] e.g. ["new","investigating","escalated"]
+  filterSeverity        Json?                       // string[] e.g. ["high"]
+  filterPriority        Json?                       // int[] e.g. [1,2]
+  filterCategory        Json?                       // string[]
+  filterCustomerId      String?                     // Specific customer
+  filterCarrierId       String?                     // Specific carrier
+  filterLaneId          String?                     // Specific lane
+  filterRegion          Json?                       // string[] country codes
+  filterTempControlled  Boolean?                    // true = only temp-controlled shipment issues
+  filterHazmat          Boolean?                    // true = only hazmat shipment issues
+  filterAssigneeId      String?                     // Assigned to specific user
+  filterSource          Json?                       // string[] e.g. ["auto_exception"]
+  filterDateRange       String?                     // "today", "week", "month", "quarter", "custom"
+  filterQuery           String?                     // Free-text search term
+  filterSignalScoreMin  Int?                        // Only show issues above this signal score
+  filterShowNoise       Boolean  @default(false)    // Include auto-dismissed noise issues
+
+  // Display preferences
+  viewMode    String   @default("kanban")           // "kanban", "list", "timeline"
+  sortBy      String   @default("createdAt")        // "createdAt", "priority", "severity", "slaDeadline"
+  sortOrder   String   @default("desc")
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([orgId])
+  @@index([createdBy])
 }
 
 // ============================================================

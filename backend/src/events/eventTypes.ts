@@ -47,6 +47,12 @@ export const EVENT_TYPES = {
   TRIAGE_ISSUE_STATUS_CHANGED: 'triage.issue_status_changed',
   TRIAGE_ISSUE_ESCALATED: 'triage.issue_escalated',
 
+  // Sensor Alerts (published by SystemLocoAdapter when isAlert=true)
+  SENSOR_ALERT_TEMPERATURE: 'sensor.alert_temperature',
+  SENSOR_ALERT_IMPACT: 'sensor.alert_impact',
+  SENSOR_ALERT_BATTERY: 'sensor.alert_battery',
+  SENSOR_ALERT_LIGHT: 'sensor.alert_light',
+
   // Integration
   INTEGRATION_OUTBOUND_SENT: 'integration.outbound_sent',
   INTEGRATION_OUTBOUND_FAILED: 'integration.outbound_failed',

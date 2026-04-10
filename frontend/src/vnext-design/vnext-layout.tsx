@@ -54,7 +54,6 @@ const APPS: AppDef[] = [
         { to: '/', icon: 'space_dashboard', label: 'Dashboard', end: true },
         { to: '/shipments', icon: 'local_shipping', label: 'Shipments' },
         { to: '/orders', icon: 'receipt_long', label: 'Orders' },
-        { to: '/issues', icon: 'bug_report', label: 'Issues', badge: '5' },
         { to: '/devices', icon: 'sensors', label: 'Devices' },
       ]},
       { title: 'Network', items: [
@@ -63,6 +62,21 @@ const APPS: AppDef[] = [
         { to: '/customers', icon: 'people', label: 'Customers' },
         { to: '/locations', icon: 'location_on', label: 'Locations' },
         { to: '/lanes', icon: 'route', label: 'Lanes' },
+      ]},
+    ],
+  },
+  {
+    key: 'triage', icon: 'crisis_alert', label: 'Triage', basePath: '/triage',
+    sections: [
+      { title: 'Triage Centre', items: [
+        { to: '/triage', icon: 'space_dashboard', label: 'Signal Dashboard', end: true },
+        { to: '/triage/board', icon: 'view_kanban', label: 'All Issues' },
+        { to: '/triage/search', icon: 'search', label: 'Search' },
+        { to: '/triage/spot-check', icon: 'fact_check', label: 'Spot Check' },
+        { to: '/triage/reports', icon: 'assessment', label: 'Reports' },
+      ]},
+      { title: 'Boards', items: [
+        { to: '/triage/boards/create', icon: 'add', label: 'Create Board' },
       ]},
     ],
   },
@@ -109,6 +123,7 @@ const APPS: AppDef[] = [
 ];
 
 function detectApp(pathname: string): string {
+  if (pathname.startsWith('/triage')) return 'triage';
   if (pathname.startsWith('/integrations')) return 'integrations';
   if (pathname.startsWith('/settings') || pathname === '/style-guide') return 'admin';
   if (pathname.startsWith('/documents') || pathname.startsWith('/reports')) return 'reports';

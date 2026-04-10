@@ -30,6 +30,7 @@ import { S3FileStorage } from '../storage/S3FileStorage.js';
 import { AttachmentRepository } from '../repositories/AttachmentRepository.js';
 import { CustomFieldService } from '../services/CustomFieldService.js';
 import { IssuesRepository } from '../repositories/IssuesRepository.js';
+import { TriageBoardsRepository } from '../repositories/TriageBoardsRepository.js';
 import { PgBossQueueAdapter } from '../queue/PgBossQueueAdapter.js';
 import { PgBossEventBus } from '../events/PgBossEventBus.js';
 import { SmtpEmailService } from '../services/SmtpEmailService.js';
@@ -158,6 +159,10 @@ export function registerDependencies(prisma: PrismaClient): void {
   // Issues / Triage
   container.singleton(TOKENS.IIssuesRepository).toFactory(() => {
     return new IssuesRepository(container.resolve(TOKENS.PrismaClient));
+  });
+
+  container.singleton(TOKENS.ITriageBoardsRepository).toFactory(() => {
+    return new TriageBoardsRepository(container.resolve(TOKENS.PrismaClient));
   });
 
   // Email service — env-based provider selection
