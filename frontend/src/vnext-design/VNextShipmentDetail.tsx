@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { useNavigate, useParams, Link } from 'react-router-dom';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { API_URL } from '../api';
@@ -231,6 +231,8 @@ export default function VNextShipmentDetail() {
   const [shipment, setShipment] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [generating, setGenerating] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -247,6 +249,40 @@ export default function VNextShipmentDetail() {
       .catch(err => setError(err.message))
       .finally(() => setLoading(false));
   }, [id]);
+
+  // Fetch documents for this shipment
+  const loadDocuments = useCallback(() => {
+    if (!id) return;
+    fetch(`${API_URL}/api/v1/documents?shipmentId=${id}`)
+      .then(r => r.json())
+      .then(json => { if (!json.error) setDocuments(json.data || []); })
+      .catch(() => {});
+  }, [id]);
+
+  useEffect(() => { loadDocuments(); }, [loadDocuments]);
+
+  const handleGenerateDoc = async (type: 'bol' | 'customs') => {
+    if (!id) return;
+    setGenerating(type);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/documents/generate/${type}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shipmentId: id }),
+      });
+      const json = await res.json();
+      if (json.error) { alert(`Error: ${json.error}`); return; }
+      loadDocuments();
+      // Navigate to BOL view for BOL documents
+      if (type === 'bol') {
+        navigate(`/documents/${json.data.id}/view`);
+      }
+    } catch {
+      alert(`Failed to generate ${type === 'bol' ? 'Bill of Lading' : 'Customs Form'}`);
+    } finally {
+      setGenerating(null);
+    }
+  };
 
   const hasOriginCoords = !!(shipment?.origin?.lat && shipment?.origin?.lng);
   const hasDestCoords = !!(shipment?.destination?.lat && shipment?.destination?.lng);
@@ -480,37 +516,65 @@ export default function VNextShipmentDetail() {
             <div className="vn-card">
               <div className="vn-card-header">
                 <h2>Documents</h2>
-                <button className="vn-btn vn-btn-outline vn-btn-sm">
-                  <span className="material-icons">upload_file</span>
-                  Upload
-                </button>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    className="vn-btn vn-btn-primary vn-btn-sm"
+                    disabled={generating !== null}
+                    onClick={() => handleGenerateDoc('bol')}
+                  >
+                    <span className="material-icons">description</span>
+                    {generating === 'bol' ? 'Generating...' : 'Generate BOL'}
+                  </button>
+                  <button
+                    className="vn-btn vn-btn-outline vn-btn-sm"
+                    disabled={generating !== null}
+                    onClick={() => handleGenerateDoc('customs')}
+                  >
+                    <span className="material-icons">public</span>
+                    {generating === 'customs' ? 'Generating...' : 'Customs Form'}
+                  </button>
+                </div>
               </div>
               <div className="vn-card-body vn-card-flush">
-                <div className="vn-table-wrap">
-                  <table className="vn-table">
-                    <thead><tr><th>Document</th><th>Type</th><th>Uploaded</th><th>Actions</th></tr></thead>
-                    <tbody>
-                      {[
-                        { name: 'BOL-SHP4821.pdf', type: 'Bill of Lading', date: 'Apr 6, 2026' },
-                        { name: 'Rate Confirmation.pdf', type: 'Rate Con', date: 'Apr 5, 2026' },
-                        { name: 'POD-SHP4821.jpg', type: 'Proof of Delivery', date: 'Pending' },
-                      ].map((doc, i) => (
-                        <tr key={i}>
-                          <td style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <span className="material-icons" style={{ color: 'var(--error)', fontSize: 20 }}>picture_as_pdf</span>
-                            <span style={{ fontWeight: 500 }}>{doc.name}</span>
-                          </td>
-                          <td>{doc.type}</td>
-                          <td style={{ fontSize: 13 }}>{doc.date}</td>
-                          <td>
-                            <button className="vn-btn-icon"><span className="material-icons" style={{ fontSize: 18 }}>download</span></button>
-                            <button className="vn-btn-icon"><span className="material-icons" style={{ fontSize: 18 }}>visibility</span></button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                {documents.length === 0 ? (
+                  <div style={{ padding: 32, textAlign: 'center', color: 'var(--on-surface-variant)' }}>
+                    <span className="material-icons" style={{ fontSize: 40, opacity: 0.4, marginBottom: 8, display: 'block' }}>folder_open</span>
+                    <p style={{ fontSize: 14 }}>No documents yet. Generate a Bill of Lading to get started.</p>
+                  </div>
+                ) : (
+                  <div className="vn-table-wrap">
+                    <table className="vn-table">
+                      <thead><tr><th>Document</th><th>Type</th><th>Created</th><th>Actions</th></tr></thead>
+                      <tbody>
+                        {documents.map((doc: any) => {
+                          const typeLabel: Record<string, string> = { bol: 'Bill of Lading', customs: 'Customs Form', label: 'Label', attachment: 'Attachment' };
+                          const typeChip: Record<string, string> = { bol: 'vn-chip vn-chip-info', customs: 'vn-chip vn-chip-warning', label: 'vn-chip vn-chip-secondary', attachment: 'vn-chip vn-chip-secondary' };
+                          return (
+                            <tr key={doc.id}>
+                              <td style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <span className="material-icons" style={{ color: 'var(--error)', fontSize: 20 }}>picture_as_pdf</span>
+                                <span style={{ fontWeight: 500 }}>{doc.fileName}</span>
+                                {doc.documentNumber && <span style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>({doc.documentNumber})</span>}
+                              </td>
+                              <td><span className={typeChip[doc.documentType] || 'vn-chip vn-chip-secondary'}>{typeLabel[doc.documentType] || doc.documentType}</span></td>
+                              <td style={{ fontSize: 13 }}>{new Date(doc.createdAt).toLocaleDateString()}</td>
+                              <td style={{ display: 'flex', gap: 4 }}>
+                                {doc.documentType === 'bol' && (
+                                  <Link to={`/documents/${doc.id}/view`}>
+                                    <button className="vn-btn-icon" title="View BOL"><span className="material-icons" style={{ fontSize: 18 }}>visibility</span></button>
+                                  </Link>
+                                )}
+                                <a href={`${API_URL}/api/v1/documents/${doc.id}/download`} target="_blank" rel="noopener noreferrer">
+                                  <button className="vn-btn-icon" title="Download PDF"><span className="material-icons" style={{ fontSize: 18 }}>download</span></button>
+                                </a>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             </div>
           )}

@@ -47,6 +47,7 @@ import VNextThemeSettings from './vnext-design/VNextThemeSettings';
 import VNextEmailSettings from './vnext-design/VNextEmailSettings';
 import VNextEmailTemplates from './vnext-design/VNextEmailTemplates';
 import VNextDocumentTemplates from './vnext-design/VNextDocumentTemplates';
+import VNextBolView from './vnext-design/VNextBolView';
 import VNextCustomFields from './vnext-design/VNextCustomFields';
 import VNextMapsSettings from './vnext-design/VNextMapsSettings';
 import VNextDevices from './vnext-design/VNextDevices';
@@ -139,6 +140,7 @@ root.render(
 
           {/* Documents & Reports */}
           <Route path="documents" element={<VNextDocuments />} />
+          <Route path="documents/:id/view" element={<VNextBolView />} />
           <Route path="reports/daily" element={<VNextDailyReport />} />
 
           {/* Settings */}
