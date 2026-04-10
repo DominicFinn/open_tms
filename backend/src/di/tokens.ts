@@ -31,6 +31,9 @@ export const TOKENS = {
   // Attachment tokens
   IAttachmentRepository: Symbol.for('IAttachmentRepository'),
 
+  // Issue/Triage tokens
+  IIssuesRepository: Symbol.for('IIssuesRepository'),
+
   // Custom fields tokens
   ICustomFieldService: Symbol.for('ICustomFieldService'),
 

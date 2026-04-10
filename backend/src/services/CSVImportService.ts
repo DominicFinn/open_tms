@@ -74,6 +74,7 @@ interface ParsedOrder {
   serviceLevel: string;
   temperatureControl: string;
   requiresHazmat: boolean;
+  sourceRow: number; // CSV row number (1-indexed, accounting for header)
   trackableUnits: Array<{
     identifier: string;
     unitType: string;
@@ -190,14 +191,17 @@ export class CSVImportService implements ICSVImportService {
       rows.push(row);
     }
 
-    // Group rows by order number
+    // Group rows by order number, tracking source row numbers (1-indexed, header = row 1)
     const orderGroups = new Map<string, CSVRow[]>();
-    for (const row of rows) {
+    const orderFirstRow = new Map<string, number>(); // orderNumber → first CSV row number
+    for (let idx = 0; idx < rows.length; idx++) {
+      const row = rows[idx];
       if (!row.orderNumber) {
         continue;
       }
       if (!orderGroups.has(row.orderNumber)) {
         orderGroups.set(row.orderNumber, []);
+        orderFirstRow.set(row.orderNumber, idx + 2); // +2: 1-indexed + header row
       }
       orderGroups.get(row.orderNumber)!.push(row);
     }
@@ -278,6 +282,7 @@ export class CSVImportService implements ICSVImportService {
 
       orders.push({
         orderNumber,
+        sourceRow: orderFirstRow.get(orderNumber) || 0,
         poNumber: firstRow.poNumber,
         customerId: firstRow.customerId,
         customerName: firstRow.customerName,
@@ -384,7 +389,7 @@ export class CSVImportService implements ICSVImportService {
         } catch (error: any) {
           result.success = false;
           result.errors.push({
-            row: 0, // TODO: track actual row number
+            row: parsedOrder.sourceRow,
             message: `Order ${parsedOrder.orderNumber}: ${error.message}`
           });
         }

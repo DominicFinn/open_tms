@@ -45,6 +45,7 @@ import { emailTemplateRoutes } from './routes/emailTemplates.js';
 import { mapsSettingsRoutes } from './routes/mapsSettings.js';
 import deviceRoutes from './routes/devices.js';
 import telemetryRoutes from './routes/telemetry.js';
+import { issueRoutes } from './routes/issues.js';
 
 const server = Fastify({ logger: true });
 
@@ -108,6 +109,7 @@ async function start() {
   await server.register(mapsSettingsRoutes);
   await server.register(deviceRoutes);
   await server.register(telemetryRoutes);
+  await server.register(issueRoutes);
 
   // Start queue adapter (needed for publishing events, even if workers run elsewhere)
   try {

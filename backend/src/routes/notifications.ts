@@ -8,18 +8,21 @@
  */
 
 import { FastifyInstance } from 'fastify';
+import { optionalAuth } from '../middleware/jwtAuth.js';
 
 export async function notificationRoutes(server: FastifyInstance) {
   const prefix = '/api/v1/notifications';
 
   // List notifications for the current user
   server.get(prefix, {
+    onRequest: [optionalAuth],
     schema: {
       tags: ['Notifications'],
       summary: 'List notifications',
       querystring: {
         type: 'object',
         properties: {
+          userId: { type: 'string', description: 'Fallback when no JWT is present' },
           read: { type: 'string', enum: ['true', 'false'] },
           category: { type: 'string' },
           limit: { type: 'integer', default: 20 },
@@ -46,10 +49,10 @@ export async function notificationRoutes(server: FastifyInstance) {
   }, async (request, reply) => {
     const { read, category, limit = 20, offset = 0 } = request.query as any;
 
-    // TODO: Get userId from auth context. For now use a query param or default.
-    const userId = (request.query as any).userId;
+    // Prefer JWT auth, fall back to query param for backward compatibility
+    const userId = request.user?.sub || (request.query as any).userId;
     if (!userId) {
-      return reply.status(400).send({ data: null, error: 'userId query parameter required (until auth is wired)' });
+      return reply.status(400).send({ data: null, error: 'Authentication required or userId query parameter' });
     }
 
     const where: any = { userId };
@@ -73,13 +76,14 @@ export async function notificationRoutes(server: FastifyInstance) {
 
   // Unread count (lightweight endpoint for polling)
   server.get(`${prefix}/unread-count`, {
+    onRequest: [optionalAuth],
     schema: {
       tags: ['Notifications'],
       summary: 'Get unread notification count',
       querystring: {
         type: 'object',
         properties: {
-          userId: { type: 'string' },
+          userId: { type: 'string', description: 'Fallback when no JWT is present' },
         },
       },
       response: {
@@ -93,9 +97,9 @@ export async function notificationRoutes(server: FastifyInstance) {
       },
     },
   }, async (request, reply) => {
-    const userId = (request.query as any).userId;
+    const userId = request.user?.sub || (request.query as any).userId;
     if (!userId) {
-      return reply.status(400).send({ data: null, error: 'userId required' });
+      return reply.status(400).send({ data: null, error: 'Authentication required or userId query parameter' });
     }
 
     const count = await server.prisma.notification.count({

@@ -86,7 +86,6 @@ export class InAppNotificationHandler implements IEventHandler {
     if (!content) return;
 
     // Find all users in this org
-    // TODO: Check UserNotificationPreference per user
     const users = await this.prisma.user.findMany({
       where: { organizationId: event.orgId },
       select: { id: true },
@@ -94,9 +93,36 @@ export class InAppNotificationHandler implements IEventHandler {
 
     if (users.length === 0) return;
 
+    // Map notification category to UserNotificationPreference eventCategory
+    const categoryMap: Record<string, string> = {
+      shipment_update: 'shipment_updates',
+      order_update: 'order_updates',
+      exception: 'exceptions',
+      triage: 'triage',
+      system: 'system',
+    };
+    const eventCategory = categoryMap[content.category] || content.category;
+
+    // Check UserNotificationPreference for each user
+    const preferences = await this.prisma.userNotificationPreference.findMany({
+      where: {
+        userId: { in: users.map(u => u.id) },
+        eventCategory,
+      },
+    });
+    const prefMap = new Map(preferences.map(p => [p.userId, p]));
+
+    // Filter to users who have in-app notifications enabled (default: enabled if no preference exists)
+    const eligibleUsers = users.filter(user => {
+      const pref = prefMap.get(user.id);
+      return !pref || pref.inAppEnabled;
+    });
+
+    if (eligibleUsers.length === 0) return;
+
     // Batch create notifications
     await this.prisma.notification.createMany({
-      data: users.map((user) => ({
+      data: eligibleUsers.map((user) => ({
         userId: user.id,
         orgId: event.orgId,
         title: content.title,
@@ -111,6 +137,6 @@ export class InAppNotificationHandler implements IEventHandler {
       })),
     });
 
-    console.log(`[InAppNotification] Created ${users.length} notification(s) for ${event.type}`);
+    console.log(`[InAppNotification] Created ${eligibleUsers.length}/${users.length} notification(s) for ${event.type} (filtered by preferences)`);
   }
 }

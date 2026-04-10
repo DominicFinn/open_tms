@@ -1080,6 +1080,71 @@ model CustomFieldAudit {
 }
 
 // ============================================================
+// Triage Centre — Issue tracking & Kanban workflow
+// ============================================================
+
+model Issue {
+  id              String    @id @default(uuid())
+  issueNumber     String    @unique                 // Human-readable: "ISS-001"
+  title           String
+  description     String?
+  orgId           String
+
+  // Kanban workflow
+  status          String    @default("new")         // new, investigating, escalated, resolved, closed
+  severity        String    @default("medium")      // high, medium, low
+  category        String?                           // Pickup Delay, Documentation, Equipment, Communication, Compliance, Delivery, Billing, Freight Damage, etc.
+
+  // Linked entities
+  shipmentId      String?
+  orderId         String?
+  carrierId       String?
+  customerId      String?
+
+  // Assignment & escalation
+  assigneeId      String?                           // User ID of assigned person
+  assigneeName    String?                           // Denormalized for display
+  escalatedAt     DateTime?
+  resolvedAt      DateTime?
+  closedAt        DateTime?
+
+  // Source tracking (how the issue was created)
+  source          String    @default("manual")      // manual, auto_exception, auto_tracking, auto_sensor
+  sourceEventId   String?                           // DomainEventLog.id that triggered auto-creation
+
+  // SLA tracking
+  slaDeadline     DateTime?                         // When this issue must be resolved by
+  slaBreach       Boolean   @default(false)
+
+  // Metadata
+  createdBy       String?                           // User who created the issue
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  comments        IssueComment[]
+
+  @@index([orgId, status])
+  @@index([status])
+  @@index([severity])
+  @@index([assigneeId])
+  @@index([shipmentId])
+  @@index([orderId])
+  @@index([createdAt])
+}
+
+model IssueComment {
+  id          String   @id @default(uuid())
+  issue       Issue    @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  issueId     String
+  authorId    String?                               // User ID
+  authorName  String                                // Denormalized for display
+  body        String
+  createdAt   DateTime @default(now())
+
+  @@index([issueId, createdAt])
+}
+
+// ============================================================
 // Domain Events — immutable event store
 // ============================================================
 

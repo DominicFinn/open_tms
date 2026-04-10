@@ -152,6 +152,40 @@ export class DistanceService {
     };
   }
 
+  /**
+   * Geocode an address using OpenStreetMap Nominatim (free, no API key required).
+   * Rate-limited to 1 request/second per Nominatim usage policy.
+   */
+  private static async geocodeAddress(location: Location): Promise<{ lat: number; lng: number } | null> {
+    const parts = [location.address1, location.city, location.state, location.postalCode, location.country]
+      .filter(Boolean)
+      .join(', ');
+
+    if (!parts.trim()) return null;
+
+    try {
+      const params = new URLSearchParams({
+        q: parts,
+        format: 'json',
+        limit: '1',
+      });
+      const response = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, {
+        headers: { 'User-Agent': 'OpenTMS/0.1.0' },
+      });
+
+      if (!response.ok) return null;
+
+      const data = await response.json();
+      if (data.length > 0) {
+        return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+      }
+    } catch (error) {
+      console.warn('Nominatim geocoding error:', error);
+    }
+
+    return null;
+  }
+
   // Get distance with address geocoding (if coordinates are missing)
   static async getDistanceWithGeocoding(origin: Location, destination: Location): Promise<DistanceResult> {
     // If we have coordinates, use them directly
@@ -159,11 +193,28 @@ export class DistanceService {
       return this.getDistance(origin, destination);
     }
 
-    // TODO: Implement geocoding service to get coordinates from addresses
-    // For now, return error if coordinates are missing
-    return {
-      distance: 0,
-      error: 'Coordinates required for distance calculation'
-    };
+    // Geocode missing coordinates
+    let originCoords = origin.lat && origin.lng ? { lat: origin.lat, lng: origin.lng } : null;
+    let destCoords = destination.lat && destination.lng ? { lat: destination.lat, lng: destination.lng } : null;
+
+    if (!originCoords) {
+      originCoords = await this.geocodeAddress(origin);
+    }
+    if (!destCoords) {
+      destCoords = await this.geocodeAddress(destination);
+    }
+
+    if (!originCoords || !destCoords) {
+      return {
+        distance: 0,
+        error: 'Could not geocode one or both addresses',
+      };
+    }
+
+    // Use geocoded coordinates for distance calculation
+    return this.getDistance(
+      { ...origin, lat: originCoords.lat, lng: originCoords.lng },
+      { ...destination, lat: destCoords.lat, lng: destCoords.lng }
+    );
   }
 }
