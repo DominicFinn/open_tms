@@ -1257,3 +1257,120 @@ model ShipmentReadModel {
   @@index([carrierId])
   @@index([createdAt])
 }
+
+model CarrierReadModel {
+  id              String    @id
+  orgId           String
+  name            String
+  mcNumber        String?
+  dotNumber       String?
+  contactEmail    String?
+  status          String                           // active, archived
+  validationTier  String?
+  vehicleCount    Int       @default(0)
+  driverCount     Int       @default(0)
+  activeLaneCount Int       @default(0)
+  createdAt       DateTime
+  updatedAt       DateTime
+
+  @@index([orgId])
+  @@index([status])
+  @@index([name])
+}
+
+model CustomerReadModel {
+  id               String    @id
+  orgId            String
+  name             String
+  contactEmail     String?
+  activeOrderCount Int       @default(0)
+  totalOrderCount  Int       @default(0)
+  createdAt        DateTime
+  updatedAt        DateTime
+
+  @@index([orgId])
+  @@index([name])
+}
+
+model LaneReadModel {
+  id                  String    @id
+  orgId               String
+  name                String
+  originName          String?
+  originCity          String?
+  destinationName     String?
+  destinationCity     String?
+  serviceLevel        String
+  distance            Float?
+  carrierCount        Int       @default(0)
+  activeShipmentCount Int       @default(0)
+  status              String    @default("active")
+  createdAt           DateTime
+  updatedAt           DateTime
+
+  @@index([orgId])
+  @@index([status])
+}
+
+// ─── Issue / Triage ─────────────────────────────────────────────
+// Tracks exceptions, delays, and operational issues across the system.
+// Issues can be auto-created from domain events (e.g., shipment.exception)
+// or manually by dispatchers.
+
+model Issue {
+  id              String    @id @default(uuid())
+  orgId           String
+  title           String
+  description     String?
+  status          String    @default("open")       // open, in_progress, resolved, closed
+  priority        String    @default("medium")     // low, medium, high, critical
+  category        String                            // exception, delay, damage, compliance, other
+
+  // Source entity that triggered the issue
+  sourceEntityType String?                          // "shipment", "order", "carrier"
+  sourceEntityId   String?
+  sourceEventId    String?                          // DomainEventLog.id that triggered this
+
+  // Assignment
+  assigneeId      String?
+  assigneeName    String?
+  escalatedTo     String?
+  escalatedAt     DateTime?
+
+  // Resolution
+  resolvedAt      DateTime?
+  resolvedBy      String?
+  resolution      String?                           // Free-text resolution notes
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([orgId])
+  @@index([status])
+  @@index([priority])
+  @@index([sourceEntityType, sourceEntityId])
+  @@index([assigneeId])
+  @@index([createdAt])
+}
+
+model IssueReadModel {
+  id                String    @id
+  orgId             String
+  title             String
+  status            String
+  priority          String
+  category          String
+  sourceEntityType  String?
+  sourceEntityId    String?
+  assigneeName      String?
+  escalatedTo       String?
+  resolvedAt        DateTime?
+  createdAt         DateTime
+  updatedAt         DateTime
+
+  @@index([orgId])
+  @@index([status])
+  @@index([priority])
+  @@index([assigneeName])
+  @@index([createdAt])
+}

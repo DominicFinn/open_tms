@@ -12,6 +12,10 @@ import { InAppNotificationHandler } from './handlers/InAppNotificationHandler.js
 import { EmailHandler } from './handlers/EmailHandler.js';
 import { OrderProjection } from './projections/OrderProjection.js';
 import { ShipmentProjection } from './projections/ShipmentProjection.js';
+import { CarrierProjection } from './projections/CarrierProjection.js';
+import { CustomerProjection } from './projections/CustomerProjection.js';
+import { LaneProjection } from './projections/LaneProjection.js';
+import { IssueProjection } from './projections/IssueProjection.js';
 
 export async function registerEventHandlers(
   eventBus: IEventBus,
@@ -24,9 +28,10 @@ export async function registerEventHandlers(
     // CQRS read model projections
     new OrderProjection(prisma),
     new ShipmentProjection(prisma),
-    // Future handlers:
-    // new WebhookHandler(prisma),
-    // new TriageHandler(prisma),
+    new CarrierProjection(prisma),
+    new CustomerProjection(prisma),
+    new LaneProjection(prisma),
+    new IssueProjection(prisma),
   ];
 
   // Add email handler if email service is available

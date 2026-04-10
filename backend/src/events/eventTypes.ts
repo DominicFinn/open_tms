@@ -56,11 +56,13 @@ export const EVENT_TYPES = {
   TRACKING_GEOFENCE_ENTERED: 'tracking.geofence_entered',
   TRACKING_ETA_UPDATED: 'tracking.eta_updated',
 
-  // Triage (Phase 4)
-  TRIAGE_ISSUE_CREATED: 'triage.issue_created',
-  TRIAGE_ISSUE_ASSIGNED: 'triage.issue_assigned',
-  TRIAGE_ISSUE_STATUS_CHANGED: 'triage.issue_status_changed',
-  TRIAGE_ISSUE_ESCALATED: 'triage.issue_escalated',
+  // Issues / Triage
+  ISSUE_CREATED: 'issue.created',
+  ISSUE_UPDATED: 'issue.updated',
+  ISSUE_ASSIGNED: 'issue.assigned',
+  ISSUE_STATUS_CHANGED: 'issue.status_changed',
+  ISSUE_ESCALATED: 'issue.escalated',
+  ISSUE_RESOLVED: 'issue.resolved',
 
   // Integration
   INTEGRATION_OUTBOUND_SENT: 'integration.outbound_sent',
@@ -108,6 +110,12 @@ export const EVENT_SCHEMA_VERSIONS: Record<string, number> = {
   [EVENT_TYPES.TRACKING_LOCATION_RECEIVED]: 1,
   [EVENT_TYPES.TRACKING_GEOFENCE_ENTERED]: 1,
   [EVENT_TYPES.TRACKING_ETA_UPDATED]: 1,
+  [EVENT_TYPES.ISSUE_CREATED]: 1,
+  [EVENT_TYPES.ISSUE_UPDATED]: 1,
+  [EVENT_TYPES.ISSUE_ASSIGNED]: 1,
+  [EVENT_TYPES.ISSUE_STATUS_CHANGED]: 1,
+  [EVENT_TYPES.ISSUE_ESCALATED]: 1,
+  [EVENT_TYPES.ISSUE_RESOLVED]: 1,
 };
 
 /**

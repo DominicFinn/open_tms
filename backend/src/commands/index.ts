@@ -32,3 +32,8 @@ export { UpdateLocationCommandHandler, UPDATE_LOCATION } from './locations/index
 export { CreateLaneCommandHandler, CREATE_LANE } from './lanes/index.js';
 export { UpdateLaneCommandHandler, UPDATE_LANE } from './lanes/index.js';
 export { ArchiveLaneCommandHandler, ARCHIVE_LANE } from './lanes/index.js';
+
+// Issue commands
+export { CreateIssueCommandHandler, CREATE_ISSUE } from './issues/index.js';
+export { UpdateIssueCommandHandler, UPDATE_ISSUE } from './issues/index.js';
+export { EscalateIssueCommandHandler, ESCALATE_ISSUE } from './issues/index.js';

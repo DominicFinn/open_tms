@@ -51,6 +51,9 @@ import { UpdateLocationCommandHandler } from '../commands/locations/UpdateLocati
 import { CreateLaneCommandHandler } from '../commands/lanes/CreateLaneCommand.js';
 import { UpdateLaneCommandHandler } from '../commands/lanes/UpdateLaneCommand.js';
 import { ArchiveLaneCommandHandler } from '../commands/lanes/ArchiveLaneCommand.js';
+import { CreateIssueCommandHandler } from '../commands/issues/CreateIssueCommand.js';
+import { UpdateIssueCommandHandler } from '../commands/issues/UpdateIssueCommand.js';
+import { EscalateIssueCommandHandler } from '../commands/issues/EscalateIssueCommand.js';
 
 /**
  * Register all application dependencies
@@ -256,6 +259,11 @@ export function registerDependencies(prisma: PrismaClient): void {
     bus.register(new CreateLaneCommandHandler(prisma, eventBus));
     bus.register(new UpdateLaneCommandHandler(prisma, eventBus));
     bus.register(new ArchiveLaneCommandHandler(prisma, eventBus));
+
+    // Issue commands
+    bus.register(new CreateIssueCommandHandler(prisma, eventBus));
+    bus.register(new UpdateIssueCommandHandler(prisma, eventBus));
+    bus.register(new EscalateIssueCommandHandler(prisma, eventBus));
 
     return bus;
   });
