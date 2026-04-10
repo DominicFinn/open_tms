@@ -85,7 +85,7 @@ export class EmailHandler implements IEventHandler {
     const themeConfig = org.themeConfig as Record<string, string> | null;
     const branding = {
       orgName: org.name,
-      primaryColor: themeConfig?.['primary'] || themeConfig?.['--color-primary'] || '#1976d2',
+      primaryColor: themeConfig?.['primary'] || '#1976d2',
       emailHeaderHtml: org.emailHeaderHtml || undefined,
       emailFooterHtml: org.emailFooterHtml || undefined,
     };

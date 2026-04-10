@@ -72,6 +72,25 @@ Reference the canonical class list at the top of `theme.css`:
 - API base URL from `frontend/src/api.ts` (`API_URL`)
 - No styled-components or CSS-in-JS libraries — use theme.css classes + inline styles with CSS variables
 
+### VNext Design System — PREFERRED FOR NEW WORK
+- VNext is the new design system at `/vnext`, defined in `frontend/src/vnext-design/vnext.css`
+- **All VNext CSS classes use the `vn-` prefix** (e.g., `vn-card`, `vn-btn`, `vn-chip-success`)
+- VNext uses the SAME CSS custom properties from `theme.css` — never hardcode colors
+- Layout: Fixed sidebar (`vn-sidebar`) + sticky topbar (`vn-topbar`) via `vnext-layout.tsx`
+- Reusable React components in `frontend/src/vnext-design/components/` — import from barrel `index.ts`
+- Full documentation: `frontend/src/vnext-design/DESIGN_SYSTEM.md`
+- **Forms:** Use `vn-field` > `vn-field-label` + `vn-input` (top labels, NOT floating)
+- **Form layout:** `vn-form-grid` (2-col desktop, 1-col mobile), `vn-form-section` for grouping
+- **Modals:** `vn-modal-backdrop` > `vn-modal` with `vn-modal-header` / `vn-modal-body` / `vn-modal-footer`
+- **Alerts:** `vn-alert vn-alert-{success|error|warning|info}`
+- **Tables:** `vn-table-wrap` > `vn-table`, with `vn-table-id` and `vn-table-secondary` for cell content
+- **Filters:** `vn-filters` with `vn-filter-input` and `vn-filter-select`
+- **Tabs:** `vn-tabs` > `vn-tab` buttons with `.active` class
+- **Detail pages:** `vn-detail-grid` with `vn-detail-main` + `vn-detail-sidebar` (sticky)
+- **Stats:** `vn-stats` > `vn-stat` with icon variants (primary, success, warning, error, info)
+- VNext pages go in `frontend/src/vnext-design/VNext*.tsx`
+- When building new features, **prefer vnext patterns** unless specifically told to use the old system
+
 ## EDI Communication Hub
 
 ### Architecture

@@ -54,6 +54,7 @@ export function MapProvider({ children }: { children: ReactNode }) {
     async function init() {
       try {
         const res = await fetch(`${API_URL}/api/v1/maps/api-key`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const result = await res.json();
         const key = result.data?.apiKey;
 
