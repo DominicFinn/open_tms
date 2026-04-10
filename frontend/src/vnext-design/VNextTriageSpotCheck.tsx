@@ -81,6 +81,10 @@ export default function VNextTriageSpotCheck() {
           <div className="vn-stat-icon error"><span className="material-icons">warning</span></div>
           <div><div className="vn-stat-value">{breachCount}</div><div className="vn-stat-label">SLA Breaches</div></div>
         </div>
+        <div className="vn-stat">
+          <div className="vn-stat-icon warning"><span className="material-icons">percent</span></div>
+          <div><div className="vn-stat-value">{breachRate}%</div><div className="vn-stat-label">Breach Rate</div></div>
+        </div>
       </div>
 
       {issues.length === 0 ? (
