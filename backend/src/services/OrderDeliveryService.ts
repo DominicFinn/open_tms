@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { ICargoReconciliationService } from './CargoReconciliationService.js';
 
 export interface DeliveryStatusUpdate {
   orderId: string;
@@ -27,7 +28,16 @@ export interface IOrderDeliveryService {
 }
 
 export class OrderDeliveryService implements IOrderDeliveryService {
+  private cargoReconciliation: ICargoReconciliationService | null = null;
+
   constructor(private prisma: PrismaClient) {}
+
+  /**
+   * Set the cargo reconciliation service (injected after construction to avoid circular deps)
+   */
+  setCargoReconciliationService(service: ICargoReconciliationService): void {
+    this.cargoReconciliation = service;
+  }
 
   /**
    * Update order delivery status
@@ -267,6 +277,27 @@ export class OrderDeliveryService implements IOrderDeliveryService {
             },
           }
         });
+      }
+
+      // Cargo reconciliation: auto-record scans and reconcile for misdrop detection
+      if (this.cargoReconciliation) {
+        try {
+          await this.cargoReconciliation.autoReconcileStop(shipmentStopId, method);
+          await this.cargoReconciliation.reconcileStopCompletion(shipmentStopId);
+
+          // If this was the last stop, check for cargo left on vehicle
+          const allStops = await this.prisma.shipmentStop.findMany({
+            where: { shipmentId: stop.shipmentId },
+          });
+          const allCompleted = allStops.every(
+            (s) => s.id === shipmentStopId || s.status === 'completed' || s.status === 'skipped'
+          );
+          if (allCompleted) {
+            await this.cargoReconciliation.checkLeftOnVehicle(stop.shipmentId);
+          }
+        } catch (err) {
+          console.error('[OrderDeliveryService] Cargo reconciliation failed (non-blocking):', err);
+        }
       }
 
       return updateResult.count;

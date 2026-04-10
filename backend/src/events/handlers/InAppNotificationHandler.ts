@@ -59,6 +59,34 @@ function buildNotification(event: DomainEvent): { title: string; body: string; c
         category: 'order_update',
         severity: 'info',
       };
+    case 'cargo.misdrop_detected':
+      return {
+        title: `Cargo misdrop: ${p.unitIdentifier || 'Unknown unit'}`,
+        body: `${p.unitType} "${p.unitIdentifier}" was delivered to ${p.actualStop} but expected at ${p.expectedStop} (Order ${p.orderNumber})`,
+        category: 'exception',
+        severity: 'error',
+      };
+    case 'cargo.missing_at_stop':
+      return {
+        title: `Cargo missing: ${p.unitIdentifier || 'Unknown unit'}`,
+        body: `${p.unitType} "${p.unitIdentifier}" was not found at ${p.stopName} (Order ${p.orderNumber})`,
+        category: 'exception',
+        severity: 'warning',
+      };
+    case 'cargo.left_on_vehicle':
+      return {
+        title: `Cargo left on vehicle: ${p.unitIdentifier || 'Unknown unit'}`,
+        body: `${p.unitType} "${p.unitIdentifier}" was never confirmed delivered — may still be on the vehicle (Order ${p.orderNumber})`,
+        category: 'exception',
+        severity: 'error',
+      };
+    case 'cargo.discrepancy_resolved':
+      return {
+        title: `Cargo issue resolved: ${p.unitIdentifier || 'Unknown unit'}`,
+        body: p.resolution || `Discrepancy for ${p.unitIdentifier} has been resolved`,
+        category: 'order_update',
+        severity: 'success',
+      };
     default:
       return null;
   }
@@ -73,6 +101,10 @@ export class InAppNotificationHandler implements IEventHandler {
     'order.status_changed',
     'order.exception',
     'order.delivered',
+    'cargo.misdrop_detected',
+    'cargo.missing_at_stop',
+    'cargo.left_on_vehicle',
+    'cargo.discrepancy_resolved',
   ];
   readonly options: SubscribeOptions = {
     concurrency: 3,

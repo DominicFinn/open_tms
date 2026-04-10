@@ -91,6 +91,10 @@ model Shipment {
   deviceAssignments DeviceAssignment[]    // IoT device assignments
   sensorReadings    SensorReading[]       // Sensor telemetry data
 
+  // Cargo tracking
+  cargoScans        CargoScan[]
+  cargoDiscrepancies CargoDiscrepancy[]
+
   // Custom fields
   customFieldVersionId String?
   customFieldValues    Json?
@@ -133,6 +137,12 @@ model ShipmentStop {
   signatureUrl      String?   // URL to signature image
   photoUrls         Json?     // Array of photo URLs
   proofOfDelivery   Json?     // Additional proof data
+
+  // Cargo tracking relations
+  cargoScans            CargoScan[]
+  discrepanciesExpected CargoDiscrepancy[] @relation("ExpectedStop")
+  discrepanciesActual   CargoDiscrepancy[] @relation("ActualStop")
+  trackableUnitsHere    TrackableUnit[]    @relation("UnitCurrentStop")
 
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
@@ -568,11 +578,22 @@ model TrackableUnit {
   sensorReadings  SensorReading[]
   deviceEvents    DeviceEvent[]
 
+  // Cargo tracking — where this unit physically is right now
+  currentStopId   String?          // Which stop this unit is currently at (null = in transit / on vehicle)
+  currentStop     ShipmentStop?    @relation("UnitCurrentStop", fields: [currentStopId], references: [id])
+  condition       String           @default("good") // good, damaged, lost, unknown
+  lastScannedAt   DateTime?
+
+  // Cargo scan & discrepancy relations
+  cargoScans      CargoScan[]
+  discrepancies   CargoDiscrepancy[]
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
   @@unique([orderId, sequenceNumber])
   @@index([orderId])
+  @@index([currentStopId])
 }
 
 model AuditLog {
@@ -1665,4 +1686,80 @@ model DeviceEvent {
   @@index([deviceId, startTime])
   @@index([shipmentId])
   @@index([eventType])
+}
+
+// ============================================================
+// Cargo Tracking & Misdrop Detection
+// ============================================================
+
+// Records physical confirmation of a trackable unit at a specific stop
+model CargoScan {
+  id                String        @id @default(uuid())
+  trackableUnit     TrackableUnit @relation(fields: [trackableUnitId], references: [id], onDelete: Cascade)
+  trackableUnitId   String
+  shipmentStop      ShipmentStop  @relation(fields: [shipmentStopId], references: [id], onDelete: Cascade)
+  shipmentStopId    String
+  shipment          Shipment      @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  shipmentId        String
+
+  // Scan details
+  scanType          String        // load, unload, checkpoint
+  scanMethod        String        // barcode, rfid, manual, geofence, iot
+  scannedAt         DateTime      @default(now())
+  scannedBy         String?       // User ID or device ID
+
+  // Location at scan time
+  lat               Float?
+  lng               Float?
+
+  // Result of scan evaluation
+  expected          Boolean       @default(true) // Was this unit expected at this stop?
+  notes             String?
+
+  createdAt         DateTime      @default(now())
+
+  @@index([trackableUnitId])
+  @@index([shipmentStopId])
+  @@index([shipmentId])
+  @@index([scannedAt])
+}
+
+// Tracks cargo discrepancies — misdrops, missing cargo, unexpected deliveries
+model CargoDiscrepancy {
+  id                String        @id @default(uuid())
+  shipment          Shipment      @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  shipmentId        String
+  trackableUnit     TrackableUnit @relation(fields: [trackableUnitId], references: [id], onDelete: Cascade)
+  trackableUnitId   String
+
+  // Discrepancy classification
+  discrepancyType   String        // misdrop_early, misdrop_late, missing_at_stop, unexpected_at_stop, left_on_vehicle, damaged, wrong_destination
+  severity          String        @default("high") // critical, high, medium, low
+
+  // Where was it supposed to go vs where it actually went
+  expectedStop      ShipmentStop? @relation("ExpectedStop", fields: [expectedStopId], references: [id])
+  expectedStopId    String?
+  actualStop        ShipmentStop? @relation("ActualStop", fields: [actualStopId], references: [id])
+  actualStopId      String?
+
+  // Lifecycle
+  status            String        @default("open") // open, investigating, resolved, dismissed
+  detectedAt        DateTime      @default(now())
+  detectedBy        String        @default("system") // system, manual, driver, iot
+  resolvedAt        DateTime?
+  resolvedBy        String?
+  resolution        String?       // Description of how it was resolved
+
+  // Context
+  description       String        // Human-readable description of the issue
+  notes             String?
+
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@index([shipmentId])
+  @@index([trackableUnitId])
+  @@index([status])
+  @@index([discrepancyType])
+  @@index([detectedAt])
 }
