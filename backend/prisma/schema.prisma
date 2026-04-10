@@ -23,6 +23,10 @@ model Customer {
   tradingPartners TradingPartner[] @relation("CustomerTradingPartners")
   users        User[]
 
+  // Read model relations
+  orderReadModels    OrderReadModel[]
+  shipmentReadModels ShipmentReadModel[]
+
   // Custom fields
   customFieldVersionId String?              // Version of custom field definitions used
   customFieldValues    Json?                // { "fieldKey": value, ... }
@@ -94,6 +98,9 @@ model Shipment {
   // Cargo tracking
   cargoScans        CargoScan[]
   cargoDiscrepancies CargoDiscrepancy[]
+
+  // Read model relations
+  orderReadModels    OrderReadModel[]
 
   // Custom fields
   customFieldVersionId String?
@@ -261,6 +268,9 @@ model Carrier {
   tenderOffers   TenderOffer[]
   tenderBids     TenderBid[]
   tradingPartners TradingPartner[] @relation("CarrierTradingPartners")
+
+  // Read model relations
+  shipmentReadModels ShipmentReadModel[]
 }
 
 model Vehicle {
@@ -327,6 +337,9 @@ model Lane {
   customerLanes CustomerLane[]
   laneCarriers  LaneCarrier[]
   stops         LaneStop[]
+
+  // Read model relations
+  shipmentReadModels ShipmentReadModel[]
 }
 
 model CustomerLane {
@@ -552,6 +565,15 @@ model Organization {
 
   users               User[]
   emailTemplates      EmailTemplate[]
+
+  // Issue & Read model relations
+  issues              Issue[]
+  carrierReadModels   CarrierReadModel[]
+  customerReadModels  CustomerReadModel[]
+  issueReadModels     IssueReadModel[]
+  laneReadModels      LaneReadModel[]
+  orderReadModels     OrderReadModel[]
+  shipmentReadModels  ShipmentReadModel[]
 }
 
 model TrackableUnit {
@@ -1291,21 +1313,24 @@ model EmailTemplate {
 
 model OrderReadModel {
   id                    String    @id                // Same as Order.id
+  organization          Organization @relation(fields: [orgId], references: [id])
   orgId                 String
   orderNumber           String    @unique
   poNumber              String?
   status                String                       // pending, validated, converted, assigned, etc.
   deliveryStatus        String                       // unassigned, assigned, in_transit, delivered, exception
-  customerName          String
+  customer              Customer  @relation(fields: [customerId], references: [id])
   customerId            String
+  customerName          String
   originName            String?
   originCity            String?
   originState           String?
   destinationName       String?
   destinationCity       String?
   destinationState      String?
-  shipmentReference     String?
+  shipment              Shipment? @relation(fields: [shipmentId], references: [id])
   shipmentId            String?
+  shipmentReference     String?
   carrierName           String?
   serviceLevel          String?
   temperatureRequired   Boolean   @default(false)
@@ -1330,21 +1355,25 @@ model OrderReadModel {
 
 model ShipmentReadModel {
   id                String    @id                    // Same as Shipment.id
+  organization      Organization @relation(fields: [orgId], references: [id])
   orgId             String
   reference         String    @unique
   status            String                           // draft, in_transit, delivered, etc.
-  customerName      String
+  customer          Customer  @relation(fields: [customerId], references: [id])
   customerId        String
+  customerName      String
   originName        String?
   originCity        String?
   originState       String?
   destinationName   String?
   destinationCity   String?
   destinationState  String?
-  carrierName       String?
+  carrier           Carrier?  @relation(fields: [carrierId], references: [id])
   carrierId         String?
-  laneName          String?
+  carrierName       String?
+  lane              Lane?     @relation(fields: [laneId], references: [id])
   laneId            String?
+  laneName          String?
   proNumber         String?
   pickupDate        DateTime?
   deliveryDate      DateTime?
@@ -1365,6 +1394,7 @@ model ShipmentReadModel {
 
 model CarrierReadModel {
   id              String    @id
+  organization    Organization @relation(fields: [orgId], references: [id])
   orgId           String
   name            String
   mcNumber        String?
@@ -1385,6 +1415,7 @@ model CarrierReadModel {
 
 model CustomerReadModel {
   id               String    @id
+  organization     Organization @relation(fields: [orgId], references: [id])
   orgId            String
   name             String
   contactEmail     String?
@@ -1399,6 +1430,7 @@ model CustomerReadModel {
 
 model LaneReadModel {
   id                  String    @id
+  organization        Organization @relation(fields: [orgId], references: [id])
   orgId               String
   name                String
   originName          String?
@@ -1424,6 +1456,7 @@ model LaneReadModel {
 
 model Issue {
   id              String    @id @default(uuid())
+  organization    Organization @relation(fields: [orgId], references: [id])
   orgId           String
   title           String
   description     String?
@@ -1468,6 +1501,7 @@ model ProjectionCheckpoint {
 
 model IssueReadModel {
   id                String    @id
+  organization      Organization @relation(fields: [orgId], references: [id])
   orgId             String
   title             String
   status            String
