@@ -17,4 +17,8 @@ module.exports = {
       useESM: false,
     }],
   },
+  // Strip .js extensions from imports so ts-jest can resolve .ts files
+  moduleNameMapper: {
+    '^(\\.{1,2}/.*)\\.js$': '$1',
+  },
 };
