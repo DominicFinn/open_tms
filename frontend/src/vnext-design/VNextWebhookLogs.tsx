@@ -9,6 +9,7 @@ export default function VNextWebhookLogs() {
   const [totalPages, setTotalPages] = useState(1);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [selectedLog, setSelectedLog] = useState<any>(null);
   const [dateRange, setDateRange] = useState('24h');
   const [stats, setStats] = useState<{ total: number; successful: number; errors: number; updates: number }>({
     total: 0, successful: 0, errors: 0, updates: 0,
@@ -183,7 +184,7 @@ export default function VNextWebhookLogs() {
                     <tr
                       key={l.id}
                       style={{ cursor: 'pointer' }}
-                      onClick={() => console.log('Open detail for log', l.id, l)}
+                      onClick={() => setSelectedLog(l)}
                     >
                       <td style={{ fontSize: 13, fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
                         {l.createdAt ? new Date(l.createdAt).toLocaleString() : l.time || '—'}
@@ -248,6 +249,46 @@ export default function VNextWebhookLogs() {
           </button>
         </div>
       </div>
+
+      {selectedLog && (
+        <div className="vn-modal-backdrop" onClick={() => setSelectedLog(null)}>
+          <div className="vn-modal" style={{ maxWidth: 700 }} onClick={e => e.stopPropagation()}>
+            <div className="vn-modal-header">
+              <h2>Webhook Log Detail</h2>
+              <button className="vn-btn vn-btn-ghost vn-btn-icon" onClick={() => setSelectedLog(null)}>
+                <span className="material-icons">close</span>
+              </button>
+            </div>
+            <div className="vn-modal-body" style={{ maxHeight: '70vh', overflow: 'auto' }}>
+              <div className="vn-info-grid">
+                <div className="vn-info-item"><label>ID</label><span style={{ fontFamily: 'monospace', fontSize: 12 }}>{selectedLog.id}</span></div>
+                <div className="vn-info-item"><label>Status</label><span>{selectedLog.status}</span></div>
+                <div className="vn-info-item"><label>Device</label><span>{selectedLog.deviceName || '—'}</span></div>
+                <div className="vn-info-item"><label>Event Type</label><span>{selectedLog.eventType || '—'}</span></div>
+                <div className="vn-info-item"><label>Shipment</label><span>{selectedLog.shipmentReference || selectedLog.shipmentId || '—'}</span></div>
+                <div className="vn-info-item"><label>Received</label><span>{selectedLog.createdAt ? new Date(selectedLog.createdAt).toLocaleString() : '—'}</span></div>
+                <div className="vn-info-item"><label>Processed</label><span>{selectedLog.processedAt ? new Date(selectedLog.processedAt).toLocaleString() : '—'}</span></div>
+                {selectedLog.errorMessage && (
+                  <div className="vn-info-item" style={{ gridColumn: '1 / -1' }}><label>Error</label><span style={{ color: 'var(--error)' }}>{selectedLog.errorMessage}</span></div>
+                )}
+              </div>
+              {selectedLog.rawPayload && (
+                <>
+                  <h3 style={{ marginTop: 16, fontSize: 14, fontWeight: 600, color: 'var(--on-surface)' }}>Raw Payload</h3>
+                  <pre style={{
+                    marginTop: 8, padding: 12, background: 'var(--surface-container)', borderRadius: 'var(--border-radius-sm)',
+                    fontSize: 11, fontFamily: 'monospace', overflow: 'auto', maxHeight: 300, color: 'var(--on-surface)',
+                    border: '1px solid var(--outline-variant)',
+                  }}>{JSON.stringify(selectedLog.rawPayload, null, 2)}</pre>
+                </>
+              )}
+            </div>
+            <div className="vn-modal-footer">
+              <button className="vn-btn vn-btn-outline" onClick={() => setSelectedLog(null)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

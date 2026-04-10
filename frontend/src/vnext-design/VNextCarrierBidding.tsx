@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { API_URL } from '../api';
 
 interface Bid {
   carrier: string;
@@ -14,63 +15,61 @@ interface Bid {
   status: 'pending' | 'accepted' | 'declined';
 }
 
-const LANES = [
-  {
-    id: 'BID-201',
-    origin: 'Chicago, IL',
-    dest: 'Dallas, TX',
-    customer: 'Acme Corp',
-    mode: 'FTL',
-    weight: '42,000 lbs',
-    pickup: 'Apr 9',
-    delivery: 'Apr 11',
-    targetRate: 2800,
-    status: 'Open',
-    bids: [
-      { carrier: 'Swift Transport', rating: 4.8, onTime: 97, loads: 342, price: 2750, transit: '2 days', equipment: "53' Dry Van", submitted: '2h ago', status: 'pending' as const },
-      { carrier: 'Lone Star Freight', rating: 4.9, onTime: 98, loads: 412, price: 2900, transit: '2 days', equipment: "53' Dry Van", submitted: '3h ago', status: 'pending' as const },
-      { carrier: 'Mountain Haul', rating: 4.6, onTime: 95, loads: 215, price: 2680, transit: '3 days', equipment: "53' Dry Van", submitted: '5h ago', status: 'pending' as const },
-    ],
-    originCoords: [41.88, -87.63] as [number, number],
-    destCoords: [32.78, -96.80] as [number, number],
-  },
-  {
-    id: 'BID-200',
-    origin: 'Los Angeles, CA',
-    dest: 'Seattle, WA',
-    customer: 'Global Widgets',
-    mode: 'LTL',
-    weight: '8,500 lbs',
-    pickup: 'Apr 10',
-    delivery: 'Apr 13',
-    targetRate: 1800,
-    status: 'Open',
-    bids: [
-      { carrier: 'Pacific Lines', rating: 4.2, onTime: 89, loads: 98, price: 1650, transit: '3 days', equipment: 'LTL Shared', submitted: '1h ago', status: 'pending' as const },
-      { carrier: 'Desert Freight', rating: 4.5, onTime: 94, loads: 186, price: 1920, transit: '2 days', equipment: 'LTL Shared', submitted: '4h ago', status: 'pending' as const },
-    ],
-    originCoords: [34.05, -118.24] as [number, number],
-    destCoords: [47.61, -122.33] as [number, number],
-  },
-  {
-    id: 'BID-199',
-    origin: 'Atlanta, GA',
-    dest: 'New York, NY',
-    customer: 'BioPharm Inc',
-    mode: 'Reefer',
-    weight: '22,000 lbs',
-    pickup: 'Apr 8',
-    delivery: 'Apr 10',
-    targetRate: 3500,
-    status: 'Awarded',
-    bids: [
-      { carrier: 'Southeast Express', rating: 4.7, onTime: 96, loads: 528, price: 3350, transit: '2 days', equipment: "53' Reefer", submitted: '1d ago', status: 'accepted' as const },
-      { carrier: 'NorthEast Carriers', rating: 4.3, onTime: 91, loads: 124, price: 3600, transit: '2 days', equipment: "53' Reefer", submitted: '1d ago', status: 'declined' as const },
-    ],
-    originCoords: [33.75, -84.39] as [number, number],
-    destCoords: [40.71, -74.01] as [number, number],
-  },
-];
+function mapTenderToLane(t: any) {
+  const origin = t.shipment?.origin;
+  const dest = t.shipment?.destination;
+  const originLabel = origin ? `${origin.city}, ${origin.state || ''}`.trim() : 'N/A';
+  const destLabel = dest ? `${dest.city}, ${dest.state || ''}`.trim() : 'N/A';
+
+  const statusMap: Record<string, string> = {
+    draft: 'Draft',
+    open: 'Open',
+    evaluating: 'Open',
+    awarded: 'Awarded',
+    cancelled: 'Cancelled',
+  };
+
+  const relativeTime = (dateStr: string) => {
+    if (!dateStr) return '';
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    const days = Math.floor(hrs / 24);
+    return `${days}d ago`;
+  };
+
+  const bids: Bid[] = (t.offers || []).flatMap((offer: any) =>
+    (offer.bids || []).map((bid: any) => ({
+      carrier: offer.carrier?.name || 'Unknown Carrier',
+      rating: 0,
+      onTime: 0,
+      loads: 0,
+      price: bid.rate || 0,
+      transit: bid.transitDays ? `${bid.transitDays} days` : 'N/A',
+      equipment: bid.equipmentType || t.equipmentType || 'N/A',
+      submitted: relativeTime(bid.createdAt),
+      status: (bid.status === 'accepted' ? 'accepted' : bid.status === 'declined' ? 'declined' : 'pending') as Bid['status'],
+    }))
+  );
+
+  return {
+    id: t.reference || `TNR-${t.id?.slice(0, 6)}`,
+    origin: originLabel,
+    dest: destLabel,
+    customer: t.shipment?.customer?.name || 'N/A',
+    mode: t.equipmentType || 'FTL',
+    weight: 'N/A',
+    pickup: t.shipment?.pickupDate ? new Date(t.shipment.pickupDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'N/A',
+    delivery: t.shipment?.deliveryDate ? new Date(t.shipment.deliveryDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'N/A',
+    targetRate: t.targetRate || 0,
+    status: statusMap[t.status] || t.status || 'Unknown',
+    bids,
+    originCoords: [39.5, -98.5] as [number, number],
+    destCoords: [39.5, -95.5] as [number, number],
+  };
+}
 
 function BidStars({ rating }: { rating: number }) {
   return (
@@ -85,12 +84,26 @@ function BidStars({ rating }: { rating: number }) {
 }
 
 export default function VNextCarrierBidding() {
-  const [selectedLane, setSelectedLane] = useState(LANES[0]);
+  const [lanes, setLanes] = useState<any[]>([]);
+  const [selectedLane, setSelectedLane] = useState<any | null>(null);
+  const [loading, setLoading] = useState(true);
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<L.Map | null>(null);
 
   useEffect(() => {
-    if (!mapRef.current) return;
+    fetch(`${API_URL}/api/v1/tenders`)
+      .then(r => r.json())
+      .then(json => {
+        const mapped = (json.data || []).map(mapTenderToLane);
+        setLanes(mapped);
+        if (mapped.length > 0) setSelectedLane(mapped[0]);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    if (!mapRef.current || !selectedLane) return;
     if (mapInstance.current) {
       mapInstance.current.remove();
       mapInstance.current = null;
@@ -131,17 +144,50 @@ export default function VNextCarrierBidding() {
     mapInstance.current = map;
 
     return () => { map.remove(); mapInstance.current = null; };
-  }, [selectedLane.id]);
+  }, [selectedLane?.id]);
 
-  const lowestBid = Math.min(...selectedLane.bids.map(b => b.price));
-  const highestBid = Math.max(...selectedLane.bids.map(b => b.price));
+  if (loading) {
+    return (
+      <div className="vn-empty">
+        <span className="material-icons" style={{ animation: 'spin 1s linear infinite' }}>refresh</span>
+        <h3>Loading...</h3>
+      </div>
+    );
+  }
+
+  if (!selectedLane || lanes.length === 0) {
+    return (
+      <>
+        <div className="vn-page-header">
+          <div>
+            <h1>Carrier Bidding</h1>
+            <p>0 open bid requests</p>
+          </div>
+          <div className="vn-page-actions">
+            <button className="vn-btn vn-btn-primary">
+              <span className="material-icons">add</span>
+              New Bid Request
+            </button>
+          </div>
+        </div>
+        <div className="vn-empty">
+          <span className="material-icons">gavel</span>
+          <h3>No tenders found</h3>
+          <p>Create a new bid request to get started</p>
+        </div>
+      </>
+    );
+  }
+
+  const lowestBid = selectedLane.bids.length > 0 ? Math.min(...selectedLane.bids.map((b: Bid) => b.price)) : 0;
+  const highestBid = selectedLane.bids.length > 0 ? Math.max(...selectedLane.bids.map((b: Bid) => b.price)) : 0;
 
   return (
     <>
       <div className="vn-page-header">
         <div>
           <h1>Carrier Bidding</h1>
-          <p>{LANES.filter(l => l.status === 'Open').length} open bid requests · {LANES.reduce((s, l) => s + l.bids.length, 0)} total bids</p>
+          <p>{lanes.filter(l => l.status === 'Open').length} open bid requests · {lanes.reduce((s, l) => s + l.bids.length, 0)} total bids</p>
         </div>
         <div className="vn-page-actions">
           <button className="vn-btn vn-btn-primary">
@@ -158,7 +204,7 @@ export default function VNextCarrierBidding() {
           <div className="vn-card" style={{ marginBottom: 24 }}>
             <div className="vn-card-header"><h2>Bid Requests</h2></div>
             <div className="vn-card-body vn-card-flush">
-              {LANES.map(lane => (
+              {lanes.map(lane => (
                 <div
                   key={lane.id}
                   onClick={() => setSelectedLane(lane)}
@@ -209,8 +255,8 @@ export default function VNextCarrierBidding() {
             <div className="vn-card-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {selectedLane.bids
                 .slice()
-                .sort((a, b) => a.price - b.price)
-                .map((bid, i) => (
+                .sort((a: Bid, b: Bid) => a.price - b.price)
+                .map((bid: Bid, i: number) => (
                   <div key={bid.carrier} className={`vn-bid-card ${bid.status === 'accepted' ? 'selected' : ''}`}>
                     {i === 0 && bid.status === 'pending' && (
                       <div style={{

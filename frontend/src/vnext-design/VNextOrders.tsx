@@ -41,6 +41,8 @@ export default function VNextOrders() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [activeTab, setActiveTab] = useState('all');
   const [orders, setOrders] = useState<Order[]>([]);
+  const [customers, setCustomers] = useState<{ id: string; name: string }[]>([]);
+  const [customerFilter, setCustomerFilter] = useState('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -65,12 +67,20 @@ export default function VNextOrders() {
     return () => { cancelled = true; };
   }, []);
 
+  useEffect(() => {
+    fetch(`${API_URL}/api/v1/customers`)
+      .then(r => r.json())
+      .then(json => setCustomers((json.data || []).filter((c: any) => !c.archived)))
+      .catch(() => {});
+  }, []);
+
   const filtered = orders.filter(o => {
     if (statusFilter !== 'all') {
       const sNorm = o.status?.toLowerCase().replace(/[_ ]/g, '');
       const map: Record<string, string> = { ready: 'readytoship', pending: 'pendingapproval', shipped: 'shipped', draft: 'draft', delivered: 'delivered', cancelled: 'cancelled' };
       if (sNorm !== map[statusFilter]) return false;
     }
+    if (customerFilter !== 'all' && o.customerId !== customerFilter) return false;
     if (search) {
       const q = search.toLowerCase();
       const orderNum = (o.orderNumber || o.id || '').toLowerCase();
@@ -183,12 +193,11 @@ export default function VNextOrders() {
             <option>Reefer</option>
             <option>Flatbed</option>
           </select>
-          <select className="vn-filter-select">
-            <option>All Customers</option>
-            <option>Acme Corp</option>
-            <option>Global Widgets</option>
-            <option>TechStart Inc</option>
-            <option>FreshFoods LLC</option>
+          <select className="vn-filter-select" value={customerFilter} onChange={e => setCustomerFilter(e.target.value)}>
+            <option value="all">All Customers</option>
+            {customers.map(c => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
           </select>
         </div>
 

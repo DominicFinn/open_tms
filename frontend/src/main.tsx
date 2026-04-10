@@ -65,6 +65,8 @@ import CarrierBidHistory from './pages/carrier-portal/CarrierBidHistory';
 import CarrierTenderHistory from './pages/carrier-portal/CarrierTenderHistory';
 import CarrierProfile from './pages/carrier-portal/CarrierProfile';
 import TradingPartners from './pages/TradingPartners';
+import VNextColdChainProfiles from './pages/VNextColdChainProfiles';
+import VNextCAPAReports from './pages/VNextCAPAReports';
 import './theme.css';
 
 const root = createRoot(document.getElementById('root')!);
@@ -137,6 +139,10 @@ root.render(
           <Route path="lanes/create" element={<VNextCreateLane />} />
           <Route path="lanes/:id/edit" element={<VNextCreateLane />} />
           <Route path="lanes/:id" element={<VNextLaneDetail />} />
+
+          {/* Cold Chain & Compliance */}
+          <Route path="cold-chain/profiles" element={<VNextColdChainProfiles />} />
+          <Route path="cold-chain/capa" element={<VNextCAPAReports />} />
 
           {/* Documents & Reports */}
           <Route path="documents" element={<VNextDocuments />} />

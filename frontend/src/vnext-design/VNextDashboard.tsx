@@ -6,6 +6,7 @@ export default function VNextDashboard() {
   const navigate = useNavigate();
   const [shipments, setShipments] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
+  const [activeIssues, setActiveIssues] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -25,6 +26,18 @@ export default function VNextDashboard() {
           setShipments(shipJson.data || []);
           setOrders(ordJson.data || []);
         }
+        // Fetch issues separately — non-critical, so don't block on errors
+        fetch(`${API_URL}/api/v1/issues`)
+          .then(r => r.json())
+          .then(json => {
+            if (!cancelled) {
+              const issues = (json.data || [])
+                .filter((i: any) => i.status === 'open' || i.status === 'in_progress')
+                .slice(0, 5);
+              setActiveIssues(issues);
+            }
+          })
+          .catch(() => {});
       } catch (e: any) {
         if (!cancelled) setError(e.message || 'Failed to load data');
       } finally {
@@ -200,32 +213,50 @@ export default function VNextDashboard() {
             </button>
           </div>
           <div className="vn-card-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {[
-              { title: 'Delayed pickup at Chicago warehouse', severity: 'error', shipment: 'SHP-4821', time: '2h ago' },
-              { title: 'Missing BOL for Dallas delivery', severity: 'warning', shipment: 'SHP-4815', time: '4h ago' },
-              { title: 'Carrier unresponsive — ETA update needed', severity: 'error', shipment: 'SHP-4812', time: '6h ago' },
-              { title: 'Temperature excursion alert', severity: 'warning', shipment: 'SHP-4808', time: '8h ago' },
-            ].map((issue, i) => (
-              <div key={i} style={{
-                display: 'flex', alignItems: 'center', gap: 12,
-                padding: '10px 12px',
-                borderRadius: 'var(--border-radius-sm)',
-                border: '1px solid var(--outline-variant)',
-                cursor: 'pointer',
-              }}>
-                <span className="material-icons" style={{
-                  color: issue.severity === 'error' ? 'var(--error)' : 'var(--warning)',
-                  fontSize: 20,
+            {activeIssues.map((issue: any) => {
+              const severityColor = (p: string) => {
+                if (p === 'critical' || p === 'high') return 'error';
+                if (p === 'medium') return 'warning';
+                return 'info';
+              };
+              const chipColor = severityColor(issue.priority);
+              const relativeTime = (() => {
+                if (!issue.createdAt) return '';
+                const diff = Date.now() - new Date(issue.createdAt).getTime();
+                const mins = Math.floor(diff / 60000);
+                if (mins < 60) return `${mins}m ago`;
+                const hrs = Math.floor(mins / 60);
+                if (hrs < 24) return `${hrs}h ago`;
+                const days = Math.floor(hrs / 24);
+                return `${days}d ago`;
+              })();
+              return (
+                <div key={issue.id} style={{
+                  display: 'flex', alignItems: 'center', gap: 12,
+                  padding: '10px 12px',
+                  borderRadius: 'var(--border-radius-sm)',
+                  border: '1px solid var(--outline-variant)',
+                  cursor: 'pointer',
                 }}>
-                  {issue.severity === 'error' ? 'error' : 'warning'}
-                </span>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--on-surface)' }}>{issue.title}</div>
-                  <div style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>{issue.shipment} · {issue.time}</div>
+                  <span className="material-icons" style={{
+                    color: chipColor === 'error' ? 'var(--error)' : chipColor === 'warning' ? 'var(--warning)' : 'var(--info)',
+                    fontSize: 20,
+                  }}>
+                    {chipColor === 'error' ? 'error' : chipColor === 'warning' ? 'warning' : 'info'}
+                  </span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--on-surface)' }}>{issue.title}</div>
+                    <div style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>{issue.sourceEntityId || 'N/A'} · {relativeTime}</div>
+                  </div>
+                  <span className="material-icons" style={{ fontSize: 18, color: 'var(--on-surface-variant)' }}>chevron_right</span>
                 </div>
-                <span className="material-icons" style={{ fontSize: 18, color: 'var(--on-surface-variant)' }}>chevron_right</span>
+              );
+            })}
+            {activeIssues.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '16px 0', color: 'var(--on-surface-variant)', fontSize: 13 }}>
+                No active issues
               </div>
-            ))}
+            )}
           </div>
         </div>
       </div>

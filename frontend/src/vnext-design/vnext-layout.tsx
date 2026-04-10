@@ -54,7 +54,7 @@ const APPS: AppDef[] = [
         { to: '/', icon: 'space_dashboard', label: 'Dashboard', end: true },
         { to: '/shipments', icon: 'local_shipping', label: 'Shipments' },
         { to: '/orders', icon: 'receipt_long', label: 'Orders' },
-        { to: '/issues', icon: 'bug_report', label: 'Issues', badge: '5' },
+        { to: '/issues', icon: 'bug_report', label: 'Issues' },
         { to: '/devices', icon: 'sensors', label: 'Devices' },
       ]},
       { title: 'Network', items: [
@@ -63,6 +63,10 @@ const APPS: AppDef[] = [
         { to: '/customers', icon: 'people', label: 'Customers' },
         { to: '/locations', icon: 'location_on', label: 'Locations' },
         { to: '/lanes', icon: 'route', label: 'Lanes' },
+      ]},
+      { title: 'Cold Chain', items: [
+        { to: '/cold-chain/profiles', icon: 'thermostat', label: 'Profiles' },
+        { to: '/cold-chain/capa', icon: 'assignment_late', label: 'CAPA Reports' },
       ]},
     ],
   },
@@ -112,6 +116,7 @@ function detectApp(pathname: string): string {
   if (pathname.startsWith('/integrations')) return 'integrations';
   if (pathname.startsWith('/settings') || pathname === '/style-guide') return 'admin';
   if (pathname.startsWith('/documents') || pathname.startsWith('/reports')) return 'reports';
+  // cold-chain routes live under operations
   return 'operations';
 }
 

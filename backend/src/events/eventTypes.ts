@@ -97,6 +97,25 @@ export const EVENT_TYPES = {
   ISSUE_ESCALATED: 'issue.escalated',
   ISSUE_RESOLVED: 'issue.resolved',
 
+  // Cold Chain
+  COLD_CHAIN_PROFILE_CREATED: 'cold_chain_profile.created',
+  COLD_CHAIN_PROFILE_UPDATED: 'cold_chain_profile.updated',
+  COLD_CHAIN_PROFILE_DEACTIVATED: 'cold_chain_profile.deactivated',
+  COLD_CHAIN_EXCURSION_DETECTED: 'cold_chain.excursion_detected',
+  COLD_CHAIN_EXCURSION_ACKNOWLEDGED: 'cold_chain.excursion_acknowledged',
+  COLD_CHAIN_EXCURSION_RESOLVED: 'cold_chain.excursion_resolved',
+  COLD_CHAIN_DISPOSITION_CHANGED: 'cold_chain.disposition_changed',
+  COLD_CHAIN_TEMPERATURE_LOGGED: 'cold_chain.temperature_logged',
+  DEVICE_CALIBRATION_RECORDED: 'device.calibration_recorded',
+  DEVICE_CALIBRATION_EXPIRED: 'device.calibration_expired',
+
+  // CAPA
+  CAPA_CREATED: 'capa.created',
+  CAPA_UPDATED: 'capa.updated',
+  CAPA_STATUS_CHANGED: 'capa.status_changed',
+  CAPA_APPROVED: 'capa.approved',
+  CAPA_VERIFIED: 'capa.verified',
+
   // Integration
   INTEGRATION_OUTBOUND_SENT: 'integration.outbound_sent',
   INTEGRATION_OUTBOUND_FAILED: 'integration.outbound_failed',
@@ -149,6 +168,21 @@ export const EVENT_SCHEMA_VERSIONS: Record<string, number> = {
   [EVENT_TYPES.ISSUE_STATUS_CHANGED]: 1,
   [EVENT_TYPES.ISSUE_ESCALATED]: 1,
   [EVENT_TYPES.ISSUE_RESOLVED]: 1,
+  [EVENT_TYPES.COLD_CHAIN_PROFILE_CREATED]: 1,
+  [EVENT_TYPES.COLD_CHAIN_PROFILE_UPDATED]: 1,
+  [EVENT_TYPES.COLD_CHAIN_PROFILE_DEACTIVATED]: 1,
+  [EVENT_TYPES.COLD_CHAIN_EXCURSION_DETECTED]: 1,
+  [EVENT_TYPES.COLD_CHAIN_EXCURSION_ACKNOWLEDGED]: 1,
+  [EVENT_TYPES.COLD_CHAIN_EXCURSION_RESOLVED]: 1,
+  [EVENT_TYPES.COLD_CHAIN_DISPOSITION_CHANGED]: 1,
+  [EVENT_TYPES.COLD_CHAIN_TEMPERATURE_LOGGED]: 1,
+  [EVENT_TYPES.DEVICE_CALIBRATION_RECORDED]: 1,
+  [EVENT_TYPES.DEVICE_CALIBRATION_EXPIRED]: 1,
+  [EVENT_TYPES.CAPA_CREATED]: 1,
+  [EVENT_TYPES.CAPA_UPDATED]: 1,
+  [EVENT_TYPES.CAPA_STATUS_CHANGED]: 1,
+  [EVENT_TYPES.CAPA_APPROVED]: 1,
+  [EVENT_TYPES.CAPA_VERIFIED]: 1,
 };
 
 /**
@@ -249,4 +283,62 @@ export interface EntityChangedPayload {
 export interface EntityArchivedPayload {
   entityId: string;
   entityType: string;
+}
+
+// Cold Chain payloads
+export interface ColdChainProfileCreatedPayload {
+  name: string;
+  minTemperature: number;
+  maxTemperature: number;
+  alertMinTemperature: number;
+  alertMaxTemperature: number;
+}
+
+export interface ColdChainExcursionDetectedPayload {
+  shipmentId: string;
+  shipmentReference: string;
+  deviceId?: string;
+  excursionType: string;
+  severity: string;
+  peakValue: number;
+  thresholdValue: number;
+}
+
+export interface ColdChainDispositionChangedPayload {
+  shipmentId: string;
+  shipmentReference: string;
+  previousDisposition: string;
+  newDisposition: string;
+  setBy: string;
+}
+
+export interface ColdChainTemperatureLoggedPayload {
+  shipmentId: string;
+  deviceId?: string;
+  temperature: number;
+  isExcursion: boolean;
+  isAlert: boolean;
+}
+
+export interface DeviceCalibrationRecordedPayload {
+  deviceId: string;
+  deviceName: string;
+  calibratedBy: string;
+  certificateNumber?: string;
+  expiresAt: string;
+}
+
+export interface CAPACreatedPayload {
+  reportNumber: string;
+  title: string;
+  issueId: string;
+  shipmentId?: string;
+  priority: string;
+}
+
+export interface CAPAStatusChangedPayload {
+  reportNumber: string;
+  title: string;
+  previousStatus: string;
+  newStatus: string;
 }

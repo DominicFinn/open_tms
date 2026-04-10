@@ -1,48 +1,72 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { API_URL } from '../api';
 
 interface Issue {
   id: string;
+  orgId: string;
   title: string;
-  shipment: string;
-  severity: 'high' | 'medium' | 'low';
+  description: string | null;
+  status: 'open' | 'in_progress' | 'resolved' | 'closed';
+  priority: 'low' | 'medium' | 'high' | 'critical';
   category: string;
-  assignee: string;
-  initials: string;
-  created: string;
-  column: 'new' | 'investigating' | 'escalated' | 'resolved';
+  sourceEntityType: string | null;
+  sourceEntityId: string | null;
+  sourceEventId: string | null;
+  assigneeId: string | null;
+  assigneeName: string | null;
+  escalatedTo: string | null;
+  escalatedAt: string | null;
+  resolvedAt: string | null;
+  resolvedBy: string | null;
+  resolution: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
-const ISSUES: Issue[] = [
-  { id: 'ISS-301', title: 'Delayed pickup — warehouse closed early', shipment: 'SHP-4821', severity: 'high', category: 'Pickup Delay', assignee: 'Jane S.', initials: 'JS', created: '2h ago', column: 'new' },
-  { id: 'ISS-300', title: 'Missing BOL for Dallas delivery', shipment: 'SHP-4815', severity: 'medium', category: 'Documentation', assignee: 'Tom K.', initials: 'TK', created: '4h ago', column: 'new' },
-  { id: 'ISS-299', title: 'Temperature excursion — reefer unit alarm', shipment: 'SHP-4808', severity: 'high', category: 'Equipment', assignee: 'Sarah L.', initials: 'SL', created: '6h ago', column: 'investigating' },
-  { id: 'ISS-298', title: 'Carrier unresponsive — no ETA update in 8 hrs', shipment: 'SHP-4812', severity: 'high', category: 'Communication', assignee: 'Jane S.', initials: 'JS', created: '8h ago', column: 'investigating' },
-  { id: 'ISS-297', title: 'Overweight load — scale ticket shows 44,200 lbs', shipment: 'SHP-4810', severity: 'medium', category: 'Compliance', assignee: 'Tom K.', initials: 'TK', created: '1d ago', column: 'escalated' },
-  { id: 'ISS-296', title: 'Customer refused delivery — wrong product', shipment: 'SHP-4805', severity: 'high', category: 'Delivery', assignee: 'Sarah L.', initials: 'SL', created: '1d ago', column: 'escalated' },
-  { id: 'ISS-295', title: 'Detention charges — waited 4 hrs at dock', shipment: 'SHP-4801', severity: 'low', category: 'Billing', assignee: 'Jane S.', initials: 'JS', created: '2d ago', column: 'resolved' },
-  { id: 'ISS-294', title: 'Late delivery — traffic delay on I-35', shipment: 'SHP-4798', severity: 'low', category: 'Delivery Delay', assignee: 'Tom K.', initials: 'TK', created: '2d ago', column: 'resolved' },
-  { id: 'ISS-293', title: 'Damaged freight — 2 pallets compromised', shipment: 'SHP-4795', severity: 'medium', category: 'Freight Damage', assignee: 'Sarah L.', initials: 'SL', created: '3d ago', column: 'resolved' },
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
+function getInitials(name: string | null): string {
+  if (!name) return '?';
+  return name.split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2);
+}
+
+const COLUMNS: { key: Issue['status']; label: string; cssClass: string }[] = [
+  { key: 'open', label: 'Open', cssClass: 'col-new' },
+  { key: 'in_progress', label: 'In Progress', cssClass: 'col-investigating' },
+  { key: 'resolved', label: 'Resolved', cssClass: 'col-escalated' },
+  { key: 'closed', label: 'Closed', cssClass: 'col-resolved' },
 ];
 
-const COLUMNS: { key: Issue['column']; label: string; cssClass: string }[] = [
-  { key: 'new', label: 'New', cssClass: 'col-new' },
-  { key: 'investigating', label: 'Investigating', cssClass: 'col-investigating' },
-  { key: 'escalated', label: 'Escalated', cssClass: 'col-escalated' },
-  { key: 'resolved', label: 'Resolved', cssClass: 'col-resolved' },
-];
-
-function SeverityChip({ severity }: { severity: Issue['severity'] }) {
-  const map = { high: 'error', medium: 'warning', low: 'secondary' } as const;
-  return <span className={`vn-chip vn-chip-${map[severity]}`} style={{ textTransform: 'capitalize' }}>{severity}</span>;
+function SeverityChip({ priority }: { priority: Issue['priority'] }) {
+  const map = { critical: 'error', high: 'error', medium: 'warning', low: 'secondary' } as const;
+  return <span className={`vn-chip vn-chip-${map[priority]}`} style={{ textTransform: 'capitalize' }}>{priority}</span>;
 }
 
 export default function VNextIssueKanban() {
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
   const [filterSeverity, setFilterSeverity] = useState('all');
+  const [issues, setIssues] = useState<Issue[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const filtered = ISSUES.filter(issue => {
+  useEffect(() => {
+    fetch(`${API_URL}/api/v1/issues`)
+      .then(r => r.json())
+      .then(json => setIssues(json.data || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const filtered = issues.filter(issue => {
     if (filterSeverity === 'all') return true;
-    return issue.severity === filterSeverity;
+    return issue.priority === filterSeverity;
   });
 
   return (
@@ -50,7 +74,7 @@ export default function VNextIssueKanban() {
       <div className="vn-page-header">
         <div>
           <h1>Issues</h1>
-          <p>{ISSUES.filter(i => i.column !== 'resolved').length} open issues across {new Set(ISSUES.map(i => i.shipment)).size} shipments</p>
+          <p>{issues.filter(i => i.status !== 'resolved' && i.status !== 'closed').length} open issues across {new Set(issues.map(i => i.sourceEntityId).filter(Boolean)).size} shipments</p>
         </div>
         <div className="vn-page-actions">
           <div style={{ display: 'flex', border: '1px solid var(--outline-variant)', borderRadius: 'var(--border-radius-sm)', overflow: 'hidden' }}>
@@ -71,6 +95,7 @@ export default function VNextIssueKanban() {
           </div>
           <select className="vn-filter-select" value={filterSeverity} onChange={e => setFilterSeverity(e.target.value)}>
             <option value="all">All Severities</option>
+            <option value="critical">Critical</option>
             <option value="high">High</option>
             <option value="medium">Medium</option>
             <option value="low">Low</option>
@@ -87,37 +112,41 @@ export default function VNextIssueKanban() {
         <div className="vn-stat">
           <div className="vn-stat-icon info"><span className="material-icons">fiber_new</span></div>
           <div>
-            <div className="vn-stat-value">{ISSUES.filter(i => i.column === 'new').length}</div>
-            <div className="vn-stat-label">New</div>
+            <div className="vn-stat-value">{issues.filter(i => i.status === 'open').length}</div>
+            <div className="vn-stat-label">Open</div>
           </div>
         </div>
         <div className="vn-stat">
           <div className="vn-stat-icon warning"><span className="material-icons">search</span></div>
           <div>
-            <div className="vn-stat-value">{ISSUES.filter(i => i.column === 'investigating').length}</div>
-            <div className="vn-stat-label">Investigating</div>
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon error"><span className="material-icons">priority_high</span></div>
-          <div>
-            <div className="vn-stat-value">{ISSUES.filter(i => i.column === 'escalated').length}</div>
-            <div className="vn-stat-label">Escalated</div>
+            <div className="vn-stat-value">{issues.filter(i => i.status === 'in_progress').length}</div>
+            <div className="vn-stat-label">In Progress</div>
           </div>
         </div>
         <div className="vn-stat">
           <div className="vn-stat-icon success"><span className="material-icons">check_circle</span></div>
           <div>
-            <div className="vn-stat-value">{ISSUES.filter(i => i.column === 'resolved').length}</div>
+            <div className="vn-stat-value">{issues.filter(i => i.status === 'resolved').length}</div>
             <div className="vn-stat-label">Resolved</div>
+          </div>
+        </div>
+        <div className="vn-stat">
+          <div className="vn-stat-icon error"><span className="material-icons">cancel</span></div>
+          <div>
+            <div className="vn-stat-value">{issues.filter(i => i.status === 'closed').length}</div>
+            <div className="vn-stat-label">Closed</div>
           </div>
         </div>
       </div>
 
-      {viewMode === 'kanban' ? (
+      {loading ? (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>
+          <div className="loading-spinner" />
+        </div>
+      ) : viewMode === 'kanban' ? (
         <div className="vn-kanban">
           {COLUMNS.map(col => {
-            const colIssues = filtered.filter(i => i.column === col.key);
+            const colIssues = filtered.filter(i => i.status === col.key);
             return (
               <div key={col.key} className={`vn-kanban-col ${col.cssClass}`}>
                 <div className="vn-kanban-col-header">
@@ -128,24 +157,26 @@ export default function VNextIssueKanban() {
                   {colIssues.map(issue => (
                     <div className="vn-kanban-card" key={issue.id}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
-                        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--on-surface-variant)' }}>{issue.id}</span>
-                        <SeverityChip severity={issue.severity} />
+                        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--on-surface-variant)' }}>{issue.id.slice(0, 8)}</span>
+                        <SeverityChip priority={issue.priority} />
                       </div>
                       <div className="vn-kanban-card-title">{issue.title}</div>
-                      <div className="vn-kanban-card-meta">
-                        <span className="material-icons">local_shipping</span>
-                        {issue.shipment}
-                      </div>
+                      {issue.sourceEntityId && (
+                        <div className="vn-kanban-card-meta">
+                          <span className="material-icons">local_shipping</span>
+                          {issue.sourceEntityId}
+                        </div>
+                      )}
                       <div className="vn-kanban-card-meta">
                         <span className="material-icons">category</span>
                         {issue.category}
                       </div>
                       <div className="vn-kanban-card-footer">
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <div className="vn-kanban-card-assignee">{issue.initials}</div>
-                          <span style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>{issue.assignee}</span>
+                          <div className="vn-kanban-card-assignee">{getInitials(issue.assigneeName)}</div>
+                          <span style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>{issue.assigneeName || 'Unassigned'}</span>
                         </div>
-                        <span style={{ fontSize: 11, color: 'var(--on-surface-variant)' }}>{issue.created}</span>
+                        <span style={{ fontSize: 11, color: 'var(--on-surface-variant)' }}>{timeAgo(issue.createdAt)}</span>
                       </div>
                     </div>
                   ))}
@@ -167,9 +198,9 @@ export default function VNextIssueKanban() {
                 <tr>
                   <th>ID</th>
                   <th>Issue</th>
-                  <th>Shipment</th>
+                  <th>Reference</th>
                   <th>Category</th>
-                  <th>Severity</th>
+                  <th>Priority</th>
                   <th>Assignee</th>
                   <th>Status</th>
                   <th>Created</th>
@@ -178,23 +209,23 @@ export default function VNextIssueKanban() {
               <tbody>
                 {filtered.map(issue => (
                   <tr key={issue.id}>
-                    <td><span className="vn-table-id">{issue.id}</span></td>
+                    <td><span className="vn-table-id">{issue.id.slice(0, 8)}</span></td>
                     <td style={{ maxWidth: 280 }}>{issue.title}</td>
-                    <td><span className="vn-table-id">{issue.shipment}</span></td>
+                    <td><span className="vn-table-id">{issue.sourceEntityId || '—'}</span></td>
                     <td>{issue.category}</td>
-                    <td><SeverityChip severity={issue.severity} /></td>
+                    <td><SeverityChip priority={issue.priority} /></td>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <div className="vn-kanban-card-assignee">{issue.initials}</div>
-                        {issue.assignee}
+                        <div className="vn-kanban-card-assignee">{getInitials(issue.assigneeName)}</div>
+                        {issue.assigneeName || 'Unassigned'}
                       </div>
                     </td>
                     <td>
-                      <span className={`vn-chip vn-chip-${issue.column === 'new' ? 'info' : issue.column === 'investigating' ? 'warning' : issue.column === 'escalated' ? 'error' : 'success'}`} style={{ textTransform: 'capitalize' }}>
-                        {issue.column}
+                      <span className={`vn-chip vn-chip-${issue.status === 'open' ? 'info' : issue.status === 'in_progress' ? 'warning' : issue.status === 'resolved' ? 'success' : 'secondary'}`} style={{ textTransform: 'capitalize' }}>
+                        {issue.status.replace('_', ' ')}
                       </span>
                     </td>
-                    <td style={{ fontSize: 13, whiteSpace: 'nowrap' }}>{issue.created}</td>
+                    <td style={{ fontSize: 13, whiteSpace: 'nowrap' }}>{timeAgo(issue.createdAt)}</td>
                   </tr>
                 ))}
               </tbody>

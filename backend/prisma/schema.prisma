@@ -102,6 +102,21 @@ model Shipment {
   // Read model relations
   orderReadModels    OrderReadModel[]
 
+  // Cold chain
+  coldChainProfile      ColdChainProfile? @relation(fields: [coldChainProfileId], references: [id])
+  coldChainProfileId    String?
+  effectiveMinTemp      Float?            // Computed from orders or profile (°C canonical)
+  effectiveMaxTemp      Float?
+  effectiveAlertMinTemp Float?            // Warning thresholds (tighter than min/max)
+  effectiveAlertMaxTemp Float?
+  coldChainDisposition  String            @default("not_applicable") // not_applicable, monitoring, pending_review, released, quarantined
+  dispositionSetBy      String?
+  dispositionSetAt      DateTime?
+  dispositionNotes      String?
+  temperatureLogs       ImmutableTemperatureLog[]
+  coldChainExcursions   ColdChainExcursion[]
+  capaReports           CAPAReport[]
+
   // Custom fields
   customFieldVersionId String?
   customFieldValues    Json?
@@ -540,6 +555,9 @@ model Organization {
   // Carrier Tendering
   autoTenderEnabled   Boolean  @default(false)  // Auto-publish tenders for laneless shipments
   defaultGeofenceRadiusMeters Float @default(200) // Default geofence radius for new locations
+
+  // Cold Chain & Compliance
+  autoDeliverShipmentDocs Boolean @default(false) // Auto-deliver compliance docs to customers on shipment complete
 
   // Maps & Geocoding
   googleMapsApiKey    String?   // Google Maps API key for Places + Geocoding
@@ -1480,6 +1498,9 @@ model Issue {
   resolvedBy      String?
   resolution      String?                           // Free-text resolution notes
 
+  // CAPA reports linked to this issue
+  capaReports     CAPAReport[]
+
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -1811,6 +1832,7 @@ model Device {
   name            String                          // Device name — used for shipment/order matching
   provider        String    @default("system_loco")
   model           String?                         // Device model (e.g., "HGx")
+  manufacturer    String?                         // Device manufacturer (e.g., "System Loco")
   firmware        String?
   labels          Json?                           // string[] of device tags/labels
   status          String    @default("active")    // active, inactive, retired
@@ -1824,6 +1846,9 @@ model Device {
   assignments     DeviceAssignment[]
   sensorReadings  SensorReading[]
   deviceEvents    DeviceEvent[]
+  calibrations    DeviceCalibration[]
+  temperatureLogs ImmutableTemperatureLog[]
+  coldChainExcursions ColdChainExcursion[]
 
   @@index([name])
   @@index([provider])
@@ -2000,4 +2025,243 @@ model CargoDiscrepancy {
   @@index([status])
   @@index([discrepancyType])
   @@index([detectedAt])
+}
+
+// ============================================================
+// Cold Chain & Compliance
+// ============================================================
+
+// Named temperature/humidity profile — e.g. "Frozen Goods (-25°C to -18°C)"
+model ColdChainProfile {
+  id                  String    @id @default(uuid())
+  orgId               String
+  name                String                          // e.g. "Frozen Goods", "Refrigerated Pharma"
+  description         String?
+
+  // Acceptable temperature range (°C — canonical metric)
+  minTemperature      Float                           // Lower acceptable limit
+  maxTemperature      Float                           // Upper acceptable limit
+
+  // Alert thresholds — tighter than acceptable range, triggers warning before breach
+  alertMinTemperature Float                           // Lower warning threshold
+  alertMaxTemperature Float                           // Upper warning threshold
+
+  // Optional humidity range (% RH)
+  minHumidity         Float?
+  maxHumidity         Float?
+  alertMinHumidity    Float?
+  alertMaxHumidity    Float?
+
+  active              Boolean   @default(true)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  createdBy           String?                         // User ID who created
+  updatedBy           String?                         // User ID who last modified
+
+  shipments           Shipment[]
+
+  @@index([orgId])
+  @@index([active])
+}
+
+// Device calibration records — tracks whether temperature sensors are signed off
+model DeviceCalibration {
+  id                  String    @id @default(uuid())
+  orgId               String
+  device              Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  deviceId            String
+
+  calibratedAt        DateTime                        // When calibration was performed
+  calibratedBy        String                          // Person or lab that performed calibration
+  certificateNumber   String?                         // Calibration certificate reference
+  expiresAt           DateTime                        // When calibration expires
+  calibrationMethod   String?                         // Method used (e.g., "NIST traceable", "2-point")
+  accuracy            Float?                          // Accuracy in °C (e.g., 0.5 means ±0.5°C)
+  status              String    @default("valid")     // valid, expired, pending
+  notes               String?
+
+  // Optional link to calibration certificate document
+  documentStorageKey  String?                         // Storage key for certificate PDF
+
+  createdAt           DateTime  @default(now())
+  createdBy           String?                         // User ID who recorded this
+
+  @@index([deviceId])
+  @@index([orgId])
+  @@index([status])
+  @@index([expiresAt])
+}
+
+// Immutable temperature log — WRITE-ONLY. No updates or deletes. CFR 21 Part 11 compliant.
+// Each row is a tamper-evident record of a temperature reading with a snapshot of the active profile thresholds.
+model ImmutableTemperatureLog {
+  id                  String    @id @default(uuid())
+  orgId               String
+
+  // Links to entities
+  shipment            Shipment? @relation(fields: [shipmentId], references: [id], onDelete: SetNull)
+  shipmentId          String?
+  device              Device?   @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+  deviceId            String?
+  orderId             String?
+  trackableUnitId     String?
+
+  // Sensor values
+  temperature         Float                           // °C — canonical metric
+  humidity            Float?                          // % RH
+
+  // Location at time of reading
+  lat                 Float?
+  lng                 Float?
+
+  // Timestamps
+  recordedAt          DateTime                        // When the device captured the reading
+  capturedAt          DateTime  @default(now())       // When the system received it
+
+  // Profile thresholds at time of capture — snapshot for audit trail
+  profileMinTemp      Float?
+  profileMaxTemp      Float?
+  profileAlertMinTemp Float?
+  profileAlertMaxTemp Float?
+  profileName         String?                         // Name of profile at time of capture
+
+  // Compliance flags
+  isWithinRange       Boolean                         // temperature within [profileMinTemp, profileMaxTemp]
+  isWithinAlertRange  Boolean                         // temperature within [profileAlertMinTemp, profileAlertMaxTemp]
+  isExcursion         Boolean   @default(false)       // Outside acceptable range
+  isAlert             Boolean   @default(false)       // Outside alert range but within acceptable
+
+  // Tamper evidence — SHA-256 hash of (shipmentId + deviceId + temperature + recordedAt + profileMinTemp + profileMaxTemp)
+  integrityHash       String
+
+  // Original raw payload for forensic analysis
+  rawPayload          Json?
+
+  // Immutable: createdAt only, no updatedAt
+  createdAt           DateTime  @default(now())
+
+  @@index([shipmentId, recordedAt])
+  @@index([deviceId, recordedAt])
+  @@index([orgId, capturedAt])
+  @@index([isExcursion])
+  @@index([isAlert])
+}
+
+// Temperature excursion — a period where readings breached profile thresholds
+model ColdChainExcursion {
+  id                  String    @id @default(uuid())
+  orgId               String
+
+  shipment            Shipment  @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  shipmentId          String
+  device              Device?   @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+  deviceId            String?
+
+  // Excursion classification
+  excursionType       String                          // high_temp, low_temp, high_humidity, low_humidity
+  severity            String                          // warning (alert range), critical (acceptable range breach)
+
+  // Duration
+  startedAt           DateTime                        // First reading outside threshold
+  endedAt             DateTime?                       // Last reading outside threshold (null if ongoing)
+  durationMinutes     Int?                            // Computed duration
+
+  // Worst-case values
+  peakValue           Float                           // Worst reading during excursion
+  thresholdValue      Float                           // What was the limit that was breached
+
+  readingCount        Int       @default(1)           // How many readings fell within this excursion
+
+  // Lifecycle
+  status              String    @default("active")    // active, acknowledged, resolved
+  acknowledgedBy      String?
+  acknowledgedAt      DateTime?
+  resolvedBy          String?
+  resolvedAt          DateTime?
+
+  // Disposition decision
+  dispositionDecision String?                         // released, quarantined
+  notes               String?
+
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([shipmentId])
+  @@index([orgId])
+  @@index([status])
+  @@index([severity])
+  @@index([startedAt])
+}
+
+// CAPA Report — Corrective and Preventive Action, linked to Issues in Triage
+model CAPAReport {
+  id                  String    @id @default(uuid())
+  orgId               String
+
+  // Links
+  issue               Issue     @relation(fields: [issueId], references: [id])
+  issueId             String
+  shipment            Shipment? @relation(fields: [shipmentId], references: [id], onDelete: SetNull)
+  shipmentId          String?
+
+  // Identification
+  reportNumber        String                          // Auto-generated: CAPA-YYYYMMDD-NNN
+  title               String
+  status              String    @default("draft")     // draft, investigation, root_cause_identified, action_plan, implementation, verification, closed
+  priority            String    @default("medium")    // low, medium, high, critical
+
+  // Problem description
+  description         String                          // What happened
+  immediateAction     String?                         // What was done immediately
+  containmentAction   String?                         // Steps taken to prevent further impact
+
+  // Investigation
+  investigationDetails String?
+  rootCause           String?
+  rootCauseCategory   String?                         // equipment, process, personnel, environmental, material, other
+
+  // Corrective action
+  correctiveAction    String?
+  correctiveActionDueDate DateTime?
+  correctiveActionCompletedDate DateTime?
+
+  // Preventive action
+  preventiveAction    String?
+  preventiveActionDueDate DateTime?
+  preventiveActionCompletedDate DateTime?
+
+  // People
+  investigatorId      String?                         // User ID of investigator
+  investigatorName    String?
+  approverId          String?                         // User ID of approver
+  approverName        String?
+  approvedAt          DateTime?
+
+  // Affected scope
+  affectedProducts    Json?                           // string[] of product descriptions
+  affectedShipmentIds Json?                           // string[] of shipment IDs
+  affectedLocationIds Json?                           // string[] of location IDs
+
+  // Context snapshots
+  eventTimeline       Json?                           // Key events leading to the issue
+  temperatureData     Json?                           // Summary of temp readings during incident
+
+  // Verification & closure
+  verificationMethod  String?
+  verifiedById        String?
+  verifiedByName      String?
+  verifiedAt          DateTime?
+  effectivenessCheck  String?
+  lessonsLearned      String?
+
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  createdBy           String?
+  updatedBy           String?
+
+  @@index([orgId])
+  @@index([issueId])
+  @@index([shipmentId])
+  @@index([status])
+  @@index([reportNumber])
 }

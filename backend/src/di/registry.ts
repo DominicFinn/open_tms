@@ -70,6 +70,17 @@ import { UpdateDeviceCommandHandler } from '../commands/devices/UpdateDeviceComm
 import { AssignDeviceCommandHandler } from '../commands/devices/AssignDeviceCommand.js';
 import { CreateCarrierUserCommandHandler } from '../commands/carrierUsers/CreateCarrierUserCommand.js';
 import { RecordCargoScanCommandHandler } from '../commands/cargoTracking/RecordCargoScanCommand.js';
+import { CreateColdChainProfileCommandHandler } from '../commands/coldChain/CreateColdChainProfileCommand.js';
+import { UpdateColdChainProfileCommandHandler } from '../commands/coldChain/UpdateColdChainProfileCommand.js';
+import { AcknowledgeExcursionCommandHandler } from '../commands/coldChain/AcknowledgeExcursionCommand.js';
+import { ResolveExcursionCommandHandler } from '../commands/coldChain/ResolveExcursionCommand.js';
+import { SetDispositionCommandHandler } from '../commands/coldChain/SetDispositionCommand.js';
+import { RecordCalibrationCommandHandler } from '../commands/coldChain/RecordCalibrationCommand.js';
+import { CreateCAPACommandHandler } from '../commands/capa/CreateCAPACommand.js';
+import { UpdateCAPACommandHandler } from '../commands/capa/UpdateCAPACommand.js';
+import { ColdChainRepository } from '../repositories/ColdChainRepository.js';
+import { ColdChainService } from '../services/ColdChainService.js';
+import { ComplianceReportService } from '../services/ComplianceReportService.js';
 import { TenderRepository } from '../repositories/TenderRepository.js';
 import { CarrierUserRepository } from '../repositories/CarrierUserRepository.js';
 import { TenderService } from '../services/TenderService.js';
@@ -271,6 +282,22 @@ export function registerDependencies(prisma: PrismaClient): void {
     );
   });
 
+  // Cold Chain repositories and services
+  container.singleton(TOKENS.IColdChainRepository).toFactory(() => {
+    return new ColdChainRepository(container.resolve(TOKENS.PrismaClient));
+  });
+
+  container.singleton(TOKENS.IColdChainService).toFactory(() => {
+    return new ColdChainService(container.resolve(TOKENS.PrismaClient));
+  });
+
+  container.singleton(TOKENS.IComplianceReportService).toFactory(() => {
+    return new ComplianceReportService(
+      container.resolve(TOKENS.PrismaClient),
+      container.resolve(TOKENS.IBinaryStorageProvider),
+    );
+  });
+
   // Tender repositories and services
   container.singleton(TOKENS.ITenderRepository).toFactory(() => {
     return new TenderRepository(container.resolve(TOKENS.PrismaClient));
@@ -386,6 +413,18 @@ export function registerDependencies(prisma: PrismaClient): void {
 
     // Cargo Tracking commands
     bus.register(new RecordCargoScanCommandHandler(prisma, eventBus));
+
+    // Cold Chain commands
+    bus.register(new CreateColdChainProfileCommandHandler(prisma, eventBus));
+    bus.register(new UpdateColdChainProfileCommandHandler(prisma, eventBus));
+    bus.register(new AcknowledgeExcursionCommandHandler(prisma, eventBus));
+    bus.register(new ResolveExcursionCommandHandler(prisma, eventBus));
+    bus.register(new SetDispositionCommandHandler(prisma, eventBus));
+    bus.register(new RecordCalibrationCommandHandler(prisma, eventBus));
+
+    // CAPA commands
+    bus.register(new CreateCAPACommandHandler(prisma, eventBus));
+    bus.register(new UpdateCAPACommandHandler(prisma, eventBus));
 
     return bus;
   });

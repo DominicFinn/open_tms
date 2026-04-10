@@ -11,6 +11,7 @@ export interface UpdateOrganizationSettingsDTO {
   distanceUnit?: 'km' | 'mi';
   autoTenderEnabled?: boolean;
   defaultGeofenceRadiusMeters?: number;
+  autoDeliverShipmentDocs?: boolean;
 }
 
 export interface IOrganizationRepository {
