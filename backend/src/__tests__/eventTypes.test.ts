@@ -35,6 +35,13 @@ describe('EVENT_TYPES', () => {
     expect(EVENT_TYPES.TRACKING_ETA_UPDATED).toBe('tracking.eta_updated');
   });
 
+  it('contains sensor alert events', () => {
+    expect(EVENT_TYPES.SENSOR_ALERT_TEMPERATURE).toBe('sensor.alert_temperature');
+    expect(EVENT_TYPES.SENSOR_ALERT_IMPACT).toBe('sensor.alert_impact');
+    expect(EVENT_TYPES.SENSOR_ALERT_BATTERY).toBe('sensor.alert_battery');
+    expect(EVENT_TYPES.SENSOR_ALERT_LIGHT).toBe('sensor.alert_light');
+  });
+
   it('contains integration events', () => {
     expect(EVENT_TYPES.INTEGRATION_OUTBOUND_SENT).toBe('integration.outbound_sent');
     expect(EVENT_TYPES.INTEGRATION_OUTBOUND_FAILED).toBe('integration.outbound_failed');
