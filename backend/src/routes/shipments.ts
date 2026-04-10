@@ -1,12 +1,21 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { randomUUID } from 'crypto';
 import { container } from '../di/container.js';
 import { TOKENS } from '../di/tokens.js';
-import { IQueueAdapter } from '../queue/IQueueAdapter.js';
-import { QUEUES } from '../queue/events.js';
-import { IEventBus, EVENT_TYPES, createEvent } from '../events/index.js';
+import { ICommandBus } from '../commands/CommandBus.js';
+import { CREATE_SHIPMENT } from '../commands/shipments/CreateShipmentCommand.js';
+import { UPDATE_SHIPMENT } from '../commands/shipments/UpdateShipmentCommand.js';
+import { ARCHIVE_SHIPMENT } from '../commands/shipments/ArchiveShipmentCommand.js';
 
 export async function shipmentRoutes(server: FastifyInstance) {
+  const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
+
+  const getOrgId = async () => {
+    const org = await server.prisma.organization.findFirst({ select: { id: true } });
+    return org?.id || 'default';
+  };
+
   // Get all shipments
   server.get('/api/v1/shipments', async (_req: FastifyRequest, _reply: FastifyReply) => {
     const shipments = await server.prisma.shipment.findMany({
@@ -25,7 +34,7 @@ export async function shipmentRoutes(server: FastifyInstance) {
             }
           }
         },
-        carrier: true // Manual carrier assignment
+        carrier: true
       },
       orderBy: { createdAt: 'desc' }
     });
@@ -38,7 +47,7 @@ export async function shipmentRoutes(server: FastifyInstance) {
       reference: z.string().min(1),
       customerId: z.string().uuid(),
       laneId: z.string().uuid().optional(),
-      carrierId: z.string().uuid().optional(), // Manual carrier assignment for non-lane shipments
+      carrierId: z.string().uuid().optional(),
       originId: z.string().uuid().optional(),
       destinationId: z.string().uuid().optional(),
       pickupDate: z.string().datetime().optional(),
@@ -52,7 +61,6 @@ export async function shipmentRoutes(server: FastifyInstance) {
         volumeM3: z.number().nonnegative().optional()
       })).default([])
     }).refine((data) => {
-      // Either laneId OR (originId AND destinationId) must be provided
       return (data.laneId && !data.originId && !data.destinationId) ||
         (!data.laneId && data.originId && data.destinationId);
     }, {
@@ -61,32 +69,22 @@ export async function shipmentRoutes(server: FastifyInstance) {
 
     const body = schema.parse((req as any).body);
 
-    // If laneId is provided, get the lane's origin and destination
-    let finalOriginId = body.originId;
-    let finalDestinationId = body.destinationId;
+    const result = await commandBus.dispatch({
+      type: CREATE_SHIPMENT,
+      orgId: await getOrgId(),
+      actorId: null,
+      payload: body,
+      metadata: { correlationId: randomUUID(), source: 'api' },
+    });
 
-    if (body.laneId) {
-      const lane = await server.prisma.lane.findFirst({
-        where: { id: body.laneId, archived: false },
-        include: { origin: true, destination: true }
-      });
-
-      if (!lane) {
-        reply.code(400);
-        return { data: null, error: 'Lane not found' };
-      }
-
-      finalOriginId = lane.originId;
-      finalDestinationId = lane.destinationId;
+    if (!result.success) {
+      reply.code(400);
+      return { data: null, error: result.error };
     }
 
-    const created = await server.prisma.shipment.create({
-      data: {
-        ...body,
-        originId: finalOriginId!,
-        destinationId: finalDestinationId!,
-        status: 'draft'
-      },
+    // Fetch full shipment for response
+    const created = await server.prisma.shipment.findFirst({
+      where: { id: (result.data as any).id },
       include: {
         customer: true,
         origin: true,
@@ -97,14 +95,7 @@ export async function shipmentRoutes(server: FastifyInstance) {
           include: {
             order: {
               include: {
-                trackableUnits: {
-                  include: {
-                    lineItems: true
-                  },
-                  orderBy: {
-                    sequenceNumber: 'asc'
-                  }
-                },
+                trackableUnits: { include: { lineItems: true }, orderBy: { sequenceNumber: 'asc' } },
                 lineItems: true
               }
             }
@@ -113,43 +104,7 @@ export async function shipmentRoutes(server: FastifyInstance) {
       }
     });
 
-    // Publish to queue for outbound integrations
-    try {
-      const queue = container.resolve<IQueueAdapter>(TOKENS.IQueueAdapter);
-      const eventPayload = {
-        shipmentId: created.id,
-        eventType: 'created' as const,
-        shipmentReference: created.reference,
-        carrierId: created.carrierId || undefined,
-      };
-      await queue.publish(QUEUES.OUTBOUND_CARRIER, { type: 'shipment.created', payload: eventPayload });
-      await queue.publish(QUEUES.OUTBOUND_TRACKING, { type: 'shipment.created', payload: eventPayload });
-    } catch (err) {
-      server.log.warn('Failed to publish shipment events to queue: ' + (err as Error).message);
-    }
-
-    // Publish domain event
-    try {
-      const eventBus = container.resolve<IEventBus>(TOKENS.IEventBus);
-      const org = await server.prisma.organization.findFirst({ select: { id: true } });
-      await eventBus.publish(createEvent({
-        type: EVENT_TYPES.SHIPMENT_CREATED,
-        orgId: org?.id || 'default',
-        actorId: req.user?.sub,
-        entityType: 'shipment',
-        entityId: created.id,
-        payload: {
-          shipmentReference: created.reference,
-          customerId: body.customerId,
-          originId: finalOriginId,
-          destinationId: finalDestinationId,
-          status: 'draft',
-        },
-        source: 'api',
-      }));
-    } catch (err) {
-      server.log.warn('Failed to publish domain event: ' + (err as Error).message);
-    }
+    // Event publishing and queue integration handled by CreateShipmentCommand
 
     reply.code(201);
     return { data: created, error: null };
@@ -168,57 +123,30 @@ export async function shipmentRoutes(server: FastifyInstance) {
           include: {
             origin: true,
             destination: true,
-            stops: {
-              include: {
-                location: true
-              },
-              orderBy: {
-                order: 'asc'
-              }
-            },
-            laneCarriers: {
-              include: { carrier: true },
-              orderBy: { assigned: 'desc' } // Show assigned carrier first
-            }
+            stops: { include: { location: true }, orderBy: { order: 'asc' } },
+            laneCarriers: { include: { carrier: true }, orderBy: { assigned: 'desc' } }
           }
         },
-        carrier: true, // Manual carrier assignment
-        loads: {
-          include: {
-            vehicle: true,
-            driver: true
-          }
-        },
-        events: {
-          orderBy: {
-            eventTime: 'desc'
-          }
-        },
+        carrier: true,
+        loads: { include: { vehicle: true, driver: true } },
+        events: { orderBy: { eventTime: 'desc' } },
         stops: {
           include: {
             location: true,
             orders: {
               select: {
-                id: true,
-                orderNumber: true,
-                deliveryStatus: true,
-                status: true,
+                id: true, orderNumber: true, deliveryStatus: true, status: true,
                 customer: { select: { name: true } }
               }
             }
           },
-          orderBy: {
-            sequenceNumber: 'asc'
-          }
+          orderBy: { sequenceNumber: 'asc' }
         },
         orderShipments: {
           include: {
             order: {
               select: {
-                id: true,
-                orderNumber: true,
-                status: true,
-                deliveryStatus: true,
+                id: true, orderNumber: true, status: true, deliveryStatus: true,
                 customer: { select: { name: true } }
               }
             }
@@ -236,22 +164,15 @@ export async function shipmentRoutes(server: FastifyInstance) {
   // Get shipment events
   server.get('/api/v1/shipments/:id/events', async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-
-    // Verify shipment exists
-    const shipment = await server.prisma.shipment.findFirst({
-      where: { id, archived: false }
-    });
-
+    const shipment = await server.prisma.shipment.findFirst({ where: { id, archived: false } });
     if (!shipment) {
       reply.code(404);
       return { data: null, error: 'Shipment not found' };
     }
-
     const events = await server.prisma.shipmentEvent.findMany({
       where: { shipmentId: id },
       orderBy: { eventTime: 'desc' }
     });
-
     return { data: events, error: null };
   });
 
@@ -265,7 +186,7 @@ export async function shipmentRoutes(server: FastifyInstance) {
       deliveryDate: z.string().datetime().optional(),
       customerId: z.string().uuid().optional(),
       laneId: z.string().uuid().optional(),
-      carrierId: z.string().uuid().nullable().optional(), // Manual carrier assignment
+      carrierId: z.string().uuid().nullable().optional(),
       proNumber: z.string().nullable().optional(),
       originId: z.string().uuid().optional(),
       destinationId: z.string().uuid().optional(),
@@ -277,79 +198,35 @@ export async function shipmentRoutes(server: FastifyInstance) {
         volumeM3: z.number().nonnegative().optional()
       })).optional()
     }).refine((data) => {
-      // If any route fields are provided, validate the combination
       const hasRouteFields = data.laneId !== undefined || data.originId !== undefined || data.destinationId !== undefined;
-      if (!hasRouteFields) return true; // No route changes
-
-      // Either laneId OR (originId AND destinationId) must be provided
+      if (!hasRouteFields) return true;
       return (data.laneId && !data.originId && !data.destinationId) ||
         (!data.laneId && data.originId && data.destinationId);
     }, {
       message: "Either laneId or both originId and destinationId must be provided"
     }).parse((req as any).body);
 
-    const shipment = await server.prisma.shipment.findFirst({
-      where: { id, archived: false }
+    const result = await commandBus.dispatch({
+      type: UPDATE_SHIPMENT,
+      orgId: await getOrgId(),
+      actorId: null,
+      payload: { id, data: body },
+      metadata: { correlationId: randomUUID(), source: 'api' },
     });
-    if (!shipment) {
-      reply.code(404);
-      return { data: null, error: 'Shipment not found' };
+
+    if (!result.success) {
+      reply.code(result.error?.includes('not found') ? 404 : 400);
+      return { data: null, error: result.error };
     }
 
-    // Prepare update data
-    const updateData: any = { ...body };
-
-    // If laneId is provided, get the lane's origin and destination
-    if (body.laneId) {
-      const lane = await server.prisma.lane.findFirst({
-        where: { id: body.laneId, archived: false },
-        include: { origin: true, destination: true }
-      });
-
-      if (!lane) {
-        reply.code(400);
-        return { data: null, error: 'Lane not found' };
-      }
-
-      updateData.originId = lane.originId;
-      updateData.destinationId = lane.destinationId;
-    }
-
-    const previousStatus = shipment.status;
-
-    const updated = await server.prisma.shipment.update({
+    const updated = await server.prisma.shipment.findFirst({
       where: { id },
-      data: updateData,
       include: {
-        customer: true,
-        origin: true,
-        destination: true,
-        lane: updateData.laneId ? { include: { origin: true, destination: true } } : false
+        customer: true, origin: true, destination: true,
+        lane: body.laneId ? { include: { origin: true, destination: true } } : false
       }
     });
-
-    // Publish domain events for status changes
-    if (body.status && body.status !== previousStatus) {
-      try {
-        const eventBus = container.resolve<IEventBus>(TOKENS.IEventBus);
-        const org = await server.prisma.organization.findFirst({ select: { id: true } });
-        await eventBus.publish(createEvent({
-          type: EVENT_TYPES.SHIPMENT_STATUS_CHANGED,
-          orgId: org?.id || 'default',
-          actorId: req.user?.sub,
-          entityType: 'shipment',
-          entityId: id,
-          payload: {
-            previousStatus,
-            newStatus: body.status,
-            shipmentReference: updated.reference,
-          },
-          source: 'api',
-        }));
-      } catch (err) {
-        server.log.warn('Failed to publish status change event: ' + (err as Error).message);
-      }
-    }
+    // Event publishing handled by UpdateShipmentCommand
 
     return { data: updated, error: null };
   });
@@ -358,21 +235,19 @@ export async function shipmentRoutes(server: FastifyInstance) {
   server.delete('/api/v1/shipments/:id', async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
 
-    const shipment = await server.prisma.shipment.findFirst({
-      where: { id, archived: false }
+    const result = await commandBus.dispatch({
+      type: ARCHIVE_SHIPMENT,
+      orgId: await getOrgId(),
+      actorId: null,
+      payload: { id },
+      metadata: { correlationId: randomUUID(), source: 'api' },
     });
-    if (!shipment) {
+
+    if (!result.success) {
       reply.code(404);
-      return { data: null, error: 'Shipment not found' };
+      return { data: null, error: result.error };
     }
 
-    const archived = await server.prisma.shipment.update({
-      where: { id },
-      data: {
-        archived: true,
-        archivedAt: new Date()
-      }
-    });
-    return { data: archived, error: null };
+    return { data: { id, archived: true }, error: null };
   });
 }

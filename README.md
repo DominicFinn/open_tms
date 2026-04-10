@@ -6,7 +6,7 @@
 [![Fastify](https://img.shields.io/badge/Fastify-202020?logo=fastify&logoColor=white)](https://www.fastify.io/)
 [![Prisma](https://img.shields.io/badge/Prisma-3982CE?logo=prisma&logoColor=white)](https://www.prisma.io/)
 
-A simple, open-source Transport Management System built with TypeScript, featuring a Fastify backend, React frontend, and comprehensive CRUD operations. Perfect for managing shipments, customers, and locations with a beautiful Material Design 3 interface.
+A simple, open-source Transport Management System built with TypeScript, featuring a CQRS event-driven backend, React frontend, and comprehensive domain modelling. Designed for managing shipments, customers, carriers, orders, and operational issues with real-time IoT tracking, EDI integration, and a beautiful Material Design 3 interface.
 
 ## 🚨 Help needed please
 Under development at the moment. I have really made this as a demo to show off our data platform capabilities at System Loco, we develop IoT devices and the supporting data and intelligence platform. We integrate with real time visibility platforms and TMS systems to provide a complete end to end solution.
@@ -71,14 +71,20 @@ Deploy your own Open TMS instance with one click:
 - **Error Handling** - Graceful error management and user notifications
 
 ### 🔧 Technical Excellence
+- **CQRS Architecture** - Command/Query Responsibility Segregation with 20+ domain command handlers
+- **Event-Driven** - Every state change emits a domain event to an immutable event store (DomainEventLog)
+- **Read Model Projections** - 6 denormalized read models (Order, Shipment, Carrier, Customer, Lane, Issue) built from events, optimized for fast list queries with zero joins
+- **Event Bus** - pg-boss fan-out with per-handler queues, wildcard subscriptions, configurable concurrency
+- **Issue/Triage System** - Operational issue tracking with status lifecycle, priority escalation, and source entity linking
 - **TypeScript** - Full type safety across frontend and backend
 - **RESTful API** - Well-documented API with Swagger/OpenAPI
-- **Database Migrations** - Prisma-powered database management
-- **Repository Pattern** - Clean data access layer with interface-based design
-- **Dependency Injection** - Testable, loosely-coupled architecture
-- **DTO Pattern** - Type-safe data transfer with validation
+- **Database Migrations** - Prisma-powered database management (45+ models)
+- **Dependency Injection** - Custom DI container with Symbol-based tokens
+- **Metrics & Monitoring** - `/metrics` endpoint with read model lag detection, event throughput, queue depths
+- **Event Export API** - Queryable event store with wildcard filters, cursor pagination, and aggregate stats — ready for data warehouse and ML pipeline consumption
+- **Test Suite** - 59 tests across 11 suites covering commands, projections, and full CQRS pipeline integration
 - **Soft Delete** - Data preservation with archive functionality
-- **Validation** - Comprehensive input validation and error handling
+- **Validation** - Comprehensive input validation with Zod schemas
 
 ## 🏗️ Architecture
 
@@ -126,26 +132,39 @@ Deploy your own Open TMS instance with one click:
 
 ### Backend Architecture
 
-The backend follows a clean, layered architecture with:
-
-- **Routes Layer** - HTTP endpoints and request/response handling
-- **Repository Layer** - Data access abstraction using the Repository Pattern
-- **Dependency Injection** - Custom DI container for loose coupling and testability
-- **Type Safety** - TypeScript interfaces (DTOs) for all data structures
+The backend follows a **CQRS (Command Query Responsibility Segregation)** architecture:
 
 ```
-Routes (HTTP)
-    ↓ (uses interfaces)
-Repositories (Data Access)
-    ↓ (uses Prisma)
-Database (PostgreSQL)
+Routes (HTTP) ─── validate (Zod) ──→ CommandBus.dispatch()
+                                          ↓
+                                   BaseCommandHandler
+                                   (Prisma $transaction)
+                                          ↓
+                                     emit(events)
+                                          ↓
+                                    Commit + Publish
+                                    ↓              ↓
+                              Read Models     Side Effects
+                             (Projections)  (Email, Audit,
+                                            Notifications)
 ```
+
+**Write side** — Commands execute inside transactions, emit domain events after commit:
+- 20+ command handlers across 7 entity types (Orders, Shipments, Carriers, Customers, Locations, Lanes, Issues)
+- Every write publishes to the immutable DomainEventLog — no silent mutations
+
+**Read side** — Projection handlers build denormalized read models from events:
+- 6 read model tables optimized for list queries (no joins needed)
+- Eventual consistency with configurable projection concurrency
 
 **Key Patterns:**
+- **CQRS** - Commands (write) separated from queries (read)
+- **Event Sourcing (lite)** - Immutable event log, not full event-sourced aggregates
 - **Repository Pattern** - All database operations abstracted into repository classes
-- **Dependency Injection** - Interface-based DI container for testability
-- **DTO Pattern** - Type-safe data transfer objects for API contracts
-- **Interface Segregation** - Each repository has a corresponding interface
+- **Dependency Injection** - Symbol-based DI container for testability
+- **Outbox Pattern** - Events collected during transaction, published after commit
+
+See [Domain Behaviours](./docs/DOMAIN_BEHAVIOURS.md) for the complete reference of commands, events, and side effects per entity.
 
 ## 🚀 Quick Start
 

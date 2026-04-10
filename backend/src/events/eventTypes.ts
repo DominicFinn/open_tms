@@ -3,6 +3,10 @@
  *
  * Naming convention: entity.action (past tense).
  * Wildcards supported for subscriptions: "shipment.*", "*"
+ *
+ * Schema versions: each event type has a version number. When payload
+ * structure changes, bump the version. Consumers should handle all
+ * versions they might encounter (backward compatibility).
  */
 
 export const EVENT_TYPES = {
@@ -15,6 +19,7 @@ export const EVENT_TYPES = {
   SHIPMENT_EXCEPTION: 'shipment.exception',
   SHIPMENT_STOP_ARRIVED: 'shipment.stop_arrived',
   SHIPMENT_STOP_COMPLETED: 'shipment.stop_completed',
+  SHIPMENT_ARCHIVED: 'shipment.archived',
 
   // Orders
   ORDER_CREATED: 'order.created',
@@ -25,6 +30,7 @@ export const EVENT_TYPES = {
   ORDER_EXCEPTION: 'order.exception',
   ORDER_EXCEPTION_RESOLVED: 'order.exception_resolved',
   ORDER_DELIVERED: 'order.delivered',
+  ORDER_ARCHIVED: 'order.archived',
 
   // Carriers
   CARRIER_CREATED: 'carrier.created',
@@ -44,12 +50,32 @@ export const EVENT_TYPES = {
   LOCATION_ARRIVAL_CRITERIA_UPDATED: 'location.arrival_criteria_updated',
   LOCATION_ARRIVAL_CRITERIA_REMOVED: 'location.arrival_criteria_removed',
 
+  // Lanes
+  LANE_CREATED: 'lane.created',
+  LANE_UPDATED: 'lane.updated',
+  LANE_ARCHIVED: 'lane.archived',
+
   // Tenders
   TENDER_CREATED: 'tender.created',
   TENDER_PUBLISHED: 'tender.published',
   TENDER_AWARDED: 'tender.awarded',
   TENDER_CANCELLED: 'tender.cancelled',
   TENDER_RESPONSE_RECEIVED: 'tender.response_received',
+
+  // Trading Partners
+  TRADING_PARTNER_CREATED: 'trading_partner.created',
+  TRADING_PARTNER_UPDATED: 'trading_partner.updated',
+
+  // Devices
+  DEVICE_CREATED: 'device.created',
+  DEVICE_UPDATED: 'device.updated',
+  DEVICE_ASSIGNED: 'device.assigned',
+  DEVICE_UNASSIGNED: 'device.unassigned',
+
+  // Carrier Users
+  CARRIER_USER_CREATED: 'carrier_user.created',
+  CARRIER_USER_UPDATED: 'carrier_user.updated',
+  CARRIER_USER_DEACTIVATED: 'carrier_user.deactivated',
 
   // Tracking
   TRACKING_LOCATION_RECEIVED: 'tracking.location_received',
@@ -63,11 +89,13 @@ export const EVENT_TYPES = {
   CARGO_LEFT_ON_VEHICLE: 'cargo.left_on_vehicle',
   CARGO_DISCREPANCY_RESOLVED: 'cargo.discrepancy_resolved',
 
-  // Triage (Phase 4)
-  TRIAGE_ISSUE_CREATED: 'triage.issue_created',
-  TRIAGE_ISSUE_ASSIGNED: 'triage.issue_assigned',
-  TRIAGE_ISSUE_STATUS_CHANGED: 'triage.issue_status_changed',
-  TRIAGE_ISSUE_ESCALATED: 'triage.issue_escalated',
+  // Issues / Triage
+  ISSUE_CREATED: 'issue.created',
+  ISSUE_UPDATED: 'issue.updated',
+  ISSUE_ASSIGNED: 'issue.assigned',
+  ISSUE_STATUS_CHANGED: 'issue.status_changed',
+  ISSUE_ESCALATED: 'issue.escalated',
+  ISSUE_RESOLVED: 'issue.resolved',
 
   // Integration
   INTEGRATION_OUTBOUND_SENT: 'integration.outbound_sent',
@@ -76,6 +104,52 @@ export const EVENT_TYPES = {
 } as const;
 
 export type EventType = typeof EVENT_TYPES[keyof typeof EVENT_TYPES];
+
+/**
+ * Schema version registry — tracks the current payload version for each event type.
+ * When you change a payload structure, bump the version here.
+ * Consumers should handle all versions they encounter.
+ */
+export const EVENT_SCHEMA_VERSIONS: Record<string, number> = {
+  [EVENT_TYPES.SHIPMENT_CREATED]: 1,
+  [EVENT_TYPES.SHIPMENT_UPDATED]: 1,
+  [EVENT_TYPES.SHIPMENT_STATUS_CHANGED]: 1,
+  [EVENT_TYPES.SHIPMENT_CARRIER_ASSIGNED]: 1,
+  [EVENT_TYPES.SHIPMENT_DELIVERED]: 1,
+  [EVENT_TYPES.SHIPMENT_EXCEPTION]: 1,
+  [EVENT_TYPES.SHIPMENT_STOP_ARRIVED]: 1,
+  [EVENT_TYPES.SHIPMENT_STOP_COMPLETED]: 1,
+  [EVENT_TYPES.SHIPMENT_ARCHIVED]: 1,
+  [EVENT_TYPES.ORDER_CREATED]: 1,
+  [EVENT_TYPES.ORDER_UPDATED]: 1,
+  [EVENT_TYPES.ORDER_STATUS_CHANGED]: 1,
+  [EVENT_TYPES.ORDER_DELIVERY_STATUS_CHANGED]: 1,
+  [EVENT_TYPES.ORDER_ASSIGNED_TO_SHIPMENT]: 1,
+  [EVENT_TYPES.ORDER_EXCEPTION]: 1,
+  [EVENT_TYPES.ORDER_EXCEPTION_RESOLVED]: 1,
+  [EVENT_TYPES.ORDER_DELIVERED]: 1,
+  [EVENT_TYPES.ORDER_ARCHIVED]: 1,
+  [EVENT_TYPES.CARRIER_CREATED]: 1,
+  [EVENT_TYPES.CARRIER_UPDATED]: 1,
+  [EVENT_TYPES.CARRIER_ARCHIVED]: 1,
+  [EVENT_TYPES.CUSTOMER_CREATED]: 1,
+  [EVENT_TYPES.CUSTOMER_UPDATED]: 1,
+  [EVENT_TYPES.CUSTOMER_ARCHIVED]: 1,
+  [EVENT_TYPES.LOCATION_CREATED]: 1,
+  [EVENT_TYPES.LOCATION_UPDATED]: 1,
+  [EVENT_TYPES.LANE_CREATED]: 1,
+  [EVENT_TYPES.LANE_UPDATED]: 1,
+  [EVENT_TYPES.LANE_ARCHIVED]: 1,
+  [EVENT_TYPES.TRACKING_LOCATION_RECEIVED]: 1,
+  [EVENT_TYPES.TRACKING_GEOFENCE_ENTERED]: 1,
+  [EVENT_TYPES.TRACKING_ETA_UPDATED]: 1,
+  [EVENT_TYPES.ISSUE_CREATED]: 1,
+  [EVENT_TYPES.ISSUE_UPDATED]: 1,
+  [EVENT_TYPES.ISSUE_ASSIGNED]: 1,
+  [EVENT_TYPES.ISSUE_STATUS_CHANGED]: 1,
+  [EVENT_TYPES.ISSUE_ESCALATED]: 1,
+  [EVENT_TYPES.ISSUE_RESOLVED]: 1,
+};
 
 /**
  * Event payload types for type-safe publishing.
@@ -170,4 +244,9 @@ export interface CargoLeftOnVehiclePayload {
 
 export interface EntityChangedPayload {
   changes?: Record<string, { before: unknown; after: unknown }>;
+}
+
+export interface EntityArchivedPayload {
+  entityId: string;
+  entityType: string;
 }

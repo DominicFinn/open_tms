@@ -1,5 +1,6 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { randomUUID } from 'crypto';
 import { IOrdersRepository } from '../repositories/OrdersRepository.js';
 import { ILocationsRepository } from '../repositories/LocationsRepository.js';
 import { IShipmentAssignmentService } from '../services/ShipmentAssignmentService.js';
@@ -9,6 +10,10 @@ import { IOrderConversionService } from '../services/OrderConversionService.js';
 import { IOrganizationRepository } from '../repositories/OrganizationRepository.js';
 import { ILocationResolutionService } from '../services/LocationResolutionService.js';
 import { container, TOKENS } from '../di/index.js';
+import { ICommandBus } from '../commands/CommandBus.js';
+import { CREATE_ORDER } from '../commands/orders/CreateOrderCommand.js';
+import { UPDATE_ORDER } from '../commands/orders/UpdateOrderCommand.js';
+import { ARCHIVE_ORDER } from '../commands/orders/ArchiveOrderCommand.js';
 
 // Validation schemas (exported for reuse by customerApi.ts)
 export const lineItemSchema = z.object({
@@ -106,7 +111,13 @@ export async function orderRoutes(server: FastifyInstance) {
   const deliveryService = container.resolve<IOrderDeliveryService>(TOKENS.IOrderDeliveryService);
   const conversionService = container.resolve<IOrderConversionService>(TOKENS.IOrderConversionService);
   const orgRepo = container.resolve<IOrganizationRepository>(TOKENS.IOrganizationRepository);
+  const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
   const locationResolution = container.resolve<ILocationResolutionService>(TOKENS.ILocationResolutionService);
+
+  const getOrgId = async () => {
+    const org = await server.prisma.organization.findFirst({ select: { id: true } });
+    return org?.id || 'default';
+  };
 
   // Get all orders
   server.get('/api/v1/orders', async (_req: FastifyRequest, _reply: FastifyReply) => {
@@ -182,9 +193,21 @@ export async function orderRoutes(server: FastifyInstance) {
       status = 'validated';
     }
 
-    orderData.status = status;
+    const result = await commandBus.dispatch({
+      type: CREATE_ORDER,
+      orgId: await getOrgId(),
+      actorId: null,
+      payload: { orderData, status },
+      metadata: { correlationId: randomUUID(), source: 'api' },
+    });
 
-    const created = await ordersRepo.create(orderData);
+    if (!result.success) {
+      reply.code(400);
+      return { data: null, error: result.error };
+    }
+
+    // Fetch full order with relations for response
+    const created = await ordersRepo.findById((result.data as any).id);
     reply.code(201);
     return { data: created, error: null };
   });
@@ -205,18 +228,25 @@ export async function orderRoutes(server: FastifyInstance) {
     const { id } = req.params as { id: string };
     const body = updateOrderSchema.parse((req as any).body);
 
-    const order = await ordersRepo.findById(id);
-    if (!order) {
-      reply.code(404);
-      return { data: null, error: 'Order not found' };
+    // Convert date strings to Date objects
+    const data: any = { ...body };
+    if (body.requestedPickupDate) data.requestedPickupDate = new Date(body.requestedPickupDate);
+    if (body.requestedDeliveryDate) data.requestedDeliveryDate = new Date(body.requestedDeliveryDate);
+
+    const result = await commandBus.dispatch({
+      type: UPDATE_ORDER,
+      orgId: await getOrgId(),
+      actorId: null,
+      payload: { id, data },
+      metadata: { correlationId: randomUUID(), source: 'api' },
+    });
+
+    if (!result.success) {
+      reply.code(result.error?.includes('not found') ? 404 : 400);
+      return { data: null, error: result.error };
     }
 
-    // Convert date strings to Date objects
-    const updateData: any = { ...body };
-    if (body.requestedPickupDate) updateData.requestedPickupDate = new Date(body.requestedPickupDate);
-    if (body.requestedDeliveryDate) updateData.requestedDeliveryDate = new Date(body.requestedDeliveryDate);
-
-    const updated = await ordersRepo.update(id, updateData);
+    const updated = await ordersRepo.findById(id);
     return { data: updated, error: null };
   });
 
@@ -224,13 +254,20 @@ export async function orderRoutes(server: FastifyInstance) {
   server.delete('/api/v1/orders/:id', async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
 
-    const order = await ordersRepo.findById(id);
-    if (!order) {
+    const result = await commandBus.dispatch({
+      type: ARCHIVE_ORDER,
+      orgId: await getOrgId(),
+      actorId: null,
+      payload: { id },
+      metadata: { correlationId: randomUUID(), source: 'api' },
+    });
+
+    if (!result.success) {
       reply.code(404);
-      return { data: null, error: 'Order not found' };
+      return { data: null, error: result.error };
     }
 
-    const archived = await ordersRepo.archive(id);
+    const archived = await ordersRepo.findById(id);
     return { data: archived, error: null };
   });
 

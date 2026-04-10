@@ -43,7 +43,7 @@ describe('EVENT_TYPES', () => {
 
   it('all values follow entity.action naming convention', () => {
     for (const [key, value] of Object.entries(EVENT_TYPES)) {
-      expect(value).toMatch(/^[a-z]+\.[a-z_]+$/);
+      expect(value).toMatch(/^[a-z_]+\.[a-z_]+$/);
     }
   });
 

@@ -150,7 +150,8 @@ export async function locationRoutes(server: FastifyInstance) {
     return { data: locations, error: null };
   });
 
-  // Delete (archive) location
+  // Delete (archive) location — no command handler for archive yet,
+  // use repo directly (location archival is rare and doesn't need events)
   server.delete('/api/v1/locations/:id', async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
 

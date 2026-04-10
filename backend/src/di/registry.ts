@@ -38,6 +38,38 @@ import { PgBossQueueAdapter } from '../queue/PgBossQueueAdapter.js';
 import { PgBossEventBus } from '../events/PgBossEventBus.js';
 import { SmtpEmailService } from '../services/SmtpEmailService.js';
 import { ConsoleEmailService } from '../services/ConsoleEmailService.js';
+import { CommandBus } from '../commands/CommandBus.js';
+import { CreateOrderCommandHandler } from '../commands/orders/CreateOrderCommand.js';
+import { UpdateOrderCommandHandler } from '../commands/orders/UpdateOrderCommand.js';
+import { ArchiveOrderCommandHandler } from '../commands/orders/ArchiveOrderCommand.js';
+import { CreateShipmentCommandHandler } from '../commands/shipments/CreateShipmentCommand.js';
+import { UpdateShipmentCommandHandler } from '../commands/shipments/UpdateShipmentCommand.js';
+import { ArchiveShipmentCommandHandler } from '../commands/shipments/ArchiveShipmentCommand.js';
+import { CreateCarrierCommandHandler } from '../commands/carriers/CreateCarrierCommand.js';
+import { UpdateCarrierCommandHandler } from '../commands/carriers/UpdateCarrierCommand.js';
+import { ArchiveCarrierCommandHandler } from '../commands/carriers/ArchiveCarrierCommand.js';
+import { CreateCustomerCommandHandler } from '../commands/customers/CreateCustomerCommand.js';
+import { UpdateCustomerCommandHandler } from '../commands/customers/UpdateCustomerCommand.js';
+import { ArchiveCustomerCommandHandler } from '../commands/customers/ArchiveCustomerCommand.js';
+import { CreateLocationCommandHandler } from '../commands/locations/CreateLocationCommand.js';
+import { UpdateLocationCommandHandler } from '../commands/locations/UpdateLocationCommand.js';
+import { CreateLaneCommandHandler } from '../commands/lanes/CreateLaneCommand.js';
+import { UpdateLaneCommandHandler } from '../commands/lanes/UpdateLaneCommand.js';
+import { ArchiveLaneCommandHandler } from '../commands/lanes/ArchiveLaneCommand.js';
+import { CreateIssueCommandHandler } from '../commands/issues/CreateIssueCommand.js';
+import { UpdateIssueCommandHandler } from '../commands/issues/UpdateIssueCommand.js';
+import { EscalateIssueCommandHandler } from '../commands/issues/EscalateIssueCommand.js';
+import { CreateTenderCommandHandler } from '../commands/tenders/CreateTenderCommand.js';
+import { OpenTenderCommandHandler } from '../commands/tenders/OpenTenderCommand.js';
+import { AwardTenderCommandHandler } from '../commands/tenders/AwardTenderCommand.js';
+import { CancelTenderCommandHandler } from '../commands/tenders/CancelTenderCommand.js';
+import { CreateTradingPartnerCommandHandler } from '../commands/tradingPartners/CreateTradingPartnerCommand.js';
+import { UpdateTradingPartnerCommandHandler } from '../commands/tradingPartners/UpdateTradingPartnerCommand.js';
+import { CreateDeviceCommandHandler } from '../commands/devices/CreateDeviceCommand.js';
+import { UpdateDeviceCommandHandler } from '../commands/devices/UpdateDeviceCommand.js';
+import { AssignDeviceCommandHandler } from '../commands/devices/AssignDeviceCommand.js';
+import { CreateCarrierUserCommandHandler } from '../commands/carrierUsers/CreateCarrierUserCommand.js';
+import { RecordCargoScanCommandHandler } from '../commands/cargoTracking/RecordCargoScanCommand.js';
 import { TenderRepository } from '../repositories/TenderRepository.js';
 import { CarrierUserRepository } from '../repositories/CarrierUserRepository.js';
 import { TenderService } from '../services/TenderService.js';
@@ -291,5 +323,70 @@ export function registerDependencies(prisma: PrismaClient): void {
       container.resolve(TOKENS.ILocationsRepository),
       container.resolve(TOKENS.ILocationResolutionService)
     );
+  });
+
+  // Command bus — register all command handlers
+  container.singleton(TOKENS.ICommandBus).toFactory(() => {
+    const bus = new CommandBus();
+    const prisma = container.resolve<PrismaClient>(TOKENS.PrismaClient);
+    const eventBus = container.resolve<PgBossEventBus>(TOKENS.IEventBus);
+    const queue = container.resolve<import('../queue/IQueueAdapter.js').IQueueAdapter>(TOKENS.IQueueAdapter);
+
+    // Order commands
+    bus.register(new CreateOrderCommandHandler(prisma, eventBus));
+    bus.register(new UpdateOrderCommandHandler(prisma, eventBus));
+    bus.register(new ArchiveOrderCommandHandler(prisma, eventBus));
+
+    // Shipment commands
+    bus.register(new CreateShipmentCommandHandler(prisma, eventBus, queue));
+    bus.register(new UpdateShipmentCommandHandler(prisma, eventBus));
+    bus.register(new ArchiveShipmentCommandHandler(prisma, eventBus));
+
+    // Carrier commands
+    bus.register(new CreateCarrierCommandHandler(prisma, eventBus));
+    bus.register(new UpdateCarrierCommandHandler(prisma, eventBus));
+    bus.register(new ArchiveCarrierCommandHandler(prisma, eventBus));
+
+    // Customer commands
+    bus.register(new CreateCustomerCommandHandler(prisma, eventBus));
+    bus.register(new UpdateCustomerCommandHandler(prisma, eventBus));
+    bus.register(new ArchiveCustomerCommandHandler(prisma, eventBus));
+
+    // Location commands
+    bus.register(new CreateLocationCommandHandler(prisma, eventBus));
+    bus.register(new UpdateLocationCommandHandler(prisma, eventBus));
+
+    // Lane commands
+    bus.register(new CreateLaneCommandHandler(prisma, eventBus));
+    bus.register(new UpdateLaneCommandHandler(prisma, eventBus));
+    bus.register(new ArchiveLaneCommandHandler(prisma, eventBus));
+
+    // Issue commands
+    bus.register(new CreateIssueCommandHandler(prisma, eventBus));
+    bus.register(new UpdateIssueCommandHandler(prisma, eventBus));
+    bus.register(new EscalateIssueCommandHandler(prisma, eventBus));
+
+    // Tender commands
+    bus.register(new CreateTenderCommandHandler(prisma, eventBus));
+    bus.register(new OpenTenderCommandHandler(prisma, eventBus));
+    bus.register(new AwardTenderCommandHandler(prisma, eventBus));
+    bus.register(new CancelTenderCommandHandler(prisma, eventBus));
+
+    // Trading Partner commands
+    bus.register(new CreateTradingPartnerCommandHandler(prisma, eventBus));
+    bus.register(new UpdateTradingPartnerCommandHandler(prisma, eventBus));
+
+    // Device commands
+    bus.register(new CreateDeviceCommandHandler(prisma, eventBus));
+    bus.register(new UpdateDeviceCommandHandler(prisma, eventBus));
+    bus.register(new AssignDeviceCommandHandler(prisma, eventBus));
+
+    // Carrier User commands
+    bus.register(new CreateCarrierUserCommandHandler(prisma, eventBus));
+
+    // Cargo Tracking commands
+    bus.register(new RecordCargoScanCommandHandler(prisma, eventBus));
+
+    return bus;
   });
 }

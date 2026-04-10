@@ -1284,6 +1284,210 @@ model EmailTemplate {
   @@index([eventType])
 }
 
+// ─── CQRS Read Models ───────────────────────────────────────────
+// Denormalized projections built from domain events.
+// These tables are populated by projection handlers (OrderProjection, ShipmentProjection)
+// and serve GET/list endpoints without joins.
+
+model OrderReadModel {
+  id                    String    @id                // Same as Order.id
+  orgId                 String
+  orderNumber           String    @unique
+  poNumber              String?
+  status                String                       // pending, validated, converted, assigned, etc.
+  deliveryStatus        String                       // unassigned, assigned, in_transit, delivered, exception
+  customerName          String
+  customerId            String
+  originName            String?
+  originCity            String?
+  originState           String?
+  destinationName       String?
+  destinationCity       String?
+  destinationState      String?
+  shipmentReference     String?
+  shipmentId            String?
+  carrierName           String?
+  serviceLevel          String?
+  temperatureRequired   Boolean   @default(false)
+  hazmat                Boolean   @default(false)
+  trackableUnitCount    Int       @default(0)
+  lineItemCount         Int       @default(0)
+  totalWeight           Float?
+  requestedDeliveryDate DateTime?
+  deliveredAt           DateTime?
+  exceptionType         String?
+  importSource          String?
+  createdAt             DateTime
+  updatedAt             DateTime
+
+  @@index([orgId])
+  @@index([status])
+  @@index([deliveryStatus])
+  @@index([customerId])
+  @@index([createdAt])
+  @@index([shipmentId])
+}
+
+model ShipmentReadModel {
+  id                String    @id                    // Same as Shipment.id
+  orgId             String
+  reference         String    @unique
+  status            String                           // draft, in_transit, delivered, etc.
+  customerName      String
+  customerId        String
+  originName        String?
+  originCity        String?
+  originState       String?
+  destinationName   String?
+  destinationCity   String?
+  destinationState  String?
+  carrierName       String?
+  carrierId         String?
+  laneName          String?
+  laneId            String?
+  proNumber         String?
+  pickupDate        DateTime?
+  deliveryDate      DateTime?
+  orderCount        Int       @default(0)
+  stopCount         Int       @default(0)
+  currentLat        Float?
+  currentLng        Float?
+  lastLocationAt    DateTime?
+  createdAt         DateTime
+  updatedAt         DateTime
+
+  @@index([orgId])
+  @@index([status])
+  @@index([customerId])
+  @@index([carrierId])
+  @@index([createdAt])
+}
+
+model CarrierReadModel {
+  id              String    @id
+  orgId           String
+  name            String
+  mcNumber        String?
+  dotNumber       String?
+  contactEmail    String?
+  status          String                           // active, archived
+  validationTier  String?
+  vehicleCount    Int       @default(0)
+  driverCount     Int       @default(0)
+  activeLaneCount Int       @default(0)
+  createdAt       DateTime
+  updatedAt       DateTime
+
+  @@index([orgId])
+  @@index([status])
+  @@index([name])
+}
+
+model CustomerReadModel {
+  id               String    @id
+  orgId            String
+  name             String
+  contactEmail     String?
+  activeOrderCount Int       @default(0)
+  totalOrderCount  Int       @default(0)
+  createdAt        DateTime
+  updatedAt        DateTime
+
+  @@index([orgId])
+  @@index([name])
+}
+
+model LaneReadModel {
+  id                  String    @id
+  orgId               String
+  name                String
+  originName          String?
+  originCity          String?
+  destinationName     String?
+  destinationCity     String?
+  serviceLevel        String
+  distance            Float?
+  carrierCount        Int       @default(0)
+  activeShipmentCount Int       @default(0)
+  status              String    @default("active")
+  createdAt           DateTime
+  updatedAt           DateTime
+
+  @@index([orgId])
+  @@index([status])
+}
+
+// ─── Issue / Triage ─────────────────────────────────────────────
+// Tracks exceptions, delays, and operational issues across the system.
+// Issues can be auto-created from domain events (e.g., shipment.exception)
+// or manually by dispatchers.
+
+model Issue {
+  id              String    @id @default(uuid())
+  orgId           String
+  title           String
+  description     String?
+  status          String    @default("open")       // open, in_progress, resolved, closed
+  priority        String    @default("medium")     // low, medium, high, critical
+  category        String                            // exception, delay, damage, compliance, other
+
+  // Source entity that triggered the issue
+  sourceEntityType String?                          // "shipment", "order", "carrier"
+  sourceEntityId   String?
+  sourceEventId    String?                          // DomainEventLog.id that triggered this
+
+  // Assignment
+  assigneeId      String?
+  assigneeName    String?
+  escalatedTo     String?
+  escalatedAt     DateTime?
+
+  // Resolution
+  resolvedAt      DateTime?
+  resolvedBy      String?
+  resolution      String?                           // Free-text resolution notes
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([orgId])
+  @@index([status])
+  @@index([priority])
+  @@index([sourceEntityType, sourceEntityId])
+  @@index([assigneeId])
+  @@index([createdAt])
+}
+
+model ProjectionCheckpoint {
+  projectionName  String   @id
+  lastEventId     String
+  lastEventTime   DateTime
+  processedCount  Int      @default(0)
+  updatedAt       DateTime @updatedAt
+}
+
+model IssueReadModel {
+  id                String    @id
+  orgId             String
+  title             String
+  status            String
+  priority          String
+  category          String
+  sourceEntityType  String?
+  sourceEntityId    String?
+  assigneeName      String?
+  escalatedTo       String?
+  resolvedAt        DateTime?
+  createdAt         DateTime
+  updatedAt         DateTime
+
+  @@index([orgId])
+  @@index([status])
+  @@index([priority])
+  @@index([assigneeName])
+  @@index([createdAt])
+}
+
 // ============================================================
 // EDI Communication Hub — Unified Trading Partner model
 // ============================================================

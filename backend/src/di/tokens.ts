@@ -43,6 +43,9 @@ export const TOKENS = {
   // Email tokens
   IEmailService: Symbol.for('IEmailService'),
 
+  // Command bus
+  ICommandBus: Symbol.for('ICommandBus'),
+
   // Tender tokens
   ITenderRepository: Symbol.for('ITenderRepository'),
   ICarrierUserRepository: Symbol.for('ICarrierUserRepository'),

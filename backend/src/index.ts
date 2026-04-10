@@ -44,6 +44,7 @@ import { eventRoutes } from './routes/events.js';
 import { emailSettingsRoutes } from './routes/emailSettings.js';
 import { emailTemplateRoutes } from './routes/emailTemplates.js';
 import { mapsSettingsRoutes } from './routes/mapsSettings.js';
+import { metricsRoutes } from './routes/metrics.js';
 import { arrivalCriteriaRoutes } from './routes/arrivalCriteria.js';
 import { tenderRoutes } from './routes/tenders.js';
 import { carrierPortalRoutes } from './routes/carrierPortal.js';
@@ -114,6 +115,7 @@ async function start() {
   await server.register(emailSettingsRoutes);
   await server.register(emailTemplateRoutes);
   await server.register(mapsSettingsRoutes);
+  await server.register(metricsRoutes);
   await server.register(arrivalCriteriaRoutes);
   await server.register(tenderRoutes);
   await server.register(carrierPortalRoutes);

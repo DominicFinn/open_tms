@@ -16,6 +16,7 @@
 
 import { randomUUID } from 'crypto';
 import { DomainEvent, EventMetadata } from './DomainEvent.js';
+import { EVENT_SCHEMA_VERSIONS } from './eventTypes.js';
 
 export interface CreateEventParams<T> {
   type: string;
@@ -44,7 +45,7 @@ export function createEvent<T>(params: CreateEventParams<T>): DomainEvent<T> {
       correlationId: params.correlationId ?? id,
       causationId: params.causationId,
       source: params.source ?? 'api',
-      schemaVersion: 1,
+      schemaVersion: EVENT_SCHEMA_VERSIONS[params.type] ?? 1,
     },
   };
 }
