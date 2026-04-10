@@ -131,8 +131,6 @@ export async function shipmentRoutes(server: FastifyInstance) {
     // Publish domain event
     try {
       const eventBus = container.resolve<IEventBus>(TOKENS.IEventBus);
-      // Look up org from customer
-      const customer = await server.prisma.customer.findUnique({ where: { id: body.customerId }, select: { id: true } });
       const org = await server.prisma.organization.findFirst({ select: { id: true } });
       await eventBus.publish(createEvent({
         type: EVENT_TYPES.SHIPMENT_CREATED,

@@ -2,9 +2,14 @@ import { PrismaClient } from '@prisma/client';
 import { QueueMessage } from '../queue/IQueueAdapter.js';
 import { WebhookEvent } from '../queue/events.js';
 import { IOrderDeliveryService } from '../services/OrderDeliveryService.js';
+import { IArrivalCriteriaEvaluationService } from '../services/ArrivalCriteriaEvaluationService.js';
 import { SystemLocoAdapter } from '../integrations/SystemLocoAdapter.js';
 
-export function createInboundWebhookWorker(prisma: PrismaClient, deliveryService: IOrderDeliveryService) {
+export function createInboundWebhookWorker(
+  prisma: PrismaClient,
+  deliveryService: IOrderDeliveryService,
+  arrivalCriteriaService?: IArrivalCriteriaEvaluationService,
+) {
   const systemLoco = new SystemLocoAdapter(prisma);
 
   return async (message: QueueMessage<WebhookEvent>) => {
@@ -64,6 +69,21 @@ export function createInboundWebhookWorker(prisma: PrismaClient, deliveryService
             );
           } catch {
             // Geofence check is non-critical
+          }
+        }
+
+        // Evaluate arrival criteria (WiFi, BLE, enhanced geofence) from IoT payload
+        if (result.shipmentId && arrivalCriteriaService) {
+          try {
+            await arrivalCriteriaService.evaluateAndUpdateOrders({
+              shipmentId: result.shipmentId,
+              deviceId: deviceInfo.id || undefined,
+              lat: location.lat ? Number(location.lat) : undefined,
+              lng: (location.lon || location.lng) ? Number(location.lon || location.lng) : undefined,
+              rawPayload,
+            });
+          } catch {
+            // Arrival criteria evaluation is non-critical
           }
         }
 

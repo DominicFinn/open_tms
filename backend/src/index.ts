@@ -13,6 +13,7 @@ import { createOutboundCarrierWorker } from './workers/outboundCarrierWorker.js'
 import { createOutboundTrackingWorker } from './workers/outboundTrackingWorker.js';
 import { createInboundWebhookWorker } from './workers/inboundWebhookWorker.js';
 import { OrderDeliveryService } from './services/OrderDeliveryService.js';
+import { ArrivalCriteriaEvaluationService } from './services/ArrivalCriteriaEvaluationService.js';
 import { customerRoutes } from './routes/customers.js';
 import { carrierRoutes } from './routes/carriers.js';
 import { locationRoutes } from './routes/locations.js';
@@ -43,6 +44,7 @@ import { eventRoutes } from './routes/events.js';
 import { emailSettingsRoutes } from './routes/emailSettings.js';
 import { emailTemplateRoutes } from './routes/emailTemplates.js';
 import { mapsSettingsRoutes } from './routes/mapsSettings.js';
+import { arrivalCriteriaRoutes } from './routes/arrivalCriteria.js';
 import { tenderRoutes } from './routes/tenders.js';
 import { carrierPortalRoutes } from './routes/carrierPortal.js';
 import { carrierUserRoutes } from './routes/carrierUsers.js';
@@ -111,6 +113,7 @@ async function start() {
   await server.register(emailSettingsRoutes);
   await server.register(emailTemplateRoutes);
   await server.register(mapsSettingsRoutes);
+  await server.register(arrivalCriteriaRoutes);
   await server.register(tenderRoutes);
   await server.register(carrierPortalRoutes);
   await server.register(carrierUserRoutes);
@@ -129,9 +132,10 @@ async function start() {
     // Set DISABLE_EMBEDDED_WORKERS=true when using `docker compose up` with the worker service.
     if (process.env.DISABLE_EMBEDDED_WORKERS !== 'true') {
       const deliveryService = new OrderDeliveryService(server.prisma);
+      const arrivalCriteriaService = new ArrivalCriteriaEvaluationService(server.prisma, deliveryService);
       await queue.subscribe(QUEUES.OUTBOUND_CARRIER, createOutboundCarrierWorker(server.prisma));
       await queue.subscribe(QUEUES.OUTBOUND_TRACKING, createOutboundTrackingWorker(server.prisma));
-      await queue.subscribe(QUEUES.INBOUND_WEBHOOK, createInboundWebhookWorker(server.prisma, deliveryService));
+      await queue.subscribe(QUEUES.INBOUND_WEBHOOK, createInboundWebhookWorker(server.prisma, deliveryService, arrivalCriteriaService));
       server.log.info('Embedded queue workers registered (set DISABLE_EMBEDDED_WORKERS=true to use separate worker container)');
     } else {
       server.log.info('Embedded workers disabled — using separate worker container');

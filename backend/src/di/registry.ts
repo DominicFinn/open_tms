@@ -14,6 +14,9 @@ import { LanesRepository } from '../repositories/LanesRepository.js';
 import { OrdersRepository } from '../repositories/OrdersRepository.js';
 import { OrganizationRepository } from '../repositories/OrganizationRepository.js';
 import { PendingLaneRequestsRepository } from '../repositories/PendingLaneRequestsRepository.js';
+import { ArrivalCriteriaRepository } from '../repositories/ArrivalCriteriaRepository.js';
+import { LocationResolutionService } from '../services/LocationResolutionService.js';
+import { ArrivalCriteriaEvaluationService } from '../services/ArrivalCriteriaEvaluationService.js';
 import { ShipmentAssignmentService } from '../services/ShipmentAssignmentService.js';
 import { CSVImportService } from '../services/CSVImportService.js';
 import { OrderDeliveryService } from '../services/OrderDeliveryService.js';
@@ -82,6 +85,10 @@ export function registerDependencies(prisma: PrismaClient): void {
     return new PendingLaneRequestsRepository(container.resolve(TOKENS.PrismaClient));
   });
 
+  container.singleton(TOKENS.IArrivalCriteriaRepository).toFactory(() => {
+    return new ArrivalCriteriaRepository(container.resolve(TOKENS.PrismaClient));
+  });
+
   // Register services as singletons
   container.singleton(TOKENS.IShipmentAssignmentService).toFactory(() => {
     return new ShipmentAssignmentService(container.resolve(TOKENS.PrismaClient));
@@ -96,8 +103,23 @@ export function registerDependencies(prisma: PrismaClient): void {
     );
   });
 
+  container.singleton(TOKENS.ILocationResolutionService).toFactory(() => {
+    return new LocationResolutionService(
+      container.resolve(TOKENS.PrismaClient),
+      container.resolve(TOKENS.ILocationsRepository),
+      container.resolve(TOKENS.IArrivalCriteriaRepository)
+    );
+  });
+
   container.singleton(TOKENS.IOrderDeliveryService).toFactory(() => {
     return new OrderDeliveryService(container.resolve(TOKENS.PrismaClient));
+  });
+
+  container.singleton(TOKENS.IArrivalCriteriaEvaluationService).toFactory(() => {
+    return new ArrivalCriteriaEvaluationService(
+      container.resolve(TOKENS.PrismaClient),
+      container.resolve(TOKENS.IOrderDeliveryService)
+    );
   });
 
   container.singleton(TOKENS.IOrderConversionService).toFactory(() => {
@@ -245,7 +267,8 @@ export function registerDependencies(prisma: PrismaClient): void {
       container.resolve(TOKENS.IEDI850ParseService),
       container.resolve(TOKENS.IOrdersRepository),
       container.resolve(TOKENS.ICustomersRepository),
-      container.resolve(TOKENS.ILocationsRepository)
+      container.resolve(TOKENS.ILocationsRepository),
+      container.resolve(TOKENS.ILocationResolutionService)
     );
   });
 }

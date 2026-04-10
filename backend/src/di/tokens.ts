@@ -14,7 +14,11 @@ export const TOKENS = {
   IOrganizationRepository: Symbol.for('IOrganizationRepository'),
   IPendingLaneRequestsRepository: Symbol.for('IPendingLaneRequestsRepository'),
 
+  IArrivalCriteriaRepository: Symbol.for('IArrivalCriteriaRepository'),
+
   // Service tokens
+  ILocationResolutionService: Symbol.for('ILocationResolutionService'),
+  IArrivalCriteriaEvaluationService: Symbol.for('IArrivalCriteriaEvaluationService'),
   IShipmentAssignmentService: Symbol.for('IShipmentAssignmentService'),
   ICSVImportService: Symbol.for('ICSVImportService'),
   IOrderDeliveryService: Symbol.for('IOrderDeliveryService'),

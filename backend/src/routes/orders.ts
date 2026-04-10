@@ -7,6 +7,7 @@ import { ICSVImportService } from '../services/CSVImportService.js';
 import { IOrderDeliveryService } from '../services/OrderDeliveryService.js';
 import { IOrderConversionService } from '../services/OrderConversionService.js';
 import { IOrganizationRepository } from '../repositories/OrganizationRepository.js';
+import { ILocationResolutionService } from '../services/LocationResolutionService.js';
 import { container, TOKENS } from '../di/index.js';
 
 // Validation schemas (exported for reuse by customerApi.ts)
@@ -105,6 +106,7 @@ export async function orderRoutes(server: FastifyInstance) {
   const deliveryService = container.resolve<IOrderDeliveryService>(TOKENS.IOrderDeliveryService);
   const conversionService = container.resolve<IOrderConversionService>(TOKENS.IOrderConversionService);
   const orgRepo = container.resolve<IOrganizationRepository>(TOKENS.IOrganizationRepository);
+  const locationResolution = container.resolve<ILocationResolutionService>(TOKENS.ILocationResolutionService);
 
   // Get all orders
   server.get('/api/v1/orders', async (_req: FastifyRequest, _reply: FastifyReply) => {
@@ -147,13 +149,36 @@ export async function orderRoutes(server: FastifyInstance) {
       }));
     }
 
+    // Auto-resolve locations: if originData/destinationData provided, create the location
+    if (!orderData.originId && body.originData) {
+      try {
+        const result = await locationResolution.resolveOrCreate(body.originData, req.user?.sub);
+        orderData.originId = result.location.id;
+        orderData.originValidated = true;
+        delete orderData.originData;
+      } catch (err) {
+        server.log.warn('Failed to auto-resolve origin location: ' + (err as Error).message);
+      }
+    }
+
+    if (!orderData.destinationId && body.destinationData) {
+      try {
+        const result = await locationResolution.resolveOrCreate(body.destinationData, req.user?.sub);
+        orderData.destinationId = result.location.id;
+        orderData.destinationValidated = true;
+        delete orderData.destinationData;
+      } catch (err) {
+        server.log.warn('Failed to auto-resolve destination location: ' + (err as Error).message);
+      }
+    }
+
     // Determine order status based on location validation
     let status = 'pending';
-    if (!body.originId && body.originData) {
+    if (!orderData.originId && body.originData) {
       status = 'location_error';
-    } else if (!body.destinationId && body.destinationData) {
+    } else if (!orderData.destinationId && body.destinationData) {
       status = 'location_error';
-    } else if (body.originId && body.destinationId) {
+    } else if (orderData.originId && orderData.destinationId) {
       status = 'validated';
     }
 

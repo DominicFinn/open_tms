@@ -1,6 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { API_URL } from '../api';
 
+interface ArrivalCriteriaSummary {
+  id: string;
+  criteriaType: string;
+}
+
 interface Location {
   id: string;
   name: string;
@@ -13,6 +18,7 @@ interface Location {
   lat: number | null;
   lng: number | null;
   archived: boolean;
+  arrivalCriteria?: ArrivalCriteriaSummary[];
 }
 
 export default function VNextLocations() {
@@ -43,7 +49,7 @@ export default function VNextLocations() {
     total: locations.length,
     active: locations.filter(l => !l.archived).length,
     withCoords: locations.filter(l => l.lat != null && l.lng != null).length,
-    archived: locations.filter(l => l.archived).length,
+    withCriteria: locations.filter(l => l.arrivalCriteria && l.arrivalCriteria.length > 0).length,
   };
 
   const filtered = locations.filter(l => {
@@ -107,10 +113,10 @@ export default function VNextLocations() {
           </div>
         </div>
         <div className="vn-stat">
-          <div className="vn-stat-icon warning"><span className="material-icons">archive</span></div>
+          <div className="vn-stat-icon warning"><span className="material-icons">sensors</span></div>
           <div>
-            <div className="vn-stat-value">{stats.archived}</div>
-            <div className="vn-stat-label">Archived</div>
+            <div className="vn-stat-value">{stats.withCriteria}</div>
+            <div className="vn-stat-label">With Arrival Criteria</div>
           </div>
         </div>
       </div>
@@ -172,6 +178,7 @@ export default function VNextLocations() {
                   <th>City / State</th>
                   <th>Country</th>
                   <th>Coordinates</th>
+                  <th>Arrival Criteria</th>
                   <th>Status</th>
                 </tr>
               </thead>
@@ -194,12 +201,30 @@ export default function VNextLocations() {
                         <span style={{ fontSize: 12, color: 'var(--on-surface-variant)', fontStyle: 'italic' }}>No coordinates</span>
                       )}
                     </td>
+                    <td>
+                      {l.arrivalCriteria && l.arrivalCriteria.length > 0 ? (
+                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                          {l.arrivalCriteria.map(c => {
+                            const icon = c.criteriaType === 'geofence' ? 'gps_fixed' : c.criteriaType === 'wifi' ? 'wifi' : 'bluetooth';
+                            const label = c.criteriaType === 'ble' ? 'BLE' : c.criteriaType.charAt(0).toUpperCase() + c.criteriaType.slice(1);
+                            return (
+                              <span key={c.id} className="vn-chip vn-chip-info" style={{ fontSize: 11 }}>
+                                <span className="material-icons" style={{ fontSize: 14 }}>{icon}</span>
+                                {label}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <span style={{ fontSize: 12, color: 'var(--on-surface-variant)', fontStyle: 'italic' }}>None</span>
+                      )}
+                    </td>
                     <td><span className={`vn-chip vn-chip-${l.archived ? 'error' : 'success'}`}>{l.archived ? 'Archived' : 'Active'}</span></td>
                   </tr>
                 ))}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={6}>
+                    <td colSpan={7}>
                       <div className="vn-empty">
                         <span className="material-icons">search_off</span>
                         <h3>No locations found</h3>

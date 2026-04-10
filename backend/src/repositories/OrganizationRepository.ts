@@ -7,6 +7,10 @@ export interface UpdateOrganizationSettingsDTO {
   customUnitName?: string;
   weightUnit?: 'kg' | 'lb';
   dimUnit?: 'cm' | 'in';
+  temperatureUnit?: 'C' | 'F';
+  distanceUnit?: 'km' | 'mi';
+  autoTenderEnabled?: boolean;
+  defaultGeofenceRadiusMeters?: number;
 }
 
 export interface IOrganizationRepository {
