@@ -1047,13 +1047,10 @@ export default function VNextShipmentDetail() {
             <div className="vn-card">
               <div className="vn-card-header"><h2>Financials</h2></div>
               <div className="vn-card-body">
-                <div className="vn-info-grid">
-                  <div className="vn-info-item"><label>Carrier Rate</label><span>$2,850.00</span></div>
-                  <div className="vn-info-item"><label>Customer Rate</label><span>$3,400.00</span></div>
-                  <div className="vn-info-item"><label>Margin</label><span style={{ color: 'var(--success)' }}>$550.00 (16.2%)</span></div>
-                  <div className="vn-info-item"><label>Fuel Surcharge</label><span>$285.00</span></div>
-                  <div className="vn-info-item"><label>Accessorials</label><span>$0.00</span></div>
-                  <div className="vn-info-item"><label>Total Revenue</label><span style={{ fontWeight: 700, fontSize: 16 }}>$3,685.00</span></div>
+                <div className="vn-empty">
+                  <span className="material-icons" style={{ fontSize: 48, color: 'var(--on-surface-variant)' }}>payments</span>
+                  <p>Financial data will be available when Rate Management is enabled.</p>
+                  <p style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>See Phase 7 — Rate Management, Invoicing &amp; Freight Audit</p>
                 </div>
               </div>
             </div>
@@ -1063,21 +1060,9 @@ export default function VNextShipmentDetail() {
             <div className="vn-card">
               <div className="vn-card-header"><h2>Notes</h2></div>
               <div className="vn-card-body">
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  <div style={{ padding: 12, background: 'var(--surface-container)', borderRadius: 'var(--border-radius-sm)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--on-surface)' }}>Jane S.</span>
-                      <span style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>Apr 6, 4:00 PM</span>
-                    </div>
-                    <p style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>Customer requested delivery before 10 AM. Carrier confirmed ETA.</p>
-                  </div>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <input type="text" placeholder="Add a note..." style={{
-                      flex: 1, padding: '10px 14px', border: '1px solid var(--outline-variant)', borderRadius: 'var(--border-radius-sm)',
-                      background: 'var(--surface-container)', color: 'var(--on-surface)', fontSize: 14, outline: 'none',
-                    }} />
-                    <button className="vn-btn vn-btn-primary vn-btn-sm"><span className="material-icons">send</span></button>
-                  </div>
+                <div className="vn-empty">
+                  <span className="material-icons" style={{ fontSize: 48, color: 'var(--on-surface-variant)' }}>comment</span>
+                  <p>No notes yet. Comments will be available in a future update.</p>
                 </div>
               </div>
             </div>

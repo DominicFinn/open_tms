@@ -54,7 +54,7 @@ const APPS: AppDef[] = [
         { to: '/', icon: 'space_dashboard', label: 'Dashboard', end: true },
         { to: '/shipments', icon: 'local_shipping', label: 'Shipments' },
         { to: '/orders', icon: 'receipt_long', label: 'Orders' },
-        { to: '/issues', icon: 'bug_report', label: 'Issues', badge: '5' },
+        { to: '/issues', icon: 'bug_report', label: 'Issues' },
         { to: '/devices', icon: 'sensors', label: 'Devices' },
       ]},
       { title: 'Network', items: [

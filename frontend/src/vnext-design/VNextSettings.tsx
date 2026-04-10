@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   VnPageHeader,
   VnTabs,
   VnCard,
   VnButton,
-  VnChip,
+  VnAlert,
   VnField,
   VnInput,
   VnSelect,
@@ -12,15 +12,7 @@ import {
   VnFormSection,
   VnFormActions,
 } from './components';
-
-/* ── Static demo data ───────────────────────────────────── */
-
-const integrations = [
-  { name: 'Google Maps', icon: 'map', status: 'connected' as const },
-  { name: 'SendGrid', icon: 'email', status: 'connected' as const },
-  { name: 'Slack', icon: 'chat', status: 'not_configured' as const },
-  { name: 'SAP', icon: 'inventory_2', status: 'not_configured' as const },
-];
+import { API_URL } from '../api';
 
 const tabs = [
   { key: 'general', label: 'General', icon: 'settings' },
@@ -102,28 +94,85 @@ function RadioGroup({
 /* ── Tab Content ────────────────────────────────────────── */
 
 function GeneralTab() {
+  const [orgName, setOrgName] = useState('');
   const [weight, setWeight] = useState('kg');
   const [dimensions, setDimensions] = useState('cm');
   const [temperature, setTemperature] = useState('C');
   const [distance, setDistance] = useState('km');
   const [autoDeliverDocs, setAutoDeliverDocs] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<{ text: string; variant: 'success' | 'error' } | null>(null);
+
+  useEffect(() => {
+    fetch(`${API_URL}/api/v1/organization/settings`)
+      .then(r => r.json())
+      .then(json => {
+        const s = json.data;
+        if (s) {
+          setOrgName(s.name || '');
+          setWeight(s.weightUnit || 'kg');
+          setDimensions(s.dimUnit || 'cm');
+          setTemperature(s.temperatureUnit || 'C');
+          setDistance(s.distanceUnit || 'km');
+          setAutoDeliverDocs(s.autoDeliverShipmentDocs || false);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setSaveMessage(null);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/organization/settings`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: orgName,
+          weightUnit: weight,
+          dimUnit: dimensions,
+          temperatureUnit: temperature,
+          distanceUnit: distance,
+          autoDeliverShipmentDocs: autoDeliverDocs,
+        }),
+      });
+      if (res.ok) setSaveMessage({ text: 'Settings saved', variant: 'success' });
+      else setSaveMessage({ text: 'Failed to save settings', variant: 'error' });
+    } catch {
+      setSaveMessage({ text: 'Failed to save settings', variant: 'error' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return <div className="loading-spinner" style={{ margin: '40px auto' }} />;
+  }
 
   return (
     <>
+      {saveMessage && (
+        <VnAlert variant={saveMessage.variant} onClose={() => setSaveMessage(null)}>
+          {saveMessage.text}
+        </VnAlert>
+      )}
+
       <VnFormSection title="Organization" icon="business">
         <VnFormGrid>
           <VnField label="Company Name" required>
-            <VnInput defaultValue="Acme Logistics" />
+            <VnInput value={orgName} onChange={e => setOrgName(e.target.value)} />
           </VnField>
           <VnField label="Industry">
-            <VnSelect defaultValue="logistics">
+            <VnSelect>
               <option value="logistics">Logistics</option>
               <option value="manufacturing">Manufacturing</option>
               <option value="retail">Retail</option>
             </VnSelect>
           </VnField>
           <VnField label="Timezone">
-            <VnSelect defaultValue="America/New_York">
+            <VnSelect>
               <option value="America/New_York">America / New York (ET)</option>
               <option value="America/Chicago">America / Chicago (CT)</option>
               <option value="America/Denver">America / Denver (MT)</option>
@@ -133,7 +182,7 @@ function GeneralTab() {
             </VnSelect>
           </VnField>
           <VnField label="Default Currency">
-            <VnSelect defaultValue="USD">
+            <VnSelect>
               <option value="USD">USD</option>
               <option value="EUR">EUR</option>
               <option value="GBP">GBP</option>
@@ -205,7 +254,9 @@ function GeneralTab() {
 
       <VnFormActions>
         <VnButton variant="outline">Cancel</VnButton>
-        <VnButton variant="primary" icon="save">Save</VnButton>
+        <VnButton variant="primary" icon="save" onClick={handleSave} disabled={saving}>
+          {saving ? 'Saving...' : 'Save'}
+        </VnButton>
       </VnFormActions>
     </>
   );
@@ -289,55 +340,45 @@ function NotificationsTab() {
 
 function IntegrationsTab() {
   return (
-    <div
-      style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-        gap: '20px',
-      }}
-    >
-      {integrations.map(integ => (
-        <VnCard key={integ.name}>
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: '12px',
-              textAlign: 'center',
-            }}
-          >
-            <span
-              className="material-icons"
-              style={{
-                fontSize: '40px',
-                color: 'var(--primary)',
-                background: 'var(--primary-container)',
-                borderRadius: '12px',
-                padding: '12px',
-              }}
-            >
-              {integ.icon}
-            </span>
-            <span
-              style={{
-                fontSize: '16px',
-                fontWeight: 600,
-                color: 'var(--on-surface)',
-              }}
-            >
-              {integ.name}
-            </span>
-            <VnChip variant={integ.status === 'connected' ? 'success' : 'secondary'}>
-              {integ.status === 'connected' ? 'Connected' : 'Not configured'}
-            </VnChip>
-            <VnButton variant="outline" size="sm" icon="settings">
-              Configure
-            </VnButton>
-          </div>
-        </VnCard>
-      ))}
-    </div>
+    <VnCard>
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: '16px',
+          padding: '40px 20px',
+          textAlign: 'center',
+        }}
+      >
+        <span
+          className="material-icons"
+          style={{
+            fontSize: '48px',
+            color: 'var(--primary)',
+            background: 'var(--primary-container)',
+            borderRadius: '12px',
+            padding: '12px',
+          }}
+        >
+          extension
+        </span>
+        <span style={{ fontSize: '16px', fontWeight: 600, color: 'var(--on-surface)' }}>
+          Integrations are managed from the Integrations app
+        </span>
+        <a
+          href="/integrations"
+          style={{
+            color: 'var(--primary)',
+            fontSize: '14px',
+            fontWeight: 500,
+            textDecoration: 'none',
+          }}
+        >
+          Go to Integrations &rarr;
+        </a>
+      </div>
+    </VnCard>
   );
 }
 
