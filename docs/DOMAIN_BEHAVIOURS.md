@@ -410,3 +410,116 @@ Scale handler throughput via environment variables:
 | `PROJECTION_CONCURRENCY` | 3 | All 6 projection handlers |
 | `AUDIT_CONCURRENCY` | 5 | AuditHandler |
 | `EMAIL_CONCURRENCY` | 2 | EmailHandler |
+
+---
+
+## Cold Chain Profile
+
+Cold chain profiles define allowable temperature and humidity bands for shipments carrying temperature-sensitive cargo.
+
+### Commands
+
+| Command | Trigger | Events Emitted |
+|---------|---------|----------------|
+| `cold_chain_profile.create` | `POST /api/v1/cold-chain-profiles` | `cold_chain_profile.created` |
+| `cold_chain_profile.update` | `PUT /api/v1/cold-chain-profiles/:id` | `cold_chain_profile.updated` |
+
+### Side Effects
+
+| Event | What Happens |
+|-------|-------------|
+| `cold_chain_profile.created` | — |
+| `cold_chain_profile.updated` | — |
+| `cold_chain_profile.deactivated` | — |
+
+---
+
+## Cold Chain Monitoring
+
+Monitors temperature telemetry on shipments, detects excursions, and manages the cold chain disposition lifecycle.
+
+### Commands
+
+| Command | Trigger | Events Emitted |
+|---------|---------|----------------|
+| `cold_chain.set_disposition` | `POST /api/v1/shipments/:id/cold-chain/disposition` | `cold_chain.disposition_changed` |
+
+### Auto-Generated Events
+
+| Event | Trigger |
+|-------|---------|
+| `cold_chain.temperature_logged` | IoT sensor telemetry ingested |
+| `cold_chain.excursion_detected` | Temperature reading outside profile alert range |
+| `cold_chain.excursion_acknowledged` | User acknowledges an active excursion |
+| `cold_chain.excursion_resolved` | Temperature returns to acceptable range or manual resolution |
+
+### Side Effects
+
+| Event | What Happens |
+|-------|-------------|
+| `cold_chain.excursion_detected` | Auto-creates triage issue for critical severity excursions |
+| `cold_chain.disposition_changed` | — |
+| Shipment delivered | Compliance report PDF auto-generated on shipment delivered |
+
+### Disposition Lifecycle
+
+```
+monitoring → pending_review → released
+                            → quarantined
+```
+
+---
+
+## Device Calibration
+
+Tracks calibration records for IoT temperature/humidity devices used in cold chain monitoring.
+
+### Commands
+
+| Command | Trigger | Events Emitted |
+|---------|---------|----------------|
+| `device.record_calibration` | `POST /api/v1/devices/:id/calibrations` | `device.calibration_recorded` |
+
+### Auto-Generated Events
+
+| Event | Trigger |
+|-------|---------|
+| `device.calibration_expired` | Calibration expiry date reached |
+
+### Side Effects
+
+| Event | What Happens |
+|-------|-------------|
+| `device.calibration_recorded` | — |
+| `device.calibration_expired` | — |
+
+---
+
+## CAPA Report
+
+Corrective and Preventive Action reports for documenting and resolving cold chain quality incidents.
+
+### Commands
+
+| Command | Trigger | Events Emitted |
+|---------|---------|----------------|
+| `capa.create` | `POST /api/v1/capa-reports` | `capa.created` |
+| `capa.update` | `PUT /api/v1/capa-reports/:id` | `capa.updated` |
+
+### Smart Event Selection
+
+UpdateCapaCommand emits different events based on what changed:
+- Status changed: emits `capa.status_changed`
+- Status → approved: emits `capa.approved`
+- Status → verified: emits `capa.verified`
+- Other fields only: emits `capa.updated`
+
+### Side Effects
+
+| Event | What Happens |
+|-------|-------------|
+| `capa.created` | — |
+| `capa.updated` | — |
+| `capa.status_changed` | — |
+| `capa.approved` | — |
+| `capa.verified` | — |

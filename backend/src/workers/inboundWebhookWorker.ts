@@ -4,6 +4,7 @@ import { WebhookEvent } from '../queue/events.js';
 import { IOrderDeliveryService } from '../services/OrderDeliveryService.js';
 import { IArrivalCriteriaEvaluationService } from '../services/ArrivalCriteriaEvaluationService.js';
 import { SystemLocoAdapter } from '../integrations/SystemLocoAdapter.js';
+import { ColdChainService } from '../services/ColdChainService.js';
 
 export function createInboundWebhookWorker(
   prisma: PrismaClient,
@@ -11,6 +12,9 @@ export function createInboundWebhookWorker(
   arrivalCriteriaService?: IArrivalCriteriaEvaluationService,
 ) {
   const systemLoco = new SystemLocoAdapter(prisma);
+  // Wire cold chain monitoring into the sensor ingestion pipeline
+  const coldChainService = new ColdChainService(prisma);
+  systemLoco.setColdChainService(coldChainService);
 
   return async (message: QueueMessage<WebhookEvent>) => {
     const { webhookLogId, rawPayload } = message.payload;

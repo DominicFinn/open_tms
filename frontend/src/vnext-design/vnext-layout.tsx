@@ -64,6 +64,10 @@ const APPS: AppDef[] = [
         { to: '/locations', icon: 'location_on', label: 'Locations' },
         { to: '/lanes', icon: 'route', label: 'Lanes' },
       ]},
+      { title: 'Cold Chain', items: [
+        { to: '/cold-chain/profiles', icon: 'thermostat', label: 'Profiles' },
+        { to: '/cold-chain/capa', icon: 'assignment_late', label: 'CAPA Reports' },
+      ]},
     ],
   },
   {
@@ -112,6 +116,7 @@ function detectApp(pathname: string): string {
   if (pathname.startsWith('/integrations')) return 'integrations';
   if (pathname.startsWith('/settings') || pathname === '/style-guide') return 'admin';
   if (pathname.startsWith('/documents') || pathname.startsWith('/reports')) return 'reports';
+  // cold-chain routes live under operations
   return 'operations';
 }
 

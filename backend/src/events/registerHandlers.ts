@@ -16,6 +16,8 @@ import { CarrierProjection } from './projections/CarrierProjection.js';
 import { CustomerProjection } from './projections/CustomerProjection.js';
 import { LaneProjection } from './projections/LaneProjection.js';
 import { IssueProjection } from './projections/IssueProjection.js';
+import { ColdChainComplianceHandler } from './handlers/ColdChainComplianceHandler.js';
+import { IBinaryStorageProvider } from '../storage/IBinaryStorageProvider.js';
 
 /** Read concurrency from env with a default */
 function envInt(key: string, fallback: number): number {
@@ -42,7 +44,8 @@ const CONCURRENCY_OVERRIDES: Record<string, () => number> = {
 export async function registerEventHandlers(
   eventBus: IEventBus,
   prisma: PrismaClient,
-  emailService?: IEmailService
+  emailService?: IEmailService,
+  storageProvider?: IBinaryStorageProvider
 ): Promise<void> {
   const handlers: IEventHandler[] = [
     new AuditHandler(prisma),
@@ -59,6 +62,11 @@ export async function registerEventHandlers(
   // Add email handler if email service is available
   if (emailService) {
     handlers.push(new EmailHandler(prisma, emailService));
+  }
+
+  // Add cold chain compliance handler if storage provider is available
+  if (storageProvider) {
+    handlers.push(new ColdChainComplianceHandler(prisma, storageProvider));
   }
 
   for (const handler of handlers) {

@@ -31,6 +31,9 @@ import { OrderDeliveryService } from './services/OrderDeliveryService.js';
 import { IEmailService } from './services/IEmailService.js';
 import { SmtpEmailService } from './services/SmtpEmailService.js';
 import { ConsoleEmailService } from './services/ConsoleEmailService.js';
+import { IBinaryStorageProvider } from './storage/IBinaryStorageProvider.js';
+import { DatabaseBinaryStorage } from './storage/DatabaseBinaryStorage.js';
+import { S3FileStorage } from './storage/S3FileStorage.js';
 
 const WORKER_MODE = process.env.WORKER_MODE || 'all';
 
@@ -79,8 +82,25 @@ async function startWorker() {
       console.log('[Worker] Email service: console (emails logged to stdout)');
     }
 
+    // Create storage provider for compliance report generation
+    let storageProvider: IBinaryStorageProvider;
+    const s3Endpoint = process.env.S3_ENDPOINT;
+    const s3Bucket = process.env.S3_BUCKET;
+    if (s3Endpoint && s3Bucket) {
+      storageProvider = new S3FileStorage({
+        endpoint: s3Endpoint,
+        bucket: s3Bucket,
+        region: process.env.S3_REGION || 'us-east-1',
+        accessKeyId: process.env.S3_ACCESS_KEY_ID || '',
+        secretAccessKey: process.env.S3_SECRET_ACCESS_KEY || '',
+        forcePathStyle: process.env.S3_FORCE_PATH_STYLE !== 'false',
+      });
+    } else {
+      storageProvider = new DatabaseBinaryStorage(prisma);
+    }
+
     const eventBus = new PgBossEventBus(prisma, queue);
-    await registerEventHandlers(eventBus, prisma, emailService);
+    await registerEventHandlers(eventBus, prisma, emailService, storageProvider);
     await eventBus.start();
     console.log('[Worker] Event handlers registered and started');
   }

@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { ColdChainService } from '../services/ColdChainService.js';
 
 /**
  * System Loco IoT Data Feed Adapter
@@ -13,6 +14,7 @@ import { PrismaClient } from '@prisma/client';
  * - Stores sensor data as SensorReading time-series
  * - Stores lifecycle events as DeviceEvent
  * - Creates ShipmentEvent for location updates
+ * - Cold chain monitoring: writes to ImmutableTemperatureLog and detects excursions
  */
 
 // Event types that carry sensor data worth storing as SensorReading
@@ -41,10 +43,26 @@ export interface ProcessingResult {
   sensorReadingId: string | null;
   deviceEventId: string | null;
   matched: boolean;
+  coldChain?: {
+    logId: string;
+    isExcursion: boolean;
+    isAlert: boolean;
+    excursionId?: string;
+  };
 }
 
 export class SystemLocoAdapter {
+  private coldChainService: ColdChainService | null = null;
+
   constructor(private prisma: PrismaClient) {}
+
+  /**
+   * Set the cold chain service for temperature monitoring integration.
+   * Called post-construction to avoid circular dependency issues.
+   */
+  setColdChainService(service: ColdChainService): void {
+    this.coldChainService = service;
+  }
 
   /**
    * Detect if a payload is a System Loco message and which type.
@@ -90,6 +108,33 @@ export class SystemLocoAdapter {
       shipmentEventId = se.id;
     }
 
+    // 6. Cold chain monitoring — process temperature for immutable log + excursion detection
+    let coldChain: ProcessingResult['coldChain'];
+    if (this.coldChainService && shipmentId && eventType === 'temperature') {
+      const p = payload.payload || {};
+      const temperature = p.temperature != null ? Number(p.temperature) : null;
+      if (temperature !== null) {
+        try {
+          const org = await this.prisma.organization.findFirst({ select: { id: true } });
+          coldChain = await this.coldChainService.processTemperatureReading({
+            orgId: org?.id || '',
+            shipmentId,
+            deviceId: device.id,
+            orderId: orderId ?? undefined,
+            trackableUnitId: trackableUnitId ?? undefined,
+            temperature,
+            humidity: p.humidity != null ? Number(p.humidity) : undefined,
+            lat: location?.lat ? Number(location.lat) : undefined,
+            lng: (location?.lon || location?.lng) ? Number(location.lon || location.lng) : undefined,
+            recordedAt: eventTime,
+            rawPayload: payload,
+          });
+        } catch (err) {
+          console.error(`[SystemLocoAdapter] Cold chain processing failed for shipment ${shipmentId}:`, err);
+        }
+      }
+    }
+
     return {
       deviceId: device.id,
       shipmentId,
@@ -99,6 +144,7 @@ export class SystemLocoAdapter {
       sensorReadingId,
       deviceEventId,
       matched: !!(shipmentId || orderId || trackableUnitId),
+      coldChain,
     };
   }
 
@@ -212,6 +258,36 @@ export class SystemLocoAdapter {
       shipmentEventId = se.id;
     }
 
+    // 5. Cold chain monitoring — process temperature from shipment events
+    let coldChain: ProcessingResult['coldChain'];
+    if (this.coldChainService && shipmentId && deviceId) {
+      const temperature = reportPayload.temperature != null ? Number(reportPayload.temperature)
+        : reportPayload.sensors?.temperature != null ? Number(reportPayload.sensors.temperature)
+        : null;
+      if (temperature !== null) {
+        try {
+          const org = await this.prisma.organization.findFirst({ select: { id: true } });
+          coldChain = await this.coldChainService.processTemperatureReading({
+            orgId: org?.id || '',
+            shipmentId,
+            deviceId,
+            orderId: orderId ?? undefined,
+            trackableUnitId: trackableUnitId ?? undefined,
+            temperature,
+            humidity: reportPayload.humidity != null ? Number(reportPayload.humidity)
+              : reportPayload.sensors?.humidity != null ? Number(reportPayload.sensors.humidity)
+              : undefined,
+            lat: location.lat ? Number(location.lat) : undefined,
+            lng: (location.lon || location.lng) ? Number(location.lon || location.lng) : undefined,
+            recordedAt: eventTime,
+            rawPayload: payload,
+          });
+        } catch (err) {
+          console.error(`[SystemLocoAdapter] Cold chain processing failed for shipment ${shipmentId}:`, err);
+        }
+      }
+    }
+
     return {
       deviceId: deviceId || '',
       shipmentId,
@@ -221,6 +297,7 @@ export class SystemLocoAdapter {
       sensorReadingId,
       deviceEventId,
       matched: !!(shipmentId || orderId || trackableUnitId),
+      coldChain,
     };
   }
 

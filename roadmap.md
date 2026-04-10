@@ -232,22 +232,33 @@
   - CSV/PDF export of shipment, order, and customer data
 
 ## **Phase 6: Cold Chain & Advanced Compliance**
-- **Cold Chain Profiles** 🔲
-  - Define allowable temperature/humidity bands.
-  - Assign to shipments automatically based on product/customer.
-- **Excursion Management** 🔲
-  - Mark shipments as "released" or "quarantined."
-  - Generate compliance reports (CFR 21 Part 11, EU Annex 11).
-- **Regulatory Audit Trail** 🔲
-  - Immutable logs, timestamps, digital signatures.
+- **Cold Chain Profiles** ✅
+  - ✅ Cold chain profile CRUD (name, temp range, alert range, humidity)
+  - ✅ Assign profiles to shipments based on product/customer requirements
+- **Excursion Management** ✅
+  - ✅ Excursion detection wired into IoT sensor pipeline
+  - ✅ Shipment cold chain disposition lifecycle (monitoring → pending_review → released/quarantined)
+  - ✅ Auto-triage issue creation for critical excursions
+- **Regulatory Audit Trail** (partial)
+  - ✅ Immutable temperature logging with SHA-256 integrity hashes (CFR 21 Part 11)
+  - 🔲 Full regulatory audit trail UI
 - **Digital BOL Sharing & Secure Repository** 🔲
   - Integrate with an external eBOL / digital document provider for tamper-proof sharing
   - Shareable BOL links with access control (time-limited, PIN-protected)
   - Digital signature capture (shipper, carrier, consignee) on online BOL view
   - Publish immutable BOL documents to a secure external repository
   - Audit log of all BOL views, prints, and downloads
-- **Customer Reporting** 🔲
-  - Auto-generate compliance PDFs/CSVs per shipment.
+- **Customer Reporting** (partial)
+  - ✅ Cold chain compliance report PDF auto-generated on shipment complete
+  - 🔲 Broader customer-facing reporting and CSV export
+- **Device Calibration** ✅
+  - ✅ Device calibration tracking (certificate, expiry, accuracy)
+- **CAPA Reports** ✅
+  - ✅ CAPA report model and management UI
+- **Admin & Frontend** ✅
+  - ✅ Admin setting: auto-deliver shipment docs to customers
+  - ✅ Frontend: Cold chain profiles page (VNext)
+  - ✅ Frontend: CAPA reports page (VNext)
 
 ## **Phase 7: Financial & Commercial**
 - **Rate Management** 🔲

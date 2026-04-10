@@ -54,6 +54,11 @@ export const TOKENS = {
   IEDI204Service: Symbol.for('IEDI204Service'),
   IEDI990ParseService: Symbol.for('IEDI990ParseService'),
 
+  // Cold Chain & Compliance tokens
+  IColdChainRepository: Symbol.for('IColdChainRepository'),
+  IColdChainService: Symbol.for('IColdChainService'),
+  IComplianceReportService: Symbol.for('IComplianceReportService'),
+
   // Trading Partner / EDI Hub tokens
   ITradingPartnerRepository: Symbol.for('ITradingPartnerRepository'),
   IEdiRouterService: Symbol.for('IEdiRouterService'),
