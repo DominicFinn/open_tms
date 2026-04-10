@@ -1833,3 +1833,453 @@
     justify-content: center;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Bill of Lading — online document view
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.bol-actions {
+  margin-bottom: 24px;
+}
+
+.bol-document {
+  max-width: 900px;
+  margin: 0 auto;
+  background: var(--surface-container-lowest);
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--border-radius-md);
+  padding: 40px 48px;
+  font-size: 14px;
+  color: var(--on-surface);
+  line-height: 1.5;
+}
+
+/* Header */
+.bol-header {
+  text-align: center;
+  margin-bottom: 32px;
+  padding-bottom: 24px;
+  border-bottom: 2px solid var(--on-surface);
+}
+
+.bol-org-name {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--primary);
+  margin-bottom: 4px;
+  letter-spacing: -0.3px;
+}
+
+.bol-title {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin: 8px 0 20px;
+  color: var(--on-surface);
+}
+
+.bol-meta-row {
+  display: flex;
+  justify-content: center;
+  gap: 32px;
+  flex-wrap: wrap;
+}
+
+.bol-meta-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.bol-meta-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--on-surface-variant);
+}
+
+.bol-meta-value {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--on-surface);
+}
+
+/* Parties side-by-side */
+.bol-parties {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.bol-party {
+  padding: 16px 20px;
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--border-radius-sm);
+  background: var(--surface-container-low);
+}
+
+.bol-address {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--on-surface);
+}
+
+/* Section */
+.bol-section {
+  margin-bottom: 24px;
+}
+
+.bol-section-title {
+  font-size: 14px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--on-surface);
+  padding-bottom: 8px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--outline-variant);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Info grid (key-value pairs) */
+.bol-info-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px 24px;
+}
+
+.bol-info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.bol-info-item label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--on-surface-variant);
+}
+
+.bol-info-item span {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--on-surface);
+}
+
+/* Tables */
+.bol-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.bol-table th {
+  text-align: left;
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--on-surface-variant);
+  background: var(--surface-container);
+  border-bottom: 1px solid var(--outline-variant);
+  white-space: nowrap;
+}
+
+.bol-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--outline-variant);
+  color: var(--on-surface);
+  vertical-align: middle;
+}
+
+.bol-table-nested {
+  margin-top: 8px;
+  margin-bottom: 16px;
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--border-radius-sm);
+  overflow: hidden;
+}
+
+/* Orders */
+.bol-order {
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px dashed var(--outline-variant);
+}
+
+.bol-order:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.bol-order-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+  font-size: 14px;
+}
+
+.bol-order-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.bol-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--border-radius-full);
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--surface-container-high);
+  color: var(--on-surface-variant);
+}
+
+.bol-tag-hazmat {
+  background: var(--error-container);
+  color: var(--on-error-container);
+}
+
+/* Totals */
+.bol-totals {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+  padding: 16px 0;
+  border-top: 2px solid var(--on-surface);
+  border-bottom: 2px solid var(--on-surface);
+}
+
+.bol-total-item {
+  text-align: center;
+}
+
+.bol-total-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--on-surface-variant);
+  margin-bottom: 4px;
+}
+
+.bol-total-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--on-surface);
+}
+
+/* Special Instructions */
+.bol-instructions {
+  padding: 12px 16px;
+  background: var(--warning-container);
+  color: var(--on-warning-container);
+  border-radius: var(--border-radius-sm);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* Signatures */
+.bol-signatures {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  margin: 32px 0 24px;
+}
+
+.bol-sig-block {
+  text-align: center;
+}
+
+.bol-sig-role {
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--on-surface);
+  margin-bottom: 40px;
+}
+
+.bol-sig-line {
+  border-bottom: 1px solid var(--on-surface);
+  margin-bottom: 4px;
+}
+
+.bol-sig-caption {
+  font-size: 11px;
+  color: var(--on-surface-variant);
+}
+
+/* Footer */
+.bol-footer {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--on-surface-variant);
+  border-top: 1px solid var(--outline-variant);
+  padding-top: 12px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+/* ── BOL Print Styles ─────────────────────────────────────────────────── */
+@media print {
+  /* Hide everything except the document */
+  .bol-actions,
+  .no-print,
+  nav,
+  .vn-sidebar,
+  .vn-topbar,
+  .vn-layout-sidebar,
+  header,
+  footer {
+    display: none !important;
+  }
+
+  /* Remove layout chrome */
+  .vn-layout-main,
+  .vn-layout-content,
+  main {
+    margin: 0 !important;
+    padding: 0 !important;
+    max-width: 100% !important;
+  }
+
+  /* Document fills the page */
+  .bol-document {
+    max-width: 100%;
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    margin: 0;
+    box-shadow: none;
+    background: white;
+    color: black;
+  }
+
+  .bol-header {
+    border-bottom-color: black;
+  }
+
+  .bol-org-name {
+    color: black;
+  }
+
+  .bol-title {
+    color: black;
+  }
+
+  .bol-party {
+    border-color: #999;
+    background: white;
+  }
+
+  .bol-section-title {
+    color: black;
+    border-bottom-color: #ccc;
+  }
+
+  .bol-table th {
+    background: #f0f0f0 !important;
+    color: black;
+    border-color: #999;
+  }
+
+  .bol-table td {
+    border-color: #ccc;
+    color: black;
+  }
+
+  .bol-table-nested {
+    border-color: #999;
+  }
+
+  .bol-totals {
+    border-color: black;
+  }
+
+  .bol-instructions {
+    background: #fff8e1 !important;
+    color: black;
+    border: 1px solid #999;
+  }
+
+  .bol-tag {
+    background: #eee !important;
+    color: black;
+  }
+
+  .bol-tag-hazmat {
+    background: #ffcdd2 !important;
+    color: black;
+  }
+
+  .bol-sig-line {
+    border-bottom-color: black;
+  }
+
+  .bol-footer {
+    border-top-color: #999;
+    color: #666;
+  }
+
+  /* Page break control */
+  .bol-section {
+    page-break-inside: avoid;
+  }
+
+  .bol-signatures {
+    page-break-inside: avoid;
+  }
+
+  .bol-table thead {
+    display: table-header-group;
+  }
+
+  .bol-table tr {
+    page-break-inside: avoid;
+  }
+}
+
+/* BOL responsive */
+@media (max-width: 768px) {
+  .bol-document {
+    padding: 24px 20px;
+  }
+
+  .bol-parties {
+    grid-template-columns: 1fr;
+  }
+
+  .bol-info-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .bol-totals {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .bol-signatures {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+
+  .bol-meta-row {
+    gap: 16px;
+  }
+}

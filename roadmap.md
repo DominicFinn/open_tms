@@ -189,6 +189,12 @@
   - Generate compliance reports (CFR 21 Part 11, EU Annex 11).
 - **Regulatory Audit Trail** 🔲
   - Immutable logs, timestamps, digital signatures.
+- **Digital BOL Sharing & Secure Repository** 🔲
+  - Integrate with an external eBOL / digital document provider for tamper-proof sharing
+  - Shareable BOL links with access control (time-limited, PIN-protected)
+  - Digital signature capture (shipper, carrier, consignee) on online BOL view
+  - Publish immutable BOL documents to a secure external repository
+  - Audit log of all BOL views, prints, and downloads
 - **Customer Reporting** 🔲
   - Auto-generate compliance PDFs/CSVs per shipment.
 

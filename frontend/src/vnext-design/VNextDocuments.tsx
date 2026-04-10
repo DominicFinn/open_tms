@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { API_URL } from '../api';
 
 function formatFileSize(bytes: number): string {
@@ -208,7 +209,14 @@ export default function VNextDocuments() {
                     </td>
                     <td style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>{doc.size}</td>
                     <td style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>{doc.created}</td>
-                    <td>
+                    <td style={{ display: 'flex', gap: 4 }}>
+                      {doc.documentType === 'bol' && (
+                        <Link to={`/documents/${doc.id}/view`}>
+                          <button className="vn-btn-icon" title="View BOL">
+                            <span className="material-icons" style={{ fontSize: 18 }}>visibility</span>
+                          </button>
+                        </Link>
+                      )}
                       <a href={`${API_URL}/api/v1/documents/${doc.id}/download`} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
                         <button className="vn-btn-icon" title="Download">
                           <span className="material-icons" style={{ fontSize: 18 }}>download</span>
