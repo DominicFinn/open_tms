@@ -23,8 +23,8 @@ export function CarrierPortalLayout() {
     <>
       {/* Carrier Portal Header */}
       <header style={{
-        background: 'var(--color-surface)',
-        borderBottom: '1px solid var(--color-border)',
+        background: 'var(--surface-container)',
+        borderBottom: '1px solid var(--outline-variant)',
         padding: '0 var(--spacing-3)',
         height: '56px',
         display: 'flex',
@@ -35,9 +35,9 @@ export function CarrierPortalLayout() {
         zIndex: 100,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-2)' }}>
-          <span className="material-icons" style={{ color: 'var(--color-primary)', fontSize: '28px' }}>local_shipping</span>
+          <span className="material-icons" style={{ color: 'var(--primary)', fontSize: '28px' }}>local_shipping</span>
           <span style={{ fontWeight: 700, fontSize: '16px' }}>Carrier Portal</span>
-          <span style={{ color: 'var(--color-text-secondary)', fontSize: '14px' }}>
+          <span style={{ color: 'var(--on-surface-variant)', fontSize: '14px' }}>
             {user.carrierName ? `| ${user.carrierName}` : ''}
           </span>
         </div>
@@ -52,8 +52,8 @@ export function CarrierPortalLayout() {
               textDecoration: 'none',
               fontSize: '14px',
               fontWeight: isActive ? 600 : 400,
-              color: isActive ? 'var(--color-primary)' : 'var(--color-text)',
-              background: isActive ? 'var(--color-primary-light)' : 'transparent',
+              color: isActive ? 'var(--primary)' : 'var(--on-surface)',
+              background: isActive ? 'var(--primary-container)' : 'transparent',
             })}
           >
             Dashboard
@@ -66,8 +66,8 @@ export function CarrierPortalLayout() {
               textDecoration: 'none',
               fontSize: '14px',
               fontWeight: isActive ? 600 : 400,
-              color: isActive ? 'var(--color-primary)' : 'var(--color-text)',
-              background: isActive ? 'var(--color-primary-light)' : 'transparent',
+              color: isActive ? 'var(--primary)' : 'var(--on-surface)',
+              background: isActive ? 'var(--primary-container)' : 'transparent',
             })}
           >
             Tender History
@@ -80,8 +80,8 @@ export function CarrierPortalLayout() {
               textDecoration: 'none',
               fontSize: '14px',
               fontWeight: isActive ? 600 : 400,
-              color: isActive ? 'var(--color-primary)' : 'var(--color-text)',
-              background: isActive ? 'var(--color-primary-light)' : 'transparent',
+              color: isActive ? 'var(--primary)' : 'var(--on-surface)',
+              background: isActive ? 'var(--primary-container)' : 'transparent',
             })}
           >
             Bid History
@@ -94,15 +94,15 @@ export function CarrierPortalLayout() {
               textDecoration: 'none',
               fontSize: '14px',
               fontWeight: isActive ? 600 : 400,
-              color: isActive ? 'var(--color-primary)' : 'var(--color-text)',
-              background: isActive ? 'var(--color-primary-light)' : 'transparent',
+              color: isActive ? 'var(--primary)' : 'var(--on-surface)',
+              background: isActive ? 'var(--primary-container)' : 'transparent',
             })}
           >
             Profile
           </NavLink>
-          <div style={{ borderLeft: '1px solid var(--color-border)', height: '24px', margin: '0 8px' }} />
-          <span style={{ fontSize: '13px', color: 'var(--color-text-secondary)' }}>{user.email}</span>
-          <button className="button-outline" style={{ padding: '4px 12px', fontSize: '12px' }} onClick={handleLogout}>
+          <div style={{ borderLeft: '1px solid var(--outline-variant)', height: '24px', margin: '0 8px' }} />
+          <span style={{ fontSize: '13px', color: 'var(--on-surface-variant)' }}>{user.email}</span>
+          <button className="vn-btn vn-btn-outline" style={{ padding: '4px 12px', fontSize: '12px' }} onClick={handleLogout}>
             Logout
           </button>
         </nav>

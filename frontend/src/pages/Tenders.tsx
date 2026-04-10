@@ -67,26 +67,28 @@ export default function Tenders() {
 
   return (
     <div>
-      <div className="page-header">
+      <div className="vn-page-header">
         <div>
           <h1>Tenders</h1>
-          <p style={{ color: 'var(--color-text-secondary)', margin: 0 }}>
+          <p style={{ color: 'var(--on-surface-variant)', margin: 0 }}>
             Manage carrier tender requests and bids
           </p>
         </div>
-        <Link to="/tenders/create" className="button">
-          <span className="material-icons" style={{ fontSize: '18px', marginRight: '6px' }}>add</span>
-          Create Tender
-        </Link>
+        <div className="vn-page-actions">
+          <Link to="/tenders/create" className="vn-btn vn-btn-primary">
+            <span className="material-icons" style={{ fontSize: '18px', marginRight: '6px' }}>add</span>
+            Create Tender
+          </Link>
+        </div>
       </div>
 
-      <div className="card" style={{ marginBottom: 'var(--spacing-3)' }}>
+      <div className="vn-card" style={{ marginBottom: 'var(--spacing-3)' }}>
         <div style={{ display: 'flex', gap: 'var(--spacing-2)', alignItems: 'center', flexWrap: 'wrap', marginBottom: 'var(--spacing-1)' }}>
           <label style={{ fontWeight: 500, fontSize: '14px' }}>Status:</label>
           {['', 'draft', 'open', 'evaluating', 'awarded', 'cancelled', 'expired'].map(s => (
             <button
               key={s}
-              className={statusFilter === s ? 'button' : 'button-outline'}
+              className={statusFilter === s ? 'vn-btn vn-btn-primary' : 'vn-btn vn-btn-outline'}
               style={{ padding: '4px 12px', fontSize: '13px' }}
               onClick={() => setStatusFilter(s)}
             >
@@ -97,7 +99,7 @@ export default function Tenders() {
         <div style={{ display: 'flex', gap: 'var(--spacing-2)', alignItems: 'center' }}>
           <label style={{ fontWeight: 500, fontSize: '14px' }}>Carrier:</label>
           <select
-            className="text-field"
+            className="vn-select"
             style={{ width: 'auto', minWidth: '200px', padding: '4px 8px', fontSize: '13px' }}
             value={carrierFilter}
             onChange={e => setCarrierFilter(e.target.value)}
@@ -108,64 +110,70 @@ export default function Tenders() {
             ))}
           </select>
           {carrierFilter && (
-            <button className="button-outline" style={{ padding: '4px 12px', fontSize: '13px' }} onClick={() => setCarrierFilter('')}>
+            <button className="vn-btn vn-btn-outline" style={{ padding: '4px 12px', fontSize: '13px' }} onClick={() => setCarrierFilter('')}>
               Clear
             </button>
           )}
         </div>
       </div>
 
-      <div className="table-container">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Reference</th>
-              <th>Shipment</th>
-              <th>Route</th>
-              <th>Strategy</th>
-              <th>Status</th>
-              <th>Carriers</th>
-              <th>Bids</th>
-              <th>Target Rate</th>
-              <th>Created</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr><td colSpan={9} style={{ textAlign: 'center', padding: '40px' }}><span className="loading-spinner" /></td></tr>
-            ) : tenders.length === 0 ? (
-              <tr><td colSpan={9} style={{ textAlign: 'center', padding: '40px', color: 'var(--color-text-secondary)' }}>No tenders found</td></tr>
-            ) : tenders.map(t => (
-              <tr key={t.id} onClick={() => navigate(`/tenders/${t.id}`)} style={{ cursor: 'pointer' }}>
-                <td style={{ fontWeight: 600 }}>{t.reference}</td>
-                <td>
-                  <Link to={`/shipments/${t.shipment.id}`} onClick={e => e.stopPropagation()} style={{ color: 'var(--color-primary)' }}>
-                    {t.shipment.reference}
-                  </Link>
-                </td>
-                <td>
-                  {t.shipment.origin.city}{t.shipment.origin.state ? `, ${t.shipment.origin.state}` : ''}
-                  {' → '}
-                  {t.shipment.destination.city}{t.shipment.destination.state ? `, ${t.shipment.destination.state}` : ''}
-                </td>
-                <td>
-                  <span className={`chip chip-${t.strategy === 'broadcast' ? 'info' : 'secondary'}`}>
-                    {t.strategy}
-                  </span>
-                </td>
-                <td>
-                  <span className={`chip chip-${statusColors[t.status] || 'secondary'}`}>
-                    {t.status}
-                  </span>
-                </td>
-                <td>{t.offers.length}</td>
-                <td>{t.bids.length}</td>
-                <td>{t.targetRate ? `$${t.targetRate.toLocaleString()}` : '--'}</td>
-                <td>{new Date(t.createdAt).toLocaleDateString()}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="vn-card">
+        <div className="vn-card-flush">
+          <div className="vn-table-wrap">
+            <table className="vn-table">
+              <thead>
+                <tr>
+                  <th>Reference</th>
+                  <th>Shipment</th>
+                  <th>Route</th>
+                  <th>Strategy</th>
+                  <th>Status</th>
+                  <th>Carriers</th>
+                  <th>Bids</th>
+                  <th>Target Rate</th>
+                  <th>Created</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr><td colSpan={9} style={{ textAlign: 'center', padding: '40px' }}>
+                    <div className="vn-empty"><span className="material-icons" style={{animation:'spin 1s linear infinite'}}>refresh</span><h3>Loading...</h3></div>
+                  </td></tr>
+                ) : tenders.length === 0 ? (
+                  <tr><td colSpan={9} style={{ textAlign: 'center', padding: '40px', color: 'var(--on-surface-variant)' }}>No tenders found</td></tr>
+                ) : tenders.map(t => (
+                  <tr key={t.id} onClick={() => navigate(`/tenders/${t.id}`)} style={{ cursor: 'pointer' }}>
+                    <td style={{ fontWeight: 600 }}>{t.reference}</td>
+                    <td>
+                      <Link to={`/shipments/${t.shipment.id}`} onClick={e => e.stopPropagation()} style={{ color: 'var(--primary)' }}>
+                        {t.shipment.reference}
+                      </Link>
+                    </td>
+                    <td>
+                      {t.shipment.origin.city}{t.shipment.origin.state ? `, ${t.shipment.origin.state}` : ''}
+                      {' → '}
+                      {t.shipment.destination.city}{t.shipment.destination.state ? `, ${t.shipment.destination.state}` : ''}
+                    </td>
+                    <td>
+                      <span className={`vn-chip vn-chip-${t.strategy === 'broadcast' ? 'info' : 'secondary'}`}>
+                        {t.strategy}
+                      </span>
+                    </td>
+                    <td>
+                      <span className={`vn-chip vn-chip-${statusColors[t.status] || 'secondary'}`}>
+                        {t.status}
+                      </span>
+                    </td>
+                    <td>{t.offers.length}</td>
+                    <td>{t.bids.length}</td>
+                    <td>{t.targetRate ? `$${t.targetRate.toLocaleString()}` : '--'}</td>
+                    <td>{new Date(t.createdAt).toLocaleDateString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -41,25 +41,25 @@ export default function CarrierLogin() {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      background: 'var(--color-background)',
+      background: 'var(--background)',
       padding: 'var(--spacing-3)',
     }}>
-      <div className="card" style={{ maxWidth: '400px', width: '100%' }}>
+      <div className="vn-card" style={{ maxWidth: '400px', width: '100%' }}>
         <div style={{ textAlign: 'center', marginBottom: 'var(--spacing-3)' }}>
-          <span className="material-icons" style={{ fontSize: '48px', color: 'var(--color-primary)' }}>local_shipping</span>
+          <span className="material-icons" style={{ fontSize: '48px', color: 'var(--primary)' }}>local_shipping</span>
           <h2 style={{ margin: '8px 0 4px' }}>Carrier Portal</h2>
-          <p style={{ color: 'var(--color-text-secondary)', margin: 0, fontSize: '14px' }}>
+          <p style={{ color: 'var(--on-surface-variant)', margin: 0, fontSize: '14px' }}>
             Sign in to view tenders and submit bids
           </p>
         </div>
 
-        {error && <div className="alert alert-error" style={{ marginBottom: 'var(--spacing-2)' }}>{error}</div>}
+        {error && <div className="vn-alert vn-alert-error" style={{ marginBottom: 'var(--spacing-2)' }}>{error}</div>}
 
         <form onSubmit={handleSubmit}>
-          <div style={{ marginBottom: 'var(--spacing-2)' }}>
-            <label className="field-label">Email</label>
+          <div className="vn-field" style={{ marginBottom: 'var(--spacing-2)' }}>
+            <label className="vn-field-label">Email</label>
             <input
-              className="text-field"
+              className="vn-input"
               type="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
@@ -68,10 +68,10 @@ export default function CarrierLogin() {
               placeholder="your@email.com"
             />
           </div>
-          <div style={{ marginBottom: 'var(--spacing-3)' }}>
-            <label className="field-label">Password</label>
+          <div className="vn-field" style={{ marginBottom: 'var(--spacing-3)' }}>
+            <label className="vn-field-label">Password</label>
             <input
-              className="text-field"
+              className="vn-input"
               type="password"
               value={password}
               onChange={e => setPassword(e.target.value)}
@@ -79,7 +79,7 @@ export default function CarrierLogin() {
               placeholder="Enter your password"
             />
           </div>
-          <button className="button" type="submit" disabled={loading} style={{ width: '100%' }}>
+          <button className="vn-btn vn-btn-primary" type="submit" disabled={loading} style={{ width: '100%' }}>
             {loading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>

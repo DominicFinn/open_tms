@@ -37,49 +37,53 @@ export default function CarrierBidHistory() {
       });
   }, []);
 
-  if (loading) return <div style={{ textAlign: 'center', padding: '60px' }}><span className="loading-spinner" /></div>;
+  if (loading) return <div className="vn-empty"><span className="material-icons" style={{animation:'spin 1s linear infinite'}}>refresh</span><h3>Loading...</h3></div>;
 
   return (
     <div>
-      <div className="page-header">
+      <div className="vn-page-header">
         <h1>Bid History</h1>
       </div>
 
-      <div className="table-container">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Tender</th>
-              <th>Rate</th>
-              <th>Transit</th>
-              <th>Equipment</th>
-              <th>Source</th>
-              <th>Status</th>
-              <th>Tender Status</th>
-              <th>Submitted</th>
-            </tr>
-          </thead>
-          <tbody>
-            {bids.length === 0 ? (
-              <tr>
-                <td colSpan={8} style={{ textAlign: 'center', padding: '40px', color: 'var(--color-text-secondary)' }}>
-                  No bids submitted yet
-                </td>
-              </tr>
-            ) : bids.map(b => (
-              <tr key={b.id}>
-                <td style={{ fontWeight: 600 }}>{b.tender.reference}</td>
-                <td style={{ fontWeight: 700 }}>${b.rate.toLocaleString()}</td>
-                <td>{b.transitDays ? `${b.transitDays} days` : '--'}</td>
-                <td>{b.equipmentType || '--'}</td>
-                <td>{b.sourceType}</td>
-                <td><span className={`chip chip-${statusColors[b.status] || 'secondary'}`}>{b.status}</span></td>
-                <td><span className={`chip chip-${statusColors[b.tender.status] || 'secondary'}`}>{b.tender.status}</span></td>
-                <td>{new Date(b.submittedAt).toLocaleString()}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="vn-card">
+        <div className="vn-card-flush">
+          <div className="vn-table-wrap">
+            <table className="vn-table">
+              <thead>
+                <tr>
+                  <th>Tender</th>
+                  <th>Rate</th>
+                  <th>Transit</th>
+                  <th>Equipment</th>
+                  <th>Source</th>
+                  <th>Status</th>
+                  <th>Tender Status</th>
+                  <th>Submitted</th>
+                </tr>
+              </thead>
+              <tbody>
+                {bids.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} style={{ textAlign: 'center', padding: '40px', color: 'var(--on-surface-variant)' }}>
+                      No bids submitted yet
+                    </td>
+                  </tr>
+                ) : bids.map(b => (
+                  <tr key={b.id}>
+                    <td style={{ fontWeight: 600 }}>{b.tender.reference}</td>
+                    <td style={{ fontWeight: 700 }}>${b.rate.toLocaleString()}</td>
+                    <td>{b.transitDays ? `${b.transitDays} days` : '--'}</td>
+                    <td>{b.equipmentType || '--'}</td>
+                    <td>{b.sourceType}</td>
+                    <td><span className={`vn-chip vn-chip-${statusColors[b.status] || 'secondary'}`}>{b.status}</span></td>
+                    <td><span className={`vn-chip vn-chip-${statusColors[b.tender.status] || 'secondary'}`}>{b.tender.status}</span></td>
+                    <td>{new Date(b.submittedAt).toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
   );

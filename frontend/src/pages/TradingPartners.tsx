@@ -133,25 +133,27 @@ export default function TradingPartners() {
 
   return (
     <div>
-      <div className="page-header">
+      <div className="vn-page-header">
         <div>
           <h1>Trading Partners</h1>
-          <p style={{ color: 'var(--color-text-secondary)', margin: 0 }}>
+          <p style={{ color: 'var(--on-surface-variant)', margin: 0 }}>
             Manage EDI connections with customers, carriers, ERPs, and other systems
           </p>
         </div>
-        <button className="button" onClick={() => setShowCreate(true)}>
-          <span className="material-icons" style={{ fontSize: '18px', marginRight: '6px' }}>add</span>
-          Add Partner
-        </button>
+        <div className="vn-page-actions">
+          <button className="vn-btn vn-btn-primary" onClick={() => setShowCreate(true)}>
+            <span className="material-icons" style={{ fontSize: '18px', marginRight: '6px' }}>add</span>
+            Add Partner
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
-      <div className="card" style={{ marginBottom: 'var(--spacing-3)' }}>
+      <div className="vn-filters" style={{ marginBottom: 'var(--spacing-3)' }}>
         <div style={{ display: 'flex', gap: 'var(--spacing-2)', alignItems: 'center', flexWrap: 'wrap' }}>
           <label style={{ fontWeight: 500, fontSize: '14px' }}>Type:</label>
           {['', 'customer', 'carrier', '3pl', 'warehouse', 'erp', 'other'].map(t => (
-            <button key={t} className={entityFilter === t ? 'button' : 'button-outline'}
+            <button key={t} className={entityFilter === t ? 'vn-btn vn-btn-primary' : 'vn-btn vn-btn-outline'}
               style={{ padding: '4px 12px', fontSize: '13px' }}
               onClick={() => setEntityFilter(t)}>
               {t || 'All'}
@@ -161,152 +163,160 @@ export default function TradingPartners() {
       </div>
 
       {/* Partners table */}
-      <div className="table-container">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Type</th>
-              <th>Linked Entity</th>
-              <th>Connection</th>
-              <th>Inbound</th>
-              <th>Outbound</th>
-              <th>Transactions</th>
-              <th>Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr><td colSpan={9} style={{ textAlign: 'center', padding: '40px' }}><span className="loading-spinner" /></td></tr>
-            ) : partners.length === 0 ? (
-              <tr><td colSpan={9} style={{ textAlign: 'center', padding: '40px', color: 'var(--color-text-secondary)' }}>No trading partners configured</td></tr>
-            ) : partners.map(p => (
-              <tr key={p.id} onClick={() => setShowDetail(p.id)} style={{ cursor: 'pointer' }}>
-                <td style={{ fontWeight: 600 }}>
-                  <span className="material-icons" style={{ fontSize: '16px', marginRight: '6px', verticalAlign: 'middle' }}>{entityIcons[p.entityType] || 'device_hub'}</span>
-                  {p.name}
-                </td>
-                <td><span className="chip chip-secondary">{p.entityType}</span></td>
-                <td style={{ fontSize: '13px', color: 'var(--color-text-secondary)' }}>
-                  {p.customer?.name || p.carrier?.name || '--'}
-                </td>
-                <td style={{ fontSize: '13px' }}>
-                  {p.sftpHost && <span title={`sftp://${p.sftpHost}`}>SFTP</span>}
-                  {p.sftpHost && p.httpUrl && ' + '}
-                  {p.httpUrl && <span title={p.httpUrl}>HTTP</span>}
-                  {!p.sftpHost && !p.httpUrl && '--'}
-                </td>
-                <td>
-                  {p.inboundEnabled
-                    ? <span className="chip chip-success" style={{ fontSize: '11px' }}>On</span>
-                    : <span className="chip chip-secondary" style={{ fontSize: '11px' }}>Off</span>}
-                </td>
-                <td>
-                  {p.outboundEnabled
-                    ? <span className="chip chip-success" style={{ fontSize: '11px' }}>On ({p.outboundTransport})</span>
-                    : <span className="chip chip-secondary" style={{ fontSize: '11px' }}>Off</span>}
-                </td>
-                <td>
-                  <div style={{ display: 'flex', gap: '2px', flexWrap: 'wrap' }}>
-                    {p.transactions.map(t => (
-                      <span key={t.id} className={`chip chip-${t.direction === 'inbound' ? 'info' : 'primary'}`} style={{ fontSize: '10px', padding: '1px 6px' }}>
-                        {t.direction === 'inbound' ? '↓' : '↑'}{t.transactionType}
+      <div className="vn-card">
+        <div className="vn-card-flush">
+          <div className="vn-table-wrap">
+            <table className="vn-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Type</th>
+                  <th>Linked Entity</th>
+                  <th>Connection</th>
+                  <th>Inbound</th>
+                  <th>Outbound</th>
+                  <th>Transactions</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr><td colSpan={9} style={{ textAlign: 'center', padding: '40px' }}>
+                    <div className="vn-empty"><span className="material-icons" style={{animation:'spin 1s linear infinite'}}>refresh</span><h3>Loading...</h3></div>
+                  </td></tr>
+                ) : partners.length === 0 ? (
+                  <tr><td colSpan={9} style={{ textAlign: 'center', padding: '40px', color: 'var(--on-surface-variant)' }}>No trading partners configured</td></tr>
+                ) : partners.map(p => (
+                  <tr key={p.id} onClick={() => setShowDetail(p.id)} style={{ cursor: 'pointer' }}>
+                    <td style={{ fontWeight: 600 }}>
+                      <span className="material-icons" style={{ fontSize: '16px', marginRight: '6px', verticalAlign: 'middle' }}>{entityIcons[p.entityType] || 'device_hub'}</span>
+                      {p.name}
+                    </td>
+                    <td><span className="vn-chip vn-chip-secondary">{p.entityType}</span></td>
+                    <td style={{ fontSize: '13px', color: 'var(--on-surface-variant)' }}>
+                      {p.customer?.name || p.carrier?.name || '--'}
+                    </td>
+                    <td style={{ fontSize: '13px' }}>
+                      {p.sftpHost && <span title={`sftp://${p.sftpHost}`}>SFTP</span>}
+                      {p.sftpHost && p.httpUrl && ' + '}
+                      {p.httpUrl && <span title={p.httpUrl}>HTTP</span>}
+                      {!p.sftpHost && !p.httpUrl && '--'}
+                    </td>
+                    <td>
+                      {p.inboundEnabled
+                        ? <span className="vn-chip vn-chip-success" style={{ fontSize: '11px' }}>On</span>
+                        : <span className="vn-chip vn-chip-secondary" style={{ fontSize: '11px' }}>Off</span>}
+                    </td>
+                    <td>
+                      {p.outboundEnabled
+                        ? <span className="vn-chip vn-chip-success" style={{ fontSize: '11px' }}>On ({p.outboundTransport})</span>
+                        : <span className="vn-chip vn-chip-secondary" style={{ fontSize: '11px' }}>Off</span>}
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', gap: '2px', flexWrap: 'wrap' }}>
+                        {p.transactions.map(t => (
+                          <span key={t.id} className={`vn-chip vn-chip-${t.direction === 'inbound' ? 'info' : 'primary'}`} style={{ fontSize: '10px', padding: '1px 6px' }}>
+                            {t.direction === 'inbound' ? '↓' : '↑'}{t.transactionType}
+                          </span>
+                        ))}
+                        {p.transactions.length === 0 && <span style={{ color: 'var(--on-surface-variant)', fontSize: '12px' }}>None</span>}
+                      </div>
+                    </td>
+                    <td>
+                      <span className={`vn-chip vn-chip-${p.active ? 'success' : 'error'}`}>
+                        {p.active ? 'Active' : 'Inactive'}
                       </span>
-                    ))}
-                    {p.transactions.length === 0 && <span style={{ color: 'var(--color-text-secondary)', fontSize: '12px' }}>None</span>}
-                  </div>
-                </td>
-                <td>
-                  <span className={`chip chip-${p.active ? 'success' : 'error'}`}>
-                    {p.active ? 'Active' : 'Inactive'}
-                  </span>
-                </td>
-                <td>
-                  <button className="icon-btn" title={p.active ? 'Deactivate' : 'Activate'}
-                    onClick={e => { e.stopPropagation(); handleToggleActive(p); }}>
-                    <span className="material-icons" style={{ fontSize: '18px' }}>{p.active ? 'pause' : 'play_arrow'}</span>
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                    </td>
+                    <td>
+                      <button className="vn-btn-icon" title={p.active ? 'Deactivate' : 'Activate'}
+                        onClick={e => { e.stopPropagation(); handleToggleActive(p); }}>
+                        <span className="material-icons" style={{ fontSize: '18px' }}>{p.active ? 'pause' : 'play_arrow'}</span>
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
 
       {/* Detail panel */}
       {detailPartner && (
-        <div className="modal-backdrop" onClick={() => setShowDetail(null)}>
-          <div className="modal-card" onClick={e => e.stopPropagation()} style={{ maxWidth: '700px', maxHeight: '80vh', overflow: 'auto' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-2)' }}>
-              <h3 style={{ margin: 0 }}>{detailPartner.name}</h3>
-              <button className="icon-btn" onClick={() => setShowDetail(null)}>
+        <div className="vn-modal-backdrop" onClick={() => setShowDetail(null)}>
+          <div className="vn-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '700px', maxHeight: '80vh', overflow: 'auto' }}>
+            <div className="vn-modal-header">
+              <h2>{detailPartner.name}</h2>
+              <button className="vn-modal-close" onClick={() => setShowDetail(null)}>
                 <span className="material-icons">close</span>
               </button>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-2)', fontSize: '13px', marginBottom: 'var(--spacing-2)' }}>
-              <div><strong>Type:</strong> {detailPartner.entityType}</div>
-              <div><strong>Linked:</strong> {detailPartner.customer?.name || detailPartner.carrier?.name || 'None'}</div>
-              <div><strong>SFTP:</strong> {detailPartner.sftpHost || 'Not configured'}</div>
-              <div><strong>HTTP:</strong> {detailPartner.httpUrl || 'Not configured'}</div>
-              <div><strong>Sender ID:</strong> {detailPartner.senderId || '--'}</div>
-              <div><strong>Receiver ID:</strong> {detailPartner.receiverId || '--'}</div>
-              <div><strong>Inbound:</strong> {detailPartner.inboundEnabled ? 'Enabled' : 'Disabled'}</div>
-              <div><strong>Outbound:</strong> {detailPartner.outboundEnabled ? `Enabled (${detailPartner.outboundTransport})` : 'Disabled'}</div>
-              {detailPartner.lastPolledAt && <div><strong>Last Polled:</strong> {new Date(detailPartner.lastPolledAt).toLocaleString()}</div>}
-            </div>
-
-            {/* Transaction types */}
-            <h4 style={{ margin: 'var(--spacing-2) 0 var(--spacing-1)' }}>Transaction Types</h4>
-            {detailPartner.transactions.length === 0 ? (
-              <p style={{ color: 'var(--color-text-secondary)', fontSize: '13px' }}>No transaction types configured. Add one below.</p>
-            ) : (
-              <div className="table-container" style={{ marginBottom: 'var(--spacing-2)' }}>
-                <table className="data-table">
-                  <thead>
-                    <tr><th>Type</th><th>Direction</th><th>Auto-Process</th><th>997 Ack</th><th></th></tr>
-                  </thead>
-                  <tbody>
-                    {detailPartner.transactions.map(t => {
-                      const typeInfo = transactionTypes.find(tt => tt.code === t.transactionType);
-                      return (
-                        <tr key={t.id}>
-                          <td style={{ fontWeight: 500 }}>{t.transactionType} {typeInfo ? `— ${typeInfo.name}` : ''}</td>
-                          <td><span className={`chip chip-${t.direction === 'inbound' ? 'info' : 'primary'}`}>{t.direction}</span></td>
-                          <td>{t.autoProcess ? 'Yes' : 'No'}</td>
-                          <td>{t.ack997Required ? 'Yes' : 'No'}</td>
-                          <td>
-                            <button className="icon-btn" title="Remove" onClick={() => handleRemoveTransaction(detailPartner.id, t.id)}>
-                              <span className="material-icons" style={{ fontSize: '16px', color: 'var(--color-error)' }}>delete</span>
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+            <div className="vn-modal-body">
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-2)', fontSize: '13px', marginBottom: 'var(--spacing-2)' }}>
+                <div><strong>Type:</strong> {detailPartner.entityType}</div>
+                <div><strong>Linked:</strong> {detailPartner.customer?.name || detailPartner.carrier?.name || 'None'}</div>
+                <div><strong>SFTP:</strong> {detailPartner.sftpHost || 'Not configured'}</div>
+                <div><strong>HTTP:</strong> {detailPartner.httpUrl || 'Not configured'}</div>
+                <div><strong>Sender ID:</strong> {detailPartner.senderId || '--'}</div>
+                <div><strong>Receiver ID:</strong> {detailPartner.receiverId || '--'}</div>
+                <div><strong>Inbound:</strong> {detailPartner.inboundEnabled ? 'Enabled' : 'Disabled'}</div>
+                <div><strong>Outbound:</strong> {detailPartner.outboundEnabled ? `Enabled (${detailPartner.outboundTransport})` : 'Disabled'}</div>
+                {detailPartner.lastPolledAt && <div><strong>Last Polled:</strong> {new Date(detailPartner.lastPolledAt).toLocaleString()}</div>}
               </div>
-            )}
 
-            {/* Add transaction */}
-            <div style={{ display: 'flex', gap: 'var(--spacing-1)', alignItems: 'center' }}>
-              <select className="text-field" style={{ width: 'auto', fontSize: '13px', padding: '4px 8px' }}
-                value={addTxnType} onChange={e => { setAddTxnType(e.target.value); setAddTxnPartnerId(detailPartner.id); }}>
-                <option value="">Add type...</option>
-                {transactionTypes.map(tt => (
-                  <option key={tt.code} value={tt.code}>{tt.code} — {tt.name} ({tt.status})</option>
-                ))}
-              </select>
-              <select className="text-field" style={{ width: 'auto', fontSize: '13px', padding: '4px 8px' }}
-                value={addTxnDir} onChange={e => setAddTxnDir(e.target.value)}>
-                <option value="inbound">Inbound</option>
-                <option value="outbound">Outbound</option>
-              </select>
-              <button className="button" style={{ fontSize: '12px', padding: '4px 12px' }}
-                onClick={handleAddTransaction} disabled={!addTxnType}>
-                Add
-              </button>
+              {/* Transaction types */}
+              <h4 style={{ margin: 'var(--spacing-2) 0 var(--spacing-1)' }}>Transaction Types</h4>
+              {detailPartner.transactions.length === 0 ? (
+                <p style={{ color: 'var(--on-surface-variant)', fontSize: '13px' }}>No transaction types configured. Add one below.</p>
+              ) : (
+                <div className="vn-table-wrap" style={{ marginBottom: 'var(--spacing-2)' }}>
+                  <table className="vn-table">
+                    <thead>
+                      <tr><th>Type</th><th>Direction</th><th>Auto-Process</th><th>997 Ack</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                      {detailPartner.transactions.map(t => {
+                        const typeInfo = transactionTypes.find(tt => tt.code === t.transactionType);
+                        return (
+                          <tr key={t.id}>
+                            <td style={{ fontWeight: 500 }}>{t.transactionType} {typeInfo ? `— ${typeInfo.name}` : ''}</td>
+                            <td><span className={`vn-chip vn-chip-${t.direction === 'inbound' ? 'info' : 'primary'}`}>{t.direction}</span></td>
+                            <td>{t.autoProcess ? 'Yes' : 'No'}</td>
+                            <td>{t.ack997Required ? 'Yes' : 'No'}</td>
+                            <td>
+                              <button className="vn-btn-icon" title="Remove" onClick={() => handleRemoveTransaction(detailPartner.id, t.id)}>
+                                <span className="material-icons" style={{ fontSize: '16px', color: 'var(--error)' }}>delete</span>
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Add transaction */}
+              <div style={{ display: 'flex', gap: 'var(--spacing-1)', alignItems: 'center' }}>
+                <select className="vn-select" style={{ width: 'auto', fontSize: '13px', padding: '4px 8px' }}
+                  value={addTxnType} onChange={e => { setAddTxnType(e.target.value); setAddTxnPartnerId(detailPartner.id); }}>
+                  <option value="">Add type...</option>
+                  {transactionTypes.map(tt => (
+                    <option key={tt.code} value={tt.code}>{tt.code} — {tt.name} ({tt.status})</option>
+                  ))}
+                </select>
+                <select className="vn-select" style={{ width: 'auto', fontSize: '13px', padding: '4px 8px' }}
+                  value={addTxnDir} onChange={e => setAddTxnDir(e.target.value)}>
+                  <option value="inbound">Inbound</option>
+                  <option value="outbound">Outbound</option>
+                </select>
+                <button className="vn-btn vn-btn-primary" style={{ fontSize: '12px', padding: '4px 12px' }}
+                  onClick={handleAddTransaction} disabled={!addTxnType}>
+                  Add
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -314,108 +324,125 @@ export default function TradingPartners() {
 
       {/* Create modal */}
       {showCreate && (
-        <div className="modal-backdrop" onClick={() => setShowCreate(false)}>
-          <div className="modal-card" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px', maxHeight: '80vh', overflow: 'auto' }}>
-            <h3 style={{ margin: '0 0 var(--spacing-2)' }}>Add Trading Partner</h3>
-            <form onSubmit={handleCreate}>
-              <div className="form-grid">
-                <div>
-                  <label className="field-label">Partner Name *</label>
-                  <input className="text-field" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required />
+        <div className="vn-modal-backdrop" onClick={() => setShowCreate(false)}>
+          <div className="vn-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px', maxHeight: '80vh', overflow: 'auto' }}>
+            <div className="vn-modal-header">
+              <h2>Add Trading Partner</h2>
+              <button className="vn-modal-close" onClick={() => setShowCreate(false)}>
+                <span className="material-icons">close</span>
+              </button>
+            </div>
+            <div className="vn-modal-body">
+              <form onSubmit={handleCreate}>
+                <div className="vn-form-grid">
+                  <div>
+                    <label className="vn-field-label">Partner Name *</label>
+                    <input className="vn-input" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required />
+                  </div>
+                  <div>
+                    <label className="vn-field-label">Entity Type *</label>
+                    <select className="vn-select" value={form.entityType} onChange={e => setForm({ ...form, entityType: e.target.value })}>
+                      <option value="customer">Customer</option>
+                      <option value="carrier">Carrier</option>
+                      <option value="3pl">3PL</option>
+                      <option value="warehouse">Warehouse</option>
+                      <option value="erp">ERP (SAP, Oracle, etc.)</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
                 </div>
-                <div>
-                  <label className="field-label">Entity Type *</label>
-                  <select className="text-field" value={form.entityType} onChange={e => setForm({ ...form, entityType: e.target.value })}>
-                    <option value="customer">Customer</option>
-                    <option value="carrier">Carrier</option>
-                    <option value="3pl">3PL</option>
-                    <option value="warehouse">Warehouse</option>
-                    <option value="erp">ERP (SAP, Oracle, etc.)</option>
-                    <option value="other">Other</option>
-                  </select>
-                </div>
-              </div>
 
-              <h4 style={{ margin: 'var(--spacing-2) 0 var(--spacing-1)' }}>SFTP Connection</h4>
-              <div className="form-grid">
-                <div>
-                  <label className="field-label">SFTP Host</label>
-                  <input className="text-field" value={form.sftpHost} onChange={e => setForm({ ...form, sftpHost: e.target.value })} placeholder="sftp.example.com" />
+                <div className="vn-form-section">
+                  <div className="vn-form-section-title"><span className="material-icons">dns</span>SFTP Connection</div>
+                  <div className="vn-form-grid">
+                    <div>
+                      <label className="vn-field-label">SFTP Host</label>
+                      <input className="vn-input" value={form.sftpHost} onChange={e => setForm({ ...form, sftpHost: e.target.value })} placeholder="sftp.example.com" />
+                    </div>
+                    <div>
+                      <label className="vn-field-label">Port</label>
+                      <input className="vn-input" type="number" value={form.sftpPort} onChange={e => setForm({ ...form, sftpPort: e.target.value })} />
+                    </div>
+                    <div>
+                      <label className="vn-field-label">Username</label>
+                      <input className="vn-input" value={form.sftpUsername} onChange={e => setForm({ ...form, sftpUsername: e.target.value })} />
+                    </div>
+                    <div>
+                      <label className="vn-field-label">Password</label>
+                      <input className="vn-input" type="password" value={form.sftpPassword} onChange={e => setForm({ ...form, sftpPassword: e.target.value })} />
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <label className="field-label">Port</label>
-                  <input className="text-field" type="number" value={form.sftpPort} onChange={e => setForm({ ...form, sftpPort: e.target.value })} />
-                </div>
-                <div>
-                  <label className="field-label">Username</label>
-                  <input className="text-field" value={form.sftpUsername} onChange={e => setForm({ ...form, sftpUsername: e.target.value })} />
-                </div>
-                <div>
-                  <label className="field-label">Password</label>
-                  <input className="text-field" type="password" value={form.sftpPassword} onChange={e => setForm({ ...form, sftpPassword: e.target.value })} />
-                </div>
-              </div>
 
-              <h4 style={{ margin: 'var(--spacing-2) 0 var(--spacing-1)' }}>EDI Config</h4>
-              <div className="form-grid">
-                <div>
-                  <label className="field-label">Sender ID</label>
-                  <input className="text-field" value={form.senderId} onChange={e => setForm({ ...form, senderId: e.target.value })} placeholder="Our ISA06 ID" />
+                <div className="vn-form-section">
+                  <div className="vn-form-section-title"><span className="material-icons">settings</span>EDI Config</div>
+                  <div className="vn-form-grid">
+                    <div>
+                      <label className="vn-field-label">Sender ID</label>
+                      <input className="vn-input" value={form.senderId} onChange={e => setForm({ ...form, senderId: e.target.value })} placeholder="Our ISA06 ID" />
+                    </div>
+                    <div>
+                      <label className="vn-field-label">Receiver ID</label>
+                      <input className="vn-input" value={form.receiverId} onChange={e => setForm({ ...form, receiverId: e.target.value })} placeholder="Partner's ISA08 ID" />
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <label className="field-label">Receiver ID</label>
-                  <input className="text-field" value={form.receiverId} onChange={e => setForm({ ...form, receiverId: e.target.value })} placeholder="Partner's ISA08 ID" />
-                </div>
-              </div>
 
-              <h4 style={{ margin: 'var(--spacing-2) 0 var(--spacing-1)' }}>Inbound (receive EDI from this partner)</h4>
-              <div className="form-grid">
-                <div>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <input type="checkbox" checked={form.inboundEnabled} onChange={e => setForm({ ...form, inboundEnabled: e.target.checked })} />
-                    Enable inbound polling
-                  </label>
+                <div className="vn-form-section">
+                  <div className="vn-form-section-title"><span className="material-icons">download</span>Inbound (receive EDI from this partner)</div>
+                  <div className="vn-form-grid">
+                    <div>
+                      <label className="vn-switch">
+                        <input type="checkbox" checked={form.inboundEnabled} onChange={e => setForm({ ...form, inboundEnabled: e.target.checked })} />
+                        <span className="vn-switch-track"></span>
+                        Enable inbound polling
+                      </label>
+                    </div>
+                    <div>
+                      <label className="vn-field-label">Inbound Directory</label>
+                      <input className="vn-input" value={form.inboundDir} onChange={e => setForm({ ...form, inboundDir: e.target.value })} />
+                    </div>
+                    <div>
+                      <label className="vn-field-label">File Pattern</label>
+                      <input className="vn-input" value={form.inboundFilePattern} onChange={e => setForm({ ...form, inboundFilePattern: e.target.value })} />
+                    </div>
+                    <div>
+                      <label className="vn-field-label">Polling Interval (seconds)</label>
+                      <input className="vn-input" type="number" min="60" value={form.pollingInterval} onChange={e => setForm({ ...form, pollingInterval: e.target.value })} />
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <label className="field-label">Inbound Directory</label>
-                  <input className="text-field" value={form.inboundDir} onChange={e => setForm({ ...form, inboundDir: e.target.value })} />
-                </div>
-                <div>
-                  <label className="field-label">File Pattern</label>
-                  <input className="text-field" value={form.inboundFilePattern} onChange={e => setForm({ ...form, inboundFilePattern: e.target.value })} />
-                </div>
-                <div>
-                  <label className="field-label">Polling Interval (seconds)</label>
-                  <input className="text-field" type="number" min="60" value={form.pollingInterval} onChange={e => setForm({ ...form, pollingInterval: e.target.value })} />
-                </div>
-              </div>
 
-              <h4 style={{ margin: 'var(--spacing-2) 0 var(--spacing-1)' }}>Outbound (send EDI to this partner)</h4>
-              <div className="form-grid">
-                <div>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <input type="checkbox" checked={form.outboundEnabled} onChange={e => setForm({ ...form, outboundEnabled: e.target.checked })} />
-                    Enable outbound delivery
-                  </label>
+                <div className="vn-form-section">
+                  <div className="vn-form-section-title"><span className="material-icons">upload</span>Outbound (send EDI to this partner)</div>
+                  <div className="vn-form-grid">
+                    <div>
+                      <label className="vn-switch">
+                        <input type="checkbox" checked={form.outboundEnabled} onChange={e => setForm({ ...form, outboundEnabled: e.target.checked })} />
+                        <span className="vn-switch-track"></span>
+                        Enable outbound delivery
+                      </label>
+                    </div>
+                    <div>
+                      <label className="vn-field-label">Transport</label>
+                      <select className="vn-select" value={form.outboundTransport} onChange={e => setForm({ ...form, outboundTransport: e.target.value })}>
+                        <option value="sftp">SFTP</option>
+                        <option value="http">HTTP/API</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="vn-field-label">Outbound Directory (SFTP)</label>
+                      <input className="vn-input" value={form.outboundDir} onChange={e => setForm({ ...form, outboundDir: e.target.value })} placeholder="/outbound" />
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <label className="field-label">Transport</label>
-                  <select className="text-field" value={form.outboundTransport} onChange={e => setForm({ ...form, outboundTransport: e.target.value })}>
-                    <option value="sftp">SFTP</option>
-                    <option value="http">HTTP/API</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="field-label">Outbound Directory (SFTP)</label>
-                  <input className="text-field" value={form.outboundDir} onChange={e => setForm({ ...form, outboundDir: e.target.value })} placeholder="/outbound" />
-                </div>
-              </div>
 
-              <div className="form-actions" style={{ marginTop: 'var(--spacing-2)' }}>
-                <button type="button" className="button-outline" onClick={() => setShowCreate(false)}>Cancel</button>
-                <button type="submit" className="button">Create Partner</button>
-              </div>
-            </form>
+                <div className="vn-form-actions" style={{ marginTop: 'var(--spacing-2)' }}>
+                  <button type="button" className="vn-btn vn-btn-outline" onClick={() => setShowCreate(false)}>Cancel</button>
+                  <button type="submit" className="vn-btn vn-btn-primary">Create Partner</button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       )}

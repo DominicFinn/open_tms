@@ -59,73 +59,80 @@ export default function CarrierProfile() {
 
   return (
     <div>
-      <div className="page-header">
+      <div className="vn-page-header">
         <h1>Profile & Settings</h1>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-3)' }}>
         {/* Profile Info */}
-        <div className="card">
-          <h3 style={{ margin: '0 0 var(--spacing-2)' }}>
-            <span className="material-icons" style={{ verticalAlign: 'middle', marginRight: '8px', fontSize: '20px' }}>person</span>
-            Profile
-          </h3>
-          <div style={{ display: 'grid', gap: 'var(--spacing-1)', fontSize: '14px' }}>
-            <div><strong>Name:</strong> {user.name}</div>
-            <div><strong>Email:</strong> {user.email}</div>
-            <div><strong>Role:</strong> <span className={`chip chip-${user.role === 'admin' ? 'primary' : 'secondary'}`}>{user.role}</span></div>
-            <div><strong>Carrier:</strong> {user.carrierName}</div>
+        <div className="vn-card">
+          <div className="vn-card-header">
+            <h2>
+              <span className="material-icons" style={{ verticalAlign: 'middle', marginRight: '8px', fontSize: '20px' }}>person</span>
+              Profile
+            </h2>
+          </div>
+          <div className="vn-card-body">
+            <div style={{ display: 'grid', gap: 'var(--spacing-1)', fontSize: '14px' }}>
+              <div><strong>Name:</strong> {user.name}</div>
+              <div><strong>Email:</strong> {user.email}</div>
+              <div><strong>Role:</strong> <span className={`vn-chip vn-chip-${user.role === 'admin' ? 'primary' : 'secondary'}`}>{user.role}</span></div>
+              <div><strong>Carrier:</strong> {user.carrierName}</div>
+            </div>
           </div>
         </div>
 
         {/* Change Password */}
-        <div className="card">
-          <h3 style={{ margin: '0 0 var(--spacing-2)' }}>
-            <span className="material-icons" style={{ verticalAlign: 'middle', marginRight: '8px', fontSize: '20px' }}>lock</span>
-            Change Password
-          </h3>
+        <div className="vn-card">
+          <div className="vn-card-header">
+            <h2>
+              <span className="material-icons" style={{ verticalAlign: 'middle', marginRight: '8px', fontSize: '20px' }}>lock</span>
+              Change Password
+            </h2>
+          </div>
+          <div className="vn-card-body">
+            {error && <div className="vn-alert vn-alert-error" style={{ marginBottom: 'var(--spacing-2)' }}>{error}</div>}
+            {success && <div className="vn-alert vn-alert-success" style={{ marginBottom: 'var(--spacing-2)' }}>{success}</div>}
 
-          {error && <div className="alert alert-error" style={{ marginBottom: 'var(--spacing-2)' }}>{error}</div>}
-          {success && <div className="alert alert-success" style={{ marginBottom: 'var(--spacing-2)' }}>{success}</div>}
-
-          <form onSubmit={handleChangePassword}>
-            <div style={{ marginBottom: 'var(--spacing-2)' }}>
-              <label className="field-label">Current Password</label>
-              <input
-                className="text-field"
-                type="password"
-                value={currentPassword}
-                onChange={e => setCurrentPassword(e.target.value)}
-                required
-              />
-            </div>
-            <div style={{ marginBottom: 'var(--spacing-2)' }}>
-              <label className="field-label">New Password</label>
-              <input
-                className="text-field"
-                type="password"
-                value={newPassword}
-                onChange={e => setNewPassword(e.target.value)}
-                required
-                minLength={8}
-              />
-              <div className="field-hint">Min 8 chars, must include uppercase, lowercase, and a number</div>
-            </div>
-            <div style={{ marginBottom: 'var(--spacing-2)' }}>
-              <label className="field-label">Confirm New Password</label>
-              <input
-                className="text-field"
-                type="password"
-                value={confirmPassword}
-                onChange={e => setConfirmPassword(e.target.value)}
-                required
-                minLength={8}
-              />
-            </div>
-            <button type="submit" className="button" disabled={loading}>
-              {loading ? 'Changing...' : 'Change Password'}
-            </button>
-          </form>
+            <form onSubmit={handleChangePassword}>
+              <div className="vn-field" style={{ marginBottom: 'var(--spacing-2)' }}>
+                <label className="vn-field-label">Current Password</label>
+                <input
+                  className="vn-input"
+                  type="password"
+                  value={currentPassword}
+                  onChange={e => setCurrentPassword(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="vn-field" style={{ marginBottom: 'var(--spacing-2)' }}>
+                <label className="vn-field-label">New Password</label>
+                <input
+                  className="vn-input"
+                  type="password"
+                  value={newPassword}
+                  onChange={e => setNewPassword(e.target.value)}
+                  required
+                  minLength={8}
+                />
+                <span className="vn-field-hint">Min 8 chars, must include uppercase, lowercase, and a number</span>
+              </div>
+              <div className="vn-field" style={{ marginBottom: 'var(--spacing-2)' }}>
+                <label className="vn-field-label">Confirm New Password</label>
+                <input
+                  className="vn-input"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={e => setConfirmPassword(e.target.value)}
+                  required
+                  minLength={8}
+                />
+              </div>
+              <button type="submit" className="vn-btn vn-btn-primary" disabled={loading}>
+                {loading ? 'Changing...' : 'Change Password'}
+              </button>
+            </form>
+          </div>
         </div>
       </div>
     </div>
