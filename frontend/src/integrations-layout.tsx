@@ -49,9 +49,13 @@ export function IntegrationsLayout() {
           </NavLink>
 
           <div className="sidebar-section-label">EDI</div>
+          <NavLink to="/integrations/trading-partners" onClick={closeMobileMenu}>
+            <span className="material-icons">hub</span>
+            Trading Partners
+          </NavLink>
           <NavLink to="/integrations/edi-partners" onClick={closeMobileMenu}>
             <span className="material-icons">swap_horiz</span>
-            EDI Partners
+            EDI Partners (Legacy)
           </NavLink>
           <NavLink to="/integrations/edi-files" onClick={closeMobileMenu}>
             <span className="material-icons">insert_drive_file</span>

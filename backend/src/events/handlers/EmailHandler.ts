@@ -57,6 +57,8 @@ export class EmailHandler implements IEventHandler {
         emailFromName: true,
         logoStorageKey: true,
         themeConfig: true,
+        emailHeaderHtml: true,
+        emailFooterHtml: true,
       },
     });
 
@@ -83,7 +85,9 @@ export class EmailHandler implements IEventHandler {
     const themeConfig = org.themeConfig as Record<string, string> | null;
     const branding = {
       orgName: org.name,
-      primaryColor: themeConfig?.['--color-primary'] || '#1976d2',
+      primaryColor: themeConfig?.['primary'] || '#1976d2',
+      emailHeaderHtml: org.emailHeaderHtml || undefined,
+      emailFooterHtml: org.emailFooterHtml || undefined,
     };
 
     // 4. Render the email

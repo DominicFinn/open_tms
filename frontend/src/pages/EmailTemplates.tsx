@@ -109,6 +109,11 @@ export default function EmailTemplatesPage() {
   const handleSave = async () => {
     setSaving(true);
     setAlert(null);
+    if (creating && !formEventType.trim()) {
+      setAlert({ type: 'error', message: 'Event type is required.' });
+      setSaving(false);
+      return;
+    }
     try {
       const body: any = {
         name: formName,

@@ -13,6 +13,7 @@ import { createOutboundCarrierWorker } from './workers/outboundCarrierWorker.js'
 import { createOutboundTrackingWorker } from './workers/outboundTrackingWorker.js';
 import { createInboundWebhookWorker } from './workers/inboundWebhookWorker.js';
 import { OrderDeliveryService } from './services/OrderDeliveryService.js';
+import { ArrivalCriteriaEvaluationService } from './services/ArrivalCriteriaEvaluationService.js';
 import { customerRoutes } from './routes/customers.js';
 import { carrierRoutes } from './routes/carriers.js';
 import { locationRoutes } from './routes/locations.js';
@@ -44,6 +45,15 @@ import { emailSettingsRoutes } from './routes/emailSettings.js';
 import { emailTemplateRoutes } from './routes/emailTemplates.js';
 import { mapsSettingsRoutes } from './routes/mapsSettings.js';
 import { metricsRoutes } from './routes/metrics.js';
+import { arrivalCriteriaRoutes } from './routes/arrivalCriteria.js';
+import { tenderRoutes } from './routes/tenders.js';
+import { carrierPortalRoutes } from './routes/carrierPortal.js';
+import { carrierUserRoutes } from './routes/carrierUsers.js';
+import { ediTenderRoutes } from './routes/ediTender.js';
+import { tradingPartnerRoutes } from './routes/tradingPartners.js';
+import deviceRoutes from './routes/devices.js';
+import telemetryRoutes from './routes/telemetry.js';
+import { cargoTrackingRoutes } from './routes/cargoTracking.js';
 
 const server = Fastify({ logger: true });
 
@@ -106,6 +116,15 @@ async function start() {
   await server.register(emailTemplateRoutes);
   await server.register(mapsSettingsRoutes);
   await server.register(metricsRoutes);
+  await server.register(arrivalCriteriaRoutes);
+  await server.register(tenderRoutes);
+  await server.register(carrierPortalRoutes);
+  await server.register(carrierUserRoutes);
+  await server.register(ediTenderRoutes);
+  await server.register(tradingPartnerRoutes);
+  await server.register(deviceRoutes);
+  await server.register(telemetryRoutes);
+  await server.register(cargoTrackingRoutes);
 
   // Start queue adapter (needed for publishing events, even if workers run elsewhere)
   try {
@@ -117,9 +136,10 @@ async function start() {
     // Set DISABLE_EMBEDDED_WORKERS=true when using `docker compose up` with the worker service.
     if (process.env.DISABLE_EMBEDDED_WORKERS !== 'true') {
       const deliveryService = new OrderDeliveryService(server.prisma);
+      const arrivalCriteriaService = new ArrivalCriteriaEvaluationService(server.prisma, deliveryService);
       await queue.subscribe(QUEUES.OUTBOUND_CARRIER, createOutboundCarrierWorker(server.prisma));
       await queue.subscribe(QUEUES.OUTBOUND_TRACKING, createOutboundTrackingWorker(server.prisma));
-      await queue.subscribe(QUEUES.INBOUND_WEBHOOK, createInboundWebhookWorker(server.prisma, deliveryService));
+      await queue.subscribe(QUEUES.INBOUND_WEBHOOK, createInboundWebhookWorker(server.prisma, deliveryService, arrivalCriteriaService));
       server.log.info('Embedded queue workers registered (set DISABLE_EMBEDDED_WORKERS=true to use separate worker container)');
     } else {
       server.log.info('Embedded workers disabled — using separate worker container');

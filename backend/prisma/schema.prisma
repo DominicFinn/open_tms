@@ -20,6 +20,7 @@ model Customer {
   orders       Order[]
   apiKeys      ApiKey[]
   ediPartners  EdiPartner[]
+  tradingPartners TradingPartner[] @relation("CustomerTradingPartners")
   users        User[]
 
   // Custom fields
@@ -52,6 +53,7 @@ model Location {
   pendingLaneRequestsAsOrigin PendingLaneRequest[] @relation("PendingLaneOrigin")
   pendingLaneRequestsAsDestination PendingLaneRequest[] @relation("PendingLaneDestination")
   shipmentStops  ShipmentStop[] // Multi-stop shipment support
+  arrivalCriteria ArrivalCriteria[] // Arrival criteria for this location
 
   // Custom fields
   customFieldVersionId String?
@@ -85,6 +87,13 @@ model Shipment {
   orderShipments OrderShipment[]
   stops         ShipmentStop[] // Multi-stop route support
   outboundLogs  OutboundIntegrationLog[] // Outbound integration logs
+  tenders       Tender[] // Carrier tenders for this shipment
+  deviceAssignments DeviceAssignment[]    // IoT device assignments
+  sensorReadings    SensorReading[]       // Sensor telemetry data
+
+  // Cargo tracking
+  cargoScans        CargoScan[]
+  cargoDiscrepancies CargoDiscrepancy[]
 
   // Custom fields
   customFieldVersionId String?
@@ -129,6 +138,12 @@ model ShipmentStop {
   photoUrls         Json?     // Array of photo URLs
   proofOfDelivery   Json?     // Additional proof data
 
+  // Cargo tracking relations
+  cargoScans            CargoScan[]
+  discrepanciesExpected CargoDiscrepancy[] @relation("ExpectedStop")
+  discrepanciesActual   CargoDiscrepancy[] @relation("ActualStop")
+  trackableUnitsHere    TrackableUnit[]    @relation("UnitCurrentStop")
+
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
@@ -136,6 +151,48 @@ model ShipmentStop {
   @@index([shipmentId])
   @@index([locationId])
   @@index([status])
+}
+
+// ─── Arrival Criteria ─────────────────────────────────────────────────────────
+// Every location should have at least one arrival criteria to determine
+// when a shipment has arrived. Types: geofence, wifi, ble (Bluetooth anchor).
+
+model ArrivalCriteria {
+  id          String   @id @default(uuid())
+  location    Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  locationId  String
+
+  // Criteria type
+  criteriaType String  // "geofence", "wifi", "ble"
+
+  // Geofence criteria
+  radiusMeters Float?  // Radius in meters for geofence trigger
+  lat          Float?  // Center latitude (defaults to location lat if null)
+  lng          Float?  // Center longitude (defaults to location lng if null)
+
+  // WiFi criteria (IoT device detects a known WiFi network)
+  wifiSsid     String? // WiFi network name (SSID)
+  wifiBssid    String? // WiFi access point MAC address (BSSID) for precise identification
+
+  // BLE criteria (Bluetooth Low Energy location anchor / reader)
+  bleUuid      String? // BLE beacon UUID
+  bleMajor     Int?    // BLE beacon major value
+  bleMinor     Int?    // BLE beacon minor value
+  bleRssiThreshold Int? // RSSI threshold for proximity detection (e.g., -70 dBm)
+  bleAnchorId  String? // Fixed anchor/reader ID at this location (matches device reports)
+  bleReaderLocation String? // Where the reader is at this location (e.g., "Loading Dock B")
+
+  // Metadata
+  name         String? // Optional friendly name (e.g., "Loading Dock A WiFi")
+  active       Boolean @default(true)
+  priority     Int     @default(0) // Higher priority criteria checked first
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([locationId])
+  @@index([criteriaType])
+  @@index([locationId, active])
 }
 
 model ShipmentEvent {
@@ -192,9 +249,18 @@ model Carrier {
   validatedAt               DateTime?
   validatedBy               String?
 
+  // Standard Carrier Alpha Code (needed for EDI 204)
+  scacCode     String?
+
   // Custom fields
   customFieldVersionId String?
   customFieldValues    Json?
+
+  // Tendering relations
+  carrierUsers   CarrierUser[]
+  tenderOffers   TenderOffer[]
+  tenderBids     TenderBid[]
+  tradingPartners TradingPartner[] @relation("CarrierTradingPartners")
 }
 
 model Vehicle {
@@ -289,6 +355,14 @@ model LaneCarrier {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  // Contract rate fields
+  rateType              String?   // "per_mile" | "flat" | "cwt"
+  contractStartDate     DateTime?
+  contractEndDate       DateTime?
+  fuelSurchargePercent  Float?
+  accessorialRates      Json?     // { "detention": 50, "lumper": 75, ... }
+  isContractRate        Boolean   @default(false)
+
   @@unique([laneId, carrierId])
 }
 
@@ -379,6 +453,10 @@ model Order {
   // Pending lane requests
   pendingLaneRequests   PendingLaneRequest[]
 
+  // IoT device tracking
+  deviceAssignments     DeviceAssignment[]
+  sensorReadings        SensorReading[]
+
   // Custom fields
   customFieldVersionId String?
   customFieldValues    Json?
@@ -446,8 +524,16 @@ model Organization {
   themeConfig         Json?                       // Full CSS custom property overrides (see ThemeConfig)
   themeUpdatedAt      DateTime?                   // Used for cache invalidation
 
+  // Carrier Tendering
+  autoTenderEnabled   Boolean  @default(false)  // Auto-publish tenders for laneless shipments
+  defaultGeofenceRadiusMeters Float @default(200) // Default geofence radius for new locations
+
   // Maps & Geocoding
   googleMapsApiKey    String?   // Google Maps API key for Places + Geocoding
+
+  // Email Branding
+  emailHeaderHtml     String?  // Custom HTML for email header (replaces default logo/name header)
+  emailFooterHtml     String?  // Custom HTML for email footer (replaces default "Sent by..." footer)
 
   // Email Configuration
   emailProvider       String   @default("console") // "smtp" | "sendgrid" | "ses" | "console"
@@ -488,11 +574,26 @@ model TrackableUnit {
   barcode         String?  // Optional barcode/QR code
   notes           String?
 
+  // IoT device tracking at unit level
+  sensorReadings  SensorReading[]
+  deviceEvents    DeviceEvent[]
+
+  // Cargo tracking — where this unit physically is right now
+  currentStopId   String?          // Which stop this unit is currently at (null = in transit / on vehicle)
+  currentStop     ShipmentStop?    @relation("UnitCurrentStop", fields: [currentStopId], references: [id])
+  condition       String           @default("good") // good, damaged, lost, unknown
+  lastScannedAt   DateTime?
+
+  // Cargo scan & discrepancy relations
+  cargoScans      CargoScan[]
+  discrepancies   CargoDiscrepancy[]
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
   @@unique([orderId, sequenceNumber])
   @@index([orderId])
+  @@index([currentStopId])
 }
 
 model AuditLog {
@@ -728,6 +829,10 @@ model EdiPartner {
 
   // Field mapping template (JSON)
   fieldMapping    Json?
+
+  // Outbound EDI tendering
+  ediTenderEnabled Boolean  @default(false) // Can send/receive EDI 204/990
+  ediOutboundDir   String?                  // SFTP directory for outbound EDI 204 files
 
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -1381,4 +1486,484 @@ model IssueReadModel {
   @@index([priority])
   @@index([assigneeName])
   @@index([createdAt])
+}
+
+// ============================================================
+// EDI Communication Hub — Unified Trading Partner model
+// ============================================================
+
+model TradingPartner {
+  id             String   @id @default(uuid())
+  name           String
+  active         Boolean  @default(true)
+
+  // What kind of entity is this partner?
+  entityType     String                  // "customer" | "carrier" | "3pl" | "warehouse" | "erp" | "other"
+  customerId     String?                 // Optional link to Customer
+  customer       Customer? @relation("CustomerTradingPartners", fields: [customerId], references: [id])
+  carrierId      String?                 // Optional link to Carrier
+  carrier        Carrier?  @relation("CarrierTradingPartners", fields: [carrierId], references: [id])
+
+  // ── SFTP Connection ──
+  sftpHost       String?
+  sftpPort       Int      @default(22)
+  sftpUsername   String?
+  sftpPassword   String?
+  sftpPrivateKey String?
+
+  // ── HTTP/API Connection ──
+  httpUrl        String?
+  httpAuthType   String?                 // "none" | "basic" | "bearer" | "api_key"
+  httpAuthHeader String?                 // Header name (e.g., "X-API-Key")
+  httpAuthValue  String?                 // Auth credential value
+
+  // ── EDI Envelope Config ──
+  senderId       String?                 // ISA06 — our sender ID for this partner
+  receiverId     String?                 // ISA08 — partner's receiver ID
+  ediVersion     String   @default("005010")
+
+  // ── Inbound Config ──
+  inboundEnabled     Boolean  @default(false)
+  inboundDir         String   @default("/")       // SFTP directory to poll for inbound files
+  inboundFilePattern String   @default("*.edi,*.x12")
+  pollingInterval    Int      @default(900)        // seconds (15 min default)
+  pollingCron        String?                       // Optional cron expression override
+  lastPolledAt       DateTime?
+
+  // ── Outbound Config ──
+  outboundEnabled    Boolean  @default(false)
+  outboundDir        String?                       // SFTP directory for outbound files (null = use HTTP)
+  outboundTransport  String   @default("sftp")     // "sftp" | "http"
+  outboundFileNaming String   @default("reference") // "date" | "sequence" | "reference"
+
+  // ── Legacy migration tracking ──
+  migratedFromEdiPartnerId        String?           // ID of old EdiPartner if migrated
+  migratedFromOutboundIntegrationId String?         // ID of old OutboundIntegration if migrated
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  transactions   TradingPartnerTransaction[]
+  ediLogs        EdiTransactionLog[]
+
+  @@index([entityType])
+  @@index([customerId])
+  @@index([carrierId])
+  @@index([active])
+  @@index([inboundEnabled])
+  @@index([outboundEnabled])
+}
+
+model TradingPartnerTransaction {
+  id             String         @id @default(uuid())
+  partner        TradingPartner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  partnerId      String
+
+  transactionType String                  // "850" | "855" | "856" | "204" | "990" | "214" | "210" | "997" | "810"
+  direction       String                  // "inbound" | "outbound"
+  enabled         Boolean  @default(true)
+
+  // Per-type config
+  fieldMapping    Json?                   // Custom field mappings for this transaction type
+  autoProcess     Boolean  @default(true) // Auto-create orders (850), auto-update shipments (214), etc.
+  ack997Required  Boolean  @default(true) // Send/require 997 functional acknowledgment
+
+  // Inbound file pattern override (if different from partner default)
+  filePattern     String?                 // e.g., "*.990" to override partner's default "*.edi"
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([partnerId, transactionType, direction])
+  @@index([partnerId])
+  @@index([transactionType])
+  @@index([direction])
+}
+
+model EdiTransactionLog {
+  id             String         @id @default(uuid())
+  partner        TradingPartner @relation(fields: [partnerId], references: [id])
+  partnerId      String
+
+  // What was exchanged
+  transactionType String                  // "850", "856", "204", "990", "997", etc.
+  direction       String                  // "inbound" | "outbound"
+
+  // File details
+  fileName        String?
+  fileSize        Int?
+  fileContent     String?                 // Raw EDI content (for audit)
+  fileHash        String?                 // SHA-256 for dedup
+
+  // Transport details
+  transport       String                  // "sftp" | "http"
+  url             String?                 // HTTP URL or SFTP path
+  responseCode    Int?                    // HTTP response code
+  responseBody    String?
+
+  // Processing
+  status          String   @default("pending") // "pending" | "processing" | "success" | "error" | "duplicate"
+  processedAt     DateTime?
+  errorMessage    String?
+
+  // Linked entities
+  shipmentId      String?
+  shipmentReference String?
+  orderId         String?
+  tenderId        String?
+
+  // 997 acknowledgment tracking
+  ack997Sent      Boolean  @default(false)
+  ack997Received  Boolean  @default(false)
+  ack997LogId     String?                 // Reference to the 997 log entry
+
+  // Retry
+  retryCount      Int      @default(0)
+  lastRetryAt     DateTime?
+
+  createdAt       DateTime @default(now())
+
+  @@index([partnerId])
+  @@index([transactionType])
+  @@index([direction])
+  @@index([status])
+  @@index([shipmentId])
+  @@index([fileHash])
+  @@index([createdAt])
+}
+
+// ============================================================
+// Carrier Tendering — CarrierUser, Tender, TenderOffer, TenderBid
+// ============================================================
+
+model CarrierUser {
+  id           String   @id @default(uuid())
+  carrier      Carrier  @relation(fields: [carrierId], references: [id])
+  carrierId    String
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         String   @default("dispatcher") // "dispatcher" | "admin"
+  active       Boolean  @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenderBids   TenderBid[]
+
+  @@index([carrierId])
+  @@index([email])
+}
+
+model Tender {
+  id                    String   @id @default(uuid())
+  shipment              Shipment @relation(fields: [shipmentId], references: [id])
+  shipmentId            String
+  reference             String   @unique          // Auto-generated: "TND-001"
+
+  // Strategy & configuration
+  strategy              String   @default("broadcast") // "broadcast" | "waterfall"
+  status                String   @default("draft")     // "draft" | "open" | "evaluating" | "awarded" | "cancelled" | "expired"
+  tenderDurationMinutes Int      @default(120)         // How long carriers have to respond
+
+  // Rate information
+  targetRate            Float?                         // Target rate (what shipper hopes to pay)
+  currency              String   @default("USD")
+
+  // Shipment details for tender
+  equipmentType         String?                        // "53' Dry Van", "53' Reefer", etc.
+  notes                 String?
+  specialInstructions   String?
+
+  // Lifecycle timestamps
+  openedAt              DateTime?
+  closedAt              DateTime?
+  awardedAt             DateTime?
+
+  // Who created this tender
+  createdBy             String?                        // User ID
+
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  offers                TenderOffer[]
+  bids                  TenderBid[]
+
+  @@index([shipmentId])
+  @@index([status])
+  @@index([reference])
+  @@index([createdAt])
+}
+
+model TenderOffer {
+  id           String   @id @default(uuid())
+  tender       Tender   @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+  tenderId     String
+  carrier      Carrier  @relation(fields: [carrierId], references: [id])
+  carrierId    String
+
+  // Waterfall sequencing (1 = first choice, 2 = second, etc.)
+  sequence     Int      @default(1)
+
+  // Status tracking
+  status       String   @default("pending") // "pending" | "sent" | "viewed" | "expired" | "cancelled"
+  sentAt       DateTime?
+  expiresAt    DateTime?
+  viewedAt     DateTime?
+
+  // EDI 204 tracking
+  ediSent      Boolean  @default(false)
+  edi204Content String?                    // Stored EDI 204 document for audit trail
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  bids         TenderBid[]
+
+  @@unique([tenderId, carrierId])
+  @@index([tenderId])
+  @@index([carrierId])
+  @@index([status])
+  @@index([expiresAt])
+}
+
+model TenderBid {
+  id             String      @id @default(uuid())
+  tender         Tender      @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+  tenderId       String
+  tenderOffer    TenderOffer @relation(fields: [tenderOfferId], references: [id], onDelete: Cascade)
+  tenderOfferId  String
+  carrier        Carrier     @relation(fields: [carrierId], references: [id])
+  carrierId      String
+
+  // Bid details
+  rate           Float                            // Carrier's bid rate
+  currency       String      @default("USD")
+  transitDays    Int?                             // Estimated transit time in days
+  equipmentType  String?                          // Equipment offered
+  notes          String?                          // Carrier comments
+
+  // Status
+  status         String      @default("submitted") // "submitted" | "accepted" | "rejected" | "withdrawn" | "expired"
+  submittedAt    DateTime    @default(now())
+  respondedAt    DateTime?                        // When the bid was accepted/rejected
+
+  // Who submitted this bid
+  submittedBy    CarrierUser? @relation(fields: [submittedById], references: [id])
+  submittedById  String?                          // Null if submitted via EDI
+
+  // Source tracking
+  sourceType     String      @default("portal")  // "portal" | "edi_990" | "manual"
+  edi990Content  String?                          // Raw EDI 990 content if submitted via EDI
+
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  @@unique([tenderOfferId, carrierId])
+  @@index([tenderId])
+  @@index([carrierId])
+  @@index([status])
+  @@index([submittedAt])
+}
+
+// ============================================================
+// IoT Device Tracking
+// ============================================================
+
+model Device {
+  id              String    @id @default(uuid())
+  externalId      String    @unique               // Provider device ID (e.g., System Loco ObjectId)
+  displayId       String?                         // User-friendly ID (e.g., "HG-00012345")
+  name            String                          // Device name — used for shipment/order matching
+  provider        String    @default("system_loco")
+  model           String?                         // Device model (e.g., "HGx")
+  firmware        String?
+  labels          Json?                           // string[] of device tags/labels
+  status          String    @default("active")    // active, inactive, retired
+  batteryLevel    Int?
+  lastSeenAt      DateTime?
+  lastLat         Float?
+  lastLng         Float?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  assignments     DeviceAssignment[]
+  sensorReadings  SensorReading[]
+  deviceEvents    DeviceEvent[]
+
+  @@index([name])
+  @@index([provider])
+  @@index([status])
+}
+
+model DeviceAssignment {
+  id              String    @id @default(uuid())
+  device          Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  deviceId        String
+  shipment        Shipment? @relation(fields: [shipmentId], references: [id], onDelete: SetNull)
+  shipmentId      String?
+  order           Order?    @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  orderId         String?
+  trackableUnitId String?
+  active          Boolean   @default(true)
+  assignedAt      DateTime  @default(now())
+  unassignedAt    DateTime?
+
+  @@index([deviceId, active])
+  @@index([shipmentId])
+  @@index([orderId])
+}
+
+model SensorReading {
+  id              String    @id @default(uuid())
+  device          Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  deviceId        String
+  shipment        Shipment? @relation(fields: [shipmentId], references: [id], onDelete: SetNull)
+  shipmentId      String?
+  order           Order?    @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  orderId         String?
+  trackableUnit   TrackableUnit? @relation(fields: [trackableUnitId], references: [id], onDelete: SetNull)
+  trackableUnitId String?
+  eventTime       DateTime                        // When the reading occurred
+
+  // Sensor values (nullable — only populated when present)
+  temperature     Float?
+  humidity        Float?
+  lightLevel      Int?
+  batteryLevel    Int?
+  batteryVoltage  Float?
+  impactG         Float?
+  tiltAngle       Float?
+  movement        String?                         // "stationary" | "moving"
+
+  // Location at time of reading
+  lat             Float?
+  lng             Float?
+  address         String?
+
+  // Thresholds (from device config, for context)
+  tempMin         Float?
+  tempMax         Float?
+  lightMin        Int?
+  lightMax        Int?
+
+  // Alert
+  isAlert         Boolean   @default(false)
+  alertType       String?                         // "temperature" | "impact" | "light" | "tip" | "battery"
+
+  rawPayload      Json?
+  createdAt       DateTime  @default(now())
+
+  @@index([deviceId, eventTime])
+  @@index([shipmentId, eventTime])
+  @@index([orderId, eventTime])
+  @@index([trackableUnitId, eventTime])
+  @@index([isAlert])
+}
+
+model DeviceEvent {
+  id              String    @id @default(uuid())
+  device          Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  deviceId        String
+  shipmentId      String?
+  orderId         String?
+  trackableUnit   TrackableUnit? @relation(fields: [trackableUnitId], references: [id], onDelete: SetNull)
+  trackableUnitId String?
+
+  externalEventId String?   @unique               // System Loco event ID (for dedup)
+  eventType       String                          // temperature, impact, drop, tip, zoneChange, firmware, charging, etc.
+  category        String                          // "event" | "warning" | "info"
+
+  startTime       DateTime
+  endTime         DateTime?
+
+  lat             Float?
+  lng             Float?
+  address         String?
+  zoneName        String?
+
+  message         String?
+  payload         Json?                           // Full type-specific payload
+
+  createdAt       DateTime  @default(now())
+
+  @@index([deviceId, startTime])
+  @@index([shipmentId])
+  @@index([eventType])
+}
+
+// ============================================================
+// Cargo Tracking & Misdrop Detection
+// ============================================================
+
+// Records physical confirmation of a trackable unit at a specific stop
+model CargoScan {
+  id                String        @id @default(uuid())
+  trackableUnit     TrackableUnit @relation(fields: [trackableUnitId], references: [id], onDelete: Cascade)
+  trackableUnitId   String
+  shipmentStop      ShipmentStop  @relation(fields: [shipmentStopId], references: [id], onDelete: Cascade)
+  shipmentStopId    String
+  shipment          Shipment      @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  shipmentId        String
+
+  // Scan details
+  scanType          String        // load, unload, checkpoint
+  scanMethod        String        // barcode, rfid, manual, geofence, iot
+  scannedAt         DateTime      @default(now())
+  scannedBy         String?       // User ID or device ID
+
+  // Location at scan time
+  lat               Float?
+  lng               Float?
+
+  // Result of scan evaluation
+  expected          Boolean       @default(true) // Was this unit expected at this stop?
+  notes             String?
+
+  createdAt         DateTime      @default(now())
+
+  @@index([trackableUnitId])
+  @@index([shipmentStopId])
+  @@index([shipmentId])
+  @@index([scannedAt])
+}
+
+// Tracks cargo discrepancies — misdrops, missing cargo, unexpected deliveries
+model CargoDiscrepancy {
+  id                String        @id @default(uuid())
+  shipment          Shipment      @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  shipmentId        String
+  trackableUnit     TrackableUnit @relation(fields: [trackableUnitId], references: [id], onDelete: Cascade)
+  trackableUnitId   String
+
+  // Discrepancy classification
+  discrepancyType   String        // misdrop_early, misdrop_late, missing_at_stop, unexpected_at_stop, left_on_vehicle, damaged, wrong_destination
+  severity          String        @default("high") // critical, high, medium, low
+
+  // Where was it supposed to go vs where it actually went
+  expectedStop      ShipmentStop? @relation("ExpectedStop", fields: [expectedStopId], references: [id])
+  expectedStopId    String?
+  actualStop        ShipmentStop? @relation("ActualStop", fields: [actualStopId], references: [id])
+  actualStopId      String?
+
+  // Lifecycle
+  status            String        @default("open") // open, investigating, resolved, dismissed
+  detectedAt        DateTime      @default(now())
+  detectedBy        String        @default("system") // system, manual, driver, iot
+  resolvedAt        DateTime?
+  resolvedBy        String?
+  resolution        String?       // Description of how it was resolved
+
+  // Context
+  description       String        // Human-readable description of the issue
+  notes             String?
+
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@index([shipmentId])
+  @@index([trackableUnitId])
+  @@index([status])
+  @@index([discrepancyType])
+  @@index([detectedAt])
 }

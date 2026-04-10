@@ -45,7 +45,7 @@ export async function registerEventHandlers(
   emailService?: IEmailService
 ): Promise<void> {
   const handlers: IEventHandler[] = [
-    new AuditHandler(),
+    new AuditHandler(prisma),
     new InAppNotificationHandler(prisma),
     // CQRS read model projections
     new OrderProjection(prisma),

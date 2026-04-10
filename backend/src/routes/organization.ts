@@ -12,6 +12,8 @@ const updateSettingsSchema = z.object({
   dimUnit: z.enum(['cm', 'in']).optional(),
   temperatureUnit: z.enum(['C', 'F']).optional(),
   distanceUnit: z.enum(['km', 'mi']).optional(),
+  autoTenderEnabled: z.boolean().optional(),
+  defaultGeofenceRadiusMeters: z.number().positive().optional(),
 });
 
 export async function organizationRoutes(server: FastifyInstance) {

@@ -74,6 +74,11 @@ export default function ThemeSettings() {
   const [savingName, setSavingName] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [emailHeaderHtml, setEmailHeaderHtml] = useState('');
+  const [emailFooterHtml, setEmailFooterHtml] = useState('');
+  const [originalEmailHeaderHtml, setOriginalEmailHeaderHtml] = useState('');
+  const [originalEmailFooterHtml, setOriginalEmailFooterHtml] = useState('');
+  const [savingEmailBranding, setSavingEmailBranding] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -82,9 +87,10 @@ export default function ThemeSettings() {
 
   async function loadTheme() {
     try {
-      const [themeRes, orgRes] = await Promise.all([
+      const [themeRes, orgRes, emailBrandingRes] = await Promise.all([
         fetch(`${API_URL}/api/v1/theme`),
         fetch(`${API_URL}/api/v1/organization/settings`),
+        fetch(`${API_URL}/api/v1/theme/email-branding`),
       ]);
       const themeResult = await themeRes.json();
       if (themeResult.data?.themeConfig) {
@@ -95,6 +101,13 @@ export default function ThemeSettings() {
       if (orgResult.data?.name) {
         setSystemName(orgResult.data.name);
         setOriginalSystemName(orgResult.data.name);
+      }
+      const emailResult = await emailBrandingRes.json();
+      if (emailResult.data) {
+        setEmailHeaderHtml(emailResult.data.emailHeaderHtml || '');
+        setEmailFooterHtml(emailResult.data.emailFooterHtml || '');
+        setOriginalEmailHeaderHtml(emailResult.data.emailHeaderHtml || '');
+        setOriginalEmailFooterHtml(emailResult.data.emailFooterHtml || '');
       }
     } catch {
       setMessage({ type: 'error', text: 'Failed to load theme configuration' });
@@ -353,6 +366,118 @@ export default function ThemeSettings() {
                 Remove Logo
               </button>
             )}
+          </div>
+        </div>
+      </div>
+
+      {/* Email Branding */}
+      <div className="card" style={{ marginBottom: 'var(--spacing-3)' }}>
+        <h2 style={{ marginTop: 0 }}>Email Branding</h2>
+        <p style={{ color: 'var(--on-surface-variant)' }}>
+          Customize the header and footer HTML used in notification emails. Leave blank to use the default (logo/org name header
+          and "Sent by [org name] via Open TMS" footer). HTML should be email-safe (inline styles, tables for layout).
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-2)' }}>
+          <div>
+            <label style={{ display: 'block', fontWeight: 500, marginBottom: 'var(--spacing-1)', fontSize: '0.875rem' }}>
+              Email Header HTML
+            </label>
+            <textarea
+              value={emailHeaderHtml}
+              onChange={(e) => setEmailHeaderHtml(e.target.value)}
+              placeholder='<img src="https://example.com/logo.png" alt="Company" style="max-height:40px;" />'
+              rows={4}
+              style={{
+                width: '100%',
+                padding: 'var(--spacing-2)',
+                borderRadius: '6px',
+                border: '1px solid var(--outline-variant)',
+                backgroundColor: 'var(--surface-container-lowest)',
+                color: 'var(--on-surface)',
+                fontFamily: 'monospace',
+                fontSize: '0.8125rem',
+                resize: 'vertical',
+              }}
+            />
+          </div>
+          <div>
+            <label style={{ display: 'block', fontWeight: 500, marginBottom: 'var(--spacing-1)', fontSize: '0.875rem' }}>
+              Email Footer HTML
+            </label>
+            <textarea
+              value={emailFooterHtml}
+              onChange={(e) => setEmailFooterHtml(e.target.value)}
+              placeholder='<p>Sent by Acme Logistics | <a href="https://example.com">Visit our website</a></p>'
+              rows={4}
+              style={{
+                width: '100%',
+                padding: 'var(--spacing-2)',
+                borderRadius: '6px',
+                border: '1px solid var(--outline-variant)',
+                backgroundColor: 'var(--surface-container-lowest)',
+                color: 'var(--on-surface)',
+                fontFamily: 'monospace',
+                fontSize: '0.8125rem',
+                resize: 'vertical',
+              }}
+            />
+          </div>
+          <div style={{ display: 'flex', gap: 'var(--spacing-1)' }}>
+            <button
+              className="button"
+              disabled={savingEmailBranding || (emailHeaderHtml === originalEmailHeaderHtml && emailFooterHtml === originalEmailFooterHtml)}
+              onClick={async () => {
+                setSavingEmailBranding(true);
+                setMessage(null);
+                try {
+                  const res = await fetch(`${API_URL}/api/v1/theme/email-branding`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      emailHeaderHtml: emailHeaderHtml || null,
+                      emailFooterHtml: emailFooterHtml || null,
+                    }),
+                  });
+                  const result = await res.json();
+                  if (result.error) {
+                    setMessage({ type: 'error', text: result.error });
+                  } else {
+                    setOriginalEmailHeaderHtml(emailHeaderHtml);
+                    setOriginalEmailFooterHtml(emailFooterHtml);
+                    setMessage({ type: 'success', text: 'Email branding saved successfully' });
+                  }
+                } catch {
+                  setMessage({ type: 'error', text: 'Failed to save email branding' });
+                } finally {
+                  setSavingEmailBranding(false);
+                }
+              }}
+            >
+              {savingEmailBranding ? 'Saving...' : 'Save Email Branding'}
+            </button>
+            <button
+              className="button button-outline"
+              disabled={savingEmailBranding || (!emailHeaderHtml && !emailFooterHtml)}
+              onClick={async () => {
+                if (!confirm('Reset email header and footer to defaults?')) return;
+                setSavingEmailBranding(true);
+                setMessage(null);
+                try {
+                  await fetch(`${API_URL}/api/v1/theme/email-branding`, { method: 'DELETE' });
+                  setEmailHeaderHtml('');
+                  setEmailFooterHtml('');
+                  setOriginalEmailHeaderHtml('');
+                  setOriginalEmailFooterHtml('');
+                  setMessage({ type: 'success', text: 'Email branding reset to defaults' });
+                } catch {
+                  setMessage({ type: 'error', text: 'Failed to reset email branding' });
+                } finally {
+                  setSavingEmailBranding(false);
+                }
+              }}
+            >
+              Reset to Defaults
+            </button>
           </div>
         </div>
       </div>

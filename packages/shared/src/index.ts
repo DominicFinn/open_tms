@@ -81,3 +81,65 @@ export interface ApiResponse<T> {
   data: T;
   error?: { message: string; code?: string } | null;
 }
+
+// Tender types
+export type TenderStrategy = 'broadcast' | 'waterfall';
+export type TenderStatus = 'draft' | 'open' | 'evaluating' | 'awarded' | 'cancelled' | 'expired';
+export type TenderOfferStatus = 'pending' | 'sent' | 'viewed' | 'expired' | 'cancelled';
+export type TenderBidStatus = 'submitted' | 'accepted' | 'rejected' | 'withdrawn' | 'expired';
+export type TenderBidSource = 'portal' | 'edi_990' | 'manual';
+
+export interface Tender extends Timestamped {
+  id: ID;
+  shipmentId: ID;
+  reference: string;
+  strategy: TenderStrategy;
+  status: TenderStatus;
+  tenderDurationMinutes: number;
+  targetRate?: number;
+  currency: string;
+  equipmentType?: string;
+  notes?: string;
+  specialInstructions?: string;
+  openedAt?: string;
+  closedAt?: string;
+  awardedAt?: string;
+  createdBy?: string;
+}
+
+export interface TenderOffer extends Timestamped {
+  id: ID;
+  tenderId: ID;
+  carrierId: ID;
+  sequence: number;
+  status: TenderOfferStatus;
+  sentAt?: string;
+  expiresAt?: string;
+  viewedAt?: string;
+  ediSent: boolean;
+}
+
+export interface TenderBid extends Timestamped {
+  id: ID;
+  tenderId: ID;
+  tenderOfferId: ID;
+  carrierId: ID;
+  rate: number;
+  currency: string;
+  transitDays?: number;
+  equipmentType?: string;
+  notes?: string;
+  status: TenderBidStatus;
+  submittedAt: string;
+  respondedAt?: string;
+  sourceType: TenderBidSource;
+}
+
+export interface CarrierUser {
+  id: ID;
+  carrierId: ID;
+  email: string;
+  name: string;
+  role: string;
+  active: boolean;
+}

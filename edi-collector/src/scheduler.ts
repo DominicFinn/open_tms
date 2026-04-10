@@ -1,6 +1,6 @@
 import cron from 'node-cron';
-import { AppConfig, EdiPartnerConfig, fetchPartnerConfigs } from './config.js';
-import { collectFromPartner, clearSeenCache } from './collector.js';
+import { AppConfig, EdiPartnerConfig, TradingPartnerConfig, fetchPartnerConfigs, fetchTradingPartnerConfigs } from './config.js';
+import { collectFromPartner, collectFromTradingPartner, clearSeenCache } from './collector.js';
 import { log } from './logger.js';
 
 interface PartnerJob {
@@ -77,36 +77,91 @@ function stopPartnerJob(partnerId: string) {
   log.info(`[${job.partnerName}] Job stopped`);
 }
 
+// Schedule a TradingPartner (new model — routes by transaction type)
+function scheduleTradingPartner(partner: TradingPartnerConfig, appConfig: AppConfig) {
+  const jobId = `tp-${partner.id}`;
+  stopPartnerJob(jobId);
+
+  const job: PartnerJob = {
+    partnerId: jobId,
+    partnerName: partner.name,
+    running: false,
+  };
+
+  const run = () => {
+    if (job.running) {
+      log.warn(`[${partner.name}] Previous collection still running, skipping`);
+      return;
+    }
+    job.running = true;
+    collectFromTradingPartner(partner, appConfig)
+      .then(result => {
+        if (result.filesProcessed > 0) log.info(`[${partner.name}] Cycle: ${result.filesProcessed} files`);
+        if (result.errors.length > 0) log.warn(`[${partner.name}] Cycle: ${result.errors.length} error(s)`);
+      })
+      .catch(err => log.error(`[${partner.name}] Cycle failed: ${err.message}`))
+      .finally(() => { job.running = false; });
+  };
+
+  if (partner.pollingCron && cron.validate(partner.pollingCron)) {
+    log.info(`[${partner.name}] (TradingPartner) Scheduling cron: ${partner.pollingCron}`);
+    job.cronTask = cron.schedule(partner.pollingCron, run);
+  } else {
+    const intervalMs = partner.pollingInterval * 1000;
+    log.info(`[${partner.name}] (TradingPartner) Scheduling every ${partner.pollingInterval}s`);
+    run(); // Run immediately
+    job.intervalTimer = setInterval(run, intervalMs);
+  }
+
+  activeJobs.set(jobId, job);
+}
+
 export async function refreshSchedule(appConfig: AppConfig) {
   log.info('Refreshing partner configurations...');
 
-  let partners: EdiPartnerConfig[];
+  const allActiveIds = new Set<string>();
+
+  // 1. Fetch TradingPartner configs (new model)
   try {
-    partners = await fetchPartnerConfigs(appConfig);
+    const tradingPartners = await fetchTradingPartnerConfigs(appConfig);
+    log.info(`Fetched ${tradingPartners.length} TradingPartner(s) with inbound enabled`);
+
+    for (const tp of tradingPartners) {
+      if (!tp.sftpHost || !tp.sftpUsername) {
+        log.warn(`[${tp.name}] Missing SFTP credentials, skipping`);
+        continue;
+      }
+      const jobId = `tp-${tp.id}`;
+      allActiveIds.add(jobId);
+      scheduleTradingPartner(tp, appConfig);
+    }
   } catch (err: any) {
-    log.error(`Failed to fetch partner configs: ${err.message}`);
-    return;
+    log.warn(`Failed to fetch TradingPartner configs (may not exist yet): ${err.message}`);
   }
 
-  log.info(`Fetched ${partners.length} active polling partner(s)`);
+  // 2. Fetch legacy EdiPartner configs (backward compatibility)
+  try {
+    const partners = await fetchPartnerConfigs(appConfig);
+    log.info(`Fetched ${partners.length} legacy EdiPartner(s)`);
 
-  const activePartnerIds = new Set(partners.map(p => p.id));
-
-  // Stop jobs for partners that are no longer active/polling
-  for (const [partnerId] of activeJobs) {
-    if (!activePartnerIds.has(partnerId)) {
-      stopPartnerJob(partnerId);
-      clearSeenCache(partnerId);
+    for (const partner of partners) {
+      if (!partner.sftpHost || !partner.sftpUsername) {
+        log.warn(`[${partner.name}] Missing SFTP credentials, skipping`);
+        continue;
+      }
+      allActiveIds.add(partner.id);
+      schedulePartner(partner, appConfig);
     }
+  } catch (err: any) {
+    log.error(`Failed to fetch legacy partner configs: ${err.message}`);
   }
 
-  // Schedule or re-schedule each active partner
-  for (const partner of partners) {
-    if (!partner.sftpHost || !partner.sftpUsername) {
-      log.warn(`[${partner.name}] Missing SFTP credentials, skipping`);
-      continue;
+  // 3. Stop jobs for partners no longer active
+  for (const [jobId] of activeJobs) {
+    if (!allActiveIds.has(jobId)) {
+      stopPartnerJob(jobId);
+      clearSeenCache(jobId);
     }
-    schedulePartner(partner, appConfig);
   }
 }
 

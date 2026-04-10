@@ -45,16 +45,34 @@ export const EVENT_TYPES = {
   // Locations
   LOCATION_CREATED: 'location.created',
   LOCATION_UPDATED: 'location.updated',
+  LOCATION_ARCHIVED: 'location.archived',
+  LOCATION_ARRIVAL_CRITERIA_ADDED: 'location.arrival_criteria_added',
+  LOCATION_ARRIVAL_CRITERIA_UPDATED: 'location.arrival_criteria_updated',
+  LOCATION_ARRIVAL_CRITERIA_REMOVED: 'location.arrival_criteria_removed',
 
   // Lanes
   LANE_CREATED: 'lane.created',
   LANE_UPDATED: 'lane.updated',
   LANE_ARCHIVED: 'lane.archived',
 
+  // Tenders
+  TENDER_CREATED: 'tender.created',
+  TENDER_PUBLISHED: 'tender.published',
+  TENDER_AWARDED: 'tender.awarded',
+  TENDER_CANCELLED: 'tender.cancelled',
+  TENDER_RESPONSE_RECEIVED: 'tender.response_received',
+
   // Tracking
   TRACKING_LOCATION_RECEIVED: 'tracking.location_received',
   TRACKING_GEOFENCE_ENTERED: 'tracking.geofence_entered',
   TRACKING_ETA_UPDATED: 'tracking.eta_updated',
+
+  // Cargo tracking & misdrop detection
+  CARGO_SCAN_RECORDED: 'cargo.scan_recorded',
+  CARGO_MISDROP_DETECTED: 'cargo.misdrop_detected',
+  CARGO_MISSING_AT_STOP: 'cargo.missing_at_stop',
+  CARGO_LEFT_ON_VEHICLE: 'cargo.left_on_vehicle',
+  CARGO_DISCREPANCY_RESOLVED: 'cargo.discrepancy_resolved',
 
   // Issues / Triage
   ISSUE_CREATED: 'issue.created',
@@ -177,6 +195,36 @@ export interface TrackingLocationReceivedPayload {
   lng: number;
   eventTime: string;
   deviceId?: string;
+}
+
+export interface CargoMisdropPayload {
+  shipmentId: string;
+  trackableUnitId: string;
+  unitIdentifier: string;
+  unitType: string;
+  discrepancyType: string;
+  expectedStop: string;
+  actualStop: string;
+  orderId: string;
+  orderNumber: string;
+}
+
+export interface CargoMissingPayload {
+  shipmentId: string;
+  trackableUnitId: string;
+  unitIdentifier: string;
+  unitType: string;
+  stopName: string;
+  orderNumber: string;
+}
+
+export interface CargoLeftOnVehiclePayload {
+  shipmentId: string;
+  trackableUnitId: string;
+  unitIdentifier: string;
+  unitType: string;
+  orderId: string;
+  orderNumber: string;
 }
 
 export interface EntityChangedPayload {

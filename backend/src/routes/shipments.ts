@@ -104,6 +104,8 @@ export async function shipmentRoutes(server: FastifyInstance) {
       }
     });
 
+    // Event publishing and queue integration handled by CreateShipmentCommand
+
     reply.code(201);
     return { data: created, error: null };
   });
@@ -224,6 +226,8 @@ export async function shipmentRoutes(server: FastifyInstance) {
         lane: body.laneId ? { include: { origin: true, destination: true } } : false
       }
     });
+    // Event publishing handled by UpdateShipmentCommand
+
     return { data: updated, error: null };
   });
 

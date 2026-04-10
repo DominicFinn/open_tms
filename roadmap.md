@@ -69,20 +69,19 @@
   - ✅ Payload format support: EDI 856 vs JSON
   - ✅ Shared authentication helpers (basic, bearer, api_key)
 
-## **Phase 3: Platform Foundations, Documentation & Compliance**
+## **Phase 3: Platform Foundations, Documentation & Compliance** ✅
 - **User Management & Authentication** ✅
   - ✅ User accounts with login, password management
   - ✅ SSO/OAuth support (Google, Microsoft)
   - ✅ Roles & permissions (admin, dispatcher, warehouse, read-only)
   - ✅ Session management (JWT-based)
-  - Multi-tenancy support (extend existing Organization model) 🔲
-  - User attribution on audit trail events 🔲
+  - ✅ User attribution on audit trail events
 - **Document Templates** ✅
   - ✅ Auto-generate Bills of Lading, shipping labels, customs forms
   - ✅ PDF generation with prefilled shipment details (pdf-lib)
   - ✅ Document template management UI (create/edit Handlebars templates)
   - ✅ Daily operations report (Excel export with 5 sheets: summary, shipments, orders, stop schedule, exceptions)
-- **Document Management** (partial)
+- **Document Management** ✅
   - ✅ Store and archive generated docs (GeneratedDocument model)
   - ✅ Document download and listing with filters
   - ✅ S3-compatible file storage provider (AWS S3, MinIO, Azure Blob S3 compat)
@@ -94,12 +93,7 @@
   - ✅ Opaque storage keys (UUID-based, no customer/entity info in storage paths) for security
     - ⚠️ Open decision: opaque UUIDs won't suit SharePoint/network drive providers where users expect browsable folder structures. Key format may need to be per-provider if file-system-based storage is added later.
   - ✅ Default 10-year retention period on all files and generated documents
-  - Data export capability 🔲 (low priority — bulk export of documents/attachments per entity)
-  - Electronic signature capture for delivery confirmation 🔲
-    - **Deferred**: Requires a legally binding signature system — simple canvas signatures are not sufficient
-    - Will implement as adapter pattern with pluggable providers (DocuSign, Adobe Sign, or similar)
-    - Consider both e-signature and wet signature workflows
-  - Begin audit trail for shipment events 🔲
+  - Begin audit trail for shipment events → moved to **Phase 9a** (Audit Review & Compliance Trail)
 - **Theming & White-labeling** ✅
   - ✅ CSS custom properties stored as JSON in Organization.themeConfig
   - ✅ Theme API (GET/PUT/DELETE) with CSS variable key allowlist and color validation
@@ -111,8 +105,8 @@
   - ✅ Settings, document templates, and custom fields moved to Admin app
   - ✅ Hardcoded colors replaced with CSS variables across all frontend components
   - ✅ CLAUDE.md created with frontend theming conventions
-  - Email header/footer branding configuration 🔲
-  - Document templates should inherit branding (logo, colors) 🔲
+  - ✅ Email header/footer branding configuration
+  - ✅ Document templates inherit branding (logo, colors, org name)
 - **Custom Fields** ✅
   - ✅ Configurable fields for shipments, orders, carriers, customers, and locations
   - ✅ Field types: text, decimal, integer, date, boolean, single-select list, multi-select list
@@ -127,11 +121,36 @@
   - ✅ User-level overrides: each user selects preferred units (null = use org default)
   - ✅ Conversion utilities (backend stores canonical metric, converts on display)
   - ✅ Settings UI updated with temperature and distance unit selectors
-- **Multi-Language Support** 🔲
-  - Language files (JSON) for UI translations
-  - User-selectable language preference
-  - Backend error messages and labels in language files
-  - RTL layout support for applicable languages
+## **Phase 3b: Location Arrival Criteria & Carrier Tendering**
+- **Location Auto-Creation & Arrival Criteria** 🔲
+  - Locations are always created when orders/shipments arrive (EDI, API, CSV, manual)
+  - Automatic location resolution: match by name + city, create if no match found
+  - Default geofence arrival criteria created for every new location
+  - Three arrival criteria types:
+    - **Geofence** — radius-based detection (GPS coordinates + radius in meters)
+    - **WiFi Network** — IoT device/tracker detects known WiFi SSID/BSSID at location
+    - **BLE Anchor** — Bluetooth Low Energy beacon detection (UUID, major, minor, RSSI threshold)
+  - Arrival criteria management API (CRUD per location)
+  - Configurable default geofence radius at organization level
+  - Audit events for location creation, editing, and arrival criteria changes
+- **Shipment Completion Criteria** 🔲
+  - Shipment regarded as completed when:
+    - Arrival criteria met at destination (geofence entered, WiFi seen, BLE detected)
+    - Manually completed by user
+    - Automatically completed via external API call / integration event
+  - Arrival criteria evaluation integrated with existing geofence + IoT delivery service
+- **Carrier Tendering** 🔲
+  - When a shipment has origin/destination but no lane, a tender is created
+  - Tender lifecycle: draft → published → awarded / cancelled / expired
+  - Carrier responses with pricing, transit time, and notes
+  - Award tender to carrier — automatically assigns carrier to shipment
+  - Auto-publish toggle: admin setting to auto-publish tenders for laneless shipments
+  - Manual publish option for users who want to assign carriers directly
+  - Tender audit trail via domain events
+- **Admin Settings** 🔲
+  - Auto-tender feature toggle (on/off) in organization settings
+  - Default geofence radius configuration
+  - Settings available in Admin > Settings
 
 ## **Phase 4: Notifications, Tracking & Exception Management**
 - **Emails & Notifications** ✅
@@ -183,7 +202,11 @@
   - Real-time GPS location tracking
   - Offline support with sync when reconnected
   - Push notifications for new assignments
-
+- **Electronic Signature Capture** 🔲
+  - Requires a legally binding signature system — simple canvas signatures are not sufficient
+  - Adapter pattern with pluggable providers (DocuSign, Adobe Sign, or similar)
+  - Both e-signature and wet signature workflows
+  - Integrated with driver mobile app for delivery confirmation
 ## **Phase 5: IoT Integration (System Loco)**
 - **Device–Shipment Linking** 🔲
   - Associate IoT devices with shipments (1:1, 1:many).
@@ -199,6 +222,14 @@
     - Automatic order completion when shipment enters destination geofence
     - Enhanced triggers: geofence + light sensor = truck door opened at destination
     - Automatic status updates based on sensor data
+- **Multi-Language Support** 🔲
+  - Language files (JSON) for UI translations
+  - User-selectable language preference
+  - Backend error messages and labels in language files
+  - RTL layout support for applicable languages
+- **Data Export** 🔲
+  - Bulk export of documents/attachments per entity
+  - CSV/PDF export of shipment, order, and customer data
 
 ## **Phase 6: Cold Chain & Advanced Compliance**
 - **Cold Chain Profiles** 🔲
@@ -209,6 +240,12 @@
   - Generate compliance reports (CFR 21 Part 11, EU Annex 11).
 - **Regulatory Audit Trail** 🔲
   - Immutable logs, timestamps, digital signatures.
+- **Digital BOL Sharing & Secure Repository** 🔲
+  - Integrate with an external eBOL / digital document provider for tamper-proof sharing
+  - Shareable BOL links with access control (time-limited, PIN-protected)
+  - Digital signature capture (shipper, carrier, consignee) on online BOL view
+  - Publish immutable BOL documents to a secure external repository
+  - Audit log of all BOL views, prints, and downloads
 - **Customer Reporting** 🔲
   - Auto-generate compliance PDFs/CSVs per shipment.
 
@@ -233,13 +270,51 @@
   - CSV/PDF report export
   - Scheduled reports via email
 
-## **Phase 8: Portals & Integration**
+## **Phase 8: Portals, Tendering & Integration**
+- **Carrier Tendering System** ✅
+  - ✅ Tender model with broadcast and waterfall strategies
+  - ✅ TenderOffer (per-carrier) and TenderBid (carrier's rate submission) models
+  - ✅ Configurable tender duration (how long carriers have to respond)
+  - ✅ Full tender lifecycle: draft → open → evaluating → awarded → confirmed
+  - ✅ Waterfall logic: auto-progress to next carrier on timeout or decline
+  - ✅ Broadcast logic: all carriers notified simultaneously, bids compared
+  - ✅ Award flow: accept winning bid, reject others, assign carrier to shipment
+  - ✅ Tender expiration checks for automatic timeout handling
+  - ✅ Admin tender management UI: list with status/carrier filters, detail with bid comparison, award modal
+  - ✅ Create tender wizard: 5-step flow (shipment, strategy, carrier selection with waterfall reordering, parameters, review)
+  - ✅ Tender history and carrier filter on tenders list
+- **Carrier Portal** ✅
+  - ✅ CarrierUser model with email/password authentication (separate from internal users)
+  - ✅ JWT-based carrier auth with dedicated issuer (`open-tms-carrier`)
+  - ✅ Carrier portal login page at `/carrier-portal/login`
+  - ✅ Carrier dashboard: active tenders, pending bids, loads won summary
+  - ✅ Tender view with bid submission form (rate, transit days, equipment, notes)
+  - ✅ Tender decline with automatic waterfall progression
+  - ✅ Bid history page showing all bids with status (submitted/accepted/rejected)
+  - ✅ Full tender history page with outcome tracking (won/lost/pending/expired) and win rate
+  - ✅ Carrier portal profile page with password change
+  - ✅ Carrier portal layout with separate navigation header
+- **Carrier User Management (Admin)** ✅
+  - ✅ Admin UI for creating/managing carrier portal users on carrier edit page
+  - ✅ Create user modal (email, password, name, role)
+  - ✅ Activate/deactivate carrier users
+  - ✅ Admin password reset for carrier users
+  - ✅ Password strength validation (uppercase, lowercase, number, 8+ chars)
+  - ✅ Account lockout after 5 failed login attempts (15 min cooldown)
+  - ✅ Progressive lockout warnings
+- **Carrier Enhancements** ✅
+  - ✅ SCAC code field on carrier model and forms (required for EDI 204)
+  - ✅ Contract rate fields on LaneCarrier (rateType, contractStartDate/EndDate, fuelSurchargePercent, accessorialRates)
+- **EDI 204/990 Support** ✅
+  - ✅ EDI 204 (Motor Carrier Load Tender) generation service — full X12 004010 segment mapping
+  - ✅ EDI 990 (Response to Load Tender) parse service — accept/decline processing
+  - ✅ EDI 204 preview endpoint
+  - ✅ Inbound EDI 990 endpoint with automatic bid creation and waterfall progression
+  - 🔲 Automated EDI 204 delivery via SFTP/HTTP (currently manual — see Phase 8b)
+  - 🔲 Automated EDI 990 polling from SFTP (currently manual — see Phase 8b)
 - **Customer Portal** 🔲
   - Customer-facing UI for order tracking, document access, order submission
   - Self-service shipment visibility
-- **Carrier Portal** 🔲
-  - Carrier-facing UI for load acceptance, status updates, document upload
-  - Capacity and availability management
 - **TMS-to-TMS Integration** 🔲
   - JSON APIs modeled after EDI structure
   - Share shipments, status, documents across TMS partners
@@ -250,6 +325,92 @@
   - N8N custom node package for Open TMS
   - OAuth/API key authentication for N8N callbacks into Open TMS
   - Pre-built workflow templates (e.g., auto-notify on exception, escalate delayed shipments)
+
+## **Phase 8b: EDI Communication Hub**
+The current EDI infrastructure handles inbound 850 (SFTP polling) and outbound 856 (HTTP push) as separate systems. This phase unifies all EDI communication into a single **Trading Partner** model that handles any transaction type, any direction, and any transport method.
+
+- **Unified Trading Partner Model** 🔲
+  - Replace separate EdiPartner (inbound-only) and OutboundIntegration (outbound-only) with a unified TradingPartner model
+  - Each partner has: entity type (customer, carrier, 3PL, warehouse, ERP), transport config (SFTP, HTTP/API, AS2), and direction (inbound, outbound, bidirectional)
+  - TradingPartnerTransaction registry: which EDI types each partner supports, with per-type config overrides
+  - Support multiple connections per partner (e.g., carrier has SFTP for inbound 990 + HTTP for outbound 204)
+  - Migration path from existing EdiPartner and OutboundIntegration data
+- **Transaction Type Registry** 🔲
+  - EDI 850 (Purchase Order): Customer/ERP → TMS (inbound) ✅ exists
+  - EDI 855 (PO Acknowledgment): TMS → Customer/ERP (outbound)
+  - EDI 856 (Advance Ship Notice): TMS → Customer/Carrier/ERP (outbound) ✅ exists
+  - EDI 204 (Motor Carrier Load Tender): TMS → Carrier (outbound) ✅ exists
+  - EDI 990 (Response to Load Tender): Carrier → TMS (inbound) ✅ exists
+  - EDI 214 (Shipment Status Message): Carrier → TMS (inbound) + TMS → Customer (outbound)
+  - EDI 210 (Freight Invoice): Carrier → TMS (inbound)
+  - EDI 997 (Functional Acknowledgment): bidirectional — auto-generated on every inbound transaction
+  - EDI 810 (Invoice): TMS → Customer (outbound)
+  - EDI 820 (Payment Order/Remittance): Customer → TMS (inbound)
+- **Outbound EDI Delivery Engine** 🔲
+  - Queue-based outbound delivery worker (extends existing outboundCarrierWorker pattern)
+  - SFTP writer: connect to partner's SFTP, write EDI file to configured outbound directory
+  - HTTP/API sender: POST EDI content to partner's endpoint (existing pattern from GenericEdiCarrierAdapter)
+  - AS2 transport: Applicability Statement 2 for enterprise trading partners (MDN receipts, encryption)
+  - Outbound file naming conventions (configurable per partner: date-based, sequence-based, etc.)
+  - Delivery confirmation tracking and retry logic
+  - Outbound EDI audit log (what was sent, when, to whom, delivery status)
+- **Inbound EDI Router** 🔲
+  - Extend edi-collector to detect transaction type from ST segment (850, 990, 214, 210, etc.)
+  - Route to appropriate parser service based on transaction type
+  - Support multiple inbound file patterns per partner (*.850, *.990, *.214, *.210)
+  - Inbound EDI 997 auto-generation: acknowledge every received transaction
+  - Inbound file archival after processing
+- **EDI 214 (Shipment Status) Service** 🔲
+  - Inbound: parse carrier status updates (pickup, in-transit, delivered) → update shipment status
+  - Outbound: generate status messages for customers based on shipment events
+  - Status code mapping: AF (pickup), X1 (in-transit), D1 (delivered), A7 (refused)
+  - Integration with existing ShipmentEvent model
+- **EDI 210 (Freight Invoice) Service** 🔲
+  - Inbound: parse carrier freight invoices → create billing records
+  - Three-way matching: tender rate vs shipment status vs invoice amount
+  - Discrepancy detection and flagging
+  - Feeds into Phase 7 (Financial & Commercial) freight audit
+- **EDI 997 (Functional Acknowledgment)** 🔲
+  - Auto-generate 997 for every inbound EDI transaction
+  - Track 997 receipt for outbound transactions (was our 204 acknowledged?)
+  - Configurable: require 997 within N hours or alert
+- **Trading Partner Management UI** 🔲
+  - Unified partner configuration page in Integrations app
+  - Per-partner: connection config, supported transaction types, field mappings, test connection
+  - Transaction activity dashboard: sent/received counts per type, error rates
+  - EDI file browser: view all inbound/outbound files per partner with content preview
+  - Replace separate EDI Partners and Outbound Integrations pages
+- **SAP / ERP Integration Patterns** 🔲
+  - SAP iDoc ↔ X12 EDI mapping templates
+  - Configurable field mapping UI for non-standard ERP formats
+  - Flat file (CSV/fixed-width) adapter for legacy ERP systems
+  - REST/SOAP API adapter for modern ERP integration (SAP S/4HANA, Oracle, NetSuite)
+
+## **Phase 8c: Carrier Intelligence & Risk**
+- **Carrier Performance Monitoring** 🔲
+  - On-time pickup/delivery percentage tracking
+  - Tender acceptance rate per carrier
+  - Average transit time vs quoted time
+  - Damage/claim rate tracking
+  - Performance scorecards with trend analysis
+  - Automatic performance-based carrier ranking for waterfall tenders
+- **Carrier Risk Scoring** 🔲
+  - FMCSA SAFER system API integration for MC/DOT validation
+  - Automatic carrier authority verification on creation
+  - Insurance certificate expiry monitoring and alerts
+  - Safety rating tracking (Satisfactory, Conditional, Unsatisfactory)
+  - Fictitious carrier detection (cross-reference MC databases, flag suspicious patterns)
+  - Risk score algorithm combining safety, insurance, performance, and financial factors
+- **Carrier Onboarding Workflow** 🔲
+  - Self-registration flow for carriers with approval pipeline
+  - Document collection: insurance certificates, W-9, carrier authority, operating permits
+  - Automated validation checks before activation
+  - Onboarding status tracking tied to validation tiers
+- **Carrier Reporting** 🔲
+  - Carrier spend analysis per lane and time period
+  - Capacity utilization reports
+  - Rate benchmarking vs market data (feeds from Phase 9c)
+  - Exportable carrier scorecards for procurement reviews
 
 ## **Phase 9: Routes & Maps Insights**
 - **Map Provider Integration** 🔲
@@ -289,6 +450,26 @@
   - Multi-stop optimization (TSP solver) for shipments with many waypoints
   - Fuel cost estimation per route variant
   - Carbon footprint calculation per route for sustainability reporting
+
+## **Phase 9a: Audit Review & Compliance Trail**
+- **Audit Trail Review UI** 🔲
+  - Searchable, filterable audit log viewer (Admin > Audit Log)
+  - Filter by entity type, action, user, date range
+  - Timeline view per entity (shipment, order, carrier, customer)
+  - Export audit records (CSV/PDF) for compliance reviews
+- **Shipment Event Audit Trail** 🔲
+  - Complete event history on shipment detail page (status changes, assignments, document generation, stop updates)
+  - Order-level audit trail on order detail page
+  - Visual timeline with user attribution and timestamps
+- **Audit Data Integrity** 🔲
+  - Immutable audit records — no update or delete API for audit entries
+  - Checksums or hash chains on DomainEventLog for tamper evidence
+  - Retention policy enforcement (configurable per org, default 7 years)
+- **Compliance Reporting** 🔲
+  - Scheduled audit summary reports (daily/weekly digest of changes)
+  - User activity reports (actions per user over time period)
+  - Data access logging for sensitive fields (PII, financial data)
+  - Pre-built report templates for SOC 2, ISO 27001 evidence gathering
 
 ## **Phase 9b: Intelligence & AI**
 - **AI Triage Agent** 🔲
@@ -407,10 +588,16 @@
 ---
 
 🔥 **Priorities:**
-- **Immediate:** Complete **Phase 4** — Triage Centre UI (kanban board), auto-triage handler (exception events → issues), SLA tracking. CQRS event backbone is done; now build the operational UX on top.
-- **Short term:** Deliver **Phase 5** (IoT device-shipment linking, sensor visualization) — the event pipeline is ready for high-throughput IoT ingestion.
-- **Medium term:** Deliver **Phase 6** (cold chain compliance) → unique differentiator. Events + issue system provide the audit trail and exception workflow needed for regulatory compliance.
-- **Long term:** **Phase 7–8** (financials, portals, N8N integration) to scale platform. Event export API is warehouse-ready for financial analytics.
-- **Strategic:** **Phase 9–9c** (routes & maps, AI agents, data providers) — the intelligence layer. DomainEventLog + ML pipeline readiness means AI agents can consume the full event stream.
-- **Operational:** **Phase 10** (SRE & observability) — `/metrics` endpoint and projection checkpointing are in place. Next: Prometheus format, Grafana dashboards, OpenTelemetry tracing.
+- **Immediate:** Complete **Phase 4** Triage Centre UI + auto-triage handler. CQRS backbone is done. Continue **Phase 8b** (EDI Communication Hub, unified trading partners).
+- **Short term:** Deliver **Phase 5** (IoT device-shipment linking, sensor visualization) — event pipeline ready for high-throughput IoT. Continue **Phase 8c** (carrier intelligence, FMCSA).
+- **Medium term:** Deliver **Phase 6** (cold chain compliance). Events + issue system provide audit trail and exception workflow for regulatory compliance.
+- **Long term:** **Phase 7–8** remaining items (financials, customer portal, N8N integration). Event export API is warehouse-ready for financial analytics.
+- **Strategic:** **Phase 9–9c** (routes & maps, AI agents, data providers) — DomainEventLog + ML pipeline readiness means AI agents can consume the full event stream.
+- **Operational:** **Phase 10** (SRE & observability) — `/metrics` endpoint and projection checkpointing in place. Next: Prometheus format, Grafana dashboards, OpenTelemetry tracing.
 - **Future:** **Phase 11** (advanced operations) for enterprise depth.
+
+---
+
+## Considerations (Outside Roadmap)
+
+- **Multi-Tenancy Support** — Extend existing Organization model for true multi-tenant isolation. Significant architectural decision: row-level security vs schema-per-tenant vs database-per-tenant. Impacts every query, every route, every permission check. Should be evaluated when there is a concrete need (multiple paying customers on a single deployment) rather than built speculatively. Current single-org model works for self-hosted and single-tenant SaaS deployments.

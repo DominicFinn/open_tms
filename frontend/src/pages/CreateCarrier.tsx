@@ -2,6 +2,7 @@ import React from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { API_URL } from '../api';
 import CarrierCreationForm from '../components/CarrierCreationForm';
+import CarrierUserManagement from '../components/CarrierUserManagement';
 
 interface Carrier {
   id: string;
@@ -148,6 +149,13 @@ export default function CreateCarrier() {
         onCarrierUpdated={handleCarrierUpdated}
         onCancel={handleCancel}
       />
+
+      {/* Carrier User Management (only on edit) */}
+      {isEditing && editingCarrier && (
+        <div className="card" style={{ marginTop: 'var(--spacing-3)' }}>
+          <CarrierUserManagement carrierId={editingCarrier.id} carrierName={editingCarrier.name} />
+        </div>
+      )}
     </div>
   );
 }

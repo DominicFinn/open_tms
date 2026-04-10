@@ -14,6 +14,7 @@ import { IOrdersRepository } from '../repositories/OrdersRepository.js';
 import { ICustomersRepository } from '../repositories/CustomersRepository.js';
 import { ILocationsRepository } from '../repositories/LocationsRepository.js';
 import { IEDI850ParseService, ParseResult, EdiFieldMappingConfig } from './EDI850ParseService.js';
+import { ILocationResolutionService } from './LocationResolutionService.js';
 
 export interface EdiImportOptions {
   partnerId?: string;
@@ -46,7 +47,8 @@ export class EdiImportService implements IEdiImportService {
     private parseService: IEDI850ParseService,
     private ordersRepo: IOrdersRepository,
     private customersRepo: ICustomersRepository,
-    private locationsRepo: ILocationsRepository
+    private locationsRepo: ILocationsRepository,
+    private locationResolutionService?: ILocationResolutionService
   ) {}
 
   /**
@@ -172,35 +174,61 @@ export class EdiImportService implements IEdiImportService {
             continue;
           }
 
-          // Resolve origin location
+          // Resolve origin location — always create if not found
           let originId: string | undefined;
           let originData: any;
           if (parsedOrder.origin) {
-            const locations = await this.locationsRepo.all();
-            const match = locations.find(l =>
-              l.name.toLowerCase() === parsedOrder.origin!.name.toLowerCase() &&
-              l.city.toLowerCase() === parsedOrder.origin!.city.toLowerCase()
-            );
-            if (match) {
-              originId = match.id;
+            if (this.locationResolutionService) {
+              const result = await this.locationResolutionService.resolveOrCreate({
+                name: parsedOrder.origin.name,
+                address1: parsedOrder.origin.address1 || parsedOrder.origin.name,
+                city: parsedOrder.origin.city,
+                state: parsedOrder.origin.state,
+                postalCode: parsedOrder.origin.postalCode,
+                country: parsedOrder.origin.country || 'US',
+              });
+              originId = result.location.id;
             } else {
-              originData = parsedOrder.origin;
+              // Fallback: search for existing match
+              const locations = await this.locationsRepo.all();
+              const match = locations.find(l =>
+                l.name.toLowerCase() === parsedOrder.origin!.name.toLowerCase() &&
+                l.city.toLowerCase() === parsedOrder.origin!.city.toLowerCase()
+              );
+              if (match) {
+                originId = match.id;
+              } else {
+                originData = parsedOrder.origin;
+              }
             }
           }
 
-          // Resolve destination location
+          // Resolve destination location — always create if not found
           let destinationId: string | undefined;
           let destinationData: any;
           if (parsedOrder.destination) {
-            const locations = await this.locationsRepo.all();
-            const match = locations.find(l =>
-              l.name.toLowerCase() === parsedOrder.destination!.name.toLowerCase() &&
-              l.city.toLowerCase() === parsedOrder.destination!.city.toLowerCase()
-            );
-            if (match) {
-              destinationId = match.id;
+            if (this.locationResolutionService) {
+              const result = await this.locationResolutionService.resolveOrCreate({
+                name: parsedOrder.destination.name,
+                address1: parsedOrder.destination.address1 || parsedOrder.destination.name,
+                city: parsedOrder.destination.city,
+                state: parsedOrder.destination.state,
+                postalCode: parsedOrder.destination.postalCode,
+                country: parsedOrder.destination.country || 'US',
+              });
+              destinationId = result.location.id;
             } else {
-              destinationData = parsedOrder.destination;
+              // Fallback: search for existing match
+              const locations = await this.locationsRepo.all();
+              const match = locations.find(l =>
+                l.name.toLowerCase() === parsedOrder.destination!.name.toLowerCase() &&
+                l.city.toLowerCase() === parsedOrder.destination!.city.toLowerCase()
+              );
+              if (match) {
+                destinationId = match.id;
+              } else {
+                destinationData = parsedOrder.destination;
+              }
             }
           }
 

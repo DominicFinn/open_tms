@@ -8,6 +8,7 @@ import { ICSVImportService } from '../services/CSVImportService.js';
 import { IOrderDeliveryService } from '../services/OrderDeliveryService.js';
 import { IOrderConversionService } from '../services/OrderConversionService.js';
 import { IOrganizationRepository } from '../repositories/OrganizationRepository.js';
+import { ILocationResolutionService } from '../services/LocationResolutionService.js';
 import { container, TOKENS } from '../di/index.js';
 import { ICommandBus } from '../commands/CommandBus.js';
 import { CREATE_ORDER } from '../commands/orders/CreateOrderCommand.js';
@@ -111,6 +112,7 @@ export async function orderRoutes(server: FastifyInstance) {
   const conversionService = container.resolve<IOrderConversionService>(TOKENS.IOrderConversionService);
   const orgRepo = container.resolve<IOrganizationRepository>(TOKENS.IOrganizationRepository);
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
+  const locationResolution = container.resolve<ILocationResolutionService>(TOKENS.ILocationResolutionService);
 
   const getOrgId = async () => {
     const org = await server.prisma.organization.findFirst({ select: { id: true } });
@@ -158,13 +160,36 @@ export async function orderRoutes(server: FastifyInstance) {
       }));
     }
 
+    // Auto-resolve locations: if originData/destinationData provided, create the location
+    if (!orderData.originId && body.originData) {
+      try {
+        const result = await locationResolution.resolveOrCreate(body.originData, req.user?.sub);
+        orderData.originId = result.location.id;
+        orderData.originValidated = true;
+        delete orderData.originData;
+      } catch (err) {
+        server.log.warn('Failed to auto-resolve origin location: ' + (err as Error).message);
+      }
+    }
+
+    if (!orderData.destinationId && body.destinationData) {
+      try {
+        const result = await locationResolution.resolveOrCreate(body.destinationData, req.user?.sub);
+        orderData.destinationId = result.location.id;
+        orderData.destinationValidated = true;
+        delete orderData.destinationData;
+      } catch (err) {
+        server.log.warn('Failed to auto-resolve destination location: ' + (err as Error).message);
+      }
+    }
+
     // Determine order status based on location validation
     let status = 'pending';
-    if (!body.originId && body.originData) {
+    if (!orderData.originId && body.originData) {
       status = 'location_error';
-    } else if (!body.destinationId && body.destinationData) {
+    } else if (!orderData.destinationId && body.destinationData) {
       status = 'location_error';
-    } else if (body.originId && body.destinationId) {
+    } else if (orderData.originId && orderData.destinationId) {
       status = 'validated';
     }
 
@@ -837,7 +862,7 @@ export async function orderRoutes(server: FastifyInstance) {
     }).parse((req as any).body);
 
     try {
-      const result = await conversionService.batchConvert(body.orderIds, { mode: body.mode });
+      const result = await conversionService.batchConvert(body.orderIds, { mode: body.mode }, req.user?.sub);
 
       if (!result.success && result.shipmentIds.length === 0) {
         reply.code(400);
@@ -868,7 +893,7 @@ export async function orderRoutes(server: FastifyInstance) {
         return { data: null, error: 'Order not found' };
       }
 
-      const result = await conversionService.splitOrder(id, body.groups);
+      const result = await conversionService.splitOrder(id, body.groups, req.user?.sub);
 
       if (!result.success) {
         reply.code(400);

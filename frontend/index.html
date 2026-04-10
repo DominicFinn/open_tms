@@ -6,6 +6,10 @@
     <title>Open TMS</title>
   </head>
   <body>
+    <script>
+      // Apply saved theme before React renders to prevent flash
+      (function(){var t=localStorage.getItem('theme-mode');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t)})();
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

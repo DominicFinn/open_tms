@@ -14,12 +14,17 @@ import { LanesRepository } from '../repositories/LanesRepository.js';
 import { OrdersRepository } from '../repositories/OrdersRepository.js';
 import { OrganizationRepository } from '../repositories/OrganizationRepository.js';
 import { PendingLaneRequestsRepository } from '../repositories/PendingLaneRequestsRepository.js';
+import { ArrivalCriteriaRepository } from '../repositories/ArrivalCriteriaRepository.js';
+import { CargoTrackingRepository } from '../repositories/CargoTrackingRepository.js';
+import { LocationResolutionService } from '../services/LocationResolutionService.js';
+import { ArrivalCriteriaEvaluationService } from '../services/ArrivalCriteriaEvaluationService.js';
 import { ShipmentAssignmentService } from '../services/ShipmentAssignmentService.js';
 import { CSVImportService } from '../services/CSVImportService.js';
 import { OrderDeliveryService } from '../services/OrderDeliveryService.js';
 import { EDI850ParseService } from '../services/EDI850ParseService.js';
 import { EdiImportService } from '../services/EdiImportService.js';
 import { OrderConversionService } from '../services/OrderConversionService.js';
+import { CargoReconciliationService } from '../services/CargoReconciliationService.js';
 import { DocumentTemplateRepository } from '../repositories/DocumentTemplateRepository.js';
 import { GeneratedDocumentRepository } from '../repositories/GeneratedDocumentRepository.js';
 import { DocumentGenerationService } from '../services/DocumentGenerationService.js';
@@ -54,6 +59,14 @@ import { ArchiveLaneCommandHandler } from '../commands/lanes/ArchiveLaneCommand.
 import { CreateIssueCommandHandler } from '../commands/issues/CreateIssueCommand.js';
 import { UpdateIssueCommandHandler } from '../commands/issues/UpdateIssueCommand.js';
 import { EscalateIssueCommandHandler } from '../commands/issues/EscalateIssueCommand.js';
+import { TenderRepository } from '../repositories/TenderRepository.js';
+import { CarrierUserRepository } from '../repositories/CarrierUserRepository.js';
+import { TenderService } from '../services/TenderService.js';
+import { CarrierAuthService } from '../services/CarrierAuthService.js';
+import { TradingPartnerRepository } from '../repositories/TradingPartnerRepository.js';
+import { EdiRouterService } from '../services/EdiRouterService.js';
+import { OutboundEdiDeliveryService } from '../services/OutboundEdiDeliveryService.js';
+import { EDI997Service } from '../services/EDI997Service.js';
 
 /**
  * Register all application dependencies
@@ -95,6 +108,14 @@ export function registerDependencies(prisma: PrismaClient): void {
     return new PendingLaneRequestsRepository(container.resolve(TOKENS.PrismaClient));
   });
 
+  container.singleton(TOKENS.IArrivalCriteriaRepository).toFactory(() => {
+    return new ArrivalCriteriaRepository(container.resolve(TOKENS.PrismaClient));
+  });
+
+  container.singleton(TOKENS.ICargoTrackingRepository).toFactory(() => {
+    return new CargoTrackingRepository(container.resolve(TOKENS.PrismaClient));
+  });
+
   // Register services as singletons
   container.singleton(TOKENS.IShipmentAssignmentService).toFactory(() => {
     return new ShipmentAssignmentService(container.resolve(TOKENS.PrismaClient));
@@ -109,12 +130,42 @@ export function registerDependencies(prisma: PrismaClient): void {
     );
   });
 
+  container.singleton(TOKENS.ILocationResolutionService).toFactory(() => {
+    return new LocationResolutionService(
+      container.resolve(TOKENS.PrismaClient),
+      container.resolve(TOKENS.ILocationsRepository),
+      container.resolve(TOKENS.IArrivalCriteriaRepository)
+    );
+  });
+
   container.singleton(TOKENS.IOrderDeliveryService).toFactory(() => {
     return new OrderDeliveryService(container.resolve(TOKENS.PrismaClient));
   });
 
+  container.singleton(TOKENS.IArrivalCriteriaEvaluationService).toFactory(() => {
+    return new ArrivalCriteriaEvaluationService(
+      container.resolve(TOKENS.PrismaClient),
+      container.resolve(TOKENS.IOrderDeliveryService)
+    );
+  });
+
+  // Wire up cargo reconciliation into the delivery service (post-construction to avoid circular deps)
+  {
+    const deliveryService = container.resolve<OrderDeliveryService>(TOKENS.IOrderDeliveryService);
+    const cargoService = container.resolve<CargoReconciliationService>(TOKENS.ICargoReconciliationService);
+    deliveryService.setCargoReconciliationService(cargoService);
+  }
+
   container.singleton(TOKENS.IOrderConversionService).toFactory(() => {
     return new OrderConversionService(container.resolve(TOKENS.PrismaClient));
+  });
+
+  container.singleton(TOKENS.ICargoReconciliationService).toFactory(() => {
+    return new CargoReconciliationService(
+      container.resolve(TOKENS.PrismaClient),
+      container.resolve(TOKENS.ICargoTrackingRepository),
+      container.resolve(TOKENS.IEventBus)
+    );
   });
 
   // Document repositories
@@ -209,6 +260,44 @@ export function registerDependencies(prisma: PrismaClient): void {
     );
   });
 
+  // Tender repositories and services
+  container.singleton(TOKENS.ITenderRepository).toFactory(() => {
+    return new TenderRepository(container.resolve(TOKENS.PrismaClient));
+  });
+
+  container.singleton(TOKENS.ICarrierUserRepository).toFactory(() => {
+    return new CarrierUserRepository(container.resolve(TOKENS.PrismaClient));
+  });
+
+  container.singleton(TOKENS.ITenderService).toFactory(() => {
+    return new TenderService(
+      container.resolve(TOKENS.ITenderRepository),
+      container.resolve(TOKENS.PrismaClient),
+      container.resolve(TOKENS.IOutboundEdiDeliveryService),
+    );
+  });
+
+  container.singleton(TOKENS.ICarrierAuthService).toFactory(() => {
+    return new CarrierAuthService(container.resolve(TOKENS.ICarrierUserRepository));
+  });
+
+  // Trading Partner / EDI Hub
+  container.singleton(TOKENS.ITradingPartnerRepository).toFactory(() => {
+    return new TradingPartnerRepository(container.resolve(TOKENS.PrismaClient));
+  });
+
+  container.singleton(TOKENS.IEdiRouterService).toFactory(() => {
+    return new EdiRouterService();
+  });
+
+  container.singleton(TOKENS.IOutboundEdiDeliveryService).toFactory(() => {
+    return new OutboundEdiDeliveryService(container.resolve(TOKENS.ITradingPartnerRepository));
+  });
+
+  container.singleton(TOKENS.IEDI997Service).toFactory(() => {
+    return new EDI997Service();
+  });
+
   // EDI services
   container.singleton(TOKENS.IEDI850ParseService).toFactory(() => {
     return new EDI850ParseService();
@@ -220,7 +309,8 @@ export function registerDependencies(prisma: PrismaClient): void {
       container.resolve(TOKENS.IEDI850ParseService),
       container.resolve(TOKENS.IOrdersRepository),
       container.resolve(TOKENS.ICustomersRepository),
-      container.resolve(TOKENS.ILocationsRepository)
+      container.resolve(TOKENS.ILocationsRepository),
+      container.resolve(TOKENS.ILocationResolutionService)
     );
   });
 
