@@ -12,6 +12,8 @@ export interface CreateArrivalCriteriaDTO {
   bleMajor?: number;
   bleMinor?: number;
   bleRssiThreshold?: number;
+  bleAnchorId?: string;
+  bleReaderLocation?: string;
   name?: string;
   priority?: number;
 }
@@ -27,6 +29,8 @@ export interface UpdateArrivalCriteriaDTO {
   bleMajor?: number | null;
   bleMinor?: number | null;
   bleRssiThreshold?: number | null;
+  bleAnchorId?: string | null;
+  bleReaderLocation?: string | null;
   name?: string | null;
   active?: boolean;
   priority?: number;

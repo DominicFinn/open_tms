@@ -1,7 +1,7 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "types": ["node", "react", "react-dom"]
+    "types": ["node", "react", "react-dom", "google.maps"]
   },
   "exclude": [
     "src/**/__tests__/**",

@@ -6,6 +6,7 @@ interface Carrier {
   name: string;
   mcNumber?: string;
   dotNumber?: string;
+  scacCode?: string;
   contactName?: string;
   contactEmail?: string;
   contactPhone?: string;
@@ -46,6 +47,7 @@ export default function CarrierCreationForm({
   const [name, setName] = useState('');
   const [mcNumber, setMcNumber] = useState('');
   const [dotNumber, setDotNumber] = useState('');
+  const [scacCode, setScacCode] = useState('');
   const [contactName, setContactName] = useState('');
   const [contactEmail, setContactEmail] = useState('');
   const [contactPhone, setContactPhone] = useState('');
@@ -71,6 +73,7 @@ export default function CarrierCreationForm({
       setName(editingCarrier.name);
       setMcNumber(editingCarrier.mcNumber || '');
       setDotNumber(editingCarrier.dotNumber || '');
+      setScacCode((editingCarrier as any).scacCode || '');
       setContactName(editingCarrier.contactName || '');
       setContactEmail(editingCarrier.contactEmail || '');
       setContactPhone(editingCarrier.contactPhone || '');
@@ -96,6 +99,7 @@ export default function CarrierCreationForm({
     setName('');
     setMcNumber('');
     setDotNumber('');
+    setScacCode('');
     setContactName('');
     setContactEmail('');
     setContactPhone('');
@@ -144,6 +148,7 @@ export default function CarrierCreationForm({
         name: name.trim(),
         mcNumber: mcNumber.trim() || undefined,
         dotNumber: dotNumber.trim() || undefined,
+        scacCode: scacCode.trim().toUpperCase() || undefined,
         contactName: contactName.trim() || undefined,
         contactEmail: contactEmail.trim() || undefined,
         contactPhone: contactPhone.trim() || undefined,
@@ -247,6 +252,16 @@ export default function CarrierCreationForm({
               disabled={loading}
             />
             <label>DOT Number (optional)</label>
+          </div>
+          <div className="text-field">
+            <input
+              value={scacCode}
+              onChange={e => setScacCode(e.target.value.toUpperCase().slice(0, 4))}
+              placeholder=" "
+              disabled={loading}
+              maxLength={4}
+            />
+            <label>SCAC Code (optional)</label>
           </div>
         </div>
 

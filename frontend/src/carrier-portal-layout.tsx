@@ -1,0 +1,120 @@
+import React from 'react';
+import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import './theme.css';
+
+export function CarrierPortalLayout() {
+  const navigate = useNavigate();
+
+  function getCarrierUser() {
+    try {
+      return JSON.parse(localStorage.getItem('carrier_user') || '{}');
+    } catch { return {}; }
+  }
+
+  function handleLogout() {
+    localStorage.removeItem('carrier_token');
+    localStorage.removeItem('carrier_user');
+    navigate('/carrier-portal/login');
+  }
+
+  const user = getCarrierUser();
+
+  return (
+    <>
+      {/* Carrier Portal Header */}
+      <header style={{
+        background: 'var(--surface-container)',
+        borderBottom: '1px solid var(--outline-variant)',
+        padding: '0 var(--spacing-3)',
+        height: '56px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        position: 'sticky',
+        top: 0,
+        zIndex: 100,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-2)' }}>
+          <span className="material-icons" style={{ color: 'var(--primary)', fontSize: '28px' }}>local_shipping</span>
+          <span style={{ fontWeight: 700, fontSize: '16px' }}>Carrier Portal</span>
+          <span style={{ color: 'var(--on-surface-variant)', fontSize: '14px' }}>
+            {user.carrierName ? `| ${user.carrierName}` : ''}
+          </span>
+        </div>
+
+        <nav style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-2)' }}>
+          <NavLink
+            to="/carrier-portal"
+            end
+            style={({ isActive }) => ({
+              padding: '6px 12px',
+              borderRadius: 'var(--radius-sm)',
+              textDecoration: 'none',
+              fontSize: '14px',
+              fontWeight: isActive ? 600 : 400,
+              color: isActive ? 'var(--primary)' : 'var(--on-surface)',
+              background: isActive ? 'var(--primary-container)' : 'transparent',
+            })}
+          >
+            Dashboard
+          </NavLink>
+          <NavLink
+            to="/carrier-portal/history"
+            style={({ isActive }) => ({
+              padding: '6px 12px',
+              borderRadius: 'var(--radius-sm)',
+              textDecoration: 'none',
+              fontSize: '14px',
+              fontWeight: isActive ? 600 : 400,
+              color: isActive ? 'var(--primary)' : 'var(--on-surface)',
+              background: isActive ? 'var(--primary-container)' : 'transparent',
+            })}
+          >
+            Tender History
+          </NavLink>
+          <NavLink
+            to="/carrier-portal/bids"
+            style={({ isActive }) => ({
+              padding: '6px 12px',
+              borderRadius: 'var(--radius-sm)',
+              textDecoration: 'none',
+              fontSize: '14px',
+              fontWeight: isActive ? 600 : 400,
+              color: isActive ? 'var(--primary)' : 'var(--on-surface)',
+              background: isActive ? 'var(--primary-container)' : 'transparent',
+            })}
+          >
+            Bid History
+          </NavLink>
+          <NavLink
+            to="/carrier-portal/profile"
+            style={({ isActive }) => ({
+              padding: '6px 12px',
+              borderRadius: 'var(--radius-sm)',
+              textDecoration: 'none',
+              fontSize: '14px',
+              fontWeight: isActive ? 600 : 400,
+              color: isActive ? 'var(--primary)' : 'var(--on-surface)',
+              background: isActive ? 'var(--primary-container)' : 'transparent',
+            })}
+          >
+            Profile
+          </NavLink>
+          <div style={{ borderLeft: '1px solid var(--outline-variant)', height: '24px', margin: '0 8px' }} />
+          <span style={{ fontSize: '13px', color: 'var(--on-surface-variant)' }}>{user.email}</span>
+          <button className="vn-btn vn-btn-outline" style={{ padding: '4px 12px', fontSize: '12px' }} onClick={handleLogout}>
+            Logout
+          </button>
+        </nav>
+      </header>
+
+      <main style={{
+        maxWidth: '1200px',
+        margin: '0 auto',
+        padding: 'var(--spacing-3)',
+      }}>
+        <Outlet />
+      </main>
+    </>
+  );
+}

@@ -58,6 +58,8 @@ export async function arrivalCriteriaRoutes(server: FastifyInstance) {
       bleMajor: z.number().int().optional(),
       bleMinor: z.number().int().optional(),
       bleRssiThreshold: z.number().int().optional(),
+      bleAnchorId: z.string().optional(),
+      bleReaderLocation: z.string().optional(),
       // Meta
       name: z.string().optional(),
       priority: z.number().int().default(0),
@@ -119,6 +121,8 @@ export async function arrivalCriteriaRoutes(server: FastifyInstance) {
       bleMajor: z.number().int().nullable().optional(),
       bleMinor: z.number().int().nullable().optional(),
       bleRssiThreshold: z.number().int().nullable().optional(),
+      bleAnchorId: z.string().nullable().optional(),
+      bleReaderLocation: z.string().nullable().optional(),
       name: z.string().nullable().optional(),
       active: z.boolean().optional(),
       priority: z.number().int().optional(),

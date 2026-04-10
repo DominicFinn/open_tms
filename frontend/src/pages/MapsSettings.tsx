@@ -12,7 +12,7 @@ export default function MapsSettings() {
 
   useEffect(() => {
     fetch(`${API_URL}/api/v1/maps/settings`)
-      .then((r) => r.json())
+      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then((res) => {
         if (res.data) {
           setHasKey(res.data.hasKey);
@@ -32,6 +32,7 @@ export default function MapsSettings() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ googleMapsApiKey: apiKey || null }),
       });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       if (data.error) {
         setMessage({ type: 'error', text: data.error });
@@ -53,6 +54,7 @@ export default function MapsSettings() {
     setMessage(null);
     try {
       const res = await fetch(`${API_URL}/api/v1/maps/test`, { method: 'POST' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       if (data.error) {
         setMessage({ type: 'error', text: data.error });

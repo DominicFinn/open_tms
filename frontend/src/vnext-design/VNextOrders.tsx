@@ -1,41 +1,105 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { API_URL } from '../api';
 
-const ORDERS = [
-  { id: 'ORD-7051', customer: 'Acme Corp', origin: 'Chicago, IL', dest: 'Dallas, TX', commodity: 'General Merchandise', weight: '42,000 lbs', pieces: 24, mode: 'FTL', status: 'Ready to Ship', statusColor: 'success', created: 'Apr 7', reqDelivery: 'Apr 10', value: '$18,400' },
-  { id: 'ORD-7050', customer: 'Global Widgets', origin: 'Los Angeles, CA', dest: 'Phoenix, AZ', commodity: 'Electronics', weight: '12,500 lbs', pieces: 8, mode: 'LTL', status: 'Pending Approval', statusColor: 'warning', created: 'Apr 7', reqDelivery: 'Apr 11', value: '$42,000' },
-  { id: 'ORD-7049', customer: 'TechStart Inc', origin: 'Atlanta, GA', dest: 'Miami, FL', commodity: 'Server Equipment', weight: '38,200 lbs', pieces: 16, mode: 'FTL', status: 'Shipped', statusColor: 'info', created: 'Apr 6', reqDelivery: 'Apr 9', value: '$95,000' },
-  { id: 'ORD-7048', customer: 'FreshFoods LLC', origin: 'New York, NY', dest: 'Boston, MA', commodity: 'Perishable Goods', weight: '28,000 lbs', pieces: 32, mode: 'Reefer', status: 'Ready to Ship', statusColor: 'success', created: 'Apr 6', reqDelivery: 'Apr 8', value: '$8,200' },
-  { id: 'ORD-7047', customer: 'Industrial Co', origin: 'Denver, CO', dest: 'Salt Lake City, UT', commodity: 'Steel Beams', weight: '55,000 lbs', pieces: 6, mode: 'Flatbed', status: 'Draft', statusColor: 'secondary', created: 'Apr 6', reqDelivery: 'Apr 12', value: '$33,500' },
-  { id: 'ORD-7046', customer: 'RetailMax', origin: 'Houston, TX', dest: 'San Antonio, TX', commodity: 'Consumer Goods', weight: '33,500 lbs', pieces: 40, mode: 'FTL', status: 'Shipped', statusColor: 'info', created: 'Apr 5', reqDelivery: 'Apr 7', value: '$12,800' },
-  { id: 'ORD-7045', customer: 'BioPharm Inc', origin: 'Minneapolis, MN', dest: 'Milwaukee, WI', commodity: 'Pharmaceuticals', weight: '15,000 lbs', pieces: 12, mode: 'Reefer', status: 'Delivered', statusColor: 'success', created: 'Apr 4', reqDelivery: 'Apr 6', value: '$125,000' },
-  { id: 'ORD-7044', customer: 'AutoParts Plus', origin: 'Detroit, MI', dest: 'Columbus, OH', commodity: 'Auto Parts', weight: '44,000 lbs', pieces: 50, mode: 'FTL', status: 'Cancelled', statusColor: 'error', created: 'Apr 4', reqDelivery: 'Apr 7', value: '$22,400' },
-];
+interface Order {
+  id: string;
+  orderNumber?: string;
+  poNumber?: string;
+  status: string;
+  deliveryStatus?: string;
+  customerId?: string;
+  customer?: { name: string };
+  origin?: { name: string; city: string; state: string };
+  destination?: { name: string; city: string; state: string };
+  requestedPickupDate?: string;
+  requestedDeliveryDate?: string;
+  serviceLevel?: string;
+  temperatureControl?: boolean;
+  requiresHazmat?: boolean;
+}
+
+function orderStatusColor(status: string): string {
+  const s = status?.toLowerCase().replace(/[_ ]/g, '');
+  if (s === 'readytoship' || s === 'ready') return 'success';
+  if (s === 'pendingapproval' || s === 'pending') return 'warning';
+  if (s === 'shipped' || s === 'intransit') return 'info';
+  if (s === 'delivered') return 'success';
+  if (s === 'cancelled' || s === 'canceled') return 'error';
+  return 'secondary';
+}
+
+function formatDate(d?: string): string {
+  if (!d) return '—';
+  const date = new Date(d);
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
 
 export default function VNextOrders() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [activeTab, setActiveTab] = useState('all');
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  const filtered = ORDERS.filter(o => {
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoading(true);
+        const res = await fetch(`${API_URL}/api/v1/orders`);
+        if (!res.ok) throw new Error(`Failed to load orders (${res.status})`);
+        const json = await res.json();
+        if (!cancelled) {
+          setOrders(json.data || []);
+          setError('');
+        }
+      } catch (err: any) {
+        if (!cancelled) setError(err.message || 'Failed to load orders');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const filtered = orders.filter(o => {
     if (statusFilter !== 'all') {
-      const map: Record<string, string> = { ready: 'Ready to Ship', pending: 'Pending Approval', shipped: 'Shipped', draft: 'Draft', delivered: 'Delivered', cancelled: 'Cancelled' };
-      if (o.status !== map[statusFilter]) return false;
+      const sNorm = o.status?.toLowerCase().replace(/[_ ]/g, '');
+      const map: Record<string, string> = { ready: 'readytoship', pending: 'pendingapproval', shipped: 'shipped', draft: 'draft', delivered: 'delivered', cancelled: 'cancelled' };
+      if (sNorm !== map[statusFilter]) return false;
     }
     if (search) {
       const q = search.toLowerCase();
-      return o.id.toLowerCase().includes(q) || o.customer.toLowerCase().includes(q) || o.origin.toLowerCase().includes(q) || o.dest.toLowerCase().includes(q) || o.commodity.toLowerCase().includes(q);
+      const orderNum = (o.orderNumber || o.id || '').toLowerCase();
+      const customerName = o.customer?.name?.toLowerCase() || '';
+      const originLabel = o.origin ? `${o.origin.city}, ${o.origin.state}`.toLowerCase() : '';
+      const destLabel = o.destination ? `${o.destination.city}, ${o.destination.state}`.toLowerCase() : '';
+      return orderNum.includes(q) || customerName.includes(q) || originLabel.includes(q) || destLabel.includes(q);
     }
     return true;
   });
+
+  if (loading) {
+    return (
+      <div className="vn-empty"><span className="material-icons" style={{animation:'spin 1s linear infinite'}}>refresh</span><h3>Loading...</h3></div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="vn-alert vn-alert-error"><span className="material-icons">error</span><div className="vn-alert-content">{error}</div></div>
+    );
+  }
 
   return (
     <>
       <div className="vn-page-header">
         <div>
           <h1>Orders</h1>
-          <p>{ORDERS.length} orders this week</p>
+          <p>{orders.length} orders</p>
         </div>
         <div className="vn-page-actions">
           <button className="vn-btn vn-btn-outline">
@@ -54,30 +118,29 @@ export default function VNextOrders() {
         <div className="vn-stat">
           <div className="vn-stat-icon success"><span className="material-icons">inventory_2</span></div>
           <div>
-            <div className="vn-stat-value">{ORDERS.filter(o => o.status === 'Ready to Ship').length}</div>
+            <div className="vn-stat-value">{orders.filter(o => o.status?.toLowerCase().replace(/[_ ]/g, '') === 'readytoship').length}</div>
             <div className="vn-stat-label">Ready to Ship</div>
           </div>
         </div>
         <div className="vn-stat">
           <div className="vn-stat-icon warning"><span className="material-icons">hourglass_empty</span></div>
           <div>
-            <div className="vn-stat-value">{ORDERS.filter(o => o.status === 'Pending Approval').length}</div>
+            <div className="vn-stat-value">{orders.filter(o => o.status?.toLowerCase().replace(/[_ ]/g, '') === 'pendingapproval').length}</div>
             <div className="vn-stat-label">Pending Approval</div>
           </div>
         </div>
         <div className="vn-stat">
           <div className="vn-stat-icon info"><span className="material-icons">local_shipping</span></div>
           <div>
-            <div className="vn-stat-value">{ORDERS.filter(o => o.status === 'Shipped').length}</div>
+            <div className="vn-stat-value">{orders.filter(o => o.status?.toLowerCase() === 'shipped').length}</div>
             <div className="vn-stat-label">Shipped</div>
           </div>
         </div>
         <div className="vn-stat">
-          <div className="vn-stat-icon primary"><span className="material-icons">payments</span></div>
+          <div className="vn-stat-icon primary"><span className="material-icons">inventory</span></div>
           <div>
-            <div className="vn-stat-value">$357K</div>
-            <div className="vn-stat-label">Total Value</div>
-            <div className="vn-stat-change up"><span className="material-icons">trending_up</span>+18% vs last week</div>
+            <div className="vn-stat-value">{orders.filter(o => o.status?.toLowerCase() === 'delivered').length}</div>
+            <div className="vn-stat-label">Delivered</div>
           </div>
         </div>
       </div>
@@ -85,10 +148,10 @@ export default function VNextOrders() {
       {/* Tabs */}
       <div className="vn-tabs" style={{ marginBottom: 16 }}>
         {[
-          { key: 'all', label: 'All Orders', count: ORDERS.length },
-          { key: 'ready', label: 'Ready to Ship', count: ORDERS.filter(o => o.status === 'Ready to Ship').length },
-          { key: 'pending', label: 'Pending', count: ORDERS.filter(o => o.status === 'Pending Approval').length },
-          { key: 'shipped', label: 'Shipped', count: ORDERS.filter(o => o.status === 'Shipped').length },
+          { key: 'all', label: 'All Orders', count: orders.length },
+          { key: 'ready', label: 'Ready to Ship', count: orders.filter(o => o.status?.toLowerCase().replace(/[_ ]/g, '') === 'readytoship').length },
+          { key: 'pending', label: 'Pending', count: orders.filter(o => o.status?.toLowerCase().replace(/[_ ]/g, '') === 'pendingapproval').length },
+          { key: 'shipped', label: 'Shipped', count: orders.filter(o => o.status?.toLowerCase() === 'shipped').length },
         ].map(tab => (
           <button
             key={tab.key}
@@ -136,51 +199,56 @@ export default function VNextOrders() {
                 <th>Order</th>
                 <th>Customer</th>
                 <th>Route</th>
-                <th>Commodity</th>
-                <th>Mode</th>
-                <th>Weight / Pieces</th>
+                <th>Service Level</th>
+                <th>Requirements</th>
+                <th>Req. Pickup</th>
                 <th>Req. Delivery</th>
-                <th>Value</th>
+                <th>Delivery Status</th>
                 <th>Status</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map(o => (
+              {filtered.map(o => {
+                const sNorm = o.status?.toLowerCase().replace(/[_ ]/g, '');
+                return (
                 <tr key={o.id}>
                   <td>
-                    <span className="vn-table-id">{o.id}</span>
-                    <div className="vn-table-secondary">Created {o.created}</div>
+                    <span className="vn-table-id">{o.orderNumber || o.id}</span>
+                    {o.poNumber && <div className="vn-table-secondary">PO# {o.poNumber}</div>}
                   </td>
-                  <td>{o.customer}</td>
+                  <td>{o.customer?.name || '—'}</td>
                   <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <span className="vn-route-dot origin" style={{ width: 8, height: 8 }} />
-                      <span style={{ fontSize: 13 }}>{o.origin}</span>
+                      <span style={{ fontSize: 13 }}>{o.origin ? `${o.origin.city}, ${o.origin.state}` : '—'}</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
                       <span className="vn-route-dot destination" style={{ width: 8, height: 8 }} />
-                      <span style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>{o.dest}</span>
+                      <span style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>{o.destination ? `${o.destination.city}, ${o.destination.state}` : '—'}</span>
                     </div>
                   </td>
-                  <td style={{ fontSize: 13 }}>{o.commodity}</td>
-                  <td><span className="vn-chip vn-chip-secondary">{o.mode}</span></td>
+                  <td style={{ fontSize: 13 }}>{o.serviceLevel || '—'}</td>
                   <td>
-                    <div style={{ fontSize: 13 }}>{o.weight}</div>
-                    <div className="vn-table-secondary">{o.pieces} pieces</div>
+                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                      {o.temperatureControl && <span className="vn-chip vn-chip-secondary">Temp Ctrl</span>}
+                      {o.requiresHazmat && <span className="vn-chip vn-chip-warning">Hazmat</span>}
+                      {!o.temperatureControl && !o.requiresHazmat && '—'}
+                    </div>
                   </td>
-                  <td style={{ fontSize: 13, whiteSpace: 'nowrap' }}>{o.reqDelivery}</td>
-                  <td style={{ fontSize: 14, fontWeight: 600 }}>{o.value}</td>
-                  <td><span className={`vn-chip vn-chip-${o.statusColor}`}>{o.status}</span></td>
+                  <td style={{ fontSize: 13, whiteSpace: 'nowrap' }}>{formatDate(o.requestedPickupDate)}</td>
+                  <td style={{ fontSize: 13, whiteSpace: 'nowrap' }}>{formatDate(o.requestedDeliveryDate)}</td>
+                  <td>{o.deliveryStatus || '—'}</td>
+                  <td><span className={`vn-chip vn-chip-${orderStatusColor(o.status)}`}>{o.status}</span></td>
                   <td>
                     <div style={{ display: 'flex', gap: 4 }}>
-                      {o.status === 'Ready to Ship' && (
-                        <button className="vn-btn vn-btn-primary vn-btn-sm" onClick={() => navigate('/vnext/carrier-bidding')}>
+                      {sNorm === 'readytoship' && (
+                        <button className="vn-btn vn-btn-primary vn-btn-sm" onClick={() => navigate('/carrier-bidding')}>
                           <span className="material-icons">local_shipping</span>
                           Ship
                         </button>
                       )}
-                      {o.status === 'Pending Approval' && (
+                      {sNorm === 'pendingapproval' && (
                         <button className="vn-btn vn-btn-success vn-btn-sm">
                           <span className="material-icons">check</span>
                           Approve
@@ -190,7 +258,8 @@ export default function VNextOrders() {
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

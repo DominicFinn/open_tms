@@ -244,13 +244,51 @@
   - CSV/PDF report export
   - Scheduled reports via email
 
-## **Phase 8: Portals & Integration**
+## **Phase 8: Portals, Tendering & Integration**
+- **Carrier Tendering System** ✅
+  - ✅ Tender model with broadcast and waterfall strategies
+  - ✅ TenderOffer (per-carrier) and TenderBid (carrier's rate submission) models
+  - ✅ Configurable tender duration (how long carriers have to respond)
+  - ✅ Full tender lifecycle: draft → open → evaluating → awarded → confirmed
+  - ✅ Waterfall logic: auto-progress to next carrier on timeout or decline
+  - ✅ Broadcast logic: all carriers notified simultaneously, bids compared
+  - ✅ Award flow: accept winning bid, reject others, assign carrier to shipment
+  - ✅ Tender expiration checks for automatic timeout handling
+  - ✅ Admin tender management UI: list with status/carrier filters, detail with bid comparison, award modal
+  - ✅ Create tender wizard: 5-step flow (shipment, strategy, carrier selection with waterfall reordering, parameters, review)
+  - ✅ Tender history and carrier filter on tenders list
+- **Carrier Portal** ✅
+  - ✅ CarrierUser model with email/password authentication (separate from internal users)
+  - ✅ JWT-based carrier auth with dedicated issuer (`open-tms-carrier`)
+  - ✅ Carrier portal login page at `/carrier-portal/login`
+  - ✅ Carrier dashboard: active tenders, pending bids, loads won summary
+  - ✅ Tender view with bid submission form (rate, transit days, equipment, notes)
+  - ✅ Tender decline with automatic waterfall progression
+  - ✅ Bid history page showing all bids with status (submitted/accepted/rejected)
+  - ✅ Full tender history page with outcome tracking (won/lost/pending/expired) and win rate
+  - ✅ Carrier portal profile page with password change
+  - ✅ Carrier portal layout with separate navigation header
+- **Carrier User Management (Admin)** ✅
+  - ✅ Admin UI for creating/managing carrier portal users on carrier edit page
+  - ✅ Create user modal (email, password, name, role)
+  - ✅ Activate/deactivate carrier users
+  - ✅ Admin password reset for carrier users
+  - ✅ Password strength validation (uppercase, lowercase, number, 8+ chars)
+  - ✅ Account lockout after 5 failed login attempts (15 min cooldown)
+  - ✅ Progressive lockout warnings
+- **Carrier Enhancements** ✅
+  - ✅ SCAC code field on carrier model and forms (required for EDI 204)
+  - ✅ Contract rate fields on LaneCarrier (rateType, contractStartDate/EndDate, fuelSurchargePercent, accessorialRates)
+- **EDI 204/990 Support** ✅
+  - ✅ EDI 204 (Motor Carrier Load Tender) generation service — full X12 004010 segment mapping
+  - ✅ EDI 990 (Response to Load Tender) parse service — accept/decline processing
+  - ✅ EDI 204 preview endpoint
+  - ✅ Inbound EDI 990 endpoint with automatic bid creation and waterfall progression
+  - 🔲 Automated EDI 204 delivery via SFTP/HTTP (currently manual — see Phase 8b)
+  - 🔲 Automated EDI 990 polling from SFTP (currently manual — see Phase 8b)
 - **Customer Portal** 🔲
   - Customer-facing UI for order tracking, document access, order submission
   - Self-service shipment visibility
-- **Carrier Portal** 🔲
-  - Carrier-facing UI for load acceptance, status updates, document upload
-  - Capacity and availability management
 - **TMS-to-TMS Integration** 🔲
   - JSON APIs modeled after EDI structure
   - Share shipments, status, documents across TMS partners
@@ -261,6 +299,92 @@
   - N8N custom node package for Open TMS
   - OAuth/API key authentication for N8N callbacks into Open TMS
   - Pre-built workflow templates (e.g., auto-notify on exception, escalate delayed shipments)
+
+## **Phase 8b: EDI Communication Hub**
+The current EDI infrastructure handles inbound 850 (SFTP polling) and outbound 856 (HTTP push) as separate systems. This phase unifies all EDI communication into a single **Trading Partner** model that handles any transaction type, any direction, and any transport method.
+
+- **Unified Trading Partner Model** 🔲
+  - Replace separate EdiPartner (inbound-only) and OutboundIntegration (outbound-only) with a unified TradingPartner model
+  - Each partner has: entity type (customer, carrier, 3PL, warehouse, ERP), transport config (SFTP, HTTP/API, AS2), and direction (inbound, outbound, bidirectional)
+  - TradingPartnerTransaction registry: which EDI types each partner supports, with per-type config overrides
+  - Support multiple connections per partner (e.g., carrier has SFTP for inbound 990 + HTTP for outbound 204)
+  - Migration path from existing EdiPartner and OutboundIntegration data
+- **Transaction Type Registry** 🔲
+  - EDI 850 (Purchase Order): Customer/ERP → TMS (inbound) ✅ exists
+  - EDI 855 (PO Acknowledgment): TMS → Customer/ERP (outbound)
+  - EDI 856 (Advance Ship Notice): TMS → Customer/Carrier/ERP (outbound) ✅ exists
+  - EDI 204 (Motor Carrier Load Tender): TMS → Carrier (outbound) ✅ exists
+  - EDI 990 (Response to Load Tender): Carrier → TMS (inbound) ✅ exists
+  - EDI 214 (Shipment Status Message): Carrier → TMS (inbound) + TMS → Customer (outbound)
+  - EDI 210 (Freight Invoice): Carrier → TMS (inbound)
+  - EDI 997 (Functional Acknowledgment): bidirectional — auto-generated on every inbound transaction
+  - EDI 810 (Invoice): TMS → Customer (outbound)
+  - EDI 820 (Payment Order/Remittance): Customer → TMS (inbound)
+- **Outbound EDI Delivery Engine** 🔲
+  - Queue-based outbound delivery worker (extends existing outboundCarrierWorker pattern)
+  - SFTP writer: connect to partner's SFTP, write EDI file to configured outbound directory
+  - HTTP/API sender: POST EDI content to partner's endpoint (existing pattern from GenericEdiCarrierAdapter)
+  - AS2 transport: Applicability Statement 2 for enterprise trading partners (MDN receipts, encryption)
+  - Outbound file naming conventions (configurable per partner: date-based, sequence-based, etc.)
+  - Delivery confirmation tracking and retry logic
+  - Outbound EDI audit log (what was sent, when, to whom, delivery status)
+- **Inbound EDI Router** 🔲
+  - Extend edi-collector to detect transaction type from ST segment (850, 990, 214, 210, etc.)
+  - Route to appropriate parser service based on transaction type
+  - Support multiple inbound file patterns per partner (*.850, *.990, *.214, *.210)
+  - Inbound EDI 997 auto-generation: acknowledge every received transaction
+  - Inbound file archival after processing
+- **EDI 214 (Shipment Status) Service** 🔲
+  - Inbound: parse carrier status updates (pickup, in-transit, delivered) → update shipment status
+  - Outbound: generate status messages for customers based on shipment events
+  - Status code mapping: AF (pickup), X1 (in-transit), D1 (delivered), A7 (refused)
+  - Integration with existing ShipmentEvent model
+- **EDI 210 (Freight Invoice) Service** 🔲
+  - Inbound: parse carrier freight invoices → create billing records
+  - Three-way matching: tender rate vs shipment status vs invoice amount
+  - Discrepancy detection and flagging
+  - Feeds into Phase 7 (Financial & Commercial) freight audit
+- **EDI 997 (Functional Acknowledgment)** 🔲
+  - Auto-generate 997 for every inbound EDI transaction
+  - Track 997 receipt for outbound transactions (was our 204 acknowledged?)
+  - Configurable: require 997 within N hours or alert
+- **Trading Partner Management UI** 🔲
+  - Unified partner configuration page in Integrations app
+  - Per-partner: connection config, supported transaction types, field mappings, test connection
+  - Transaction activity dashboard: sent/received counts per type, error rates
+  - EDI file browser: view all inbound/outbound files per partner with content preview
+  - Replace separate EDI Partners and Outbound Integrations pages
+- **SAP / ERP Integration Patterns** 🔲
+  - SAP iDoc ↔ X12 EDI mapping templates
+  - Configurable field mapping UI for non-standard ERP formats
+  - Flat file (CSV/fixed-width) adapter for legacy ERP systems
+  - REST/SOAP API adapter for modern ERP integration (SAP S/4HANA, Oracle, NetSuite)
+
+## **Phase 8c: Carrier Intelligence & Risk**
+- **Carrier Performance Monitoring** 🔲
+  - On-time pickup/delivery percentage tracking
+  - Tender acceptance rate per carrier
+  - Average transit time vs quoted time
+  - Damage/claim rate tracking
+  - Performance scorecards with trend analysis
+  - Automatic performance-based carrier ranking for waterfall tenders
+- **Carrier Risk Scoring** 🔲
+  - FMCSA SAFER system API integration for MC/DOT validation
+  - Automatic carrier authority verification on creation
+  - Insurance certificate expiry monitoring and alerts
+  - Safety rating tracking (Satisfactory, Conditional, Unsatisfactory)
+  - Fictitious carrier detection (cross-reference MC databases, flag suspicious patterns)
+  - Risk score algorithm combining safety, insurance, performance, and financial factors
+- **Carrier Onboarding Workflow** 🔲
+  - Self-registration flow for carriers with approval pipeline
+  - Document collection: insurance certificates, W-9, carrier authority, operating permits
+  - Automated validation checks before activation
+  - Onboarding status tracking tied to validation tiers
+- **Carrier Reporting** 🔲
+  - Carrier spend analysis per lane and time period
+  - Capacity utilization reports
+  - Rate benchmarking vs market data (feeds from Phase 9c)
+  - Exportable carrier scorecards for procurement reviews
 
 ## **Phase 9: Routes & Maps Insights**
 - **Map Provider Integration** 🔲
@@ -435,10 +559,12 @@
 ---
 
 🔥 **Priorities:**
-- **Immediate:** **Phase 3** complete — proceed to **Phase 3b** (location arrival criteria, carrier tendering).
-- **Short term:** Deliver **Phase 3b** then **Phase 4** (notifications, triage centre, live tracking) for operational visibility.
+- **Immediate:** **Phase 3b** (location arrival criteria, IoT arrival integration) + **Phase 8b** (EDI Communication Hub) for automated EDI transfers.
+- **Short term:** Deliver **Phase 8b** (unified EDI trading partners, automated 204/990, inbound router) → unlocks automated carrier tendering and multi-party EDI.
+- **Short term:** Deliver **Phase 4** (notifications, triage centre, live tracking) for operational visibility.
 - **Medium term:** Deliver **Phase 5–6** (IoT + cold chain compliance) → unique differentiator.
-- **Long term:** **Phase 7–8** (financials, portals, N8N integration) to scale platform.
+- **Medium term:** Deliver **Phase 8c** (carrier intelligence, performance monitoring, risk scoring, FMCSA integration) → carrier quality assurance.
+- **Long term:** **Phase 7–8** remaining items (financials, customer portal, N8N integration) to scale platform.
 - **Strategic:** **Phase 9–9c** (routes & maps, audit review, AI agents, data providers) — the intelligence layer that turns Open TMS from a record system into a decision system. Phase 9a (audit review) lands before agentic work to ensure compliance foundations are solid.
 - **Operational:** **Phase 10** (SRE & observability) — ship early pieces (health checks, structured logging, queue dashboard) alongside Phase 4, then build out fully as deployment complexity grows.
 - **Future:** **Phase 11** (advanced operations) for enterprise depth.

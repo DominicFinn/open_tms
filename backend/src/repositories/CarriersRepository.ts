@@ -4,6 +4,7 @@ export interface CreateCarrierDTO {
   name: string;
   mcNumber?: string;
   dotNumber?: string;
+  scacCode?: string;
   contactName?: string;
   contactEmail?: string;
   contactPhone?: string;

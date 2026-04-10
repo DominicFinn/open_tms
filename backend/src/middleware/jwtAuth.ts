@@ -18,9 +18,21 @@ export interface JWTPayload {
   aud?: string;
 }
 
+export interface CarrierJWTPayload {
+  sub: string;
+  email: string;
+  carrierId: string;
+  carrierName: string;
+  role: string;
+  iat?: number;
+  exp?: number;
+  iss?: string;
+}
+
 declare module 'fastify' {
   interface FastifyRequest {
     user?: JWTPayload;
+    carrierUser?: CarrierJWTPayload;
   }
 }
 
@@ -104,6 +116,32 @@ export function requirePermission(...requiredPermissions: string[]) {
       reply.code(403).send({ data: null, error: 'Insufficient permissions' });
     }
   };
+}
+
+/**
+ * Fastify preHandler hook: extracts and validates carrier JWT from Authorization header.
+ * Sets req.carrierUser if valid. Sends 401 if missing or invalid.
+ */
+export async function authenticateCarrierJWT(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) {
+    reply.code(401).send({ data: null, error: 'Authorization header required' });
+    return;
+  }
+
+  const token = authHeader.slice(7);
+
+  try {
+    const payload = verifyJWT(token);
+    // Carrier tokens have iss: "open-tms-carrier" and carrierId
+    if (payload.iss !== 'open-tms-carrier' || !(payload as any).carrierId) {
+      reply.code(401).send({ data: null, error: 'Invalid carrier token' });
+      return;
+    }
+    req.carrierUser = payload as unknown as CarrierJWTPayload;
+  } catch {
+    reply.code(401).send({ data: null, error: 'Invalid or expired token' });
+  }
 }
 
 /**

@@ -1,0 +1,192 @@
+import { PrismaClient, TradingPartner, TradingPartnerTransaction } from '@prisma/client';
+
+export interface CreateTradingPartnerDTO {
+  name: string;
+  entityType: string;
+  customerId?: string;
+  carrierId?: string;
+  // SFTP
+  sftpHost?: string;
+  sftpPort?: number;
+  sftpUsername?: string;
+  sftpPassword?: string;
+  sftpPrivateKey?: string;
+  // HTTP
+  httpUrl?: string;
+  httpAuthType?: string;
+  httpAuthHeader?: string;
+  httpAuthValue?: string;
+  // EDI
+  senderId?: string;
+  receiverId?: string;
+  ediVersion?: string;
+  // Inbound
+  inboundEnabled?: boolean;
+  inboundDir?: string;
+  inboundFilePattern?: string;
+  pollingInterval?: number;
+  pollingCron?: string;
+  // Outbound
+  outboundEnabled?: boolean;
+  outboundDir?: string;
+  outboundTransport?: string;
+  outboundFileNaming?: string;
+}
+
+export interface UpdateTradingPartnerDTO extends Partial<CreateTradingPartnerDTO> {
+  active?: boolean;
+}
+
+export interface CreateTransactionDTO {
+  partnerId: string;
+  transactionType: string;
+  direction: string;
+  enabled?: boolean;
+  fieldMapping?: any;
+  autoProcess?: boolean;
+  ack997Required?: boolean;
+  filePattern?: string;
+}
+
+export type TradingPartnerWithTransactions = TradingPartner & {
+  transactions: TradingPartnerTransaction[];
+  customer?: { id: string; name: string } | null;
+  carrier?: { id: string; name: string } | null;
+};
+
+export interface ITradingPartnerRepository {
+  create(data: CreateTradingPartnerDTO): Promise<TradingPartner>;
+  findById(id: string): Promise<TradingPartnerWithTransactions | null>;
+  findAll(filters?: { entityType?: string; active?: boolean }): Promise<TradingPartnerWithTransactions[]>;
+  findByCarrierId(carrierId: string): Promise<TradingPartnerWithTransactions | null>;
+  findByCustomerId(customerId: string): Promise<TradingPartnerWithTransactions | null>;
+  findInboundPartners(): Promise<TradingPartnerWithTransactions[]>;
+  findOutboundPartnersByTransaction(transactionType: string): Promise<TradingPartnerWithTransactions[]>;
+  update(id: string, data: UpdateTradingPartnerDTO): Promise<TradingPartner>;
+  updateLastPolled(id: string): Promise<void>;
+  // Transactions
+  addTransaction(data: CreateTransactionDTO): Promise<TradingPartnerTransaction>;
+  updateTransaction(id: string, data: Partial<TradingPartnerTransaction>): Promise<TradingPartnerTransaction>;
+  removeTransaction(id: string): Promise<void>;
+  // Logs
+  createLog(data: any): Promise<any>;
+  findLogs(filters: { partnerId?: string; transactionType?: string; direction?: string; status?: string }): Promise<any[]>;
+  updateLog(id: string, data: any): Promise<any>;
+}
+
+const partnerInclude = {
+  transactions: { orderBy: { transactionType: 'asc' as const } },
+  customer: { select: { id: true, name: true } },
+  carrier: { select: { id: true, name: true } },
+};
+
+export class TradingPartnerRepository implements ITradingPartnerRepository {
+  constructor(private prisma: PrismaClient) {}
+
+  async create(data: CreateTradingPartnerDTO): Promise<TradingPartner> {
+    return this.prisma.tradingPartner.create({ data });
+  }
+
+  async findById(id: string): Promise<TradingPartnerWithTransactions | null> {
+    return this.prisma.tradingPartner.findUnique({
+      where: { id },
+      include: partnerInclude,
+    }) as Promise<TradingPartnerWithTransactions | null>;
+  }
+
+  async findAll(filters?: { entityType?: string; active?: boolean }): Promise<TradingPartnerWithTransactions[]> {
+    const where: any = {};
+    if (filters?.entityType) where.entityType = filters.entityType;
+    if (filters?.active !== undefined) where.active = filters.active;
+
+    return this.prisma.tradingPartner.findMany({
+      where,
+      include: partnerInclude,
+      orderBy: { name: 'asc' },
+    }) as Promise<TradingPartnerWithTransactions[]>;
+  }
+
+  async findByCarrierId(carrierId: string): Promise<TradingPartnerWithTransactions | null> {
+    return this.prisma.tradingPartner.findFirst({
+      where: { carrierId, active: true },
+      include: partnerInclude,
+    }) as Promise<TradingPartnerWithTransactions | null>;
+  }
+
+  async findByCustomerId(customerId: string): Promise<TradingPartnerWithTransactions | null> {
+    return this.prisma.tradingPartner.findFirst({
+      where: { customerId, active: true },
+      include: partnerInclude,
+    }) as Promise<TradingPartnerWithTransactions | null>;
+  }
+
+  async findInboundPartners(): Promise<TradingPartnerWithTransactions[]> {
+    return this.prisma.tradingPartner.findMany({
+      where: { active: true, inboundEnabled: true },
+      include: partnerInclude,
+    }) as Promise<TradingPartnerWithTransactions[]>;
+  }
+
+  async findOutboundPartnersByTransaction(transactionType: string): Promise<TradingPartnerWithTransactions[]> {
+    return this.prisma.tradingPartner.findMany({
+      where: {
+        active: true,
+        outboundEnabled: true,
+        transactions: {
+          some: { transactionType, direction: 'outbound', enabled: true },
+        },
+      },
+      include: partnerInclude,
+    }) as Promise<TradingPartnerWithTransactions[]>;
+  }
+
+  async update(id: string, data: UpdateTradingPartnerDTO): Promise<TradingPartner> {
+    return this.prisma.tradingPartner.update({ where: { id }, data });
+  }
+
+  async updateLastPolled(id: string): Promise<void> {
+    await this.prisma.tradingPartner.update({
+      where: { id },
+      data: { lastPolledAt: new Date() },
+    });
+  }
+
+  // ── Transactions ──
+
+  async addTransaction(data: CreateTransactionDTO): Promise<TradingPartnerTransaction> {
+    return this.prisma.tradingPartnerTransaction.create({ data });
+  }
+
+  async updateTransaction(id: string, data: Partial<TradingPartnerTransaction>): Promise<TradingPartnerTransaction> {
+    return this.prisma.tradingPartnerTransaction.update({ where: { id }, data: data as any });
+  }
+
+  async removeTransaction(id: string): Promise<void> {
+    await this.prisma.tradingPartnerTransaction.delete({ where: { id } });
+  }
+
+  // ── Logs ──
+
+  async createLog(data: any): Promise<any> {
+    return this.prisma.ediTransactionLog.create({ data });
+  }
+
+  async findLogs(filters: { partnerId?: string; transactionType?: string; direction?: string; status?: string }): Promise<any[]> {
+    const where: any = {};
+    if (filters.partnerId) where.partnerId = filters.partnerId;
+    if (filters.transactionType) where.transactionType = filters.transactionType;
+    if (filters.direction) where.direction = filters.direction;
+    if (filters.status) where.status = filters.status;
+
+    return this.prisma.ediTransactionLog.findMany({
+      where,
+      include: { partner: { select: { id: true, name: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+    });
+  }
+
+  async updateLog(id: string, data: any): Promise<any> {
+    return this.prisma.ediTransactionLog.update({ where: { id }, data });
+  }
+}

@@ -128,11 +128,14 @@
   flex: 1;
   max-width: 480px;
   position: relative;
+  display: flex;
+  align-items: center;
 }
 
 .vn-topbar-search input {
   width: 100%;
-  padding: 8px 12px 8px 40px;
+  height: 36px;
+  padding: 0 12px 0 40px;
   border: 1px solid var(--outline-variant);
   border-radius: var(--border-radius-full);
   background: var(--surface-container);
@@ -140,6 +143,7 @@
   font-size: 14px;
   outline: none;
   transition: border-color 0.15s;
+  box-sizing: border-box;
 }
 
 .vn-topbar-search input:focus {
@@ -149,10 +153,12 @@
 .vn-topbar-search .material-icons {
   position: absolute;
   left: 12px;
-  top: 50%;
+  top: 35%;
   transform: translateY(-50%);
   font-size: 20px;
+  line-height: 1;
   color: var(--on-surface-variant);
+  pointer-events: none;
 }
 
 .vn-topbar-actions {
@@ -186,6 +192,100 @@
   background: var(--error);
   border-radius: 50%;
   border: 2px solid var(--surface-container-lowest);
+}
+
+/* ── App Switcher Grid ────────────────────────────────────── */
+.vn-app-grid-wrapper {
+  position: relative;
+}
+
+.vn-app-grid-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: var(--surface-container-lowest);
+  border: 1px solid var(--outline-variant);
+  border-radius: 20px;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.25);
+  padding: 24px;
+  z-index: 300;
+  width: 340px;
+  animation: vn-slide-up 0.15s ease-out;
+}
+
+.vn-app-grid-panel h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--on-surface);
+  margin: 0 0 20px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.vn-app-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-auto-rows: 110px;
+  gap: 16px;
+}
+
+.vn-app-grid-tile,
+.vn-app-grid-tile:hover {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 0;
+  border: none;
+  background: none !important;
+  border-radius: 0;
+  cursor: pointer;
+  color: var(--on-surface);
+  font-family: inherit;
+  transition: none;
+}
+
+.vn-app-grid-tile:hover .vn-app-grid-icon {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.vn-app-grid-icon {
+  width: 72px;
+  height: 72px;
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-container-high);
+  transition: transform 0.15s, box-shadow 0.15s, background 0.15s;
+}
+
+.vn-app-grid-tile.active .vn-app-grid-icon {
+  background: var(--primary);
+}
+
+.vn-app-grid-icon .material-icons {
+  font-size: 32px;
+  color: var(--on-surface);
+}
+
+.vn-app-grid-tile.active .vn-app-grid-icon .material-icons {
+  color: var(--on-primary);
+}
+
+.vn-app-grid-label {
+  font-size: 12px;
+  font-weight: 500;
+  text-align: center;
+  line-height: 1.2;
+  color: var(--on-surface);
+}
+
+.vn-app-grid-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 299;
 }
 
 .vn-topbar-avatar {
@@ -555,23 +655,24 @@
 /* ── Filters Bar ──────────────────────────────────────────── */
 .vn-filters {
   display: flex;
+  align-items: center;
   gap: 8px;
-  padding: 16px 20px;
+  padding: 12px 20px;
   border-bottom: 1px solid var(--outline-variant);
   flex-wrap: wrap;
-  align-items: center;
 }
 
 .vn-filter-input {
-  padding: 8px 12px 8px 36px;
+  padding: 7px 12px 7px 36px;
   border: 1px solid var(--outline-variant);
   border-radius: var(--border-radius-sm);
   background: var(--surface-container);
   color: var(--on-surface);
   font-size: 13px;
   outline: none;
-  min-width: 220px;
+  width: 200px;
   transition: border-color 0.15s;
+  box-sizing: border-box;
 }
 
 .vn-filter-input:focus {
@@ -580,19 +681,23 @@
 
 .vn-filter-group {
   position: relative;
+  display: flex;
+  align-items: center;
 }
 
 .vn-filter-group .material-icons {
   position: absolute;
   left: 10px;
-  top: 50%;
+  top: 35%;
   transform: translateY(-50%);
   font-size: 18px;
+  line-height: 1;
   color: var(--on-surface-variant);
+  pointer-events: none;
 }
 
 .vn-filter-select {
-  padding: 8px 32px 8px 12px;
+  padding: 7px 32px 7px 12px;
   border: 1px solid var(--outline-variant);
   border-radius: var(--border-radius-sm);
   background: var(--surface-container);
@@ -600,6 +705,7 @@
   font-size: 13px;
   outline: none;
   appearance: none;
+  width: auto;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236F797A' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 10px center;
@@ -616,6 +722,9 @@
 }
 
 .vn-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 12px 20px;
   font-size: 14px;
   font-weight: 500;
@@ -628,6 +737,11 @@
   white-space: nowrap;
   transition: all 0.15s;
   font-family: inherit;
+}
+
+.vn-tab .material-icons {
+  font-size: 18px;
+  line-height: 1;
 }
 
 .vn-tab:hover {
@@ -1123,7 +1237,7 @@
   }
 
   .vn-filter-input {
-    min-width: 0;
+    width: 100%;
   }
 
   .vn-bid-card {
@@ -1218,4 +1332,504 @@
   background: var(--success);
   display: inline-block;
   animation: vn-pulse 2s infinite;
+}
+
+/* ============================================================
+   FORMS
+   Top-label fields (not floating). Matches vnext aesthetic.
+   ============================================================ */
+
+/* ── Field Wrapper ───────────────────────────────────────── */
+.vn-field {
+  margin-bottom: 16px;
+}
+
+.vn-field-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--on-surface-variant);
+  margin-bottom: 6px;
+  letter-spacing: 0.1px;
+}
+
+.vn-field-label .required {
+  color: var(--error);
+  margin-left: 2px;
+}
+
+.vn-field-hint {
+  display: block;
+  font-size: 12px;
+  color: var(--on-surface-variant);
+  margin-top: 4px;
+}
+
+/* Error state */
+.vn-field.vn-field-error .vn-field-label {
+  color: var(--error);
+}
+
+.vn-field.vn-field-error .vn-input,
+.vn-field.vn-field-error .vn-select,
+.vn-field.vn-field-error .vn-textarea {
+  border-color: var(--error);
+}
+
+.vn-field.vn-field-error .vn-field-hint {
+  color: var(--error);
+}
+
+/* ── Text Input ──────────────────────────────────────────── */
+.vn-input {
+  width: 100%;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--on-surface);
+  background: var(--surface-container-lowest);
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--border-radius-sm);
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  box-sizing: border-box;
+}
+
+.vn-input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent);
+}
+
+.vn-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: var(--surface-container);
+}
+
+.vn-input::placeholder {
+  color: var(--on-surface-variant);
+  opacity: 0.6;
+}
+
+/* ── Select ──────────────────────────────────────────────── */
+.vn-select {
+  width: 100%;
+  padding: 10px 36px 10px 14px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--on-surface);
+  background: var(--surface-container-lowest);
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--border-radius-sm);
+  outline: none;
+  appearance: none;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  box-sizing: border-box;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+}
+
+.vn-select:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent);
+}
+
+.vn-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background-color: var(--surface-container);
+}
+
+/* ── Textarea ────────────────────────────────────────────── */
+.vn-textarea {
+  width: 100%;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--on-surface);
+  background: var(--surface-container-lowest);
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--border-radius-sm);
+  outline: none;
+  resize: vertical;
+  min-height: 80px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  box-sizing: border-box;
+}
+
+.vn-textarea:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent);
+}
+
+/* ── Checkbox ────────────────────────────────────────────── */
+.vn-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--on-surface);
+  user-select: none;
+}
+
+.vn-checkbox input[type="checkbox"] {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--on-surface-variant);
+  border-radius: 4px;
+  cursor: pointer;
+  position: relative;
+  transition: background 0.15s, border-color 0.15s;
+  flex-shrink: 0;
+}
+
+.vn-checkbox input[type="checkbox"]:checked {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+.vn-checkbox input[type="checkbox"]:checked::after {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 1px;
+  width: 6px;
+  height: 11px;
+  border: solid var(--on-primary);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.vn-checkbox input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* ── Radio ───────────────────────────────────────────────── */
+.vn-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--on-surface);
+  user-select: none;
+}
+
+.vn-radio input[type="radio"] {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--on-surface-variant);
+  border-radius: 50%;
+  cursor: pointer;
+  position: relative;
+  transition: border-color 0.15s;
+  flex-shrink: 0;
+}
+
+.vn-radio input[type="radio"]:checked {
+  border-color: var(--primary);
+}
+
+.vn-radio input[type="radio"]:checked::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--primary);
+}
+
+.vn-radio input[type="radio"]:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* ── Toggle Switch ───────────────────────────────────────── */
+.vn-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--on-surface);
+  user-select: none;
+}
+
+.vn-switch-track {
+  width: 44px;
+  height: 24px;
+  border-radius: 12px;
+  background: var(--outline-variant);
+  position: relative;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+
+.vn-switch input:checked + .vn-switch-track {
+  background: var(--primary);
+}
+
+.vn-switch-track::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--surface-container-lowest);
+  box-shadow: var(--shadow-1);
+  transition: transform 0.2s;
+}
+
+.vn-switch input:checked + .vn-switch-track::after {
+  transform: translateX(20px);
+}
+
+.vn-switch input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+/* ── Form Layout ─────────────────────────────────────────── */
+.vn-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 24px;
+}
+
+.vn-form-grid .vn-col-span-2 {
+  grid-column: span 2;
+}
+
+.vn-form-section {
+  margin-bottom: 24px;
+}
+
+.vn-form-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--on-surface);
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--outline-variant);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.vn-form-section-title .material-icons {
+  font-size: 18px;
+  color: var(--on-surface-variant);
+}
+
+.vn-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-top: 20px;
+  border-top: 1px solid var(--outline-variant);
+  margin-top: 8px;
+}
+
+/* ============================================================
+   MODALS
+   Portal-based dialogs with backdrop + card
+   ============================================================ */
+
+.vn-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: var(--overlay-bg, rgba(0, 0, 0, 0.5));
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  animation: vn-fade-in 0.15s ease-out;
+}
+
+@keyframes vn-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes vn-slide-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.vn-modal {
+  background: var(--surface-container-lowest);
+  border-radius: var(--border-radius-md, 16px);
+  box-shadow: var(--shadow-2, 0 8px 32px rgba(0, 0, 0, 0.2));
+  width: 100%;
+  max-width: 520px;
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: vn-slide-up 0.2s ease-out;
+}
+
+.vn-modal-sm { max-width: 380px; }
+.vn-modal-lg { max-width: 720px; }
+.vn-modal-xl { max-width: 960px; }
+
+.vn-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--outline-variant);
+  flex-shrink: 0;
+}
+
+.vn-modal-header h2 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--on-surface);
+}
+
+.vn-modal-close {
+  background: none;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  color: var(--on-surface-variant);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+
+.vn-modal-close:hover {
+  background: var(--surface-container);
+}
+
+.vn-modal-body {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.vn-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 20px;
+  border-top: 1px solid var(--outline-variant);
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   ALERTS
+   Horizontal banners with icon + message + optional dismiss
+   ============================================================ */
+
+.vn-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: var(--border-radius-sm);
+  font-size: 14px;
+  line-height: 1.5;
+  border: 1px solid;
+}
+
+.vn-alert .material-icons {
+  font-size: 20px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.vn-alert-content {
+  flex: 1;
+}
+
+.vn-alert-dismiss {
+  background: none;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  color: inherit;
+  opacity: 0.6;
+  border-radius: 50%;
+  display: flex;
+  flex-shrink: 0;
+  transition: opacity 0.15s;
+}
+
+.vn-alert-dismiss:hover {
+  opacity: 1;
+}
+
+.vn-alert-success {
+  background: var(--success-container);
+  color: var(--on-success-container);
+  border-color: color-mix(in srgb, var(--success) 30%, transparent);
+}
+
+.vn-alert-error {
+  background: var(--error-container);
+  color: var(--on-error-container);
+  border-color: color-mix(in srgb, var(--error) 30%, transparent);
+}
+
+.vn-alert-warning {
+  background: var(--warning-container);
+  color: var(--on-warning-container);
+  border-color: color-mix(in srgb, var(--warning) 30%, transparent);
+}
+
+.vn-alert-info {
+  background: var(--info-container);
+  color: var(--on-info-container);
+  border-color: color-mix(in srgb, var(--info) 30%, transparent);
+}
+
+/* ============================================================
+   RESPONSIVE — Forms & Modals
+   ============================================================ */
+
+@media (max-width: 768px) {
+  .vn-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .vn-form-grid .vn-col-span-2 {
+    grid-column: span 1;
+  }
+
+  .vn-modal {
+    max-width: 100%;
+    max-height: calc(100vh - 32px);
+    border-radius: var(--border-radius-sm);
+  }
+
+  .vn-modal-backdrop {
+    padding: 16px;
+  }
+
+  .vn-form-actions {
+    flex-direction: column;
+  }
+
+  .vn-form-actions .vn-btn {
+    width: 100%;
+    justify-content: center;
+  }
 }
