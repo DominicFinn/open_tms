@@ -7,7 +7,7 @@
  */
 
 import { PrismaClient } from '@prisma/client';
-import { IEventBus } from '../../events/IEventBus.js';
+import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { IQueueAdapter } from '../../queue/IQueueAdapter.js';
 import { QUEUES } from '../../queue/events.js';
@@ -48,8 +48,8 @@ export class CreateShipmentCommandHandler extends BaseCommandHandler<CreateShipm
 
   constructor(
     prisma: PrismaClient,
-    eventBus: IEventBus,
-    private queue: IQueueAdapter
+    eventBus: PgBossEventBus,
+    private queue: IQueueAdapter,
   ) {
     super(prisma, eventBus);
   }

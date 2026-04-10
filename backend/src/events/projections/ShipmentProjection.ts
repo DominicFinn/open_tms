@@ -139,8 +139,8 @@ export class ShipmentProjection implements IEventHandler {
         stopCount: shipment.stops?.length ?? 0,
         updatedAt: new Date(),
       },
-    }).catch(() => {
-      console.warn(`[ShipmentProjection] ShipmentReadModel ${shipment.id} not found for update`);
+    }).catch((err: Error) => {
+      console.error(`[ShipmentProjection] Failed to update ShipmentReadModel ${shipment.id}: ${err.message}`);
     });
   }
 
@@ -149,7 +149,9 @@ export class ShipmentProjection implements IEventHandler {
     await this.prisma.shipmentReadModel.update({
       where: { id: event.entityId },
       data: { status: payload.newStatus, updatedAt: new Date() },
-    }).catch(() => {});
+    }).catch((err: Error) => {
+      console.error(`[ShipmentProjection] Failed to update read model for ${event.entityId}: ${err.message}`);
+    });
   }
 
   private async onCarrierAssigned(event: DomainEvent): Promise<void> {
@@ -171,14 +173,18 @@ export class ShipmentProjection implements IEventHandler {
         carrierName: carrierName ?? undefined,
         updatedAt: new Date(),
       },
-    }).catch(() => {});
+    }).catch((err: Error) => {
+      console.error(`[ShipmentProjection] Failed to update read model for ${event.entityId}: ${err.message}`);
+    });
   }
 
   private async onShipmentDelivered(event: DomainEvent): Promise<void> {
     await this.prisma.shipmentReadModel.update({
       where: { id: event.entityId },
       data: { status: 'delivered', updatedAt: new Date() },
-    }).catch(() => {});
+    }).catch((err: Error) => {
+      console.error(`[ShipmentProjection] Failed to update read model for ${event.entityId}: ${err.message}`);
+    });
   }
 
   private async onStopUpdate(event: DomainEvent): Promise<void> {
@@ -190,7 +196,9 @@ export class ShipmentProjection implements IEventHandler {
     await this.prisma.shipmentReadModel.update({
       where: { id: shipmentId },
       data: { stopCount, updatedAt: new Date() },
-    }).catch(() => {});
+    }).catch((err: Error) => {
+      console.error(`[ShipmentProjection] Failed to update read model for ${event.entityId}: ${err.message}`);
+    });
   }
 
   private async onLocationReceived(event: DomainEvent): Promise<void> {
@@ -203,6 +211,8 @@ export class ShipmentProjection implements IEventHandler {
         lastLocationAt: new Date(payload.eventTime),
         updatedAt: new Date(),
       },
-    }).catch(() => {});
+    }).catch((err: Error) => {
+      console.error(`[ShipmentProjection] Failed to update read model for ${event.entityId}: ${err.message}`);
+    });
   }
 }

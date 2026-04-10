@@ -5,6 +5,11 @@
  * Fan-out: one published event may be delivered to multiple handler queues
  * (e.g., evt.audit, evt.notification.email, evt.webhook) independently.
  * Each handler queue has its own retry policy and concurrency.
+ *
+ * Supports two modes:
+ * 1. publish() — persist to event store + fan out (for non-command usage)
+ * 2. persist() + fanOut() — split for outbox pattern (BaseCommandHandler
+ *    persists inside tx, fans out after commit)
  */
 
 import { PrismaClient } from '@prisma/client';
@@ -20,6 +25,9 @@ interface HandlerRegistration {
   options: SubscribeOptions;
 }
 
+/** Prisma transaction client type for outbox persist */
+type TxClient = Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>;
+
 export class PgBossEventBus implements IEventBus {
   private registry = new Map<string, HandlerRegistration>();
   private started = false;
@@ -29,9 +37,12 @@ export class PgBossEventBus implements IEventBus {
     private queue: IQueueAdapter
   ) {}
 
-  async publish<T>(event: DomainEvent<T>): Promise<void> {
-    // 1. Persist to immutable event store
-    await this.prisma.domainEventLog.create({
+  /**
+   * Persist event to the immutable event store within an existing transaction.
+   * Used by BaseCommandHandler to write events atomically with the command.
+   */
+  async persist<T>(event: DomainEvent<T>, tx: TxClient): Promise<void> {
+    await tx.domainEventLog.create({
       data: {
         id: event.id,
         type: event.type,
@@ -44,8 +55,14 @@ export class PgBossEventBus implements IEventBus {
         metadata: event.metadata as any,
       },
     });
+  }
 
-    // 2. Fan out to matching handler queues
+  /**
+   * Fan out an already-persisted event to matching handler queues.
+   * Called after transaction commit. Failures are logged but don't throw
+   * because the event is already safely in DomainEventLog.
+   */
+  async fanOut<T>(event: DomainEvent<T>): Promise<void> {
     const fanOutPromises: Promise<string>[] = [];
 
     for (const [handlerName, registration] of this.registry) {
@@ -64,8 +81,34 @@ export class PgBossEventBus implements IEventBus {
     }
 
     if (fanOutPromises.length > 0) {
-      await Promise.all(fanOutPromises);
+      await Promise.all(fanOutPromises).catch((err) => {
+        console.error(`[EventBus] Fan-out failed for event ${event.id} (${event.type}): ${(err as Error).message}`);
+      });
     }
+  }
+
+  /**
+   * Convenience: persist to event store + fan out in one call.
+   * Used by non-command code (e.g., routes that publish events directly).
+   */
+  async publish<T>(event: DomainEvent<T>): Promise<void> {
+    // 1. Persist to immutable event store
+    await this.prisma.domainEventLog.create({
+      data: {
+        id: event.id,
+        type: event.type,
+        timestamp: event.timestamp,
+        orgId: event.orgId,
+        actorId: event.actorId,
+        entityType: event.entityType,
+        entityId: event.entityId,
+        payload: event.payload as any,
+        metadata: event.metadata as any,
+      },
+    });
+
+    // 2. Fan out to matching handler queues
+    await this.fanOut(event);
   }
 
   async publishBatch(events: DomainEvent[]): Promise<void> {

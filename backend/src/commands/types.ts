@@ -27,6 +27,8 @@ export interface CommandMetadata {
   correlationId: string;
   /** Where the command originated: "api", "worker", "webhook", "system" */
   source: string;
+  /** Optional idempotency key — if set, duplicate commands with the same key are skipped */
+  idempotencyKey?: string;
 }
 
 /** The result returned after a command executes. */
@@ -36,6 +38,8 @@ export interface CommandResult<T = unknown> {
   /** Domain events that were published as a result of this command */
   events: DomainEvent[];
   error?: string;
+  /** True if the command was skipped due to idempotency check */
+  idempotent?: boolean;
 }
 
 /** Interface that all command handlers implement. */

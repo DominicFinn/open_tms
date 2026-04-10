@@ -142,9 +142,8 @@ export class OrderProjection implements IEventHandler {
         requestedDeliveryDate: order.requestedDeliveryDate,
         updatedAt: new Date(),
       },
-    }).catch(() => {
-      // Read model row may not exist yet if backfill hasn't run
-      console.warn(`[OrderProjection] OrderReadModel ${order.id} not found for update`);
+    }).catch((err: Error) => {
+      console.error(`[OrderProjection] Failed to update OrderReadModel ${order.id}: ${err.message}`);
     });
   }
 
@@ -153,7 +152,9 @@ export class OrderProjection implements IEventHandler {
     await this.prisma.orderReadModel.update({
       where: { id: event.entityId },
       data: { status: payload.newStatus, updatedAt: new Date() },
-    }).catch(() => {});
+    }).catch((err: Error) => {
+      console.error(`[OrderProjection] Failed to update read model for ${event.entityId}: ${err.message}`);
+    });
   }
 
   private async onDeliveryStatusChanged(event: DomainEvent): Promise<void> {
@@ -166,7 +167,9 @@ export class OrderProjection implements IEventHandler {
         exceptionType: payload.newStatus === 'exception' ? undefined : null,
         updatedAt: new Date(),
       },
-    }).catch(() => {});
+    }).catch((err: Error) => {
+      console.error(`[OrderProjection] Failed to update read model for ${event.entityId}: ${err.message}`);
+    });
   }
 
   private async onAssignedToShipment(event: DomainEvent): Promise<void> {
@@ -179,7 +182,9 @@ export class OrderProjection implements IEventHandler {
         deliveryStatus: 'assigned',
         updatedAt: new Date(),
       },
-    }).catch(() => {});
+    }).catch((err: Error) => {
+      console.error(`[OrderProjection] Failed to update read model for ${event.entityId}: ${err.message}`);
+    });
   }
 
   private async onOrderDelivered(event: DomainEvent): Promise<void> {
@@ -191,7 +196,9 @@ export class OrderProjection implements IEventHandler {
         exceptionType: null,
         updatedAt: new Date(),
       },
-    }).catch(() => {});
+    }).catch((err: Error) => {
+      console.error(`[OrderProjection] Failed to update read model for ${event.entityId}: ${err.message}`);
+    });
   }
 
   private async onOrderException(event: DomainEvent): Promise<void> {
@@ -203,7 +210,9 @@ export class OrderProjection implements IEventHandler {
         exceptionType: payload.exceptionType ?? 'unknown',
         updatedAt: new Date(),
       },
-    }).catch(() => {});
+    }).catch((err: Error) => {
+      console.error(`[OrderProjection] Failed to update read model for ${event.entityId}: ${err.message}`);
+    });
   }
 
   private async onExceptionResolved(event: DomainEvent): Promise<void> {
@@ -214,7 +223,9 @@ export class OrderProjection implements IEventHandler {
         exceptionType: null,
         updatedAt: new Date(),
       },
-    }).catch(() => {});
+    }).catch((err: Error) => {
+      console.error(`[OrderProjection] Failed to update read model for ${event.entityId}: ${err.message}`);
+    });
   }
 
   private async calculateTotalWeight(orderId: string): Promise<number | null> {

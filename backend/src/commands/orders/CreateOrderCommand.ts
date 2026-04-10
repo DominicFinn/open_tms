@@ -6,7 +6,7 @@
  */
 
 import { PrismaClient } from '@prisma/client';
-import { IEventBus } from '../../events/IEventBus.js';
+import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { Command } from '../types.js';
@@ -33,7 +33,7 @@ export const CREATE_ORDER = 'order.create';
 export class CreateOrderCommandHandler extends BaseCommandHandler<CreateOrderPayload, CreateOrderResult> {
   readonly commandType = CREATE_ORDER;
 
-  constructor(prisma: PrismaClient, eventBus: IEventBus) {
+  constructor(prisma: PrismaClient, eventBus: PgBossEventBus) {
     super(prisma, eventBus);
   }
 

@@ -35,7 +35,22 @@ import { SmtpEmailService } from '../services/SmtpEmailService.js';
 import { ConsoleEmailService } from '../services/ConsoleEmailService.js';
 import { CommandBus } from '../commands/CommandBus.js';
 import { CreateOrderCommandHandler } from '../commands/orders/CreateOrderCommand.js';
+import { UpdateOrderCommandHandler } from '../commands/orders/UpdateOrderCommand.js';
+import { ArchiveOrderCommandHandler } from '../commands/orders/ArchiveOrderCommand.js';
 import { CreateShipmentCommandHandler } from '../commands/shipments/CreateShipmentCommand.js';
+import { UpdateShipmentCommandHandler } from '../commands/shipments/UpdateShipmentCommand.js';
+import { ArchiveShipmentCommandHandler } from '../commands/shipments/ArchiveShipmentCommand.js';
+import { CreateCarrierCommandHandler } from '../commands/carriers/CreateCarrierCommand.js';
+import { UpdateCarrierCommandHandler } from '../commands/carriers/UpdateCarrierCommand.js';
+import { ArchiveCarrierCommandHandler } from '../commands/carriers/ArchiveCarrierCommand.js';
+import { CreateCustomerCommandHandler } from '../commands/customers/CreateCustomerCommand.js';
+import { UpdateCustomerCommandHandler } from '../commands/customers/UpdateCustomerCommand.js';
+import { ArchiveCustomerCommandHandler } from '../commands/customers/ArchiveCustomerCommand.js';
+import { CreateLocationCommandHandler } from '../commands/locations/CreateLocationCommand.js';
+import { UpdateLocationCommandHandler } from '../commands/locations/UpdateLocationCommand.js';
+import { CreateLaneCommandHandler } from '../commands/lanes/CreateLaneCommand.js';
+import { UpdateLaneCommandHandler } from '../commands/lanes/UpdateLaneCommand.js';
+import { ArchiveLaneCommandHandler } from '../commands/lanes/ArchiveLaneCommand.js';
 
 /**
  * Register all application dependencies
@@ -206,15 +221,41 @@ export function registerDependencies(prisma: PrismaClient): void {
     );
   });
 
-  // Command bus — register command handlers
+  // Command bus — register all command handlers
   container.singleton(TOKENS.ICommandBus).toFactory(() => {
     const bus = new CommandBus();
     const prisma = container.resolve<PrismaClient>(TOKENS.PrismaClient);
-    const eventBus = container.resolve<import('../events/IEventBus.js').IEventBus>(TOKENS.IEventBus);
+    const eventBus = container.resolve<PgBossEventBus>(TOKENS.IEventBus);
     const queue = container.resolve<import('../queue/IQueueAdapter.js').IQueueAdapter>(TOKENS.IQueueAdapter);
 
+    // Order commands
     bus.register(new CreateOrderCommandHandler(prisma, eventBus));
+    bus.register(new UpdateOrderCommandHandler(prisma, eventBus));
+    bus.register(new ArchiveOrderCommandHandler(prisma, eventBus));
+
+    // Shipment commands
     bus.register(new CreateShipmentCommandHandler(prisma, eventBus, queue));
+    bus.register(new UpdateShipmentCommandHandler(prisma, eventBus));
+    bus.register(new ArchiveShipmentCommandHandler(prisma, eventBus));
+
+    // Carrier commands
+    bus.register(new CreateCarrierCommandHandler(prisma, eventBus));
+    bus.register(new UpdateCarrierCommandHandler(prisma, eventBus));
+    bus.register(new ArchiveCarrierCommandHandler(prisma, eventBus));
+
+    // Customer commands
+    bus.register(new CreateCustomerCommandHandler(prisma, eventBus));
+    bus.register(new UpdateCustomerCommandHandler(prisma, eventBus));
+    bus.register(new ArchiveCustomerCommandHandler(prisma, eventBus));
+
+    // Location commands
+    bus.register(new CreateLocationCommandHandler(prisma, eventBus));
+    bus.register(new UpdateLocationCommandHandler(prisma, eventBus));
+
+    // Lane commands
+    bus.register(new CreateLaneCommandHandler(prisma, eventBus));
+    bus.register(new UpdateLaneCommandHandler(prisma, eventBus));
+    bus.register(new ArchiveLaneCommandHandler(prisma, eventBus));
 
     return bus;
   });
