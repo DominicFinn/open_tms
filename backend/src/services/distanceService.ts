@@ -152,11 +152,70 @@ export class DistanceService {
     };
   }
 
+  private static readonly GOOGLE_GEOCODING_API_URL = 'https://maps.googleapis.com/maps/api/geocode/json';
+  private static readonly NOMINATIM_API_URL = 'https://nominatim.openstreetmap.org/search';
+
   /**
-   * Geocode an address using OpenStreetMap Nominatim (free, no API key required).
-   * Rate-limited to 1 request/second per Nominatim usage policy.
+   * Geocode an address to lat/lng coordinates.
+   *
+   * Provider priority:
+   *   1. Google Geocoding API — if GOOGLE_MAPS_API_KEY env var is set
+   *   2. OpenStreetMap Nominatim — free fallback, no API key required
+   *
+   * Set GOOGLE_MAPS_API_KEY to use Google. Otherwise Nominatim is used automatically.
    */
   private static async geocodeAddress(location: Location): Promise<{ lat: number; lng: number } | null> {
+    // Try Google Geocoding first if API key is available
+    const googleKey = process.env.GOOGLE_MAPS_API_KEY;
+    if (googleKey) {
+      const result = await this.geocodeWithGoogle(location, googleKey);
+      if (result) return result;
+    }
+
+    // Fallback to Nominatim (free, no key required)
+    return this.geocodeWithNominatim(location);
+  }
+
+  /**
+   * Google Geocoding API — requires GOOGLE_MAPS_API_KEY.
+   * https://developers.google.com/maps/documentation/geocoding
+   */
+  private static async geocodeWithGoogle(location: Location, apiKey: string): Promise<{ lat: number; lng: number } | null> {
+    const address = [location.address1, location.city, location.state, location.postalCode, location.country]
+      .filter(Boolean)
+      .join(', ');
+
+    if (!address.trim()) return null;
+
+    try {
+      const params = new URLSearchParams({ address, key: apiKey });
+      const response = await fetch(`${this.GOOGLE_GEOCODING_API_URL}?${params}`);
+      if (!response.ok) {
+        console.warn('Google Geocoding API request failed:', response.status);
+        return null;
+      }
+
+      const data = await response.json();
+      if (data.status === 'OK' && data.results?.length > 0) {
+        const { lat, lng } = data.results[0].geometry.location;
+        return { lat, lng };
+      }
+      if (data.status !== 'ZERO_RESULTS') {
+        console.warn('Google Geocoding API returned:', data.status, data.error_message);
+      }
+    } catch (error) {
+      console.warn('Google Geocoding error:', error);
+    }
+
+    return null;
+  }
+
+  /**
+   * OpenStreetMap Nominatim — free geocoding, no API key required.
+   * Rate limit: 1 request/second per Nominatim usage policy.
+   * https://nominatim.org/release-docs/develop/api/Search/
+   */
+  private static async geocodeWithNominatim(location: Location): Promise<{ lat: number; lng: number } | null> {
     const parts = [location.address1, location.city, location.state, location.postalCode, location.country]
       .filter(Boolean)
       .join(', ');
@@ -164,12 +223,8 @@ export class DistanceService {
     if (!parts.trim()) return null;
 
     try {
-      const params = new URLSearchParams({
-        q: parts,
-        format: 'json',
-        limit: '1',
-      });
-      const response = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, {
+      const params = new URLSearchParams({ q: parts, format: 'json', limit: '1' });
+      const response = await fetch(`${this.NOMINATIM_API_URL}?${params}`, {
         headers: { 'User-Agent': 'OpenTMS/0.1.0' },
       });
 
