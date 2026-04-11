@@ -145,7 +145,7 @@ The EDI system uses a **unified Trading Partner model** (`TradingPartner`) that 
 | 204 | Motor Carrier Load Tender | Outbound | Active |
 | 990 | Response to Load Tender | Inbound | Active |
 | 997 | Functional Acknowledgment | Both | Active |
-| 214 | Shipment Status | Both | Planned |
+| 214 | Shipment Status | Both | Active |
 | 210 | Freight Invoice | Inbound | Planned |
 
 ### EDI Flow — How It Works
@@ -168,8 +168,12 @@ The EDI system uses a **unified Trading Partner model** (`TradingPartner`) that 
 - `backend/src/services/EDI997Service.ts` — Functional Acknowledgment generator
 - `backend/src/services/EDI850ParseService.ts` — Purchase Order parser
 - `backend/src/services/EDI856Service.ts` — Advance Ship Notice generator
+- `backend/src/services/EDI214ParseService.ts` — EDI 214 Shipment Status parser (inbound)
+- `backend/src/services/EDI214Service.ts` — EDI 214 Shipment Status generator (outbound)
+- `backend/src/services/edi214StatusMapping.ts` — AT7 status code to internal status mapping
 - `backend/src/routes/tradingPartners.ts` — API routes for partner management
 - `backend/src/routes/ediTender.ts` — EDI 204 preview and 990 inbound endpoints
+- `backend/src/routes/edi214.ts` — EDI 214 inbound, generate, and preview endpoints
 - `edi-collector/src/collector.ts` — SFTP polling with multi-type routing
 - `frontend/src/pages/TradingPartners.tsx` — Partner management UI (Integrations app)
 

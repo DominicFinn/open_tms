@@ -89,6 +89,9 @@ import { TradingPartnerRepository } from '../repositories/TradingPartnerReposito
 import { EdiRouterService } from '../services/EdiRouterService.js';
 import { OutboundEdiDeliveryService } from '../services/OutboundEdiDeliveryService.js';
 import { EDI997Service } from '../services/EDI997Service.js';
+import { EDI214ParseService } from '../services/EDI214ParseService.js';
+import { EDI214Service } from '../services/EDI214Service.js';
+import { ProcessInbound214CommandHandler } from '../commands/shipments/ProcessInbound214Command.js';
 import { HereRoutingProvider } from '../services/routing/HereRoutingProvider.js';
 import { TomTomRoutingProvider } from '../services/routing/TomTomRoutingProvider.js';
 import { ValhallaRoutingProvider } from '../services/routing/ValhallaRoutingProvider.js';
@@ -340,6 +343,14 @@ export function registerDependencies(prisma: PrismaClient): void {
     return new EDI997Service();
   });
 
+  container.singleton(TOKENS.IEDI214ParseService).toFactory(() => {
+    return new EDI214ParseService();
+  });
+
+  container.singleton(TOKENS.IEDI214Service).toFactory(() => {
+    return new EDI214Service();
+  });
+
   // EDI services
   container.singleton(TOKENS.IEDI850ParseService).toFactory(() => {
     return new EDI850ParseService();
@@ -473,6 +484,9 @@ export function registerDependencies(prisma: PrismaClient): void {
     // CAPA commands
     bus.register(new CreateCAPACommandHandler(prisma, eventBus));
     bus.register(new UpdateCAPACommandHandler(prisma, eventBus));
+
+    // EDI 214 commands
+    bus.register(new ProcessInbound214CommandHandler(prisma, eventBus));
 
     return bus;
   });

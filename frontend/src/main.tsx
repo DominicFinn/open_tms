@@ -67,6 +67,16 @@ import CarrierProfile from './pages/carrier-portal/CarrierProfile';
 import TradingPartners from './pages/TradingPartners';
 import VNextColdChainProfiles from './pages/VNextColdChainProfiles';
 import VNextCAPAReports from './pages/VNextCAPAReports';
+
+// Warehouse App
+import { WarehouseLayout } from './warehouse/warehouse-layout';
+import WarehouseLogin from './warehouse/WarehouseLogin';
+import WarehouseSelectLocation from './warehouse/WarehouseSelectLocation';
+import WarehouseShipments from './warehouse/WarehouseShipments';
+import WarehouseShipmentDetail from './warehouse/WarehouseShipmentDetail';
+import WarehouseArchive from './warehouse/WarehouseArchive';
+import WarehouseCreateShipment from './warehouse/WarehouseCreateShipment';
+import WarehouseSettings from './warehouse/WarehouseSettings';
 import './theme.css';
 
 const root = createRoot(document.getElementById('root')!);
@@ -83,6 +93,17 @@ root.render(
           <Route path="history" element={<CarrierTenderHistory />} />
           <Route path="bids" element={<CarrierBidHistory />} />
           <Route path="profile" element={<CarrierProfile />} />
+        </Route>
+
+        {/* Warehouse App (standalone — outside main layout) */}
+        <Route path="/warehouse/login" element={<WarehouseLogin />} />
+        <Route path="/warehouse/select-location" element={<WarehouseSelectLocation />} />
+        <Route path="/warehouse" element={<WarehouseLayout />}>
+          <Route index element={<WarehouseShipments />} />
+          <Route path="shipments/:id" element={<WarehouseShipmentDetail />} />
+          <Route path="archive" element={<WarehouseArchive />} />
+          <Route path="create" element={<WarehouseCreateShipment />} />
+          <Route path="settings" element={<WarehouseSettings />} />
         </Route>
 
         {/* Main app (VNext layout) */}

@@ -64,6 +64,8 @@ export const TOKENS = {
   IEdiRouterService: Symbol.for('IEdiRouterService'),
   IOutboundEdiDeliveryService: Symbol.for('IOutboundEdiDeliveryService'),
   IEDI997Service: Symbol.for('IEDI997Service'),
+  IEDI214ParseService: Symbol.for('IEDI214ParseService'),
+  IEDI214Service: Symbol.for('IEDI214Service'),
 
   // Routing & ETA monitoring tokens
   IRoutingProvider: Symbol.for('IRoutingProvider'),

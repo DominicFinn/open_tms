@@ -113,6 +113,7 @@ unassigned → assigned → in_transit → delivered
 | `CreateShipmentCommand` | `POST /api/v1/shipments` | `shipment.created` |
 | `UpdateShipmentCommand` | `PUT /api/v1/shipments/:id` | `shipment.updated`, `shipment.status_changed`, `shipment.carrier_assigned` |
 | `ArchiveShipmentCommand` | `DELETE /api/v1/shipments/:id` | `shipment.archived` |
+| `ProcessInbound214Command` | `POST /api/v1/edi/214/inbound` | `edi_214.received`, `shipment.status_changed`, `shipment.stop_arrived`, `shipment.stop_completed`, `shipment.exception`, `shipment.delivered` |
 
 ### Side Effects
 
@@ -125,6 +126,8 @@ unassigned → assigned → in_transit → delivered
 | `shipment.exception` | — | In-app + email | — |
 | `shipment.stop_arrived` | ShipmentReadModel.stopCount updated | In-app | Orders at stop → delivery_status_changed |
 | `shipment.stop_completed` | ShipmentReadModel.stopCount updated | In-app | Orders at stop → delivered |
+| `edi_214.received` | — | — | Auto-forward outbound 214 to customer trading partners |
+| `edi_214.sent` | — | — | — |
 
 ### Tracking (IoT)
 
@@ -526,6 +529,7 @@ UpdateCapaCommand emits different events based on what changed:
 
 ---
 
+<<<<<<< HEAD
 ## ETA Monitoring
 
 The ETA monitor is a cron-driven background service (not a CQRS command) that checks in-transit shipments against traffic-aware routing APIs. It runs via pg-boss schedule and publishes events through the standard event bus.
@@ -569,3 +573,85 @@ pg-boss cron schedule (default: every 10 minutes). Can also be triggered manuall
 | `ETA_WARNING_THRESHOLD_MINUTES` | `30` | Warning threshold |
 | `ETA_CRITICAL_THRESHOLD_MINUTES` | `60` | Critical threshold (triggers shipment.exception) |
 | `ETA_STALE_GPS_THRESHOLD_MINUTES` | `60` | Skip shipments with GPS older than this |
+
+---
+
+## Warehouse App
+
+The warehouse app is a mobile-first sub-application for warehouse operatives to "launch" shipments — preparing them for dispatch by assigning IoT trackers, accessories, and verifying details.
+
+### Auth: Magic Links
+
+Magic links are persistent, reusable tokens encoded in QR codes for wall-mounting in warehouses.
+
+| Action | API | What Happens |
+|--------|-----|-------------|
+| Generate Magic Link | `POST /api/v1/warehouse/auth/magic-link/generate` | Creates SHA-256 hashed token, deactivates previous links for user |
+| Validate Magic Link | `POST /api/v1/warehouse/auth/magic-link/validate` | Verifies hash, checks expiry, logs to LoginAuditLog, returns user data |
+| Password Login | `POST /api/v1/warehouse/auth/login` | Standard login with lockout (5 attempts → 15 min), logs to LoginAuditLog |
+| Revoke Magic Links | `DELETE /api/v1/warehouse/auth/magic-link/:userId` | Deactivates all active magic links for user |
+
+### Login Audit Log
+
+Every login attempt (success or failure) is recorded in `LoginAuditLog` with:
+- `method`: password, magic_link, oauth_google, oauth_microsoft
+- `success`: boolean
+- `failReason`: user_not_found, invalid_password, locked, expired_link, inactive_link
+- `ipAddress`, `userAgent`: client metadata
+
+### Shipment Launch Workflow
+
+```
+Shipment (draft) → Warehouse Operative opens detail
+                  → Step 1: Assign IoT trackers (scan barcode → device lookup → assign)
+                  → Step 2: Add accessories (temp sensors, door seals)
+                  → Step 3: Pair trackable units with IoT devices
+                  → Step 4: Review & Launch
+                  → Shipment marked as launched (launchedAt, launchedBy set)
+                  → Status transitions from "draft" to "ready"
+                  → Geofence exit will later transition to "in_transit"
+```
+
+### Shipment Flags
+
+Users cannot edit shipment details — they flag issues instead.
+
+| Action | API | What Happens |
+|--------|-----|-------------|
+| Flag Issue | `POST /api/v1/warehouse/shipments/:id/flag` | Creates ShipmentFlag record with reason, user info |
+| Resolve Flag | `PUT /api/v1/warehouse/shipments/:shipmentId/flags/:flagId/resolve` | Marks flag resolved, records resolver |
+| Launch Check | `POST /api/v1/warehouse/shipments/:id/launch` | Blocks launch if unresolved flags exist |
+
+### Device Assignment (Scanning)
+
+| Action | API | What Happens |
+|--------|-----|-------------|
+| Lookup Device | `GET /api/v1/warehouse/devices/lookup?barcode=X` | Finds by externalId, displayId, or name |
+| Assign to Shipment | `POST /api/v1/warehouse/shipments/:id/assign-device` | Deactivates previous assignment, creates new |
+| Assign to Unit | Same endpoint with `trackableUnitId` | Links device to specific pallet/tote |
+| Remove Device | `DELETE /api/v1/warehouse/shipments/:id/devices/:deviceId` | Soft-deactivates assignment |
+
+### Accessories
+
+Accessories are physical items attached to shipments (BLE sensors, door seals).
+
+Types: `temp_sensor_front`, `temp_sensor_middle`, `temp_sensor_back`, `door_sensor`, `door_seal`, `ble_tracker`
+
+| Action | API | What Happens |
+|--------|-----|-------------|
+| Add Accessory | `POST /api/v1/warehouse/shipments/:id/accessories` | Creates ShipmentAccessory record |
+| Remove Accessory | `DELETE /api/v1/warehouse/shipments/:id/accessories/:id` | Hard deletes record |
+
+### WiFi Connectivity Monitoring
+
+`POST /api/v1/warehouse/connectivity` — Logs `wifi_lost`, `wifi_restored`, `slow_connection` events. Fire-and-forget from the frontend when `navigator.onLine` changes. Used for operational diagnostics.
+
+### Shipment Lifecycle (Warehouse Perspective)
+
+```
+draft ──(warehouse launch)──→ ready ──(geofence exit)──→ in_transit ──→ delivered
+  │                             │
+  └──(idle >2 days)──→ archive  └──(warehouse app shows as "launched")
+```
+
+Launched shipments drop off the active list. Stale shipments (>2 days in draft without launch) appear on the archive screen.
