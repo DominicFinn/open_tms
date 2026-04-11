@@ -276,6 +276,19 @@ export interface CargoLeftOnVehiclePayload {
   orderNumber: string;
 }
 
+export interface TrackingEtaUpdatedPayload {
+  shipmentId: string;
+  shipmentReference: string;
+  previousEta?: string;
+  newEta: string;
+  delayMinutes: number;
+  severity: 'minor_delay' | 'warning' | 'critical';
+  nextStopId?: string;
+  nextStopName?: string;
+  trafficDelaySeconds?: number;
+  provider: string;
+}
+
 export interface EntityChangedPayload {
   changes?: Record<string, { before: unknown; after: unknown }>;
 }

@@ -87,6 +87,16 @@ function buildNotification(event: DomainEvent): { title: string; body: string; c
         category: 'order_update',
         severity: 'success',
       };
+    case 'tracking.eta_updated': {
+      const delaySeverity = p.severity === 'critical' ? 'error' : p.severity === 'warning' ? 'warning' : 'info';
+      const delayLabel = p.severity === 'critical' ? 'CRITICAL DELAY' : p.severity === 'warning' ? 'Delay warning' : 'Minor delay';
+      return {
+        title: `${delayLabel}: ${p.shipmentReference || event.entityId}`,
+        body: `Shipment is running ${p.delayMinutes} minutes late${p.nextStopName ? ` for ${p.nextStopName}` : ''}. New ETA: ${p.newEta ? new Date(p.newEta).toLocaleString() : 'unknown'}`,
+        category: 'shipment_update',
+        severity: delaySeverity,
+      };
+    }
     default:
       return null;
   }
@@ -105,6 +115,7 @@ export class InAppNotificationHandler implements IEventHandler {
     'cargo.missing_at_stop',
     'cargo.left_on_vehicle',
     'cargo.discrepancy_resolved',
+    'tracking.eta_updated',
   ];
   readonly options: SubscribeOptions = {
     concurrency: 3,

@@ -65,6 +65,10 @@ export const TOKENS = {
   IOutboundEdiDeliveryService: Symbol.for('IOutboundEdiDeliveryService'),
   IEDI997Service: Symbol.for('IEDI997Service'),
 
+  // Routing & ETA monitoring tokens
+  IRoutingProvider: Symbol.for('IRoutingProvider'),
+  IShipmentEtaMonitorService: Symbol.for('IShipmentEtaMonitorService'),
+
   // Infrastructure tokens
   PrismaClient: Symbol.for('PrismaClient'),
   IFileStorageProvider: Symbol.for('IFileStorageProvider'),

@@ -89,6 +89,10 @@ import { TradingPartnerRepository } from '../repositories/TradingPartnerReposito
 import { EdiRouterService } from '../services/EdiRouterService.js';
 import { OutboundEdiDeliveryService } from '../services/OutboundEdiDeliveryService.js';
 import { EDI997Service } from '../services/EDI997Service.js';
+import { HereRoutingProvider } from '../services/routing/HereRoutingProvider.js';
+import { TomTomRoutingProvider } from '../services/routing/TomTomRoutingProvider.js';
+import { ValhallaRoutingProvider } from '../services/routing/ValhallaRoutingProvider.js';
+import { ShipmentEtaMonitorService } from '../services/routing/ShipmentEtaMonitorService.js';
 
 /**
  * Register all application dependencies
@@ -351,6 +355,50 @@ export function registerDependencies(prisma: PrismaClient): void {
       container.resolve(TOKENS.ILocationResolutionService)
     );
   });
+
+  // Routing provider — env-based provider selection
+  const routingProvider = process.env.ROUTING_PROVIDER || 'none';
+  if (routingProvider === 'here' && process.env.HERE_API_KEY) {
+    container.singleton(TOKENS.IRoutingProvider).toFactory(() => {
+      return new HereRoutingProvider({
+        apiKey: process.env.HERE_API_KEY!,
+        baseUrl: process.env.HERE_BASE_URL,
+        matrixBaseUrl: process.env.HERE_MATRIX_BASE_URL,
+      });
+    });
+  } else if (routingProvider === 'tomtom' && process.env.TOMTOM_API_KEY) {
+    container.singleton(TOKENS.IRoutingProvider).toFactory(() => {
+      return new TomTomRoutingProvider({
+        apiKey: process.env.TOMTOM_API_KEY!,
+        baseUrl: process.env.TOMTOM_BASE_URL,
+      });
+    });
+  } else if (routingProvider === 'valhalla' && process.env.VALHALLA_BASE_URL) {
+    container.singleton(TOKENS.IRoutingProvider).toFactory(() => {
+      return new ValhallaRoutingProvider({
+        baseUrl: process.env.VALHALLA_BASE_URL!,
+      });
+    });
+  }
+  // If no provider configured, IRoutingProvider won't be resolvable — ETA monitor stays disabled
+
+  // ETA monitor service (only if routing provider is configured)
+  if (routingProvider !== 'none') {
+    container.singleton(TOKENS.IShipmentEtaMonitorService).toFactory(() => {
+      return new ShipmentEtaMonitorService(
+        container.resolve(TOKENS.PrismaClient),
+        container.resolve(TOKENS.IRoutingProvider),
+        container.resolve(TOKENS.IEventBus),
+        {
+          delayThresholdMinutes: Number(process.env.ETA_DELAY_THRESHOLD_MINUTES || 15),
+          warningThresholdMinutes: Number(process.env.ETA_WARNING_THRESHOLD_MINUTES || 30),
+          criticalThresholdMinutes: Number(process.env.ETA_CRITICAL_THRESHOLD_MINUTES || 60),
+          routeDeviationMeters: Number(process.env.ETA_ROUTE_DEVIATION_METERS || 5000),
+          staleGpsThresholdMinutes: Number(process.env.ETA_STALE_GPS_THRESHOLD_MINUTES || 60),
+        },
+      );
+    });
+  }
 
   // Command bus — register all command handlers
   container.singleton(TOKENS.ICommandBus).toFactory(() => {
