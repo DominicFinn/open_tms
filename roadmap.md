@@ -187,14 +187,29 @@
   - ✅ ShipmentEvent model with location tracking
   - ✅ Geofencing with automatic delivery status updates
   - ✅ ShipmentReadModel tracks currentLat/Lng/lastLocationAt
+  - ✅ **ETA Monitoring Service** — cron-driven shipment delay detection
+    - ✅ Provider-agnostic routing interface (IRoutingProvider) with three implementations:
+      - TomTom ($0.50/1K, full truck routing with vehicle dimensions/hazmat)
+      - HERE ($2.50/1K, industry standard for logistics)
+      - Valhalla (self-hosted, free, truck costing model, no traffic)
+    - ✅ Adaptive polling: frequency scales with proximity to delivery, skips parked/stale trucks
+    - ✅ Three delay severity levels: minor (15m), warning (30m), critical (60m)
+    - ✅ Updates ShipmentStop.estimatedArrival with traffic-aware routing ETAs
+    - ✅ Publishes tracking.eta_updated and shipment.exception events
+    - ✅ In-app notifications for all delay severities
+    - ✅ pg-boss cron schedule (default: every 10 minutes, configurable)
+    - ✅ API endpoints: monitor status, manual trigger, single-shipment check
+    - ✅ Configurable via env vars (provider, thresholds, cron schedule)
+    - ✅ 10 unit tests
+    - ✅ [ETA Monitoring Guide](./docs/ETA_MONITORING_GUIDE.md)
   - Carrier API integration (FedEx, UPS, DHL) 🔲
   - Update shipments automatically from carrier feeds 🔲
 - **Exceptions** (partial)
   - ✅ Exception status on orders with type classification
   - ✅ Exception resolution workflow
   - ✅ Event-driven notifications on exceptions
+  - ✅ ETA-based exception auto-detection (critical delays auto-create shipment.exception events)
   - Alerts for route deviations 🔲
-  - Exception auto-detection from tracking data 🔲
 - **Driver Mobile App** 🔲
   - Mobile app for drivers to update order/shipment status in the field
   - Delivery confirmation with signature capture

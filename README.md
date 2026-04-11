@@ -61,6 +61,7 @@ Deploy your own Open TMS instance with one click:
 - **Authentication & Authorization** - Standalone auth service with JWT tokens, OAuth 2.0 (Google/Microsoft), RBAC with fine-grained permissions, and account lockout protection
 - **Email Service** - Pluggable email with SMTP and console providers, Handlebars templates, admin-configurable settings, and per-organization overrides
 - **Cold Chain Monitoring** - Temperature profiles, immutable logging, excursion detection, compliance reports (CFR 21 Part 11)
+- **ETA Monitoring** - Cron-driven shipment delay detection using traffic-aware routing APIs (TomTom, HERE, Valhalla), adaptive polling, configurable alert thresholds, and automatic notifications
 
 ### 🎨 Modern UI/UX
 - **Material Design 3** - Beautiful, consistent design system

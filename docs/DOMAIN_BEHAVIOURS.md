@@ -523,3 +523,49 @@ UpdateCapaCommand emits different events based on what changed:
 | `capa.status_changed` | — |
 | `capa.approved` | — |
 | `capa.verified` | — |
+
+---
+
+## ETA Monitoring
+
+The ETA monitor is a cron-driven background service (not a CQRS command) that checks in-transit shipments against traffic-aware routing APIs. It runs via pg-boss schedule and publishes events through the standard event bus.
+
+### Trigger
+
+pg-boss cron schedule (default: every 10 minutes). Can also be triggered manually via `POST /api/v1/eta-monitor/run`.
+
+### Process
+
+1. Query all in-transit shipments (status: `in_transit`, `dispatched`, `picked_up`, `at_stop`)
+2. Apply adaptive polling filter (skip stale GPS, parked trucks, distant shipments based on time-to-delivery)
+3. For each qualifying shipment:
+   - Get current GPS position from ShipmentReadModel
+   - Get next pending stop's location coordinates
+   - Call routing provider (TomTom/HERE/Valhalla) with traffic-aware ETA request
+   - Compare new ETA against scheduled `ShipmentStop.estimatedArrival`
+   - Update `ShipmentStop.estimatedArrival` with routing-based ETA
+
+### Events Emitted
+
+| Condition | Event | Payload |
+|-----------|-------|---------|
+| Delay >= 15 min | `tracking.eta_updated` | `{ shipmentId, shipmentReference, previousEta, newEta, delayMinutes, severity, nextStopName, trafficDelaySeconds, provider }` |
+| Delay >= 60 min (critical) | `shipment.exception` | `{ shipmentReference, exceptionType: "eta_critical_delay", description }` |
+
+### Side Effects
+
+| Event | What Happens |
+|-------|-------------|
+| `tracking.eta_updated` | InAppNotificationHandler creates severity-based notifications (info/warning/error) for all org users |
+| `shipment.exception` | InAppNotificationHandler creates error notification; EmailHandler sends exception email (if configured); AuditHandler logs to immutable audit trail |
+
+### Configuration (env vars)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ROUTING_PROVIDER` | `none` | Provider: `here`, `tomtom`, `valhalla` |
+| `ETA_MONITOR_CRON` | `*/10 * * * *` | Cron schedule |
+| `ETA_DELAY_THRESHOLD_MINUTES` | `15` | Minor delay threshold |
+| `ETA_WARNING_THRESHOLD_MINUTES` | `30` | Warning threshold |
+| `ETA_CRITICAL_THRESHOLD_MINUTES` | `60` | Critical threshold (triggers shipment.exception) |
+| `ETA_STALE_GPS_THRESHOLD_MINUTES` | `60` | Skip shipments with GPS older than this |
