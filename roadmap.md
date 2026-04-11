@@ -582,7 +582,74 @@ The current EDI infrastructure handles inbound 850 (SFTP polling) and outbound 8
   - Resource limit recommendations per container (CPU, memory) based on workload patterns
   - Load testing scripts and baseline benchmarks
 
-## **Phase 11: Advanced Operations**
+## **Phase 11: Warehouse Shipment App** ✅ (Partial)
+- **Warehouse Login & Auth** ✅
+  - ✅ Password login for warehouse users
+  - ✅ Magic link / QR code login (printable, reusable, wall-mountable)
+  - ✅ Login audit log (method tracking: password, magic_link, oauth)
+  - ✅ Admin toggle for magic links (security configurable)
+  - ✅ Account lockout (5 failed attempts → 15 min lockout)
+- **Location Selection** ✅
+  - ✅ Location selector on first login
+  - ✅ Preferred location saved to user profile (auto-selects on next login)
+  - ✅ Admin can pre-set preferred location for users
+- **Shipment List (Today's Work)** ✅
+  - ✅ List draft/ready shipments filtered by origin warehouse
+  - ✅ Filter chips: All, To Do, Launched, Flagged
+  - ✅ Search by reference, ID, or PRO number
+  - ✅ Scan-to-filter via barcode scanner (HID keyboard emulation)
+  - ✅ Auto-refresh every 30 seconds
+  - ✅ Launched shipments visually de-emphasized
+- **Shipment Detail (Read-Only)** ✅
+  - ✅ Full shipment details: route, customer, dates, carrier, driver, vehicle
+  - ✅ Orders and trackable units displayed at detail level
+  - ✅ Flag button for reporting issues (free-text reason)
+  - ✅ Flag resolution workflow
+- **Launch Wizard** ✅
+  - ✅ Step 1: Assign IoT trackers (scan device barcode, assign to shipment)
+  - ✅ Step 2: Add accessories (temp sensors, door sensors, BLE trackers, non-IoT door seals)
+  - ✅ Step 3: Pair trackable units with IoT devices (scan unit → scan device workflow)
+  - ✅ Step 4: Review checklist and launch
+  - ✅ Prevents launch if unresolved flags exist
+- **IoT Device Integration** ✅
+  - ✅ Device lookup by barcode (externalId, displayId, name)
+  - ✅ Warning if device already assigned to another shipment
+  - ✅ Device assignment at shipment level and trackable unit level
+  - ✅ Accessory types: temp sensor (front/middle/back), door sensor, door seal, BLE tracker
+- **Archive** ✅
+  - ✅ Stale shipments (>2 days in draft/loading) shown on archive screen
+  - ✅ Keeps main list clean for active warehouse operations
+- **Admin Shipment Creation** ✅
+  - ✅ Admin users can create basic shipments from warehouse app
+  - ✅ Pre-fills origin from selected warehouse location
+- **Barcode Scanning** ✅
+  - ✅ HID scanner support (Zebra/Honeywell built-in scanners)
+  - ✅ Rapid keystroke pattern detection (distinguishes scanner from typing)
+  - ✅ Manual keyboard fallback button
+- **WiFi Connectivity Monitoring** ✅
+  - ✅ Logs offline/online events to backend
+  - ✅ Duration tracking for outage analysis
+- **Admin Settings** ✅
+  - ✅ Magic link toggle in Settings → Warehouse tab
+  - ✅ Scanner mode preference (HID vs camera)
+  - ✅ QR code generation with print support
+  - ✅ Login audit log viewer
+- **Mobile-First Design** ✅
+  - ✅ Bottom navigation bar for key sections
+  - ✅ Touch-optimized cards, buttons, and forms
+  - ✅ Keyboard-aware input positioning
+  - ✅ CSS custom properties from theme.css (no hardcoded colors)
+  - ✅ Designed for small Zebra/Android screens
+- **Future / Roadmap Items** 🔲
+  - ✅ Camera-based barcode scanning fallback (native BarcodeDetector API, Chrome 83+)
+  - 🔲 Order creation from warehouse app
+  - 🔲 Offline mode / queue operations for WiFi dead zones
+  - 🔲 False start detection (IoT devices sent on wrong shipment)
+  - 🔲 Full shipment management for admin users (mini TMS)
+  - 🔲 Flutter native app (for app store distribution and native scanner APIs)
+  - 🔲 Geofence-based auto-transition from "ready" to "in_transit"
+
+## **Phase 12: Advanced Operations**
 - **Load Planning & Consolidation** 🔲
   - Multi-order load building and optimization
   - Load board for available capacity

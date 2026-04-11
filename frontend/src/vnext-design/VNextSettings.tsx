@@ -16,6 +16,7 @@ import { API_URL } from '../api';
 
 const tabs = [
   { key: 'general', label: 'General', icon: 'settings' },
+  { key: 'warehouse', label: 'Warehouse', icon: 'warehouse' },
   { key: 'notifications', label: 'Notifications', icon: 'notifications' },
   { key: 'integrations', label: 'Integrations', icon: 'extension' },
   { key: 'theme', label: 'Theme', icon: 'palette' },
@@ -552,6 +553,266 @@ function ThemeTab() {
   );
 }
 
+/* ── Warehouse Tab ─────────────────────────────────────── */
+
+function WarehouseTab() {
+  const [magicLinksEnabled, setMagicLinksEnabled] = useState(true);
+  const [scanMode, setScanMode] = useState('hid');
+  const [users, setUsers] = useState<any[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState('');
+  const [generatedLink, setGeneratedLink] = useState('');
+  const [qrSvg, setQrSvg] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<{ text: string; variant: 'success' | 'error' } | null>(null);
+
+  useEffect(() => {
+    Promise.all([
+      fetch(`${API_URL}/api/v1/warehouse/settings`).then(r => r.json()),
+      fetch(`${API_URL}/api/v1/organization/users`).then(r => r.json()).catch(() => ({ data: [] })),
+    ]).then(([settings, usersRes]) => {
+      if (settings.data) {
+        setMagicLinksEnabled(settings.data.magicLinksEnabled ?? true);
+        setScanMode(settings.data.warehouseScanMode || 'hid');
+      }
+      setUsers(usersRes.data || []);
+    }).finally(() => setLoading(false));
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setSaveMessage(null);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/warehouse/settings`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ magicLinksEnabled, warehouseScanMode: scanMode }),
+      });
+      if (res.ok) setSaveMessage({ text: 'Warehouse settings saved', variant: 'success' });
+      else setSaveMessage({ text: 'Failed to save settings', variant: 'error' });
+    } catch {
+      setSaveMessage({ text: 'Failed to save settings', variant: 'error' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const generateMagicLink = async () => {
+    if (!selectedUserId) return;
+    setGenerating(true);
+    setGeneratedLink('');
+    setQrSvg('');
+    try {
+      const res = await fetch(`${API_URL}/api/v1/warehouse/auth/magic-link/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: selectedUserId }),
+      });
+      const json = await res.json();
+      if (json.data?.token) {
+        const link = `${window.location.origin}/warehouse/login?token=${json.data.token}`;
+        setGeneratedLink(link);
+        // Generate QR code SVG inline (simple QR using a data URL approach)
+        setQrSvg(link);
+      } else {
+        setSaveMessage({ text: json.error || 'Failed to generate', variant: 'error' });
+      }
+    } catch {
+      setSaveMessage({ text: 'Failed to generate magic link', variant: 'error' });
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const printQrCode = () => {
+    const userName = users.find(u => u.id === selectedUserId);
+    const name = userName ? `${userName.firstName} ${userName.lastName}` : 'User';
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html><head><title>Login QR Code - ${name}</title>
+      <style>
+        body { font-family: sans-serif; text-align: center; padding: 40px; }
+        .qr-container { display: inline-block; padding: 20px; border: 2px solid #333; border-radius: 12px; }
+        h2 { margin: 0 0 8px; }
+        p { color: #666; margin: 0 0 16px; font-size: 14px; }
+        img { display: block; margin: 0 auto 16px; }
+        .footer { font-size: 12px; color: #999; margin-top: 16px; }
+      </style></head><body>
+        <div class="qr-container">
+          <h2>Warehouse Login</h2>
+          <p>${name}</p>
+          <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(generatedLink)}" width="200" height="200" />
+          <p style="font-size: 11px; word-break: break-all; max-width: 300px;">${generatedLink}</p>
+          <div class="footer">Scan this QR code with your device camera to log in</div>
+        </div>
+        <script>setTimeout(() => window.print(), 500);</script>
+      </body></html>
+    `);
+    printWindow.document.close();
+  };
+
+  if (loading) return <div className="loading-spinner" style={{ margin: '40px auto' }} />;
+
+  return (
+    <>
+      {saveMessage && (
+        <VnAlert variant={saveMessage.variant} onClose={() => setSaveMessage(null)}>
+          {saveMessage.text}
+        </VnAlert>
+      )}
+
+      <VnFormSection title="Warehouse App Settings" icon="warehouse">
+        <VnFormGrid>
+          <div>
+            <Switch
+              label="Magic Link Login (QR Codes)"
+              checked={magicLinksEnabled}
+              onChange={setMagicLinksEnabled}
+            />
+            <div style={{ fontSize: '12px', color: 'var(--on-surface-variant)', marginTop: '4px', marginLeft: '40px' }}>
+              When enabled, admins can generate printable QR codes for warehouse users to log in without typing credentials.
+              Disable this if security concerns require password-only access.
+            </div>
+          </div>
+          <RadioGroup
+            label="Default Scanner Mode"
+            name="scanMode"
+            options={[
+              { value: 'hid', label: 'Built-in Scanner (HID)' },
+              { value: 'camera', label: 'Camera' },
+            ]}
+            value={scanMode}
+            onChange={setScanMode}
+          />
+        </VnFormGrid>
+      </VnFormSection>
+
+      <VnFormActions>
+        <VnButton variant="outline" onClick={() => window.location.reload()}>Reset</VnButton>
+        <VnButton variant="primary" icon="save" onClick={handleSave} disabled={saving}>
+          {saving ? 'Saving...' : 'Save Settings'}
+        </VnButton>
+      </VnFormActions>
+
+      {magicLinksEnabled && (
+        <VnFormSection title="Generate Login QR Code" icon="qr_code">
+          <VnFormGrid>
+            <VnField label="Select User">
+              <VnSelect value={selectedUserId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedUserId(e.target.value)}>
+                <option value="">Choose a user...</option>
+                {users.map((u: any) => (
+                  <option key={u.id} value={u.id}>{u.firstName} {u.lastName} ({u.email})</option>
+                ))}
+              </VnSelect>
+            </VnField>
+            <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+              <VnButton
+                variant="primary"
+                icon="qr_code"
+                onClick={generateMagicLink}
+                disabled={!selectedUserId || generating}
+              >
+                {generating ? 'Generating...' : 'Generate QR Code'}
+              </VnButton>
+            </div>
+          </VnFormGrid>
+
+          {generatedLink && (
+            <VnCard className="vn-mt-3">
+              <div style={{ padding: '24px', textAlign: 'center' }}>
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(generatedLink)}`}
+                  alt="Login QR Code"
+                  width={200}
+                  height={200}
+                  style={{ display: 'block', margin: '0 auto 16px' }}
+                />
+                <p style={{ fontSize: '12px', color: 'var(--on-surface-variant)', wordBreak: 'break-all', maxWidth: '400px', margin: '0 auto 16px' }}>
+                  {generatedLink}
+                </p>
+                <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                  <VnButton variant="outline" icon="content_copy" onClick={() => navigator.clipboard.writeText(generatedLink)}>
+                    Copy Link
+                  </VnButton>
+                  <VnButton variant="primary" icon="print" onClick={printQrCode}>
+                    Print QR Code
+                  </VnButton>
+                </div>
+              </div>
+            </VnCard>
+          )}
+        </VnFormSection>
+      )}
+
+      <VnFormSection title="Login Audit Log" icon="history">
+        <LoginAuditPreview />
+      </VnFormSection>
+    </>
+  );
+}
+
+function LoginAuditPreview() {
+  const [logs, setLogs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(`${API_URL}/api/v1/warehouse/audit/logins?limit=20`)
+      .then(r => r.json())
+      .then(json => setLogs(json.data || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <div className="loading-spinner" style={{ margin: '20px auto' }} />;
+
+  if (logs.length === 0) {
+    return <p style={{ color: 'var(--on-surface-variant)', fontSize: '14px' }}>No login activity yet.</p>;
+  }
+
+  return (
+    <div className="vn-table-wrap" style={{ maxHeight: '300px', overflow: 'auto' }}>
+      <table className="vn-table">
+        <thead>
+          <tr>
+            <th>User</th>
+            <th>Method</th>
+            <th>Status</th>
+            <th>Time</th>
+          </tr>
+        </thead>
+        <tbody>
+          {logs.map((log: any) => (
+            <tr key={log.id}>
+              <td>{log.user?.firstName} {log.user?.lastName}</td>
+              <td>
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '4px',
+                  fontSize: '12px', padding: '2px 8px', borderRadius: '12px',
+                  background: log.method === 'magic_link' ? 'var(--primary-container)' : 'var(--surface-container)',
+                  color: log.method === 'magic_link' ? 'var(--on-primary-container)' : 'var(--on-surface)',
+                }}>
+                  {log.method === 'magic_link' ? 'QR / Magic Link' : log.method === 'password' ? 'Password' : log.method}
+                </span>
+              </td>
+              <td>
+                <span style={{ color: log.success ? 'var(--color-success)' : 'var(--error)' }}>
+                  {log.success ? 'Success' : `Failed (${log.failReason})`}
+                </span>
+              </td>
+              <td style={{ fontSize: '12px', color: 'var(--on-surface-variant)' }}>
+                {new Date(log.createdAt).toLocaleString()}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 /* ── Main Page ──────────────────────────────────────────── */
 
 export default function VNextSettings() {
@@ -565,6 +826,7 @@ export default function VNextSettings() {
 
       <div style={{ marginTop: '24px' }}>
         {activeTab === 'general' && <GeneralTab />}
+        {activeTab === 'warehouse' && <WarehouseTab />}
         {activeTab === 'notifications' && <NotificationsTab />}
         {activeTab === 'integrations' && <IntegrationsTab />}
         {activeTab === 'theme' && <ThemeTab />}
