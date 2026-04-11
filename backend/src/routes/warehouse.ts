@@ -1,15 +1,18 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import { randomUUID, createHash } from 'crypto';
+import { WarehouseService } from '../services/WarehouseService.js';
 
 /**
  * Warehouse App API Routes
  *
  * Mobile-first endpoints for warehouse operatives to launch shipments,
  * scan devices, and manage the day's work.
+ *
+ * Business logic is delegated to WarehouseService for testability.
  */
 export async function warehouseRoutes(server: FastifyInstance) {
   const prisma = server.prisma;
+  const warehouseService = new WarehouseService(prisma);
 
   // ─── Auth: Magic Link ───────────────────────────────────────────────────────
 
@@ -37,50 +40,15 @@ export async function warehouseRoutes(server: FastifyInstance) {
       expiresInDays: z.number().positive().optional(),
     }).parse(req.body);
 
-    // Check magic links are enabled
-    const org = await prisma.organization.findFirst();
-    if (!org?.magicLinksEnabled) {
-      reply.code(403);
-      return { data: null, error: 'Magic links are disabled for this organization' };
+    const result = await warehouseService.generateMagicLink(body.userId, body.expiresInDays);
+    if (!result.success) {
+      reply.code(result.error.includes('disabled') ? 403 : 404);
+      return { data: null, error: result.error };
     }
-
-    // Verify user exists
-    const user = await prisma.user.findUnique({ where: { id: body.userId } });
-    if (!user || !user.active) {
-      reply.code(404);
-      return { data: null, error: 'User not found or inactive' };
-    }
-
-    // Deactivate any existing active magic links for this user
-    await prisma.magicLink.updateMany({
-      where: { userId: body.userId, active: true },
-      data: { active: false },
-    });
-
-    // Generate token
-    const token = randomUUID() + '-' + randomUUID();
-    const tokenHash = createHash('sha256').update(token).digest('hex');
-    const expiresAt = body.expiresInDays
-      ? new Date(Date.now() + body.expiresInDays * 86400000)
-      : null;
-
-    await prisma.magicLink.create({
-      data: {
-        userId: body.userId,
-        tokenHash,
-        expiresAt,
-        active: true,
-      },
-    });
 
     reply.code(201);
     return {
-      data: {
-        token,
-        userId: body.userId,
-        userName: `${user.firstName} ${user.lastName}`,
-        expiresAt,
-      },
+      data: result.data,
       error: null,
     };
   });
@@ -103,99 +71,16 @@ export async function warehouseRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { token } = z.object({ token: z.string().min(1) }).parse(req.body);
-
-    const tokenHash = createHash('sha256').update(token).digest('hex');
-    const magicLink = await prisma.magicLink.findUnique({
-      where: { tokenHash },
-      include: {
-        user: {
-          include: {
-            roles: { include: { role: true } },
-          },
-        },
-      },
-    });
-
-    if (!magicLink || !magicLink.active) {
-      // Log failed attempt
-      await prisma.loginAuditLog.create({
-        data: {
-          userId: magicLink?.userId || 'unknown',
-          method: 'magic_link',
-          ipAddress: req.ip,
-          userAgent: req.headers['user-agent'] || null,
-          success: false,
-          failReason: !magicLink ? 'invalid_token' : 'inactive_link',
-        },
-      });
+    const result = await warehouseService.validateMagicLink(
+      token,
+      req.ip,
+      req.headers['user-agent'] || null,
+    );
+    if (!result.success) {
       reply.code(401);
-      return { data: null, error: 'Invalid or expired magic link' };
+      return { data: null, error: result.error };
     }
-
-    if (magicLink.expiresAt && magicLink.expiresAt < new Date()) {
-      await prisma.magicLink.update({
-        where: { id: magicLink.id },
-        data: { active: false },
-      });
-      await prisma.loginAuditLog.create({
-        data: {
-          userId: magicLink.userId,
-          method: 'magic_link',
-          ipAddress: req.ip,
-          userAgent: req.headers['user-agent'] || null,
-          success: false,
-          failReason: 'expired_link',
-        },
-      });
-      reply.code(401);
-      return { data: null, error: 'Magic link has expired' };
-    }
-
-    if (!magicLink.user.active) {
-      reply.code(401);
-      return { data: null, error: 'User account is inactive' };
-    }
-
-    // Magic link is valid — do NOT deactivate (reusable QR codes)
-    // Update last login
-    await prisma.user.update({
-      where: { id: magicLink.userId },
-      data: { lastLoginAt: new Date(), failedLoginAttempts: 0 },
-    });
-
-    // Log successful login
-    await prisma.loginAuditLog.create({
-      data: {
-        userId: magicLink.userId,
-        method: 'magic_link',
-        ipAddress: req.ip,
-        userAgent: req.headers['user-agent'] || null,
-        success: true,
-      },
-    });
-
-    // Build JWT-compatible user data (frontend will store this)
-    const roles = magicLink.user.roles.map(r => r.role.name);
-    const permissions = magicLink.user.roles.flatMap(r => {
-      const perms = r.role.permissions;
-      return Array.isArray(perms) ? perms as string[] : [];
-    });
-
-    return {
-      data: {
-        user: {
-          id: magicLink.user.id,
-          email: magicLink.user.email,
-          firstName: magicLink.user.firstName,
-          lastName: magicLink.user.lastName,
-          roles,
-          permissions,
-          organizationId: magicLink.user.organizationId,
-          preferredLocationId: magicLink.user.preferredLocationId,
-        },
-      },
-      error: null,
-    };
+    return { data: result.data, error: null };
   });
 
   /**
@@ -221,82 +106,29 @@ export async function warehouseRoutes(server: FastifyInstance) {
       password: z.string().min(1),
     }).parse(req.body);
 
-    const user = await prisma.user.findUnique({
-      where: { email },
-      include: { roles: { include: { role: true } } },
-    });
-
-    if (!user || !user.active) {
-      await logLoginAttempt(prisma, user?.id, 'password', req, false, 'user_not_found');
-      reply.code(401);
-      return { data: null, error: 'Invalid credentials' };
-    }
-
-    // Check lockout
-    if (user.lockedUntil && user.lockedUntil > new Date()) {
-      await logLoginAttempt(prisma, user.id, 'password', req, false, 'locked');
-      reply.code(423);
-      return { data: null, error: 'Account is locked. Try again later.' };
-    }
-
-    // Verify password (using same bcrypt approach as auth-service)
-    if (!user.passwordHash) {
-      await logLoginAttempt(prisma, user.id, 'password', req, false, 'no_password_set');
-      reply.code(401);
-      return { data: null, error: 'Invalid credentials' };
-    }
-
-    // Dynamic import bcrypt — may be bcrypt or bcryptjs depending on install
-    let bcrypt: { compare: (data: string, hash: string) => Promise<boolean> };
+    // Dynamic import bcrypt
+    let bcryptCompare: (plain: string, hash: string) => Promise<boolean>;
     try {
       // @ts-expect-error Dynamic import of optional dependency
-      bcrypt = await import('bcrypt');
+      const bcrypt = await import('bcrypt');
+      bcryptCompare = bcrypt.compare || bcrypt.default?.compare;
     } catch {
       // @ts-expect-error Dynamic import of optional dependency
-      bcrypt = await import('bcryptjs');
+      const bcryptjs = await import('bcryptjs');
+      bcryptCompare = bcryptjs.compare || bcryptjs.default?.compare;
     }
 
-    const valid = await bcrypt.compare(password, user.passwordHash);
-    if (!valid) {
-      const attempts = user.failedLoginAttempts + 1;
-      const lockData: any = { failedLoginAttempts: attempts };
-      if (attempts >= 5) {
-        lockData.lockedUntil = new Date(Date.now() + 15 * 60 * 1000); // 15 min lockout
-      }
-      await prisma.user.update({ where: { id: user.id }, data: lockData });
-      await logLoginAttempt(prisma, user.id, 'password', req, false, 'invalid_password');
-      reply.code(401);
-      return { data: null, error: 'Invalid credentials' };
+    const result = await warehouseService.passwordLogin(
+      email, password,
+      req.ip,
+      req.headers['user-agent'] || null,
+      bcryptCompare,
+    );
+    if (!result.success) {
+      reply.code(result.statusCode);
+      return { data: null, error: result.error };
     }
-
-    // Success
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { lastLoginAt: new Date(), failedLoginAttempts: 0, lockedUntil: null },
-    });
-    await logLoginAttempt(prisma, user.id, 'password', req, true);
-
-    const roles = user.roles.map(r => r.role.name);
-    const permissions = user.roles.flatMap(r => {
-      const perms = r.role.permissions;
-      return Array.isArray(perms) ? perms as string[] : [];
-    });
-
-    return {
-      data: {
-        user: {
-          id: user.id,
-          email: user.email,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          roles,
-          permissions,
-          organizationId: user.organizationId,
-          preferredLocationId: user.preferredLocationId,
-        },
-      },
-      error: null,
-    };
+    return { data: result.data, error: null };
   });
 
   // ─── User Preferences ────────────────────────────────────────────────────────
@@ -545,23 +377,13 @@ export async function warehouseRoutes(server: FastifyInstance) {
       flaggedByName: z.string(),
     }).parse(req.body);
 
-    const shipment = await prisma.shipment.findFirst({ where: { id, archived: false } });
-    if (!shipment) {
+    const result = await warehouseService.flagShipment(id, body.flaggedBy, body.flaggedByName, body.reason);
+    if (!result.success) {
       reply.code(404);
-      return { data: null, error: 'Shipment not found' };
+      return { data: null, error: result.error };
     }
-
-    const flag = await prisma.shipmentFlag.create({
-      data: {
-        shipmentId: id,
-        flaggedBy: body.flaggedBy,
-        flaggedByName: body.flaggedByName,
-        reason: body.reason,
-      },
-    });
-
     reply.code(201);
-    return { data: flag, error: null };
+    return { data: result.data, error: null };
   });
 
   /**
@@ -575,16 +397,13 @@ export async function warehouseRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { flagId } = req.params as { shipmentId: string; flagId: string };
-    const body = z.object({
-      resolvedBy: z.string(),
-    }).parse(req.body);
-
-    const flag = await prisma.shipmentFlag.update({
-      where: { id: flagId },
-      data: { resolved: true, resolvedBy: body.resolvedBy, resolvedAt: new Date() },
-    });
-
-    return { data: flag, error: null };
+    const body = z.object({ resolvedBy: z.string() }).parse(req.body);
+    const result = await warehouseService.resolveFlag(flagId, body.resolvedBy);
+    if (!result.success) {
+      reply.code(404);
+      return { data: null, error: result.error };
+    }
+    return { data: result.data, error: null };
   });
 
   // ─── Device Assignment (Tracker Scanning) ─────────────────────────────────
@@ -607,41 +426,12 @@ export async function warehouseRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { barcode } = req.query as { barcode: string };
-
-    const device = await prisma.device.findFirst({
-      where: {
-        OR: [
-          { externalId: barcode },
-          { displayId: barcode },
-          { name: barcode },
-        ],
-        status: 'active',
-      },
-      include: {
-        assignments: {
-          where: { active: true },
-          include: {
-            shipment: { select: { id: true, reference: true } },
-          },
-        },
-      },
-    });
-
-    if (!device) {
+    const result = await warehouseService.lookupDevice(barcode);
+    if (!result.success) {
       reply.code(404);
-      return { data: null, error: 'Device not found. Check the barcode and try again.' };
+      return { data: null, error: result.error };
     }
-
-    // Warn if already assigned
-    const activeAssignment = device.assignments[0];
-    return {
-      data: {
-        ...device,
-        alreadyAssigned: !!activeAssignment,
-        currentShipmentRef: activeAssignment?.shipment?.reference || null,
-      },
-      error: null,
-    };
+    return { data: result.data, error: null };
   });
 
   /**
@@ -668,22 +458,9 @@ export async function warehouseRoutes(server: FastifyInstance) {
       trackableUnitId: z.string().optional(),
     }).parse(req.body);
 
-    // Deactivate existing assignments for this device
-    await prisma.deviceAssignment.updateMany({
-      where: { deviceId: body.deviceId, active: true },
-      data: { active: false, unassignedAt: new Date() },
-    });
-
-    const assignment = await prisma.deviceAssignment.create({
-      data: {
-        deviceId: body.deviceId,
-        shipmentId: id,
-        trackableUnitId: body.trackableUnitId || null,
-      },
-    });
-
+    const result = await warehouseService.assignDeviceToShipment(id, body.deviceId, body.trackableUnitId);
     reply.code(201);
-    return { data: assignment, error: null };
+    return { data: result.success ? result.data : null, error: null };
   });
 
   /**
@@ -697,12 +474,7 @@ export async function warehouseRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id, deviceId } = req.params as { id: string; deviceId: string };
-
-    await prisma.deviceAssignment.updateMany({
-      where: { deviceId, shipmentId: id, active: true },
-      data: { active: false, unassignedAt: new Date() },
-    });
-
+    await warehouseService.removeDeviceFromShipment(id, deviceId);
     return { data: { removed: true }, error: null };
   });
 
@@ -740,15 +512,9 @@ export async function warehouseRoutes(server: FastifyInstance) {
       notes: z.string().optional(),
     }).parse(req.body);
 
-    const accessory = await prisma.shipmentAccessory.create({
-      data: {
-        shipmentId: id,
-        ...body,
-      },
-    });
-
+    const result = await warehouseService.addAccessory(id, body);
     reply.code(201);
-    return { data: accessory, error: null };
+    return { data: result.data, error: null };
   });
 
   /**
@@ -762,8 +528,7 @@ export async function warehouseRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { accessoryId } = req.params as { id: string; accessoryId: string };
-
-    await prisma.shipmentAccessory.delete({ where: { id: accessoryId } });
+    await warehouseService.removeAccessory(accessoryId);
     return { data: { removed: true }, error: null };
   });
 
@@ -787,35 +552,13 @@ export async function warehouseRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const { launchedBy } = z.object({
-      launchedBy: z.string(),
-    }).parse(req.body);
-
-    const shipment = await prisma.shipment.findFirst({ where: { id, archived: false } });
-    if (!shipment) {
-      reply.code(404);
-      return { data: null, error: 'Shipment not found' };
+    const { launchedBy } = z.object({ launchedBy: z.string() }).parse(req.body);
+    const result = await warehouseService.launchShipment(id, launchedBy);
+    if (!result.success) {
+      reply.code(result.error.includes('not found') ? 404 : 400);
+      return { data: null, error: result.error };
     }
-
-    // Check for unresolved flags
-    const unresolvedFlags = await prisma.shipmentFlag.count({
-      where: { shipmentId: id, resolved: false },
-    });
-    if (unresolvedFlags > 0) {
-      reply.code(400);
-      return { data: null, error: `Cannot launch: ${unresolvedFlags} unresolved flag(s)` };
-    }
-
-    const updated = await prisma.shipment.update({
-      where: { id },
-      data: {
-        launchedAt: new Date(),
-        launchedBy,
-        status: shipment.status === 'draft' ? 'ready' : shipment.status,
-      },
-    });
-
-    return { data: updated, error: null };
+    return { data: result.data, error: null };
   });
 
   // ─── Create Basic Shipment (Admin only) ───────────────────────────────────
@@ -1120,29 +863,3 @@ export async function warehouseRoutes(server: FastifyInstance) {
   });
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-async function logLoginAttempt(
-  prisma: any,
-  userId: string | undefined,
-  method: string,
-  req: FastifyRequest,
-  success: boolean,
-  failReason?: string,
-) {
-  if (!userId) return;
-  try {
-    await prisma.loginAuditLog.create({
-      data: {
-        userId,
-        method,
-        ipAddress: req.ip,
-        userAgent: req.headers['user-agent'] || null,
-        success,
-        failReason: failReason || null,
-      },
-    });
-  } catch {
-    // Don't fail the login for audit log issues
-  }
-}
