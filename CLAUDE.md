@@ -91,6 +91,42 @@ Reference the canonical class list at the top of `theme.css`:
 - VNext pages go in `frontend/src/vnext-design/VNext*.tsx`
 - When building new features, **prefer vnext patterns** unless specifically told to use the old system
 
+## ETA Monitoring & Route Tracking
+
+### Architecture
+The ETA monitoring system runs as a pg-boss cron job that checks in-transit shipments against traffic-aware routing APIs. It uses a **provider-agnostic interface** (`IRoutingProvider`) so the routing backend can be swapped via environment config.
+
+### Routing Providers
+- **TomTom** — Cheapest truck routing ($0.50/1K requests), full vehicle dimension support
+- **HERE** — Industry standard for logistics ($2.50/1K), best truck routing data
+- **Valhalla** — Self-hosted, free, truck costing model but no real-time traffic
+
+Provider selection: set `ROUTING_PROVIDER=tomtom|here|valhalla` plus the provider's API key/URL.
+
+### Adaptive Polling
+The monitor uses adaptive polling to minimize API costs:
+- >8 hours from delivery: checked every ~40 min
+- 2-8 hours from delivery: checked every ~20 min
+- <2 hours from delivery: checked every ~10 min
+- Stale GPS (>60 min) or no GPS: skipped entirely
+
+### Delay Severity Levels
+| Severity | Default Threshold | Event | Notification |
+|----------|:-----------------:|-------|:------------:|
+| Minor | 15 min | `tracking.eta_updated` | info |
+| Warning | 30 min | `tracking.eta_updated` | warning |
+| Critical | 60 min | `tracking.eta_updated` + `shipment.exception` | error |
+
+### Key Files
+- `backend/src/services/routing/IRoutingProvider.ts` — Provider interface and DTOs
+- `backend/src/services/routing/HereRoutingProvider.ts` — HERE implementation
+- `backend/src/services/routing/TomTomRoutingProvider.ts` — TomTom implementation
+- `backend/src/services/routing/ValhallaRoutingProvider.ts` — Valhalla implementation
+- `backend/src/services/routing/ShipmentEtaMonitorService.ts` — Core monitoring engine
+- `backend/src/workers/etaMonitorWorker.ts` — pg-boss cron worker
+- `backend/src/routes/etaMonitor.ts` — API routes (status, manual run, single-shipment check)
+- Full documentation: `docs/ETA_MONITORING_GUIDE.md`
+
 ## EDI Communication Hub
 
 ### Architecture

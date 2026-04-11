@@ -12,8 +12,10 @@ import { QUEUES } from './queue/events.js';
 import { createOutboundCarrierWorker } from './workers/outboundCarrierWorker.js';
 import { createOutboundTrackingWorker } from './workers/outboundTrackingWorker.js';
 import { createInboundWebhookWorker } from './workers/inboundWebhookWorker.js';
+import { createEtaMonitorWorker, registerEtaMonitorSchedule, ETA_MONITOR_QUEUE } from './workers/etaMonitorWorker.js';
 import { OrderDeliveryService } from './services/OrderDeliveryService.js';
 import { ArrivalCriteriaEvaluationService } from './services/ArrivalCriteriaEvaluationService.js';
+import { IShipmentEtaMonitorService } from './services/routing/ShipmentEtaMonitorService.js';
 import { customerRoutes } from './routes/customers.js';
 import { carrierRoutes } from './routes/carriers.js';
 import { locationRoutes } from './routes/locations.js';
@@ -56,6 +58,7 @@ import deviceRoutes from './routes/devices.js';
 import telemetryRoutes from './routes/telemetry.js';
 import { cargoTrackingRoutes } from './routes/cargoTracking.js';
 import { coldChainRoutes } from './routes/coldChain.js';
+import { etaMonitorRoutes } from './routes/etaMonitor.js';
 import { warehouseRoutes } from './routes/warehouse.js';
 
 const server = Fastify({ logger: true });
@@ -130,6 +133,7 @@ async function start() {
   await server.register(telemetryRoutes);
   await server.register(cargoTrackingRoutes);
   await server.register(coldChainRoutes);
+  await server.register(etaMonitorRoutes);
   await server.register(warehouseRoutes);
 
   // Start queue adapter (needed for publishing events, even if workers run elsewhere)
@@ -146,6 +150,22 @@ async function start() {
       await queue.subscribe(QUEUES.OUTBOUND_CARRIER, createOutboundCarrierWorker(server.prisma));
       await queue.subscribe(QUEUES.OUTBOUND_TRACKING, createOutboundTrackingWorker(server.prisma));
       await queue.subscribe(QUEUES.INBOUND_WEBHOOK, createInboundWebhookWorker(server.prisma, deliveryService, arrivalCriteriaService));
+
+      // ETA Monitor — register cron schedule and worker if routing provider is configured
+      if (process.env.ROUTING_PROVIDER && process.env.ROUTING_PROVIDER !== 'none') {
+        try {
+          const etaMonitorService = container.resolve<IShipmentEtaMonitorService>(TOKENS.IShipmentEtaMonitorService);
+          const boss = (queue as any).boss; // Access pg-boss instance for schedule()
+          if (boss) {
+            await registerEtaMonitorSchedule(boss);
+            await queue.subscribe(ETA_MONITOR_QUEUE, createEtaMonitorWorker(server.prisma, etaMonitorService));
+            server.log.info(`ETA monitor worker registered (provider: ${process.env.ROUTING_PROVIDER})`);
+          }
+        } catch (err) {
+          server.log.warn('ETA monitor worker failed to register: ' + (err as Error).message);
+        }
+      }
+
       server.log.info('Embedded queue workers registered (set DISABLE_EMBEDDED_WORKERS=true to use separate worker container)');
     } else {
       server.log.info('Embedded workers disabled — using separate worker container');
