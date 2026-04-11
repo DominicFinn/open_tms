@@ -371,11 +371,15 @@ The current EDI infrastructure handles inbound 850 (SFTP polling) and outbound 8
   - Support multiple inbound file patterns per partner (*.850, *.990, *.214, *.210)
   - Inbound EDI 997 auto-generation: acknowledge every received transaction
   - Inbound file archival after processing
-- **EDI 214 (Shipment Status) Service** 🔲
-  - Inbound: parse carrier status updates (pickup, in-transit, delivered) → update shipment status
-  - Outbound: generate status messages for customers based on shipment events
-  - Status code mapping: AF (pickup), X1 (in-transit), D1 (delivered), A7 (refused)
-  - Integration with existing ShipmentEvent model
+- **EDI 214 (Shipment Status) Service** ✅
+  - ✅ Inbound: parse carrier status updates (pickup, in-transit, delivered) → update shipment status
+  - ✅ Outbound: generate status messages for customers based on shipment events
+  - ✅ Status code mapping: AF (pickup), X1/X3 (arrived), X6 (en route), D1 (delivered), A7 (refused), A9 (damaged), etc.
+  - ✅ Integration with existing ShipmentEvent model
+  - ✅ Auto-forward inbound 214 to customer trading partners
+  - ✅ Stop-level status updates from AT7+MS1 location matching
+  - ✅ 997 acknowledgment auto-generation for inbound 214
+  - ✅ EDI collector SFTP polling support for 214 files
 - **EDI 210 (Freight Invoice) Service** 🔲
   - Inbound: parse carrier freight invoices → create billing records
   - Three-way matching: tender rate vs shipment status vs invoice amount

@@ -35,8 +35,12 @@ const TRANSACTION_ROUTES: Record<string, EdiRouteResult> = {
     endpoint: '/api/v1/edi/997/inbound',
     description: 'Functional Acknowledgment → Track Ack Status',
   },
+  '214': {
+    transactionType: '214',
+    endpoint: '/api/v1/edi/214/inbound',
+    description: 'Shipment Status → Update Tracking',
+  },
   // Future transaction types:
-  // '214': { transactionType: '214', endpoint: '/api/v1/edi/214/inbound', description: 'Shipment Status → Update Tracking' },
   // '210': { transactionType: '210', endpoint: '/api/v1/edi/210/inbound', description: 'Freight Invoice → Create Billing Record' },
 };
 

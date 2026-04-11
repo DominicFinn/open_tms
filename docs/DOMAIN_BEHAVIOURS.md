@@ -113,6 +113,7 @@ unassigned → assigned → in_transit → delivered
 | `CreateShipmentCommand` | `POST /api/v1/shipments` | `shipment.created` |
 | `UpdateShipmentCommand` | `PUT /api/v1/shipments/:id` | `shipment.updated`, `shipment.status_changed`, `shipment.carrier_assigned` |
 | `ArchiveShipmentCommand` | `DELETE /api/v1/shipments/:id` | `shipment.archived` |
+| `ProcessInbound214Command` | `POST /api/v1/edi/214/inbound` | `edi_214.received`, `shipment.status_changed`, `shipment.stop_arrived`, `shipment.stop_completed`, `shipment.exception`, `shipment.delivered` |
 
 ### Side Effects
 
@@ -125,6 +126,8 @@ unassigned → assigned → in_transit → delivered
 | `shipment.exception` | — | In-app + email | — |
 | `shipment.stop_arrived` | ShipmentReadModel.stopCount updated | In-app | Orders at stop → delivery_status_changed |
 | `shipment.stop_completed` | ShipmentReadModel.stopCount updated | In-app | Orders at stop → delivered |
+| `edi_214.received` | — | — | Auto-forward outbound 214 to customer trading partners |
+| `edi_214.sent` | — | — | — |
 
 ### Tracking (IoT)
 
