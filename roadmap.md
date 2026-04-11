@@ -641,7 +641,7 @@ The current EDI infrastructure handles inbound 850 (SFTP polling) and outbound 8
   - ✅ CSS custom properties from theme.css (no hardcoded colors)
   - ✅ Designed for small Zebra/Android screens
 - **Future / Roadmap Items** 🔲
-  - 🔲 Camera-based barcode scanning fallback (for devices without built-in scanners)
+  - ✅ Camera-based barcode scanning fallback (native BarcodeDetector API, Chrome 83+)
   - 🔲 Order creation from warehouse app
   - 🔲 Offline mode / queue operations for WiFi dead zones
   - 🔲 False start detection (IoT devices sent on wrong shipment)

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API_URL } from '../api';
 import { useBarcodeScanner } from './useBarcodeScanner';
+import { CameraScannerModal } from './CameraScannerModal';
 import './warehouse.css';
 
 export default function WarehouseShipments() {
@@ -10,6 +11,7 @@ export default function WarehouseShipments() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [cameraOpen, setCameraOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const locationId = (() => {
@@ -88,6 +90,9 @@ export default function WarehouseShipments() {
             </button>
           )}
         </div>
+        <button className="wh-filter-btn" onClick={() => setCameraOpen(true)} title="Scan with camera">
+          <span className="material-icons">photo_camera</span>
+        </button>
         <button className="wh-filter-btn" onClick={() => {
           if (searchRef.current) {
             searchRef.current.focus();
@@ -97,6 +102,15 @@ export default function WarehouseShipments() {
           <span className="material-icons">keyboard</span>
         </button>
       </div>
+
+      {/* Camera scanner modal */}
+      <CameraScannerModal
+        open={cameraOpen}
+        onClose={() => setCameraOpen(false)}
+        onScan={(barcode) => setSearch(barcode)}
+        title="Scan Shipment"
+        hint="Point camera at a shipment barcode"
+      />
 
       {/* Filter chips */}
       <div className="wh-filter-chips">

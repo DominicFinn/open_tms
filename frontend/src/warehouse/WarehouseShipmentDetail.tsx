@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { API_URL } from '../api';
 import { useBarcodeScanner } from './useBarcodeScanner';
+import { CameraScannerModal } from './CameraScannerModal';
 import './warehouse.css';
 
 type WizardStep = 'detail' | 'trackers' | 'accessories' | 'units' | 'review';
@@ -40,6 +41,10 @@ export default function WarehouseShipmentDetail() {
   // Flag form
   const [showFlagForm, setShowFlagForm] = useState(false);
   const [flagReason, setFlagReason] = useState('');
+
+  // Camera scanner
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [cameraScanContext, setCameraScanContext] = useState<'tracker' | 'accessory' | 'unit' | 'unit-device'>('tracker');
 
   const user = (() => {
     try { return JSON.parse(localStorage.getItem('warehouse_user') || '{}'); }
@@ -124,6 +129,17 @@ export default function WarehouseShipmentDetail() {
   }, [step, scanMode, scannedUnit]);
 
   useBarcodeScanner(handleScan, { enabled: step !== 'detail' && step !== 'review' });
+
+  // Camera scan handler — routes scanned barcode same as HID scanner
+  const handleCameraScan = useCallback((barcode: string) => {
+    handleScan(barcode);
+    setCameraOpen(false);
+  }, [handleScan]);
+
+  function openCameraScanner(context: 'tracker' | 'accessory' | 'unit' | 'unit-device') {
+    setCameraScanContext(context);
+    setCameraOpen(true);
+  }
 
   // ─── Actions ────────────────────────────────────────────────────────────
 
@@ -492,7 +508,11 @@ export default function WarehouseShipmentDetail() {
           <div className="wh-scan-area">
             <span className="material-icons">qr_code_scanner</span>
             <p className="wh-scan-area-title">Scan Tracker Barcode</p>
-            <p className="wh-scan-area-hint">Use built-in scanner or press the keyboard button to type</p>
+            <p className="wh-scan-area-hint">Use built-in scanner or tap camera button</p>
+            <button className="wh-scan-camera-btn" onClick={() => openCameraScanner('tracker')}>
+              <span className="material-icons">photo_camera</span>
+              Scan with Camera
+            </button>
           </div>
 
           {/* Scanned device preview */}
@@ -576,6 +596,10 @@ export default function WarehouseShipmentDetail() {
                   <span className="material-icons">qr_code_scanner</span>
                   <p className="wh-scan-area-title">Scan Device ID</p>
                   <p className="wh-scan-area-hint">Scan the barcode on the BLE device</p>
+                  <button className="wh-scan-camera-btn" onClick={() => openCameraScanner('accessory')}>
+                    <span className="material-icons">photo_camera</span>
+                    Scan with Camera
+                  </button>
                   {scannedDevice && (
                     <div style={{ marginTop: '8px', fontSize: '14px', fontWeight: 600, color: 'var(--primary)' }}>
                       Found: {scannedDevice.displayId || scannedDevice.name}
@@ -588,6 +612,10 @@ export default function WarehouseShipmentDetail() {
                     <span className="material-icons">qr_code_scanner</span>
                     <p className="wh-scan-area-title">Scan Seal ID</p>
                     <p className="wh-scan-area-hint">Scan or type the door seal identifier</p>
+                    <button className="wh-scan-camera-btn" onClick={() => openCameraScanner('accessory')}>
+                      <span className="material-icons">photo_camera</span>
+                      Scan with Camera
+                    </button>
                     {accessoryIdentifier && (
                       <div style={{ marginTop: '8px', fontSize: '14px', fontWeight: 600, color: 'var(--primary)' }}>
                         ID: {accessoryIdentifier}
@@ -676,6 +704,10 @@ export default function WarehouseShipmentDetail() {
                 <div className="wh-scan-area" style={{ border: scanMode === 'unit' ? '2px dashed var(--primary)' : undefined, padding: '12px' }}>
                   <span className="material-icons" style={{ fontSize: '32px' }}>qr_code_scanner</span>
                   <p className="wh-scan-area-hint" style={{ margin: 0 }}>Scan unit barcode</p>
+                  <button className="wh-scan-camera-btn" onClick={() => { setScanMode('unit'); openCameraScanner('unit'); }}>
+                    <span className="material-icons">photo_camera</span>
+                    Camera
+                  </button>
                 </div>
               )}
             </div>
@@ -689,6 +721,10 @@ export default function WarehouseShipmentDetail() {
                 <div className="wh-scan-area" style={{ border: '2px dashed var(--primary)', padding: '12px' }}>
                   <span className="material-icons" style={{ fontSize: '32px' }}>qr_code_scanner</span>
                   <p className="wh-scan-area-hint" style={{ margin: 0 }}>Now scan the tracker</p>
+                  <button className="wh-scan-camera-btn" onClick={() => openCameraScanner('unit-device')}>
+                    <span className="material-icons">photo_camera</span>
+                    Camera
+                  </button>
                 </div>
               ) : (
                 <div style={{ padding: '12px', textAlign: 'center', color: 'var(--on-surface-variant)', fontSize: '13px' }}>
@@ -807,6 +843,25 @@ export default function WarehouseShipmentDetail() {
           </div>
         </>
       )}
+
+      {/* Camera scanner modal — shared across all wizard steps */}
+      <CameraScannerModal
+        open={cameraOpen}
+        onClose={() => setCameraOpen(false)}
+        onScan={handleCameraScan}
+        title={
+          cameraScanContext === 'tracker' ? 'Scan Tracker' :
+          cameraScanContext === 'accessory' ? 'Scan Accessory' :
+          cameraScanContext === 'unit' ? 'Scan Unit' :
+          'Scan Device'
+        }
+        hint={
+          cameraScanContext === 'tracker' ? 'Point camera at the tracker barcode' :
+          cameraScanContext === 'accessory' ? 'Point camera at the accessory barcode' :
+          cameraScanContext === 'unit' ? 'Point camera at the pallet/tote barcode' :
+          'Point camera at the IoT device barcode'
+        }
+      />
     </>
   );
 }
