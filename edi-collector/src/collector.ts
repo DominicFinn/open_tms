@@ -51,8 +51,8 @@ function detectTransactionType(content: string): string | null {
 const TRANSACTION_ROUTES: Record<string, string> = {
   '850': '/api/v1/orders/import/edi',
   '990': '/api/v1/edi/tender/990',
+  '214': '/api/v1/edi/214/inbound',
   // Future:
-  // '214': '/api/v1/edi/214/inbound',
   // '210': '/api/v1/edi/210/inbound',
 };
 
@@ -299,6 +299,8 @@ export async function collectFromTradingPartner(
           log.info(`[${partner.name}] ${file.name} (850) imported — ${result.data?.ordersCreated || 0} orders created`);
         } else if (txnType === '990') {
           log.info(`[${partner.name}] ${file.name} (990) processed — action: ${result.data?.action || 'unknown'}`);
+        } else if (txnType === '214') {
+          log.info(`[${partner.name}] ${file.name} (214) processed — status: ${result.data?.statusCode || 'unknown'} (${result.data?.action || ''})`);
         } else {
           log.info(`[${partner.name}] ${file.name} (${txnType}) processed`);
         }

@@ -120,6 +120,10 @@ export const EVENT_TYPES = {
   INTEGRATION_OUTBOUND_SENT: 'integration.outbound_sent',
   INTEGRATION_OUTBOUND_FAILED: 'integration.outbound_failed',
   INTEGRATION_WEBHOOK_RECEIVED: 'integration.webhook_received',
+
+  // EDI 214 (Shipment Status)
+  EDI_214_RECEIVED: 'edi_status.received',
+  EDI_214_SENT: 'edi_status.sent',
 } as const;
 
 export type EventType = typeof EVENT_TYPES[keyof typeof EVENT_TYPES];
@@ -183,6 +187,8 @@ export const EVENT_SCHEMA_VERSIONS: Record<string, number> = {
   [EVENT_TYPES.CAPA_STATUS_CHANGED]: 1,
   [EVENT_TYPES.CAPA_APPROVED]: 1,
   [EVENT_TYPES.CAPA_VERIFIED]: 1,
+  [EVENT_TYPES.EDI_214_RECEIVED]: 1,
+  [EVENT_TYPES.EDI_214_SENT]: 1,
 };
 
 /**
@@ -341,4 +347,24 @@ export interface CAPAStatusChangedPayload {
   title: string;
   previousStatus: string;
   newStatus: string;
+}
+
+// EDI 214 payloads
+export interface Edi214ReceivedPayload {
+  shipmentId: string;
+  shipmentReference: string;
+  carrierScac: string;
+  proNumber: string;
+  statusCode: string;
+  statusDescription: string;
+  city: string;
+  state: string;
+  tradingPartnerId?: string;
+}
+
+export interface Edi214SentPayload {
+  shipmentId: string;
+  shipmentReference: string;
+  tradingPartnerId: string;
+  statusCode: string;
 }

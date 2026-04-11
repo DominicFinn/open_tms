@@ -17,6 +17,10 @@ import { CustomerProjection } from './projections/CustomerProjection.js';
 import { LaneProjection } from './projections/LaneProjection.js';
 import { IssueProjection } from './projections/IssueProjection.js';
 import { ColdChainComplianceHandler } from './handlers/ColdChainComplianceHandler.js';
+import { Edi214ForwardHandler } from './handlers/Edi214ForwardHandler.js';
+import { EDI214Service } from '../services/EDI214Service.js';
+import { OutboundEdiDeliveryService } from '../services/OutboundEdiDeliveryService.js';
+import { TradingPartnerRepository } from '../repositories/TradingPartnerRepository.js';
 import { IBinaryStorageProvider } from '../storage/IBinaryStorageProvider.js';
 
 /** Read concurrency from env with a default */
@@ -68,6 +72,12 @@ export async function registerEventHandlers(
   if (storageProvider) {
     handlers.push(new ColdChainComplianceHandler(prisma, storageProvider));
   }
+
+  // Add EDI 214 auto-forward handler
+  const tradingPartnerRepo = new TradingPartnerRepository(prisma);
+  const edi214GenerationService = new EDI214Service();
+  const outboundDeliveryService = new OutboundEdiDeliveryService(tradingPartnerRepo);
+  handlers.push(new Edi214ForwardHandler(prisma, edi214GenerationService, outboundDeliveryService));
 
   for (const handler of handlers) {
     // Apply env-based concurrency overrides
