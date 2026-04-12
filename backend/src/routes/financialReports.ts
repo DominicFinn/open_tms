@@ -358,4 +358,232 @@ export async function financialReportRoutes(server: FastifyInstance) {
       error: null,
     };
   });
+
+  // ─── CSV Exports for Accounting ─────────────────────────────────────────────
+
+  const fmtCents = (c: number) => (c / 100).toFixed(2);
+  const fmtD = (d: Date | string | null) => d ? new Date(d).toISOString().slice(0, 10) : '';
+  const csvEscape = (s: string | null | undefined) => s ? `"${String(s).replace(/"/g, '""')}"` : '';
+
+  // Invoice register CSV
+  server.get('/api/v1/reports/export/invoices', {
+    schema: {
+      tags: ['Financial - Exports'],
+      summary: 'Download invoice register as CSV (all invoices with line items)',
+      querystring: {
+        type: 'object',
+        properties: {
+          from: { type: 'string', description: 'Issue date from (YYYY-MM-DD)' },
+          to: { type: 'string', description: 'Issue date to (YYYY-MM-DD)' },
+          status: { type: 'string' },
+        },
+      },
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const q = req.query as Record<string, string>;
+    const where: any = {};
+    if (q.from) where.issueDate = { ...(where.issueDate || {}), gte: new Date(q.from + 'T00:00:00Z') };
+    if (q.to) where.issueDate = { ...(where.issueDate || {}), lte: new Date(q.to + 'T23:59:59Z') };
+    if (q.status) where.status = q.status;
+
+    const invoices = await prisma.invoice.findMany({
+      where,
+      include: {
+        customer: { select: { name: true } },
+        lineItems: true,
+      },
+      orderBy: { issueDate: 'asc' },
+      take: 50000,
+    });
+
+    const rows = ['Invoice #,Status,Customer,Issue Date,Due Date,Subtotal,Tax,Total,Paid,Balance,Currency,Line Type,Line Description,Line Amount'];
+
+    for (const inv of invoices) {
+      if (inv.lineItems.length === 0) {
+        rows.push([
+          inv.invoiceNumber, inv.status, csvEscape(inv.customer.name),
+          fmtD(inv.issueDate), fmtD(inv.dueDate),
+          fmtCents(inv.subtotalCents), fmtCents(inv.taxCents), fmtCents(inv.totalCents),
+          fmtCents(inv.paidCents), fmtCents(inv.balanceCents), inv.currency,
+          '', '', '',
+        ].join(','));
+      }
+      for (const li of inv.lineItems) {
+        rows.push([
+          inv.invoiceNumber, inv.status, csvEscape(inv.customer.name),
+          fmtD(inv.issueDate), fmtD(inv.dueDate),
+          fmtCents(inv.subtotalCents), fmtCents(inv.taxCents), fmtCents(inv.totalCents),
+          fmtCents(inv.paidCents), fmtCents(inv.balanceCents), inv.currency,
+          li.chargeType, csvEscape(li.description), fmtCents(li.totalCents),
+        ].join(','));
+      }
+    }
+
+    reply.header('Content-Type', 'text/csv');
+    reply.header('Content-Disposition', `attachment; filename="invoice-register-${new Date().toISOString().slice(0, 10)}.csv"`);
+    return rows.join('\n');
+  });
+
+  // Carrier invoice register CSV
+  server.get('/api/v1/reports/export/carrier-invoices', {
+    schema: {
+      tags: ['Financial - Exports'],
+      summary: 'Download carrier invoice register as CSV',
+      querystring: {
+        type: 'object',
+        properties: {
+          from: { type: 'string' },
+          to: { type: 'string' },
+          status: { type: 'string' },
+        },
+      },
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const q = req.query as Record<string, string>;
+    const where: any = {};
+    if (q.from) where.receivedDate = { ...(where.receivedDate || {}), gte: new Date(q.from + 'T00:00:00Z') };
+    if (q.to) where.receivedDate = { ...(where.receivedDate || {}), lte: new Date(q.to + 'T23:59:59Z') };
+    if (q.status) where.status = q.status;
+
+    const invoices = await prisma.carrierInvoice.findMany({
+      where,
+      include: {
+        carrier: { select: { name: true, scacCode: true } },
+        lineItems: true,
+      },
+      orderBy: { receivedDate: 'asc' },
+      take: 50000,
+    });
+
+    const rows = ['Invoice #,Status,Carrier,SCAC,Received,Due,Total,Approved,Paid,Match Status,Variance,Variance %,Line Type,Line Description,Line Amount,Expected,Line Variance'];
+
+    for (const ci of invoices) {
+      if (ci.lineItems.length === 0) {
+        rows.push([
+          ci.invoiceNumber, ci.status, csvEscape(ci.carrier.name), ci.carrier.scacCode || '',
+          fmtD(ci.receivedDate), fmtD(ci.dueDate),
+          fmtCents(ci.totalCents), ci.approvedCents != null ? fmtCents(ci.approvedCents) : '', fmtCents(ci.paidCents),
+          ci.matchStatus, ci.varianceCents != null ? fmtCents(ci.varianceCents) : '', ci.variancePercent != null ? String(ci.variancePercent) : '',
+          '', '', '', '', '',
+        ].join(','));
+      }
+      for (const li of ci.lineItems) {
+        rows.push([
+          ci.invoiceNumber, ci.status, csvEscape(ci.carrier.name), ci.carrier.scacCode || '',
+          fmtD(ci.receivedDate), fmtD(ci.dueDate),
+          fmtCents(ci.totalCents), ci.approvedCents != null ? fmtCents(ci.approvedCents) : '', fmtCents(ci.paidCents),
+          ci.matchStatus, ci.varianceCents != null ? fmtCents(ci.varianceCents) : '', ci.variancePercent != null ? String(ci.variancePercent) : '',
+          li.chargeType, csvEscape(li.description), fmtCents(li.amountCents),
+          li.expectedAmountCents != null ? fmtCents(li.expectedAmountCents) : '',
+          li.varianceCents != null ? fmtCents(li.varianceCents) : '',
+        ].join(','));
+      }
+    }
+
+    reply.header('Content-Type', 'text/csv');
+    reply.header('Content-Disposition', `attachment; filename="carrier-invoice-register-${new Date().toISOString().slice(0, 10)}.csv"`);
+    return rows.join('\n');
+  });
+
+  // Payment ledger CSV
+  server.get('/api/v1/reports/export/payments', {
+    schema: {
+      tags: ['Financial - Exports'],
+      summary: 'Download payment ledger as CSV (all customer payments received)',
+      querystring: {
+        type: 'object',
+        properties: {
+          from: { type: 'string' },
+          to: { type: 'string' },
+        },
+      },
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const q = req.query as Record<string, string>;
+    const where: any = {};
+    if (q.from) where.receivedDate = { ...(where.receivedDate || {}), gte: new Date(q.from + 'T00:00:00Z') };
+    if (q.to) where.receivedDate = { ...(where.receivedDate || {}), lte: new Date(q.to + 'T23:59:59Z') };
+
+    const payments = await prisma.payment.findMany({
+      where,
+      include: {
+        invoice: {
+          select: { invoiceNumber: true, customerId: true, customer: { select: { name: true } } },
+        },
+      },
+      orderBy: { receivedDate: 'asc' },
+      take: 50000,
+    });
+
+    const rows = ['Date,Invoice #,Customer,Amount,Method,Reference,Notes'];
+
+    for (const p of payments) {
+      rows.push([
+        fmtD(p.receivedDate),
+        p.invoice.invoiceNumber,
+        csvEscape(p.invoice.customer.name),
+        fmtCents(p.amountCents),
+        p.paymentMethod || '',
+        csvEscape(p.referenceNumber),
+        csvEscape(p.notes),
+      ].join(','));
+    }
+
+    reply.header('Content-Type', 'text/csv');
+    reply.header('Content-Disposition', `attachment; filename="payment-ledger-${new Date().toISOString().slice(0, 10)}.csv"`);
+    return rows.join('\n');
+  });
+
+  // Charge detail CSV
+  server.get('/api/v1/reports/export/charges', {
+    schema: {
+      tags: ['Financial - Exports'],
+      summary: 'Download all charges as CSV (revenue and cost line items)',
+      querystring: {
+        type: 'object',
+        properties: {
+          from: { type: 'string' },
+          to: { type: 'string' },
+          chargeCategory: { type: 'string', enum: ['revenue', 'cost'] },
+        },
+      },
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const q = req.query as Record<string, string>;
+    const where: any = {};
+    if (q.from) where.createdAt = { ...(where.createdAt || {}), gte: new Date(q.from + 'T00:00:00Z') };
+    if (q.to) where.createdAt = { ...(where.createdAt || {}), lte: new Date(q.to + 'T23:59:59Z') };
+    if (q.chargeCategory) where.chargeCategory = q.chargeCategory;
+
+    const charges = await prisma.charge.findMany({
+      where,
+      include: {
+        shipment: { select: { reference: true, customer: { select: { name: true } } } },
+      },
+      orderBy: { createdAt: 'asc' },
+      take: 50000,
+    });
+
+    const rows = ['Date,Shipment,Customer,Category,Type,Description,Amount,Currency,Status,Source,Freight Class'];
+
+    for (const c of charges) {
+      rows.push([
+        fmtD(c.createdAt),
+        c.shipment?.reference || '',
+        csvEscape(c.shipment?.customer?.name),
+        c.chargeCategory,
+        c.chargeType,
+        csvEscape(c.description),
+        fmtCents(c.amountCents),
+        c.currency,
+        c.status,
+        c.source,
+        c.freightClass || '',
+      ].join(','));
+    }
+
+    reply.header('Content-Type', 'text/csv');
+    reply.header('Content-Disposition', `attachment; filename="charge-detail-${new Date().toISOString().slice(0, 10)}.csv"`);
+    return rows.join('\n');
+  });
 }

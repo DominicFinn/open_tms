@@ -358,6 +358,8 @@
   - ✅ Carrier spend summary (total invoiced/approved/paid per carrier)
   - ✅ Margin analysis by customer (revenue/cost/margin from shipment summaries)
   - ✅ Frontend: AR Aging Report page with distribution bar chart and customer breakdown
+  - ✅ CSV exports for accounting: invoice register, carrier invoice register, payment ledger, charge detail (with date range + status filters)
+  - ✅ Frontend: Export to CSV page with date range presets and per-export filters
   - Operational dashboards and KPIs (on-time %, cost per shipment, carrier scorecard) 🔲
   - Scheduled reports via email 🔲
 

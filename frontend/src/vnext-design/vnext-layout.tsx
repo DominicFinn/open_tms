@@ -99,6 +99,7 @@ const APPS: AppDef[] = [
       ]},
       { title: 'Reports', items: [
         { to: '/finance/aging', icon: 'assessment', label: 'AR Aging' },
+        { to: '/finance/exports', icon: 'download', label: 'Export to CSV' },
       ]},
     ],
   },
