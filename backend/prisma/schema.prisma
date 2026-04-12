@@ -1442,6 +1442,7 @@ model ShipmentReadModel {
   @@index([customerId])
   @@index([carrierId])
   @@index([createdAt])
+  @@index([currentLat, currentLng])              // Composite index for map bbox queries
 }
 
 model CarrierReadModel {
