@@ -96,6 +96,9 @@ const APPS: AppDef[] = [
         { to: '/finance/queries', icon: 'help_outline', label: 'Queries & Disputes' },
         { to: '/finance/credit-notes', icon: 'note', label: 'Credit Notes' },
       ]},
+      { title: 'Reports', items: [
+        { to: '/finance/aging', icon: 'assessment', label: 'AR Aging' },
+      ]},
     ],
   },
   {

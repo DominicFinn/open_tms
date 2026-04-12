@@ -353,11 +353,13 @@
   - ✅ Re-weigh / re-class adjustment workflow (creates cost + revenue adjustment charges)
   - ✅ Multi-order LTL consolidation billing (ConsolidationBillingService, pro-rate by weight)
   - ✅ EDI 810 outbound Invoice generation (ISA/GS/ST envelope, BIG/N1/ITD/IT1/TDS/CTT segments)
-- **Basic Reporting & Analytics** 🔲
-  - Operational dashboards and KPIs (on-time %, cost per shipment, carrier scorecard)
-  - Financial reports (lane spend analysis, carrier spend)
-  - CSV/PDF report export
-  - Scheduled reports via email
+- **Basic Reporting & Analytics** (partial)
+  - ✅ AR aging report (JSON API + CSV export, aging buckets by customer, date picker)
+  - ✅ Carrier spend summary (total invoiced/approved/paid per carrier)
+  - ✅ Margin analysis by customer (revenue/cost/margin from shipment summaries)
+  - ✅ Frontend: AR Aging Report page with distribution bar chart and customer breakdown
+  - Operational dashboards and KPIs (on-time %, cost per shipment, carrier scorecard) 🔲
+  - Scheduled reports via email 🔲
 
 ## **Phase 8: Portals, Tendering & Integration**
 - **Carrier Tendering System** ✅
