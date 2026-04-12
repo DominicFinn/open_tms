@@ -60,6 +60,7 @@ Deploy your own Open TMS instance with one click:
 - **Email Service** - Pluggable email with SMTP and console providers, Handlebars templates, admin-configurable settings, and per-organization overrides
 - **Cold Chain Monitoring** - Temperature profiles, immutable logging, excursion detection, compliance reports (CFR 21 Part 11)
 - **ETA Monitoring** - Cron-driven shipment delay detection using traffic-aware routing APIs (TomTom, HERE, Valhalla), adaptive polling, configurable alert thresholds, and automatic notifications
+- **Location Operations** - Per-location dashboards showing incoming, at-dock, and outgoing shipments with dwell time monitoring. Facility capability display (cross-dock, cold storage, hazmat, docks). Map integration via location marker popups.
 
 ### 🎨 Modern UI/UX
 - **Material Design 3** - Beautiful, consistent design system
