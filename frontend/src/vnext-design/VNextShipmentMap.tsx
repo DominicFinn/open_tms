@@ -597,9 +597,14 @@ export default function VNextShipmentMap() {
                 <div>${loc.city}${loc.state ? `, ${loc.state}` : ''} ${loc.postalCode || ''}</div>
                 <div>${loc.country}</div>
               </div>
-              <a href="/locations/${loc.id}/edit" style="display:inline-block;margin-top:6px;font-size:12px;color:var(--primary);text-decoration:none">
-                Edit &rarr;
-              </a>
+              <div style="display:flex;gap:12px;margin-top:6px">
+                <a href="/locations/${loc.id}/ops" style="font-size:12px;color:var(--primary);text-decoration:none;font-weight:600">
+                  Operations &rarr;
+                </a>
+                <a href="/locations/${loc.id}/edit" style="font-size:12px;color:var(--on-surface-variant);text-decoration:none">
+                  Edit
+                </a>
+              </div>
             </div>
           `, { className: 'map-popup' });
 

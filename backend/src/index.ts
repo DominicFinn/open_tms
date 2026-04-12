@@ -64,6 +64,7 @@ import { coldChainRoutes } from './routes/coldChain.js';
 import { etaMonitorRoutes } from './routes/etaMonitor.js';
 import { slaRoutes } from './routes/sla.js';
 import { mapRoutes } from './routes/map.js';
+import { locationOpsRoutes } from './routes/locationOps.js';
 import { warehouseRoutes } from './routes/warehouse.js';
 
 const server = Fastify({ logger: true });
@@ -142,6 +143,7 @@ async function start() {
   await server.register(etaMonitorRoutes);
   await server.register(slaRoutes);
   await server.register(mapRoutes);
+  await server.register(locationOpsRoutes);
   await server.register(warehouseRoutes);
 
   // Start queue adapter (needed for publishing events, even if workers run elsewhere)

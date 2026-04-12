@@ -56,6 +56,7 @@ import VNextDeviceDetail from './vnext-design/VNextDeviceDetail';
 import VNextShipmentMap from './vnext-design/VNextShipmentMap';
 import VNextSlaDashboard from './vnext-design/VNextSlaDashboard';
 import VNextSlaPolicies from './vnext-design/VNextSlaPolicies';
+import VNextLocationOps from './vnext-design/VNextLocationOps';
 
 // Carrier Tendering & Portal
 import Tenders from './pages/Tenders';
@@ -162,6 +163,7 @@ root.render(
           <Route path="locations" element={<VNextLocations />} />
           <Route path="locations/create" element={<VNextCreateLocation />} />
           <Route path="locations/:id/edit" element={<VNextCreateLocation />} />
+          <Route path="locations/:id/ops" element={<VNextLocationOps />} />
 
           {/* Lanes */}
           <Route path="lanes" element={<VNextLanes />} />

@@ -489,7 +489,15 @@ The current EDI infrastructure handles inbound 850 (SFTP polling) and outbound 8
   - ✅ OpenStreetMap default with Google Maps auto-fallback (existing MapProvider)
   - ✅ Admin settings page for Google Maps API key (Admin > Settings > Maps)
   - Pluggable map provider interface for additional providers 🔲
-- **Location Operations View** 🔲
+- **Location Operations View** (partial)
+  - ✅ Per-location operations dashboard at `/locations/:id/ops`
+  - ✅ Backend API: `/api/v1/locations/:id/operations` with incoming/at-location/outgoing data
+  - ✅ Stats: incoming/at-location/outgoing counts, units here, today's arrivals, avg dwell time
+  - ✅ Incoming tab: shipment stops with ETAs + direct inbound shipments
+  - ✅ At-location tab: shipments at dock with dwell time badges, trackable units present
+  - ✅ Outgoing tab: shipments departing from this location
+  - ✅ Facility info bar: dock count, cross-dock capability, cold storage, hazmat, appointment required
+  - ✅ Map integration: location marker popups link to operations view
   - Per-location operations dashboard: what's incoming, inside, and outgoing at a specific hub/spoke
   - Distribution centre focus: dock utilization, dwell time, cross-dock throughput
   - Cross-dock operations: inbound → sort → outbound pipeline visibility
