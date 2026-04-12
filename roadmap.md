@@ -476,7 +476,10 @@ The current EDI infrastructure handles inbound 850 (SFTP polling) and outbound 8
   - ✅ At-risk evaluations table (sorted by time to breach)
   - ✅ Breach history table with overdue duration
   - ✅ Auto-refresh (30s) with pause/play toggle
-  - Customer-facing SLA compliance reports (PDF/CSV export) 🔲
+  - ✅ Customer-facing SLA compliance reports (CSV export with date range and customer filters)
+  - ✅ SLA summary stats API for compliance rate, breach rate by rule type, avg breach duration
+  - ✅ Export section on SLA dashboard with date pickers and download button
+  - ✅ SLA Compliance link in Reports nav section
   - Scheduled SLA report delivery via email 🔲
 - **Spatial Indexing & Security Event Geofencing** 🔲
   - PostGIS extension for inverse geofence queries (`ST_DWithin` with spatial index)

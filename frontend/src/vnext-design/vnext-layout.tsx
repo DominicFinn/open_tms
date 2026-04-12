@@ -79,6 +79,7 @@ const APPS: AppDef[] = [
         { to: '/documents', icon: 'description', label: 'Documents' },
         { to: '/reports/daily', icon: 'assessment', label: 'Daily Report' },
         { to: '/reports/locations', icon: 'location_on', label: 'Location Activity' },
+        { to: '/sla', icon: 'timer', label: 'SLA Compliance' },
       ]},
     ],
   },

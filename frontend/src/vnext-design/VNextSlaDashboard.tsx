@@ -280,6 +280,45 @@ export default function VNextSlaDashboard() {
           )}
         </div>
       </div>
+
+      {/* Export section */}
+      <div className="vn-card" style={{ marginTop: '24px' }}>
+        <div className="vn-card-header">
+          <h2>Export Compliance Report</h2>
+        </div>
+        <div className="vn-card-body">
+          <p style={{ fontSize: '14px', color: 'var(--on-surface-variant)', margin: '0 0 16px' }}>
+            Download a CSV report of SLA evaluations for sharing with customers or internal review.
+          </p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'flex-end' }}>
+            <div className="vn-field" style={{ marginBottom: 0 }}>
+              <label className="vn-field-label">From</label>
+              <input className="vn-input" type="date" id="report-from"
+                defaultValue={new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)} />
+            </div>
+            <div className="vn-field" style={{ marginBottom: 0 }}>
+              <label className="vn-field-label">To</label>
+              <input className="vn-input" type="date" id="report-to"
+                defaultValue={new Date().toISOString().slice(0, 10)} />
+            </div>
+            <button
+              className="vn-btn"
+              onClick={() => {
+                const from = (document.getElementById('report-from') as HTMLInputElement)?.value;
+                const to = (document.getElementById('report-to') as HTMLInputElement)?.value;
+                const params = new URLSearchParams();
+                if (from) params.set('from', from);
+                if (to) params.set('to', to);
+                window.open(`${API_URL}/api/v1/reports/sla-compliance?${params}`, '_blank');
+              }}
+              style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
+            >
+              <span className="material-icons" style={{ fontSize: '16px' }}>download</span>
+              Download CSV
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
