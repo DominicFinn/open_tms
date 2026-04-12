@@ -456,6 +456,28 @@ The current EDI infrastructure handles inbound 850 (SFTP polling) and outbound 8
   - Exportable carrier scorecards for procurement reviews
 
 ## **Phase 9: Routes & Maps Insights**
+- **Shipment Map View** ✅
+  - ✅ Full-page map at `/map` with OpenStreetMap tiles (Google Maps if API key configured)
+  - ✅ Supercluster (KD-tree) client-side clustering for performance at scale
+  - ✅ Entity type switching: Shipments | Orders | Trackable Units
+  - ✅ Backend bbox-filtered GeoJSON API (`/api/v1/map/shipments`, `/orders`, `/units`)
+  - ✅ Status-coloured markers (in_transit, delivered, exception, draft)
+  - ✅ Status filter chips for shipment filtering
+  - ✅ Location markers overlay (warehouse icons with popups)
+  - ✅ Issue/SLA overlay with pulsing breach/warning markers
+  - ✅ Composite index on ShipmentReadModel (currentLat, currentLng)
+  - ✅ Fullscreen mode for control centre wall monitors (Browser Fullscreen API)
+  - ✅ Auto-refresh (30s polling) with pause/play toggle
+  - ✅ Click-to-zoom on clusters, popups with entity details and navigation links
+  - Route lines between origin and destination 🔲
+- **SLA Dashboard** ✅
+  - ✅ Control centre dashboard at `/sla` with large-format numbers
+  - ✅ Compliance rate, active/warning/breached/met stats
+  - ✅ At-risk evaluations table (sorted by time to breach)
+  - ✅ Breach history table with overdue duration
+  - ✅ Auto-refresh (30s) with pause/play toggle
+  - Customer-facing SLA compliance reports (PDF/CSV export) 🔲
+  - Scheduled SLA report delivery via email 🔲
 - **Spatial Indexing & Security Event Geofencing** 🔲
   - PostGIS extension for inverse geofence queries (`ST_DWithin` with spatial index)
   - Geography column on Location model for fast spatial lookups
@@ -463,11 +485,10 @@ The current EDI infrastructure handles inbound 850 (SFTP polling) and outbound 8
   - Security event evaluation in SLA cron worker (cron-based, not real-time — see [ADR](./docs/SECURITY_EVENT_GEOFENCING_ADR.md))
   - Optional Tile38 Docker container for large-scale real-time geofencing
   - Provider-agnostic: external IoT platforms (System Loco, Shippeo, project44) can push geofence events directly, bypassing built-in spatial evaluation
-- **Map Provider Integration** 🔲
-  - Pluggable map provider interface (Google Maps, Mapbox, HERE, OpenStreetMap fallback)
-  - Admin settings page: API key management for map providers (Admin > Settings > Map Provider)
-  - Provider capabilities matrix — routing, traffic, geocoding, satellite imagery vary per provider
-  - API key storage encrypted at rest, usage metering and quota alerts
+- **Map Provider Integration** (partial)
+  - ✅ OpenStreetMap default with Google Maps auto-fallback (existing MapProvider)
+  - ✅ Admin settings page for Google Maps API key (Admin > Settings > Maps)
+  - Pluggable map provider interface for additional providers 🔲
 - **Route Overhaul** 🔲
   - Redesign route model: routes as first-class entities separate from lanes
   - Route builder UI: drag-and-drop waypoints, reordering, named route variants per lane

@@ -53,6 +53,7 @@ const APPS: AppDef[] = [
       { title: 'Operations', items: [
         { to: '/', icon: 'space_dashboard', label: 'Dashboard', end: true },
         { to: '/map', icon: 'map', label: 'Map View' },
+        { to: '/sla', icon: 'timer', label: 'SLA Dashboard' },
         { to: '/shipments', icon: 'local_shipping', label: 'Shipments' },
         { to: '/orders', icon: 'receipt_long', label: 'Orders' },
         { to: '/issues', icon: 'bug_report', label: 'Issues' },

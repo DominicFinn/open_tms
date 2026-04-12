@@ -219,6 +219,16 @@ export default function VNextShipmentMap() {
   const [issueCount, setIssueCount] = useState(0);
   const issuesLayer = useRef<L.LayerGroup | null>(null);
 
+  // Location markers overlay state
+  const [showLocations, setShowLocations] = useState(false);
+  const locationsLayer = useRef<L.LayerGroup | null>(null);
+
+  // Fullscreen and auto-refresh
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [autoRefresh, setAutoRefresh] = useState(false);
+  const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
   // Supercluster instance — memoised on feature data
   const cluster = useMemo(() => {
     const sc = new Supercluster({
@@ -270,6 +280,7 @@ export default function VNextShipmentMap() {
       setFeatures(json.data?.features || []);
       setTotal(json.data?.total || 0);
       setTruncated(json.data?.truncated || false);
+      setLastRefresh(new Date());
     } catch (err) {
       setError((err as Error).message);
       console.error('[Map] Fetch error:', err);
@@ -295,6 +306,7 @@ export default function VNextShipmentMap() {
 
     markersLayer.current = L.layerGroup().addTo(map);
     issuesLayer.current = L.layerGroup().addTo(map);
+    locationsLayer.current = L.layerGroup().addTo(map);
     mapInstance.current = map;
 
     // Fetch on map move (debounced)
@@ -493,10 +505,113 @@ export default function VNextShipmentMap() {
     }
   }, [issueFeatures, showIssues]);
 
+  // Auto-refresh (30s interval)
+  useEffect(() => {
+    if (!autoRefresh) return;
+    const interval = setInterval(() => {
+      fetchData();
+      // Re-fetch issues too if overlay is active
+      if (showIssues) {
+        setShowIssues(false);
+        setTimeout(() => setShowIssues(true), 50);
+      }
+    }, 30_000);
+    return () => clearInterval(interval);
+  }, [autoRefresh, fetchData, showIssues]);
+
+  // Fullscreen toggle
+  const toggleFullscreen = useCallback(() => {
+    if (!containerRef.current) return;
+    if (!document.fullscreenElement) {
+      containerRef.current.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => {});
+    } else {
+      document.exitFullscreen().then(() => setIsFullscreen(false)).catch(() => {});
+    }
+  }, []);
+
+  useEffect(() => {
+    const onFsChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', onFsChange);
+    return () => document.removeEventListener('fullscreenchange', onFsChange);
+  }, []);
+
+  // Invalidate map size after fullscreen toggle (Leaflet needs this)
+  useEffect(() => {
+    if (mapInstance.current) {
+      setTimeout(() => mapInstance.current?.invalidateSize(), 100);
+    }
+  }, [isFullscreen]);
+
+  // Location markers overlay
+  useEffect(() => {
+    if (!showLocations || !mapInstance.current || !locationsLayer.current) {
+      locationsLayer.current?.clearLayers();
+      return;
+    }
+
+    let cancelled = false;
+    async function fetchLocations() {
+      try {
+        const res = await fetch(`${API_URL}/api/v1/locations?limit=500`);
+        if (!res.ok || cancelled) return;
+        const json = await res.json();
+        const locs = (json.data || []).filter((l: any) => l.lat && l.lng);
+
+        if (cancelled || !locationsLayer.current) return;
+        locationsLayer.current.clearLayers();
+
+        for (const loc of locs) {
+          const marker = L.marker([loc.lat, loc.lng], {
+            icon: L.divIcon({
+              className: 'map-location',
+              html: `<div style="
+                width:24px;height:24px;
+                border-radius:4px;
+                background:var(--surface);
+                color:var(--primary);
+                display:flex;align-items:center;justify-content:center;
+                border:2px solid var(--primary);
+                box-shadow:0 1px 4px rgba(0,0,0,0.2);
+                opacity:0.8;
+              "><span class="material-icons" style="font-size:16px">warehouse</span></div>`,
+              iconSize: [24, 24],
+              iconAnchor: [12, 12],
+            }),
+            zIndexOffset: -100, // Locations render below shipments
+          });
+
+          marker.bindPopup(`
+            <div style="min-width:180px;font-family:var(--font-family,Roboto,sans-serif)">
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+                <span class="material-icons" style="font-size:16px;color:var(--primary)">warehouse</span>
+                <strong style="font-size:13px">${loc.name}</strong>
+              </div>
+              <div style="font-size:12px;color:var(--on-surface-variant);line-height:1.5">
+                <div>${loc.address1}</div>
+                <div>${loc.city}${loc.state ? `, ${loc.state}` : ''} ${loc.postalCode || ''}</div>
+                <div>${loc.country}</div>
+              </div>
+              <a href="/locations/${loc.id}/edit" style="display:inline-block;margin-top:6px;font-size:12px;color:var(--primary);text-decoration:none">
+                Edit &rarr;
+              </a>
+            </div>
+          `, { className: 'map-popup' });
+
+          marker.addTo(locationsLayer.current!);
+        }
+      } catch (err) {
+        console.error('[Map] Location fetch error:', err);
+      }
+    }
+
+    fetchLocations();
+    return () => { cancelled = true; };
+  }, [showLocations]);
+
   const shipmentStatuses = ['draft', 'dispatched', 'in_transit', 'delivered', 'exception'];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 56px)' }}>
+    <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', height: isFullscreen ? '100vh' : 'calc(100vh - 56px)', background: 'var(--surface)' }}>
       {/* Toolbar */}
       <div style={{
         display: 'flex',
@@ -569,6 +684,27 @@ export default function VNextShipmentMap() {
           </div>
         )}
 
+        {/* Locations overlay toggle */}
+        <button
+          onClick={() => setShowLocations((prev) => !prev)}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            padding: '4px 12px',
+            fontSize: '12px',
+            fontWeight: 600,
+            borderRadius: '12px',
+            border: `1px solid ${showLocations ? 'var(--primary)' : 'var(--outline-variant)'}`,
+            background: showLocations ? 'var(--primary)' : 'transparent',
+            color: showLocations ? 'var(--on-primary)' : 'var(--on-surface-variant)',
+            cursor: 'pointer',
+          }}
+        >
+          <span className="material-icons" style={{ fontSize: '16px' }}>warehouse</span>
+          Locations
+        </button>
+
         {/* Issue/SLA overlay toggle */}
         <button
           onClick={() => setShowIssues((prev) => !prev)}
@@ -593,25 +729,65 @@ export default function VNextShipmentMap() {
           Issues{issueCount > 0 && showIssues ? ` (${issueCount})` : ''}
         </button>
 
-        {/* Right side: stats */}
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '12px', fontSize: '13px', color: 'var(--on-surface-variant)' }}>
+        {/* Right side: controls + stats */}
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--on-surface-variant)' }}>
           {loading && (
             <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
               <span className="material-icons" style={{ fontSize: '16px', animation: 'spin 1s linear infinite' }}>sync</span>
-              Loading...
             </span>
           )}
           {!loading && (
-            <span>
-              {total.toLocaleString()} {entityType}{truncated ? ' (limited)' : ''}
+            <span>{total.toLocaleString()} {entityType}{truncated ? ' (limited)' : ''}</span>
+          )}
+          {lastRefresh && !loading && (
+            <span style={{ fontSize: '11px', opacity: 0.7 }}>
+              {lastRefresh.toLocaleTimeString()}
             </span>
           )}
           {error && (
-            <span style={{ color: 'var(--color-error)' }}>
+            <span style={{ color: 'var(--color-error)', fontSize: '12px' }}>
               <span className="material-icons" style={{ fontSize: '16px', verticalAlign: 'middle' }}>error</span>
-              {' '}{error}
             </span>
           )}
+
+          {/* Auto-refresh toggle */}
+          <button
+            onClick={() => setAutoRefresh((prev) => !prev)}
+            title={autoRefresh ? 'Stop auto-refresh (30s)' : 'Start auto-refresh (30s)'}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '3px',
+              padding: '3px 8px', fontSize: '11px', fontWeight: 600,
+              borderRadius: '10px',
+              border: `1px solid ${autoRefresh ? 'var(--color-success)' : 'var(--outline-variant)'}`,
+              background: autoRefresh ? 'var(--color-success)' : 'transparent',
+              color: autoRefresh ? '#fff' : 'var(--on-surface-variant)',
+              cursor: 'pointer',
+            }}
+          >
+            <span className="material-icons" style={{ fontSize: '14px' }}>
+              {autoRefresh ? 'pause' : 'play_arrow'}
+            </span>
+            {autoRefresh ? 'Live' : 'Auto'}
+          </button>
+
+          {/* Fullscreen toggle */}
+          <button
+            onClick={toggleFullscreen}
+            title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen (control centre mode)'}
+            style={{
+              display: 'flex', alignItems: 'center',
+              padding: '4px',
+              borderRadius: '6px',
+              border: '1px solid var(--outline-variant)',
+              background: 'transparent',
+              color: 'var(--on-surface-variant)',
+              cursor: 'pointer',
+            }}
+          >
+            <span className="material-icons" style={{ fontSize: '18px' }}>
+              {isFullscreen ? 'fullscreen_exit' : 'fullscreen'}
+            </span>
+          </button>
         </div>
       </div>
 
@@ -644,6 +820,12 @@ export default function VNextShipmentMap() {
               <span style={{ color: 'var(--on-surface-variant)' }}>{item.label}</span>
             </div>
           ))}
+          {showLocations && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
+              <span className="material-icons" style={{ fontSize: '16px', color: 'var(--primary)' }}>warehouse</span>
+              <span style={{ color: 'var(--on-surface-variant)' }}>Location</span>
+            </div>
+          )}
           {showIssues && (
             <>
               <div style={{ borderTop: '1px solid var(--outline-variant)', margin: '6px 0', paddingTop: '6px', fontWeight: 600, color: 'var(--on-surface)' }}>Issues / SLA</div>
@@ -679,7 +861,7 @@ export default function VNextShipmentMap() {
           border-radius: 8px;
           box-shadow: 0 4px 12px rgba(0,0,0,0.15);
         }
-        .map-cluster, .map-point, .map-issue {
+        .map-cluster, .map-point, .map-issue, .map-location {
           background: transparent !important;
           border: none !important;
         }

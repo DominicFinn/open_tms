@@ -54,6 +54,7 @@ import VNextMapsSettings from './vnext-design/VNextMapsSettings';
 import VNextDevices from './vnext-design/VNextDevices';
 import VNextDeviceDetail from './vnext-design/VNextDeviceDetail';
 import VNextShipmentMap from './vnext-design/VNextShipmentMap';
+import VNextSlaDashboard from './vnext-design/VNextSlaDashboard';
 
 // Carrier Tendering & Portal
 import Tenders from './pages/Tenders';
@@ -113,8 +114,9 @@ root.render(
           {/* Dashboard */}
           <Route index element={<VNextDashboard />} />
 
-          {/* Map */}
+          {/* Map & Dashboard */}
           <Route path="map" element={<VNextShipmentMap />} />
+          <Route path="sla" element={<VNextSlaDashboard />} />
 
           {/* Shipments */}
           <Route path="shipments" element={<VNextShipments />} />
