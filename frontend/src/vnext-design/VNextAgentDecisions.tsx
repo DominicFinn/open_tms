@@ -32,6 +32,17 @@ interface Stats {
   averageConfidence: number | null;
   promotedCount: number;
   pendingReviewCount: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalTokens: number;
+  averageDurationMs: number | null;
+}
+
+interface DailyUsage {
+  date: string;
+  invocations: number;
+  inputTokens: number;
+  outputTokens: number;
 }
 
 function timeAgo(dateStr: string): string {
@@ -78,6 +89,7 @@ export default function VNextAgentDecisions() {
   const navigate = useNavigate();
   const [decisions, setDecisions] = useState<Decision[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
+  const [dailyUsage, setDailyUsage] = useState<DailyUsage[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -98,17 +110,20 @@ export default function VNextAgentDecisions() {
         if (agentTypeFilter !== 'all') params.set('agentType', agentTypeFilter);
         params.set('limit', '100');
 
-        const [listRes, statsRes] = await Promise.all([
+        const [listRes, statsRes, usageRes] = await Promise.all([
           fetch(`${API_URL}/api/v1/agent-decisions?${params}`),
           fetch(`${API_URL}/api/v1/agent-decisions/stats`),
+          fetch(`${API_URL}/api/v1/agent-decisions/usage?days=30`),
         ]);
 
         if (!cancelled) {
           const listJson = await listRes.json();
           const statsJson = await statsRes.json();
+          const usageJson = await usageRes.json();
           setDecisions(listJson.data?.items || []);
           setTotal(listJson.data?.total || 0);
           setStats(statsJson.data || null);
+          setDailyUsage(usageJson.data || []);
           setError('');
         }
       } catch (err: any) {
@@ -167,7 +182,54 @@ export default function VNextAgentDecisions() {
           label="Avg Confidence"
         />
         <VnStatCard icon="auto_fix_high" iconVariant="primary" value={stats?.promotedCount ?? 0} label="Promoted" />
+        <VnStatCard
+          icon="token"
+          iconVariant="error"
+          value={stats?.totalTokens ? stats.totalTokens.toLocaleString() : '0'}
+          label="Total Tokens"
+        />
       </div>
+
+      {/* Daily usage chart */}
+      {dailyUsage.length > 0 && (
+        <div className="vn-card" style={{ marginTop: 24 }}>
+          <div className="vn-card-header">
+            <h2>Usage (Last 30 Days)</h2>
+            <span style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>
+              {stats?.totalInputTokens?.toLocaleString() ?? 0} input + {stats?.totalOutputTokens?.toLocaleString() ?? 0} output tokens
+            </span>
+          </div>
+          <div className="vn-card-body">
+            <div style={{ display: 'flex', gap: 2, alignItems: 'flex-end', height: 120 }}>
+              {dailyUsage.map((d) => {
+                const maxInvocations = Math.max(...dailyUsage.map(x => x.invocations), 1);
+                const height = Math.max(4, (d.invocations / maxInvocations) * 100);
+                const totalTokens = d.inputTokens + d.outputTokens;
+                return (
+                  <div
+                    key={d.date}
+                    title={`${d.date}: ${d.invocations} invocations, ${totalTokens.toLocaleString()} tokens`}
+                    style={{
+                      flex: 1,
+                      height: `${height}%`,
+                      background: 'var(--primary)',
+                      borderRadius: '4px 4px 0 0',
+                      opacity: 0.8,
+                      minWidth: 4,
+                      cursor: 'default',
+                    }}
+                  />
+                );
+              })}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 11, color: 'var(--on-surface-variant)' }}>
+              <span>{dailyUsage[0]?.date}</span>
+              <span>Invocations per day</span>
+              <span>{dailyUsage[dailyUsage.length - 1]?.date}</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Filters + table */}
       <div className="vn-card" style={{ marginTop: 24 }}>

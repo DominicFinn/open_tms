@@ -29,6 +29,9 @@ interface Decision {
   outcomeRecordedBy: string | null;
   promotedToAutomation: boolean;
   promotedAt: string | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  durationMs: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -306,6 +309,21 @@ export default function VNextAgentDecisionDetail() {
               ]} />
             </div>
           </div>
+
+          {/* Token usage card */}
+          {(decision.inputTokens || decision.outputTokens || decision.durationMs) && (
+            <div className="vn-card">
+              <div className="vn-card-header"><h2>Token Usage</h2></div>
+              <div className="vn-card-body">
+                <VnInfoGrid items={[
+                  { label: 'Input Tokens', value: decision.inputTokens?.toLocaleString() ?? '-' },
+                  { label: 'Output Tokens', value: decision.outputTokens?.toLocaleString() ?? '-' },
+                  { label: 'Total Tokens', value: ((decision.inputTokens || 0) + (decision.outputTokens || 0)).toLocaleString() },
+                  { label: 'Duration', value: decision.durationMs ? `${(decision.durationMs / 1000).toFixed(1)}s` : '-' },
+                ]} />
+              </div>
+            </div>
+          )}
 
           {decision.actionEntityType && decision.actionEntityId && (
             <div className="vn-card">

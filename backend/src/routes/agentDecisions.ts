@@ -111,6 +111,35 @@ export const agentDecisionRoutes: FastifyPluginAsync = async (server) => {
     return { data: stats, error: null };
   });
 
+  // ── GET /api/v1/agent-decisions/usage — Daily usage breakdown for charts ──
+
+  server.get<{ Querystring: { days?: string } }>('/api/v1/agent-decisions/usage', {
+    schema: {
+      tags: ['Agent Decisions'],
+      summary: 'Get daily agent usage breakdown (invocations, tokens) for charting',
+      querystring: {
+        type: 'object',
+        properties: { days: { type: 'string', description: 'Number of days to look back (default: 30)' } },
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            data: { type: 'array', items: { type: 'object' } },
+            error: { type: 'string', nullable: true },
+          },
+        },
+      },
+    },
+  }, async (request) => {
+    const repo = container.resolve<IAgentDecisionRepository>(TOKENS.IAgentDecisionRepository);
+    const org = await server.prisma.organization.findFirst();
+    const orgId = org?.id || 'default';
+    const days = request.query.days ? parseInt(request.query.days, 10) : 30;
+    const usage = await repo.getDailyUsage(orgId, days);
+    return { data: usage, error: null };
+  });
+
   // ── GET /api/v1/agent-decisions — List decisions with filters ──
 
   server.get<{

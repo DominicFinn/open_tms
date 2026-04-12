@@ -606,6 +606,12 @@ model Organization {
   emailFromName       String?                      // Default "from" display name
   emailEnabled        Boolean  @default(false)     // Global kill switch
 
+  // AI / LLM Configuration (for agent features)
+  llmProvider         String?                      // "anthropic" (more providers in future)
+  llmApiKey           String?                      // API key — masked in API responses, encrypted at rest in production
+  llmModel            String?                      // Model override, e.g. "claude-sonnet-4-20250514"
+  llmEnabled          Boolean  @default(false)     // Global kill switch for AI agents
+
   // Metadata
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
@@ -2583,6 +2589,11 @@ model AgentDecision {
   outcomeRecordedAt DateTime?
   outcomeRecordedBy String?                           // User who reviewed
 
+  // Token usage tracking (for cost monitoring)
+  inputTokens       Int?                              // Tokens sent to the LLM
+  outputTokens      Int?                              // Tokens received from the LLM
+  durationMs        Int?                              // Wall-clock time for the LLM call in milliseconds
+
   // Automation promotion
   promotedToAutomation Boolean @default(false)
   promotedAt           DateTime?
@@ -2619,6 +2630,9 @@ model AgentDecisionReadModel {
   actionEntityId       String?
   outcomeStatus        String    @default("pending")
   promotedToAutomation Boolean   @default(false)
+  inputTokens          Int?
+  outputTokens         Int?
+  durationMs           Int?
 
   createdAt            DateTime
   updatedAt            DateTime

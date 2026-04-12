@@ -60,12 +60,18 @@ export class AgentDecisionProjection implements IEventHandler {
         actionEntityId: record.actionEntityId,
         outcomeStatus: record.outcomeStatus,
         promotedToAutomation: record.promotedToAutomation,
+        inputTokens: record.inputTokens,
+        outputTokens: record.outputTokens,
+        durationMs: record.durationMs,
         createdAt: record.createdAt,
         updatedAt: record.updatedAt,
       },
       update: {
         agentType: record.agentType,
         summary: record.summary,
+        inputTokens: record.inputTokens,
+        outputTokens: record.outputTokens,
+        durationMs: record.durationMs,
         updatedAt: record.updatedAt,
       },
     });

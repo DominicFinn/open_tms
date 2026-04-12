@@ -30,6 +30,9 @@ export interface CreateAgentDecisionPayload {
   actionPayload?: Record<string, unknown>;
   actionEntityType?: string;
   actionEntityId?: string;
+  inputTokens?: number;
+  outputTokens?: number;
+  durationMs?: number;
 }
 
 export const CREATE_AGENT_DECISION = 'agent_decision.create';
@@ -69,6 +72,9 @@ export class CreateAgentDecisionCommandHandler extends BaseCommandHandler<
         actionPayload: command.payload.actionPayload as Prisma.InputJsonValue ?? undefined,
         actionEntityType: command.payload.actionEntityType,
         actionEntityId: command.payload.actionEntityId,
+        inputTokens: command.payload.inputTokens,
+        outputTokens: command.payload.outputTokens,
+        durationMs: command.payload.durationMs,
       },
     });
 

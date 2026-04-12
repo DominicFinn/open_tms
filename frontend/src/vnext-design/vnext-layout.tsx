@@ -110,6 +110,7 @@ const APPS: AppDef[] = [
         { to: '/settings/custom-fields', icon: 'tune', label: 'Custom Fields' },
         { to: '/settings/maps', icon: 'map', label: 'Maps & Geocoding' },
         { to: '/settings/sla', icon: 'timer', label: 'SLA Policies' },
+        { to: '/settings/llm', icon: 'smart_toy', label: 'AI / LLM' },
       ]},
       { title: 'Apps', items: [
         { to: '/warehouse', icon: 'warehouse', label: 'Warehouse App' },

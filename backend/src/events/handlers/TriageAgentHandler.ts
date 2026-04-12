@@ -101,11 +101,13 @@ export class TriageAgentHandler implements IEventHandler {
 
       // 3. Build prompt and call LLM
       const messages = this.buildPrompt(event, context);
+      const llmStart = Date.now();
       const llmResponse = await this.llm.complete({
         messages,
         maxTokens: 512,
         temperature: 0.2,
       });
+      const durationMs = Date.now() - llmStart;
 
       // 4. Parse the structured response
       const decision = this.parseDecision(llmResponse.content);
@@ -114,7 +116,7 @@ export class TriageAgentHandler implements IEventHandler {
       const actionResult = await this.executeAction(event, decision, correlationId);
 
       // 6. Log the decision
-      await this.logDecision(event, context, decision, messages, llmResponse, actionResult, correlationId);
+      await this.logDecision(event, context, decision, messages, llmResponse, actionResult, correlationId, durationMs);
 
       console.log(`[TriageAgent] ${event.type} on ${event.entityType}/${event.entityId} — ${decision.actionType} (confidence: ${decision.confidence})`);
     } catch (err) {
@@ -394,6 +396,7 @@ Based on this event and context, what action should be taken?`;
     llmResponse: { provider: string; model: string; usage?: { inputTokens: number; outputTokens: number } },
     actionResult: { actionEntityType?: string; actionEntityId?: string; actionPayload?: Record<string, unknown> },
     correlationId: string,
+    durationMs?: number,
   ): Promise<void> {
     await this.commandBus.dispatch({
       type: CREATE_AGENT_DECISION,
@@ -410,16 +413,16 @@ Based on this event and context, what action should be taken?`;
         entityId: event.entityId,
         summary: decision.summary,
         reasoning: decision.reasoning,
-        context: {
-          ...context,
-          llmUsage: llmResponse.usage,
-        },
+        context,
         conversationLog: messages.map((m) => ({ role: m.role, content: m.content })),
         confidence: decision.confidence,
         actionType: decision.actionType,
         actionPayload: actionResult.actionPayload,
         actionEntityType: actionResult.actionEntityType,
         actionEntityId: actionResult.actionEntityId,
+        inputTokens: llmResponse.usage?.inputTokens,
+        outputTokens: llmResponse.usage?.outputTokens,
+        durationMs,
       },
       metadata: { correlationId, source: 'system' },
     });
