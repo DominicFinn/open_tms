@@ -19,17 +19,26 @@ const completed = [
   'CAPA Reports',
   'Cargo Scan Reconciliation',
   'OAuth SSO (Google/Microsoft)',
+  'Charges & Rating Engine',
+  'Quotes with Revision Tracking',
+  'Customer Invoicing (AR)',
+  'Carrier Invoices & Freight Audit (AP)',
+  'Financial Queries & Credit Notes',
+  'LTL Class-Based Rating',
+  'EDI 210, 810, 820 Financial Transactions',
+  'AR Aging & Financial Reports',
+  'CSV Exports for Accounting',
 ]
 
 const upcoming = [
   { title: 'Customer Portal', description: 'Self-service order tracking and document access for your customers' },
-  { title: 'Rate Management', description: 'Contract rates, spot rates, accessorial charges, and multi-currency support' },
-  { title: 'Quoting Engine', description: 'Request and compare quotes from multiple carriers automatically' },
-  { title: 'Invoicing & Freight Audit', description: 'Generate invoices from shipments, audit against contracted rates' },
   { title: 'Driver Mobile App', description: 'Status updates, signature capture, photo POD, and offline GPS tracking' },
   { title: 'N8N Workflow Integration', description: 'Custom automation nodes for event-driven logistics workflows' },
   { title: 'Multi-Language Support', description: 'UI translations, RTL layouts, and localised content' },
   { title: 'Advanced Reporting', description: 'Operational dashboards, carrier scorecards, and lane spend analysis' },
+  { title: 'Carrier Intelligence', description: 'Performance scoring, FMCSA integration, risk assessment, and onboarding workflows' },
+  { title: 'Route Optimization', description: 'Multi-stop TSP solver, traffic analysis, and carbon footprint calculation' },
+  { title: 'Warehouse Management', description: 'Inventory, receiving, fulfillment, wave planning, and pick optimization' },
 ]
 
 export default function Roadmap() {

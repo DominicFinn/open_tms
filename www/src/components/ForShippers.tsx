@@ -21,6 +21,10 @@ export default function ForShippers() {
       description: 'Tendering with broadcast and waterfall strategies. Compare bids, track carrier performance, and manage contract rates across lanes.',
     },
     {
+      title: 'Financial Operations',
+      description: 'Auto-invoicing on delivery, three-way carrier freight audit, quotes with revision tracking, LTL rating, and AR aging reports with CSV exports.',
+    },
+    {
       title: 'Warehouse Operations',
       description: 'Mobile-first launch app with barcode scanning, IoT device pairing, and pre-flight checks. Magic link QR auth for floor staff.',
     },

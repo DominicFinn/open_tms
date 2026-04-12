@@ -9,6 +9,7 @@ import Quality from './pages/features/Quality'
 import Reports from './pages/features/Reports'
 import Warehouse from './pages/features/Warehouse'
 import AiAgents from './pages/features/AiAgents'
+import Financial from './pages/features/Financial'
 import Layout from './components/Layout'
 
 export default function App() {
@@ -22,6 +23,7 @@ export default function App() {
         <Route path="/features/reports" element={<Reports />} />
         <Route path="/features/warehouse" element={<Warehouse />} />
         <Route path="/features/ai-agents" element={<AiAgents />} />
+        <Route path="/features/financial" element={<Financial />} />
         <Route path="/blog" element={<Blog />} />
         <Route path="/blog/:slug" element={<BlogPost />} />
         <Route path="/docs" element={<Docs />} />
