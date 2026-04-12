@@ -337,4 +337,246 @@ export const mapRoutes: FastifyPluginAsync = async (server) => {
       error: null,
     };
   });
+
+  // GET /api/v1/map/issues — get open issues and SLA breaches with coordinates
+  // Issues inherit coordinates from their linked shipment (via sourceEntityType/sourceEntityId).
+  // SLA evaluations are joined to provide breach status.
+  server.get<{
+    Querystring: {
+      status?: string;
+      priority?: string;
+      slaStatus?: string;
+      limit?: string;
+    };
+  }>('/api/v1/map/issues', {
+    schema: {
+      tags: ['Map'],
+      summary: 'Get issues with shipment coordinates for map overlay',
+      querystring: {
+        type: 'object',
+        properties: {
+          status: { type: 'string', description: 'Issue status filter (comma-separated: open,in_progress)' },
+          priority: { type: 'string', description: 'Priority filter (comma-separated: critical,high)' },
+          slaStatus: { type: 'string', description: 'SLA evaluation status filter (comma-separated: breached,warning,active)' },
+          limit: { type: 'string' },
+        },
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            data: {
+              type: 'object',
+              properties: {
+                type: { type: 'string' },
+                features: { type: 'array', items: { type: 'object' } },
+                total: { type: 'number' },
+              },
+            },
+            error: { type: 'string', nullable: true },
+          },
+        },
+      },
+    },
+  }, async (request) => {
+    const limit = Math.min(parseInt(request.query.limit || '1000', 10), 5000);
+    const statusFilter = request.query.status?.split(',').filter(Boolean) || ['open', 'in_progress'];
+    const priorityFilter = request.query.priority?.split(',').filter(Boolean);
+    const slaStatusFilter = request.query.slaStatus?.split(',').filter(Boolean);
+
+    // Build issue WHERE clause
+    const issueWhere: any = {
+      status: { in: statusFilter },
+      sourceEntityType: 'shipment',
+      sourceEntityId: { not: null },
+    };
+    if (priorityFilter?.length) {
+      issueWhere.priority = { in: priorityFilter };
+    }
+
+    // Fetch issues linked to shipments
+    const issues = await server.prisma.issue.findMany({
+      where: issueWhere,
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        priority: true,
+        category: true,
+        sourceEntityId: true,
+        assigneeName: true,
+        createdAt: true,
+        resolvedAt: true,
+      },
+      take: limit,
+      orderBy: [
+        { priority: 'asc' }, // critical first
+        { createdAt: 'desc' },
+      ],
+    });
+
+    if (issues.length === 0) {
+      return { data: { type: 'FeatureCollection', features: [], total: 0 }, error: null };
+    }
+
+    // Get shipment coordinates in bulk
+    const shipmentIds = [...new Set(issues.map((i) => i.sourceEntityId!))];
+    const shipments = await server.prisma.shipmentReadModel.findMany({
+      where: {
+        id: { in: shipmentIds },
+        currentLat: { not: null },
+        currentLng: { not: null },
+      },
+      select: {
+        id: true,
+        reference: true,
+        currentLat: true,
+        currentLng: true,
+        status: true,
+        customerName: true,
+      },
+    });
+
+    const shipmentMap = new Map(shipments.map((s) => [s.id, s]));
+
+    // Optionally fetch SLA evaluations for these issues
+    let slaByIssue = new Map<string, any[]>();
+    const issueIds = issues.map((i) => i.id);
+    const slaWhere: any = {
+      entityType: 'issue',
+      entityId: { in: issueIds },
+    };
+    if (slaStatusFilter?.length) {
+      slaWhere.status = { in: slaStatusFilter };
+    }
+
+    const slaEvals = await server.prisma.slaEvaluation.findMany({
+      where: slaWhere,
+      select: {
+        id: true,
+        entityId: true,
+        ruleType: true,
+        ruleName: true,
+        status: true,
+        slaDueAt: true,
+        breachedAt: true,
+        remainingMinutes: true,
+      },
+    });
+
+    for (const sla of slaEvals) {
+      const existing = slaByIssue.get(sla.entityId) || [];
+      existing.push(sla);
+      slaByIssue.set(sla.entityId, existing);
+    }
+
+    // Also get SLA evaluations directly linked to shipments (e.g., ETA breaches)
+    const shipmentSlaWhere: any = {
+      entityType: 'shipment',
+      entityId: { in: shipmentIds },
+      status: { in: slaStatusFilter?.length ? slaStatusFilter : ['breached', 'warning'] },
+    };
+
+    const shipmentSlaEvals = await server.prisma.slaEvaluation.findMany({
+      where: shipmentSlaWhere,
+      select: {
+        id: true,
+        entityId: true,
+        ruleType: true,
+        ruleName: true,
+        status: true,
+        slaDueAt: true,
+        breachedAt: true,
+        remainingMinutes: true,
+      },
+    });
+
+    // Build features — one per issue with coordinates from the linked shipment
+    const features: any[] = [];
+
+    for (const issue of issues) {
+      const shipment = shipmentMap.get(issue.sourceEntityId!);
+      if (!shipment) continue; // No coordinates available
+
+      const issueSlas = slaByIssue.get(issue.id) || [];
+      const worstSla = issueSlas.length > 0
+        ? issueSlas.sort((a: any, b: any) => {
+            const order: Record<string, number> = { breached: 0, warning: 1, active: 2, met: 3, cancelled: 4 };
+            return (order[a.status] ?? 5) - (order[b.status] ?? 5);
+          })[0]
+        : null;
+
+      features.push({
+        type: 'Feature',
+        geometry: {
+          type: 'Point',
+          coordinates: [shipment.currentLng!, shipment.currentLat!],
+        },
+        properties: {
+          id: issue.id,
+          type: 'issue',
+          title: issue.title,
+          status: issue.status,
+          priority: issue.priority,
+          category: issue.category,
+          assigneeName: issue.assigneeName,
+          createdAt: issue.createdAt.toISOString(),
+          shipmentId: shipment.id,
+          shipmentReference: shipment.reference,
+          shipmentStatus: shipment.status,
+          customerName: shipment.customerName,
+          slaStatus: worstSla?.status ?? null,
+          slaRuleName: worstSla?.ruleName ?? null,
+          slaDueAt: worstSla?.slaDueAt?.toISOString() ?? null,
+          slaBreachedAt: worstSla?.breachedAt?.toISOString() ?? null,
+          slaRemainingMinutes: worstSla?.remainingMinutes ?? null,
+        },
+      });
+    }
+
+    // Also add shipment-level SLA breaches that don't yet have issues
+    for (const sla of shipmentSlaEvals) {
+      const shipment = shipmentMap.get(sla.entityId);
+      if (!shipment) continue;
+
+      // Skip if we already have an issue feature for this shipment
+      if (features.some((f: any) => f.properties.shipmentId === sla.entityId)) continue;
+
+      features.push({
+        type: 'Feature',
+        geometry: {
+          type: 'Point',
+          coordinates: [shipment.currentLng!, shipment.currentLat!],
+        },
+        properties: {
+          id: sla.id,
+          type: 'sla_breach',
+          title: `${sla.ruleName} — ${sla.status}`,
+          status: sla.status,
+          priority: sla.status === 'breached' ? 'critical' : 'high',
+          category: 'compliance',
+          assigneeName: null,
+          createdAt: sla.breachedAt?.toISOString() ?? null,
+          shipmentId: shipment.id,
+          shipmentReference: shipment.reference,
+          shipmentStatus: shipment.status,
+          customerName: shipment.customerName,
+          slaStatus: sla.status,
+          slaRuleName: sla.ruleName,
+          slaDueAt: sla.slaDueAt?.toISOString() ?? null,
+          slaBreachedAt: sla.breachedAt?.toISOString() ?? null,
+          slaRemainingMinutes: sla.remainingMinutes ?? null,
+        },
+      });
+    }
+
+    return {
+      data: {
+        type: 'FeatureCollection',
+        features,
+        total: features.length,
+      },
+      error: null,
+    };
+  });
 };

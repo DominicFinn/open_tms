@@ -31,6 +31,12 @@ interface GeoFeature {
   properties: Record<string, any>;
 }
 
+interface IssueFeature {
+  type: 'Feature';
+  geometry: { type: 'Point'; coordinates: [number, number] };
+  properties: Record<string, any>;
+}
+
 // Status → CSS variable mapping for markers
 function getStatusColor(status: string): string {
   switch (status) {
@@ -147,6 +153,53 @@ function buildPopupHtml(entityType: EntityType, props: Record<string, any>): str
   `;
 }
 
+function getPriorityColor(priority: string): string {
+  switch (priority) {
+    case 'critical': return 'var(--color-error)';
+    case 'high': return 'var(--color-warning)';
+    case 'medium': return 'var(--color-info)';
+    default: return 'var(--on-surface-variant)';
+  }
+}
+
+function buildIssuePopupHtml(props: Record<string, any>): string {
+  const slaLine = props.slaStatus
+    ? `<div style="margin-top:4px;padding:4px 8px;border-radius:4px;font-size:11px;font-weight:600;
+        background:${props.slaStatus === 'breached' ? 'var(--color-error)' : props.slaStatus === 'warning' ? 'var(--color-warning)' : 'var(--color-info)'};
+        color:#fff;">
+        SLA: ${props.slaRuleName} — ${props.slaStatus.toUpperCase()}
+        ${props.slaRemainingMinutes != null ? ` (${props.slaRemainingMinutes}m remaining)` : ''}
+        ${props.slaBreachedAt ? ` — breached ${new Date(props.slaBreachedAt).toLocaleString()}` : ''}
+      </div>`
+    : '';
+
+  return `
+    <div style="min-width:240px;font-family:var(--font-family,Roboto,sans-serif)">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+        <span class="material-icons" style="font-size:18px;color:${getPriorityColor(props.priority)}">
+          ${props.type === 'sla_breach' ? 'timer_off' : 'bug_report'}
+        </span>
+        <strong style="font-size:13px">${props.title}</strong>
+      </div>
+      <div style="font-size:12px;color:var(--on-surface-variant);line-height:1.6">
+        <div><strong>Priority:</strong> <span style="color:${getPriorityColor(props.priority)};font-weight:600">${props.priority}</span></div>
+        <div><strong>Status:</strong> ${props.status.replace(/_/g, ' ')}</div>
+        <div><strong>Category:</strong> ${props.category}</div>
+        ${props.assigneeName ? `<div><strong>Assigned:</strong> ${props.assigneeName}</div>` : '<div style="color:var(--color-warning)">Unassigned</div>'}
+        <div style="margin-top:4px;border-top:1px solid var(--outline-variant);padding-top:4px">
+          <strong>Shipment:</strong> ${props.shipmentReference} (${props.shipmentStatus})
+        </div>
+        ${props.customerName ? `<div><strong>Customer:</strong> ${props.customerName}</div>` : ''}
+      </div>
+      ${slaLine}
+      <div style="display:flex;gap:12px;margin-top:8px">
+        <a href="/issues" style="font-size:12px;color:var(--primary);text-decoration:none">Issues &rarr;</a>
+        <a href="/shipments/${props.shipmentId}" style="font-size:12px;color:var(--primary);text-decoration:none">Shipment &rarr;</a>
+      </div>
+    </div>
+  `;
+}
+
 export default function VNextShipmentMap() {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<L.Map | null>(null);
@@ -159,6 +212,12 @@ export default function VNextShipmentMap() {
   const [truncated, setTruncated] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+
+  // Issue/SLA overlay state
+  const [showIssues, setShowIssues] = useState(false);
+  const [issueFeatures, setIssueFeatures] = useState<IssueFeature[]>([]);
+  const [issueCount, setIssueCount] = useState(0);
+  const issuesLayer = useRef<L.LayerGroup | null>(null);
 
   // Supercluster instance — memoised on feature data
   const cluster = useMemo(() => {
@@ -235,6 +294,7 @@ export default function VNextShipmentMap() {
     }).addTo(map);
 
     markersLayer.current = L.layerGroup().addTo(map);
+    issuesLayer.current = L.layerGroup().addTo(map);
     mapInstance.current = map;
 
     // Fetch on map move (debounced)
@@ -360,6 +420,79 @@ export default function VNextShipmentMap() {
     return () => { map.off('zoomend', onZoom); };
   }, []);
 
+  // Fetch and render issue/SLA overlay
+  useEffect(() => {
+    if (!showIssues || !mapInstance.current || !issuesLayer.current) {
+      issuesLayer.current?.clearLayers();
+      return;
+    }
+
+    let cancelled = false;
+
+    async function fetchIssues() {
+      try {
+        const res = await fetch(`${API_URL}/api/v1/map/issues?status=open,in_progress&limit=500`);
+        if (!res.ok || cancelled) return;
+        const json = await res.json();
+        const feats = json.data?.features || [];
+        if (!cancelled) {
+          setIssueFeatures(feats);
+          setIssueCount(json.data?.total || 0);
+        }
+      } catch (err) {
+        console.error('[Map] Issue overlay fetch error:', err);
+      }
+    }
+
+    fetchIssues();
+    return () => { cancelled = true; };
+  }, [showIssues]);
+
+  // Render issue markers onto their own layer
+  useEffect(() => {
+    if (!issuesLayer.current) return;
+    const layer = issuesLayer.current;
+    layer.clearLayers();
+
+    if (!showIssues) return;
+
+    for (const feat of issueFeatures) {
+      const [lng, lat] = feat.geometry.coordinates;
+      const props = feat.properties;
+      const isBreach = props.slaStatus === 'breached';
+      const isWarning = props.slaStatus === 'warning';
+      const color = isBreach ? 'var(--color-error)' : isWarning ? 'var(--color-warning)' : getPriorityColor(props.priority);
+      const icon = props.type === 'sla_breach' ? 'timer_off' : 'bug_report';
+      const pulseClass = isBreach ? 'issue-pulse-breach' : isWarning ? 'issue-pulse-warning' : '';
+
+      const marker = L.marker([lat, lng], {
+        icon: L.divIcon({
+          className: 'map-issue',
+          html: `<div class="${pulseClass}" style="
+            width:28px;height:28px;
+            border-radius:50%;
+            background:${color};
+            color:#fff;
+            display:flex;align-items:center;justify-content:center;
+            border:2px solid var(--surface);
+            box-shadow:0 0 0 3px ${isBreach ? 'var(--color-error)' : isWarning ? 'var(--color-warning)' : 'transparent'},
+                        0 2px 6px rgba(0,0,0,0.3);
+          "><span class="material-icons" style="font-size:16px">${icon}</span></div>`,
+          iconSize: [28, 28],
+          iconAnchor: [14, 14],
+        }),
+        zIndexOffset: 1000, // Issues render above shipments
+      });
+
+      marker.bindPopup(buildIssuePopupHtml(props), {
+        maxWidth: 300,
+        className: 'map-popup',
+      });
+
+      marker.addTo(layer);
+    }
+  }, [issueFeatures, showIssues]);
+
   const shipmentStatuses = ['draft', 'dispatched', 'in_transit', 'delivered', 'exception'];
 
   return (
@@ -436,6 +569,30 @@ export default function VNextShipmentMap() {
           </div>
         )}
 
+        {/* Issue/SLA overlay toggle */}
+        <button
+          onClick={() => setShowIssues((prev) => !prev)}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            padding: '4px 12px',
+            fontSize: '12px',
+            fontWeight: 600,
+            borderRadius: '12px',
+            border: `1px solid ${showIssues ? 'var(--color-error)' : 'var(--outline-variant)'}`,
+            background: showIssues ? 'var(--color-error)' : 'transparent',
+            color: showIssues ? '#fff' : 'var(--on-surface-variant)',
+            cursor: 'pointer',
+            marginLeft: entityType !== 'shipments' ? '8px' : '0',
+          }}
+        >
+          <span className="material-icons" style={{ fontSize: '16px' }}>
+            {showIssues ? 'notifications_active' : 'notifications_none'}
+          </span>
+          Issues{issueCount > 0 && showIssues ? ` (${issueCount})` : ''}
+        </button>
+
         {/* Right side: stats */}
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '12px', fontSize: '13px', color: 'var(--on-surface-variant)' }}>
           {loading && (
@@ -487,17 +644,42 @@ export default function VNextShipmentMap() {
               <span style={{ color: 'var(--on-surface-variant)' }}>{item.label}</span>
             </div>
           ))}
+          {showIssues && (
+            <>
+              <div style={{ borderTop: '1px solid var(--outline-variant)', margin: '6px 0', paddingTop: '6px', fontWeight: 600, color: 'var(--on-surface)' }}>Issues / SLA</div>
+              {[
+                { label: 'SLA Breached', color: 'var(--color-error)', icon: 'timer_off' },
+                { label: 'SLA Warning', color: 'var(--color-warning)', icon: 'timer_off' },
+                { label: 'Open Issue', color: 'var(--color-info)', icon: 'bug_report' },
+              ].map((item) => (
+                <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
+                  <span className="material-icons" style={{ fontSize: '16px', color: item.color }}>{item.icon}</span>
+                  <span style={{ color: 'var(--on-surface-variant)' }}>{item.label}</span>
+                </div>
+              ))}
+            </>
+          )}
         </div>
       )}
 
       {/* Spin keyframe */}
       <style>{`
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes pulse-breach {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(244, 67, 54, 0.6); }
+          50% { box-shadow: 0 0 0 10px rgba(244, 67, 54, 0); }
+        }
+        @keyframes pulse-warning {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(255, 152, 0, 0.5); }
+          50% { box-shadow: 0 0 0 8px rgba(255, 152, 0, 0); }
+        }
+        .issue-pulse-breach { animation: pulse-breach 2s ease-in-out infinite; }
+        .issue-pulse-warning { animation: pulse-warning 2.5s ease-in-out infinite; }
         .map-popup .leaflet-popup-content-wrapper {
           border-radius: 8px;
           box-shadow: 0 4px 12px rgba(0,0,0,0.15);
         }
-        .map-cluster, .map-point {
+        .map-cluster, .map-point, .map-issue {
           background: transparent !important;
           border: none !important;
         }
