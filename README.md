@@ -62,6 +62,10 @@ Deploy your own Open TMS instance with one click:
 - **ETA Monitoring** - Cron-driven shipment delay detection using traffic-aware routing APIs (TomTom, HERE, Valhalla), adaptive polling, configurable alert thresholds, and automatic notifications
 - **Agent Decision Logging (AI compliance & audit)** - Full audit trail for AI agent decisions with outcome recording, decision promotion, and read model projections for compliance review
 - **AI Triage Agent** - Event-driven agent that uses Claude to triage shipment exceptions, SLA breaches, cargo issues, and cold chain excursions. Automatically creates or escalates issues with full decision logging for compliance
+- **Configurable Agent Prompts** - Per-org prompt templates with immutable versioning, template variables (`{{shipment}}`, `{{event}}`, etc.), event subscription checkboxes, confidence thresholds, and instant rollback
+- **LLM Key Management** - Bring-your-own Anthropic API key configured via admin UI, with token tracking, usage telemetry charts, and org-level enable/disable toggle
+- **Automation Rule Engine** - Deterministic When/Given/Then rules promoted from proven agent decisions. Condition evaluator with 10 operators, priority ordering, first-match execution. Zero LLM cost for automated patterns
+- **Skills System** - Extensible action framework with 4 built-in skills (Create Issue, Escalate Issue, Send Email, Call Webhook). Skill chains with question branching, template field resolution, and org-level skill configuration
 - **Location Operations** - Per-location dashboards showing incoming, at-dock, and outgoing shipments with dwell time monitoring. Facility capability display (cross-dock, cold storage, hazmat, docks). Map integration via location marker popups.
 
 ### 🎨 Modern UI/UX

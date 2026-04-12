@@ -227,6 +227,43 @@ Agent behaviour is configurable per-org via `AgentConfig` + versioned prompts (`
 - `backend/src/__tests__/commands/AgentDecisionCommands.test.ts` — Command handler tests
 - `backend/src/__tests__/projections/AgentDecisionProjection.test.ts` — Projection tests
 
+### Automation Rule Engine
+Deterministic rules promoted from agent decisions. Rules use the same unified condition format (`{field, operator, value}`) as agent-extracted conditions. When a rule matches an event, it executes instantly without an LLM call. Rules suppress the triage agent for matched events via deduplication markers.
+
+**Condition evaluation:** `ConditionEvaluator` supports operators: `equals`, `notEquals`, `contains`, `in`, `greaterThan`, `lessThan`, `greaterThanOrEqual`, `lessThanOrEqual`, `exists`, `notExists`. Handles nested field paths (`payload.delayMinutes`, `context.shipment.status`).
+
+**Rule priority:** Rules are evaluated in priority order (1-100, lower first). First matching rule executes, remaining are skipped.
+
+**Promote flow:** When a user promotes an agent decision, the `matchedConditions` from the LLM response are extracted and pre-fill the automation rule. The `POST /api/v1/automation-rules/from-decision/:id` endpoint handles this.
+
+### Skills System
+Extensible action framework. Skills are discrete, configurable action units with templated fields.
+
+**ISkill interface:** Each skill has a `definition` (fields, configSchema, requiresConfig), `validateConfig()`, and `execute()` method. New skills are registered in the `SkillRegistry`.
+
+**Built-in skills:** `create_issue`, `escalate_issue`, `send_email` (requires email config), `call_webhook` (requires URL config).
+
+**Template resolver:** All skill fields support `{{field.path}}` syntax resolved against event + context data. Same variable format as agent prompts.
+
+**Skill chains:** Ordered sequences of skills with question branching. Question nodes evaluate conditions (same `RuleCondition` format) and follow matched/unmatched branches. `SkillChainExecutor` walks the chain.
+
+**Skill config:** Org-level configuration for skills that need API keys, webhook URLs, etc. Managed via `/settings/skills` admin page.
+
+### Key Files (Automation & Skills)
+- `backend/src/services/automation/ConditionEvaluator.ts` — Condition evaluation engine
+- `backend/src/events/handlers/AutomationRuleHandler.ts` — Rule evaluation + skill dispatch
+- `backend/src/routes/automationRules.ts` — Automation rules CRUD + promote + test
+- `backend/src/services/skills/ISkill.ts` — Skill interfaces and chain step types
+- `backend/src/services/skills/SkillRegistry.ts` — Skill catalog singleton
+- `backend/src/services/skills/SkillChainExecutor.ts` — Chain execution with branching
+- `backend/src/services/skills/TemplateResolver.ts` — `{{field.path}}` template resolution
+- `backend/src/services/skills/CreateIssueSkill.ts` — Create issue skill
+- `backend/src/services/skills/SendEmailSkill.ts` — Send email skill
+- `backend/src/services/skills/CallWebhookSkill.ts` — Webhook skill
+- `backend/src/routes/skills.ts` — Skills catalog + config + chains API
+- `backend/src/__tests__/services/ConditionEvaluator.test.ts` — 18 evaluator tests
+- `backend/src/__tests__/services/SkillChainExecutor.test.ts` — 13 chain executor tests
+
 ## Carrier Tendering
 
 ### Architecture

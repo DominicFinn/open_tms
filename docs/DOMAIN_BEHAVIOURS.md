@@ -797,3 +797,52 @@ The Triage Agent is an AI event handler (`TriageAgentHandler`) that subscribes t
 7. Logs the full decision via `CreateAgentDecisionCommand`
 
 **Configuration:** Set `ANTHROPIC_API_KEY` env var to enable. Optionally set `ANTHROPIC_MODEL` (default: `claude-sonnet-4-20250514`) and `AGENT_TRIAGE_CONCURRENCY` (default: 2).
+
+### Configurable Agent Prompts
+
+Agent behaviour is configurable per-org via `AgentConfig` + versioned prompts (`AgentConfigVersion`). Each prompt change creates an immutable version linked to decisions via `promptVersionId`.
+
+| Setting | Type | Default |
+|---------|------|---------|
+| System prompt | Text with `{{template}}` vars | Hardcoded triage prompt |
+| Subscribed events | String[] | 6 exception events |
+| Temperature | Float 0-1 | 0.2 |
+| Max tokens | Int | 512 |
+| Confidence threshold | Float 0-1 | 0 (accept all) |
+| Deduplication window | Int (minutes) | 30 |
+
+### Automation Rules
+
+Deterministic rules promoted from agent decisions or created manually. Uses the same unified condition format as agent-extracted conditions.
+
+| API | Method | Purpose |
+|-----|--------|---------|
+| `/api/v1/automation-rules` | GET | List rules |
+| `/api/v1/automation-rules` | POST | Create rule |
+| `/api/v1/automation-rules/:id` | PUT | Update rule |
+| `/api/v1/automation-rules/:id/toggle` | POST | Enable/disable |
+| `/api/v1/automation-rules/:id/test` | POST | Dry-run against sample event |
+| `/api/v1/automation-rules/from-decision/:id` | POST | Create rule from promoted decision |
+
+**Condition format:** `[{ field: "payload.delayMinutes", operator: "greaterThan", value: 60 }]`
+
+**Operators:** equals, notEquals, contains, in, greaterThan, lessThan, greaterThanOrEqual, lessThanOrEqual, exists, notExists
+
+**Rule suppresses agent:** When a rule matches, it writes an AgentDecision marker that prevents the triage agent from processing the same event (deduplication).
+
+### Skills System
+
+Extensible action framework for automation rules and skill chains.
+
+**Built-in skills:**
+
+| Skill | Category | Config Required | Fields |
+|-------|----------|----------------|--------|
+| `create_issue` | triage | No | title, description, priority, category |
+| `escalate_issue` | triage | No | issueId, escalatedTo, reason |
+| `send_email` | communication | Yes (SMTP) | to, subject, body |
+| `call_webhook` | integration | Yes (URL+auth) | body |
+
+**Skill chains:** Ordered sequences of skill steps with question branching. Question nodes evaluate conditions and follow matched/unmatched branches. Steps support `{{template}}` variable syntax.
+
+**Skill config:** Org-level configuration for skills needing API keys or webhook URLs. Managed via `SkillConfig` model and `/settings/skills` admin page.

@@ -231,6 +231,91 @@ export default function AiAgents() {
         </div>
       </section>
 
+      {/* Skills system */}
+      <section className="pb-24">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <AnimateIn animation="fade-up">
+            <h2 className="text-3xl font-bold text-white mb-4">The skills system</h2>
+            <p className="text-surface-400 text-lg mb-12 max-w-3xl">
+              Skills are composable action units. Each skill does one thing well - create an issue, send an email, call a webhook.
+              Chain them together with question branching for complex multi-step responses.
+            </p>
+          </AnimateIn>
+
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {[
+              { icon: 'bug_report', name: 'Create Issue', desc: 'Create a triage issue with templated title, description, priority, and category', config: false },
+              { icon: 'priority_high', name: 'Escalate Issue', desc: 'Escalate an existing issue to critical priority with a reason', config: false },
+              { icon: 'email', name: 'Send Email', desc: 'Send templated emails via your configured SMTP service', config: true },
+              { icon: 'webhook', name: 'Call Webhook', desc: 'HTTP POST/PUT to external APIs with auth and templated body', config: true },
+            ].map((skill, i) => (
+              <AnimateIn key={i} animation="scale-up" delay={i * 100}>
+                <div className="glass-card rounded-2xl p-6 h-full">
+                  <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl mb-4" style={{ background: 'rgba(139,92,246,0.15)', color: 'rgb(167,139,250)' }}>
+                    <span className="material-icons">{skill.icon}</span>
+                  </div>
+                  <h3 className="text-base font-semibold text-white mb-2">{skill.name}</h3>
+                  <p className="text-surface-400 text-sm leading-relaxed mb-3">{skill.desc}</p>
+                  <span className="text-xs" style={{ color: skill.config ? 'rgb(251,191,36)' : 'rgb(74,222,128)' }}>
+                    {skill.config ? 'Requires configuration' : 'Works out of the box'}
+                  </span>
+                </div>
+              </AnimateIn>
+            ))}
+          </div>
+
+          <AnimateIn animation="fade-up" delay={400}>
+            <div className="glass-card rounded-2xl p-8 mt-8">
+              <h3 className="text-lg font-semibold text-white mb-3">Skill chains with branching</h3>
+              <p className="text-surface-300 leading-relaxed mb-4">
+                Chain skills together in sequences with question nodes. A question evaluates conditions against the event data
+                and branches to different skill paths. For example: create an issue, then ask "is this a cold chain excursion?" -
+                if yes, send an urgent email to the quality team and call the compliance webhook. If no, just send a notification.
+              </p>
+              <p className="text-surface-400 text-sm">
+                All skill fields support template variables like {'{{payload.shipmentReference}}'} and {'{{context.shipment.customerName}}'} -
+                resolved at runtime from the triggering event data.
+              </p>
+            </div>
+          </AnimateIn>
+        </div>
+      </section>
+
+      {/* Configurable prompts */}
+      <section className="pb-24">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <AnimateIn animation="fade-up">
+            <div
+              className="rounded-2xl p-8"
+              style={{
+                background: 'linear-gradient(135deg, rgba(16,185,129,0.08), rgba(59,130,246,0.08))',
+                borderLeft: '4px solid rgba(16,185,129,0.6)',
+              }}
+            >
+              <div className="flex items-start gap-4">
+                <div className="shrink-0 mt-0.5">
+                  <svg className="h-7 w-7 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white mb-2">Configurable agent prompts</h3>
+                  <p className="text-surface-300 text-base leading-relaxed mb-4">
+                    Every agent's system prompt is fully editable through the admin UI. Template variables like {'{{shipment}}'}, {'{{event}}'}, and {'{{sla_status}}'} inject
+                    real context data at runtime. Change how aggressive the agent is, what it prioritises, or add industry-specific guidelines.
+                  </p>
+                  <p className="text-surface-300 text-base leading-relaxed">
+                    Every prompt change creates an immutable version. Each decision links to the version that produced it.
+                    If a prompt change makes things worse, roll back to any previous version instantly. The version history gives you
+                    evidence for which prompt performed best.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </AnimateIn>
+        </div>
+      </section>
+
       {/* How it works */}
       <section className="pb-24">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">

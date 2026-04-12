@@ -570,20 +570,47 @@ The current EDI infrastructure handles inbound 850 (SFTP polling) and outbound 8
   - ✅ CQRS commands: CreateAgentDecision, RecordDecisionOutcome, PromoteDecision
   - ✅ Domain events: agent_decision.created, outcome_recorded, promoted
   - ✅ AgentDecisionReadModel projection with full audit trail
-- **AI Triage Agent** (partial)
+- **AI Triage Agent** ✅
   - ✅ ILlmProvider interface - provider-agnostic LLM abstraction
   - ✅ AnthropicLlmProvider - Claude integration via Anthropic SDK
   - ✅ TriageAgentHandler - event-driven AI triage (shipment.exception, sla.breached, cargo issues, cold chain)
   - ✅ Context gathering: shipment details, open issues, SLA evaluations
-  - ✅ Structured LLM prompting with JSON response parsing
+  - ✅ Structured LLM prompting with JSON response parsing + unified condition extraction
   - ✅ Action execution: create_issue, escalate_issue, no_action
-  - ✅ Decision logging via AgentDecision with full conversation log
-  - ✅ 30-min deduplication window to prevent duplicate decisions
+  - ✅ Decision logging via AgentDecision with full conversation log and matchedConditions
+  - ✅ 30-min configurable deduplication window
   - ✅ Worker-local CommandBus for agent action dispatch
-  - AgentConfig model: configurable prompts, LLM provider settings (LLM-independent) 🔲
-  - User-configurable agent setup (prompt editing, behaviour tuning) 🔲
+- **Configurable Agent Prompts** ✅
+  - ✅ AgentConfig model with per-org settings (subscribed events, temperature, maxTokens, confidence threshold)
+  - ✅ AgentConfigVersion - immutable prompt versioning with change notes and rollback
+  - ✅ Template variables: {{event}}, {{shipment}}, {{issues}}, {{sla_status}}
+  - ✅ Admin UI at /settings/agents with prompt editor, variable insertion, preview, version history
+  - ✅ Auto-seed default config on first worker startup
+- **LLM Key Management** ✅
+  - ✅ Organization model: llmProvider, llmApiKey, llmModel, llmEnabled
+  - ✅ Admin UI at /settings/llm with masked key display, env var detection, cost warning
+  - ✅ Token tracking: inputTokens, outputTokens, durationMs per decision
+  - ✅ Usage telemetry: daily usage chart, total token stats, invocations per day
+  - ✅ Worker reads org config with env var fallback
+- **Automation Rule Engine** ✅
+  - ✅ ConditionEvaluator with 10 operators and nested field path resolution
+  - ✅ AutomationRuleHandler - higher priority than triage agent, first-match execution
+  - ✅ Unified condition format shared between agent decisions and rules
+  - ✅ Rules suppress agent via deduplication markers (no handler coupling)
+  - ✅ Promote flow: decision matchedConditions auto-fill rule creation
+  - ✅ API: CRUD, toggle, test/dry-run, from-decision promote, execution log
+  - ✅ Frontend at /automation-rules with When/Given/Then form builder
+- **Skills System** ✅
+  - ✅ ISkill interface with definition (fields, configSchema), validateConfig, execute
+  - ✅ SkillRegistry singleton for dynamic skill catalog
+  - ✅ 4 built-in skills: CreateIssue, EscalateIssue, SendEmail, CallWebhook
+  - ✅ TemplateResolver for {{field.path}} syntax in skill fields
+  - ✅ SkillChainExecutor with question branching (conditions -> Yes/No -> nested steps)
+  - ✅ SkillConfig model for org-level skill configuration (API keys, webhook URLs)
+  - ✅ SkillChain model for reusable action sequences
+  - ✅ Admin UI at /settings/skills with skill catalog and config forms
+  - Visual node builder for skill chains (drag-and-drop flowchart UI) 🔲
   - Self-improving prompts: track agent suggestions vs human overrides, auto-refine prompts 🔲
-  - Agent action execution via N8N workflow integration (Phase 8) 🔲
 - **Carrier & Lane Performance Scoring** 🔲
   - On-time %, damage %, excursion rate
   - Route adherence scoring from Phase 9 data
