@@ -88,7 +88,7 @@ export const mapRoutes: FastifyPluginAsync = async (server) => {
       where.status = { in: statusFilter };
     }
 
-    const [shipments, total] = await Promise.all([
+    const [readModels, total] = await Promise.all([
       server.prisma.shipmentReadModel.findMany({
         where,
         select: {
@@ -115,6 +115,25 @@ export const mapRoutes: FastifyPluginAsync = async (server) => {
       server.prisma.shipmentReadModel.count({ where }),
     ]);
 
+    // Enrich with origin/destination coordinates for route arcs
+    const shipmentIds = readModels.map((s) => s.id);
+    const routeData = shipmentIds.length > 0
+      ? await server.prisma.shipment.findMany({
+          where: { id: { in: shipmentIds } },
+          select: {
+            id: true,
+            origin: { select: { lat: true, lng: true } },
+            destination: { select: { lat: true, lng: true } },
+          },
+        })
+      : [];
+    const routeMap = new Map(routeData.map((r) => [r.id, r]));
+
+    const shipments = readModels.map((s) => {
+      const route = routeMap.get(s.id);
+      return { ...s, route };
+    });
+
     // Return GeoJSON FeatureCollection for direct use with map libraries
     const features = shipments.map((s) => ({
       type: 'Feature' as const,
@@ -137,6 +156,11 @@ export const mapRoutes: FastifyPluginAsync = async (server) => {
         lastLocationAt: s.lastLocationAt?.toISOString() ?? null,
         pickupDate: s.pickupDate?.toISOString() ?? null,
         deliveryDate: s.deliveryDate?.toISOString() ?? null,
+        // Route coordinates for arc rendering
+        originLat: s.route?.origin?.lat ?? null,
+        originLng: s.route?.origin?.lng ?? null,
+        destLat: s.route?.destination?.lat ?? null,
+        destLng: s.route?.destination?.lng ?? null,
       },
     }));
 

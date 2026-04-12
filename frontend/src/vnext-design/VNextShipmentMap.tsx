@@ -224,6 +224,10 @@ export default function VNextShipmentMap() {
   const [showLocations, setShowLocations] = useState(false);
   const locationsLayer = useRef<L.LayerGroup | null>(null);
 
+  // Route arcs overlay
+  const [showRoutes, setShowRoutes] = useState(false);
+  const routesLayer = useRef<L.LayerGroup | null>(null);
+
   // Fullscreen and auto-refresh
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(false);
@@ -306,6 +310,7 @@ export default function VNextShipmentMap() {
     }).addTo(map);
 
     markersLayer.current = L.layerGroup().addTo(map);
+    routesLayer.current = L.layerGroup().addTo(map);
     issuesLayer.current = L.layerGroup().addTo(map);
     locationsLayer.current = L.layerGroup().addTo(map);
     mapInstance.current = map;
@@ -619,6 +624,55 @@ export default function VNextShipmentMap() {
     return () => { cancelled = true; };
   }, [showLocations]);
 
+  // Route arcs: draw straight lines from origin → current position → destination
+  useEffect(() => {
+    if (!routesLayer.current) return;
+    routesLayer.current.clearLayers();
+
+    if (!showRoutes || entityType !== 'shipments') return;
+
+    for (const feat of features) {
+      const props = feat.properties;
+      const [curLng, curLat] = feat.geometry.coordinates;
+      const oLat = props.originLat;
+      const oLng = props.originLng;
+      const dLat = props.destLat;
+      const dLng = props.destLng;
+
+      if (!oLat || !oLng || !dLat || !dLng) continue;
+
+      // Only show routes for active shipments
+      if (!['in_transit', 'dispatched'].includes(props.status)) continue;
+
+      // Origin → current position (solid line, traveled portion)
+      const traveledLine = L.polyline(
+        [[oLat, oLng], [curLat, curLng]],
+        { color: 'var(--color-info)', weight: 2, opacity: 0.6 }
+      );
+
+      // Current position → destination (dashed line, remaining portion)
+      const remainingLine = L.polyline(
+        [[curLat, curLng], [dLat, dLng]],
+        { color: 'var(--color-info)', weight: 2, opacity: 0.4, dashArray: '6, 8' }
+      );
+
+      // Small origin/destination markers
+      const originDot = L.circleMarker([oLat, oLng], {
+        radius: 4, fillColor: 'var(--marker-origin)', fillOpacity: 0.8,
+        stroke: true, weight: 1, color: '#fff',
+      });
+      const destDot = L.circleMarker([dLat, dLng], {
+        radius: 4, fillColor: 'var(--marker-destination)', fillOpacity: 0.8,
+        stroke: true, weight: 1, color: '#fff',
+      });
+
+      traveledLine.addTo(routesLayer.current!);
+      remainingLine.addTo(routesLayer.current!);
+      originDot.addTo(routesLayer.current!);
+      destDot.addTo(routesLayer.current!);
+    }
+  }, [features, showRoutes, entityType]);
+
   const shipmentStatuses = ['draft', 'dispatched', 'in_transit', 'delivered', 'exception'];
 
   return (
@@ -693,6 +747,29 @@ export default function VNextShipmentMap() {
               </button>
             )}
           </div>
+        )}
+
+        {/* Routes overlay toggle */}
+        {entityType === 'shipments' && (
+          <button
+            onClick={() => setShowRoutes((prev) => !prev)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '4px 12px',
+              fontSize: '12px',
+              fontWeight: 600,
+              borderRadius: '12px',
+              border: `1px solid ${showRoutes ? 'var(--color-info)' : 'var(--outline-variant)'}`,
+              background: showRoutes ? 'var(--color-info)' : 'transparent',
+              color: showRoutes ? '#fff' : 'var(--on-surface-variant)',
+              cursor: 'pointer',
+            }}
+          >
+            <span className="material-icons" style={{ fontSize: '16px' }}>route</span>
+            Routes
+          </button>
         )}
 
         {/* Locations overlay toggle */}
@@ -831,6 +908,18 @@ export default function VNextShipmentMap() {
               <span style={{ color: 'var(--on-surface-variant)' }}>{item.label}</span>
             </div>
           ))}
+          {showRoutes && (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
+                <div style={{ width: '16px', height: '2px', background: 'var(--color-info)' }} />
+                <span style={{ color: 'var(--on-surface-variant)' }}>Traveled</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
+                <div style={{ width: '16px', height: '2px', background: 'var(--color-info)', opacity: 0.4, borderTop: '2px dashed var(--color-info)' }} />
+                <span style={{ color: 'var(--on-surface-variant)' }}>Remaining</span>
+              </div>
+            </>
+          )}
           {showLocations && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
               <span className="material-icons" style={{ fontSize: '16px', color: 'var(--primary)' }}>warehouse</span>
