@@ -202,6 +202,18 @@ export const EVENT_TYPES = {
 
   // Financial: Billing Triggers
   SHIPMENT_READY_TO_INVOICE: 'shipment.ready_to_invoice',
+
+  // Quality Centre: CAPA Follow-ups
+  CAPA_FOLLOW_UP_CREATED: 'capa.follow_up_created',
+  CAPA_FOLLOW_UP_COMPLETED: 'capa.follow_up_completed',
+  CAPA_FOLLOW_UP_OVERDUE: 'capa.follow_up_overdue',
+
+  // Quality Centre: SOP / GDP Audits
+  SOP_CHECKLIST_CREATED: 'sop_checklist.created',
+  SOP_CHECKLIST_UPDATED: 'sop_checklist.updated',
+  SOP_AUDIT_STARTED: 'sop_audit.started',
+  SOP_AUDIT_COMPLETED: 'sop_audit.completed',
+  SOP_AUDIT_FAILED: 'sop_audit.failed',
 } as const;
 
 export type EventType = typeof EVENT_TYPES[keyof typeof EVENT_TYPES];
@@ -327,6 +339,15 @@ export const EVENT_SCHEMA_VERSIONS: Record<string, number> = {
   [EVENT_TYPES.CARRIER_TRACKING_UPDATE_RECEIVED]: 1,
   [EVENT_TYPES.CARRIER_TRACKING_DELIVERED]: 1,
   [EVENT_TYPES.CARRIER_TRACKING_EXCEPTION]: 1,
+  // Quality Centre
+  [EVENT_TYPES.CAPA_FOLLOW_UP_CREATED]: 1,
+  [EVENT_TYPES.CAPA_FOLLOW_UP_COMPLETED]: 1,
+  [EVENT_TYPES.CAPA_FOLLOW_UP_OVERDUE]: 1,
+  [EVENT_TYPES.SOP_CHECKLIST_CREATED]: 1,
+  [EVENT_TYPES.SOP_CHECKLIST_UPDATED]: 1,
+  [EVENT_TYPES.SOP_AUDIT_STARTED]: 1,
+  [EVENT_TYPES.SOP_AUDIT_COMPLETED]: 1,
+  [EVENT_TYPES.SOP_AUDIT_FAILED]: 1,
 };
 
 /**

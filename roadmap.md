@@ -303,6 +303,16 @@
   - ✅ Device calibration tracking (certificate, expiry, accuracy)
 - **CAPA Reports** ✅
   - ✅ CAPA report model and management UI
+- **Quality Centre** ✅
+  - ✅ Quality Centre dashboard with issue analytics and trends
+  - ✅ QualityIssueSummary aggregated read model (by carrier, lane, location, customer)
+  - ✅ CAPA follow-up notes system (30/60/90 day reviews with outcomes)
+  - ✅ SOP checklists and GDP audit management (create, schedule, complete)
+  - ✅ Carrier quality scorecard and lane quality analysis reports
+  - ✅ CAPA effectiveness report with follow-up completion rates
+  - ✅ Quality Centre as dedicated app in app switcher
+  - ✅ Create CAPA from Triage Centre issue detail
+  - ✅ SOP audit scoring with critical item failure detection
 - **Admin & Frontend** ✅
   - ✅ Admin setting: auto-deliver shipment docs to customers
   - ✅ Frontend: Cold chain profiles page (VNext)

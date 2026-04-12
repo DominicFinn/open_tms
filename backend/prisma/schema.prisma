@@ -2541,6 +2541,9 @@ model CAPAReport {
   effectivenessCheck  String?
   lessonsLearned      String?
 
+  // Follow-up notes (30/60/90 day reviews)
+  followUps           CAPAFollowUp[]
+
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
   createdBy           String?
@@ -3561,4 +3564,209 @@ model LaneRoute {
   updatedAt       DateTime @updatedAt
 
   @@index([orgId])
+}
+
+// ─── Quality Centre ────────────────────────────────────────────────────────────
+// Read models and support tables for the Quality Centre dashboard.
+// Provides aggregated quality metrics by carrier, lane, location, and customer.
+
+model QualityIssueSummary {
+  id                String    @id @default(uuid())
+  orgId             String
+
+  // Dimension - which entity this row aggregates for
+  dimensionType     String                          // "carrier", "lane", "location", "customer"
+  dimensionId       String                          // ID of the carrier/lane/location/customer
+  dimensionName     String                          // Cached display name
+
+  // Counts by category
+  totalIssues       Int       @default(0)
+  exceptionCount    Int       @default(0)
+  delayCount        Int       @default(0)
+  damageCount       Int       @default(0)
+  complianceCount   Int       @default(0)
+  otherCount        Int       @default(0)
+
+  // Counts by priority
+  criticalCount     Int       @default(0)
+  highCount         Int       @default(0)
+  mediumCount       Int       @default(0)
+  lowCount          Int       @default(0)
+
+  // Counts by status
+  openCount         Int       @default(0)
+  inProgressCount   Int       @default(0)
+  resolvedCount     Int       @default(0)
+  closedCount       Int       @default(0)
+
+  // Quality indicators
+  capaCount         Int       @default(0)           // Issues flagged needsCapa
+  avgResolutionHours Float?                         // Average time to resolve (hours)
+  lastIssueAt      DateTime?                        // When the most recent issue was created
+
+  // Period tracking - rolling window
+  periodStart       DateTime?                       // Start of the aggregation window (null = all-time)
+  periodEnd         DateTime?                       // End of the aggregation window
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@unique([orgId, dimensionType, dimensionId])
+  @@index([orgId, dimensionType])
+  @@index([orgId, totalIssues])
+  @@index([lastIssueAt])
+}
+
+// ─── CAPA Follow-Up Notes ──────────────────────────────────────────────────────
+// Contact-management-style follow-up system for CAPA reports.
+// Supports 30/60/90 day reviews and ad-hoc notes.
+
+model CAPAFollowUp {
+  id              String    @id @default(uuid())
+  orgId           String
+  capaReportId    String
+  capaReport      CAPAReport @relation(fields: [capaReportId], references: [id], onDelete: Cascade)
+
+  // Follow-up details
+  followUpType    String                          // "30_day", "60_day", "90_day", "ad_hoc", "effectiveness_check"
+  dueDate         DateTime
+  completedAt     DateTime?
+  status          String    @default("pending")   // pending, completed, overdue, skipped
+
+  // Content
+  notes           String?
+  outcome         String?                         // "on_track", "needs_attention", "escalated", "closed_effective", "closed_ineffective"
+  actionItems     String?                         // Free-text follow-up actions
+
+  // Who
+  assigneeId      String?
+  assigneeName    String?
+  completedById   String?
+  completedByName String?
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  createdBy       String?
+
+  @@index([orgId])
+  @@index([capaReportId])
+  @@index([dueDate])
+  @@index([status])
+}
+
+// ─── SOP / GDP Audit Checklists ────────────────────────────────────────────────
+// Standard Operating Procedure reviews and GDP compliance audit checklists.
+
+model SOPChecklist {
+  id              String    @id @default(uuid())
+  orgId           String
+
+  // Identification
+  title           String                          // "GDP Annual Review", "Cold Chain SOP Check"
+  description     String?
+  sopReference    String?                         // e.g. "SOP-CC-001", "GDP-2024-v2"
+  category        String                          // "gdp", "cold_chain", "warehouse", "transport", "general"
+  frequency       String    @default("annual")    // "monthly", "quarterly", "annual", "one_off"
+
+  // Status
+  status          String    @default("draft")     // draft, active, archived
+  version         Int       @default(1)
+
+  // Schedule
+  nextDueDate     DateTime?
+  lastCompletedAt DateTime?
+  lastCompletedBy String?
+
+  items           SOPChecklistItem[]
+  audits          SOPAudit[]
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  createdBy       String?
+
+  @@index([orgId])
+  @@index([category])
+  @@index([status])
+  @@index([nextDueDate])
+}
+
+model SOPChecklistItem {
+  id              String    @id @default(uuid())
+  checklistId     String
+  checklist       SOPChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+
+  // Item definition
+  sortOrder       Int       @default(0)
+  section         String?                         // Group heading: "Documentation", "Storage", "Transport"
+  question        String                          // "Are temperature records maintained for all cold chain shipments?"
+  guidance        String?                         // Help text for the auditor
+  evidenceRequired Boolean  @default(false)       // Does the auditor need to upload evidence?
+  isCritical      Boolean   @default(false)       // Critical items fail the whole audit if not met
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  responses       SOPAuditResponse[]
+
+  @@index([checklistId])
+}
+
+// An instance of completing a checklist (an "audit")
+model SOPAudit {
+  id              String    @id @default(uuid())
+  orgId           String
+  checklistId     String
+  checklist       SOPChecklist @relation(fields: [checklistId], references: [id])
+
+  // Audit metadata
+  auditNumber     String                          // Auto-generated: AUDIT-YYYYMMDD-NNN
+  status          String    @default("in_progress") // in_progress, completed, failed
+  auditorId       String?
+  auditorName     String?
+  auditDate       DateTime  @default(now())
+
+  // Results
+  score           Float?                          // Percentage of items passed (0-100)
+  passCount       Int       @default(0)
+  failCount       Int       @default(0)
+  naCount         Int       @default(0)
+  findings        String?                         // Overall findings / summary
+  correctiveActions String?                       // Actions required from this audit
+
+  // Completion
+  completedAt     DateTime?
+  reviewedById    String?
+  reviewedByName  String?
+  reviewedAt      DateTime?
+
+  responses       SOPAuditResponse[]
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([orgId])
+  @@index([checklistId])
+  @@index([status])
+  @@index([auditDate])
+}
+
+model SOPAuditResponse {
+  id              String    @id @default(uuid())
+  auditId         String
+  audit           SOPAudit  @relation(fields: [auditId], references: [id], onDelete: Cascade)
+  checklistItemId String
+  checklistItem   SOPChecklistItem @relation(fields: [checklistItemId], references: [id])
+
+  // Response
+  result          String                          // "pass", "fail", "na", "observation"
+  notes           String?
+  evidenceRef     String?                         // Storage key for uploaded evidence file
+  correctiveAction String?                        // Item-level corrective action needed
+
+  respondedAt     DateTime  @default(now())
+  respondedById   String?
+  respondedByName String?
+
+  @@index([auditId])
+  @@index([checklistItemId])
 }

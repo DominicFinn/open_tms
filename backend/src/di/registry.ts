@@ -149,6 +149,11 @@ import { CreateCarrierTrackingIntegrationCommandHandler } from '../commands/carr
 import { UpdateCarrierTrackingIntegrationCommandHandler } from '../commands/carrierTracking/UpdateCarrierTrackingIntegrationCommand.js';
 import { DeleteCarrierTrackingIntegrationCommandHandler } from '../commands/carrierTracking/DeleteCarrierTrackingIntegrationCommand.js';
 import { RecordCarrierTrackingEventCommandHandler } from '../commands/carrierTracking/RecordCarrierTrackingEventCommand.js';
+import { CreateCAPAFollowUpCommandHandler } from '../commands/capaFollowUps/CreateCAPAFollowUpCommand.js';
+import { CompleteCAPAFollowUpCommandHandler } from '../commands/capaFollowUps/CompleteCAPAFollowUpCommand.js';
+import { CreateSOPChecklistCommandHandler } from '../commands/sopChecklists/CreateSOPChecklistCommand.js';
+import { StartSOPAuditCommandHandler } from '../commands/sopChecklists/StartSOPAuditCommand.js';
+import { CompleteSOPAuditCommandHandler } from '../commands/sopChecklists/CompleteSOPAuditCommand.js';
 
 /**
  * Register all application dependencies
@@ -700,6 +705,13 @@ export function registerDependencies(prisma: PrismaClient): void {
     bus.register(new DeclineQuoteCommandHandler(prisma, eventBus));
     bus.register(new ReviseQuoteCommandHandler(prisma, eventBus));
     bus.register(new ReweighAdjustmentCommandHandler(prisma, eventBus));
+
+    // Quality Centre commands
+    bus.register(new CreateCAPAFollowUpCommandHandler(prisma, eventBus));
+    bus.register(new CompleteCAPAFollowUpCommandHandler(prisma, eventBus));
+    bus.register(new CreateSOPChecklistCommandHandler(prisma, eventBus));
+    bus.register(new StartSOPAuditCommandHandler(prisma, eventBus));
+    bus.register(new CompleteSOPAuditCommandHandler(prisma, eventBus));
 
     return bus;
   });

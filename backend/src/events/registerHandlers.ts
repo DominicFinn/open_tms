@@ -29,6 +29,7 @@ import { OutboundEdiDeliveryService } from '../services/OutboundEdiDeliveryServi
 import { TradingPartnerRepository } from '../repositories/TradingPartnerRepository.js';
 import { IBinaryStorageProvider } from '../storage/IBinaryStorageProvider.js';
 import { AgentDecisionProjection } from './projections/AgentDecisionProjection.js';
+import { QualityIssueSummaryProjection } from './projections/QualityIssueSummaryProjection.js';
 import { TriageAgentHandler } from './handlers/TriageAgentHandler.js';
 import { AutomationRuleHandler } from './handlers/AutomationRuleHandler.js';
 import { ILlmProvider } from '../services/llm/ILlmProvider.js';
@@ -60,6 +61,7 @@ const CONCURRENCY_OVERRIDES: Record<string, () => number> = {
   'projection.lane': () => envInt('PROJECTION_CONCURRENCY', 3),
   'projection.issue': () => envInt('PROJECTION_CONCURRENCY', 3),
   'projection.agent_decision': () => envInt('PROJECTION_CONCURRENCY', 3),
+  'projection.quality_issue_summary': () => envInt('PROJECTION_CONCURRENCY', 2),
   'notification.email': () => envInt('EMAIL_CONCURRENCY', 2),
   'agent.triage': () => envInt('AGENT_TRIAGE_CONCURRENCY', 2),
   'automation.rules': () => envInt('AUTOMATION_RULES_CONCURRENCY', 4),
@@ -85,6 +87,7 @@ export async function registerEventHandlers(
     new LaneProjection(prisma),
     new IssueProjection(prisma),
     new AgentDecisionProjection(prisma),
+    new QualityIssueSummaryProjection(prisma),
   ];
 
   // Add email handler if email service is available

@@ -106,6 +106,23 @@ const APPS: AppDef[] = [
     ],
   },
   {
+    key: 'quality', icon: 'verified', label: 'Quality', basePath: '/quality',
+    sections: [
+      { title: 'Quality Centre', items: [
+        { to: '/quality', icon: 'space_dashboard', label: 'Dashboard', end: true },
+        { to: '/quality/summaries', icon: 'analytics', label: 'Issue Analysis' },
+        { to: '/quality/capa', icon: 'assignment_late', label: 'CAPA Management' },
+        { to: '/quality/sop-checklists', icon: 'checklist', label: 'SOP Checklists' },
+        { to: '/quality/sop-audits', icon: 'fact_check', label: 'GDP Audits' },
+      ]},
+      { title: 'Reports', items: [
+        { to: '/quality/carrier-scorecard', icon: 'airport_shuttle', label: 'Carrier Scorecard' },
+        { to: '/quality/lane-analysis', icon: 'route', label: 'Lane Analysis' },
+        { to: '/quality/capa-effectiveness', icon: 'trending_up', label: 'CAPA Effectiveness' },
+      ]},
+    ],
+  },
+  {
     key: 'integrations', icon: 'hub', label: 'Integrations', basePath: '/integrations',
     sections: [
       { title: 'Integrations', items: [
@@ -148,6 +165,7 @@ const APPS: AppDef[] = [
 ];
 
 function detectApp(pathname: string): string {
+  if (pathname.startsWith('/quality')) return 'quality';
   if (pathname.startsWith('/finance')) return 'finance';
   if (pathname.startsWith('/integrations')) return 'integrations';
   if (pathname.startsWith('/settings') || pathname === '/style-guide') return 'admin';
