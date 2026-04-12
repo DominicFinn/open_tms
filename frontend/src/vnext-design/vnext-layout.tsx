@@ -114,6 +114,7 @@ const APPS: AppDef[] = [
         { to: '/settings/llm', icon: 'smart_toy', label: 'AI / LLM' },
         { to: '/settings/agents', icon: 'psychology', label: 'Agent Config' },
         { to: '/settings/skills', icon: 'build', label: 'Skills' },
+        { to: '/settings/skill-chains', icon: 'account_tree', label: 'Skill Chains' },
       ]},
       { title: 'Apps', items: [
         { to: '/warehouse', icon: 'warehouse', label: 'Warehouse App' },

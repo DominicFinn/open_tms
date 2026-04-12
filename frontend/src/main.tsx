@@ -62,7 +62,9 @@ import VNextAgentDecisionDetail from './vnext-design/VNextAgentDecisionDetail';
 import VNextLlmSettings from './vnext-design/VNextLlmSettings';
 import VNextAgentConfig from './vnext-design/VNextAgentConfig';
 import VNextAutomationRules from './vnext-design/VNextAutomationRules';
+import VNextAutomationRuleDetail from './vnext-design/VNextAutomationRuleDetail';
 import VNextSkillsConfig from './vnext-design/VNextSkillsConfig';
+import VNextSkillChains from './vnext-design/VNextSkillChains';
 
 // Carrier Tendering & Portal
 import Tenders from './pages/Tenders';
@@ -157,6 +159,7 @@ root.render(
 
           {/* Automation Rules */}
           <Route path="automation-rules" element={<VNextAutomationRules />} />
+          <Route path="automation-rules/:id" element={<VNextAutomationRuleDetail />} />
 
           {/* Devices */}
           <Route path="devices" element={<VNextDevices />} />
@@ -206,6 +209,7 @@ root.render(
           <Route path="settings/llm" element={<VNextLlmSettings />} />
           <Route path="settings/agents" element={<VNextAgentConfig />} />
           <Route path="settings/skills" element={<VNextSkillsConfig />} />
+          <Route path="settings/skill-chains" element={<VNextSkillChains />} />
 
           {/* Integrations (sub-layout with tabs) */}
           <Route path="integrations" element={<VNextIntegrationsLayout />}>

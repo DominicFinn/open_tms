@@ -35,6 +35,7 @@ export default function VNextSkillsConfig() {
   const [configName, setConfigName] = useState('');
   const [configValues, setConfigValues] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [editingConfigId, setEditingConfigId] = useState<string | null>(null);
 
   const loadData = async () => {
     try {
@@ -60,6 +61,7 @@ export default function VNextSkillsConfig() {
     setConfigSkillType(skillType);
     setConfigName(def?.name || skillType);
     setConfigValues({});
+    setEditingConfigId(null);
     setShowConfigForm(true);
   }
 
@@ -67,8 +69,13 @@ export default function VNextSkillsConfig() {
     setSaving(true);
     setError('');
     try {
-      const res = await fetch(`${API_URL}/api/v1/skill-configs`, {
-        method: 'POST',
+      const url = editingConfigId
+        ? `${API_URL}/api/v1/skill-configs/${editingConfigId}`
+        : `${API_URL}/api/v1/skill-configs`;
+      const method = editingConfigId ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           skillType: configSkillType,
@@ -79,8 +86,9 @@ export default function VNextSkillsConfig() {
       const json = await res.json();
       if (json.error) throw new Error(json.error);
       setShowConfigForm(false);
+      setEditingConfigId(null);
       await loadData();
-      setSuccessMsg('Skill configured');
+      setSuccessMsg(editingConfigId ? 'Configuration updated' : 'Skill configured');
       setTimeout(() => setSuccessMsg(''), 3000);
     } catch (err: any) {
       setError(err.message);
@@ -94,6 +102,16 @@ export default function VNextSkillsConfig() {
     await loadData();
     setSuccessMsg('Configuration deleted');
     setTimeout(() => setSuccessMsg(''), 3000);
+  }
+
+  function editConfig(config: SkillConfig) {
+    setConfigSkillType(config.skillType);
+    setConfigName(config.name);
+    setConfigValues(Object.fromEntries(
+      Object.entries(config.config).map(([k, v]) => [k, String(v)])
+    ));
+    setEditingConfigId(config.id);
+    setShowConfigForm(true);
   }
 
   const configuredTypes = new Set(configs.map((c) => c.skillType));
@@ -158,9 +176,14 @@ export default function VNextSkillsConfig() {
                         padding: '6px 10px', background: 'var(--surface-container)', borderRadius: 6, marginBottom: 4, fontSize: 13,
                       }}>
                         <span>{sc.name}</span>
-                        <button className="vn-btn-icon" onClick={() => deleteConfig(sc.id)}>
-                          <span className="material-icons" style={{ fontSize: 16 }}>close</span>
-                        </button>
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          <button className="vn-btn-icon" onClick={(e) => { e.stopPropagation(); editConfig(sc); }} title="Edit">
+                            <span className="material-icons" style={{ fontSize: 16 }}>edit</span>
+                          </button>
+                          <button className="vn-btn-icon" onClick={(e) => { e.stopPropagation(); deleteConfig(sc.id); }} title="Delete">
+                            <span className="material-icons" style={{ fontSize: 16 }}>close</span>
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>

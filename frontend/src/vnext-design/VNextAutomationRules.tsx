@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { API_URL } from '../api';
 import { VnPageHeader, VnChip, VnFilterBar, VnAlert, VnModal } from './components';
 
@@ -65,6 +66,7 @@ function conditionsPreview(conditions: { field: string; operator: string; value?
 }
 
 export default function VNextAutomationRules() {
+  const navigate = useNavigate();
   const [rules, setRules] = useState<AutomationRule[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -233,7 +235,7 @@ export default function VNextAutomationRules() {
               </thead>
               <tbody>
                 {filtered.map((rule) => (
-                  <tr key={rule.id}>
+                  <tr key={rule.id} onClick={() => navigate(`/automation-rules/${rule.id}`)} style={{ cursor: 'pointer' }}>
                     <td>
                       <span className="vn-table-id">{rule.name}</span>
                       {rule.sourceDecisionId && (
