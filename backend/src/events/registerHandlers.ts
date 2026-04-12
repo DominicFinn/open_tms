@@ -30,6 +30,7 @@ import { IBinaryStorageProvider } from '../storage/IBinaryStorageProvider.js';
 import { TenderAwardFinancialHandler } from './handlers/TenderAwardFinancialHandler.js';
 import { BillingTriggerHandler } from './handlers/BillingTriggerHandler.js';
 import { InvoiceProjection } from './projections/InvoiceProjection.js';
+import { FinancialImpactHandler } from './handlers/FinancialImpactHandler.js';
 
 /** Read concurrency from env with a default */
 function envInt(key: string, fallback: number): number {
@@ -108,6 +109,9 @@ export async function registerEventHandlers(
 
   // Financial: invoice read model projection
   handlers.push(new InvoiceProjection(prisma));
+
+  // Financial: auto-create queries from cargo discrepancies and cold chain events
+  handlers.push(new FinancialImpactHandler(prisma));
 
   for (const handler of handlers) {
     // Apply env-based concurrency overrides

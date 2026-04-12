@@ -330,10 +330,13 @@
   - ✅ 8 unit tests for carrier invoice commands
   - 🔲 EDI 210 Freight Invoice inbound parsing
   - 🔲 Carrier payment scheduling/batching
-- **Phase 7E: Queries, Disputes & Credit Notes** 🔲
-  - Financial query lifecycle (raised -> investigating -> resolved)
-  - Auto-create queries from cargo discrepancies and cold chain excursions
-  - Credit/debit note generation from resolved queries
+- **Phase 7E: Queries, Disputes & Credit Notes** ✅
+  - ✅ FinancialQueryRepository + CreditNoteRepository
+  - ✅ RaiseQuery + ResolveQuery CQRS commands with events
+  - ✅ ResolveQuery with optional auto-generated credit note
+  - ✅ FinancialImpactHandler: auto-creates queries from cargo.missing_at_stop, cargo.misdrop_detected, cold_chain.disposition_changed (quarantined)
+  - ✅ Financial queries REST API (5 endpoints) + Credit notes API (2 endpoints)
+  - ✅ 4 unit tests for query command handlers
 - **Phase 7F: LTL Enhancements + EDI 810** 🔲
   - Full LTL class-based rating with weight break matrix
   - Re-weigh / re-class adjustment workflow

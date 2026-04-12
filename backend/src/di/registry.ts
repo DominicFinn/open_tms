@@ -103,6 +103,9 @@ import { CreateInvoiceCommandHandler } from '../commands/invoices/CreateInvoiceC
 import { CarrierInvoiceRepository } from '../repositories/CarrierInvoiceRepository.js';
 import { FreightAuditService } from '../services/FreightAuditService.js';
 import { ReceiveCarrierInvoiceCommandHandler } from '../commands/carrierInvoices/ReceiveCarrierInvoiceCommand.js';
+import { FinancialQueryRepository, CreditNoteRepository } from '../repositories/FinancialQueryRepository.js';
+import { RaiseQueryCommandHandler } from '../commands/queries/RaiseQueryCommand.js';
+import { ResolveQueryCommandHandler } from '../commands/queries/ResolveQueryCommand.js';
 import { ApproveCarrierInvoiceCommandHandler } from '../commands/carrierInvoices/ApproveCarrierInvoiceCommand.js';
 import { RecordCarrierPaymentCommandHandler } from '../commands/carrierInvoices/RecordCarrierPaymentCommand.js';
 import { ApproveInvoiceCommandHandler } from '../commands/invoices/ApproveInvoiceCommand.js';
@@ -404,6 +407,14 @@ export function registerDependencies(prisma: PrismaClient): void {
     );
   });
 
+  container.singleton(TOKENS.IFinancialQueryRepository).toFactory(() => {
+    return new FinancialQueryRepository(container.resolve(TOKENS.PrismaClient));
+  });
+
+  container.singleton(TOKENS.ICreditNoteRepository).toFactory(() => {
+    return new CreditNoteRepository(container.resolve(TOKENS.PrismaClient));
+  });
+
   // Trading Partner / EDI Hub
   container.singleton(TOKENS.ITradingPartnerRepository).toFactory(() => {
     return new TradingPartnerRepository(container.resolve(TOKENS.PrismaClient));
@@ -586,6 +597,10 @@ export function registerDependencies(prisma: PrismaClient): void {
     bus.register(new ReceiveCarrierInvoiceCommandHandler(prisma, eventBus));
     bus.register(new ApproveCarrierInvoiceCommandHandler(prisma, eventBus));
     bus.register(new RecordCarrierPaymentCommandHandler(prisma, eventBus));
+
+    // Financial query commands
+    bus.register(new RaiseQueryCommandHandler(prisma, eventBus));
+    bus.register(new ResolveQueryCommandHandler(prisma, eventBus));
 
     return bus;
   });
