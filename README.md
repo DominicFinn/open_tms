@@ -82,7 +82,7 @@ Deploy your own Open TMS instance with one click:
 - **Dependency Injection** - Custom DI container with Symbol-based tokens
 - **Metrics & Monitoring** - `/metrics` endpoint with read model lag detection, event throughput, queue depths
 - **Event Export API** - Queryable event store with wildcard filters, cursor pagination, and aggregate stats — ready for data warehouse and ML pipeline consumption
-- **Test Suite** - 297 tests across 34 suites covering commands, projections, services, and full CQRS pipeline integration
+- **Test Suite** - 301 tests across 34 suites covering commands, projections, services, and full CQRS pipeline integration
 - **Soft Delete** - Data preservation with archive functionality
 - **Validation** - Comprehensive input validation with Zod schemas
 

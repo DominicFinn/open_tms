@@ -715,6 +715,9 @@ Launched shipments drop off the active list. Stale shipments (>2 days in draft w
 | `issue_response` | Issues | issue.createdAt | `issue.assigned` / status → in_progress | `breachThresholdMinutes` |
 | `issue_resolution` | Issues | issue.createdAt | `issue.resolved` | `breachThresholdMinutes` |
 | `dwell_time` | Shipments | stop.actualArrival | stop completed (shipment departs) | `maxDwellMinutes` |
+| `dock_turnaround` | Shipment Stops | stop.actualArrival | stop completed | `maxDwellMinutes` + `locationType` filter |
+| `sort_to_dispatch` | Shipment Stops | stop.actualArrival (at cross-dock) | stop completed | `breachThresholdMinutes` + `locationType: cross_dock` |
+| `facility_dwell` | Shipment Stops | stop.actualArrival | stop completed | `maxDwellMinutes` + `locationType` filter |
 | `light_event` | Shipments | sensor reading | N/A (occurrence-based) | `maxOccurrences` |
 | `seal_event` | Shipments | device event | N/A (occurrence-based) | `maxOccurrences` |
 | `temperature_excursion` | Shipments | excursion.startedAt | excursion resolved | `maxExcursionMinutes` |

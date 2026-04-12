@@ -27,6 +27,9 @@ export interface ISlaEvaluationService {
   /** Create SLA evaluations for a newly created issue */
   createEvaluationsForIssue(issueId: string, orgId: string, priority: string, category: string, customerId?: string): Promise<number>;
 
+  /** Create SLA evaluations for a shipment stop arrival at a typed location */
+  createEvaluationsForStop(stopId: string, shipmentId: string, orgId: string, customerId?: string): Promise<number>;
+
   /** Mark SLA evaluations as met for an entity event (e.g., issue resolved, shipment delivered) */
   markEvaluationsMet(entityType: string, entityId: string, ruleTypes?: string[]): Promise<number>;
 
@@ -53,7 +56,18 @@ const RULE_TYPES = {
   SEAL_EVENT: 'seal_event',
   TEMPERATURE_EXCURSION: 'temperature_excursion',
   TEMPERATURE_OUT_OF_RANGE: 'temperature_out_of_range',
+  // Location-type-specific rules (evaluated per stop, not per shipment)
+  DOCK_TURNAROUND: 'dock_turnaround',
+  SORT_TO_DISPATCH: 'sort_to_dispatch',
+  FACILITY_DWELL: 'facility_dwell',
 } as const;
+
+/** Rule types that are evaluated per-stop at a specific location, not per-shipment */
+const STOP_LEVEL_RULE_TYPES = [
+  RULE_TYPES.DOCK_TURNAROUND,
+  RULE_TYPES.SORT_TO_DISPATCH,
+  RULE_TYPES.FACILITY_DWELL,
+] as string[];
 
 export class SlaEvaluationService implements ISlaEvaluationService {
   constructor(
@@ -206,6 +220,99 @@ export class SlaEvaluationService implements ISlaEvaluationService {
           entityType: 'issue',
           entityId: issueId,
           entityReference: issue.title,
+          slaDueAt: slaDueAt.toISOString(),
+        });
+
+        created++;
+      } catch (err: any) {
+        if (err.code === 'P2002') continue;
+        throw err;
+      }
+    }
+
+    return created;
+  }
+
+  async createEvaluationsForStop(
+    stopId: string,
+    shipmentId: string,
+    orgId: string,
+    customerId?: string,
+  ): Promise<number> {
+    const policy = await this.slaRepo.findPolicyForEntity(orgId, customerId);
+    if (!policy) return 0;
+
+    // Get the stop with its location to determine facility type
+    const stop = await this.prisma.shipmentStop.findUnique({
+      where: { id: stopId },
+      select: {
+        id: true,
+        shipmentId: true,
+        actualArrival: true,
+        stopType: true,
+        status: true,
+        location: {
+          select: { id: true, name: true, locationType: true },
+        },
+        shipment: {
+          select: { reference: true },
+        },
+      },
+    });
+    if (!stop || !stop.actualArrival) return 0;
+
+    const locationType = stop.location.locationType;
+    let created = 0;
+    const now = new Date();
+
+    for (const rule of policy.rules) {
+      // Only process location-specific rule types AND the generic dwell_time
+      const isStopRule = STOP_LEVEL_RULE_TYPES.includes(rule.ruleType);
+      const isDwellWithLocType = rule.ruleType === RULE_TYPES.DWELL_TIME && rule.locationType;
+
+      if (!isStopRule && !isDwellWithLocType) continue;
+
+      // Check location type filter — if the rule specifies a locationType,
+      // only create an evaluation if the stop's location matches
+      if (rule.locationType && rule.locationType !== locationType) continue;
+
+      // Determine the threshold
+      const thresholdMinutes = rule.maxDwellMinutes || rule.breachThresholdMinutes;
+      if (!thresholdMinutes) continue;
+
+      const slaStartedAt = stop.actualArrival;
+      const slaDueAt = new Date(slaStartedAt.getTime() + thresholdMinutes * 60_000);
+      const warningAt = rule.warningThresholdMinutes
+        ? new Date(slaStartedAt.getTime() + rule.warningThresholdMinutes * 60_000)
+        : null;
+
+      // Entity is the stop itself — unique per (ruleId, 'shipment_stop', stopId)
+      try {
+        const evaluation = await this.slaRepo.createEvaluation({
+          id: randomUUID(),
+          orgId,
+          ruleId: rule.id,
+          ruleType: rule.ruleType,
+          ruleName: rule.name,
+          entityType: 'shipment_stop',
+          entityId: stopId,
+          entityReference: `${stop.shipment.reference} @ ${stop.location.name}`,
+          policyId: policy.id,
+          customerId,
+          slaStartedAt,
+          slaDueAt,
+          warningAt,
+          status: 'active',
+          updatedAt: now,
+        });
+
+        await this.publishEvent(orgId, EVENT_TYPES.SLA_EVALUATION_CREATED, 'sla_evaluation', evaluation.id, {
+          evaluationId: evaluation.id,
+          ruleType: rule.ruleType,
+          ruleName: rule.name,
+          entityType: 'shipment_stop',
+          entityId: stopId,
+          entityReference: `${stop.shipment.reference} @ ${stop.location.name}`,
           slaDueAt: slaDueAt.toISOString(),
         });
 

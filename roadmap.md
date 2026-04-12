@@ -503,11 +503,13 @@ The current EDI infrastructure handles inbound 850 (SFTP polling) and outbound 8
   - Cross-dock operations: inbound → sort → outbound pipeline visibility
   - Appointment scheduling view: dock calendars with slot availability
   - Map view integration: click a location marker to open its operations view
-  - Location-type-specific SLA rules:
-    - Distribution centre: max dwell time, cross-dock throughput SLA, dock turnaround time
-    - Cross dock: max sort-to-dispatch time, inbound-to-outbound cycle time
-    - Warehouse: pick/pack SLA, order fulfilment time
-    - Terminal/Port: container dwell, customs clearance time
+  - ✅ Location-type-specific SLA rules:
+    - ✅ `dock_turnaround` — max time from arrival to departure at docks (filterable by location type)
+    - ✅ `sort_to_dispatch` — max sort-to-dispatch time at cross-docks
+    - ✅ `facility_dwell` — max dwell time at specific facility types (DC, warehouse, terminal, port)
+    - ✅ `locationType` filter on all dwell/stop rules — only triggers at matching facility types
+    - ✅ Stop-level SLA evaluations created on `shipment.stop_arrived`, met on `shipment.stop_completed`
+    - ✅ Frontend: facility type filter dropdown in SLA policy rule editor
   - Works with hub-and-spoke routing: visualise spoke → hub → spoke flows
   - Aggregate metrics: daily throughput (units in/out), average dwell, on-time departure rate
 - **Route Overhaul** 🔲

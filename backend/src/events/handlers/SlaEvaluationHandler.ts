@@ -26,6 +26,8 @@ export class SlaEvaluationHandler implements IEventHandler {
     EVENT_TYPES.ISSUE_ASSIGNED,
     EVENT_TYPES.ISSUE_STATUS_CHANGED,
     EVENT_TYPES.ISSUE_RESOLVED,
+    EVENT_TYPES.SHIPMENT_STOP_ARRIVED,
+    EVENT_TYPES.SHIPMENT_STOP_COMPLETED,
     EVENT_TYPES.COLD_CHAIN_EXCURSION_DETECTED,
     EVENT_TYPES.COLD_CHAIN_EXCURSION_RESOLVED,
     EVENT_TYPES.TRACKING_ETA_UPDATED,
@@ -63,6 +65,14 @@ export class SlaEvaluationHandler implements IEventHandler {
 
         case EVENT_TYPES.ISSUE_RESOLVED:
           await this.handleIssueResolved(event);
+          break;
+
+        case EVENT_TYPES.SHIPMENT_STOP_ARRIVED:
+          await this.handleStopArrived(event);
+          break;
+
+        case EVENT_TYPES.SHIPMENT_STOP_COMPLETED:
+          await this.handleStopCompleted(event);
           break;
 
         case EVENT_TYPES.COLD_CHAIN_EXCURSION_RESOLVED:
@@ -173,6 +183,51 @@ export class SlaEvaluationHandler implements IEventHandler {
     if (payload.severity === 'critical') {
       // The cron worker will catch the actual breach; this is just for logging
       console.log(`[SlaEvaluationHandler] Critical ETA delay on shipment ${payload.shipmentId} — SLA breach check will run on next sweep`);
+    }
+  }
+
+  private async handleStopArrived(event: DomainEvent): Promise<void> {
+    // When a shipment arrives at a stop, create location-type-specific SLA evaluations
+    const payload = event.payload as { stopId?: string; shipmentId?: string };
+    const stopId = payload.stopId || event.entityId;
+    const shipmentId = payload.shipmentId;
+
+    if (!stopId) return;
+
+    // Get shipment's customerId for policy resolution
+    let customerId: string | undefined;
+    if (shipmentId) {
+      const shipment = await this.prisma.shipment.findUnique({
+        where: { id: shipmentId },
+        select: { customerId: true },
+      });
+      customerId = shipment?.customerId ?? undefined;
+    }
+
+    const count = await this.slaService.createEvaluationsForStop(
+      stopId,
+      shipmentId || '',
+      event.orgId,
+      customerId,
+    );
+    if (count > 0) {
+      console.log(`[SlaEvaluationHandler] Created ${count} location-type SLA evaluations for stop ${stopId}`);
+    }
+  }
+
+  private async handleStopCompleted(event: DomainEvent): Promise<void> {
+    // When a stop is completed (shipment departs), mark stop-level SLAs as met
+    const payload = event.payload as { stopId?: string };
+    const stopId = payload.stopId || event.entityId;
+    if (!stopId) return;
+
+    const count = await this.slaService.markEvaluationsMet(
+      'shipment_stop',
+      stopId,
+      ['dwell_time', 'dock_turnaround', 'sort_to_dispatch', 'facility_dwell'],
+    );
+    if (count > 0) {
+      console.log(`[SlaEvaluationHandler] Marked ${count} stop-level SLAs as met for stop ${stopId}`);
     }
   }
 

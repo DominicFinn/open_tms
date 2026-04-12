@@ -248,4 +248,103 @@ describe('SlaEvaluationService', () => {
       expect(result.issuesCreated).toBe(0);
     });
   });
+
+  describe('createEvaluationsForStop', () => {
+    it('creates evaluations for location-type-specific rules', async () => {
+      mockSlaRepo.findPolicyForEntity.mockResolvedValue({
+        id: 'policy-1',
+        rules: [
+          { id: 'rule-dc', ruleType: 'dock_turnaround', name: 'DC Turnaround', maxDwellMinutes: 120, warningThresholdMinutes: 90, locationType: 'distribution_centre', active: true },
+          { id: 'rule-wh', ruleType: 'facility_dwell', name: 'Warehouse Dwell', maxDwellMinutes: 480, locationType: 'warehouse', active: true },
+        ],
+      });
+      mockPrisma.shipmentStop = {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'stop-1',
+          shipmentId: 'ship-1',
+          actualArrival: new Date('2026-04-12T10:00:00Z'),
+          stopType: 'delivery',
+          status: 'arrived',
+          location: { id: 'loc-1', name: 'Midwest DC', locationType: 'distribution_centre' },
+          shipment: { reference: 'SH-001' },
+        }),
+      };
+      mockSlaRepo.createEvaluation.mockImplementation(async (data: any) => data);
+
+      const count = await service.createEvaluationsForStop('stop-1', 'ship-1', 'org-1');
+
+      // Only dock_turnaround matches (locationType = distribution_centre), not warehouse
+      expect(count).toBe(1);
+      expect(mockSlaRepo.createEvaluation).toHaveBeenCalledWith(
+        expect.objectContaining({
+          entityType: 'shipment_stop',
+          entityId: 'stop-1',
+          ruleType: 'dock_turnaround',
+          entityReference: 'SH-001 @ Midwest DC',
+        })
+      );
+    });
+
+    it('skips rules when location type does not match', async () => {
+      mockSlaRepo.findPolicyForEntity.mockResolvedValue({
+        id: 'policy-1',
+        rules: [
+          { id: 'rule-xd', ruleType: 'sort_to_dispatch', name: 'Cross Dock Sort', breachThresholdMinutes: 60, locationType: 'cross_dock', active: true },
+        ],
+      });
+      mockPrisma.shipmentStop = {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'stop-2',
+          shipmentId: 'ship-2',
+          actualArrival: new Date(),
+          stopType: 'delivery',
+          status: 'arrived',
+          location: { id: 'loc-2', name: 'Store #5', locationType: 'store' },
+          shipment: { reference: 'SH-002' },
+        }),
+      };
+
+      const count = await service.createEvaluationsForStop('stop-2', 'ship-2', 'org-1');
+
+      expect(count).toBe(0);
+    });
+
+    it('returns 0 when stop has no actual arrival', async () => {
+      mockSlaRepo.findPolicyForEntity.mockResolvedValue({ id: 'policy-1', rules: [] });
+      mockPrisma.shipmentStop = {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'stop-3', actualArrival: null,
+          location: { locationType: 'warehouse' },
+          shipment: { reference: 'SH-003' },
+        }),
+      };
+
+      const count = await service.createEvaluationsForStop('stop-3', 'ship-3', 'org-1');
+      expect(count).toBe(0);
+    });
+
+    it('calculates slaDueAt from actualArrival + maxDwellMinutes', async () => {
+      const arrival = new Date('2026-04-12T08:00:00Z');
+      mockSlaRepo.findPolicyForEntity.mockResolvedValue({
+        id: 'policy-1',
+        rules: [
+          { id: 'rule-fd', ruleType: 'facility_dwell', name: 'Port Dwell', maxDwellMinutes: 360, locationType: 'port', active: true },
+        ],
+      });
+      mockPrisma.shipmentStop = {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'stop-4', shipmentId: 'ship-4', actualArrival: arrival,
+          stopType: 'delivery', status: 'arrived',
+          location: { id: 'loc-4', name: 'Rotterdam Port', locationType: 'port' },
+          shipment: { reference: 'SH-004' },
+        }),
+      };
+      mockSlaRepo.createEvaluation.mockImplementation(async (data: any) => data);
+
+      await service.createEvaluationsForStop('stop-4', 'ship-4', 'org-1');
+
+      const call = mockSlaRepo.createEvaluation.mock.calls[0][0];
+      expect(call.slaDueAt.getTime()).toBe(arrival.getTime() + 360 * 60_000);
+    });
+  });
 });

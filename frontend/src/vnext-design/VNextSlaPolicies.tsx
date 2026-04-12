@@ -23,6 +23,7 @@ interface SlaRule {
   dwellLocationType?: string | null;
   maxOccurrences?: number | null;
   maxExcursionMinutes?: number | null;
+  locationType?: string | null;
   autoCreateIssue?: boolean;
   issuePriorityOnBreach?: string;
 }
@@ -50,10 +51,25 @@ const RULE_TYPES = [
   { value: 'issue_response', label: 'Issue Response', icon: 'reply', description: 'Issue must be acknowledged within X minutes' },
   { value: 'issue_resolution', label: 'Issue Resolution', icon: 'check_circle', description: 'Issue must be resolved within X minutes' },
   { value: 'dwell_time', label: 'Dwell Time', icon: 'hourglass_top', description: 'Max time a shipment can be stationary at a location' },
+  { value: 'dock_turnaround', label: 'Dock Turnaround', icon: 'swap_horiz', description: 'Max time from arrival to departure at a dock (location-type specific)' },
+  { value: 'sort_to_dispatch', label: 'Sort to Dispatch', icon: 'sort', description: 'Max time from inbound arrival to outbound dispatch at cross-docks' },
+  { value: 'facility_dwell', label: 'Facility Dwell', icon: 'domain', description: 'Max time at a specific facility type (DC, warehouse, terminal, port)' },
   { value: 'light_event', label: 'Light Sensor Event', icon: 'light_mode', description: 'Light detection outside known locations (tampering)' },
   { value: 'seal_event', label: 'Security Seal Event', icon: 'lock_open', description: 'Seal break detected outside known locations' },
   { value: 'temperature_excursion', label: 'Temperature Excursion', icon: 'thermostat', description: 'Single excursion duration limit' },
   { value: 'temperature_out_of_range', label: 'Cumulative Out-of-Range', icon: 'device_thermostat', description: 'Total time out of acceptable temperature range' },
+];
+
+const LOCATION_TYPES = [
+  { value: 'warehouse', label: 'Warehouse' },
+  { value: 'distribution_centre', label: 'Distribution Centre' },
+  { value: 'cross_dock', label: 'Cross Dock' },
+  { value: 'terminal', label: 'Terminal' },
+  { value: 'port', label: 'Port' },
+  { value: 'rail_yard', label: 'Rail Yard' },
+  { value: 'customer', label: 'Customer' },
+  { value: 'store', label: 'Store' },
+  { value: 'manufacturing', label: 'Manufacturing' },
 ];
 
 const PRIORITIES = ['low', 'medium', 'high', 'critical'];
@@ -73,11 +89,12 @@ function emptyRule(ruleType: string): SlaRule {
 
 function RuleEditor({ rule, onChange, onRemove }: { rule: SlaRule; onChange: (r: SlaRule) => void; onRemove: () => void }) {
   const meta = RULE_TYPES.find((r) => r.value === rule.ruleType);
-  const isTimeThreshold = ['issue_response', 'issue_resolution', 'dwell_time', 'temperature_excursion', 'temperature_out_of_range'].includes(rule.ruleType);
+  const isTimeThreshold = ['issue_response', 'issue_resolution', 'dwell_time', 'temperature_excursion', 'temperature_out_of_range', 'dock_turnaround', 'sort_to_dispatch', 'facility_dwell'].includes(rule.ruleType);
   const isEta = rule.ruleType === 'eta_delivery';
   const isOccurrence = ['light_event', 'seal_event'].includes(rule.ruleType);
   const isDwell = rule.ruleType === 'dwell_time';
   const isIssue = ['issue_response', 'issue_resolution'].includes(rule.ruleType);
+  const isLocationSpecific = ['dock_turnaround', 'sort_to_dispatch', 'facility_dwell', 'dwell_time'].includes(rule.ruleType);
 
   const set = (field: string, value: any) => onChange({ ...rule, [field]: value });
   const setNum = (field: string, v: string) => set(field, v === '' ? null : parseInt(v, 10));
@@ -146,6 +163,25 @@ function RuleEditor({ rule, onChange, onRemove }: { rule: SlaRule; onChange: (r:
               </select>
             </div>
           </>
+        )}
+
+        {/* Location type filter (for location-specific rules) */}
+        {isLocationSpecific && (
+          <div className="vn-field">
+            <label className="vn-field-label">Facility Type Filter</label>
+            <select className="vn-input" value={rule.locationType ?? ''} onChange={(e) => set('locationType', e.target.value || null)}>
+              <option value="">All location types</option>
+              {LOCATION_TYPES.map((lt) => <option key={lt.value} value={lt.value}>{lt.label}</option>)}
+            </select>
+          </div>
+        )}
+
+        {/* Dwell / facility-specific max time */}
+        {['dock_turnaround', 'sort_to_dispatch', 'facility_dwell'].includes(rule.ruleType) && (
+          <div className="vn-field">
+            <label className="vn-field-label">Max Time (minutes)</label>
+            <input className="vn-input" type="number" value={rule.maxDwellMinutes ?? ''} onChange={(e) => setNum('maxDwellMinutes', e.target.value)} placeholder="e.g. 120" />
+          </div>
         )}
 
         {/* Issue filters */}

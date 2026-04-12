@@ -1635,6 +1635,11 @@ model SlaRule {
   maxDwellMinutes     Int?                        // Max minutes at a single location before alert
   dwellLocationType   String?                     // "any", "origin", "intermediate", "destination"
 
+  // Location-type filter: restrict this rule to stops at specific facility types
+  // e.g., "distribution_centre", "cross_dock", "warehouse", "terminal", "port"
+  // null = applies to all location types
+  locationType        String?
+
   // Security event SLA: allowed occurrences before breach
   maxOccurrences      Int?                        // e.g., 0 = any occurrence is a breach
 
