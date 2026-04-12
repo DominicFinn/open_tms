@@ -68,6 +68,9 @@ function createMockPrisma(overrides?: {
     slaEvaluation: {
       findMany: jest.fn().mockResolvedValue(overrides?.slaEvaluations ?? []),
     },
+    load: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
     agentDecision: {
       findFirst: jest.fn().mockResolvedValue(overrides?.recentDecision ?? null),
     },

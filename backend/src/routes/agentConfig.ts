@@ -35,6 +35,11 @@ const TEMPLATE_VARIABLES = [
     description: 'Active SLA evaluations for this shipment',
     sample: JSON.stringify([{ id: 'eval-1', ruleType: 'eta_delivery', ruleName: 'On-Time Delivery', status: 'warning', slaDueAt: '2026-04-12T18:00:00Z' }], null, 2),
   },
+  {
+    name: '{{driver}}',
+    description: 'Driver assigned to this shipment (via loads). null if no driver assigned - agent should not use contact_driver action in that case',
+    sample: JSON.stringify({ id: 'driver-1', name: 'John Smith', phone: '+1-555-0123', email: 'john@carrier.com', hasContactInfo: true }, null, 2),
+  },
 ];
 
 export const agentConfigRoutes: FastifyPluginAsync = async (server) => {

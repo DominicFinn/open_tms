@@ -138,6 +138,7 @@ import { SkillRegistry } from '../services/skills/SkillRegistry.js';
 import { CreateIssueSkill } from '../services/skills/CreateIssueSkill.js';
 import { EscalateIssueSkill } from '../services/skills/EscalateIssueSkill.js';
 import { AddCommentSkill } from '../services/skills/AddCommentSkill.js';
+import { ContactDriverSkill } from '../services/skills/ContactDriverSkill.js';
 import { SendEmailSkill } from '../services/skills/SendEmailSkill.js';
 import { CallWebhookSkill } from '../services/skills/CallWebhookSkill.js';
 
@@ -677,6 +678,7 @@ export function registerDependencies(prisma: PrismaClient): void {
     registry.register(new CreateIssueSkill(commandBus));
     registry.register(new EscalateIssueSkill(commandBus));
     registry.register(new AddCommentSkill(prisma));
+    registry.register(new ContactDriverSkill(prisma));
     registry.register(new CallWebhookSkill());
 
     // SendEmailSkill only if email service is available
