@@ -235,30 +235,91 @@ Issues track operational problems — exceptions, delays, damage, compliance fai
 | `UpdateIssueCommand` | `PUT /api/v1/issues/:id` | `issue.updated`, `issue.status_changed`, `issue.assigned`, or `issue.resolved` |
 | `EscalateIssueCommand` | Escalation action | `issue.escalated` |
 
+UpdateIssueCommand also handles these lifecycle operations:
+
+| Operation | Fields Set | Event Emitted |
+|-----------|-----------|---------------|
+| Snooze Issue | snoozedUntil, snoozedBy, snoozedReason | `issue.snoozed` |
+| Unsnooze Issue | clears snoozedUntil, snoozedBy, snoozedReason | `issue.unsnoozed` |
+| Close Issue | status=closed, closedAt, closedBy | `issue.closed` |
+| Reopen Issue | status=open, clears closedAt | `issue.reopened` |
+| Toggle NeedsCapa | sets needsCapa boolean | `issue.needs_capa_marked` |
+| Add Label | creates IssueLabelAssignment | `issue.label_added` |
+| Remove Label | deletes IssueLabelAssignment | `issue.label_removed` |
+
 ### Smart Event Selection
 
 UpdateIssueCommand emits different events based on what changed:
-- Status → `resolved`: emits `issue.resolved`
-- Status → anything else: emits `issue.status_changed`
+- Status -> `resolved`: emits `issue.resolved`
+- Status -> `closed`: emits `issue.closed`
+- Status -> `open` (from closed): emits `issue.reopened`
+- Status -> anything else: emits `issue.status_changed`
 - Assignee changed: emits `issue.assigned`
+- Snooze set: emits `issue.snoozed`
+- Snooze cleared: emits `issue.unsnoozed`
+- needsCapa toggled: emits `issue.needs_capa_marked`
+- Label added: emits `issue.label_added`
+- Label removed: emits `issue.label_removed`
 - Other fields only: emits `issue.updated`
+
+### Side Effects
+
+| Event | Projection | Notification | Other |
+|-------|-----------|--------------|-------|
+| `issue.created` | IssueReadModel inserted | In-app (if high/critical priority) | -- |
+| `issue.assigned` | IssueReadModel.assigneeName updated | In-app to assignee | -- |
+| `issue.escalated` | IssueReadModel.escalatedTo set, priority -> critical | In-app + email to escalation target | -- |
+| `issue.resolved` | IssueReadModel.resolvedAt set | In-app | -- |
+| `issue.snoozed` | IssueReadModel.snoozedUntil set | In-app | Auto-wake on snoozedUntil expiry |
+| `issue.unsnoozed` | IssueReadModel.snoozedUntil cleared | In-app | -- |
+| `issue.closed` | IssueReadModel.closedAt, status=closed | In-app | IssueClosureReportHandler generates PDF |
+| `issue.reopened` | IssueReadModel.closedAt cleared, status=open | In-app | -- |
+| `issue.needs_capa_marked` | IssueReadModel.needsCapa updated | In-app | -- |
+| `issue.label_added` | IssueReadModel label associations updated | -- | -- |
+| `issue.label_removed` | IssueReadModel label associations updated | -- | -- |
+
+### Status Lifecycle
+
+```
+open -> in_progress -> resolved -> closed
+         |                           |
+         ↑                           v (reopen)
+    (escalated: auto-set to        open
+     in_progress, priority
+     -> critical)
+
+Any status can be snoozed (snoozedUntil set). Auto-wakes when time expires.
+```
+
+### Issue Closure Report
+
+When an issue is closed (`issue.closed` event), the `IssueClosureReportHandler` automatically generates a PDF closure report:
+- **Trigger:** `issue.closed` event
+- **Handler:** `IssueClosureReportHandler`
+- **Output:** PDF stored via `IBinaryStorageProvider` as a `GeneratedDocument` (documentType: `issue_closure_report`)
+- **Content:** issue summary, triggering event, shipment/order context, temperature telemetry, SLA evaluations, activity timeline, CAPA reports
+
+---
+
+## Comments (Polymorphic)
+
+Comments are a generic, polymorphic entity that can be attached to issues, shipments, or orders. The `entityType` + `entityId` fields link a comment to its parent.
+
+### Commands
+
+| Command | Trigger | Events Emitted |
+|---------|---------|----------------|
+| `AddCommentCommand` | `POST /api/v1/comments` | `comment.added` |
+| `UpdateCommentCommand` | `PUT /api/v1/comments/:id` | `comment.updated` |
+| `DeleteCommentCommand` | `DELETE /api/v1/comments/:id` | `comment.deleted` |
 
 ### Side Effects
 
 | Event | Projection | Notification |
 |-------|-----------|--------------|
-| `issue.created` | IssueReadModel inserted | In-app (if high/critical priority) |
-| `issue.assigned` | IssueReadModel.assigneeName updated | In-app to assignee |
-| `issue.escalated` | IssueReadModel.escalatedTo set, priority → critical | In-app + email to escalation target |
-| `issue.resolved` | IssueReadModel.resolvedAt set | In-app |
-
-### Status Lifecycle
-
-```
-open → in_progress → resolved → closed
-         ↑
-    (escalated: auto-set to in_progress, priority → critical)
-```
+| `comment.added` | IssueProjection increments commentCount | InAppNotificationHandler creates bell notification |
+| `comment.updated` | -- | -- |
+| `comment.deleted` | IssueProjection decrements commentCount | -- |
 
 ---
 
@@ -1032,8 +1093,10 @@ The Triage Agent is an AI event handler (`TriageAgentHandler`) that subscribes t
 3. Checks for recent duplicate decisions (30-min debounce window)
 4. Calls Claude with structured prompt + context
 5. Parses structured JSON response
-6. Executes action: `create_issue`, `escalate_issue`, or `no_action`
+6. Executes action: `create_issue`, `escalate_issue`, `contact_driver`, or `no_action`
 7. Logs the full decision via `CreateAgentDecisionCommand`
+
+**contact_driver action:** Gathers driver info from Shipment -> Load -> Driver. Creates or finds the related issue, then posts an agent comment with driver contact details (name, phone, email). Falls back to a "no driver assigned" message if no driver is linked to the shipment's load.
 
 **Configuration:** Set `ANTHROPIC_API_KEY` env var to enable. Optionally set `ANTHROPIC_MODEL` (default: `claude-sonnet-4-20250514`) and `AGENT_TRIAGE_CONCURRENCY` (default: 2).
 
@@ -1079,6 +1142,8 @@ Extensible action framework for automation rules and skill chains.
 |-------|----------|----------------|--------|
 | `create_issue` | triage | No | title, description, priority, category |
 | `escalate_issue` | triage | No | issueId, escalatedTo, reason |
+| `add_comment` | triage | No | entityType, entityId, body |
+| `contact_driver` | triage | No | shipmentId |
 | `send_email` | communication | Yes (SMTP) | to, subject, body |
 | `call_webhook` | integration | Yes (URL+auth) | body |
 

@@ -131,6 +131,119 @@ describe('Issue Command Handlers', () => {
 
       expect(result.events.some((e) => e.type === EVENT_TYPES.ISSUE_UPDATED)).toBe(true);
     });
+
+    it('emits ISSUE_CLOSED when status set to closed', async () => {
+      const closedAt = new Date('2026-04-12T12:00:00Z');
+      mockTx.issue.update.mockResolvedValueOnce({
+        ...mockIssue, status: 'closed', closedAt, closedBy: 'test-user',
+      });
+      const { bus } = mockEventBus();
+      const handler = new UpdateIssueCommandHandler(mockPrisma, bus);
+
+      const result = await handler.execute(
+        createTestCommand(UPDATE_ISSUE, {
+          id: 'issue-1',
+          data: { status: 'closed' },
+        })
+      );
+
+      expect(result.success).toBe(true);
+      const closedEvent = result.events.find((e) => e.type === EVENT_TYPES.ISSUE_CLOSED);
+      expect(closedEvent).toBeDefined();
+      expect(closedEvent!.payload).toEqual(
+        expect.objectContaining({ closedAt: closedAt.toISOString() })
+      );
+    });
+
+    it('emits ISSUE_REOPENED when closed issue set to open', async () => {
+      mockTx.issue.findUniqueOrThrow.mockResolvedValueOnce({
+        ...mockIssue, status: 'closed',
+      });
+      mockTx.issue.update.mockResolvedValueOnce({
+        ...mockIssue, status: 'open',
+      });
+      const { bus } = mockEventBus();
+      const handler = new UpdateIssueCommandHandler(mockPrisma, bus);
+
+      const result = await handler.execute(
+        createTestCommand(UPDATE_ISSUE, {
+          id: 'issue-1',
+          data: { status: 'open' },
+        })
+      );
+
+      const reopenedEvent = result.events.find((e) => e.type === EVENT_TYPES.ISSUE_REOPENED);
+      expect(reopenedEvent).toBeDefined();
+      expect(reopenedEvent!.payload).toEqual(
+        expect.objectContaining({ previousStatus: 'closed' })
+      );
+    });
+
+    it('emits ISSUE_SNOOZED when snoozedUntil is set', async () => {
+      const snoozedUntil = new Date('2026-05-01T00:00:00Z');
+      mockTx.issue.update.mockResolvedValueOnce({
+        ...mockIssue, snoozedUntil, snoozedBy: 'user-1',
+      });
+      const { bus } = mockEventBus();
+      const handler = new UpdateIssueCommandHandler(mockPrisma, bus);
+
+      const result = await handler.execute(
+        createTestCommand(UPDATE_ISSUE, {
+          id: 'issue-1',
+          data: { snoozedUntil: '2026-05-01T00:00:00Z', snoozedBy: 'user-1' },
+        })
+      );
+
+      const snoozedEvent = result.events.find((e) => e.type === EVENT_TYPES.ISSUE_SNOOZED);
+      expect(snoozedEvent).toBeDefined();
+      expect(snoozedEvent!.payload).toEqual(
+        expect.objectContaining({
+          snoozedUntil: snoozedUntil.toISOString(),
+          snoozedBy: 'user-1',
+        })
+      );
+    });
+
+    it('emits ISSUE_UNSNOOZED when snoozedUntil cleared to null', async () => {
+      mockTx.issue.findUniqueOrThrow.mockResolvedValueOnce({
+        ...mockIssue, snoozedUntil: new Date('2026-05-01T00:00:00Z'), snoozedBy: 'user-1',
+      });
+      mockTx.issue.update.mockResolvedValueOnce({
+        ...mockIssue, snoozedUntil: null, snoozedBy: null,
+      });
+      const { bus } = mockEventBus();
+      const handler = new UpdateIssueCommandHandler(mockPrisma, bus);
+
+      const result = await handler.execute(
+        createTestCommand(UPDATE_ISSUE, {
+          id: 'issue-1',
+          data: { snoozedUntil: null },
+        })
+      );
+
+      expect(result.events.some((e) => e.type === EVENT_TYPES.ISSUE_UNSNOOZED)).toBe(true);
+    });
+
+    it('emits ISSUE_NEEDS_CAPA_MARKED when needsCapa changes', async () => {
+      mockTx.issue.update.mockResolvedValueOnce({
+        ...mockIssue, needsCapa: true,
+      });
+      const { bus } = mockEventBus();
+      const handler = new UpdateIssueCommandHandler(mockPrisma, bus);
+
+      const result = await handler.execute(
+        createTestCommand(UPDATE_ISSUE, {
+          id: 'issue-1',
+          data: { needsCapa: true },
+        })
+      );
+
+      const capaEvent = result.events.find((e) => e.type === EVENT_TYPES.ISSUE_NEEDS_CAPA_MARKED);
+      expect(capaEvent).toBeDefined();
+      expect(capaEvent!.payload).toEqual(
+        expect.objectContaining({ needsCapa: true })
+      );
+    });
   });
 
   describe('EscalateIssueCommandHandler', () => {

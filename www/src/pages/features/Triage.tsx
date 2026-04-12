@@ -7,7 +7,7 @@ const problems = [
   {
     problem: 'Exceptions get buried in email threads and nobody owns them',
     solution: 'Kanban-style issue triage',
-    description: 'Every exception \u2014 late pickups, temperature excursions, carrier no-shows, damaged freight \u2014 surfaces automatically as a triage card. Drag between Open \u2192 In Progress \u2192 Resolved \u2192 Closed. Assign to team members, set priority, and never lose track of an issue again.',
+    description: 'Every exception - late pickups, temperature excursions, carrier no-shows, damaged freight - surfaces automatically as a triage card. Drag between Open, In Progress, Resolved, and Closed. Assign to team members, set priority, apply labels for organisation, and never lose track of an issue again.',
     icon: (
       <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M9 4.5v15m6-15v15m-10.875 0h15.75c.621 0 1.125-.504 1.125-1.125V5.625c0-.621-.504-1.125-1.125-1.125H4.125c-.621 0-1.125.504-1.125 1.125v12.75c0 .621.504 1.125 1.125 1.125z" />
@@ -31,7 +31,7 @@ const problems = [
   {
     problem: 'Priority is whoever shouts loudest, not what actually matters most',
     solution: 'Severity-based prioritisation',
-    description: 'Every issue gets a severity level \u2014 Critical, High, Medium, Low \u2014 based on business impact, not who sent the email. Filter by severity to focus on what matters. Escalation rules ensure critical issues never sit unattended.',
+    description: 'Every issue gets a severity level - Critical, High, Medium, Low - based on business impact, not who sent the email. Filter by severity to focus on what matters. Intelligent snooze lets you defer non-urgent issues with auto-wake, so nothing falls through the cracks. Escalation rules ensure critical issues never sit unattended.',
     icon: (
       <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
@@ -43,7 +43,7 @@ const problems = [
   {
     problem: 'You have no idea how many issues you handle per week or what the root causes are',
     solution: 'Full audit trail & analytics',
-    description: 'Every state change, assignment, and resolution is recorded as an immutable event. See how long issues take to resolve, which carriers generate the most exceptions, and which routes are problematic. Data-driven operations, not gut feel.',
+    description: 'Every state change, assignment, and resolution is recorded as an immutable event. When an issue is closed, a PDF closure report is auto-generated with full context: timeline, shipment data, temperature telemetry, SLA evaluations, and CAPA reports. See how long issues take to resolve, which carriers generate the most exceptions, and which routes are problematic. Data-driven operations, not gut feel.',
     icon: (
       <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5" />
@@ -58,12 +58,12 @@ const differentiators = [
   {
     number: '01',
     title: 'Most TMSs don\'t have this',
-    description: 'Triage and exception management is typically a separate tool you bolt on \u2014 if you have it at all. Open TMS builds it in natively, connected directly to your shipment data, sensor telemetry, and carrier performance.',
+    description: 'Triage and exception management is typically a separate tool you bolt on - if you have it at all. Open TMS builds it in natively, connected directly to your shipment data, sensor telemetry, and carrier performance.',
   },
   {
     number: '02',
     title: 'Built for logistics, not generic project management',
-    description: 'This isn\'t Jira or Trello with a logistics skin. Triage items link directly to shipments, orders, and carriers. Context is automatic \u2014 when you open an issue, you see the shipment timeline, sensor data, and carrier history without leaving the card.',
+    description: 'This isn\'t Jira or Trello with a logistics skin. Triage items link directly to shipments, orders, and carriers via entity search. Every issue has a collaborative comments thread where your team can discuss, share updates, and coordinate responses. When you open an issue, you see the shipment timeline, sensor data, and carrier history without leaving the card.',
   },
   {
     number: '03',
@@ -106,7 +106,7 @@ export default function Triage() {
               <AnimateIn animation="fade-up" delay={200}>
                 <p className="text-xl text-surface-300 leading-relaxed mb-10">
                   Most logistics teams find out about problems when the phone rings. The Triage Centre
-                  flips that &mdash; auto-detecting exceptions across your supply chain and giving your team
+                  flips that - auto-detecting exceptions across your supply chain and giving your team
                   a visual, priority-driven workflow to resolve them fast.
                 </p>
               </AnimateIn>
@@ -152,7 +152,7 @@ export default function Triage() {
                 <div>
                   <h3 className="text-lg font-bold text-white mb-2">This is rare.</h3>
                   <p className="text-surface-300 text-base leading-relaxed">
-                    Most TMS platforms don&apos;t include exception management at all &mdash; let alone integrated
+                    Most TMS platforms don&apos;t include exception management at all - let alone integrated
                     with live telemetry data. If you&apos;re using spreadsheets or email threads to track issues,
                     you&apos;re not alone. But there&apos;s a better way.
                   </p>
@@ -169,7 +169,7 @@ export default function Triage() {
           <AnimateIn animation="fade-up">
             <h2 className="text-3xl font-bold text-white mb-4">The problems we solve</h2>
             <p className="text-surface-400 text-lg mb-12 max-w-2xl">
-              Logistics operations are messy. Here&apos;s what teams deal with every day &mdash; and how the Triage Centre fixes it.
+              Logistics operations are messy. Here&apos;s what teams deal with every day, and how the Triage Centre fixes it.
             </p>
           </AnimateIn>
 

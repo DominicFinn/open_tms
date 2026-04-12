@@ -241,7 +241,7 @@ Extensible action framework. Skills are discrete, configurable action units with
 
 **ISkill interface:** Each skill has a `definition` (fields, configSchema, requiresConfig), `validateConfig()`, and `execute()` method. New skills are registered in the `SkillRegistry`.
 
-**Built-in skills:** `create_issue`, `escalate_issue`, `send_email` (requires email config), `call_webhook` (requires URL config).
+**Built-in skills:** `create_issue`, `escalate_issue`, `add_comment`, `contact_driver`, `send_email` (requires email config), `call_webhook` (requires URL config).
 
 **Template resolver:** All skill fields support `{{field.path}}` syntax resolved against event + context data. Same variable format as agent prompts.
 
@@ -258,11 +258,69 @@ Extensible action framework. Skills are discrete, configurable action units with
 - `backend/src/services/skills/SkillChainExecutor.ts` — Chain execution with branching
 - `backend/src/services/skills/TemplateResolver.ts` — `{{field.path}}` template resolution
 - `backend/src/services/skills/CreateIssueSkill.ts` — Create issue skill
+- `backend/src/services/skills/AddCommentSkill.ts` — Add comment skill
+- `backend/src/services/skills/ContactDriverSkill.ts` — Contact driver skill
 - `backend/src/services/skills/SendEmailSkill.ts` — Send email skill
 - `backend/src/services/skills/CallWebhookSkill.ts` — Webhook skill
 - `backend/src/routes/skills.ts` — Skills catalog + config + chains API
 - `backend/src/__tests__/services/ConditionEvaluator.test.ts` — 18 evaluator tests
 - `backend/src/__tests__/services/SkillChainExecutor.test.ts` — 13 chain executor tests
+
+## Issue / Triage Centre
+
+### Architecture
+The Triage Centre provides a drag-and-drop kanban board for managing operational issues (exceptions, delays, damage, compliance failures). Issues can be created manually, auto-created from domain events, or created by the AI triage agent. The system supports a full issue lifecycle with collaborative comments, labels, snooze/wake, and automatic PDF closure reports.
+
+### Key Models
+- **Issue** - Operational problem linked to a source entity (shipment, order, carrier). Fields include status, priority, category, assigneeId, escalatedTo, snoozedUntil, snoozedBy, snoozedReason, needsCapa, closedAt, closedBy, and label associations.
+- **Comment** (polymorphic) - Attached to issues, shipments, or orders via `entityType` + `entityId`. Supports user and agent-authored comments.
+- **IssueLabel** - Org-scoped labels for categorizing issues (name + color).
+- **IssueLabelAssignment** - Join table linking issues to labels.
+- **KanbanView** - Saved filter/sort configurations for the kanban board (per user or shared).
+
+### API Routes
+- **Issues:** `/api/v1/issues` - list, create, detail, update, status changes, assign, escalate, snooze, unsnooze, close, reopen, add/remove labels, activity timeline, closure report download
+- **Comments:** `/api/v1/comments` - list by entity, create, update, delete
+- **Issue Labels:** `/api/v1/issue-labels` - CRUD for org-scoped labels
+- **Kanban Views:** `/api/v1/kanban-views` - CRUD for saved board views
+
+### Issue Lifecycle
+```
+open -> in_progress -> resolved -> closed
+         |                           |
+         ^                           v (reopen)
+    (escalated: auto-set to        open
+     in_progress, priority
+     -> critical)
+
+Any status can be snoozed (snoozedUntil set). Auto-wakes when time expires.
+```
+
+### Issue Closure Reports
+When an issue is closed, the `IssueClosureReportHandler` automatically generates a PDF closure report stored via `IBinaryStorageProvider` as a `GeneratedDocument` (documentType: `issue_closure_report`). Content includes: issue summary, triggering event, shipment/order context, temperature telemetry, SLA evaluations, activity timeline, and CAPA reports.
+
+### Agent contact_driver Action
+The triage agent can execute a `contact_driver` action. It gathers driver info from Shipment -> Load -> Driver, creates or finds the related issue, and posts an agent comment with driver contact details (name, phone, email). Falls back to a "no driver assigned" message if no driver is linked.
+
+### Key Files
+- `backend/src/commands/issues/` — CreateIssue, UpdateIssue (handles snooze/close/reopen/needsCapa), EscalateIssue
+- `backend/src/repositories/IssueRepository.ts` — Issue query methods with filtering (status, priority, labels, search)
+- `backend/src/events/projections/IssueProjection.ts` — IssueReadModel maintenance (handles all issue.* + comment.* events, tracks commentCount and labels cache)
+- `backend/src/events/handlers/IssueClosureReportHandler.ts` — Auto-generates PDF closure report on issue.closed
+- `backend/src/events/handlers/InAppNotificationHandler.ts` — Bell notifications for all issue + comment events
+- `backend/src/services/IssueClosureReportService.ts` — PDF report generation (pdf-lib, stored via IBinaryStorageProvider)
+- `backend/src/services/skills/AddCommentSkill.ts` — Agent skill to post comments on issues
+- `backend/src/services/skills/ContactDriverSkill.ts` — Agent skill to look up and post driver contact info
+- `backend/src/routes/issues.ts` — Issue REST API + issue labels CRUD + kanban views CRUD
+- `backend/src/routes/comments.ts` — Polymorphic comment REST API (issues, shipments, orders)
+- `frontend/src/vnext-design/VNextIssueKanban.tsx` — Drag-and-drop kanban board with @dnd-kit
+- `frontend/src/vnext-design/VNextIssueDetail.tsx` — Issue detail page with activity timeline + comments
+- `backend/src/__tests__/commands/IssueCommands.test.ts` — 16 command handler tests
+- `backend/src/__tests__/projections/IssueProjection.test.ts` — 13 projection tests
+- `frontend/src/pages/Issues.tsx` - Kanban board with drag-and-drop (@dnd-kit)
+- `frontend/src/pages/IssueDetail.tsx` - Issue detail page with activity timeline, comments, SLA sidebar
+- `frontend/src/vnext-design/VNextIssues.tsx` - VNext kanban board (if applicable)
+
 ## Financial Operations
 
 ### Overview
