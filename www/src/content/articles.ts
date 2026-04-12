@@ -53,15 +53,9 @@ This isn't a toy project or a proof of concept. Open TMS ships with:
 
 ## The Business Model
 
-Open TMS is MIT licensed and free forever. The project is maintained by the team at System Loco, who build IoT devices and data platforms for logistics.
+Open TMS is MIT licensed and free forever. It's an independent open source project maintained by Dominic Finn and the community.
 
-If you need help with:
-- Custom deployments or private forks
-- Integration with proprietary systems
-- Cold chain hardware and sensor setup
-- Training and onboarding
-
-Professional consultancy is available. But the software itself? Always free.
+The software itself? Always free.
 
 ## Getting Started
 
@@ -361,6 +355,101 @@ The 5-step wizard guides you through:
 5. Review and publish
 
 The whole process takes under 30 seconds.
+    `,
+  },
+  {
+    slug: 'why-open-source-logistics-projects-fail',
+    title: 'Why Most Open Source Logistics Projects Fail',
+    excerpt: 'A group of people get together, form a committee, build a basic website, and then spend all their time on governance instead of shipping features. Here\'s how to actually build something.',
+    date: '2026-04-12',
+    author: 'Dominic Finn',
+    category: 'announcements',
+    readTime: '6 min read',
+    content: `
+## The Pattern
+
+You've seen it before. A group of people in the logistics industry get together and say: "Let's build an open source TMS." There's genuine enthusiasm. They have a few meetings. They set up a GitHub organisation. They build a basic website. They write a charter. They form a technical steering committee.
+
+And then nothing happens.
+
+Not because the people involved aren't talented or passionate. But because they've optimised for the wrong thing. They've built the scaffolding of a project — the governance, the processes, the committee structures — without anyone actually sitting down and building features.
+
+## The Real Problem: Nobody Ships
+
+The uncomfortable truth about early-stage open source is that it doesn't need a committee. It needs one person — or a very small number of people — who are relentlessly focused on shipping working software.
+
+Most open source logistics projects fail because:
+
+- **Too many cooks, not enough cooking.** Five people debating architecture in a Slack channel will lose to one person who just builds something and iterates.
+- **Governance before code.** You don't need a contributor agreement, a code of conduct committee, and a release process when you have zero releases.
+- **Design by committee.** Every decision requires consensus from people with different priorities, different availability, and different levels of commitment. Progress stalls.
+- **No product owner.** Without someone who wakes up every morning thinking about what to build next, the backlog becomes a graveyard of "good ideas we'll get to eventually."
+
+## What Actually Works
+
+At this stage of Open TMS, the project has a single active contributor acting as both product manager and developer. That's not a limitation — it's the strategy.
+
+Here's what that looks like in practice:
+
+### One Person, Wearing Both Hats
+
+The same person who decides "we need carrier tendering with broadcast and waterfall strategies" is the one who implements it. The same person who talks to logistics operators about their pain points is the one who writes the CAPA workflow engine. There's no handoff, no "requirements document" that gets misinterpreted, no three-week delay while a committee reviews the approach.
+
+### AI as a Force Multiplier
+
+This is where modern tooling changes the equation entirely. Tools like Claude don't just write code — they enable a single person to operate at the speed of a small team.
+
+The human contribution is the part that matters most: **thinking about the problem correctly.** What do logistics operators actually need? How should the data model work at scale? Which integrations matter? What are the right technology choices? How do we handle multi-tenancy, compliance, cold chain regulations?
+
+The AI handles the implementation velocity — generating well-structured code, writing tests, building UI components, handling the repetitive parts of software development. But it's guided by someone who understands the domain, makes architectural decisions deliberately, and documents the reasoning as they go.
+
+This isn't "vibe coding." It's product management with an AI development partner.
+
+### Moving Fast, Documenting As We Go
+
+Open TMS ships features fast. The event architecture, the carrier tendering system, the Quality Centre with CAPA investigations, the EDI suite, the IoT integration, the warehouse launch app — these were all built in a matter of weeks, not months.
+
+But speed without documentation is tech debt. Every feature ships with:
+- Updated domain behaviour docs
+- API schema blocks
+- Event type definitions
+- Test coverage
+- Marketing site updates
+
+The documentation isn't an afterthought — it's part of shipping.
+
+### Taking Feedback From Everywhere
+
+Being a single contributor doesn't mean working in isolation. Feature ideas come from:
+- Logistics operators describing their daily pain points
+- Compliance officers explaining regulatory requirements
+- Carrier partners describing their integration needs
+- GitHub issues from people who've deployed and found gaps
+- Industry forums where people discuss what they wish their TMS could do
+
+The difference is that feedback gets turned into features quickly, not added to a backlog that gets reviewed quarterly.
+
+## Why This Matters for Logistics
+
+The logistics industry is underserved by open source. There are excellent open source tools for CRM, ERP, e-commerce, project management — but almost nothing for transportation management. The commercial options cost hundreds of thousands per year.
+
+The path to changing that isn't forming a consortium. It's building software that works, shipping it, and letting the community grow around working code rather than around governance.
+
+## The Committee Can Come Later
+
+To be clear: governance matters. Contributor guidelines matter. Community structures matter. But they matter at a different stage. They matter when you have something worth governing — when you have working software that people depend on, when you have multiple active contributors who need coordination.
+
+Trying to build the community infrastructure before you have the software is putting the cart before the horse. Or, since we're in logistics — it's building the dispatch office before you have any trucks.
+
+## You Don't Need to Be a Developer
+
+If you're reading this and you're a logistics professional — a dispatcher, a warehouse manager, a compliance officer, a carrier relations manager — your contribution to this project is potentially more valuable than any code contribution.
+
+You know what features matter. You know which workflows are painful. You know what the regulations actually require. You know what carriers need from a TMS.
+
+Open a GitHub issue. Describe the problem. Tell us what your day looks like and where the software falls short. That's not a small contribution — that's the contribution that determines whether this project builds the right thing.
+
+The code will follow. It always does, when you know what to build.
     `,
   },
 ]

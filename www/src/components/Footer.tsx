@@ -60,7 +60,7 @@ export default function Footer() {
             &copy; {new Date().getFullYear()} Open TMS. Released under the MIT License.
           </p>
           <p className="text-sm text-surface-500">
-            Built with System Loco IoT integration
+            Integrates with System Loco IoT hardware
           </p>
         </div>
       </div>
