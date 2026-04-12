@@ -183,6 +183,96 @@ export default function Financial() {
       <section className="relative min-h-[85vh] flex items-center overflow-hidden">
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-primary-600/8 blur-[100px]" />
 
+        {/* Background floating invoice/document graphics */}
+        <div className="absolute inset-0 overflow-hidden" style={{ zIndex: 0 }}>
+          {/* Invoice document - top left */}
+          <svg viewBox="0 0 120 160" fill="none" className="absolute" style={{ width: '120px', top: '12%', left: '6%', opacity: 0.07, transform: 'rotate(-12deg)' }}>
+            <rect x="4" y="4" width="112" height="152" rx="8" stroke="currentColor" strokeWidth="2" fill="rgba(99,102,241,0.1)" />
+            <rect x="16" y="20" width="60" height="8" rx="4" fill="currentColor" />
+            <rect x="16" y="36" width="88" height="4" rx="2" fill="currentColor" opacity="0.5" />
+            <rect x="16" y="46" width="88" height="4" rx="2" fill="currentColor" opacity="0.5" />
+            <line x1="16" y1="60" x2="104" y2="60" stroke="currentColor" strokeWidth="1" opacity="0.4" />
+            <rect x="16" y="68" width="52" height="4" rx="2" fill="currentColor" opacity="0.4" />
+            <rect x="76" y="68" width="28" height="4" rx="2" fill="currentColor" opacity="0.4" />
+            <rect x="16" y="80" width="52" height="4" rx="2" fill="currentColor" opacity="0.4" />
+            <rect x="76" y="80" width="28" height="4" rx="2" fill="currentColor" opacity="0.4" />
+            <rect x="16" y="92" width="52" height="4" rx="2" fill="currentColor" opacity="0.4" />
+            <rect x="76" y="92" width="28" height="4" rx="2" fill="currentColor" opacity="0.4" />
+            <line x1="16" y1="106" x2="104" y2="106" stroke="currentColor" strokeWidth="1" opacity="0.4" />
+            <rect x="60" y="114" width="44" height="8" rx="4" fill="currentColor" opacity="0.6" />
+            <rect x="16" y="134" width="88" height="10" rx="5" fill="rgba(34,197,94,0.4)" />
+          </svg>
+
+          {/* Dollar circle - top right */}
+          <svg viewBox="0 0 80 80" fill="none" className="absolute" style={{ width: '80px', top: '8%', right: '10%', opacity: 0.06, transform: 'rotate(8deg)' }}>
+            <circle cx="40" cy="40" r="36" stroke="currentColor" strokeWidth="2" />
+            <text x="40" y="50" textAnchor="middle" fill="currentColor" fontSize="32" fontWeight="700">$</text>
+          </svg>
+
+          {/* Receipt - mid left */}
+          <svg viewBox="0 0 90 140" fill="none" className="absolute" style={{ width: '90px', top: '45%', left: '3%', opacity: 0.05, transform: 'rotate(6deg)' }}>
+            <path d="M4 12 Q4 4 12 4 L78 4 Q86 4 86 12 L86 128 L74 120 L62 128 L50 120 L38 128 L26 120 L14 128 L4 120 Z" stroke="currentColor" strokeWidth="2" fill="rgba(139,92,246,0.1)" />
+            <rect x="16" y="20" width="58" height="6" rx="3" fill="currentColor" opacity="0.5" />
+            <rect x="16" y="34" width="40" height="4" rx="2" fill="currentColor" opacity="0.3" />
+            <rect x="62" y="34" width="16" height="4" rx="2" fill="currentColor" opacity="0.3" />
+            <rect x="16" y="44" width="40" height="4" rx="2" fill="currentColor" opacity="0.3" />
+            <rect x="62" y="44" width="16" height="4" rx="2" fill="currentColor" opacity="0.3" />
+            <rect x="16" y="54" width="40" height="4" rx="2" fill="currentColor" opacity="0.3" />
+            <rect x="62" y="54" width="16" height="4" rx="2" fill="currentColor" opacity="0.3" />
+            <line x1="16" y1="68" x2="74" y2="68" stroke="currentColor" strokeWidth="1" opacity="0.3" strokeDasharray="4 2" />
+            <rect x="40" y="76" width="34" height="6" rx="3" fill="currentColor" opacity="0.5" />
+          </svg>
+
+          {/* Credit card outline - right side */}
+          <svg viewBox="0 0 140 90" fill="none" className="absolute" style={{ width: '140px', top: '55%', right: '5%', opacity: 0.05, transform: 'rotate(-6deg)' }}>
+            <rect x="4" y="4" width="132" height="82" rx="10" stroke="currentColor" strokeWidth="2" fill="rgba(59,130,246,0.08)" />
+            <rect x="4" y="22" width="132" height="14" fill="currentColor" opacity="0.15" />
+            <rect x="16" y="52" width="40" height="8" rx="4" fill="currentColor" opacity="0.2" />
+            <rect x="16" y="66" width="24" height="6" rx="3" fill="currentColor" opacity="0.15" />
+            <rect x="100" y="62" width="24" height="14" rx="4" fill="currentColor" opacity="0.1" />
+          </svg>
+
+          {/* Small invoice - bottom left */}
+          <svg viewBox="0 0 100 130" fill="none" className="absolute" style={{ width: '80px', bottom: '15%', left: '14%', opacity: 0.05, transform: 'rotate(-4deg)' }}>
+            <rect x="4" y="4" width="92" height="122" rx="6" stroke="currentColor" strokeWidth="2" fill="rgba(99,102,241,0.08)" />
+            <rect x="14" y="16" width="48" height="6" rx="3" fill="currentColor" opacity="0.5" />
+            <rect x="14" y="30" width="72" height="3" rx="1.5" fill="currentColor" opacity="0.3" />
+            <rect x="14" y="38" width="72" height="3" rx="1.5" fill="currentColor" opacity="0.3" />
+            <rect x="14" y="46" width="72" height="3" rx="1.5" fill="currentColor" opacity="0.3" />
+            <line x1="14" y1="58" x2="86" y2="58" stroke="currentColor" strokeWidth="1" opacity="0.3" />
+            <rect x="50" y="64" width="36" height="6" rx="3" fill="currentColor" opacity="0.4" />
+            <circle cx="30" cy="94" r="14" stroke="currentColor" strokeWidth="1.5" opacity="0.2" />
+            <path d="M26 94 l3 3 l5 -5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.3" />
+          </svg>
+
+          {/* Coins/currency - bottom right */}
+          <svg viewBox="0 0 100 100" fill="none" className="absolute" style={{ width: '100px', bottom: '20%', right: '12%', opacity: 0.05 }}>
+            <ellipse cx="50" cy="60" rx="30" ry="12" stroke="currentColor" strokeWidth="2" />
+            <ellipse cx="50" cy="50" rx="30" ry="12" stroke="currentColor" strokeWidth="2" fill="rgba(99,102,241,0.1)" />
+            <ellipse cx="50" cy="40" rx="30" ry="12" stroke="currentColor" strokeWidth="2" fill="rgba(99,102,241,0.15)" />
+            <text x="50" y="46" textAnchor="middle" fill="currentColor" fontSize="14" fontWeight="600" opacity="0.4">$</text>
+          </svg>
+
+          {/* Arrow flow between documents - mid area */}
+          <svg viewBox="0 0 200 40" fill="none" className="absolute" style={{ width: '200px', top: '30%', left: '50%', transform: 'translateX(-50%)', opacity: 0.04 }}>
+            <rect x="0" y="8" width="50" height="24" rx="4" stroke="currentColor" strokeWidth="2" />
+            <rect x="6" y="14" width="20" height="3" rx="1.5" fill="currentColor" opacity="0.5" />
+            <rect x="6" y="22" width="30" height="3" rx="1.5" fill="currentColor" opacity="0.3" />
+            <path d="M56 20 L80 20" stroke="currentColor" strokeWidth="2" markerEnd="url(#heroArrow)" />
+            <rect x="86" y="8" width="50" height="24" rx="4" stroke="currentColor" strokeWidth="2" />
+            <rect x="92" y="14" width="20" height="3" rx="1.5" fill="currentColor" opacity="0.5" />
+            <rect x="92" y="22" width="30" height="3" rx="1.5" fill="currentColor" opacity="0.3" />
+            <path d="M142 20 L166 20" stroke="currentColor" strokeWidth="2" markerEnd="url(#heroArrow)" />
+            <circle cx="184" cy="20" r="14" stroke="currentColor" strokeWidth="2" />
+            <path d="M179 20 l3 3 l6 -6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            <defs>
+              <marker id="heroArrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                <path d="M0 0 L8 4 L0 8" fill="currentColor" />
+              </marker>
+            </defs>
+          </svg>
+        </div>
+
         <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-32 pb-20 flex flex-col items-center text-center" style={{ zIndex: 2 }}>
           <Link to="/" className="inline-flex items-center gap-2 text-sm text-surface-400 hover:text-white transition-colors mb-8">
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -200,17 +290,17 @@ export default function Financial() {
 
             <AnimateIn animation="fade-up" delay={100}>
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight leading-[1.1] mb-6">
-                Stop chasing invoices.
+                Complete freight finance.
                 <br />
-                <span className="gradient-text">Start getting paid.</span>
+                <span className="gradient-text">From first quote to final payment.</span>
               </h1>
             </AnimateIn>
 
             <AnimateIn animation="fade-up" delay={200}>
               <p className="text-xl text-surface-300 leading-relaxed">
-                Full AR/AP lifecycle built into the TMS. Customer invoicing, carrier freight audit,
-                quoting with revision tracking, LTL rating, and financial reporting - all connected
-                to your shipment data with zero manual re-entry.
+                Manage both sides of the ledger in one place. Invoice your customers automatically on delivery,
+                audit carrier invoices with three-way matching, generate quotes with revision tracking, rate LTL shipments,
+                and get real-time margin visibility - all connected to your shipment data with zero manual re-entry.
               </p>
             </AnimateIn>
           </div>
