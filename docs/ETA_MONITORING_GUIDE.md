@@ -295,3 +295,121 @@ Notifications appear in the bell icon and are sent via email (if configured via 
 2. Add env-based selection logic in `backend/src/di/registry.ts`
 3. Export from the barrel `backend/src/services/routing/index.ts`
 4. The rest of the system (ETA monitor, events, notifications) works unchanged
+
+---
+
+## Route Deviation Alerts
+
+### Overview
+
+Route deviation detection is an extension of the ETA monitoring system. When a lane has a planned route stored as a `LaneRoute`, the ETA monitor compares each in-transit shipment's GPS position against that route's polyline during every monitoring cycle. If the distance exceeds the configured corridor, a `tracking.route_deviation` event fires.
+
+This is a separate concern from ETA delay detection. A shipment can be on-time but off-route (driver took a detour), or on-route but delayed (traffic). Both are checked independently.
+
+### How It Works
+
+**Route Planning (one-time, per lane):**
+
+1. User opens lane create/edit page and selects origin + destination locations (must have lat/lng coordinates)
+2. If a Google Maps API key is configured, the frontend loads a Google Maps DirectionsRenderer
+3. The route auto-calculates between origin/destination, passing through any intermediate stops (hub-and-spoke waypoints)
+4. User can drag the blue route line on the map to adjust the planned path (e.g., force a specific highway)
+5. On save, the frontend sends the encoded polyline, distance, duration, and corridor to `PUT /api/v1/lanes/:laneId/route`
+6. The backend stores this as a `LaneRoute` record (one per lane)
+
+**Deviation Detection (continuous, during ETA cycles):**
+
+1. ETA monitor runs its normal cycle (every 10 min via pg-boss cron)
+2. For each in-transit shipment with a `laneId`, it checks if that lane has a `LaneRoute`
+3. If it does, the `RouteDeviationService` is called with the shipment's GPS position and the route's encoded polyline
+4. The service decodes the polyline into lat/lng segments, then finds the nearest point on the polyline using point-to-segment projection
+5. Haversine distance is calculated between the current GPS position and the nearest route point
+6. If the distance exceeds the lane's `corridorMeters`:
+   - **Warning** (distance > corridor): `tracking.route_deviation` event with severity `warning`
+   - **Critical** (distance > 2x corridor): `tracking.route_deviation` event + `shipment.exception` event (type: `route_deviation`)
+
+### Design Choices
+
+**Why Google Maps for route planning but not for real-time routing?**
+
+The ETA monitor uses the IRoutingProvider interface (TomTom/HERE/Valhalla) for real-time ETA calculations because those providers offer traffic-aware truck routing at high volumes. Google Maps Directions API is used only for one-time route planning because it offers the best draggable UI experience in the browser - users can visually adjust routes by dragging the rendered path. This is a UI authoring concern, not a routing volume concern.
+
+**Why encode polylines instead of storing raw lat/lng arrays?**
+
+Google's encoded polyline format compresses the route into a compact string (typically 5-10x smaller than raw JSON arrays). A 500-point route that would be 12KB as JSON is about 2KB encoded. The `LaneRoute` model also stores decoded `waypoints` JSON for quick access when needed, so there is no decoding penalty for reads.
+
+**Why a per-lane model instead of per-shipment?**
+
+Routes are a property of the lane (the corridor between two locations), not individual shipments. Multiple shipments on the same lane share the same planned route. This avoids storing redundant route data and means updating a route once applies to all future shipments on that lane.
+
+**Why a configurable corridor instead of a fixed threshold?**
+
+Different lanes have different tolerances. A 5km corridor makes sense for a 500-mile interstate route but is too generous for a 20-mile urban delivery. The default is 5000m (3.1 mi), configurable per lane from 100m to 50km.
+
+### Graceful Degradation
+
+The feature is designed to degrade gracefully at every level:
+
+| Missing Component | Behavior |
+|---|---|
+| No Google Maps API key in org settings | Frontend shows an informational warning: "Google Maps API key required. Go to Admin > Map Settings." Lane creation works fine without route planning. |
+| API key present but Google Maps JS fails to load | MapProvider falls back to OpenStreetMap. Route editor shows the same warning. |
+| Lane has no LaneRoute | ETA monitor skips deviation check for that lane's shipments. No errors. |
+| Shipment has no laneId | ETA monitor skips deviation check entirely. Normal ETA monitoring continues. |
+| Shipment has no GPS position | Already skipped by the ETA monitor's stale-GPS filter. |
+| RouteDeviationService throws an error | Caught and logged as a warning. ETA monitoring continues for the next shipment. |
+| Routing provider not configured (no ETA monitor) | No deviation checks run since they're part of the ETA cycle. The route can still be planned and stored for future use. |
+
+### Corridor Visualization
+
+The frontend shows the corridor on the lane detail page and create/edit page. The corridor value is displayed in both kilometers and miles alongside the route distance and duration. Users adjust it via a number input with a range of 100m to 50km.
+
+### Events Reference
+
+**`tracking.route_deviation`**
+
+```json
+{
+  "type": "tracking.route_deviation",
+  "entityType": "shipment",
+  "entityId": "ship-uuid",
+  "payload": {
+    "shipmentId": "ship-uuid",
+    "shipmentReference": "SH-00042",
+    "laneId": "lane-uuid",
+    "laneName": "New York, NY -> Philadelphia, PA",
+    "currentLat": 40.123,
+    "currentLng": -75.456,
+    "deviationMeters": 7500,
+    "corridorMeters": 5000,
+    "severity": "warning",
+    "nearestRouteLat": 40.100,
+    "nearestRouteLng": -75.200
+  }
+}
+```
+
+### API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/lanes/:laneId/route` | Get the planned route for a lane |
+| PUT | `/api/v1/lanes/:laneId/route` | Save or update the planned route |
+| DELETE | `/api/v1/lanes/:laneId/route` | Remove the planned route |
+| POST | `/api/v1/lanes/:laneId/route/calculate` | Preview a route via Google Maps (not saved) |
+| POST | `/api/v1/lanes/:laneId/route/check-deviation` | Check a position against the lane's route |
+| GET | `/api/v1/lanes/:laneId/route/google-maps-status` | Check if Google Maps API key is configured |
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `backend/prisma/schema.prisma` (LaneRoute model) | Per-lane planned route storage |
+| `backend/src/services/routing/GoogleMapsDirectionsService.ts` | Google Maps API client + polyline encode/decode |
+| `backend/src/services/routing/RouteDeviationService.ts` | Point-to-polyline distance algorithm |
+| `backend/src/services/routing/ShipmentEtaMonitorService.ts` | Integrated deviation checking |
+| `backend/src/routes/laneRoutes.ts` | Lane route API endpoints |
+| `frontend/src/components/GoogleMapsRouteEditor.tsx` | Draggable Google Maps route editor |
+| `frontend/src/vnext-design/VNextCreateLane.tsx` | Lane form with route planning |
+| `frontend/src/vnext-design/VNextLaneDetail.tsx` | Lane detail with route visualization |
+| `backend/src/__tests__/services/RouteDeviationService.test.ts` | 15 unit tests |

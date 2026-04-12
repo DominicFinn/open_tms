@@ -92,6 +92,16 @@ const features = [
     highlight: false,
   },
   {
+    title: 'Route Deviation Alerts',
+    description: 'Per-lane planned routes with Google Maps drag-to-edit, configurable deviation corridors, and automatic alerting when in-transit shipments stray off the expected path.',
+    icon: (
+      <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 6.75V15m6-6v8.25m.503 3.498l4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 00-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0z" />
+      </svg>
+    ),
+    highlight: true,
+  },
+  {
     title: 'SLA Management',
     description: 'Two-tier SLA policies (org defaults + customer overrides) with 8 rule types: ETA delivery, issue response, dwell time, security events, and temperature excursions. Automatic breach detection and issue creation.',
     icon: (
