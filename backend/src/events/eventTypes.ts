@@ -81,6 +81,7 @@ export const EVENT_TYPES = {
   TRACKING_LOCATION_RECEIVED: 'tracking.location_received',
   TRACKING_GEOFENCE_ENTERED: 'tracking.geofence_entered',
   TRACKING_ETA_UPDATED: 'tracking.eta_updated',
+  TRACKING_ROUTE_DEVIATION: 'tracking.route_deviation',
 
   // Cargo tracking & misdrop detection
   CARGO_SCAN_RECORDED: 'cargo.scan_recorded',
@@ -243,6 +244,7 @@ export const EVENT_SCHEMA_VERSIONS: Record<string, number> = {
   [EVENT_TYPES.TRACKING_LOCATION_RECEIVED]: 1,
   [EVENT_TYPES.TRACKING_GEOFENCE_ENTERED]: 1,
   [EVENT_TYPES.TRACKING_ETA_UPDATED]: 1,
+  [EVENT_TYPES.TRACKING_ROUTE_DEVIATION]: 1,
   [EVENT_TYPES.ISSUE_CREATED]: 1,
   [EVENT_TYPES.ISSUE_UPDATED]: 1,
   [EVENT_TYPES.ISSUE_ASSIGNED]: 1,
@@ -429,6 +431,20 @@ export interface TrackingEtaUpdatedPayload {
   nextStopName?: string;
   trafficDelaySeconds?: number;
   provider: string;
+}
+
+export interface TrackingRouteDeviationPayload {
+  shipmentId: string;
+  shipmentReference: string;
+  laneId: string;
+  laneName: string;
+  currentLat: number;
+  currentLng: number;
+  deviationMeters: number;
+  corridorMeters: number;
+  severity: 'warning' | 'critical';
+  nearestRouteLat: number;
+  nearestRouteLng: number;
 }
 
 export interface EntityChangedPayload {

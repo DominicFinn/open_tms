@@ -15,6 +15,7 @@
 import { PrismaClient } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { IRoutingProvider, RouteResult, RoutingError } from './IRoutingProvider.js';
+import { IRouteDeviationService } from './RouteDeviationService.js';
 import { IEventBus } from '../../events/IEventBus.js';
 import { DomainEvent } from '../../events/DomainEvent.js';
 import { EVENT_TYPES, EVENT_SCHEMA_VERSIONS } from '../../events/eventTypes.js';
@@ -76,14 +77,17 @@ export interface IShipmentEtaMonitorService {
 
 export class ShipmentEtaMonitorService implements IShipmentEtaMonitorService {
   private config: EtaMonitorConfig;
+  private routeDeviationService: IRouteDeviationService | null;
 
   constructor(
     private prisma: PrismaClient,
     private routingProvider: IRoutingProvider,
     private eventBus: IEventBus,
     config?: Partial<EtaMonitorConfig>,
+    routeDeviationService?: IRouteDeviationService,
   ) {
     this.config = { ...DEFAULT_CONFIG, ...config };
+    this.routeDeviationService = routeDeviationService || null;
   }
 
   async runEtaCheck(): Promise<EtaMonitorRunResult> {
@@ -372,6 +376,11 @@ export class ShipmentEtaMonitorService implements IShipmentEtaMonitorService {
       });
     }
 
+    // Route deviation check: if the shipment has a lane with a planned route, check deviation
+    if (this.routeDeviationService && shipment.laneId) {
+      await this.checkRouteDeviation(shipment);
+    }
+
     return {
       shipmentId: shipment.id,
       shipmentReference: shipment.reference,
@@ -425,6 +434,89 @@ export class ShipmentEtaMonitorService implements IShipmentEtaMonitorService {
     await this.eventBus.publish(event);
   }
 
+  /** Check if the shipment has deviated from its planned lane route */
+  private async checkRouteDeviation(shipment: any): Promise<void> {
+    if (!this.routeDeviationService) return;
+
+    try {
+      const laneRoute = await this.prisma.laneRoute.findUnique({
+        where: { laneId: shipment.laneId },
+      });
+
+      if (!laneRoute) return; // No planned route for this lane
+
+      const result = this.routeDeviationService.checkDeviation(
+        { lat: shipment.currentLat, lng: shipment.currentLng },
+        laneRoute.encodedPolyline,
+        laneRoute.corridorMeters,
+      );
+
+      if (result.isDeviated) {
+        // Get lane name for the event
+        const lane = await this.prisma.lane.findUnique({
+          where: { id: shipment.laneId },
+          select: { name: true },
+        });
+
+        await this.publishRouteDeviationEvent(shipment, {
+          laneId: shipment.laneId,
+          laneName: lane?.name || 'Unknown',
+          deviationMeters: result.deviationMeters,
+          corridorMeters: result.corridorMeters,
+          severity: result.severity as 'warning' | 'critical',
+          nearestRouteLat: result.nearestPointOnRoute.lat,
+          nearestRouteLng: result.nearestPointOnRoute.lng,
+        });
+
+        // Also raise an exception for critical deviations
+        if (result.severity === 'critical') {
+          await this.publishShipmentException(shipment, {
+            delayMinutes: 0,
+            nextStopName: lane?.name || 'planned route',
+            newEta: new Date().toISOString(),
+            exceptionType: 'route_deviation',
+            description: `Shipment has deviated ${Math.round(result.deviationMeters / 1000)}km from the planned route on lane "${lane?.name || 'Unknown'}"`,
+          });
+        }
+      }
+    } catch (err) {
+      console.warn(`[EtaMonitor] Route deviation check failed for ${shipment.reference}: ${(err as Error).message}`);
+    }
+  }
+
+  /** Publish tracking.route_deviation domain event */
+  private async publishRouteDeviationEvent(shipment: any, detail: any): Promise<void> {
+    const event: DomainEvent = {
+      id: randomUUID(),
+      type: EVENT_TYPES.TRACKING_ROUTE_DEVIATION,
+      timestamp: new Date().toISOString(),
+      orgId: shipment.orgId,
+      actorId: null,
+      entityType: 'shipment',
+      entityId: shipment.id,
+      payload: {
+        shipmentId: shipment.id,
+        shipmentReference: shipment.reference,
+        laneId: detail.laneId,
+        laneName: detail.laneName,
+        currentLat: shipment.currentLat,
+        currentLng: shipment.currentLng,
+        deviationMeters: detail.deviationMeters,
+        corridorMeters: detail.corridorMeters,
+        severity: detail.severity,
+        nearestRouteLat: detail.nearestRouteLat,
+        nearestRouteLng: detail.nearestRouteLng,
+      },
+      metadata: {
+        correlationId: randomUUID(),
+        source: 'eta-monitor',
+        schemaVersion: EVENT_SCHEMA_VERSIONS[EVENT_TYPES.TRACKING_ROUTE_DEVIATION] || 1,
+      },
+    };
+
+    await this.eventBus.publish(event);
+  }
+
   /** Publish shipment.exception for critical delays */
   private async publishShipmentException(shipment: any, detail: any): Promise<void> {
     const event: DomainEvent = {
@@ -437,8 +529,8 @@ export class ShipmentEtaMonitorService implements IShipmentEtaMonitorService {
       entityId: shipment.id,
       payload: {
         shipmentReference: shipment.reference,
-        exceptionType: 'eta_critical_delay',
-        description: `Shipment is estimated to arrive ${detail.delayMinutes} minutes late at ${detail.nextStopName}. New ETA: ${detail.newEta}`,
+        exceptionType: detail.exceptionType || 'eta_critical_delay',
+        description: detail.description || `Shipment is estimated to arrive ${detail.delayMinutes} minutes late at ${detail.nextStopName}. New ETA: ${detail.newEta}`,
       },
       metadata: {
         correlationId: randomUUID(),

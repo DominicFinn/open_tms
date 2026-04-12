@@ -930,6 +930,7 @@ export default function VNextShipmentDetail() {
   const [error, setError] = useState('');
   const [documents, setDocuments] = useState<any[]>([]);
   const [generating, setGenerating] = useState<string | null>(null);
+  const [routeDeviation, setRouteDeviation] = useState<any>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -957,6 +958,31 @@ export default function VNextShipmentDetail() {
   }, [id]);
 
   useEffect(() => { loadDocuments(); }, [loadDocuments]);
+
+  // Check route deviation for in-transit shipments with a lane
+  useEffect(() => {
+    if (!shipment?.laneId) return;
+    const inTransit = ['in_transit', 'dispatched', 'picked_up', 'at_stop'].includes(shipment.status);
+    if (!inTransit) return;
+
+    // Get current GPS from read model (currentLat, currentLng on shipment)
+    const lat = shipment.currentLat;
+    const lng = shipment.currentLng;
+    if (!lat || !lng) return;
+
+    fetch(`${API_URL}/api/v1/lanes/${shipment.laneId}/route/check-deviation`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lat, lng }),
+    })
+      .then(r => r.json())
+      .then(json => {
+        if (json.data?.isDeviated) {
+          setRouteDeviation(json.data);
+        }
+      })
+      .catch(() => {});
+  }, [shipment?.laneId, shipment?.status, shipment?.currentLat, shipment?.currentLng]);
 
   const handleGenerateDoc = async (type: 'bol' | 'customs') => {
     if (!id) return;
@@ -1098,6 +1124,31 @@ export default function VNextShipmentDetail() {
           </button>
         </div>
       </div>
+
+      {/* Route Deviation Alert */}
+      {routeDeviation && (
+        <div className={`vn-alert vn-alert-${routeDeviation.severity === 'critical' ? 'error' : 'warning'}`} style={{ marginBottom: 16, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+          <span className="material-icons" style={{ fontSize: 20, flexShrink: 0 }}>
+            {routeDeviation.severity === 'critical' ? 'error' : 'warning'}
+          </span>
+          <div>
+            <strong>Route Deviation Detected</strong>
+            <p style={{ margin: '4px 0 0', fontSize: 13 }}>
+              This shipment is <strong>{(routeDeviation.deviationMeters / 1000).toFixed(1)} km</strong> off
+              the planned route (corridor: {(routeDeviation.corridorMeters / 1000).toFixed(1)} km).
+              {routeDeviation.severity === 'critical' && ' This is a critical deviation.'}
+            </p>
+            {shipment.laneId && (
+              <Link
+                to={`/lanes/${shipment.laneId}`}
+                style={{ fontSize: 12, color: 'inherit', marginTop: 4, display: 'inline-block' }}
+              >
+                View planned route
+              </Link>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Map */}
       {hasAnyCoords ? (
@@ -1317,7 +1368,10 @@ export default function VNextShipmentDetail() {
                 <div className="vn-info-item"><label>Status</label><span>{shipment.status || '—'}</span></div>
                 <div className="vn-info-item"><label>Pickup Date</label><span>{shipment.pickupDate ? new Date(shipment.pickupDate).toLocaleDateString() : '—'}</span></div>
                 <div className="vn-info-item"><label>Delivery Date</label><span>{shipment.deliveryDate ? new Date(shipment.deliveryDate).toLocaleDateString() : '—'}</span></div>
-                <div className="vn-info-item"><label>Lane</label><span>{shipment.lane?.name || '—'}</span></div>
+                <div className="vn-info-item"><label>Lane</label><span>{shipment.laneId ? <Link to={`/lanes/${shipment.laneId}`} style={{ color: 'var(--primary)' }}>{shipment.lane?.name || 'View Lane'}</Link> : '-'}</span></div>
+                {routeDeviation && (
+                  <div className="vn-info-item"><label>Route Status</label><span className={`vn-chip vn-chip-${routeDeviation.severity === 'critical' ? 'error' : 'warning'}`} style={{ fontSize: 11 }}>{(routeDeviation.deviationMeters / 1000).toFixed(1)} km off route</span></div>
+                )}
                 {orders.length > 0 && (
                   <div className="vn-info-item"><label>Orders</label><span>{orders.map((os: any) => os.order?.orderNumber).filter(Boolean).join(', ') || '—'}</span></div>
                 )}

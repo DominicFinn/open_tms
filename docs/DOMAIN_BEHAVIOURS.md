@@ -888,6 +888,77 @@ pg-boss cron schedule (default: every 10 minutes). Can also be triggered manuall
 
 ---
 
+## Route Deviation Alerts
+
+The route deviation system detects when an in-transit shipment deviates from a planned lane route. Routes are defined per-lane using Google Maps Directions API and stored as encoded polylines with a configurable deviation corridor.
+
+### Lane Route Model
+
+Each lane can have one planned route (`LaneRoute`) containing:
+- **encodedPolyline** - Google-encoded polyline string of the planned path
+- **waypoints** - JSON array of `{lat, lng}` for quick access
+- **distanceMeters / durationSeconds** - Route metadata from Google Maps
+- **corridorMeters** - Max distance from route before alerting (default: 5000m)
+- **summary** - Google's route summary (e.g., "via I-95 N")
+
+### Route Planning (Frontend)
+
+Users create planned routes on the lane create/edit page:
+1. Select origin and destination locations (must have lat/lng coordinates)
+2. Add intermediate stops for hub-and-spoke routing (these become waypoints)
+3. Google Maps renders a draggable DirectionsRenderer on the map
+4. Users can drag the route line to adjust the planned path
+5. Distance, duration, and corridor are saved with the lane route
+
+**Requires:** Google Maps API key configured in Admin > Map Settings.
+
+### Deviation Detection
+
+During each ETA monitor cycle, for shipments with a `laneId` that has a `LaneRoute`:
+1. Get the shipment's current GPS position from ShipmentReadModel
+2. Find the nearest point on the planned route polyline (point-to-segment projection)
+3. Calculate haversine distance from current position to nearest route point
+4. Compare against the lane route's `corridorMeters` threshold
+
+### Events Emitted
+
+| Condition | Event | Payload |
+|-----------|-------|---------|
+| Distance > corridor (warning) | `tracking.route_deviation` | `{ shipmentId, shipmentReference, laneId, laneName, currentLat, currentLng, deviationMeters, corridorMeters, severity: "warning", nearestRouteLat, nearestRouteLng }` |
+| Distance > 2x corridor (critical) | `tracking.route_deviation` + `shipment.exception` | Same as above with `severity: "critical"` + exception event |
+
+### Side Effects
+
+| Event | What Happens |
+|-------|-------------|
+| `tracking.route_deviation` | InAppNotificationHandler creates deviation notification; Triage agent evaluates for auto-issue creation |
+| `shipment.exception` (route_deviation) | Full exception flow: notification, audit, email, triage agent evaluation |
+
+### API Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/v1/lanes/:laneId/route` | Get planned route for a lane |
+| PUT | `/api/v1/lanes/:laneId/route` | Save/update planned route |
+| DELETE | `/api/v1/lanes/:laneId/route` | Delete planned route |
+| POST | `/api/v1/lanes/:laneId/route/calculate` | Preview route via Google Maps (not saved) |
+| POST | `/api/v1/lanes/:laneId/route/check-deviation` | Check if a position deviates from route |
+| GET | `/api/v1/lanes/:laneId/route/google-maps-status` | Check if Google Maps API key is configured |
+
+### Key Files
+
+- `backend/prisma/schema.prisma` - LaneRoute model
+- `backend/src/services/routing/GoogleMapsDirectionsService.ts` - Google Maps Directions API + polyline encode/decode
+- `backend/src/services/routing/RouteDeviationService.ts` - Point-to-polyline deviation detection
+- `backend/src/services/routing/ShipmentEtaMonitorService.ts` - Integrated deviation checking during ETA monitor runs
+- `backend/src/routes/laneRoutes.ts` - Lane route API endpoints
+- `frontend/src/components/GoogleMapsRouteEditor.tsx` - Draggable Google Maps route editor
+- `frontend/src/vnext-design/VNextCreateLane.tsx` - Lane create/edit with route planning
+- `frontend/src/vnext-design/VNextLaneDetail.tsx` - Lane detail with route visualization
+- `frontend/src/vnext-design/VNextShipmentDetail.tsx` - Route deviation alert banner on shipment detail
+
+---
+
 ## Warehouse App
 
 The warehouse app is a mobile-first sub-application for warehouse operatives to "launch" shipments — preparing them for dispatch by assigning IoT trackers, accessories, and verifying details.
