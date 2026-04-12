@@ -45,6 +45,11 @@ const TRANSACTION_ROUTES: Record<string, EdiRouteResult> = {
     endpoint: '/api/v1/edi/210/inbound',
     description: 'Freight Invoice → Create Carrier Invoice',
   },
+  '820': {
+    transactionType: '820',
+    endpoint: '/api/v1/edi/820/inbound',
+    description: 'Payment Order/Remittance Advice → Record Payments',
+  },
 };
 
 export class EdiRouterService implements IEdiRouterService {

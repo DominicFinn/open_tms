@@ -91,6 +91,7 @@ const APPS: AppDef[] = [
         { to: '/finance/quotes', icon: 'request_quote', label: 'Quotes' },
         { to: '/finance/invoices', icon: 'receipt', label: 'Invoices' },
         { to: '/finance/carrier-invoices', icon: 'local_shipping', label: 'Carrier Invoices' },
+        { to: '/finance/payments', icon: 'payment', label: 'Record Payments' },
       ]},
       { title: 'Disputes', items: [
         { to: '/finance/queries', icon: 'help_outline', label: 'Queries & Disputes' },

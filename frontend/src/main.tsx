@@ -72,6 +72,7 @@ import VNextFinanceQueryDetail from './vnext-design/VNextFinanceQueryDetail';
 import VNextFinanceCreateInvoice from './vnext-design/VNextFinanceCreateInvoice';
 import VNextFinanceCreateQuote from './vnext-design/VNextFinanceCreateQuote';
 import VNextFinanceAgingReport from './vnext-design/VNextFinanceAgingReport';
+import VNextFinanceRecordPayments from './vnext-design/VNextFinanceRecordPayments';
 
 // Carrier Tendering & Portal
 import Tenders from './pages/Tenders';
@@ -220,6 +221,7 @@ root.render(
           <Route path="finance/queries/:id" element={<VNextFinanceQueryDetail />} />
           <Route path="finance/credit-notes" element={<VNextFinanceCreditNotes />} />
           <Route path="finance/aging" element={<VNextFinanceAgingReport />} />
+          <Route path="finance/payments" element={<VNextFinanceRecordPayments />} />
 
           {/* Integrations (sub-layout with tabs) */}
           <Route path="integrations" element={<VNextIntegrationsLayout />}>
