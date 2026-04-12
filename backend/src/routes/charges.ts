@@ -7,6 +7,7 @@ import { IRatingService } from '../services/RatingService.js';
 import { ICommandBus } from '../commands/CommandBus.js';
 import { CREATE_CHARGE, CreateChargePayload } from '../commands/charges/CreateChargeCommand.js';
 import { APPROVE_CHARGE, ApproveChargePayload } from '../commands/charges/ApproveChargeCommand.js';
+import { REWEIGH_ADJUSTMENT, ReweighAdjustmentPayload } from '../commands/charges/ReweighAdjustmentCommand.js';
 
 export async function chargeRoutes(server: FastifyInstance) {
   const chargeService = container.resolve<IChargeService>(TOKENS.IChargeService);
@@ -236,6 +237,56 @@ export async function chargeRoutes(server: FastifyInstance) {
     try {
       const breakdown = await ratingService.calculateRate(body);
       return { data: breakdown, error: null };
+    } catch (err: any) {
+      reply.code(400);
+      return { data: null, error: err.message };
+    }
+  });
+
+  // Re-weigh / re-class adjustment
+  server.post('/api/v1/shipments/:id/reweigh-adjustment', {
+    schema: {
+      tags: ['Financial - Charges'],
+      summary: 'Record a re-weigh or re-class adjustment from the carrier',
+      body: {
+        type: 'object',
+        required: ['declaredWeightLbs', 'actualWeightLbs', 'originalChargeCents', 'adjustedChargeCents'],
+        properties: {
+          declaredWeightLbs: { type: 'number' },
+          actualWeightLbs: { type: 'number' },
+          declaredClass: { type: 'string' },
+          actualClass: { type: 'string' },
+          originalChargeCents: { type: 'integer' },
+          adjustedChargeCents: { type: 'integer' },
+          carrierId: { type: 'string' },
+        },
+      },
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const body = z.object({
+      declaredWeightLbs: z.number().positive(),
+      actualWeightLbs: z.number().positive(),
+      declaredClass: z.string().optional(),
+      actualClass: z.string().optional(),
+      originalChargeCents: z.number().int(),
+      adjustedChargeCents: z.number().int(),
+      carrierId: z.string().optional(),
+    }).parse((req as any).body);
+
+    try {
+      const result = await commandBus.dispatch<ReweighAdjustmentPayload, { costChargeId: string; revenueChargeId: string }>({
+        type: REWEIGH_ADJUSTMENT,
+        orgId: (req as any).orgId ?? '',
+        actorId: (req as any).user?.sub ?? null,
+        payload: { shipmentId: id, ...body },
+        metadata: { correlationId: crypto.randomUUID(), source: 'api' },
+      });
+      if (!result.success) {
+        reply.code(400);
+        return { data: null, error: result.error };
+      }
+      return { data: result.data, error: null };
     } catch (err: any) {
       reply.code(400);
       return { data: null, error: err.message };

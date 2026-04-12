@@ -111,6 +111,8 @@ import { LtlRatingService } from '../services/LtlRatingService.js';
 import { CreateQuoteCommandHandler } from '../commands/quotes/CreateQuoteCommand.js';
 import { AcceptQuoteCommandHandler } from '../commands/quotes/AcceptQuoteCommand.js';
 import { DeclineQuoteCommandHandler } from '../commands/quotes/DeclineQuoteCommand.js';
+import { ReviseQuoteCommandHandler } from '../commands/quotes/ReviseQuoteCommand.js';
+import { ReweighAdjustmentCommandHandler } from '../commands/charges/ReweighAdjustmentCommand.js';
 import { ApproveCarrierInvoiceCommandHandler } from '../commands/carrierInvoices/ApproveCarrierInvoiceCommand.js';
 import { RecordCarrierPaymentCommandHandler } from '../commands/carrierInvoices/RecordCarrierPaymentCommand.js';
 import { ApproveInvoiceCommandHandler } from '../commands/invoices/ApproveInvoiceCommand.js';
@@ -619,6 +621,8 @@ export function registerDependencies(prisma: PrismaClient): void {
     bus.register(new CreateQuoteCommandHandler(prisma, eventBus));
     bus.register(new AcceptQuoteCommandHandler(prisma, eventBus));
     bus.register(new DeclineQuoteCommandHandler(prisma, eventBus));
+    bus.register(new ReviseQuoteCommandHandler(prisma, eventBus));
+    bus.register(new ReweighAdjustmentCommandHandler(prisma, eventBus));
 
     return bus;
   });

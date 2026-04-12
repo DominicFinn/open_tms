@@ -14,6 +14,10 @@ import { createOutboundTrackingWorker } from './workers/outboundTrackingWorker.j
 import { createInboundWebhookWorker } from './workers/inboundWebhookWorker.js';
 import { createEtaMonitorWorker, registerEtaMonitorSchedule, ETA_MONITOR_QUEUE } from './workers/etaMonitorWorker.js';
 import { createSlaMonitorWorker, registerSlaMonitorSchedule, SLA_MONITOR_QUEUE } from './workers/slaMonitorWorker.js';
+import {
+  createQuoteExpirationWorker, registerQuoteExpirationSchedule, QUOTE_EXPIRATION_QUEUE,
+  createInvoiceOverdueWorker, registerInvoiceOverdueSchedule, INVOICE_OVERDUE_QUEUE,
+} from './workers/financialCronWorkers.js';
 import { ISlaEvaluationService } from './services/SlaEvaluationService.js';
 import { OrderDeliveryService } from './services/OrderDeliveryService.js';
 import { ArrivalCriteriaEvaluationService } from './services/ArrivalCriteriaEvaluationService.js';
@@ -199,6 +203,20 @@ async function start() {
         }
       } catch (err) {
         server.log.warn('SLA monitor worker failed to register: ' + (err as Error).message);
+      }
+
+      // Financial cron workers — always enabled
+      try {
+        const finBoss = (queue as any).boss;
+        if (finBoss) {
+          await registerQuoteExpirationSchedule(finBoss);
+          await queue.subscribe(QUOTE_EXPIRATION_QUEUE, createQuoteExpirationWorker(server.prisma));
+          await registerInvoiceOverdueSchedule(finBoss);
+          await queue.subscribe(INVOICE_OVERDUE_QUEUE, createInvoiceOverdueWorker(server.prisma));
+          server.log.info('Financial cron workers registered (quote expiration, invoice overdue)');
+        }
+      } catch (err) {
+        server.log.warn('Financial cron workers failed to register: ' + (err as Error).message);
       }
 
       server.log.info('Embedded queue workers registered (set DISABLE_EMBEDDED_WORKERS=true to use separate worker container)');

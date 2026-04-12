@@ -309,8 +309,8 @@
   - ✅ Configurable markup percentage and validity period
   - ✅ Quote REST API (5 endpoints) + LTL rate calc endpoints
   - ✅ 8 unit tests for quote command handlers
-  - 🔲 Quote expiration cron
-  - 🔲 Quote revision workflow (supersede + create new version)
+  - ✅ Quote expiration cron (pg-boss, every 30 min)
+  - ✅ Quote revision workflow (supersede + create new version with parentQuoteId linking)
 - **Phase 7C: Customer Invoicing (AR)** (in progress)
   - ✅ InvoiceRepository + PaymentRepository (interface + DTO + implementation)
   - ✅ InvoicingService (generate from shipments, find ready-to-invoice)
@@ -321,7 +321,7 @@
   - ✅ Void invoice reverts charges to approved and billing status to ready_to_invoice
   - ✅ Full/partial payment with auto-status transitions (partial_paid / paid)
   - ✅ 13 unit tests for all invoice command handlers
-  - 🔲 Invoice overdue detection cron
+  - ✅ Invoice overdue detection cron (pg-boss, hourly, 7-day reminder cadence)
   - 🔲 Invoice consolidation (weekly, monthly batching)
   - 🔲 Frontend: VNext Invoices pages
 - **Phase 7D: Carrier Invoices (AP) + Freight Audit** (in progress)
@@ -350,8 +350,8 @@
   - ✅ Density-based freight class calculator
   - ✅ LTL rate + freight class REST API endpoints
   - ✅ 9 unit tests (deficit weight, FAK, minimum charge, accessorials, density calc)
-  - 🔲 Re-weigh / re-class adjustment workflow
-  - 🔲 Multi-order consolidation billing (pro-rate by weight)
+  - ✅ Re-weigh / re-class adjustment workflow (creates cost + revenue adjustment charges)
+  - ✅ Multi-order LTL consolidation billing (ConsolidationBillingService, pro-rate by weight)
   - 🔲 EDI 810 outbound Invoice generation
 - **Basic Reporting & Analytics** 🔲
   - Operational dashboards and KPIs (on-time %, cost per shipment, carrier scorecard)

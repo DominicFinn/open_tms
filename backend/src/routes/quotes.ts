@@ -6,6 +6,7 @@ import { ICommandBus } from '../commands/CommandBus.js';
 import { CREATE_QUOTE, CreateQuotePayload } from '../commands/quotes/CreateQuoteCommand.js';
 import { ACCEPT_QUOTE, AcceptQuotePayload } from '../commands/quotes/AcceptQuoteCommand.js';
 import { DECLINE_QUOTE, DeclineQuotePayload } from '../commands/quotes/DeclineQuoteCommand.js';
+import { REVISE_QUOTE, ReviseQuotePayload } from '../commands/quotes/ReviseQuoteCommand.js';
 import { ILtlRatingService } from '../services/LtlRatingService.js';
 
 export async function quoteRoutes(server: FastifyInstance) {
@@ -187,6 +188,76 @@ export async function quoteRoutes(server: FastifyInstance) {
         reply.code(400);
         return { data: null, error: result.error };
       }
+      return { data: result.data, error: null };
+    } catch (err: any) {
+      reply.code(400);
+      return { data: null, error: err.message };
+    }
+  });
+
+  // Revise quote (supersedes original, creates new version)
+  server.post('/api/v1/quotes/:id/revise', {
+    schema: {
+      tags: ['Financial - Quotes'],
+      summary: 'Create a revised version of a quote (supersedes the original)',
+      body: {
+        type: 'object',
+        required: ['lineItems'],
+        properties: {
+          lineItems: {
+            type: 'array', minItems: 1,
+            items: {
+              type: 'object',
+              required: ['chargeType', 'description', 'amountCents'],
+              properties: {
+                chargeType: { type: 'string' },
+                description: { type: 'string' },
+                amountCents: { type: 'integer' },
+                accessorialCode: { type: 'string' },
+                freightClass: { type: 'string' },
+                weight: { type: 'number' },
+                ratePerCwt: { type: 'integer' },
+                quantity: { type: 'integer', minimum: 1 },
+              },
+            },
+          },
+          markupPercent: { type: 'number', minimum: 0 },
+          validDays: { type: 'integer', minimum: 1 },
+          notes: { type: 'string' },
+        },
+      },
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const body = z.object({
+      lineItems: z.array(z.object({
+        chargeType: z.string(),
+        description: z.string(),
+        amountCents: z.number().int(),
+        accessorialCode: z.string().optional(),
+        freightClass: z.string().optional(),
+        weight: z.number().optional(),
+        ratePerCwt: z.number().int().optional(),
+        quantity: z.number().int().min(1).optional(),
+      })).min(1),
+      markupPercent: z.number().min(0).optional(),
+      validDays: z.number().int().min(1).optional(),
+      notes: z.string().optional(),
+    }).parse((req as any).body);
+
+    try {
+      const result = await commandBus.dispatch<ReviseQuotePayload, { id: string; quoteNumber: string; version: number }>({
+        type: REVISE_QUOTE,
+        orgId: (req as any).orgId ?? '',
+        actorId: (req as any).user?.sub ?? null,
+        payload: { originalQuoteId: id, ...body },
+        metadata: { correlationId: crypto.randomUUID(), source: 'api' },
+      });
+      if (!result.success) {
+        reply.code(400);
+        return { data: null, error: result.error };
+      }
+      reply.code(201);
       return { data: result.data, error: null };
     } catch (err: any) {
       reply.code(400);
