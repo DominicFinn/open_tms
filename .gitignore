@@ -42,6 +42,7 @@ packages/**/dist/
 
 claude.md
 .claude/
+.tracking/
 # Java
 *.class
 *.jar

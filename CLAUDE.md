@@ -415,6 +415,109 @@ The tendering system supports **broadcast** (all carriers simultaneously) and **
 - **NEVER use the em dash character (`—`).** Use a regular hyphen (`-`) or rewrite the sentence instead. This applies to all www content: components, blog articles, page copy.
 - Open TMS is an **independent open source project** maintained by Dominic Finn and the community. It is NOT a System Loco project. System Loco IoT is an integration, not an ownership relationship. Never describe the project as "maintained by System Loco" or "the System Loco team."
 
+## UI Completion Verification — CRITICAL
+
+**Never assume UI work is done. Always verify it.**
+
+When implementing or modifying any frontend feature, you MUST complete ALL of the following before reporting the work as finished:
+
+### Field-Level Completeness
+- Every field defined in the backend schema/API response MUST have a corresponding UI element (form input, table column, detail display, or deliberate omission with a reason)
+- When adding a new entity or modifying a schema, cross-reference the Prisma model, API response DTO, and the UI form/table/detail page to confirm every field is accounted for
+- Check create forms, edit forms, detail/view pages, and list/table views separately — a field present in the create form but missing from the detail page is incomplete
+
+### End-to-End Verification Checklist
+Before marking any UI task complete, verify each of these:
+1. **Form submissions** — Does the create/edit form actually send all fields to the API? Check the fetch/axios call payload matches the form state
+2. **API integration** — Does the frontend read all fields from the API response and display them? Check the response mapping
+3. **Validation** — Are required fields enforced in the UI? Do error messages display correctly?
+4. **Loading states** — Does the UI show loading indicators while data is being fetched?
+5. **Error states** — Does the UI handle API errors gracefully (network failures, validation errors, 404s)?
+6. **Empty states** — Does the UI handle empty/null data without crashing or showing "undefined"?
+7. **Navigation** — Can the user get to this page? Is it linked from the sidebar, a list page, or a parent page?
+8. **TypeScript** — Does the frontend code compile without type errors? Run `npx tsc --noEmit` in the frontend directory
+
+### How to Verify
+- **Read the component code** and trace the data flow: API call → state → render. Do not just check that the file exists
+- **Start the dev server** (`cd frontend && npm run dev`) and open the page in a browser when possible
+- **Compare the form fields against the API endpoint's request schema** to ensure nothing is missing
+- **Compare the display fields against the API endpoint's response schema** to ensure nothing is missing
+- If you cannot start the dev server, explicitly state "I was unable to verify this in a browser" and explain what you checked instead
+
+### Common Failures to Watch For
+- Form has fields in the UI but the submit handler does not include them in the API payload
+- Detail page fetches data but only renders half the fields
+- Table page is missing columns for important fields
+- Create form works but edit form does not pre-populate existing values
+- Dropdown/select fields have no options or hardcoded options instead of fetching from the API
+- Modal forms that close on submit but do not refresh the parent list
+- New pages added but not wired into the router or sidebar navigation
+
+## Feature Planning and Tracking
+
+When working on a new feature that involves multiple layers (schema, backend, frontend, tests, docs), create a temporary tracking file to maintain a detailed implementation checklist. This prevents work from being forgotten across context boundaries.
+
+### When to Create a Tracking File
+- Any feature that spans backend + frontend
+- Any feature with more than 3 distinct implementation steps
+- When entering plan mode for a new feature
+- When the user explicitly asks for detailed planning
+
+### Tracking File Format
+Create the file at the project root: `.tracking/<feature-name>.md`
+
+```markdown
+# Feature: <Name>
+Created: <date>
+
+## Schema / Database
+- [ ] Prisma model defined
+- [ ] Migration created
+- [ ] prisma generate run
+
+## Backend
+- [ ] Repository interface + implementation
+- [ ] Service layer (if needed)
+- [ ] Command handlers (Create, Update, Archive)
+- [ ] Event types added
+- [ ] Projection created
+- [ ] Routes registered with Swagger schemas
+- [ ] DI tokens and registry updated
+
+## Frontend
+- [ ] List page — all columns mapped to API response fields
+- [ ] Create form — all fields present and submitted to API
+- [ ] Edit form — all fields pre-populated and submitted
+- [ ] Detail/view page — all fields displayed
+- [ ] Navigation — page accessible from sidebar/router
+- [ ] Loading, error, and empty states handled
+- [ ] TypeScript compiles cleanly
+
+## Integration
+- [ ] Create flow: form → API → database → list refresh
+- [ ] Edit flow: load existing → modify → save → verify changes
+- [ ] Delete/archive flow (if applicable)
+- [ ] Field-by-field audit: every schema field appears in UI
+
+## Tests
+- [ ] Command handler tests
+- [ ] Projection tests
+- [ ] Backend tests pass
+
+## Documentation
+- [ ] DOMAIN_BEHAVIOURS.md updated
+- [ ] roadmap.md updated
+- [ ] README.md updated (if user-facing)
+- [ ] www/ updated (if user-facing)
+```
+
+### Rules
+- **Check off items as you go** — update the tracking file after completing each step, not in bulk at the end
+- **The tracking file is the source of truth** — if it says a task is not checked off, the task is not done
+- **Field-by-field audit is mandatory** — before checking off any frontend task, list every field from the schema and confirm it appears in the UI component
+- **Delete the tracking file** when the feature is fully complete and verified
+- The `.tracking/` directory is gitignored — these files are ephemeral working documents
+
 ## Git
 
 - Feature branches off main
