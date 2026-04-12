@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { API_URL } from '../api';
 
 interface Invoice {
@@ -40,6 +40,7 @@ function statusChip(status: string): string {
 }
 
 export default function VNextFinanceInvoices() {
+  const navigate = useNavigate();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -143,7 +144,7 @@ export default function VNextFinanceInvoices() {
               </thead>
               <tbody>
                 {filtered.map(inv => (
-                  <tr key={inv.id} style={{ cursor: 'pointer' }}>
+                  <tr key={inv.id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/finance/invoices/${inv.id}`)}>
                     <td><span className="vn-table-id">{inv.invoiceNumber}</span></td>
                     <td>{inv.customer.name}</td>
                     <td><span className={`vn-chip vn-chip-${statusChip(inv.status)}`}>{inv.status.replace(/_/g, ' ')}</span></td>

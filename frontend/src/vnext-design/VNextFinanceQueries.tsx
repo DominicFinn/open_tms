@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { API_URL } from '../api';
 
 interface FinancialQuery {
@@ -48,6 +49,7 @@ function reasonLabel(reason: string): string {
 }
 
 export default function VNextFinanceQueries() {
+  const navigate = useNavigate();
   const [queries, setQueries] = useState<FinancialQuery[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -148,7 +150,7 @@ export default function VNextFinanceQueries() {
               </thead>
               <tbody>
                 {filtered.map(q => (
-                  <tr key={q.id}>
+                  <tr key={q.id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/finance/queries/${q.id}`)}>
                     <td><span className="vn-table-id">{q.queryNumber}</span></td>
                     <td><span className={`vn-chip vn-chip-${q.queryType === 'customer_dispute' ? 'primary' : 'warning'}`}>{q.queryType === 'customer_dispute' ? 'Customer' : 'Carrier'}</span></td>
                     <td>{reasonLabel(q.reason)}</td>

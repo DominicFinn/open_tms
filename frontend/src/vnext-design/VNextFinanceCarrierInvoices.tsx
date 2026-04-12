@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { API_URL } from '../api';
 
 interface CarrierInvoice {
@@ -50,6 +51,7 @@ function matchChip(status: string): string {
 }
 
 export default function VNextFinanceCarrierInvoices() {
+  const navigate = useNavigate();
   const [invoices, setInvoices] = useState<CarrierInvoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -146,7 +148,7 @@ export default function VNextFinanceCarrierInvoices() {
               </thead>
               <tbody>
                 {filtered.map(inv => (
-                  <tr key={inv.id}>
+                  <tr key={inv.id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/finance/carrier-invoices/${inv.id}`)}>
                     <td><span className="vn-table-id">{inv.invoiceNumber}</span></td>
                     <td>{inv.carrier.name}{inv.carrier.scacCode && <span className="vn-table-secondary"> ({inv.carrier.scacCode})</span>}</td>
                     <td>

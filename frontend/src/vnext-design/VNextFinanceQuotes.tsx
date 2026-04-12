@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { API_URL } from '../api';
 
 interface Quote {
@@ -40,6 +40,7 @@ function statusChip(status: string): string {
 }
 
 export default function VNextFinanceQuotes() {
+  const navigate = useNavigate();
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -79,6 +80,11 @@ export default function VNextFinanceQuotes() {
         <div>
           <h1>Quotes</h1>
           <p>{quotes.length} quotes</p>
+        </div>
+        <div className="vn-page-actions">
+          <Link to="/finance/quotes/create" className="vn-btn vn-btn-primary" style={{ textDecoration: 'none' }}>
+            <span className="material-icons">add</span> New Quote
+          </Link>
         </div>
       </div>
 
@@ -136,7 +142,7 @@ export default function VNextFinanceQuotes() {
               </thead>
               <tbody>
                 {filtered.map(q => (
-                  <tr key={q.id}>
+                  <tr key={q.id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/finance/quotes/${q.id}`)}>
                     <td><span className="vn-table-id">{q.quoteNumber}</span></td>
                     <td>{q.customer.name}</td>
                     <td><span className={`vn-chip vn-chip-${statusChip(q.status)}`}>{q.status}</span></td>

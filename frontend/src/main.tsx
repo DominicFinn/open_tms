@@ -65,6 +65,12 @@ import VNextFinanceCarrierInvoices from './vnext-design/VNextFinanceCarrierInvoi
 import VNextFinanceQuotes from './vnext-design/VNextFinanceQuotes';
 import VNextFinanceQueries from './vnext-design/VNextFinanceQueries';
 import VNextFinanceCreditNotes from './vnext-design/VNextFinanceCreditNotes';
+import VNextFinanceInvoiceDetail from './vnext-design/VNextFinanceInvoiceDetail';
+import VNextFinanceCarrierInvoiceDetail from './vnext-design/VNextFinanceCarrierInvoiceDetail';
+import VNextFinanceQuoteDetail from './vnext-design/VNextFinanceQuoteDetail';
+import VNextFinanceQueryDetail from './vnext-design/VNextFinanceQueryDetail';
+import VNextFinanceCreateInvoice from './vnext-design/VNextFinanceCreateInvoice';
+import VNextFinanceCreateQuote from './vnext-design/VNextFinanceCreateQuote';
 
 // Carrier Tendering & Portal
 import Tenders from './pages/Tenders';
@@ -202,9 +208,15 @@ root.render(
           {/* Finance */}
           <Route path="finance" element={<VNextFinanceDashboard />} />
           <Route path="finance/invoices" element={<VNextFinanceInvoices />} />
+          <Route path="finance/invoices/create" element={<VNextFinanceCreateInvoice />} />
+          <Route path="finance/invoices/:id" element={<VNextFinanceInvoiceDetail />} />
           <Route path="finance/carrier-invoices" element={<VNextFinanceCarrierInvoices />} />
+          <Route path="finance/carrier-invoices/:id" element={<VNextFinanceCarrierInvoiceDetail />} />
           <Route path="finance/quotes" element={<VNextFinanceQuotes />} />
+          <Route path="finance/quotes/create" element={<VNextFinanceCreateQuote />} />
+          <Route path="finance/quotes/:id" element={<VNextFinanceQuoteDetail />} />
           <Route path="finance/queries" element={<VNextFinanceQueries />} />
+          <Route path="finance/queries/:id" element={<VNextFinanceQueryDetail />} />
           <Route path="finance/credit-notes" element={<VNextFinanceCreditNotes />} />
 
           {/* Integrations (sub-layout with tabs) */}
