@@ -111,13 +111,22 @@ async function startWorker() {
     const eventBus = new PgBossEventBus(prisma, queue);
 
     // LLM provider for AI agent features (optional)
+    // Priority: org database config > environment variables
     let llmProvider: ILlmProvider | undefined;
     let workerCommandBus: ICommandBus | undefined;
 
-    if (process.env.ANTHROPIC_API_KEY) {
+    const org = await prisma.organization.findFirst({
+      select: { llmProvider: true, llmApiKey: true, llmModel: true, llmEnabled: true },
+    });
+
+    const llmApiKey = org?.llmApiKey || process.env.ANTHROPIC_API_KEY;
+    const llmEnabled = org?.llmEnabled ?? !!process.env.ANTHROPIC_API_KEY;
+    const llmModel = org?.llmModel || process.env.ANTHROPIC_MODEL;
+
+    if (llmApiKey && llmEnabled) {
       llmProvider = new AnthropicLlmProvider({
-        apiKey: process.env.ANTHROPIC_API_KEY,
-        model: process.env.ANTHROPIC_MODEL,
+        apiKey: llmApiKey,
+        model: llmModel,
         baseURL: process.env.ANTHROPIC_BASE_URL,
       });
 
@@ -131,7 +140,10 @@ async function startWorker() {
       bus.register(new EscalateIssueCommandHandler(prisma, eventBus));
       workerCommandBus = bus;
 
-      console.log('[Worker] LLM provider configured (Anthropic), AI agents enabled');
+      const source = org?.llmApiKey ? 'org config' : 'env var';
+      console.log(`[Worker] LLM provider configured (Anthropic via ${source}), AI agents enabled`);
+    } else if (llmApiKey && !llmEnabled) {
+      console.log('[Worker] LLM API key found but agents disabled (llmEnabled=false)');
     }
 
     await registerEventHandlers(eventBus, prisma, emailService, storageProvider, llmProvider, workerCommandBus);
