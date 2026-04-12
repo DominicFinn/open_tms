@@ -58,6 +58,14 @@ import VNextSlaDashboard from './vnext-design/VNextSlaDashboard';
 import VNextSlaPolicies from './vnext-design/VNextSlaPolicies';
 import VNextLocationOps from './vnext-design/VNextLocationOps';
 
+// VNext Finance Pages
+import VNextFinanceDashboard from './vnext-design/VNextFinanceDashboard';
+import VNextFinanceInvoices from './vnext-design/VNextFinanceInvoices';
+import VNextFinanceCarrierInvoices from './vnext-design/VNextFinanceCarrierInvoices';
+import VNextFinanceQuotes from './vnext-design/VNextFinanceQuotes';
+import VNextFinanceQueries from './vnext-design/VNextFinanceQueries';
+import VNextFinanceCreditNotes from './vnext-design/VNextFinanceCreditNotes';
+
 // Carrier Tendering & Portal
 import Tenders from './pages/Tenders';
 import TenderDetail from './pages/TenderDetail';
@@ -190,6 +198,14 @@ root.render(
           <Route path="settings/custom-fields" element={<VNextCustomFields />} />
           <Route path="settings/maps" element={<VNextMapsSettings />} />
           <Route path="settings/sla" element={<VNextSlaPolicies />} />
+
+          {/* Finance */}
+          <Route path="finance" element={<VNextFinanceDashboard />} />
+          <Route path="finance/invoices" element={<VNextFinanceInvoices />} />
+          <Route path="finance/carrier-invoices" element={<VNextFinanceCarrierInvoices />} />
+          <Route path="finance/quotes" element={<VNextFinanceQuotes />} />
+          <Route path="finance/queries" element={<VNextFinanceQueries />} />
+          <Route path="finance/credit-notes" element={<VNextFinanceCreditNotes />} />
 
           {/* Integrations (sub-layout with tabs) */}
           <Route path="integrations" element={<VNextIntegrationsLayout />}>
