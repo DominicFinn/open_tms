@@ -1,4 +1,4 @@
-const benefits = [
+const benefits: Array<{ title: string; description: string; icon: React.ReactElement; link?: string; linkLabel?: string }> = [
   {
     title: 'Free Forever',
     description: 'MIT licensed. No per-user fees, no transaction costs, no feature gates. Deploy it, customise it, and run it  - at zero software cost.',
