@@ -1,5 +1,6 @@
 import { CreateChargeCommandHandler, CREATE_CHARGE } from '../../commands/charges/CreateChargeCommand';
 import { ApproveChargeCommandHandler, APPROVE_CHARGE } from '../../commands/charges/ApproveChargeCommand';
+import { ReweighAdjustmentCommandHandler, REWEIGH_ADJUSTMENT } from '../../commands/charges/ReweighAdjustmentCommand';
 import { EVENT_TYPES } from '../../events/eventTypes';
 import { createTestCommand, mockEventBus } from '../helpers/testUtils';
 
@@ -265,6 +266,168 @@ describe('Charge Command Handlers', () => {
       expect(mockTx.shipmentFinancialSummary.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { shipmentId: 'ship-1' },
+        })
+      );
+    });
+  });
+
+  describe('ReweighAdjustmentCommandHandler', () => {
+    it('creates cost and revenue adjustment charges', async () => {
+      const costCharge = { id: 'adj-cost-1', chargeCategory: 'cost', amountCents: 20000, status: 'pending' };
+      const revenueCharge = { id: 'adj-rev-1', chargeCategory: 'revenue', amountCents: 20000, status: 'pending' };
+
+      const reweighTx = {
+        charge: {
+          create: jest.fn()
+            .mockResolvedValueOnce(costCharge)
+            .mockResolvedValueOnce(revenueCharge),
+          findMany: jest.fn().mockResolvedValue([
+            { chargeCategory: 'cost', amountCents: 150000, status: 'approved' },
+            { chargeCategory: 'revenue', amountCents: 180000, status: 'approved' },
+            costCharge,
+            revenueCharge,
+          ]),
+        },
+        shipmentFinancialSummary: { upsert: jest.fn().mockResolvedValue({}) },
+        domainEventLog: { create: jest.fn().mockResolvedValue({}) },
+      } as any;
+
+      const reweighPrisma = {
+        $transaction: jest.fn((fn: Function) => fn(reweighTx)),
+        domainEventLog: { findFirst: jest.fn().mockResolvedValue(null) },
+      } as any;
+
+      const { bus } = mockEventBus();
+      const handler = new ReweighAdjustmentCommandHandler(reweighPrisma, bus);
+
+      const result = await handler.execute(
+        createTestCommand(REWEIGH_ADJUSTMENT, {
+          shipmentId: 'ship-1',
+          declaredWeightLbs: 1000,
+          actualWeightLbs: 1200,
+          declaredClass: '100',
+          actualClass: '85',
+          originalChargeCents: 150000,
+          adjustedChargeCents: 170000,
+        })
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.data).toEqual({ costChargeId: 'adj-cost-1', revenueChargeId: 'adj-rev-1' });
+
+      // Both cost and revenue adjustment charges created
+      expect(reweighTx.charge.create).toHaveBeenCalledTimes(2);
+
+      // First call: cost adjustment
+      expect(reweighTx.charge.create).toHaveBeenNthCalledWith(1,
+        expect.objectContaining({
+          data: expect.objectContaining({
+            chargeType: 'adjustment',
+            chargeCategory: 'cost',
+            amountCents: 20000,
+            source: 'adjustment',
+            shipmentId: 'ship-1',
+          }),
+        })
+      );
+
+      // Second call: revenue adjustment (pass-through to customer)
+      expect(reweighTx.charge.create).toHaveBeenNthCalledWith(2,
+        expect.objectContaining({
+          data: expect.objectContaining({
+            chargeType: 'adjustment',
+            chargeCategory: 'revenue',
+            amountCents: 20000,
+            source: 'adjustment',
+            sourceId: 'adj-cost-1',
+          }),
+        })
+      );
+
+      // Event emitted for the cost charge
+      expect(result.events).toHaveLength(1);
+      expect(result.events[0].type).toBe(EVENT_TYPES.CHARGE_CREATED);
+      expect(result.events[0].payload).toEqual(
+        expect.objectContaining({
+          chargeId: 'adj-cost-1',
+          shipmentId: 'ship-1',
+          chargeType: 'adjustment',
+          chargeCategory: 'cost',
+          amountCents: 20000,
+          currency: 'USD',
+        })
+      );
+    });
+
+    it('fails when no adjustment needed (same amounts)', async () => {
+      const { bus } = mockEventBus();
+      const handler = new ReweighAdjustmentCommandHandler(mockPrisma, bus);
+
+      const result = await handler.execute(
+        createTestCommand(REWEIGH_ADJUSTMENT, {
+          shipmentId: 'ship-1',
+          declaredWeightLbs: 1000,
+          actualWeightLbs: 1000,
+          originalChargeCents: 150000,
+          adjustedChargeCents: 150000,
+        })
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('No adjustment needed');
+      expect(result.events).toHaveLength(0);
+    });
+
+    it('recalculates shipment financial summary', async () => {
+      const costCharge = { id: 'adj-cost-2', chargeCategory: 'cost', amountCents: 10000, status: 'pending' };
+      const revenueCharge = { id: 'adj-rev-2', chargeCategory: 'revenue', amountCents: 10000, status: 'pending' };
+
+      const summaryTx = {
+        charge: {
+          create: jest.fn()
+            .mockResolvedValueOnce(costCharge)
+            .mockResolvedValueOnce(revenueCharge),
+          findMany: jest.fn().mockResolvedValue([
+            { chargeCategory: 'cost', amountCents: 150000, status: 'approved' },
+            { chargeCategory: 'revenue', amountCents: 200000, status: 'approved' },
+            { chargeCategory: 'cost', amountCents: 10000, status: 'pending' },
+            { chargeCategory: 'revenue', amountCents: 10000, status: 'pending' },
+          ]),
+        },
+        shipmentFinancialSummary: { upsert: jest.fn().mockResolvedValue({}) },
+        domainEventLog: { create: jest.fn().mockResolvedValue({}) },
+      } as any;
+
+      const summaryPrisma = {
+        $transaction: jest.fn((fn: Function) => fn(summaryTx)),
+        domainEventLog: { findFirst: jest.fn().mockResolvedValue(null) },
+      } as any;
+
+      const { bus } = mockEventBus();
+      const handler = new ReweighAdjustmentCommandHandler(summaryPrisma, bus);
+
+      await handler.execute(
+        createTestCommand(REWEIGH_ADJUSTMENT, {
+          shipmentId: 'ship-1',
+          declaredWeightLbs: 1000,
+          actualWeightLbs: 1500,
+          originalChargeCents: 150000,
+          adjustedChargeCents: 160000,
+        })
+      );
+
+      expect(summaryTx.shipmentFinancialSummary.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { shipmentId: 'ship-1' },
+          create: expect.objectContaining({
+            shipmentId: 'ship-1',
+            expectedRevenueCents: 210000,
+            expectedCostCents: 160000,
+            expectedMarginCents: 50000,
+            actualRevenueCents: 200000,
+            actualCostCents: 150000,
+            actualMarginCents: 50000,
+          }),
         })
       );
     });

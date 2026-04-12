@@ -285,7 +285,7 @@
   - ✅ Frontend: CAPA reports page (VNext)
 
 ## **Phase 7: Financial & Commercial**
-- **Phase 7A: Financial Foundation (Charges + Rating)** (in progress)
+- **Phase 7A: Financial Foundation (Charges + Rating)** ✅
   - ✅ Customer billing fields (billing address, payment terms, credit limit, invoice consolidation, auto-invoice)
   - ✅ Carrier payment terms (payment terms, remit-to address)
   - ✅ OrderLineItem pricing fields (unitPriceCents, totalPriceCents, freightClass, nmfcCode)
@@ -311,7 +311,7 @@
   - ✅ 8 unit tests for quote command handlers
   - ✅ Quote expiration cron (pg-boss, every 30 min)
   - ✅ Quote revision workflow (supersede + create new version with parentQuoteId linking)
-- **Phase 7C: Customer Invoicing (AR)** (in progress)
+- **Phase 7C: Customer Invoicing (AR)** ✅
   - ✅ InvoiceRepository + PaymentRepository (interface + DTO + implementation)
   - ✅ InvoicingService (generate from shipments, find ready-to-invoice)
   - ✅ CreateInvoice, ApproveInvoice, SendInvoice, RecordPayment, VoidInvoice CQRS commands
@@ -324,7 +324,7 @@
   - ✅ Invoice overdue detection cron (pg-boss, hourly, 7-day reminder cadence)
   - ✅ Invoice consolidation (weekly Monday / monthly 1st batching via pg-boss cron, manual trigger endpoint)
   - 🔲 Frontend: VNext Invoices pages
-- **Phase 7D: Carrier Invoices (AP) + Freight Audit** (in progress)
+- **Phase 7D: Carrier Invoices (AP) + Freight Audit** ✅
   - ✅ CarrierInvoiceRepository (interface + DTO + implementation)
   - ✅ FreightAuditService (three-way match: tender rate vs expected charges vs carrier invoice)
   - ✅ ReceiveCarrierInvoice command with automatic three-way match and auto-approve (2% tolerance)
@@ -342,7 +342,7 @@
   - ✅ FinancialImpactHandler: auto-creates queries from cargo.missing_at_stop, cargo.misdrop_detected, cold_chain.disposition_changed (quarantined)
   - ✅ Financial queries REST API (5 endpoints) + Credit notes API (2 endpoints)
   - ✅ 4 unit tests for query command handlers
-- **Phase 7F: LTL Enhancements + EDI 810** (in progress)
+- **Phase 7F: LTL Enhancements + EDI 810** ✅
   - ✅ LtlRatingService: class-based rating, weight break matrix, deficit weight optimization
   - ✅ FAK (Freight All Kinds) override support
   - ✅ Minimum charge threshold

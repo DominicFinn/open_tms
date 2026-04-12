@@ -423,6 +423,100 @@ received → matched/discrepancy → approved → scheduled → paid
 
 ---
 
+## Quotes
+
+Quotes let operations staff price a potential shipment for a customer before it becomes a live order. A quote can be revised multiple times; accepting a quote auto-creates an order with pre-populated revenue charges.
+
+### Commands (CQRS)
+
+| Command | Trigger | Events Emitted |
+|---------|---------|----------------|
+| `CreateQuoteCommand` | `POST /api/v1/quotes` | `quote.created` |
+| `AcceptQuoteCommand` | `POST /api/v1/quotes/:id/accept` | `quote.accepted` |
+| `DeclineQuoteCommand` | `POST /api/v1/quotes/:id/decline` | `quote.declined` |
+| `ReviseQuoteCommand` | `POST /api/v1/quotes/:id/revise` | `quote.revised` |
+
+### Side Effects
+
+| Event | What Happens |
+|-------|-------------|
+| `quote.created` | Quote + QuoteLineItem records created. Validity period starts (configurable, default from org settings) |
+| `quote.accepted` | Order auto-created from quote data. Approved revenue charges added to order from quote line items. Quote marked accepted |
+| `quote.declined` | Quote marked declined. No further action |
+| `quote.revised` | Original quote status → superseded. New quote version created with `parentQuoteId` linking to original. Revision number incremented |
+| (cron) | Quote expiration cron (pg-boss, every 30 min) marks expired quotes past their validity date |
+
+### Quote Lifecycle
+
+```
+draft → sent → accepted
+             → declined
+             → expired (cron-detected)
+             → superseded (when revised)
+```
+
+---
+
+## Financial Queries & Credit Notes
+
+Financial queries track disputes, discrepancies, and cargo-related claims. They can be raised manually or auto-created by the `FinancialImpactHandler` when cargo events occur. Resolving a query can optionally generate a credit note.
+
+### Commands (CQRS)
+
+| Command | Trigger | Events Emitted |
+|---------|---------|----------------|
+| `RaiseQueryCommand` | `POST /api/v1/financial-queries` | `financial_query.raised` |
+| `ResolveQueryCommand` | `POST /api/v1/financial-queries/:id/resolve` | `financial_query.resolved`, `credit_note.created` (if adjustment) |
+
+### Auto-Created Queries (FinancialImpactHandler)
+
+The `FinancialImpactHandler` listens to cargo and cold-chain events and automatically raises financial queries:
+
+| Source Event | Query Created |
+|-------------|---------------|
+| `cargo.missing_at_stop` | Query for missing cargo at delivery stop — potential claim for undelivered goods |
+| `cargo.misdrop_detected` | Query for cargo delivered to wrong stop — investigation needed for mis-delivery |
+| `cold_chain.disposition_changed` (quarantined) | Query for quarantined goods — cold chain excursion rendered cargo unsaleable |
+
+### Side Effects
+
+| Event | What Happens |
+|-------|-------------|
+| `financial_query.raised` | Query record created with status=raised, linked to shipment/order |
+| `financial_query.resolved` | Query status updated. If resolution=resolved_adjusted, a CreditNote is auto-generated with the adjustment amount |
+| `credit_note.created` | Credit note linked to query and customer. Can offset future invoices |
+
+### Query Lifecycle
+
+```
+raised → investigating → resolved_adjusted (credit note generated)
+                       → resolved_upheld (no financial adjustment)
+```
+
+---
+
+## EDI Financial Transactions
+
+### EDI 210 — Freight Invoice (Inbound)
+
+Carrier sends an EDI 210 freight invoice. The `EDI210ParseService` parses B3/N1/LX/L5/L0/L1/L3 segments and creates a `CarrierInvoice` with line items. The `ReceiveCarrierInvoiceCommand` then performs the automatic three-way match (see Carrier Invoices section above).
+
+**Flow:** SFTP poll → edi-collector detects 210 → `POST /api/v1/edi/210/inbound` → `EDI210ParseService` → `ReceiveCarrierInvoiceCommand` → three-way match → auto-approve or flag discrepancy
+
+### EDI 810 — Invoice (Outbound)
+
+TMS generates an EDI 810 invoice for the customer. The `EDI810Service` produces the full X12 envelope (ISA/GS/ST) with BIG (invoice header), N1 (name/address), ITD (payment terms), IT1 (line items), TDS (total), and CTT (transaction count) segments.
+
+**Flow:** Invoice approved + customer has TradingPartner with outbound 810 enabled → `EDI810Service.generate()` → `OutboundEdiDeliveryService` delivers via SFTP or HTTP
+
+### EDI 820 — Payment Order/Remittance (Inbound)
+
+Customer sends an EDI 820 remittance advice. The `EDI820ParseService` parses payment details and matches to outstanding invoices via invoice number.
+
+**Flow:** SFTP poll → edi-collector detects 820 → `POST /api/v1/edi/820/inbound` → `EDI820ParseService` → `RecordPaymentCommand` → invoice payment applied
+
+---
+
 ## Trading Partners
 
 ### Commands

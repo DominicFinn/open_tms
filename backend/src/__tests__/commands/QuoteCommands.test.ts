@@ -1,6 +1,7 @@
 import { CreateQuoteCommandHandler, CREATE_QUOTE } from '../../commands/quotes/CreateQuoteCommand';
 import { AcceptQuoteCommandHandler, ACCEPT_QUOTE } from '../../commands/quotes/AcceptQuoteCommand';
 import { DeclineQuoteCommandHandler, DECLINE_QUOTE } from '../../commands/quotes/DeclineQuoteCommand';
+import { ReviseQuoteCommandHandler, REVISE_QUOTE } from '../../commands/quotes/ReviseQuoteCommand';
 import { EVENT_TYPES } from '../../events/eventTypes';
 import { createTestCommand, mockEventBus } from '../helpers/testUtils';
 
@@ -194,6 +195,131 @@ describe('Quote Command Handlers', () => {
       expect(result.events[0].payload).toEqual(
         expect.objectContaining({ reason: 'Too expensive' })
       );
+    });
+  });
+
+  describe('ReviseQuoteCommandHandler', () => {
+    it('supersedes original and creates new version', async () => {
+      const revisedQuote = {
+        ...mockQuote,
+        id: 'quote-2',
+        quoteNumber: 'QTE-0001v2',
+        version: 2,
+        parentQuoteId: 'quote-1',
+        totalCostCents: 160000,
+        totalRevenueCents: 192000,
+        marginCents: 32000,
+        marginPercent: 16.67,
+      };
+
+      const reviseTx = {
+        ...mockTx,
+        quote: {
+          ...mockTx.quote,
+          findUnique: jest.fn().mockResolvedValue({ ...mockQuote, customer: { id: 'cust-1', name: 'Acme Corp' } }),
+          update: jest.fn().mockResolvedValue({ ...mockQuote, status: 'superseded' }),
+          create: jest.fn().mockResolvedValue(revisedQuote),
+        },
+        domainEventLog: { create: jest.fn().mockResolvedValue({}) },
+      } as any;
+
+      const revisePrisma = {
+        $transaction: jest.fn((fn: Function) => fn(reviseTx)),
+        domainEventLog: { findFirst: jest.fn().mockResolvedValue(null) },
+      } as any;
+
+      const { bus } = mockEventBus();
+      const handler = new ReviseQuoteCommandHandler(revisePrisma, bus);
+
+      const result = await handler.execute(
+        createTestCommand(REVISE_QUOTE, {
+          originalQuoteId: 'quote-1',
+          lineItems: [
+            { chargeType: 'linehaul', description: 'Linehaul revised', amountCents: 160000 },
+          ],
+          markupPercent: 20,
+        })
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.data).toEqual(
+        expect.objectContaining({
+          id: 'quote-2',
+          quoteNumber: 'QTE-0001v2',
+          version: 2,
+        })
+      );
+
+      // Original quote was superseded
+      expect(reviseTx.quote.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'quote-1' },
+          data: { status: 'superseded' },
+        })
+      );
+
+      // New version created with parentQuoteId link
+      expect(reviseTx.quote.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            parentQuoteId: 'quote-1',
+            version: 2,
+            customerId: 'cust-1',
+            status: 'draft',
+          }),
+        })
+      );
+
+      // QUOTE_CREATED event emitted for the revised version
+      expect(result.events).toHaveLength(1);
+      expect(result.events[0].type).toBe(EVENT_TYPES.QUOTE_CREATED);
+      expect(result.events[0].payload).toEqual(
+        expect.objectContaining({
+          quoteId: 'quote-2',
+          parentQuoteId: 'quote-1',
+          version: 2,
+          customerName: 'Acme Corp',
+        })
+      );
+    });
+
+    it('fails for already-accepted quotes', async () => {
+      const acceptedQuote = {
+        ...mockQuote,
+        status: 'accepted',
+        customer: { id: 'cust-1', name: 'Acme Corp' },
+      };
+
+      const txAccepted = {
+        ...mockTx,
+        quote: {
+          ...mockTx.quote,
+          findUnique: jest.fn().mockResolvedValue(acceptedQuote),
+        },
+        domainEventLog: { create: jest.fn().mockResolvedValue({}) },
+      } as any;
+
+      const prismaAccepted = {
+        $transaction: jest.fn((fn: Function) => fn(txAccepted)),
+        domainEventLog: { findFirst: jest.fn().mockResolvedValue(null) },
+      } as any;
+
+      const { bus } = mockEventBus();
+      const handler = new ReviseQuoteCommandHandler(prismaAccepted, bus);
+
+      const result = await handler.execute(
+        createTestCommand(REVISE_QUOTE, {
+          originalQuoteId: 'quote-1',
+          lineItems: [
+            { chargeType: 'linehaul', description: 'Linehaul', amountCents: 100000 },
+          ],
+        })
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Cannot revise');
+      expect(result.error).toContain('accepted');
+      expect(result.events).toHaveLength(0);
     });
   });
 });
