@@ -75,6 +75,11 @@ export const TOKENS = {
   IRoutingProvider: Symbol.for('IRoutingProvider'),
   IShipmentEtaMonitorService: Symbol.for('IShipmentEtaMonitorService'),
 
+  // Financial tokens
+  IChargeRepository: Symbol.for('IChargeRepository'),
+  IChargeService: Symbol.for('IChargeService'),
+  IRatingService: Symbol.for('IRatingService'),
+
   // Infrastructure tokens
   PrismaClient: Symbol.for('PrismaClient'),
   IFileStorageProvider: Symbol.for('IFileStorageProvider'),

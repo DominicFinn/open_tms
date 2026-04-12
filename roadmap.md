@@ -285,20 +285,48 @@
   - ✅ Frontend: CAPA reports page (VNext)
 
 ## **Phase 7: Financial & Commercial**
-- **Rate Management** 🔲
-  - Contract rates vs spot rates with effective date ranges
-  - Accessorial charges (fuel surcharge, liftgate, detention, demurrage, lumper fees)
-  - Multi-currency support
-- **Quoting Engine** 🔲
-  - Request and compare quotes from multiple carriers
-  - Auto-select based on cost, service level, and rules
-- **Basic Invoicing** 🔲
-  - Generate invoices from completed shipments
-  - Track payment status, match invoices to purchase orders
-  - Freight bill pay
-- **Freight Audit** 🔲
-  - Compare carrier invoices against contracted rates
-  - Flag discrepancies for review
+- **Phase 7A: Financial Foundation (Charges + Rating)** (in progress)
+  - ✅ Customer billing fields (billing address, payment terms, credit limit, invoice consolidation, auto-invoice)
+  - ✅ Carrier payment terms (payment terms, remit-to address)
+  - ✅ OrderLineItem pricing fields (unitPriceCents, totalPriceCents, freightClass, nmfcCode)
+  - ✅ LaneCarrier priceCents field (integer cents alongside deprecated Float price)
+  - ✅ Charge model (revenue/cost line items on orders and shipments, full lifecycle)
+  - ✅ ShipmentFinancialSummary (expected vs actual revenue/cost/margin, billing status)
+  - ✅ CreateCharge + ApproveCharge CQRS commands with events
+  - ✅ TenderAwardFinancialHandler (auto-creates cost charge on tender award)
+  - ✅ RatingService (lane-carrier rate lookup, fuel surcharge calculation)
+  - ✅ ChargeService (charge CRUD, shipment financial summary recalculation)
+  - ✅ Charges REST API with Swagger schemas
+  - ✅ Financial event types (charge.created, charge.approved, invoice.*, carrier_invoice.*, financial_query.*, credit_note.*)
+  - ✅ 9 unit tests for charge command handlers
+  - ✅ Full data models for Invoice, InvoiceLineItem, Payment, CarrierInvoice, CarrierInvoiceLineItem, FinancialQuery, CreditNote, InvoiceReadModel
+  - 🔲 Frontend: Financial tab on VNext Shipment Detail
+- **Phase 7B: Quotes** 🔲
+  - Quote model with versioning/revisions
+  - LTL rating service (class-based, weight breaks, deficit weight, FAK)
+  - Quote-to-order conversion with pre-populated charges
+  - Quote expiration cron
+- **Phase 7C: Customer Invoicing (AR)** 🔲
+  - Generate invoices from delivered shipments
+  - Configurable per-customer auto-invoice on delivery
+  - Invoice consolidation (per-shipment, weekly, monthly)
+  - Payment recording and aging
+  - BillingTriggerHandler (shipment.delivered -> ready_to_invoice)
+  - Invoice overdue detection cron
+- **Phase 7D: Carrier Invoices (AP) + Freight Audit** 🔲
+  - Carrier invoice receipt and three-way match
+  - Auto-approve within configurable variance tolerance
+  - EDI 210 Freight Invoice inbound parsing
+  - Carrier payment scheduling
+- **Phase 7E: Queries, Disputes & Credit Notes** 🔲
+  - Financial query lifecycle (raised -> investigating -> resolved)
+  - Auto-create queries from cargo discrepancies and cold chain excursions
+  - Credit/debit note generation from resolved queries
+- **Phase 7F: LTL Enhancements + EDI 810** 🔲
+  - Full LTL class-based rating with weight break matrix
+  - Re-weigh / re-class adjustment workflow
+  - Multi-order consolidation billing (pro-rate by weight)
+  - EDI 810 outbound Invoice generation
 - **Basic Reporting & Analytics** 🔲
   - Operational dashboards and KPIs (on-time %, cost per shipment, carrier scorecard)
   - Financial reports (lane spend analysis, carrier spend)

@@ -92,6 +92,11 @@ import { EDI997Service } from '../services/EDI997Service.js';
 import { EDI214ParseService } from '../services/EDI214ParseService.js';
 import { EDI214Service } from '../services/EDI214Service.js';
 import { ProcessInbound214CommandHandler } from '../commands/shipments/ProcessInbound214Command.js';
+import { ChargeRepository } from '../repositories/ChargeRepository.js';
+import { ChargeService } from '../services/ChargeService.js';
+import { RatingService } from '../services/RatingService.js';
+import { CreateChargeCommandHandler } from '../commands/charges/CreateChargeCommand.js';
+import { ApproveChargeCommandHandler } from '../commands/charges/ApproveChargeCommand.js';
 import { SlaRepository } from '../repositories/SlaRepository.js';
 import { SlaEvaluationService } from '../services/SlaEvaluationService.js';
 import { CreateSlaPolicyCommandHandler } from '../commands/sla/CreateSlaPolicyCommand.js';
@@ -344,6 +349,22 @@ export function registerDependencies(prisma: PrismaClient): void {
     return new CarrierAuthService(container.resolve(TOKENS.ICarrierUserRepository));
   });
 
+  // Financial
+  container.singleton(TOKENS.IChargeRepository).toFactory(() => {
+    return new ChargeRepository(container.resolve(TOKENS.PrismaClient));
+  });
+
+  container.singleton(TOKENS.IRatingService).toFactory(() => {
+    return new RatingService(container.resolve(TOKENS.PrismaClient));
+  });
+
+  container.singleton(TOKENS.IChargeService).toFactory(() => {
+    return new ChargeService(
+      container.resolve(TOKENS.IChargeRepository),
+      container.resolve(TOKENS.PrismaClient),
+    );
+  });
+
   // Trading Partner / EDI Hub
   container.singleton(TOKENS.ITradingPartnerRepository).toFactory(() => {
     return new TradingPartnerRepository(container.resolve(TOKENS.PrismaClient));
@@ -510,6 +531,10 @@ export function registerDependencies(prisma: PrismaClient): void {
 
     // EDI 214 commands
     bus.register(new ProcessInbound214CommandHandler(prisma, eventBus));
+
+    // Financial commands
+    bus.register(new CreateChargeCommandHandler(prisma, eventBus));
+    bus.register(new ApproveChargeCommandHandler(prisma, eventBus));
 
     return bus;
   });

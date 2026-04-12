@@ -286,6 +286,55 @@ draft → open → evaluating → awarded
 | `tender.published` | All offers marked 'sent', carriers notified, EDI 204 sent if trading partner configured |
 | `tender.awarded` | Winning bid recorded, carrier assigned to shipment |
 | `tender.response_received` | Bid recorded or offer declined, waterfall auto-progresses |
+| `tender.awarded` | **Financial side effect:** `TenderAwardFinancialHandler` creates a `Charge` (category=cost, type=linehaul, source=tender_bid) on the shipment from the winning bid rate. Recalculates `ShipmentFinancialSummary`. |
+
+---
+
+## Charges (Financial)
+
+### Commands (CQRS)
+
+| Command | Trigger | Events Emitted |
+|---------|---------|----------------|
+| `CreateChargeCommand` | `POST /api/v1/charges` | `charge.created` |
+| `ApproveChargeCommand` | `POST /api/v1/charges/:id/approve` | `charge.approved` |
+
+### Service Operations
+
+| Operation | Trigger | What It Does |
+|-----------|---------|-------------|
+| Get shipment financials | `GET /api/v1/shipments/:id/financials` | Returns charges, expected vs actual revenue/cost/margin |
+| Calculate rate | `POST /api/v1/rates/calculate` | Looks up LaneCarrier rates, computes linehaul + fuel surcharge breakdown |
+| Delete charge | `DELETE /api/v1/charges/:id` | Removes a pending charge, recalculates summary |
+
+### Side Effects
+
+| Event | What Happens |
+|-------|-------------|
+| `charge.created` | `ShipmentFinancialSummary` upserted with recalculated totals |
+| `charge.approved` | `ShipmentFinancialSummary` actual figures updated |
+| `tender.awarded` | `TenderAwardFinancialHandler` auto-creates cost charge from winning bid |
+
+### Charge Lifecycle
+
+```
+pending → approved → invoiced
+              ↘ disputed → (resolved)
+pending → written_off
+```
+
+### Charge Categories
+
+- **revenue**: What the customer pays us (linehaul, fuel surcharge, accessorials)
+- **cost**: What we pay the carrier (linehaul, fuel surcharge, detention, adjustments)
+
+### ShipmentFinancialSummary
+
+Denormalized financial snapshot per shipment. Automatically recalculated whenever charges are created, approved, or deleted. Tracks:
+- Expected revenue/cost/margin (all non-written-off charges)
+- Actual revenue/cost/margin (only approved/invoiced charges)
+- Billing status: `not_ready` → `ready_to_invoice` → `invoiced` → `paid`
+- Carrier payment status: `not_ready` → `invoice_received` → `approved` → `paid`
 
 ---
 
