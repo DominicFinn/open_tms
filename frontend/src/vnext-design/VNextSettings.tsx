@@ -101,6 +101,8 @@ function GeneralTab() {
   const [temperature, setTemperature] = useState('C');
   const [distance, setDistance] = useState('km');
   const [autoDeliverDocs, setAutoDeliverDocs] = useState(false);
+  const [autoTenderEnabled, setAutoTenderEnabled] = useState(false);
+  const [defaultGeofenceRadius, setDefaultGeofenceRadius] = useState(200);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<{ text: string; variant: 'success' | 'error' } | null>(null);
@@ -117,6 +119,8 @@ function GeneralTab() {
           setTemperature(s.temperatureUnit || 'C');
           setDistance(s.distanceUnit || 'km');
           setAutoDeliverDocs(s.autoDeliverShipmentDocs || false);
+          setAutoTenderEnabled(s.autoTenderEnabled || false);
+          setDefaultGeofenceRadius(s.defaultGeofenceRadiusMeters ?? 200);
         }
       })
       .catch(() => {})
@@ -137,6 +141,8 @@ function GeneralTab() {
           temperatureUnit: temperature,
           distanceUnit: distance,
           autoDeliverShipmentDocs: autoDeliverDocs,
+          autoTenderEnabled,
+          defaultGeofenceRadiusMeters: defaultGeofenceRadius,
         }),
       });
       if (res.ok) setSaveMessage({ text: 'Settings saved', variant: 'success' });
@@ -235,6 +241,38 @@ function GeneralTab() {
               { value: 'mi', label: 'Miles (mi)' },
             ]}
           />
+        </VnFormGrid>
+      </VnFormSection>
+
+      <VnFormSection title="Carrier Tendering" icon="gavel">
+        <VnFormGrid>
+          <div className="vn-col-span-2">
+            <Switch
+              label="Auto-tender for laneless shipments"
+              checked={autoTenderEnabled}
+              onChange={setAutoTenderEnabled}
+            />
+            <p style={{ fontSize: '12px', color: 'var(--on-surface-variant)', marginTop: '4px', marginLeft: '28px' }}>
+              When enabled, a broadcast tender is automatically created for all carriers when a shipment is created without a lane or carrier assignment.
+            </p>
+          </div>
+        </VnFormGrid>
+      </VnFormSection>
+
+      <VnFormSection title="Location & Geofencing" icon="location_on">
+        <VnFormGrid>
+          <VnField label="Default Geofence Radius (meters)">
+            <VnInput
+              type="number"
+              value={String(defaultGeofenceRadius)}
+              onChange={e => setDefaultGeofenceRadius(Number(e.target.value) || 200)}
+            />
+          </VnField>
+          <div>
+            <p style={{ fontSize: '12px', color: 'var(--on-surface-variant)', marginTop: '8px' }}>
+              Default radius for geofence arrival criteria when new locations are auto-created. Applies to all new locations created via order/shipment ingestion.
+            </p>
+          </div>
         </VnFormGrid>
       </VnFormSection>
 

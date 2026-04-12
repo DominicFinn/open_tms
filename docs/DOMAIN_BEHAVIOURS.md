@@ -731,6 +731,21 @@ When `autoCreateIssue = true` on the rule:
 3. Title: "SLA Breach: {ruleName} on {entityReference}"
 4. Links back to the SlaEvaluation via `issueId`
 
+### Event-Driven Automation (Phase 3b)
+
+| Handler | Listens To | What It Does |
+|---------|-----------|-------------|
+| `AutoTenderHandler` | `shipment.created` | If org.autoTenderEnabled and shipment has no lane/carrier, creates a broadcast tender to all active carriers |
+| `ShipmentCompletionHandler` | `shipment.stop_arrived`, `tracking.geofence_entered` | When destination stop arrives, auto-transitions shipment to 'delivered' and publishes shipment.delivered event |
+
+### Location Auto-Resolution
+
+When `CreateShipmentCommand` receives `originData`/`destinationData` (raw address objects) instead of explicit location IDs:
+1. Searches for existing location by `name + city` (case-insensitive)
+2. If found, reuses the existing location
+3. If not found, creates a new `Location` record
+4. Default geofence arrival criteria are created for new locations (via `LocationResolutionService`)
+
 ### Workers
 
 | Worker | Queue | Schedule | What It Does |

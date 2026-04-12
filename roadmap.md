@@ -122,35 +122,31 @@
   - ✅ Conversion utilities (backend stores canonical metric, converts on display)
   - ✅ Settings UI updated with temperature and distance unit selectors
 ## **Phase 3b: Location Arrival Criteria & Carrier Tendering**
-- **Location Auto-Creation & Arrival Criteria** 🔲
-  - Locations are always created when orders/shipments arrive (EDI, API, CSV, manual)
-  - Automatic location resolution: match by name + city, create if no match found
-  - Default geofence arrival criteria created for every new location
-  - Three arrival criteria types:
-    - **Geofence** — radius-based detection (GPS coordinates + radius in meters)
-    - **WiFi Network** — IoT device/tracker detects known WiFi SSID/BSSID at location
-    - **BLE Anchor** — Bluetooth Low Energy beacon detection (UUID, major, minor, RSSI threshold)
-  - Arrival criteria management API (CRUD per location)
-  - Configurable default geofence radius at organization level
-  - Audit events for location creation, editing, and arrival criteria changes
-- **Shipment Completion Criteria** 🔲
-  - Shipment regarded as completed when:
-    - Arrival criteria met at destination (geofence entered, WiFi seen, BLE detected)
-    - Manually completed by user
-    - Automatically completed via external API call / integration event
-  - Arrival criteria evaluation integrated with existing geofence + IoT delivery service
-- **Carrier Tendering** 🔲
-  - When a shipment has origin/destination but no lane, a tender is created
-  - Tender lifecycle: draft → published → awarded / cancelled / expired
-  - Carrier responses with pricing, transit time, and notes
-  - Award tender to carrier — automatically assigns carrier to shipment
-  - Auto-publish toggle: admin setting to auto-publish tenders for laneless shipments
-  - Manual publish option for users who want to assign carriers directly
-  - Tender audit trail via domain events
-- **Admin Settings** 🔲
-  - Auto-tender feature toggle (on/off) in organization settings
-  - Default geofence radius configuration
-  - Settings available in Admin > Settings
+- **Location Auto-Creation & Arrival Criteria** ✅
+  - ✅ Locations auto-created when shipments provide raw address data (name+city match or create)
+  - ✅ LocationResolutionService: resolve by name+city (case-insensitive), create if no match
+  - ✅ Default geofence arrival criteria auto-created for every new location
+  - ✅ Three arrival criteria types: Geofence, WiFi Network, BLE Anchor
+  - ✅ Arrival criteria management API (CRUD per location)
+  - ✅ Configurable default geofence radius at organization level (Admin > Settings)
+  - ✅ CreateShipmentCommand accepts originData/destinationData for auto-resolution
+  - Audit events for location creation via resolution 🔲
+- **Shipment Completion Criteria** ✅
+  - ✅ ShipmentCompletionHandler: auto-delivers when destination arrival criteria met
+  - ✅ Listens to shipment.stop_arrived and tracking.geofence_entered events
+  - ✅ Checks if final stop (destination) has arrived status → transitions to delivered
+  - ✅ Publishes shipment.delivered and shipment.status_changed events
+  - ✅ Also supports manual completion and external API calls (existing status update endpoints)
+- **Auto-Tender for Laneless Shipments** ✅
+  - ✅ AutoTenderHandler: event-driven, fires on shipment.created
+  - ✅ Checks org.autoTenderEnabled setting before creating tender
+  - ✅ Creates broadcast tender to all active carriers with 2-hour duration
+  - ✅ Skips if shipment already has carrier/lane or existing tender
+  - ✅ Full tender lifecycle (draft→open→evaluating→awarded) already built in Phase 8
+- **Admin Settings** ✅
+  - ✅ Auto-tender feature toggle in Admin > Settings > General
+  - ✅ Default geofence radius configuration (meters)
+  - ✅ Settings saved via organization settings API
 
 ## **Phase 4: Notifications, Tracking & Exception Management**
 - **Emails & Notifications** ✅

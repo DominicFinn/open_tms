@@ -17,6 +17,8 @@ import { CustomerProjection } from './projections/CustomerProjection.js';
 import { LaneProjection } from './projections/LaneProjection.js';
 import { IssueProjection } from './projections/IssueProjection.js';
 import { ColdChainComplianceHandler } from './handlers/ColdChainComplianceHandler.js';
+import { AutoTenderHandler } from './handlers/AutoTenderHandler.js';
+import { ShipmentCompletionHandler } from './handlers/ShipmentCompletionHandler.js';
 import { SlaEvaluationHandler } from './handlers/SlaEvaluationHandler.js';
 import { SlaEvaluationService } from '../services/SlaEvaluationService.js';
 import { SlaRepository } from '../repositories/SlaRepository.js';
@@ -75,6 +77,12 @@ export async function registerEventHandlers(
   if (storageProvider) {
     handlers.push(new ColdChainComplianceHandler(prisma, storageProvider));
   }
+
+  // Auto-tender handler: creates tenders for laneless shipments when autoTenderEnabled
+  handlers.push(new AutoTenderHandler(prisma));
+
+  // Shipment completion handler: auto-delivers when destination arrival criteria met
+  handlers.push(new ShipmentCompletionHandler(prisma, eventBus));
 
   // Add SLA evaluation handler
   {
