@@ -45,7 +45,7 @@ Deploy your own Open TMS instance with one click:
 
 ### 🎯 Core Functionality
 - **Customer Management** - Create, edit, and manage customer information
-- **Location Management** - Handle warehouses, distribution centers, and retail locations
+- **Location Management** - Handle warehouses, distribution centres, cross docks, terminals, and more with facility classification, capabilities tracking, operating hours, and contact details
 - **Carrier & Lane Management** - Define carriers, lanes, multi-stop routes, and carrier assignments
 - **Order Management** - Full order lifecycle with trackable units (pallets, totes, boxes) and line items
 - **Shipment Tracking** - Complete shipment lifecycle management with status tracking

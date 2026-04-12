@@ -14,6 +14,15 @@ export interface CreateLocationPayload {
   country: string;
   lat?: number;
   lng?: number;
+  locationType?: string;
+  facilityCapabilities?: Record<string, boolean>;
+  operatingHours?: Record<string, { open: string; close: string }>;
+  appointmentRequired?: boolean;
+  dockCount?: number;
+  maxTrailerLengthFt?: number;
+  contactName?: string;
+  contactPhone?: string;
+  contactEmail?: string;
 }
 
 export const CREATE_LOCATION = 'location.create';
@@ -36,7 +45,7 @@ export class CreateLocationCommandHandler extends BaseCommandHandler<CreateLocat
       type: EVENT_TYPES.LOCATION_CREATED,
       entityType: 'location',
       entityId: location.id,
-      payload: { name: location.name, city: location.city, country: location.country },
+      payload: { name: location.name, city: location.city, country: location.country, locationType: location.locationType },
     }));
 
     return { id: location.id, name: location.name };

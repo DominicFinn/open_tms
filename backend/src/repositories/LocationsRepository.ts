@@ -10,6 +10,15 @@ export interface CreateLocationDTO {
   country: string;
   lat?: number;
   lng?: number;
+  locationType?: string;
+  facilityCapabilities?: Record<string, boolean>;
+  operatingHours?: Record<string, { open: string; close: string }>;
+  appointmentRequired?: boolean;
+  dockCount?: number;
+  maxTrailerLengthFt?: number;
+  contactName?: string;
+  contactPhone?: string;
+  contactEmail?: string;
 }
 
 export interface UpdateLocationDTO {
@@ -22,6 +31,15 @@ export interface UpdateLocationDTO {
   country?: string;
   lat?: number;
   lng?: number;
+  locationType?: string;
+  facilityCapabilities?: Record<string, boolean>;
+  operatingHours?: Record<string, { open: string; close: string }>;
+  appointmentRequired?: boolean;
+  dockCount?: number;
+  maxTrailerLengthFt?: number;
+  contactName?: string;
+  contactPhone?: string;
+  contactEmail?: string;
 }
 
 export interface ILocationsRepository {

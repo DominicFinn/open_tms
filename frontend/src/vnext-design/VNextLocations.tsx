@@ -18,8 +18,22 @@ interface Location {
   lat: number | null;
   lng: number | null;
   archived: boolean;
+  locationType?: string;
+  appointmentRequired?: boolean;
   arrivalCriteria?: ArrivalCriteriaSummary[];
 }
+
+const LOCATION_TYPE_LABELS: Record<string, string> = {
+  warehouse: 'Warehouse',
+  distribution_centre: 'Distribution Centre',
+  cross_dock: 'Cross Dock',
+  terminal: 'Terminal',
+  port: 'Port',
+  rail_yard: 'Rail Yard',
+  customer: 'Customer',
+  store: 'Store',
+  manufacturing: 'Manufacturing',
+};
 
 export default function VNextLocations() {
   const [locations, setLocations] = useState<Location[]>([]);
@@ -28,6 +42,7 @@ export default function VNextLocations() {
   const [search, setSearch] = useState('');
   const [countryFilter, setCountryFilter] = useState('all');
   const [viewMode, setViewMode] = useState<'table' | 'map'>('table');
+  const [typeFilter, setTypeFilter] = useState('all');
 
   useEffect(() => {
     async function fetchLocations() {
@@ -54,6 +69,7 @@ export default function VNextLocations() {
 
   const filtered = locations.filter(l => {
     if (countryFilter !== 'all' && l.country !== countryFilter) return false;
+    if (typeFilter !== 'all' && (l.locationType || '') !== typeFilter) return false;
     if (search) {
       const q = search.toLowerCase();
       return l.name.toLowerCase().includes(q) || l.city.toLowerCase().includes(q) || l.state.toLowerCase().includes(q) || (l.address1 || '').toLowerCase().includes(q);
@@ -144,6 +160,12 @@ export default function VNextLocations() {
               style={{ width: '100%' }}
             />
           </div>
+          <select className="vn-filter-select" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
+            <option value="all">All Types</option>
+            {Object.entries(LOCATION_TYPE_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
+          </select>
           <select className="vn-filter-select" value={countryFilter} onChange={e => setCountryFilter(e.target.value)}>
             <option value="all">All Countries</option>
             <option value="US">United States</option>
@@ -174,6 +196,7 @@ export default function VNextLocations() {
               <thead>
                 <tr>
                   <th>Name</th>
+                  <th>Type</th>
                   <th>Address</th>
                   <th>City / State</th>
                   <th>Country</th>
@@ -188,6 +211,15 @@ export default function VNextLocations() {
                     <td>
                       <span style={{ fontWeight: 600, color: 'var(--on-surface)' }}>{l.name}</span>
                       <div className="vn-table-secondary">{l.id}</div>
+                    </td>
+                    <td>
+                      {l.locationType ? (
+                        <span className="vn-chip vn-chip-primary" style={{ fontSize: 11 }}>
+                          {LOCATION_TYPE_LABELS[l.locationType] || l.locationType}
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: 12, color: 'var(--on-surface-variant)', fontStyle: 'italic' }}>Unclassified</span>
+                      )}
                     </td>
                     <td style={{ fontSize: 13 }}>{l.address1}{l.address2 ? `, ${l.address2}` : ''}</td>
                     <td style={{ fontSize: 13 }}>{l.city}, {l.state}</td>
@@ -224,7 +256,7 @@ export default function VNextLocations() {
                 ))}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={7}>
+                    <td colSpan={8}>
                       <div className="vn-empty">
                         <span className="material-icons">search_off</span>
                         <h3>No locations found</h3>

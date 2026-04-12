@@ -47,6 +47,21 @@ model Location {
   archivedAt DateTime?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+
+  // Location classification & metadata
+  locationType          String?  // warehouse, distribution_centre, cross_dock, terminal, port, rail_yard, customer, store, manufacturing
+  facilityCapabilities  Json?    // { crossDockCapable, hasColdStorage, hasHazmatCert, hasBondedStorage }
+  operatingHours        Json?    // Per-day schedule: { mon: { open: "08:00", close: "17:00" }, ... }
+  appointmentRequired   Boolean  @default(false)
+  dockCount             Int?
+  maxTrailerLengthFt    Int?
+
+  // Contact
+  contactName   String?
+  contactPhone  String?
+  contactEmail  String?
+
+  // Relations
   originFor  Shipment[] @relation("Origin")
   destFor    Shipment[] @relation("Destination")
   lanesAsOrigin Lane[] @relation("LaneOrigin")

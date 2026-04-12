@@ -182,12 +182,22 @@ unassigned → assigned → in_transit → delivered
 
 ## Locations
 
+### Location Metadata
+
+Locations can be classified by type (`warehouse`, `distribution_centre`, `cross_dock`, `terminal`, `port`, `rail_yard`, `customer`, `store`, `manufacturing`) and enriched with facility capabilities, operating details, and contact information. This metadata supports hub-and-spoke routing, cross-dock planning, and appointment scheduling.
+
+**Facility Capabilities** (JSON): `crossDockCapable`, `hasColdStorage`, `hasHazmatCert`, `hasBondedStorage`
+
+**Operating Details**: `appointmentRequired`, `dockCount`, `maxTrailerLengthFt`, `operatingHours` (per-day open/close schedule)
+
+**Contact**: `contactName`, `contactPhone`, `contactEmail`
+
 ### Commands
 
-| Command | Trigger | Events Emitted |
-|---------|---------|----------------|
-| `CreateLocationCommand` | `POST /api/v1/locations` | `location.created` |
-| `UpdateLocationCommand` | `PUT /api/v1/locations/:id` | `location.updated` |
+| Command | Trigger | Events Emitted | Side Effects |
+|---------|---------|----------------|-------------|
+| `CreateLocationCommand` | `POST /api/v1/locations` | `location.created` | Event payload includes `locationType` |
+| `UpdateLocationCommand` | `PUT /api/v1/locations/:id` | `location.updated` | Event payload includes changed field names |
 
 ---
 
