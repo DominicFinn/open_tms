@@ -17,6 +17,7 @@ import { createSlaMonitorWorker, registerSlaMonitorSchedule, SLA_MONITOR_QUEUE }
 import {
   createQuoteExpirationWorker, registerQuoteExpirationSchedule, QUOTE_EXPIRATION_QUEUE,
   createInvoiceOverdueWorker, registerInvoiceOverdueSchedule, INVOICE_OVERDUE_QUEUE,
+  createInvoiceConsolidationWorker, registerInvoiceConsolidationSchedule, INVOICE_CONSOLIDATION_QUEUE,
 } from './workers/financialCronWorkers.js';
 import { ISlaEvaluationService } from './services/SlaEvaluationService.js';
 import { OrderDeliveryService } from './services/OrderDeliveryService.js';
@@ -213,7 +214,9 @@ async function start() {
           await queue.subscribe(QUOTE_EXPIRATION_QUEUE, createQuoteExpirationWorker(server.prisma));
           await registerInvoiceOverdueSchedule(finBoss);
           await queue.subscribe(INVOICE_OVERDUE_QUEUE, createInvoiceOverdueWorker(server.prisma));
-          server.log.info('Financial cron workers registered (quote expiration, invoice overdue)');
+          await registerInvoiceConsolidationSchedule(finBoss);
+          await queue.subscribe(INVOICE_CONSOLIDATION_QUEUE, createInvoiceConsolidationWorker(server.prisma));
+          server.log.info('Financial cron workers registered (quote expiration, invoice overdue, invoice consolidation)');
         }
       } catch (err) {
         server.log.warn('Financial cron workers failed to register: ' + (err as Error).message);

@@ -187,3 +187,200 @@ export async function registerInvoiceOverdueSchedule(
 }
 
 export const INVOICE_OVERDUE_QUEUE = 'invoice-overdue';
+
+// ─── Invoice Consolidation (Weekly / Monthly Batching) ──────────────────────
+
+/**
+ * Runs daily. For customers with weekly or monthly consolidation:
+ * - Weekly: on Mondays, batches all ready-to-invoice shipments from the previous week
+ * - Monthly: on the 1st of each month, batches all ready-to-invoice shipments from the previous month
+ *
+ * Creates a single draft invoice per customer containing all their unbilled charges.
+ */
+export function createInvoiceConsolidationWorker(prisma: PrismaClient) {
+  return async () => {
+    console.log('[InvoiceConsolidationWorker] Starting consolidation sweep');
+
+    try {
+      const now = new Date();
+      const dayOfWeek = now.getDay(); // 0=Sun, 1=Mon
+      const dayOfMonth = now.getDate();
+
+      // Find customers needing consolidation today
+      const consolidationTypes: string[] = [];
+      if (dayOfWeek === 1) consolidationTypes.push('weekly');  // Monday
+      if (dayOfMonth === 1) consolidationTypes.push('monthly'); // 1st of month
+
+      if (consolidationTypes.length === 0) {
+        console.log('[InvoiceConsolidationWorker] Not a consolidation day (Mon for weekly, 1st for monthly) — skipping');
+        return;
+      }
+
+      const customers = await prisma.customer.findMany({
+        where: {
+          archived: false,
+          invoiceConsolidation: { in: consolidationTypes },
+        },
+        select: {
+          id: true,
+          name: true,
+          paymentTermsDays: true,
+          invoiceConsolidation: true,
+          currency: true,
+        },
+      });
+
+      if (customers.length === 0) {
+        console.log(`[InvoiceConsolidationWorker] No customers with ${consolidationTypes.join('/')} consolidation`);
+        return;
+      }
+
+      let invoicesCreated = 0;
+
+      for (const customer of customers) {
+        // Only process if today is the right day for this customer's consolidation type
+        if (customer.invoiceConsolidation === 'weekly' && dayOfWeek !== 1) continue;
+        if (customer.invoiceConsolidation === 'monthly' && dayOfMonth !== 1) continue;
+
+        // Find all ready-to-invoice shipments for this customer
+        const summaries = await prisma.shipmentFinancialSummary.findMany({
+          where: { billingStatus: 'ready_to_invoice' },
+          select: { shipmentId: true },
+        });
+
+        if (summaries.length === 0) continue;
+
+        const shipmentIds = summaries.map(s => s.shipmentId);
+
+        // Filter to only this customer's shipments
+        const customerShipments = await prisma.shipment.findMany({
+          where: {
+            id: { in: shipmentIds },
+            customerId: customer.id,
+          },
+          select: { id: true, reference: true },
+        });
+
+        if (customerShipments.length === 0) continue;
+
+        const custShipmentIds = customerShipments.map(s => s.id);
+
+        // Collect all approved revenue charges
+        const charges = await prisma.charge.findMany({
+          where: {
+            shipmentId: { in: custShipmentIds },
+            chargeCategory: 'revenue',
+            status: 'approved',
+          },
+        });
+
+        if (charges.length === 0) continue;
+
+        const subtotalCents = charges.reduce((s, c) => s + c.amountCents, 0);
+        const currency = charges[0].currency;
+
+        // Generate invoice number
+        const today = new Date();
+        const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
+        const prefix = `INV-${dateStr}-`;
+        const latest = await prisma.invoice.findFirst({
+          where: { invoiceNumber: { startsWith: prefix } },
+          orderBy: { invoiceNumber: 'desc' },
+          select: { invoiceNumber: true },
+        });
+        const seq = latest ? parseInt(latest.invoiceNumber.slice(prefix.length), 10) + 1 : 1;
+        const invoiceNumber = `${prefix}${String(seq).padStart(4, '0')}`;
+
+        const dueDate = new Date();
+        dueDate.setDate(dueDate.getDate() + customer.paymentTermsDays);
+
+        const periodLabel = customer.invoiceConsolidation === 'weekly' ? 'weekly' : 'monthly';
+        const shipmentRefs = customerShipments.map(s => s.reference).join(', ');
+
+        // Create consolidated invoice
+        await prisma.invoice.create({
+          data: {
+            orgId: charges[0].orgId,
+            invoiceNumber,
+            customerId: customer.id,
+            status: 'draft',
+            subtotalCents,
+            taxCents: 0,
+            totalCents: subtotalCents,
+            paidCents: 0,
+            balanceCents: subtotalCents,
+            currency,
+            paymentTermsDays: customer.paymentTermsDays,
+            issueDate: today,
+            dueDate,
+            createdBy: 'system',
+            internalNotes: `${periodLabel} consolidated invoice — ${customerShipments.length} shipments: ${shipmentRefs}`,
+            lineItems: {
+              create: charges.map(charge => ({
+                shipmentId: charge.shipmentId,
+                orderId: charge.orderId,
+                chargeId: charge.id,
+                chargeType: charge.chargeType,
+                description: charge.description,
+                quantity: 1,
+                unitPriceCents: charge.amountCents,
+                totalCents: charge.amountCents,
+                currency: charge.currency,
+                freightClass: charge.freightClass,
+              })),
+            },
+          },
+        });
+
+        // Mark charges as invoiced
+        await prisma.charge.updateMany({
+          where: { id: { in: charges.map(c => c.id) } },
+          data: { status: 'invoiced' },
+        });
+
+        // Update shipment billing status
+        await prisma.shipmentFinancialSummary.updateMany({
+          where: { shipmentId: { in: custShipmentIds } },
+          data: { billingStatus: 'invoiced' },
+        });
+
+        invoicesCreated++;
+        console.log(
+          `[InvoiceConsolidationWorker] Created ${periodLabel} invoice ${invoiceNumber} for ${customer.name}: ` +
+          `${customerShipments.length} shipments, ${charges.length} charges, ${subtotalCents}c`
+        );
+      }
+
+      console.log(`[InvoiceConsolidationWorker] Complete — ${invoicesCreated} consolidated invoices created`);
+    } catch (err) {
+      console.error('[InvoiceConsolidationWorker] Error:', (err as Error).message);
+      throw err;
+    }
+  };
+}
+
+export async function registerInvoiceConsolidationSchedule(
+  boss: any,
+  cronExpression?: string,
+): Promise<void> {
+  // Runs daily at 6am UTC — weekly invoices generate on Mondays, monthly on 1st
+  const cron = cronExpression || process.env.INVOICE_CONSOLIDATION_CRON || '0 6 * * *';
+  const queueName = 'invoice-consolidation';
+
+  try {
+    await boss.createQueue(queueName, {
+      retryLimit: 1,
+      retryDelay: 300,
+      expireInSeconds: 600,
+      deleteAfterSeconds: 86400,
+    }).catch(() => {});
+
+    await boss.schedule(queueName, cron, {}, { tz: 'UTC' });
+
+    console.log(`[InvoiceConsolidation] Cron schedule registered: "${cron}" on queue "${queueName}"`);
+  } catch (err) {
+    console.error('[InvoiceConsolidation] Failed to register cron schedule:', (err as Error).message);
+  }
+}
+
+export const INVOICE_CONSOLIDATION_QUEUE = 'invoice-consolidation';

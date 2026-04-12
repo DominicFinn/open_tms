@@ -254,4 +254,69 @@ export async function invoiceRoutes(server: FastifyInstance) {
       return { data: null, error: err.message };
     }
   });
+
+  // Consolidate invoices for a customer (manual trigger)
+  server.post('/api/v1/invoices/consolidate', {
+    schema: {
+      tags: ['Financial - Invoices'],
+      summary: 'Manually trigger invoice consolidation for a customer — batches all ready-to-invoice shipments into a single invoice',
+      body: {
+        type: 'object',
+        required: ['customerId'],
+        properties: {
+          customerId: { type: 'string' },
+          notes: { type: 'string' },
+        },
+      },
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const body = z.object({
+      customerId: z.string().min(1),
+      notes: z.string().optional(),
+    }).parse((req as any).body);
+
+    try {
+      const orgId = (req as any).orgId ?? '';
+
+      // Find all ready-to-invoice shipments for this customer
+      const summaries = await invoiceRepo.findAll({ status: 'ready_to_invoice' } as any);
+
+      // We need to find shipments via the financial summary
+      const prisma = container.resolve<any>(TOKENS.IChargeRepository);
+
+      // Simpler approach: use the invoicingService.findReadyToInvoice
+      const ready = await invoicingService.findReadyToInvoice(orgId, body.customerId);
+
+      if (ready.length === 0) {
+        reply.code(400);
+        return { data: null, error: 'No shipments ready to invoice for this customer' };
+      }
+
+      const shipmentIds = ready.map(s => s.shipmentId);
+
+      // Create via command
+      const result = await commandBus.dispatch<CreateInvoicePayload, { id: string; invoiceNumber: string }>({
+        type: CREATE_INVOICE,
+        orgId,
+        actorId: (req as any).user?.sub ?? null,
+        payload: {
+          customerId: body.customerId,
+          shipmentIds,
+          notes: body.notes,
+          internalNotes: `Manual consolidation — ${ready.length} shipments`,
+        },
+        metadata: { correlationId: crypto.randomUUID(), source: 'api' },
+      });
+
+      if (!result.success) {
+        reply.code(400);
+        return { data: null, error: result.error };
+      }
+
+      return { data: { ...result.data, shipmentCount: ready.length }, error: null };
+    } catch (err: any) {
+      reply.code(400);
+      return { data: null, error: err.message };
+    }
+  });
 }

@@ -70,7 +70,7 @@ export class BillingTriggerHandler implements IEventHandler {
 
       console.log(`[${this.name}] Shipment ${shipmentId} marked as ready_to_invoice (${revenueCharges.length} revenue charges)`);
 
-      // Check if the customer has auto-invoice enabled
+      // Check if the customer has auto-invoice enabled and per_shipment consolidation
       const shipment = await this.prisma.shipment.findUnique({
         where: { id: shipmentId },
         select: {
@@ -81,12 +81,15 @@ export class BillingTriggerHandler implements IEventHandler {
             select: {
               autoInvoice: true,
               paymentTermsDays: true,
+              invoiceConsolidation: true,
             },
           },
         },
       });
 
-      if (shipment?.customer.autoInvoice) {
+      // Only auto-invoice per_shipment customers immediately.
+      // Weekly/monthly customers are batched by the invoice consolidation cron worker.
+      if (shipment?.customer.autoInvoice && shipment.customer.invoiceConsolidation === 'per_shipment') {
         // Auto-create a draft invoice
         const approvedCharges = revenueCharges.filter(c => c.status === 'approved');
         if (approvedCharges.length === 0) {

@@ -322,7 +322,7 @@
   - ✅ Full/partial payment with auto-status transitions (partial_paid / paid)
   - ✅ 13 unit tests for all invoice command handlers
   - ✅ Invoice overdue detection cron (pg-boss, hourly, 7-day reminder cadence)
-  - 🔲 Invoice consolidation (weekly, monthly batching)
+  - ✅ Invoice consolidation (weekly Monday / monthly 1st batching via pg-boss cron, manual trigger endpoint)
   - 🔲 Frontend: VNext Invoices pages
 - **Phase 7D: Carrier Invoices (AP) + Freight Audit** (in progress)
   - ✅ CarrierInvoiceRepository (interface + DTO + implementation)
