@@ -385,6 +385,44 @@ If `Customer.autoInvoice = true`, when a shipment is delivered:
 
 ---
 
+## Carrier Invoices (Accounts Payable)
+
+### Commands (CQRS)
+
+| Command | Trigger | Events Emitted |
+|---------|---------|----------------|
+| `ReceiveCarrierInvoiceCommand` | `POST /api/v1/carrier-invoices` | `carrier_invoice.received`, `carrier_invoice.discrepancy` (if mismatch) |
+| `ApproveCarrierInvoiceCommand` | `POST /api/v1/carrier-invoices/:id/approve` | `carrier_invoice.approved` |
+| `RecordCarrierPaymentCommand` | `POST /api/v1/carrier-invoices/:id/pay` | `carrier_invoice.paid` |
+
+### Three-Way Match (Freight Audit)
+
+When a carrier invoice is received, `ReceiveCarrierInvoiceCommand` automatically performs a three-way match:
+
+1. For each line item, finds expected cost `Charge` records on the referenced shipment
+2. Compares invoiced amount vs expected amount per charge type
+3. Calculates variance per line and overall
+4. Line match statuses: `matched` (exact) | `variance` (amount differs) | `unmatched` (no expected charge)
+5. Overall: `matched` | `partial_match` (variance only) | `mismatch` (has unmatched lines)
+6. **Auto-approve**: If no unmatched lines AND variance <= 2%, invoice is auto-approved
+
+### Carrier Invoice Lifecycle
+
+```
+received → matched/discrepancy → approved → scheduled → paid
+                    ↘ disputed
+```
+
+### Side Effects
+
+| Event | What Happens |
+|-------|-------------|
+| `carrier_invoice.received` | ShipmentFinancialSummary.carrierPaymentStatus → invoice_received (or approved if auto) |
+| `carrier_invoice.approved` | ShipmentFinancialSummary.carrierPaymentStatus → approved |
+| `carrier_invoice.paid` | ShipmentFinancialSummary.carrierPaymentStatus → paid |
+
+---
+
 ## Trading Partners
 
 ### Commands

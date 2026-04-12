@@ -82,6 +82,8 @@ export const TOKENS = {
   IInvoiceRepository: Symbol.for('IInvoiceRepository'),
   IPaymentRepository: Symbol.for('IPaymentRepository'),
   IInvoicingService: Symbol.for('IInvoicingService'),
+  ICarrierInvoiceRepository: Symbol.for('ICarrierInvoiceRepository'),
+  IFreightAuditService: Symbol.for('IFreightAuditService'),
 
   // Infrastructure tokens
   PrismaClient: Symbol.for('PrismaClient'),

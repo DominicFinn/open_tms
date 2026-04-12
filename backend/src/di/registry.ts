@@ -100,6 +100,11 @@ import { ApproveChargeCommandHandler } from '../commands/charges/ApproveChargeCo
 import { InvoiceRepository, PaymentRepository } from '../repositories/InvoiceRepository.js';
 import { InvoicingService } from '../services/InvoicingService.js';
 import { CreateInvoiceCommandHandler } from '../commands/invoices/CreateInvoiceCommand.js';
+import { CarrierInvoiceRepository } from '../repositories/CarrierInvoiceRepository.js';
+import { FreightAuditService } from '../services/FreightAuditService.js';
+import { ReceiveCarrierInvoiceCommandHandler } from '../commands/carrierInvoices/ReceiveCarrierInvoiceCommand.js';
+import { ApproveCarrierInvoiceCommandHandler } from '../commands/carrierInvoices/ApproveCarrierInvoiceCommand.js';
+import { RecordCarrierPaymentCommandHandler } from '../commands/carrierInvoices/RecordCarrierPaymentCommand.js';
 import { ApproveInvoiceCommandHandler } from '../commands/invoices/ApproveInvoiceCommand.js';
 import { SendInvoiceCommandHandler } from '../commands/invoices/SendInvoiceCommand.js';
 import { RecordPaymentCommandHandler } from '../commands/invoices/RecordPaymentCommand.js';
@@ -388,6 +393,17 @@ export function registerDependencies(prisma: PrismaClient): void {
     );
   });
 
+  container.singleton(TOKENS.ICarrierInvoiceRepository).toFactory(() => {
+    return new CarrierInvoiceRepository(container.resolve(TOKENS.PrismaClient));
+  });
+
+  container.singleton(TOKENS.IFreightAuditService).toFactory(() => {
+    return new FreightAuditService(
+      container.resolve(TOKENS.IChargeRepository),
+      container.resolve(TOKENS.PrismaClient),
+    );
+  });
+
   // Trading Partner / EDI Hub
   container.singleton(TOKENS.ITradingPartnerRepository).toFactory(() => {
     return new TradingPartnerRepository(container.resolve(TOKENS.PrismaClient));
@@ -565,6 +581,11 @@ export function registerDependencies(prisma: PrismaClient): void {
     bus.register(new SendInvoiceCommandHandler(prisma, eventBus));
     bus.register(new RecordPaymentCommandHandler(prisma, eventBus));
     bus.register(new VoidInvoiceCommandHandler(prisma, eventBus));
+
+    // Carrier invoice commands
+    bus.register(new ReceiveCarrierInvoiceCommandHandler(prisma, eventBus));
+    bus.register(new ApproveCarrierInvoiceCommandHandler(prisma, eventBus));
+    bus.register(new RecordCarrierPaymentCommandHandler(prisma, eventBus));
 
     return bus;
   });

@@ -69,6 +69,7 @@ import { locationOpsRoutes } from './routes/locationOps.js';
 import { warehouseRoutes } from './routes/warehouse.js';
 import { chargeRoutes } from './routes/charges.js';
 import { invoiceRoutes } from './routes/invoices.js';
+import { carrierInvoiceRoutes } from './routes/carrierInvoices.js';
 
 const server = Fastify({ logger: true });
 
@@ -151,6 +152,7 @@ async function start() {
   await server.register(warehouseRoutes);
   await server.register(chargeRoutes);
   await server.register(invoiceRoutes);
+  await server.register(carrierInvoiceRoutes);
 
   // Start queue adapter (needed for publishing events, even if workers run elsewhere)
   try {

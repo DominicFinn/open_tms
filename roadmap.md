@@ -319,11 +319,17 @@
   - 🔲 Invoice overdue detection cron
   - 🔲 Invoice consolidation (weekly, monthly batching)
   - 🔲 Frontend: VNext Invoices pages
-- **Phase 7D: Carrier Invoices (AP) + Freight Audit** 🔲
-  - Carrier invoice receipt and three-way match
-  - Auto-approve within configurable variance tolerance
-  - EDI 210 Freight Invoice inbound parsing
-  - Carrier payment scheduling
+- **Phase 7D: Carrier Invoices (AP) + Freight Audit** (in progress)
+  - ✅ CarrierInvoiceRepository (interface + DTO + implementation)
+  - ✅ FreightAuditService (three-way match: tender rate vs expected charges vs carrier invoice)
+  - ✅ ReceiveCarrierInvoice command with automatic three-way match and auto-approve (2% tolerance)
+  - ✅ ApproveCarrierInvoice + RecordCarrierPayment commands
+  - ✅ Carrier invoice REST API (5 endpoints with Swagger schemas)
+  - ✅ Per-line match results (matched/variance/unmatched) with expected vs actual amounts
+  - ✅ Auto-emits CARRIER_INVOICE_DISCREPANCY event for mismatches
+  - ✅ 8 unit tests for carrier invoice commands
+  - 🔲 EDI 210 Freight Invoice inbound parsing
+  - 🔲 Carrier payment scheduling/batching
 - **Phase 7E: Queries, Disputes & Credit Notes** 🔲
   - Financial query lifecycle (raised -> investigating -> resolved)
   - Auto-create queries from cargo discrepancies and cold chain excursions
