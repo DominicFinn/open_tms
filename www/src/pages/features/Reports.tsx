@@ -96,8 +96,8 @@ export default function Reports() {
               </AnimateIn>
             </div>
 
-            {/* Right column: preview */}
-            <AnimateIn animation="slide-left" delay={300}>
+            {/* Right column: preview (desktop) */}
+            <AnimateIn animation="slide-left" delay={300} className="hidden lg:block">
               <div style={{
                 transform: 'perspective(1200px) rotateY(-4deg) rotateX(2deg)',
                 transformOrigin: 'center center',
@@ -111,6 +111,35 @@ export default function Reports() {
                 }}>
                   <ReportsPreview />
                 </div>
+              </div>
+            </AnimateIn>
+
+            {/* Mobile: compact animated chart SVG */}
+            <AnimateIn animation="fade-up" delay={300} className="lg:hidden">
+              <div className="glass-card rounded-2xl p-6 max-w-sm mx-auto">
+                <svg viewBox="0 0 280 160" fill="none" className="w-full h-auto">
+                  <style>{`
+                    @keyframes rpt-m-bar { 0% { transform: scaleY(0); } 60%,100% { transform: scaleY(1); } }
+                    @keyframes rpt-m-line { from { stroke-dashoffset: 300; } to { stroke-dashoffset: 0; } }
+                    .rpt-m-b1 { animation: rpt-m-bar 1.2s ease-out 0.1s both; transform-origin: bottom; }
+                    .rpt-m-b2 { animation: rpt-m-bar 1.2s ease-out 0.3s both; transform-origin: bottom; }
+                    .rpt-m-b3 { animation: rpt-m-bar 1.2s ease-out 0.5s both; transform-origin: bottom; }
+                    .rpt-m-b4 { animation: rpt-m-bar 1.2s ease-out 0.7s both; transform-origin: bottom; }
+                    .rpt-m-b5 { animation: rpt-m-bar 1.2s ease-out 0.9s both; transform-origin: bottom; }
+                    .rpt-m-trend { stroke-dasharray: 300; animation: rpt-m-line 2s ease-out 0.5s both; }
+                  `}</style>
+                  {/* Chart bars */}
+                  <rect className="rpt-m-b1" x="30" y="80" width="32" height="60" rx="4" fill="rgba(59,130,246,0.25)" stroke="rgba(59,130,246,0.4)" strokeWidth="1"/>
+                  <rect className="rpt-m-b2" x="74" y="55" width="32" height="85" rx="4" fill="rgba(99,102,241,0.25)" stroke="rgba(99,102,241,0.4)" strokeWidth="1"/>
+                  <rect className="rpt-m-b3" x="118" y="40" width="32" height="100" rx="4" fill="rgba(139,92,246,0.25)" stroke="rgba(139,92,246,0.4)" strokeWidth="1"/>
+                  <rect className="rpt-m-b4" x="162" y="60" width="32" height="80" rx="4" fill="rgba(99,102,241,0.25)" stroke="rgba(99,102,241,0.4)" strokeWidth="1"/>
+                  <rect className="rpt-m-b5" x="206" y="30" width="32" height="110" rx="4" fill="rgba(59,130,246,0.3)" stroke="rgba(59,130,246,0.5)" strokeWidth="1"/>
+                  {/* Trend line */}
+                  <path className="rpt-m-trend" d="M46 75 L90 50 L134 35 L178 55 L222 25" stroke="rgba(34,197,94,0.5)" strokeWidth="2" fill="none" strokeLinecap="round"/>
+                  {/* Baseline */}
+                  <line x1="20" y1="140" x2="248" y2="140" stroke="rgba(255,255,255,0.08)" strokeWidth="1"/>
+                </svg>
+                <p className="text-center text-surface-500 text-xs mt-3">Auto-generated reports and analytics</p>
               </div>
             </AnimateIn>
           </div>
@@ -221,17 +250,10 @@ export default function Reports() {
           </AnimateIn>
 
           <AnimateIn animation="fade-up" delay={200}>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '0',
-              flexWrap: 'wrap',
-              padding: '2rem 0',
-            }}>
+            {/* Desktop: horizontal flow */}
+            <div className="hidden md:flex items-center justify-center" style={{ padding: '2rem 0' }}>
               {flowSteps.map((step, i) => (
                 <div key={i} style={{ display: 'flex', alignItems: 'center' }}>
-                  {/* Node */}
                   <div className="glass-card" style={{
                     display: 'flex',
                     flexDirection: 'column',
@@ -242,33 +264,43 @@ export default function Reports() {
                     borderRadius: '16px',
                     border: `1px solid ${step.color}33`,
                     background: `${step.color}0a`,
-                    position: 'relative',
                   }}>
                     <span style={{ fontSize: '1.75rem', marginBottom: '0.5rem' }}>{step.icon}</span>
-                    <span style={{
-                      fontSize: '0.8rem',
-                      fontWeight: 600,
-                      color: step.color,
-                      textAlign: 'center',
-                      lineHeight: 1.2,
-                    }}>
-                      {step.label}
-                    </span>
+                    <span style={{ fontSize: '0.8rem', fontWeight: 600, color: step.color, textAlign: 'center', lineHeight: 1.2 }}>{step.label}</span>
                   </div>
-                  {/* Arrow connector */}
                   {i < flowSteps.length - 1 && (
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      padding: '0 0.25rem',
-                    }}>
-                      <div style={{
-                        width: '32px',
-                        height: '2px',
-                        background: 'linear-gradient(to right, rgba(255,255,255,0.15), rgba(255,255,255,0.05))',
-                      }} />
+                    <div style={{ display: 'flex', alignItems: 'center', padding: '0 0.25rem' }}>
+                      <div style={{ width: '32px', height: '2px', background: 'linear-gradient(to right, rgba(255,255,255,0.15), rgba(255,255,255,0.05))' }} />
                       <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ marginLeft: '-1px' }}>
                         <path d="M2 6h8M7 3l3 3-3 3" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+            {/* Mobile: vertical flow */}
+            <div className="md:hidden flex flex-col items-center gap-0" style={{ padding: '1rem 0' }}>
+              {flowSteps.map((step, i) => (
+                <div key={i} className="flex flex-col items-center">
+                  <div className="glass-card" style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    width: '220px',
+                    padding: '14px 18px',
+                    borderRadius: '12px',
+                    border: `1px solid ${step.color}33`,
+                    background: `${step.color}0a`,
+                  }}>
+                    <span style={{ fontSize: '1.5rem' }}>{step.icon}</span>
+                    <span style={{ fontSize: '0.85rem', fontWeight: 600, color: step.color }}>{step.label}</span>
+                  </div>
+                  {i < flowSteps.length - 1 && (
+                    <div className="flex flex-col items-center" style={{ padding: '2px 0' }}>
+                      <div style={{ width: '2px', height: '20px', background: `linear-gradient(to bottom, ${step.color}40, rgba(255,255,255,0.05))` }} />
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                        <path d="M6 2v8M3 7l3 3 3-3" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
                     </div>
                   )}

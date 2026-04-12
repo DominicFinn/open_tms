@@ -96,7 +96,7 @@ export default function Warehouse() {
           </AnimateIn>
 
           <AnimateIn animation="scale-up" delay={350}>
-            <div className="glow" style={{ display: 'inline-block', borderRadius: '2rem', padding: '4px' }}>
+            <div className="glow max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg mx-auto" style={{ display: 'inline-block', borderRadius: '2rem', padding: '4px' }}>
               <WarehousePreview />
             </div>
           </AnimateIn>

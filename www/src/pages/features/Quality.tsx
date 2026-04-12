@@ -114,8 +114,8 @@ export default function Quality() {
               </AnimateIn>
             </div>
 
-            {/* Right: preview (desktop: beside, mobile: below) */}
-            <AnimateIn animation="slide-left" delay={200} className="min-w-0">
+            {/* Right: preview (desktop only) */}
+            <AnimateIn animation="slide-left" delay={200} className="min-w-0 hidden lg:block">
               <div className="rounded-2xl overflow-hidden border border-white/10 shadow-2xl shadow-green-500/5 glow" style={{
                 transform: 'perspective(1200px) rotateY(-2deg)',
               }}>
@@ -124,6 +124,56 @@ export default function Quality() {
               <p className="text-center text-surface-400 text-sm mt-4 italic">
                 CAPA investigation  - from detection to verified resolution
               </p>
+            </AnimateIn>
+
+            {/* Mobile: compact CAPA workflow SVG */}
+            <AnimateIn animation="fade-up" delay={200} className="lg:hidden">
+              <div className="glass-card rounded-2xl p-6 max-w-sm mx-auto">
+                <svg viewBox="0 0 280 120" fill="none" className="w-full h-auto">
+                  <style>{`
+                    @keyframes qa-m-step { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }
+                    .qa-m-s1 { animation: qa-m-step 4s ease-in-out 0s infinite; }
+                    .qa-m-s2 { animation: qa-m-step 4s ease-in-out 0.6s infinite; }
+                    .qa-m-s3 { animation: qa-m-step 4s ease-in-out 1.2s infinite; }
+                    .qa-m-s4 { animation: qa-m-step 4s ease-in-out 1.8s infinite; }
+                    .qa-m-s5 { animation: qa-m-step 4s ease-in-out 2.4s infinite; }
+                  `}</style>
+                  {/* Progress steps */}
+                  <g className="qa-m-s1">
+                    <circle cx="30" cy="40" r="14" fill="rgba(34,197,94,0.15)" stroke="rgba(34,197,94,0.4)" strokeWidth="1.5"/>
+                    <path d="M25 40 l3 3 l6 -6" stroke="rgba(34,197,94,0.7)" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+                  </g>
+                  <line x1="44" y1="40" x2="78" y2="40" stroke="rgba(34,197,94,0.2)" strokeWidth="1.5"/>
+                  <g className="qa-m-s2">
+                    <circle cx="92" cy="40" r="14" fill="rgba(34,197,94,0.15)" stroke="rgba(34,197,94,0.4)" strokeWidth="1.5"/>
+                    <path d="M87 40 l3 3 l6 -6" stroke="rgba(34,197,94,0.7)" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+                  </g>
+                  <line x1="106" y1="40" x2="140" y2="40" stroke="rgba(59,130,246,0.2)" strokeWidth="1.5"/>
+                  <g className="qa-m-s3">
+                    <circle cx="154" cy="40" r="14" fill="rgba(59,130,246,0.2)" stroke="rgba(59,130,246,0.5)" strokeWidth="2"/>
+                    <circle cx="154" cy="40" r="4" fill="rgba(59,130,246,0.6)"/>
+                  </g>
+                  <line x1="168" y1="40" x2="202" y2="40" stroke="rgba(255,255,255,0.08)" strokeWidth="1.5" strokeDasharray="4 3"/>
+                  <g className="qa-m-s4">
+                    <circle cx="216" cy="40" r="14" stroke="rgba(255,255,255,0.12)" strokeWidth="1.5" fill="rgba(255,255,255,0.02)"/>
+                  </g>
+                  <line x1="230" y1="40" x2="250" y2="40" stroke="rgba(255,255,255,0.06)" strokeWidth="1.5" strokeDasharray="4 3"/>
+                  <g className="qa-m-s5">
+                    <circle cx="264" cy="40" r="14" stroke="rgba(255,255,255,0.1)" strokeWidth="1.5" fill="rgba(255,255,255,0.02)"/>
+                  </g>
+                  {/* Labels */}
+                  <text x="30" y="68" textAnchor="middle" fill="rgba(34,197,94,0.5)" fontSize="6.5" fontWeight="500">Draft</text>
+                  <text x="92" y="68" textAnchor="middle" fill="rgba(34,197,94,0.5)" fontSize="6.5" fontWeight="500">Investigate</text>
+                  <text x="154" y="68" textAnchor="middle" fill="rgba(59,130,246,0.6)" fontSize="6.5" fontWeight="600">Root Cause</text>
+                  <text x="216" y="68" textAnchor="middle" fill="rgba(255,255,255,0.2)" fontSize="6.5">Action</text>
+                  <text x="264" y="68" textAnchor="middle" fill="rgba(255,255,255,0.15)" fontSize="6.5">Verify</text>
+                  {/* Status card */}
+                  <rect x="60" y="82" width="160" height="28" rx="6" fill="rgba(59,130,246,0.08)" stroke="rgba(59,130,246,0.2)" strokeWidth="1"/>
+                  <rect x="72" y="90" width="48" height="4" rx="2" fill="rgba(59,130,246,0.3)"/>
+                  <rect x="72" y="98" width="80" height="3" rx="1.5" fill="rgba(255,255,255,0.08)"/>
+                </svg>
+                <p className="text-center text-surface-500 text-xs mt-3">Structured CAPA workflow with audit trail</p>
+              </div>
             </AnimateIn>
           </div>
         </div>
@@ -137,25 +187,35 @@ export default function Quality() {
           </AnimateIn>
 
           <div className="relative">
-            {/* Vertical center line */}
+            {/* Vertical center line - desktop only */}
             <div
-              className="absolute left-1/2 top-0 bottom-0 w-px -translate-x-1/2"
+              className="absolute left-1/2 top-0 bottom-0 w-px -translate-x-1/2 hidden lg:block"
+              style={{ background: 'linear-gradient(to bottom, transparent, rgba(34,197,94,0.4) 10%, rgba(34,197,94,0.4) 90%, transparent)' }}
+            />
+            {/* Vertical left line - mobile only */}
+            <div
+              className="absolute left-[7px] top-0 bottom-0 w-px lg:hidden"
               style={{ background: 'linear-gradient(to bottom, transparent, rgba(34,197,94,0.4) 10%, rgba(34,197,94,0.4) 90%, transparent)' }}
             />
 
-            <div className="space-y-16">
+            <div className="space-y-16 lg:space-y-16">
               {problems.map((item, i) => {
                 const isLeft = i % 2 === 0
                 return (
                   <div key={i} className="relative">
-                    {/* Center dot */}
+                    {/* Center dot - desktop */}
                     <div
-                      className="absolute left-1/2 top-8 -translate-x-1/2 w-4 h-4 rounded-full z-10 glow"
+                      className="absolute left-1/2 top-8 -translate-x-1/2 w-4 h-4 rounded-full z-10 glow hidden lg:block"
+                      style={{ backgroundColor: item.color, boxShadow: `0 0 12px ${item.color}60` }}
+                    />
+                    {/* Left dot - mobile */}
+                    <div
+                      className="absolute left-0 top-1 w-[15px] h-[15px] rounded-full z-10 glow lg:hidden"
                       style={{ backgroundColor: item.color, boxShadow: `0 0 12px ${item.color}60` }}
                     />
 
-                    <div className={`grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16 ${isLeft ? '' : 'direction-rtl'}`}>
-                      {/* Problem side */}
+                    {/* Desktop: alternating 2-col layout */}
+                    <div className={`hidden lg:grid lg:grid-cols-2 gap-16 ${isLeft ? '' : 'direction-rtl'}`}>
                       <AnimateIn animation={isLeft ? 'slide-right' : 'slide-left'} delay={i * 100}>
                         <div className={`${isLeft ? 'lg:text-right lg:pr-12' : 'lg:text-left lg:pl-12 lg:order-2'}`} style={{ direction: 'ltr' }}>
                           <p className="text-surface-400 text-sm italic leading-relaxed">
@@ -164,7 +224,6 @@ export default function Quality() {
                         </div>
                       </AnimateIn>
 
-                      {/* Solution side */}
                       <AnimateIn animation={isLeft ? 'slide-left' : 'slide-right'} delay={i * 100 + 50}>
                         <div className={`${isLeft ? 'lg:pl-12' : 'lg:pr-12 lg:text-right lg:order-1'}`} style={{ direction: 'ltr' }}>
                           <h3 className="text-xl font-bold text-white mb-2" style={{ color: item.color }}>
@@ -174,6 +233,21 @@ export default function Quality() {
                             {item.description}
                           </p>
                         </div>
+                      </AnimateIn>
+                    </div>
+
+                    {/* Mobile: left-aligned single column */}
+                    <div className="lg:hidden pl-8">
+                      <AnimateIn animation="slide-right" delay={i * 100}>
+                        <p className="text-surface-400 text-sm italic leading-relaxed mb-2">
+                          &quot;{item.problem}&quot;
+                        </p>
+                        <h3 className="text-lg font-bold text-white mb-2" style={{ color: item.color }}>
+                          {item.solution}
+                        </h3>
+                        <p className="text-surface-300 leading-relaxed text-sm">
+                          {item.description}
+                        </p>
                       </AnimateIn>
                     </div>
                   </div>

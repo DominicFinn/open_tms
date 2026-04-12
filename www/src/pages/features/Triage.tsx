@@ -112,10 +112,9 @@ export default function Triage() {
               </AnimateIn>
             </div>
 
-            {/* Right column: embedded KanbanPreview */}
-            <AnimateIn animation="slide-left" delay={300}>
+            {/* Right column: KanbanPreview (desktop only) */}
+            <AnimateIn animation="slide-left" delay={300} className="hidden lg:block">
               <div className="relative flex items-center justify-center">
-                {/* Glow behind the preview */}
                 <div className="absolute inset-0 rounded-3xl bg-accent-500/10 blur-[60px]" />
                 <div
                   className="relative glow"
@@ -126,6 +125,79 @@ export default function Triage() {
                 >
                   <KanbanPreview />
                 </div>
+              </div>
+            </AnimateIn>
+
+            {/* Mobile: compact kanban columns SVG */}
+            <AnimateIn animation="fade-up" delay={300} className="lg:hidden">
+              <div className="glass-card rounded-2xl p-6 max-w-sm mx-auto">
+                <svg viewBox="0 0 280 170" fill="none" className="w-full h-auto">
+                  <style>{`
+                    @keyframes tri-m-card { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+                    .tri-m-c1 { animation: tri-m-card 3s ease-in-out infinite; }
+                    .tri-m-c2 { animation: tri-m-card 3s ease-in-out 0.6s infinite; }
+                    .tri-m-c3 { animation: tri-m-card 3s ease-in-out 1.2s infinite; }
+                  `}</style>
+                  {/* Column headers */}
+                  <rect x="8" y="8" width="82" height="20" rx="4" fill="rgba(59,130,246,0.12)"/>
+                  <rect x="16" y="14" width="32" height="4" rx="2" fill="rgba(59,130,246,0.5)"/>
+                  <circle cx="78" cy="18" r="6" fill="rgba(59,130,246,0.2)"/>
+                  <text x="78" y="21" textAnchor="middle" fill="rgba(59,130,246,0.6)" fontSize="7" fontWeight="600">3</text>
+
+                  <rect x="99" y="8" width="82" height="20" rx="4" fill="rgba(245,158,11,0.12)"/>
+                  <rect x="107" y="14" width="44" height="4" rx="2" fill="rgba(245,158,11,0.5)"/>
+                  <circle cx="169" cy="18" r="6" fill="rgba(245,158,11,0.2)"/>
+                  <text x="169" y="21" textAnchor="middle" fill="rgba(245,158,11,0.6)" fontSize="7" fontWeight="600">2</text>
+
+                  <rect x="190" y="8" width="82" height="20" rx="4" fill="rgba(34,197,94,0.12)"/>
+                  <rect x="198" y="14" width="36" height="4" rx="2" fill="rgba(34,197,94,0.5)"/>
+                  <circle cx="260" cy="18" r="6" fill="rgba(34,197,94,0.2)"/>
+                  <text x="260" y="21" textAnchor="middle" fill="rgba(34,197,94,0.6)" fontSize="7" fontWeight="600">5</text>
+
+                  {/* Cards column 1 */}
+                  <g className="tri-m-c1">
+                    <rect x="8" y="36" width="82" height="38" rx="6" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.08)" strokeWidth="1"/>
+                    <rect x="14" y="42" width="36" height="3" rx="1.5" fill="rgba(239,68,68,0.4)"/>
+                    <rect x="14" y="49" width="68" height="3" rx="1.5" fill="rgba(255,255,255,0.1)"/>
+                    <rect x="14" y="56" width="48" height="3" rx="1.5" fill="rgba(255,255,255,0.06)"/>
+                    <rect x="56" y="64" width="28" height="6" rx="3" fill="rgba(239,68,68,0.15)" stroke="rgba(239,68,68,0.25)" strokeWidth="0.5"/>
+                  </g>
+                  <rect x="8" y="80" width="82" height="38" rx="6" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.06)" strokeWidth="1"/>
+                  <rect x="14" y="86" width="44" height="3" rx="1.5" fill="rgba(245,158,11,0.35)"/>
+                  <rect x="14" y="93" width="68" height="3" rx="1.5" fill="rgba(255,255,255,0.08)"/>
+                  <rect x="14" y="100" width="52" height="3" rx="1.5" fill="rgba(255,255,255,0.05)"/>
+                  <rect x="8" y="124" width="82" height="38" rx="6" fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.05)" strokeWidth="1"/>
+                  <rect x="14" y="130" width="40" height="3" rx="1.5" fill="rgba(249,115,22,0.35)"/>
+                  <rect x="14" y="137" width="60" height="3" rx="1.5" fill="rgba(255,255,255,0.07)"/>
+
+                  {/* Cards column 2 */}
+                  <g className="tri-m-c2">
+                    <rect x="99" y="36" width="82" height="38" rx="6" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.08)" strokeWidth="1"/>
+                    <rect x="105" y="42" width="48" height="3" rx="1.5" fill="rgba(249,115,22,0.4)"/>
+                    <rect x="105" y="49" width="68" height="3" rx="1.5" fill="rgba(255,255,255,0.1)"/>
+                    <rect x="105" y="56" width="44" height="3" rx="1.5" fill="rgba(255,255,255,0.06)"/>
+                    <rect x="147" y="64" width="28" height="6" rx="3" fill="rgba(249,115,22,0.15)" stroke="rgba(249,115,22,0.25)" strokeWidth="0.5"/>
+                  </g>
+                  <rect x="99" y="80" width="82" height="38" rx="6" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.06)" strokeWidth="1"/>
+                  <rect x="105" y="86" width="40" height="3" rx="1.5" fill="rgba(234,179,8,0.35)"/>
+                  <rect x="105" y="93" width="60" height="3" rx="1.5" fill="rgba(255,255,255,0.08)"/>
+
+                  {/* Cards column 3 */}
+                  <g className="tri-m-c3">
+                    <rect x="190" y="36" width="82" height="38" rx="6" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.08)" strokeWidth="1"/>
+                    <rect x="196" y="42" width="40" height="3" rx="1.5" fill="rgba(34,197,94,0.35)"/>
+                    <rect x="196" y="49" width="68" height="3" rx="1.5" fill="rgba(255,255,255,0.1)"/>
+                    <rect x="196" y="56" width="52" height="3" rx="1.5" fill="rgba(255,255,255,0.06)"/>
+                    <rect x="238" y="64" width="28" height="6" rx="3" fill="rgba(34,197,94,0.15)" stroke="rgba(34,197,94,0.25)" strokeWidth="0.5"/>
+                  </g>
+                  <rect x="190" y="80" width="82" height="38" rx="6" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.06)" strokeWidth="1"/>
+                  <rect x="196" y="86" width="44" height="3" rx="1.5" fill="rgba(34,197,94,0.3)"/>
+                  <rect x="196" y="93" width="56" height="3" rx="1.5" fill="rgba(255,255,255,0.07)"/>
+                  <rect x="190" y="124" width="82" height="38" rx="6" fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.05)" strokeWidth="1"/>
+                  <rect x="196" y="130" width="36" height="3" rx="1.5" fill="rgba(34,197,94,0.25)"/>
+                  <rect x="196" y="137" width="60" height="3" rx="1.5" fill="rgba(255,255,255,0.06)"/>
+                </svg>
+                <p className="text-center text-surface-500 text-xs mt-3">Drag-and-drop kanban board for exception management</p>
               </div>
             </AnimateIn>
           </div>
