@@ -92,6 +92,11 @@ import { EDI997Service } from '../services/EDI997Service.js';
 import { EDI214ParseService } from '../services/EDI214ParseService.js';
 import { EDI214Service } from '../services/EDI214Service.js';
 import { ProcessInbound214CommandHandler } from '../commands/shipments/ProcessInbound214Command.js';
+import { SlaRepository } from '../repositories/SlaRepository.js';
+import { SlaEvaluationService } from '../services/SlaEvaluationService.js';
+import { CreateSlaPolicyCommandHandler } from '../commands/sla/CreateSlaPolicyCommand.js';
+import { UpdateSlaPolicyCommandHandler } from '../commands/sla/UpdateSlaPolicyCommand.js';
+import { DeactivateSlaPolicyCommandHandler } from '../commands/sla/DeactivateSlaPolicyCommand.js';
 import { HereRoutingProvider } from '../services/routing/HereRoutingProvider.js';
 import { TomTomRoutingProvider } from '../services/routing/TomTomRoutingProvider.js';
 import { ValhallaRoutingProvider } from '../services/routing/ValhallaRoutingProvider.js';
@@ -163,7 +168,8 @@ export function registerDependencies(prisma: PrismaClient): void {
     return new LocationResolutionService(
       container.resolve(TOKENS.PrismaClient),
       container.resolve(TOKENS.ILocationsRepository),
-      container.resolve(TOKENS.IArrivalCriteriaRepository)
+      container.resolve(TOKENS.IArrivalCriteriaRepository),
+      container.resolve(TOKENS.IEventBus)
     );
   });
 
@@ -302,6 +308,19 @@ export function registerDependencies(prisma: PrismaClient): void {
     return new ComplianceReportService(
       container.resolve(TOKENS.PrismaClient),
       container.resolve(TOKENS.IBinaryStorageProvider),
+    );
+  });
+
+  // SLA repository and service
+  container.singleton(TOKENS.ISlaRepository).toFactory(() => {
+    return new SlaRepository(container.resolve(TOKENS.PrismaClient));
+  });
+
+  container.singleton(TOKENS.ISlaEvaluationService).toFactory(() => {
+    return new SlaEvaluationService(
+      container.resolve(TOKENS.PrismaClient),
+      container.resolve(TOKENS.ISlaRepository),
+      container.resolve(TOKENS.IEventBus),
     );
   });
 
@@ -484,6 +503,11 @@ export function registerDependencies(prisma: PrismaClient): void {
     // CAPA commands
     bus.register(new CreateCAPACommandHandler(prisma, eventBus));
     bus.register(new UpdateCAPACommandHandler(prisma, eventBus));
+
+    // SLA commands
+    bus.register(new CreateSlaPolicyCommandHandler(prisma, eventBus));
+    bus.register(new UpdateSlaPolicyCommandHandler(prisma, eventBus));
+    bus.register(new DeactivateSlaPolicyCommandHandler(prisma, eventBus));
 
     // EDI 214 commands
     bus.register(new ProcessInbound214CommandHandler(prisma, eventBus));

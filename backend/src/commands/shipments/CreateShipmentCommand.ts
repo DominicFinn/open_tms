@@ -21,6 +21,29 @@ export interface CreateShipmentPayload {
   carrierId?: string;
   originId?: string;
   destinationId?: string;
+  // Raw address data for auto-resolution (used when no explicit IDs provided)
+  originData?: {
+    name: string;
+    address1: string;
+    address2?: string;
+    city: string;
+    state?: string;
+    postalCode?: string;
+    country: string;
+    lat?: number;
+    lng?: number;
+  };
+  destinationData?: {
+    name: string;
+    address1: string;
+    address2?: string;
+    city: string;
+    state?: string;
+    postalCode?: string;
+    country: string;
+    lat?: number;
+    lng?: number;
+  };
   pickupDate?: string;
   deliveryDate?: string;
   proNumber?: string;
@@ -61,7 +84,7 @@ export class CreateShipmentCommandHandler extends BaseCommandHandler<CreateShipm
   ): Promise<CreateShipmentResult> {
     const body = command.payload;
 
-    // Resolve origin/destination from lane if needed
+    // Resolve origin/destination from lane, explicit IDs, or raw address data
     let finalOriginId = body.originId;
     let finalDestinationId = body.destinationId;
 
@@ -77,8 +100,94 @@ export class CreateShipmentCommandHandler extends BaseCommandHandler<CreateShipm
       finalDestinationId = lane.destinationId;
     }
 
+    // Auto-resolve origin from raw address data if no explicit ID
+    if (!finalOriginId && body.originData) {
+      const existing = await tx.location.findFirst({
+        where: {
+          archived: false,
+          name: { equals: body.originData.name, mode: 'insensitive' },
+          city: { equals: body.originData.city, mode: 'insensitive' },
+        },
+      });
+      if (existing) {
+        finalOriginId = existing.id;
+      } else {
+        const created = await tx.location.create({
+          data: {
+            name: body.originData.name,
+            address1: body.originData.address1,
+            address2: body.originData.address2,
+            city: body.originData.city,
+            state: body.originData.state,
+            postalCode: body.originData.postalCode,
+            country: body.originData.country,
+            lat: body.originData.lat,
+            lng: body.originData.lng,
+          },
+        });
+        finalOriginId = created.id;
+
+        // Emit audit event for auto-created location
+        emit(this.createEvent(command, {
+          type: EVENT_TYPES.LOCATION_CREATED,
+          entityType: 'location',
+          entityId: created.id,
+          payload: {
+            locationName: body.originData.name,
+            name: body.originData.name,
+            city: body.originData.city,
+            country: body.originData.country,
+            source: 'shipment_resolution',
+          },
+        }));
+      }
+    }
+
+    // Auto-resolve destination from raw address data if no explicit ID
+    if (!finalDestinationId && body.destinationData) {
+      const existing = await tx.location.findFirst({
+        where: {
+          archived: false,
+          name: { equals: body.destinationData.name, mode: 'insensitive' },
+          city: { equals: body.destinationData.city, mode: 'insensitive' },
+        },
+      });
+      if (existing) {
+        finalDestinationId = existing.id;
+      } else {
+        const created = await tx.location.create({
+          data: {
+            name: body.destinationData.name,
+            address1: body.destinationData.address1,
+            address2: body.destinationData.address2,
+            city: body.destinationData.city,
+            state: body.destinationData.state,
+            postalCode: body.destinationData.postalCode,
+            country: body.destinationData.country,
+            lat: body.destinationData.lat,
+            lng: body.destinationData.lng,
+          },
+        });
+        finalDestinationId = created.id;
+
+        // Emit audit event for auto-created location
+        emit(this.createEvent(command, {
+          type: EVENT_TYPES.LOCATION_CREATED,
+          entityType: 'location',
+          entityId: created.id,
+          payload: {
+            locationName: body.destinationData.name,
+            name: body.destinationData.name,
+            city: body.destinationData.city,
+            country: body.destinationData.country,
+            source: 'shipment_resolution',
+          },
+        }));
+      }
+    }
+
     if (!finalOriginId || !finalDestinationId) {
-      throw new Error('Either laneId or both originId and destinationId must be provided');
+      throw new Error('Either laneId, both originId/destinationId, or both originData/destinationData must be provided');
     }
 
     const shipment = await tx.shipment.create({

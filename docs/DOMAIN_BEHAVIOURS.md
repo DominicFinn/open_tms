@@ -198,6 +198,8 @@ Locations can be classified by type (`warehouse`, `distribution_centre`, `cross_
 |---------|---------|----------------|-------------|
 | `CreateLocationCommand` | `POST /api/v1/locations` | `location.created` | Event payload includes `locationType` |
 | `UpdateLocationCommand` | `PUT /api/v1/locations/:id` | `location.updated` | Event payload includes changed field names |
+| `CreateShipmentCommand` (resolution) | Shipment with `originData`/`destinationData` | `location.created` | `source: 'shipment_resolution'` in payload |
+| `LocationResolutionService` | Order creation, EDI import | `location.created` | `source: 'resolution'` in payload |
 
 ---
 
@@ -665,3 +667,94 @@ draft ──(warehouse launch)──→ ready ──(geofence exit)──→ in_
 ```
 
 Launched shipments drop off the active list. Stale shipments (>2 days in draft without launch) appear on the archive screen.
+
+---
+
+## SLA (Service Level Agreements)
+
+### Commands
+
+| Command | Type String | What It Does |
+|---------|-------------|--------------|
+| CreateSlaPolicyCommand | `sla_policy.create` | Creates a policy with nested rules. Scoped to org (default) or customer (override). |
+| UpdateSlaPolicyCommand | `sla_policy.update` | Updates policy fields and replaces rules wholesale. |
+| DeactivateSlaPolicyCommand | `sla_policy.deactivate` | Sets `active = false`. Existing evaluations continue but no new ones are created. |
+
+### Events
+
+| Event | When It Fires | Side Effects |
+|-------|---------------|--------------|
+| `sla_policy.created` | Policy created | Audit log |
+| `sla_policy.updated` | Policy or rules changed | Audit log |
+| `sla_policy.deactivated` | Policy deactivated | Audit log |
+| `sla.evaluation_created` | New SLA evaluation started for a shipment or issue | In-app notification |
+| `sla.warning` | Evaluation reaches warning threshold | In-app notification, email |
+| `sla.breached` | Evaluation exceeds due date | In-app notification, email, auto-create issue (if configured) |
+| `sla.met` | SLA satisfied before breach | In-app notification |
+
+### SLA Evaluation Lifecycle
+
+```
+[entity created] ──→ SlaEvaluation(active) ──→ [warning threshold] ──→ warning
+                                                                         ↓
+                                              [due date passed] ──→ breached ──→ auto-create Issue
+                                                                         
+[entity resolved/delivered] ──→ met (SLA satisfied)
+[entity cancelled] ──→ cancelled
+```
+
+### Policy Resolution (Two-Tier)
+
+1. Look for `SlaPolicy` where `orgId = X AND customerId = entity.customerId AND active = true`
+2. If not found, fall back to `SlaPolicy` where `orgId = X AND customerId IS NULL AND active = true`
+3. If neither exists, no SLA enforcement for this entity
+
+### Rule Types
+
+| ruleType | Applies To | Clock Starts | Met When | Breach Threshold |
+|----------|-----------|--------------|----------|-----------------|
+| `eta_delivery` | Shipments | pickupDate | `shipment.delivered` | `maxDeliveryMinutes` |
+| `issue_response` | Issues | issue.createdAt | `issue.assigned` / status → in_progress | `breachThresholdMinutes` |
+| `issue_resolution` | Issues | issue.createdAt | `issue.resolved` | `breachThresholdMinutes` |
+| `dwell_time` | Shipments | stop.actualArrival | stop completed (shipment departs) | `maxDwellMinutes` |
+| `dock_turnaround` | Shipment Stops | stop.actualArrival | stop completed | `maxDwellMinutes` + `locationType` filter |
+| `sort_to_dispatch` | Shipment Stops | stop.actualArrival (at cross-dock) | stop completed | `breachThresholdMinutes` + `locationType: cross_dock` |
+| `facility_dwell` | Shipment Stops | stop.actualArrival | stop completed | `maxDwellMinutes` + `locationType` filter |
+| `light_event` | Shipments | sensor reading | N/A (occurrence-based) | `maxOccurrences` |
+| `seal_event` | Shipments | device event | N/A (occurrence-based) | `maxOccurrences` |
+| `temperature_excursion` | Shipments | excursion.startedAt | excursion resolved | `maxExcursionMinutes` |
+| `temperature_out_of_range` | Shipments | first out-of-range reading | N/A (cumulative) | `maxExcursionMinutes` |
+
+### Breach → Issue Pipeline
+
+When `autoCreateIssue = true` on the rule:
+1. Creates an Issue with `category: 'compliance'`, priority from `issuePriorityOnBreach`
+2. Links to source entity via `sourceEntityType` / `sourceEntityId`
+3. Title: "SLA Breach: {ruleName} on {entityReference}"
+4. Links back to the SlaEvaluation via `issueId`
+
+### Event-Driven Automation (Phase 3b)
+
+| Handler | Listens To | What It Does |
+|---------|-----------|-------------|
+| `AutoTenderHandler` | `shipment.created` | If org.autoTenderEnabled and shipment has no lane/carrier, creates a broadcast tender to all active carriers |
+| `ShipmentCompletionHandler` | `shipment.stop_arrived`, `tracking.geofence_entered` | When destination stop arrives, auto-transitions shipment to 'delivered' and publishes shipment.delivered event |
+
+### Location Auto-Resolution
+
+When `CreateShipmentCommand` receives `originData`/`destinationData` (raw address objects) instead of explicit location IDs:
+1. Searches for existing location by `name + city` (case-insensitive)
+2. If found, reuses the existing location
+3. If not found, creates a new `Location` record and emits `location.created` with `source: 'shipment_resolution'`
+4. Default geofence arrival criteria are created for new locations (via `LocationResolutionService`)
+
+When `LocationResolutionService.resolveOrCreate()` creates a new location (used by order creation, EDI import):
+- Emits `location.created` with `source: 'resolution'` and the actor's ID
+- Event is best-effort (location creation succeeds even if event publishing fails)
+- The `AuditHandler` records the source in the audit log description
+
+### Workers
+
+| Worker | Queue | Schedule | What It Does |
+|--------|-------|----------|-------------|
+| SLA Monitor | `sla-monitor` | Every 2 min (configurable via `SLA_MONITOR_CRON`) | Sweeps active evaluations, transitions to warning/breached, auto-creates issues |

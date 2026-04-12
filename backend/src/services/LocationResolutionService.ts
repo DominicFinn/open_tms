@@ -10,6 +10,9 @@
 import { PrismaClient, Location } from '@prisma/client';
 import { ILocationsRepository, CreateLocationDTO } from '../repositories/LocationsRepository.js';
 import { IArrivalCriteriaRepository } from '../repositories/ArrivalCriteriaRepository.js';
+import { IEventBus } from '../events/IEventBus.js';
+import { createEvent } from '../events/createEvent.js';
+import { EVENT_TYPES } from '../events/eventTypes.js';
 
 export interface RawLocationData {
   name: string;
@@ -48,9 +51,10 @@ export class LocationResolutionService implements ILocationResolutionService {
     private prisma: PrismaClient,
     private locationsRepo: ILocationsRepository,
     private arrivalCriteriaRepo: IArrivalCriteriaRepository,
+    private eventBus?: IEventBus,
   ) {}
 
-  async resolveOrCreate(data: RawLocationData, _actorId?: string): Promise<LocationResolutionResult> {
+  async resolveOrCreate(data: RawLocationData, actorId?: string): Promise<LocationResolutionResult> {
     // Try to find an existing location by name + city match
     const existing = await this.prisma.location.findFirst({
       where: {
@@ -83,7 +87,7 @@ export class LocationResolutionService implements ILocationResolutionService {
 
     // Create default geofence arrival criteria
     const org = await this.prisma.organization.findFirst({
-      select: { defaultGeofenceRadiusMeters: true },
+      select: { id: true, defaultGeofenceRadiusMeters: true },
     });
     const defaultRadius = org?.defaultGeofenceRadiusMeters ?? 200;
 
@@ -93,6 +97,30 @@ export class LocationResolutionService implements ILocationResolutionService {
       location.lat ?? undefined,
       location.lng ?? undefined,
     );
+
+    // Emit audit event for location created via resolution
+    if (this.eventBus) {
+      try {
+        await this.eventBus.publish(createEvent({
+          type: EVENT_TYPES.LOCATION_CREATED,
+          orgId: org?.id || 'default',
+          actorId: actorId ?? null,
+          entityType: 'location',
+          entityId: location.id,
+          payload: {
+            locationName: location.name,
+            name: location.name,
+            city: location.city,
+            country: location.country,
+            source: 'resolution',
+          },
+          source: 'resolution',
+        }));
+      } catch (err) {
+        // Non-critical — location is created, audit is best-effort
+        console.warn(`[LocationResolution] Failed to publish location.created event: ${(err as Error).message}`);
+      }
+    }
 
     return { location, created: true };
   }

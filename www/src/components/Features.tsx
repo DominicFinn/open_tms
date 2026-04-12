@@ -51,6 +51,26 @@ const features = [
     highlight: false,
   },
   {
+    title: 'SLA Management',
+    description: 'Two-tier SLA policies (org defaults + customer overrides) with 8 rule types: ETA delivery, issue response, dwell time, security events, and temperature excursions. Automatic breach detection and issue creation.',
+    icon: (
+      <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    ),
+    highlight: true,
+  },
+  {
+    title: 'Control Centre Map',
+    description: 'Full-page map view with supercluster point clustering, entity switching, location markers, SLA breach overlay with pulsing alerts, fullscreen mode for wall monitors, and 30-second auto-refresh.',
+    icon: (
+      <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 6.75V15m6-6v8.25m.503 3.498l4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 00-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0z" />
+      </svg>
+    ),
+    highlight: true,
+  },
+  {
     title: 'Pallet & Unit Tracking',
     description: 'Track cargo at the pallet, tote, and box level  - not just the shipment. Barcode scanning, cargo manifest reconciliation, and misdrop detection at every stop.',
     icon: (
@@ -66,6 +86,16 @@ const features = [
     icon: (
       <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 010 3.75H5.625a1.875 1.875 0 010-3.75z" />
+      </svg>
+    ),
+    highlight: false,
+  },
+  {
+    title: 'Location Operations',
+    description: 'Per-location operations dashboards showing incoming, at-dock, and outgoing shipments. Facility capabilities, dwell time monitoring, and location-type-specific SLAs for distribution centres, cross-docks, and terminals.',
+    icon: (
+      <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 3H21m-3.75 3H21" />
       </svg>
     ),
     highlight: false,

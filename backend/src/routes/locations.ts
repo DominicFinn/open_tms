@@ -80,15 +80,19 @@ export async function locationRoutes(server: FastifyInstance) {
       })
       .parse((req as any).body);
 
-    // Use resolution service to create with default arrival criteria
+    // Use resolution service to create with default arrival criteria.
+    // The service emits LOCATION_CREATED for new locations automatically.
+    // For existing locations (resolved, not created), publish LOCATION_UPDATED.
     const result = await locationResolutionService.resolveOrCreate(body, req.user?.sub);
 
-    await publishLocationEvent(
-      result.created ? EVENT_TYPES.LOCATION_CREATED : EVENT_TYPES.LOCATION_UPDATED,
-      result.location.id,
-      { locationName: result.location.name, source: 'manual', created: result.created },
-      req.user?.sub,
-    );
+    if (!result.created) {
+      await publishLocationEvent(
+        EVENT_TYPES.LOCATION_UPDATED,
+        result.location.id,
+        { locationName: result.location.name, source: 'manual', created: false },
+        req.user?.sub,
+      );
+    }
 
     reply.code(result.created ? 201 : 200);
     // Fetch with arrival criteria

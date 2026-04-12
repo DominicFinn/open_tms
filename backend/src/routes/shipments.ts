@@ -43,6 +43,18 @@ export async function shipmentRoutes(server: FastifyInstance) {
 
   // Create shipment
   server.post('/api/v1/shipments', async (req: FastifyRequest, reply: FastifyReply) => {
+    const addressSchema = z.object({
+      name: z.string().min(1),
+      address1: z.string().min(1),
+      address2: z.string().optional(),
+      city: z.string().min(1),
+      state: z.string().optional(),
+      postalCode: z.string().optional(),
+      country: z.string().min(1),
+      lat: z.number().optional(),
+      lng: z.number().optional(),
+    });
+
     const schema = z.object({
       reference: z.string().min(1),
       customerId: z.string().uuid(),
@@ -50,6 +62,8 @@ export async function shipmentRoutes(server: FastifyInstance) {
       carrierId: z.string().uuid().optional(),
       originId: z.string().uuid().optional(),
       destinationId: z.string().uuid().optional(),
+      originData: addressSchema.optional(),
+      destinationData: addressSchema.optional(),
       pickupDate: z.string().datetime().optional(),
       deliveryDate: z.string().datetime().optional(),
       proNumber: z.string().optional(),
@@ -61,10 +75,12 @@ export async function shipmentRoutes(server: FastifyInstance) {
         volumeM3: z.number().nonnegative().optional()
       })).default([])
     }).refine((data) => {
-      return (data.laneId && !data.originId && !data.destinationId) ||
-        (!data.laneId && data.originId && data.destinationId);
+      // Accept lane, explicit IDs, or raw address data
+      return (data.laneId) ||
+        (data.originId && data.destinationId) ||
+        (data.originData && data.destinationData);
     }, {
-      message: "Either laneId or both originId and destinationId must be provided"
+      message: "Provide laneId, both originId/destinationId, or both originData/destinationData"
     });
 
     const body = schema.parse((req as any).body);

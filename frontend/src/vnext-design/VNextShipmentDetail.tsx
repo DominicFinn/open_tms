@@ -683,6 +683,88 @@ function CargoTab({ shipmentId }: { shipmentId: string }) {
   );
 }
 
+function SlaTab({ shipmentId }: { shipmentId: string }) {
+  const [evals, setEvals] = useState<any[]>([]);
+  const [slaLoading, setSlaLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        setSlaLoading(true);
+        const res = await fetch(`${API_URL}/api/v1/shipments/${shipmentId}/sla`);
+        if (!res.ok) throw new Error(`Failed (${res.status})`);
+        const json = await res.json();
+        if (!cancelled) setEvals(json.data || []);
+      } catch (err) {
+        console.error('SLA fetch error:', err);
+      } finally {
+        if (!cancelled) setSlaLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [shipmentId]);
+
+  if (slaLoading) return <div style={{ padding: '24px', textAlign: 'center' }}><div className="loading-spinner" /></div>;
+
+  if (evals.length === 0) {
+    return (
+      <div style={{ padding: '32px', textAlign: 'center', color: 'var(--on-surface-variant)' }}>
+        <span className="material-icons" style={{ fontSize: '48px', display: 'block', marginBottom: '8px', opacity: 0.4 }}>timer</span>
+        <h3 style={{ margin: '0 0 4px' }}>No SLA Evaluations</h3>
+        <p style={{ fontSize: '14px' }}>No SLA policies are tracking this shipment. Configure policies in Admin &gt; Settings &gt; SLA Policies.</p>
+      </div>
+    );
+  }
+
+  const getStatusChip = (status: string) => {
+    const map: Record<string, string> = { active: 'vn-chip-info', warning: 'vn-chip-warning', breached: 'vn-chip-error', met: 'vn-chip-success', cancelled: 'vn-chip-secondary' };
+    return map[status] || 'vn-chip-secondary';
+  };
+
+  const formatRemaining = (e: any) => {
+    if (e.status === 'met') return 'Met';
+    if (e.status === 'breached') return e.breachDurationMinutes ? `${e.breachDurationMinutes}m overdue` : 'Breached';
+    if (!e.slaDueAt) return '--';
+    const mins = Math.round((new Date(e.slaDueAt).getTime() - Date.now()) / 60_000);
+    if (mins < 0) return `${Math.abs(mins)}m overdue`;
+    if (mins < 60) return `${mins}m`;
+    if (mins < 1440) return `${Math.floor(mins / 60)}h ${mins % 60}m`;
+    return `${Math.floor(mins / 1440)}d`;
+  };
+
+  return (
+    <div className="vn-table-wrap">
+      <table className="vn-table">
+        <thead>
+          <tr>
+            <th>Rule</th>
+            <th>Type</th>
+            <th>Status</th>
+            <th>Time Remaining</th>
+            <th>Started</th>
+            <th>Due</th>
+          </tr>
+        </thead>
+        <tbody>
+          {evals.map((e: any) => (
+            <tr key={e.id}>
+              <td style={{ fontWeight: 500 }}>{e.ruleName}</td>
+              <td><span style={{ fontSize: '12px', color: 'var(--on-surface-variant)' }}>{e.ruleType.replace(/_/g, ' ')}</span></td>
+              <td><span className={`vn-chip ${getStatusChip(e.status)}`}>{e.status}</span></td>
+              <td style={{ fontWeight: 600, color: e.status === 'breached' ? 'var(--color-error)' : e.status === 'warning' ? 'var(--color-warning)' : 'var(--on-surface)' }}>
+                {formatRemaining(e)}
+              </td>
+              <td style={{ fontSize: '12px' }}>{new Date(e.slaStartedAt).toLocaleString()}</td>
+              <td style={{ fontSize: '12px' }}>{e.slaDueAt ? new Date(e.slaDueAt).toLocaleString() : '--'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export default function VNextShipmentDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -936,6 +1018,10 @@ export default function VNextShipmentDetail() {
               <span className="material-icons" style={{ fontSize: 16, marginRight: 4, verticalAlign: 'middle' }}>thermostat</span>
               Telemetry
             </button>
+            <button className={`vn-tab ${activeTab === 'sla' ? 'active' : ''}`} onClick={() => setActiveTab('sla')}>
+              <span className="material-icons" style={{ fontSize: 16, marginRight: 4, verticalAlign: 'middle' }}>timer</span>
+              SLA
+            </button>
           </div>
 
           {/* Events Timeline */}
@@ -1074,6 +1160,9 @@ export default function VNextShipmentDetail() {
 
           {activeTab === 'telemetry' && (
             <TelemetryTab shipmentId={id!} />
+          )}
+          {activeTab === 'sla' && (
+            <SlaTab shipmentId={id!} />
           )}
         </div>
 
