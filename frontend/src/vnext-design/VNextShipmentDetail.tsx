@@ -841,6 +841,85 @@ function SlaTab({ shipmentId }: { shipmentId: string }) {
   );
 }
 
+function ShipmentNotesTab({ shipmentId }: { shipmentId: string }) {
+  const [comments, setComments] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [newComment, setNewComment] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const loadComments = useCallback(() => {
+    fetch(`${API_URL}/api/v1/comments?entityType=shipment&entityId=${shipmentId}`)
+      .then(r => r.json())
+      .then(json => setComments(json.data?.items || json.data || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [shipmentId]);
+
+  useEffect(() => { loadComments(); }, [loadComments]);
+
+  const handleSubmit = async () => {
+    if (!newComment.trim()) return;
+    setSubmitting(true);
+    try {
+      await fetch(`${API_URL}/api/v1/comments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entityType: 'shipment', entityId: shipmentId, body: newComment }),
+      });
+      setNewComment('');
+      loadComments();
+    } catch { /* ignore */ }
+    setSubmitting(false);
+  };
+
+  if (loading) return <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}><div className="loading-spinner" /></div>;
+
+  return (
+    <div className="vn-card">
+      <div className="vn-card-header"><h2>Notes &amp; Comments</h2></div>
+      <div className="vn-card-body">
+        {comments.length === 0 && (
+          <div className="vn-empty" style={{ padding: '24px 0' }}>
+            <span className="material-icons" style={{ fontSize: 48, color: 'var(--on-surface-variant)' }}>comment</span>
+            <p>No notes yet. Add the first comment below.</p>
+          </div>
+        )}
+        {comments.map((c: any) => (
+          <div key={c.id} style={{ display: 'flex', gap: 12, padding: '12px 0', borderBottom: '1px solid var(--outline-variant)' }}>
+            <div style={{
+              width: 32, height: 32, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: c.authorType === 'agent' ? 'var(--color-info)' : 'var(--primary)',
+              color: '#fff', fontSize: 12, fontWeight: 600, flexShrink: 0,
+            }}>
+              {c.authorType === 'agent' ? <span className="material-icons" style={{ fontSize: 16 }}>smart_toy</span> : (c.authorName || '?').split(/\s+/).map((w: string) => w[0]).join('').toUpperCase().slice(0, 2)}
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                <span style={{ fontWeight: 600, fontSize: 13 }}>{c.authorName}</span>
+                <span style={{ fontSize: 11, color: 'var(--on-surface-variant)' }}>{new Date(c.createdAt).toLocaleString()}</span>
+              </div>
+              <p style={{ fontSize: 13, lineHeight: 1.5, margin: 0, color: 'var(--on-surface)' }}>{c.body}</p>
+            </div>
+          </div>
+        ))}
+        <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+          <textarea
+            className="vn-input"
+            placeholder="Add a comment..."
+            value={newComment}
+            onChange={e => setNewComment(e.target.value)}
+            rows={2}
+            style={{ flex: 1, resize: 'vertical' }}
+          />
+          <button className="vn-btn vn-btn-primary" onClick={handleSubmit} disabled={submitting || !newComment.trim()} style={{ alignSelf: 'flex-end' }}>
+            {submitting ? '...' : 'Post'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function VNextShipmentDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -1210,15 +1289,7 @@ export default function VNextShipmentDetail() {
           )}
 
           {activeTab === 'notes' && (
-            <div className="vn-card">
-              <div className="vn-card-header"><h2>Notes</h2></div>
-              <div className="vn-card-body">
-                <div className="vn-empty">
-                  <span className="material-icons" style={{ fontSize: 48, color: 'var(--on-surface-variant)' }}>comment</span>
-                  <p>No notes yet. Comments will be available in a future update.</p>
-                </div>
-              </div>
-            </div>
+            <ShipmentNotesTab shipmentId={id!} />
           )}
 
           {activeTab === 'cargo' && (

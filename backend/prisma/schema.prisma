@@ -1598,8 +1598,23 @@ model Issue {
   resolvedBy      String?
   resolution      String?                           // Free-text resolution notes
 
+  // Snooze
+  snoozedUntil    DateTime?                         // null = not snoozed; set to wake time
+  snoozedBy       String?
+  snoozedReason   String?
+
+  // CAPA tracking
+  needsCapa       Boolean   @default(false)         // Quality team flag
+
+  // Closure
+  closedAt        DateTime?
+  closedBy        String?
+
   // CAPA reports linked to this issue
   capaReports     CAPAReport[]
+
+  // Labels
+  labelAssignments IssueLabelAssignment[]
 
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
@@ -1610,6 +1625,8 @@ model Issue {
   @@index([sourceEntityType, sourceEntityId])
   @@index([assigneeId])
   @@index([createdAt])
+  @@index([needsCapa])
+  @@index([snoozedUntil])
 }
 
 model ProjectionCheckpoint {
@@ -1625,14 +1642,25 @@ model IssueReadModel {
   organization      Organization @relation(fields: [orgId], references: [id])
   orgId             String
   title             String
+  description       String?
   status            String
   priority          String
   category          String
   sourceEntityType  String?
   sourceEntityId    String?
+  sourceEventId     String?
+  assigneeId        String?
   assigneeName      String?
   escalatedTo       String?
+  escalatedAt       DateTime?
   resolvedAt        DateTime?
+  resolution        String?
+  snoozedUntil      DateTime?
+  snoozedBy         String?
+  needsCapa         Boolean   @default(false)
+  labels            Json?                             // Cached label names: ["cold-chain", "hazmat"]
+  closedAt          DateTime?
+  commentCount      Int       @default(0)
   createdAt         DateTime
   updatedAt         DateTime
 
@@ -1641,6 +1669,8 @@ model IssueReadModel {
   @@index([priority])
   @@index([assigneeName])
   @@index([createdAt])
+  @@index([needsCapa])
+  @@index([snoozedUntil])
 }
 
 // ─── SLA (Service Level Agreements) ────────────────────────────
@@ -3335,4 +3365,67 @@ model InvoiceReadModel {
   @@index([customerId])
   @@index([dueDate])
   @@index([daysPastDue])
+}
+
+// ─── Comments (polymorphic, any entity) ─────────────────────────────────────
+
+model Comment {
+  id            String   @id @default(uuid())
+  orgId         String
+  entityType    String                                // "issue", "shipment", "order", "trackable_unit"
+  entityId      String
+  authorId      String?                               // User.id or null for system/agent
+  authorName    String
+  authorType    String   @default("user")             // "user", "agent", "system"
+  body          String                                // Markdown text
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([orgId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+// ─── Issue Labels ───────────────────────────────────────────────────────────
+
+model IssueLabel {
+  id          String   @id @default(uuid())
+  orgId       String
+  name        String                                  // e.g. "cold-chain", "hazmat", "vip-customer"
+  color       String   @default("#6B7280")            // Hex color for chip display
+  assignments IssueLabelAssignment[]
+  createdAt   DateTime @default(now())
+
+  @@unique([orgId, name])
+  @@index([orgId])
+}
+
+model IssueLabelAssignment {
+  id       String     @id @default(uuid())
+  issueId  String
+  labelId  String
+  issue    Issue      @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  label    IssueLabel @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@unique([issueId, labelId])
+  @@index([issueId])
+  @@index([labelId])
+}
+
+// ─── Kanban Views (shared org-wide) ─────────────────────────────────────────
+
+model KanbanView {
+  id          String   @id @default(uuid())
+  orgId       String
+  name        String                                  // "Cold Chain Issues", "Customer X Board"
+  description String?
+  filters     Json                                    // { priority?, category?, sourceEntityType?, customerId?, labels?, slaStatus?, assigneeId? }
+  groupBy     String   @default("status")             // "status", "priority", "category", "assignee"
+  sortBy      String   @default("createdAt")          // "createdAt", "priority", "slaStatus"
+  isDefault   Boolean  @default(false)
+  createdBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([orgId])
 }

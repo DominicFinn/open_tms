@@ -125,6 +125,7 @@ import { CreateSlaPolicyCommandHandler } from '../commands/sla/CreateSlaPolicyCo
 import { UpdateSlaPolicyCommandHandler } from '../commands/sla/UpdateSlaPolicyCommand.js';
 import { DeactivateSlaPolicyCommandHandler } from '../commands/sla/DeactivateSlaPolicyCommand.js';
 import { AgentDecisionRepository } from '../repositories/AgentDecisionRepository.js';
+import { IssueRepository } from '../repositories/IssueRepository.js';
 import { CreateAgentDecisionCommandHandler } from '../commands/agentDecisions/CreateAgentDecisionCommand.js';
 import { RecordDecisionOutcomeCommandHandler } from '../commands/agentDecisions/RecordDecisionOutcomeCommand.js';
 import { PromoteDecisionCommandHandler } from '../commands/agentDecisions/PromoteDecisionCommand.js';
@@ -136,6 +137,7 @@ import { AnthropicLlmProvider } from '../services/llm/AnthropicLlmProvider.js';
 import { SkillRegistry } from '../services/skills/SkillRegistry.js';
 import { CreateIssueSkill } from '../services/skills/CreateIssueSkill.js';
 import { EscalateIssueSkill } from '../services/skills/EscalateIssueSkill.js';
+import { AddCommentSkill } from '../services/skills/AddCommentSkill.js';
 import { SendEmailSkill } from '../services/skills/SendEmailSkill.js';
 import { CallWebhookSkill } from '../services/skills/CallWebhookSkill.js';
 
@@ -355,6 +357,10 @@ export function registerDependencies(prisma: PrismaClient): void {
 
   container.singleton(TOKENS.IAgentDecisionRepository).toFactory(() => {
     return new AgentDecisionRepository(container.resolve(TOKENS.PrismaClient));
+  });
+
+  container.singleton(TOKENS.IIssueRepository).toFactory(() => {
+    return new IssueRepository(container.resolve(TOKENS.PrismaClient));
   });
 
   container.singleton(TOKENS.ISlaEvaluationService).toFactory(() => {
@@ -670,6 +676,7 @@ export function registerDependencies(prisma: PrismaClient): void {
     const commandBus = container.resolve<import('../commands/CommandBus.js').ICommandBus>(TOKENS.ICommandBus);
     registry.register(new CreateIssueSkill(commandBus));
     registry.register(new EscalateIssueSkill(commandBus));
+    registry.register(new AddCommentSkill(prisma));
     registry.register(new CallWebhookSkill());
 
     // SendEmailSkill only if email service is available

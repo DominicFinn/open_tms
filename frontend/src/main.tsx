@@ -11,6 +11,7 @@ import VNextShipments from './vnext-design/VNextShipments';
 import VNextShipmentDetail from './vnext-design/VNextShipmentDetail';
 import VNextOrders from './vnext-design/VNextOrders';
 import VNextIssueKanban from './vnext-design/VNextIssueKanban';
+import VNextIssueDetail from './vnext-design/VNextIssueDetail';
 import VNextCarriers from './vnext-design/VNextCarriers';
 import VNextCarrierBidding from './vnext-design/VNextCarrierBidding';
 import VNextCustomers from './vnext-design/VNextCustomers';
@@ -168,6 +169,7 @@ root.render(
 
           {/* Issues & Carrier Bidding */}
           <Route path="issues" element={<VNextIssueKanban />} />
+          <Route path="issues/:id" element={<VNextIssueDetail />} />
           <Route path="carrier-bidding" element={<VNextCarrierBidding />} />
 
           {/* Agent Decisions */}
