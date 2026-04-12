@@ -14,6 +14,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import Supercluster from 'supercluster';
 import { API_URL } from '../api';
+import { getLocationTypeMeta } from './locationTypesMeta';
 
 // Fix for default markers in Leaflet with Vite
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -561,31 +562,36 @@ export default function VNextShipmentMap() {
         locationsLayer.current.clearLayers();
 
         for (const loc of locs) {
+          const typeMeta = getLocationTypeMeta(loc.locationType);
+          const locIcon = typeMeta?.icon || 'place';
+          const locLabel = typeMeta?.label || 'Location';
+
           const marker = L.marker([loc.lat, loc.lng], {
             icon: L.divIcon({
               className: 'map-location',
               html: `<div style="
-                width:24px;height:24px;
+                width:26px;height:26px;
                 border-radius:4px;
                 background:var(--surface);
                 color:var(--primary);
                 display:flex;align-items:center;justify-content:center;
                 border:2px solid var(--primary);
                 box-shadow:0 1px 4px rgba(0,0,0,0.2);
-                opacity:0.8;
-              "><span class="material-icons" style="font-size:16px">warehouse</span></div>`,
-              iconSize: [24, 24],
-              iconAnchor: [12, 12],
+                opacity:0.85;
+              "><span class="material-icons" style="font-size:16px">${locIcon}</span></div>`,
+              iconSize: [26, 26],
+              iconAnchor: [13, 13],
             }),
             zIndexOffset: -100, // Locations render below shipments
           });
 
           marker.bindPopup(`
-            <div style="min-width:180px;font-family:var(--font-family,Roboto,sans-serif)">
+            <div style="min-width:200px;font-family:var(--font-family,Roboto,sans-serif)">
               <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
-                <span class="material-icons" style="font-size:16px;color:var(--primary)">warehouse</span>
+                <span class="material-icons" style="font-size:16px;color:var(--primary)">${locIcon}</span>
                 <strong style="font-size:13px">${loc.name}</strong>
               </div>
+              <div style="font-size:11px;color:var(--primary);font-weight:600;margin-bottom:4px">${locLabel}</div>
               <div style="font-size:12px;color:var(--on-surface-variant);line-height:1.5">
                 <div>${loc.address1}</div>
                 <div>${loc.city}${loc.state ? `, ${loc.state}` : ''} ${loc.postalCode || ''}</div>

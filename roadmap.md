@@ -489,6 +489,19 @@ The current EDI infrastructure handles inbound 850 (SFTP polling) and outbound 8
   - ✅ OpenStreetMap default with Google Maps auto-fallback (existing MapProvider)
   - ✅ Admin settings page for Google Maps API key (Admin > Settings > Maps)
   - Pluggable map provider interface for additional providers 🔲
+- **Location Operations View** 🔲
+  - Per-location operations dashboard: what's incoming, inside, and outgoing at a specific hub/spoke
+  - Distribution centre focus: dock utilization, dwell time, cross-dock throughput
+  - Cross-dock operations: inbound → sort → outbound pipeline visibility
+  - Appointment scheduling view: dock calendars with slot availability
+  - Map view integration: click a location marker to open its operations view
+  - Location-type-specific SLA rules:
+    - Distribution centre: max dwell time, cross-dock throughput SLA, dock turnaround time
+    - Cross dock: max sort-to-dispatch time, inbound-to-outbound cycle time
+    - Warehouse: pick/pack SLA, order fulfilment time
+    - Terminal/Port: container dwell, customs clearance time
+  - Works with hub-and-spoke routing: visualise spoke → hub → spoke flows
+  - Aggregate metrics: daily throughput (units in/out), average dwell, on-time departure rate
 - **Route Overhaul** 🔲
   - Redesign route model: routes as first-class entities separate from lanes
   - Route builder UI: drag-and-drop waypoints, reordering, named route variants per lane
