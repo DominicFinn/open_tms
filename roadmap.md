@@ -301,11 +301,16 @@
   - ✅ 9 unit tests for charge command handlers
   - ✅ Full data models for Invoice, InvoiceLineItem, Payment, CarrierInvoice, CarrierInvoiceLineItem, FinancialQuery, CreditNote, InvoiceReadModel
   - 🔲 Frontend: Financial tab on VNext Shipment Detail
-- **Phase 7B: Quotes** 🔲
-  - Quote model with versioning/revisions
-  - LTL rating service (class-based, weight breaks, deficit weight, FAK)
-  - Quote-to-order conversion with pre-populated charges
-  - Quote expiration cron
+- **Phase 7B: Quotes** ✅
+  - ✅ Quote + QuoteLineItem Prisma models with revision tracking
+  - ✅ QuoteRepository (interface + DTO + implementation)
+  - ✅ CreateQuote, AcceptQuote, DeclineQuote CQRS commands with events
+  - ✅ Quote acceptance creates Order with pre-populated approved revenue charges
+  - ✅ Configurable markup percentage and validity period
+  - ✅ Quote REST API (5 endpoints) + LTL rate calc endpoints
+  - ✅ 8 unit tests for quote command handlers
+  - 🔲 Quote expiration cron
+  - 🔲 Quote revision workflow (supersede + create new version)
 - **Phase 7C: Customer Invoicing (AR)** (in progress)
   - ✅ InvoiceRepository + PaymentRepository (interface + DTO + implementation)
   - ✅ InvoicingService (generate from shipments, find ready-to-invoice)
@@ -337,11 +342,17 @@
   - ✅ FinancialImpactHandler: auto-creates queries from cargo.missing_at_stop, cargo.misdrop_detected, cold_chain.disposition_changed (quarantined)
   - ✅ Financial queries REST API (5 endpoints) + Credit notes API (2 endpoints)
   - ✅ 4 unit tests for query command handlers
-- **Phase 7F: LTL Enhancements + EDI 810** 🔲
-  - Full LTL class-based rating with weight break matrix
-  - Re-weigh / re-class adjustment workflow
-  - Multi-order consolidation billing (pro-rate by weight)
-  - EDI 810 outbound Invoice generation
+- **Phase 7F: LTL Enhancements + EDI 810** (in progress)
+  - ✅ LtlRatingService: class-based rating, weight break matrix, deficit weight optimization
+  - ✅ FAK (Freight All Kinds) override support
+  - ✅ Minimum charge threshold
+  - ✅ LTL accessorial codes (liftgate, residential, inside delivery, notification, limited access)
+  - ✅ Density-based freight class calculator
+  - ✅ LTL rate + freight class REST API endpoints
+  - ✅ 9 unit tests (deficit weight, FAK, minimum charge, accessorials, density calc)
+  - 🔲 Re-weigh / re-class adjustment workflow
+  - 🔲 Multi-order consolidation billing (pro-rate by weight)
+  - 🔲 EDI 810 outbound Invoice generation
 - **Basic Reporting & Analytics** 🔲
   - Operational dashboards and KPIs (on-time %, cost per shipment, carrier scorecard)
   - Financial reports (lane spend analysis, carrier spend)

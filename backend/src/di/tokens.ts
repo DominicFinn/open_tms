@@ -86,6 +86,8 @@ export const TOKENS = {
   IFreightAuditService: Symbol.for('IFreightAuditService'),
   IFinancialQueryRepository: Symbol.for('IFinancialQueryRepository'),
   ICreditNoteRepository: Symbol.for('ICreditNoteRepository'),
+  IQuoteRepository: Symbol.for('IQuoteRepository'),
+  ILtlRatingService: Symbol.for('ILtlRatingService'),
 
   // Infrastructure tokens
   PrismaClient: Symbol.for('PrismaClient'),

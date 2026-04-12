@@ -44,6 +44,7 @@ model Customer {
   shipmentReadModels ShipmentReadModel[]
 
   // Financial relations
+  quotes             Quote[]
   invoices           Invoice[]
   creditNotes        CreditNote[]  @relation("CustomerCreditNotes")
 
@@ -2582,6 +2583,79 @@ model ConnectivityLog {
 
   @@index([createdAt])
   @@index([locationId])
+}
+
+// ─── Financial: Quotes ──────────────────────────────────────────────────────
+
+model Quote {
+  id                  String    @id @default(uuid())
+  orgId               String
+  quoteNumber         String    @unique           // QTE-0001
+  version             Int       @default(1)       // For revisions
+  parentQuoteId       String?                     // Links revisions
+  parentQuote         Quote?    @relation("QuoteRevisions", fields: [parentQuoteId], references: [id])
+  revisions           Quote[]   @relation("QuoteRevisions")
+  status              String    @default("draft") // draft, sent, accepted, declined, expired, superseded
+
+  customer            Customer  @relation(fields: [customerId], references: [id])
+  customerId          String
+
+  // Route details (snapshot at time of quote)
+  originId            String?
+  destinationId       String?
+  serviceLevel        String    @default("FTL")   // FTL, LTL
+  equipmentType       String?
+
+  // Financial
+  totalRevenueCents   Int                         // What we charge customer
+  totalCostCents      Int                         // Expected carrier cost
+  marginCents         Int                         // revenue - cost
+  marginPercent       Decimal   @db.Decimal(5,2)
+  currency            String    @default("USD")
+
+  // Validity
+  validFrom           DateTime  @default(now())
+  validUntil          DateTime                    // Expiration
+
+  // Conversion
+  orderId             String?                     // Set when quote is accepted and converted
+
+  notes               String?
+  createdBy           String?
+
+  lineItems           QuoteLineItem[]
+
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([orgId])
+  @@index([customerId])
+  @@index([status])
+}
+
+model QuoteLineItem {
+  id                  String    @id @default(uuid())
+  quote               Quote     @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  quoteId             String
+
+  chargeType          String    // linehaul, fuel_surcharge, accessorial, discount
+  description         String
+  amountCents         Int       // Positive = charge, negative = discount
+  currency            String    @default("USD")
+
+  // For accessorials
+  accessorialCode     String?
+
+  // For LTL
+  freightClass        String?
+  weight              Decimal?  @db.Decimal(10,2)
+  ratePerCwt          Int?      // Rate per hundredweight in cents
+
+  quantity            Int       @default(1)
+
+  createdAt           DateTime  @default(now())
+
+  @@index([quoteId])
 }
 
 // ─── Financial: Charges ─────────────────────────────────────────────────────

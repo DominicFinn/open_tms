@@ -134,6 +134,14 @@ export const EVENT_TYPES = {
   EDI_214_RECEIVED: 'edi_status.received',
   EDI_214_SENT: 'edi_status.sent',
 
+  // Financial: Quotes
+  QUOTE_CREATED: 'quote.created',
+  QUOTE_UPDATED: 'quote.updated',
+  QUOTE_SENT: 'quote.sent',
+  QUOTE_ACCEPTED: 'quote.accepted',
+  QUOTE_DECLINED: 'quote.declined',
+  QUOTE_EXPIRED: 'quote.expired',
+
   // Financial: Charges
   CHARGE_CREATED: 'charge.created',
   CHARGE_APPROVED: 'charge.approved',
@@ -238,7 +246,14 @@ export const EVENT_SCHEMA_VERSIONS: Record<string, number> = {
   [EVENT_TYPES.SLA_WARNING]: 1,
   [EVENT_TYPES.SLA_BREACHED]: 1,
   [EVENT_TYPES.SLA_MET]: 1,
-  // Financial
+  // Financial: Quotes
+  [EVENT_TYPES.QUOTE_CREATED]: 1,
+  [EVENT_TYPES.QUOTE_UPDATED]: 1,
+  [EVENT_TYPES.QUOTE_SENT]: 1,
+  [EVENT_TYPES.QUOTE_ACCEPTED]: 1,
+  [EVENT_TYPES.QUOTE_DECLINED]: 1,
+  [EVENT_TYPES.QUOTE_EXPIRED]: 1,
+  // Financial: Charges
   [EVENT_TYPES.CHARGE_CREATED]: 1,
   [EVENT_TYPES.CHARGE_APPROVED]: 1,
   [EVENT_TYPES.CHARGE_DISPUTED]: 1,

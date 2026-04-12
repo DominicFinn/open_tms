@@ -106,6 +106,11 @@ import { ReceiveCarrierInvoiceCommandHandler } from '../commands/carrierInvoices
 import { FinancialQueryRepository, CreditNoteRepository } from '../repositories/FinancialQueryRepository.js';
 import { RaiseQueryCommandHandler } from '../commands/queries/RaiseQueryCommand.js';
 import { ResolveQueryCommandHandler } from '../commands/queries/ResolveQueryCommand.js';
+import { QuoteRepository } from '../repositories/QuoteRepository.js';
+import { LtlRatingService } from '../services/LtlRatingService.js';
+import { CreateQuoteCommandHandler } from '../commands/quotes/CreateQuoteCommand.js';
+import { AcceptQuoteCommandHandler } from '../commands/quotes/AcceptQuoteCommand.js';
+import { DeclineQuoteCommandHandler } from '../commands/quotes/DeclineQuoteCommand.js';
 import { ApproveCarrierInvoiceCommandHandler } from '../commands/carrierInvoices/ApproveCarrierInvoiceCommand.js';
 import { RecordCarrierPaymentCommandHandler } from '../commands/carrierInvoices/RecordCarrierPaymentCommand.js';
 import { ApproveInvoiceCommandHandler } from '../commands/invoices/ApproveInvoiceCommand.js';
@@ -415,6 +420,14 @@ export function registerDependencies(prisma: PrismaClient): void {
     return new CreditNoteRepository(container.resolve(TOKENS.PrismaClient));
   });
 
+  container.singleton(TOKENS.IQuoteRepository).toFactory(() => {
+    return new QuoteRepository(container.resolve(TOKENS.PrismaClient));
+  });
+
+  container.singleton(TOKENS.ILtlRatingService).toFactory(() => {
+    return new LtlRatingService();
+  });
+
   // Trading Partner / EDI Hub
   container.singleton(TOKENS.ITradingPartnerRepository).toFactory(() => {
     return new TradingPartnerRepository(container.resolve(TOKENS.PrismaClient));
@@ -601,6 +614,11 @@ export function registerDependencies(prisma: PrismaClient): void {
     // Financial query commands
     bus.register(new RaiseQueryCommandHandler(prisma, eventBus));
     bus.register(new ResolveQueryCommandHandler(prisma, eventBus));
+
+    // Quote commands
+    bus.register(new CreateQuoteCommandHandler(prisma, eventBus));
+    bus.register(new AcceptQuoteCommandHandler(prisma, eventBus));
+    bus.register(new DeclineQuoteCommandHandler(prisma, eventBus));
 
     return bus;
   });
