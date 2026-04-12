@@ -780,3 +780,20 @@ Agent Decisions provide the compliance and audit layer for AI agent actions. Eve
 | `agent_decision.created` | AgentDecisionReadModel upsert | -- | Audit log |
 | `agent_decision.outcome_recorded` | AgentDecisionReadModel outcome update | -- | Audit log |
 | `agent_decision.promoted` | AgentDecisionReadModel promotion flag | -- | Audit log |
+
+### Triage Agent
+
+The Triage Agent is an AI event handler (`TriageAgentHandler`) that subscribes to exception events and uses Claude to decide what action to take. It runs as a pg-boss worker job within the event handler infrastructure.
+
+**Subscribed events:** `shipment.exception`, `sla.breached`, `cargo.misdrop_detected`, `cargo.missing_at_stop`, `cargo.left_on_vehicle`, `cold_chain.excursion_detected`
+
+**Flow:**
+1. Event arrives via pg-boss queue
+2. Handler gathers context (shipment details, open issues, SLA evaluations)
+3. Checks for recent duplicate decisions (30-min debounce window)
+4. Calls Claude with structured prompt + context
+5. Parses structured JSON response
+6. Executes action: `create_issue`, `escalate_issue`, or `no_action`
+7. Logs the full decision via `CreateAgentDecisionCommand`
+
+**Configuration:** Set `ANTHROPIC_API_KEY` env var to enable. Optionally set `ANTHROPIC_MODEL` (default: `claude-sonnet-4-20250514`) and `AGENT_TRIAGE_CONCURRENCY` (default: 2).

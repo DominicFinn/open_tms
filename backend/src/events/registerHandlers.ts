@@ -28,6 +28,9 @@ import { OutboundEdiDeliveryService } from '../services/OutboundEdiDeliveryServi
 import { TradingPartnerRepository } from '../repositories/TradingPartnerRepository.js';
 import { IBinaryStorageProvider } from '../storage/IBinaryStorageProvider.js';
 import { AgentDecisionProjection } from './projections/AgentDecisionProjection.js';
+import { TriageAgentHandler } from './handlers/TriageAgentHandler.js';
+import { ILlmProvider } from '../services/llm/ILlmProvider.js';
+import { ICommandBus } from '../commands/CommandBus.js';
 
 /** Read concurrency from env with a default */
 function envInt(key: string, fallback: number): number {
@@ -50,13 +53,16 @@ const CONCURRENCY_OVERRIDES: Record<string, () => number> = {
   'projection.issue': () => envInt('PROJECTION_CONCURRENCY', 3),
   'projection.agent_decision': () => envInt('PROJECTION_CONCURRENCY', 3),
   'notification.email': () => envInt('EMAIL_CONCURRENCY', 2),
+  'agent.triage': () => envInt('AGENT_TRIAGE_CONCURRENCY', 2),
 };
 
 export async function registerEventHandlers(
   eventBus: IEventBus,
   prisma: PrismaClient,
   emailService?: IEmailService,
-  storageProvider?: IBinaryStorageProvider
+  storageProvider?: IBinaryStorageProvider,
+  llmProvider?: ILlmProvider,
+  commandBus?: ICommandBus,
 ): Promise<void> {
   const handlers: IEventHandler[] = [
     new AuditHandler(prisma),
@@ -99,6 +105,12 @@ export async function registerEventHandlers(
   const edi214GenerationService = new EDI214Service();
   const outboundDeliveryService = new OutboundEdiDeliveryService(tradingPartnerRepo);
   handlers.push(new Edi214ForwardHandler(prisma, edi214GenerationService, outboundDeliveryService));
+
+  // Add triage agent handler if LLM provider and command bus are available
+  if (llmProvider && commandBus) {
+    handlers.push(new TriageAgentHandler(prisma, llmProvider, commandBus));
+    console.log('[EventBus] Triage agent enabled (LLM provider configured)');
+  }
 
   for (const handler of handlers) {
     // Apply env-based concurrency overrides

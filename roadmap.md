@@ -190,7 +190,7 @@
     - ✅ Frontend: SLA status tab on shipment detail (evaluations table with status/time remaining)
     - ✅ Frontend: SLA indicators on issue kanban cards (worst SLA status badge with countdown)
     - ✅ Frontend: SLA Health widget on operations dashboard (active/warning/breached/met counts)
-  - Auto-triage handler (exception events → auto-create issues) 🔲
+  - ✅ Auto-triage handler (AI agent: exception events → Claude reasoning → auto-create/escalate issues)
 - **Live Tracking & Status** (partial)
   - ✅ Inbound webhook endpoint for IoT GPS devices
   - ✅ ShipmentEvent model with location tracking
@@ -570,14 +570,20 @@ The current EDI infrastructure handles inbound 850 (SFTP polling) and outbound 8
   - ✅ CQRS commands: CreateAgentDecision, RecordDecisionOutcome, PromoteDecision
   - ✅ Domain events: agent_decision.created, outcome_recorded, promoted
   - ✅ AgentDecisionReadModel projection with full audit trail
-- **AI Triage Agent** 🔲
-  - AgentConfig model: configurable prompts, LLM provider settings (LLM-independent)
-  - AgentConversation model: context stored in database, not tied to any specific LLM
-  - User-configurable agent setup (prompt editing, behaviour tuning)
-  - Auto-triage: agent picks up issues from Triage Centre, suggests resolutions
-  - Background monitoring service: watches shipments, issues, and user feedback
-  - Self-improving prompts: track agent suggestions vs human overrides, auto-refine prompts
-  - Agent action execution via N8N workflow integration (Phase 8)
+- **AI Triage Agent** (partial)
+  - ✅ ILlmProvider interface - provider-agnostic LLM abstraction
+  - ✅ AnthropicLlmProvider - Claude integration via Anthropic SDK
+  - ✅ TriageAgentHandler - event-driven AI triage (shipment.exception, sla.breached, cargo issues, cold chain)
+  - ✅ Context gathering: shipment details, open issues, SLA evaluations
+  - ✅ Structured LLM prompting with JSON response parsing
+  - ✅ Action execution: create_issue, escalate_issue, no_action
+  - ✅ Decision logging via AgentDecision with full conversation log
+  - ✅ 30-min deduplication window to prevent duplicate decisions
+  - ✅ Worker-local CommandBus for agent action dispatch
+  - AgentConfig model: configurable prompts, LLM provider settings (LLM-independent) 🔲
+  - User-configurable agent setup (prompt editing, behaviour tuning) 🔲
+  - Self-improving prompts: track agent suggestions vs human overrides, auto-refine prompts 🔲
+  - Agent action execution via N8N workflow integration (Phase 8) 🔲
 - **Carrier & Lane Performance Scoring** 🔲
   - On-time %, damage %, excursion rate
   - Route adherence scoring from Phase 9 data

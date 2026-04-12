@@ -105,6 +105,7 @@ import { HereRoutingProvider } from '../services/routing/HereRoutingProvider.js'
 import { TomTomRoutingProvider } from '../services/routing/TomTomRoutingProvider.js';
 import { ValhallaRoutingProvider } from '../services/routing/ValhallaRoutingProvider.js';
 import { ShipmentEtaMonitorService } from '../services/routing/ShipmentEtaMonitorService.js';
+import { AnthropicLlmProvider } from '../services/llm/AnthropicLlmProvider.js';
 
 /**
  * Register all application dependencies
@@ -437,6 +438,19 @@ export function registerDependencies(prisma: PrismaClient): void {
       );
     });
   }
+
+  // LLM provider (optional — for AI agent features)
+  // Set ANTHROPIC_API_KEY to enable the triage agent and other AI features.
+  if (process.env.ANTHROPIC_API_KEY) {
+    container.singleton(TOKENS.ILlmProvider).toFactory(() => {
+      return new AnthropicLlmProvider({
+        apiKey: process.env.ANTHROPIC_API_KEY!,
+        model: process.env.ANTHROPIC_MODEL,
+        baseURL: process.env.ANTHROPIC_BASE_URL,
+      });
+    });
+  }
+  // If no LLM provider configured, ILlmProvider won't be resolvable — agent handlers stay disabled
 
   // Command bus — register all command handlers
   container.singleton(TOKENS.ICommandBus).toFactory(() => {

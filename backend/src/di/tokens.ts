@@ -78,6 +78,9 @@ export const TOKENS = {
   // Agent Decision tokens
   IAgentDecisionRepository: Symbol.for('IAgentDecisionRepository'),
 
+  // LLM tokens
+  ILlmProvider: Symbol.for('ILlmProvider'),
+
   // Infrastructure tokens
   PrismaClient: Symbol.for('PrismaClient'),
   IFileStorageProvider: Symbol.for('IFileStorageProvider'),

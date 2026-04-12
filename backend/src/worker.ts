@@ -34,6 +34,15 @@ import { ConsoleEmailService } from './services/ConsoleEmailService.js';
 import { IBinaryStorageProvider } from './storage/IBinaryStorageProvider.js';
 import { DatabaseBinaryStorage } from './storage/DatabaseBinaryStorage.js';
 import { S3FileStorage } from './storage/S3FileStorage.js';
+import { AnthropicLlmProvider } from './services/llm/AnthropicLlmProvider.js';
+import { ILlmProvider } from './services/llm/ILlmProvider.js';
+import { CommandBus, ICommandBus } from './commands/CommandBus.js';
+import { CreateAgentDecisionCommandHandler } from './commands/agentDecisions/CreateAgentDecisionCommand.js';
+import { RecordDecisionOutcomeCommandHandler } from './commands/agentDecisions/RecordDecisionOutcomeCommand.js';
+import { PromoteDecisionCommandHandler } from './commands/agentDecisions/PromoteDecisionCommand.js';
+import { CreateIssueCommandHandler } from './commands/issues/CreateIssueCommand.js';
+import { UpdateIssueCommandHandler } from './commands/issues/UpdateIssueCommand.js';
+import { EscalateIssueCommandHandler } from './commands/issues/EscalateIssueCommand.js';
 
 const WORKER_MODE = process.env.WORKER_MODE || 'all';
 
@@ -100,7 +109,32 @@ async function startWorker() {
     }
 
     const eventBus = new PgBossEventBus(prisma, queue);
-    await registerEventHandlers(eventBus, prisma, emailService, storageProvider);
+
+    // LLM provider for AI agent features (optional)
+    let llmProvider: ILlmProvider | undefined;
+    let workerCommandBus: ICommandBus | undefined;
+
+    if (process.env.ANTHROPIC_API_KEY) {
+      llmProvider = new AnthropicLlmProvider({
+        apiKey: process.env.ANTHROPIC_API_KEY,
+        model: process.env.ANTHROPIC_MODEL,
+        baseURL: process.env.ANTHROPIC_BASE_URL,
+      });
+
+      // Worker-local command bus for agent handlers to dispatch commands
+      const bus = new CommandBus();
+      bus.register(new CreateAgentDecisionCommandHandler(prisma, eventBus));
+      bus.register(new RecordDecisionOutcomeCommandHandler(prisma, eventBus));
+      bus.register(new PromoteDecisionCommandHandler(prisma, eventBus));
+      bus.register(new CreateIssueCommandHandler(prisma, eventBus));
+      bus.register(new UpdateIssueCommandHandler(prisma, eventBus));
+      bus.register(new EscalateIssueCommandHandler(prisma, eventBus));
+      workerCommandBus = bus;
+
+      console.log('[Worker] LLM provider configured (Anthropic), AI agents enabled');
+    }
+
+    await registerEventHandlers(eventBus, prisma, emailService, storageProvider, llmProvider, workerCommandBus);
     await eventBus.start();
     console.log('[Worker] Event handlers registered and started');
   }

@@ -197,11 +197,22 @@ Every AI agent decision is logged through a dedicated "decision endpoint" for co
 4. Human reviews and records outcome via `PUT /api/v1/agent-decisions/:id/outcome`
 5. Proven patterns promoted to automation via `POST /api/v1/agent-decisions/:id/promote`
 
+### Triage Agent
+The first agent implementation (`TriageAgentHandler`) subscribes to exception events and uses Claude to triage them. It can create issues, escalate existing ones, or take no action. Every decision is logged for compliance.
+
+**Enable:** Set `ANTHROPIC_API_KEY` env var. Optionally `ANTHROPIC_MODEL` (default: `claude-sonnet-4-20250514`).
+
+**Subscribed events:** `shipment.exception`, `sla.breached`, `cargo.misdrop_detected`, `cargo.missing_at_stop`, `cargo.left_on_vehicle`, `cold_chain.excursion_detected`
+
 ### Key Files
 - `backend/src/commands/agentDecisions/` — Create, RecordOutcome, Promote command handlers
 - `backend/src/repositories/AgentDecisionRepository.ts` — Repository with filtering and stats
 - `backend/src/events/projections/AgentDecisionProjection.ts` — Read model projection
 - `backend/src/routes/agentDecisions.ts` — API routes (6 endpoints)
+- `backend/src/services/llm/ILlmProvider.ts` — Provider-agnostic LLM interface
+- `backend/src/services/llm/AnthropicLlmProvider.ts` — Claude implementation
+- `backend/src/events/handlers/TriageAgentHandler.ts` — AI triage agent event handler
+- `backend/src/__tests__/handlers/TriageAgentHandler.test.ts` — Triage agent tests
 - `backend/src/__tests__/commands/AgentDecisionCommands.test.ts` — Command handler tests
 - `backend/src/__tests__/projections/AgentDecisionProjection.test.ts` — Projection tests
 
