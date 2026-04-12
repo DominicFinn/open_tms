@@ -75,6 +75,15 @@ export const TOKENS = {
   IRoutingProvider: Symbol.for('IRoutingProvider'),
   IShipmentEtaMonitorService: Symbol.for('IShipmentEtaMonitorService'),
 
+  // Agent Decision tokens
+  IAgentDecisionRepository: Symbol.for('IAgentDecisionRepository'),
+
+  // LLM tokens
+  ILlmProvider: Symbol.for('ILlmProvider'),
+
+  // Skills tokens
+  ISkillRegistry: Symbol.for('ISkillRegistry'),
+
   // Financial tokens
   IChargeRepository: Symbol.for('IChargeRepository'),
   IChargeService: Symbol.for('IChargeService'),

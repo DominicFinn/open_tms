@@ -39,8 +39,9 @@ export async function metricsRoutes(server: FastifyInstance) {
         prisma.issueReadModel.count(),
       ]);
 
+
     // Write model counts (for lag comparison)
-    const [orderCount, shipmentCount, carrierCount, customerCount, laneCount, issueCount] =
+    const [orderCount, shipmentCount, carrierCount, customerCount, laneCount, issueCount, agentDecisionCount, agentDecisionReadCount] =
       await Promise.all([
         prisma.order.count({ where: { archived: false } }),
         prisma.shipment.count({ where: { archived: false } }),
@@ -48,7 +49,16 @@ export async function metricsRoutes(server: FastifyInstance) {
         prisma.customer.count({ where: { archived: false } }),
         prisma.lane.count({ where: { archived: false } }),
         prisma.issue.count(),
+        prisma.agentDecision.count(),
+        prisma.agentDecisionReadModel.count(),
       ]);
+
+    // Agent usage (last hour)
+    const agentLastHour = await prisma.agentDecision.aggregate({
+      where: { createdAt: { gte: new Date(Date.now() - 3600000) } },
+      _count: true,
+      _sum: { inputTokens: true, outputTokens: true },
+    });
 
     // Queue stats (if available)
     let queueStats: any[] = [];
@@ -76,6 +86,15 @@ export async function metricsRoutes(server: FastifyInstance) {
         customer: { readModel: customerReadCount, writeModel: customerCount, lag: customerCount - customerReadCount },
         lane: { readModel: laneReadCount, writeModel: laneCount, lag: laneCount - laneReadCount },
         issue: { readModel: issueReadCount, writeModel: issueCount, lag: issueCount - issueReadCount },
+        agentDecision: { readModel: agentDecisionReadCount, writeModel: agentDecisionCount, lag: agentDecisionCount - agentDecisionReadCount },
+      },
+      agents: {
+        totalDecisions: agentDecisionCount,
+        lastHour: {
+          invocations: agentLastHour._count,
+          inputTokens: agentLastHour._sum.inputTokens || 0,
+          outputTokens: agentLastHour._sum.outputTokens || 0,
+        },
       },
       projectionCheckpoints: checkpoints,
       queues: queueStats,

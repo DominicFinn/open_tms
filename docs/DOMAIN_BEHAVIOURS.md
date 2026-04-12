@@ -769,7 +769,6 @@ UpdateCapaCommand emits different events based on what changed:
 
 ---
 
-<<<<<<< HEAD
 ## ETA Monitoring
 
 The ETA monitor is a cron-driven background service (not a CQRS command) that checks in-transit shipments against traffic-aware routing APIs. It runs via pg-boss schedule and publishes events through the standard event bus.
@@ -986,3 +985,91 @@ When `LocationResolutionService.resolveOrCreate()` creates a new location (used 
 | Worker | Queue | Schedule | What It Does |
 |--------|-------|----------|-------------|
 | SLA Monitor | `sla-monitor` | Every 2 min (configurable via `SLA_MONITOR_CRON`) | Sweeps active evaluations, transitions to warning/breached, auto-creates issues |
+
+---
+
+## Agent Decisions
+
+Agent Decisions provide the compliance and audit layer for AI agent actions. Every decision made by an AI agent is logged with full context, and outcomes can be recorded after the fact. Decisions can also be promoted to serve as training examples or policy references.
+
+### Commands
+
+| Command | Type | Trigger | Events Emitted |
+|---------|------|---------|----------------|
+| `CreateAgentDecisionCommand` | `agent_decision.create` | `POST /api/v1/agent-decisions` | `agent_decision.created` |
+| `RecordDecisionOutcomeCommand` | `agent_decision.record_outcome` | `PUT /api/v1/agent-decisions/:id/outcome` | `agent_decision.outcome_recorded` |
+| `PromoteDecisionCommand` | `agent_decision.promote` | `POST /api/v1/agent-decisions/:id/promote` | `agent_decision.promoted` |
+
+### Side Effects
+
+| Event | Projection | Notification | Other |
+|-------|-----------|--------------|-------|
+| `agent_decision.created` | AgentDecisionReadModel upsert | -- | Audit log |
+| `agent_decision.outcome_recorded` | AgentDecisionReadModel outcome update | -- | Audit log |
+| `agent_decision.promoted` | AgentDecisionReadModel promotion flag | -- | Audit log |
+
+### Triage Agent
+
+The Triage Agent is an AI event handler (`TriageAgentHandler`) that subscribes to exception events and uses Claude to decide what action to take. It runs as a pg-boss worker job within the event handler infrastructure.
+
+**Subscribed events:** `shipment.exception`, `sla.breached`, `cargo.misdrop_detected`, `cargo.missing_at_stop`, `cargo.left_on_vehicle`, `cold_chain.excursion_detected`
+
+**Flow:**
+1. Event arrives via pg-boss queue
+2. Handler gathers context (shipment details, open issues, SLA evaluations)
+3. Checks for recent duplicate decisions (30-min debounce window)
+4. Calls Claude with structured prompt + context
+5. Parses structured JSON response
+6. Executes action: `create_issue`, `escalate_issue`, or `no_action`
+7. Logs the full decision via `CreateAgentDecisionCommand`
+
+**Configuration:** Set `ANTHROPIC_API_KEY` env var to enable. Optionally set `ANTHROPIC_MODEL` (default: `claude-sonnet-4-20250514`) and `AGENT_TRIAGE_CONCURRENCY` (default: 2).
+
+### Configurable Agent Prompts
+
+Agent behaviour is configurable per-org via `AgentConfig` + versioned prompts (`AgentConfigVersion`). Each prompt change creates an immutable version linked to decisions via `promptVersionId`.
+
+| Setting | Type | Default |
+|---------|------|---------|
+| System prompt | Text with `{{template}}` vars | Hardcoded triage prompt |
+| Subscribed events | String[] | 6 exception events |
+| Temperature | Float 0-1 | 0.2 |
+| Max tokens | Int | 512 |
+| Confidence threshold | Float 0-1 | 0 (accept all) |
+| Deduplication window | Int (minutes) | 30 |
+
+### Automation Rules
+
+Deterministic rules promoted from agent decisions or created manually. Uses the same unified condition format as agent-extracted conditions.
+
+| API | Method | Purpose |
+|-----|--------|---------|
+| `/api/v1/automation-rules` | GET | List rules |
+| `/api/v1/automation-rules` | POST | Create rule |
+| `/api/v1/automation-rules/:id` | PUT | Update rule |
+| `/api/v1/automation-rules/:id/toggle` | POST | Enable/disable |
+| `/api/v1/automation-rules/:id/test` | POST | Dry-run against sample event |
+| `/api/v1/automation-rules/from-decision/:id` | POST | Create rule from promoted decision |
+
+**Condition format:** `[{ field: "payload.delayMinutes", operator: "greaterThan", value: 60 }]`
+
+**Operators:** equals, notEquals, contains, in, greaterThan, lessThan, greaterThanOrEqual, lessThanOrEqual, exists, notExists
+
+**Rule suppresses agent:** When a rule matches, it writes an AgentDecision marker that prevents the triage agent from processing the same event (deduplication).
+
+### Skills System
+
+Extensible action framework for automation rules and skill chains.
+
+**Built-in skills:**
+
+| Skill | Category | Config Required | Fields |
+|-------|----------|----------------|--------|
+| `create_issue` | triage | No | title, description, priority, category |
+| `escalate_issue` | triage | No | issueId, escalatedTo, reason |
+| `send_email` | communication | Yes (SMTP) | to, subject, body |
+| `call_webhook` | integration | Yes (URL+auth) | body |
+
+**Skill chains:** Ordered sequences of skill steps with question branching. Question nodes evaluate conditions and follow matched/unmatched branches. Steps support `{{template}}` variable syntax.
+
+**Skill config:** Org-level configuration for skills needing API keys or webhook URLs. Managed via `SkillConfig` model and `/settings/skills` admin page.

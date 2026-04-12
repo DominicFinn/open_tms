@@ -57,6 +57,8 @@ const APPS: AppDef[] = [
         { to: '/shipments', icon: 'local_shipping', label: 'Shipments' },
         { to: '/orders', icon: 'receipt_long', label: 'Orders' },
         { to: '/issues', icon: 'bug_report', label: 'Issues' },
+        { to: '/agent-decisions', icon: 'smart_toy', label: 'Agent Decisions' },
+        { to: '/automation-rules', icon: 'bolt', label: 'Automation Rules' },
         { to: '/devices', icon: 'sensors', label: 'Devices' },
       ]},
       { title: 'Network', items: [
@@ -129,6 +131,10 @@ const APPS: AppDef[] = [
         { to: '/settings/custom-fields', icon: 'tune', label: 'Custom Fields' },
         { to: '/settings/maps', icon: 'map', label: 'Maps & Geocoding' },
         { to: '/settings/sla', icon: 'timer', label: 'SLA Policies' },
+        { to: '/settings/llm', icon: 'smart_toy', label: 'AI / LLM' },
+        { to: '/settings/agents', icon: 'psychology', label: 'Agent Config' },
+        { to: '/settings/skills', icon: 'build', label: 'Skills' },
+        { to: '/settings/skill-chains', icon: 'account_tree', label: 'Skill Chains' },
       ]},
       { title: 'Apps', items: [
         { to: '/warehouse', icon: 'warehouse', label: 'Warehouse App' },

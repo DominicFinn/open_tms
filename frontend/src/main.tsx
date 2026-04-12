@@ -57,6 +57,14 @@ import VNextShipmentMap from './vnext-design/VNextShipmentMap';
 import VNextSlaDashboard from './vnext-design/VNextSlaDashboard';
 import VNextSlaPolicies from './vnext-design/VNextSlaPolicies';
 import VNextLocationOps from './vnext-design/VNextLocationOps';
+import VNextAgentDecisions from './vnext-design/VNextAgentDecisions';
+import VNextAgentDecisionDetail from './vnext-design/VNextAgentDecisionDetail';
+import VNextLlmSettings from './vnext-design/VNextLlmSettings';
+import VNextAgentConfig from './vnext-design/VNextAgentConfig';
+import VNextAutomationRules from './vnext-design/VNextAutomationRules';
+import VNextAutomationRuleDetail from './vnext-design/VNextAutomationRuleDetail';
+import VNextSkillsConfig from './vnext-design/VNextSkillsConfig';
+import VNextSkillChains from './vnext-design/VNextSkillChains';
 
 // VNext Finance Pages
 import VNextFinanceDashboard from './vnext-design/VNextFinanceDashboard';
@@ -162,6 +170,14 @@ root.render(
           <Route path="issues" element={<VNextIssueKanban />} />
           <Route path="carrier-bidding" element={<VNextCarrierBidding />} />
 
+          {/* Agent Decisions */}
+          <Route path="agent-decisions" element={<VNextAgentDecisions />} />
+          <Route path="agent-decisions/:id" element={<VNextAgentDecisionDetail />} />
+
+          {/* Automation Rules */}
+          <Route path="automation-rules" element={<VNextAutomationRules />} />
+          <Route path="automation-rules/:id" element={<VNextAutomationRuleDetail />} />
+
           {/* Devices */}
           <Route path="devices" element={<VNextDevices />} />
           <Route path="devices/:id" element={<VNextDeviceDetail />} />
@@ -207,6 +223,10 @@ root.render(
           <Route path="settings/custom-fields" element={<VNextCustomFields />} />
           <Route path="settings/maps" element={<VNextMapsSettings />} />
           <Route path="settings/sla" element={<VNextSlaPolicies />} />
+          <Route path="settings/llm" element={<VNextLlmSettings />} />
+          <Route path="settings/agents" element={<VNextAgentConfig />} />
+          <Route path="settings/skills" element={<VNextSkillsConfig />} />
+          <Route path="settings/skill-chains" element={<VNextSkillChains />} />
 
           {/* Finance */}
           <Route path="finance" element={<VNextFinanceDashboard />} />

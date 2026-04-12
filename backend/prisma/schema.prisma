@@ -657,6 +657,12 @@ model Organization {
   emailFromName       String?                      // Default "from" display name
   emailEnabled        Boolean  @default(false)     // Global kill switch
 
+  // AI / LLM Configuration (for agent features)
+  llmProvider         String?                      // "anthropic" (more providers in future)
+  llmApiKey           String?                      // API key — masked in API responses, encrypted at rest in production
+  llmModel            String?                      // Model override, e.g. "claude-sonnet-4-20250514"
+  llmEnabled          Boolean  @default(false)     // Global kill switch for AI agents
+
   // Metadata
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
@@ -672,6 +678,14 @@ model Organization {
   laneReadModels      LaneReadModel[]
   orderReadModels     OrderReadModel[]
   shipmentReadModels  ShipmentReadModel[]
+
+  // Agent Decision relations
+  agentDecisions          AgentDecision[]
+  agentDecisionReadModels AgentDecisionReadModel[]
+  agentConfigs            AgentConfig[]
+  automationRules         AutomationRule[]
+  skillConfigs            SkillConfig[]
+  skillChains             SkillChain[]
 }
 
 model TrackableUnit {
@@ -2583,6 +2597,274 @@ model ConnectivityLog {
 
   @@index([createdAt])
   @@index([locationId])
+}
+
+// ─── Agent Decision Logging (AI Compliance & Audit) ───────────────────────────
+// Every AI agent decision is logged for compliance, auditability, and
+// automation discovery. Captures what was decided, why, what context was
+// available, what action was taken, and the outcome.
+
+model AgentDecision {
+  id                String    @id @default(uuid())
+  organization      Organization @relation(fields: [orgId], references: [id])
+  orgId             String
+
+  // What agent made this decision
+  agentType         String                            // triage, quality_analysis, route_optimization, carrier_selection
+
+  // Which LLM produced this decision (for compliance - whose key, which model)
+  modelProvider     String?                           // "anthropic", "openai", etc. - nullable for non-AI automations
+  modelId           String?                           // "claude-sonnet-4-20250514", "gpt-4o", etc.
+
+  // What triggered the agent
+  triggerType       String                            // domain_event, schedule, manual, api
+  triggerEventType  String?                           // e.g. "shipment.exception" - the domain event type that triggered this
+  triggerEventId    String?                           // DomainEventLog.id of the triggering event
+
+  // What entity this decision is about
+  entityType        String?                           // "shipment", "order", "issue", etc.
+  entityId          String?
+
+  // The decision itself
+  summary           String                            // Short human-readable summary: "Escalated issue to critical priority"
+  reasoning         String                            // Full reasoning chain from the agent
+  context           Json                              // Snapshot of data the agent had when deciding
+  conversationLog   Json?                             // Raw LLM message exchange [{role, content}...] for audit/debugging
+  confidence        Float?                            // 0.0 - 1.0, how confident the agent was
+
+  // What action was taken
+  actionType        String                            // create_issue, escalate_issue, change_priority, notify, no_action, etc.
+  actionPayload     Json?                             // Details of the action taken (e.g. { issueId, newPriority })
+  actionEntityType  String?                           // Entity created/modified by the action
+  actionEntityId    String?                           // ID of entity created/modified
+
+  // Outcome tracking (filled in later by human review or automated feedback)
+  outcomeStatus     String    @default("pending")     // pending, correct, incorrect, partially_correct
+  outcomeNotes      String?                           // Human reviewer's notes
+  outcomeRecordedAt DateTime?
+  outcomeRecordedBy String?                           // User who reviewed
+
+  // Token usage tracking (for cost monitoring)
+  inputTokens       Int?                              // Tokens sent to the LLM
+  outputTokens      Int?                              // Tokens received from the LLM
+  durationMs        Int?                              // Wall-clock time for the LLM call in milliseconds
+
+  // Config traceability (which prompt produced this decision)
+  agentConfigId     String?                           // AgentConfig.id
+  promptVersionId   String?                           // AgentConfigVersion.id
+  matchedConditions Json?                             // Conditions in unified format [{field,operator,value}...]
+
+  // Automation promotion
+  promotedToAutomation Boolean @default(false)
+  promotedAt           DateTime?
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([orgId])
+  @@index([agentType])
+  @@index([entityType, entityId])
+  @@index([actionType])
+  @@index([outcomeStatus])
+  @@index([triggerEventType])
+  @@index([createdAt])
+  @@index([promotedToAutomation])
+}
+
+model AgentDecisionReadModel {
+  id                   String    @id
+  organization         Organization @relation(fields: [orgId], references: [id])
+  orgId                String
+
+  agentType            String
+  modelProvider        String?
+  modelId              String?
+  triggerType          String
+  triggerEventType     String?
+  entityType           String?
+  entityId             String?
+  summary              String
+  confidence           Float?
+  actionType           String
+  actionEntityType     String?
+  actionEntityId       String?
+  outcomeStatus        String    @default("pending")
+  promotedToAutomation Boolean   @default(false)
+  inputTokens          Int?
+  outputTokens         Int?
+  durationMs           Int?
+
+  createdAt            DateTime
+  updatedAt            DateTime
+
+  @@index([orgId])
+  @@index([agentType])
+  @@index([actionType])
+  @@index([outcomeStatus])
+  @@index([createdAt])
+}
+
+// ─── Agent Configuration (configurable prompts & behaviour) ──────────────────
+
+model AgentConfig {
+  id                         String    @id @default(uuid())
+  organization               Organization @relation(fields: [orgId], references: [id])
+  orgId                      String
+
+  agentType                  String                            // "triage" (extensible for future agents)
+  name                       String                            // "Shipment Triage Agent"
+  description                String?
+
+  enabled                    Boolean   @default(true)
+
+  // Which events trigger this agent (null = use code defaults)
+  subscribedEvents           Json?                             // ["shipment.exception", "sla.breached", ...]
+
+  // Active prompt version
+  activeVersionId            String?
+
+  // LLM tuning (null = use code defaults: temp 0.2, tokens 512)
+  temperature                Float?
+  maxTokens                  Int?
+
+  // Behaviour tuning
+  confidenceThreshold        Float?                            // 0-1, below this = override to no_action
+  deduplicationWindowMinutes Int?                              // null = code default (30)
+
+  versions                   AgentConfigVersion[]
+
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @updatedAt
+
+  @@unique([orgId, agentType])
+  @@index([orgId])
+  @@index([agentType])
+}
+
+model AgentConfigVersion {
+  id              String      @id @default(uuid())
+  config          AgentConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+  configId        String
+
+  versionNumber   Int
+  systemPrompt    String      @db.Text
+  changeNote      String?
+
+  createdAt       DateTime    @default(now())
+  createdBy       String?
+
+  @@unique([configId, versionNumber])
+  @@index([configId])
+}
+
+// ─── Automation Rules (deterministic rules promoted from agent decisions) ─────
+
+model AutomationRule {
+  id                String    @id @default(uuid())
+  organization      Organization @relation(fields: [orgId], references: [id])
+  orgId             String
+
+  name              String                            // "Critical delay auto-escalation"
+  description       String?
+
+  enabled           Boolean   @default(true)
+  priority          Int       @default(50)            // 1-100, lower = evaluated first
+
+  // Trigger: which events this rule listens to
+  eventPattern      String                            // "shipment.exception", "sla.breached", "shipment.*"
+
+  // Conditions: JSON array of {field, operator, value}
+  conditions        Json                              // [{ field, operator, value }, ...]
+
+  // Action
+  actionType        String                            // "create_issue", "escalate_issue"
+  actionConfig      Json                              // { issuePriority, issueCategory, issueTitle, ... }
+
+  // Provenance: which agent decision was this promoted from?
+  sourceDecisionId  String?                           // AgentDecision.id (null if manually created)
+
+  // Skill chain support (for complex multi-step actions)
+  skillChainId      String?                           // SkillChain.id (when actionType = "skill_chain")
+  inlineSteps       Json?                             // Inline SkillChainStep[] for one-off chains
+
+  // Stats
+  executionCount    Int       @default(0)
+  lastExecutedAt    DateTime?
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  executions        AutomationExecutionLog[]
+
+  @@index([orgId, enabled])
+  @@index([eventPattern])
+  @@index([priority])
+}
+
+model AutomationExecutionLog {
+  id                String    @id @default(uuid())
+  orgId             String
+
+  rule              AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  ruleId            String
+  ruleName          String                            // Denormalized for audit
+
+  // What triggered it
+  eventType         String
+  eventId           String                            // DomainEventLog.id
+  entityType        String
+  entityId          String
+
+  // What it did
+  actionType        String
+  actionResult      Json?                             // { issueId, success, error }
+
+  // Evaluation trace
+  conditionsMatched Boolean
+  evaluationMs      Int?
+
+  createdAt         DateTime  @default(now())
+
+  @@index([orgId])
+  @@index([ruleId])
+  @@index([createdAt])
+}
+
+// ─── Skills (extensible action system) ───────────────────────────────────────
+
+model SkillConfig {
+  id            String    @id @default(uuid())
+  organization  Organization @relation(fields: [orgId], references: [id])
+  orgId         String
+
+  skillType     String                            // "send_email", "call_webhook", etc.
+  name          String                            // "Ops Webhook" or "Company SMTP"
+  config        Json                              // Skill-specific config (API keys, URLs, etc.)
+  enabled       Boolean   @default(true)
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([orgId, skillType, name])
+  @@index([orgId])
+  @@index([skillType])
+}
+
+model SkillChain {
+  id            String    @id @default(uuid())
+  organization  Organization @relation(fields: [orgId], references: [id])
+  orgId         String
+
+  name          String                            // "Critical Delay Response"
+  description   String?
+
+  // Ordered array of SkillChainStep[] (skill nodes + question nodes)
+  steps         Json                              // SkillChainStep[]
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([orgId])
 }
 
 // ─── Financial: Quotes ──────────────────────────────────────────────────────

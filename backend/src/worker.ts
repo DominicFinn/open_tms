@@ -34,6 +34,21 @@ import { ConsoleEmailService } from './services/ConsoleEmailService.js';
 import { IBinaryStorageProvider } from './storage/IBinaryStorageProvider.js';
 import { DatabaseBinaryStorage } from './storage/DatabaseBinaryStorage.js';
 import { S3FileStorage } from './storage/S3FileStorage.js';
+import { AnthropicLlmProvider } from './services/llm/AnthropicLlmProvider.js';
+import { ILlmProvider } from './services/llm/ILlmProvider.js';
+import { CommandBus, ICommandBus } from './commands/CommandBus.js';
+import { CreateAgentDecisionCommandHandler } from './commands/agentDecisions/CreateAgentDecisionCommand.js';
+import { RecordDecisionOutcomeCommandHandler } from './commands/agentDecisions/RecordDecisionOutcomeCommand.js';
+import { PromoteDecisionCommandHandler } from './commands/agentDecisions/PromoteDecisionCommand.js';
+import { CreateIssueCommandHandler } from './commands/issues/CreateIssueCommand.js';
+import { UpdateIssueCommandHandler } from './commands/issues/UpdateIssueCommand.js';
+import { EscalateIssueCommandHandler } from './commands/issues/EscalateIssueCommand.js';
+import { DEFAULT_TRIAGE_PROMPT, DEFAULT_TRIAGE_EVENTS } from './events/handlers/TriageAgentHandler.js';
+import { SkillRegistry } from './services/skills/SkillRegistry.js';
+import { CreateIssueSkill } from './services/skills/CreateIssueSkill.js';
+import { EscalateIssueSkill } from './services/skills/EscalateIssueSkill.js';
+import { SendEmailSkill } from './services/skills/SendEmailSkill.js';
+import { CallWebhookSkill } from './services/skills/CallWebhookSkill.js';
 
 const WORKER_MODE = process.env.WORKER_MODE || 'all';
 
@@ -100,7 +115,91 @@ async function startWorker() {
     }
 
     const eventBus = new PgBossEventBus(prisma, queue);
-    await registerEventHandlers(eventBus, prisma, emailService, storageProvider);
+
+    // LLM provider for AI agent features (optional)
+    // Priority: org database config > environment variables
+    let llmProvider: ILlmProvider | undefined;
+    let workerCommandBus: ICommandBus | undefined;
+
+    const org = await prisma.organization.findFirst({
+      select: { llmProvider: true, llmApiKey: true, llmModel: true, llmEnabled: true },
+    });
+
+    const llmApiKey = org?.llmApiKey || process.env.ANTHROPIC_API_KEY;
+    const llmEnabled = org?.llmEnabled ?? !!process.env.ANTHROPIC_API_KEY;
+    const llmModel = org?.llmModel || process.env.ANTHROPIC_MODEL;
+
+    if (llmApiKey && llmEnabled) {
+      llmProvider = new AnthropicLlmProvider({
+        apiKey: llmApiKey,
+        model: llmModel,
+        baseURL: process.env.ANTHROPIC_BASE_URL,
+      });
+
+      // Worker-local command bus for agent handlers to dispatch commands
+      const bus = new CommandBus();
+      bus.register(new CreateAgentDecisionCommandHandler(prisma, eventBus));
+      bus.register(new RecordDecisionOutcomeCommandHandler(prisma, eventBus));
+      bus.register(new PromoteDecisionCommandHandler(prisma, eventBus));
+      bus.register(new CreateIssueCommandHandler(prisma, eventBus));
+      bus.register(new UpdateIssueCommandHandler(prisma, eventBus));
+      bus.register(new EscalateIssueCommandHandler(prisma, eventBus));
+      workerCommandBus = bus;
+
+      const source = org?.llmApiKey ? 'org config' : 'env var';
+      console.log(`[Worker] LLM provider configured (Anthropic via ${source}), AI agents enabled`);
+
+      // Auto-seed default triage agent config if none exists
+      const orgRecord = await prisma.organization.findFirst({ select: { id: true } });
+      if (orgRecord) {
+        const existingConfig = await prisma.agentConfig.findFirst({
+          where: { orgId: orgRecord.id, agentType: 'triage' },
+        });
+        if (!existingConfig) {
+          const config = await prisma.agentConfig.create({
+            data: {
+              orgId: orgRecord.id,
+              agentType: 'triage',
+              name: 'Shipment Triage Agent',
+              description: 'Analyzes shipment exceptions, SLA breaches, cargo issues, and cold chain excursions using AI to decide what action to take.',
+              enabled: true,
+              subscribedEvents: DEFAULT_TRIAGE_EVENTS,
+              versions: {
+                create: {
+                  versionNumber: 1,
+                  systemPrompt: DEFAULT_TRIAGE_PROMPT,
+                  changeNote: 'Default prompt (auto-seeded)',
+                  createdBy: 'system',
+                },
+              },
+            },
+            include: { versions: true },
+          });
+          // Set active version
+          await prisma.agentConfig.update({
+            where: { id: config.id },
+            data: { activeVersionId: config.versions[0].id },
+          });
+          console.log('[Worker] Auto-seeded default triage agent config (version 1)');
+        }
+      }
+    } else if (llmApiKey && !llmEnabled) {
+      console.log('[Worker] LLM API key found but agents disabled (llmEnabled=false)');
+    }
+
+    // Build skill registry for automation rules (always available, even without LLM)
+    const skillRegistry = new SkillRegistry();
+    if (workerCommandBus) {
+      skillRegistry.register(new CreateIssueSkill(workerCommandBus));
+      skillRegistry.register(new EscalateIssueSkill(workerCommandBus));
+    }
+    skillRegistry.register(new CallWebhookSkill());
+    if (emailService) {
+      skillRegistry.register(new SendEmailSkill(emailService));
+    }
+    console.log(`[Worker] Skill registry: ${skillRegistry.getAll().length} skills registered`);
+
+    await registerEventHandlers(eventBus, prisma, emailService, storageProvider, llmProvider, workerCommandBus, skillRegistry);
     await eventBus.start();
     console.log('[Worker] Event handlers registered and started');
   }

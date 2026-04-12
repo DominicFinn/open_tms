@@ -27,6 +27,12 @@ import { EDI214Service } from '../services/EDI214Service.js';
 import { OutboundEdiDeliveryService } from '../services/OutboundEdiDeliveryService.js';
 import { TradingPartnerRepository } from '../repositories/TradingPartnerRepository.js';
 import { IBinaryStorageProvider } from '../storage/IBinaryStorageProvider.js';
+import { AgentDecisionProjection } from './projections/AgentDecisionProjection.js';
+import { TriageAgentHandler } from './handlers/TriageAgentHandler.js';
+import { AutomationRuleHandler } from './handlers/AutomationRuleHandler.js';
+import { ILlmProvider } from '../services/llm/ILlmProvider.js';
+import { ICommandBus } from '../commands/CommandBus.js';
+import { SkillRegistry } from '../services/skills/SkillRegistry.js';
 import { TenderAwardFinancialHandler } from './handlers/TenderAwardFinancialHandler.js';
 import { BillingTriggerHandler } from './handlers/BillingTriggerHandler.js';
 import { InvoiceProjection } from './projections/InvoiceProjection.js';
@@ -51,14 +57,20 @@ const CONCURRENCY_OVERRIDES: Record<string, () => number> = {
   'projection.customer': () => envInt('PROJECTION_CONCURRENCY', 3),
   'projection.lane': () => envInt('PROJECTION_CONCURRENCY', 3),
   'projection.issue': () => envInt('PROJECTION_CONCURRENCY', 3),
+  'projection.agent_decision': () => envInt('PROJECTION_CONCURRENCY', 3),
   'notification.email': () => envInt('EMAIL_CONCURRENCY', 2),
+  'agent.triage': () => envInt('AGENT_TRIAGE_CONCURRENCY', 2),
+  'automation.rules': () => envInt('AUTOMATION_RULES_CONCURRENCY', 4),
 };
 
 export async function registerEventHandlers(
   eventBus: IEventBus,
   prisma: PrismaClient,
   emailService?: IEmailService,
-  storageProvider?: IBinaryStorageProvider
+  storageProvider?: IBinaryStorageProvider,
+  llmProvider?: ILlmProvider,
+  commandBus?: ICommandBus,
+  skillRegistry?: SkillRegistry,
 ): Promise<void> {
   const handlers: IEventHandler[] = [
     new AuditHandler(prisma),
@@ -70,6 +82,7 @@ export async function registerEventHandlers(
     new CustomerProjection(prisma),
     new LaneProjection(prisma),
     new IssueProjection(prisma),
+    new AgentDecisionProjection(prisma),
   ];
 
   // Add email handler if email service is available
@@ -112,6 +125,18 @@ export async function registerEventHandlers(
 
   // Financial: auto-create queries from cargo discrepancies and cold chain events
   handlers.push(new FinancialImpactHandler(prisma));
+
+  // Add automation rule handler (runs before triage agent — deterministic rules take priority)
+  if (skillRegistry) {
+    handlers.push(new AutomationRuleHandler(prisma, skillRegistry));
+    console.log('[EventBus] Automation rule handler enabled');
+  }
+
+  // Add triage agent handler if LLM provider and command bus are available
+  if (llmProvider && commandBus) {
+    handlers.push(new TriageAgentHandler(prisma, llmProvider, commandBus));
+    console.log('[EventBus] Triage agent enabled (LLM provider configured)');
+  }
 
   for (const handler of handlers) {
     // Apply env-based concurrency overrides

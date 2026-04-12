@@ -124,10 +124,20 @@ import { SlaEvaluationService } from '../services/SlaEvaluationService.js';
 import { CreateSlaPolicyCommandHandler } from '../commands/sla/CreateSlaPolicyCommand.js';
 import { UpdateSlaPolicyCommandHandler } from '../commands/sla/UpdateSlaPolicyCommand.js';
 import { DeactivateSlaPolicyCommandHandler } from '../commands/sla/DeactivateSlaPolicyCommand.js';
+import { AgentDecisionRepository } from '../repositories/AgentDecisionRepository.js';
+import { CreateAgentDecisionCommandHandler } from '../commands/agentDecisions/CreateAgentDecisionCommand.js';
+import { RecordDecisionOutcomeCommandHandler } from '../commands/agentDecisions/RecordDecisionOutcomeCommand.js';
+import { PromoteDecisionCommandHandler } from '../commands/agentDecisions/PromoteDecisionCommand.js';
 import { HereRoutingProvider } from '../services/routing/HereRoutingProvider.js';
 import { TomTomRoutingProvider } from '../services/routing/TomTomRoutingProvider.js';
 import { ValhallaRoutingProvider } from '../services/routing/ValhallaRoutingProvider.js';
 import { ShipmentEtaMonitorService } from '../services/routing/ShipmentEtaMonitorService.js';
+import { AnthropicLlmProvider } from '../services/llm/AnthropicLlmProvider.js';
+import { SkillRegistry } from '../services/skills/SkillRegistry.js';
+import { CreateIssueSkill } from '../services/skills/CreateIssueSkill.js';
+import { EscalateIssueSkill } from '../services/skills/EscalateIssueSkill.js';
+import { SendEmailSkill } from '../services/skills/SendEmailSkill.js';
+import { CallWebhookSkill } from '../services/skills/CallWebhookSkill.js';
 
 /**
  * Register all application dependencies
@@ -343,6 +353,10 @@ export function registerDependencies(prisma: PrismaClient): void {
     return new SlaRepository(container.resolve(TOKENS.PrismaClient));
   });
 
+  container.singleton(TOKENS.IAgentDecisionRepository).toFactory(() => {
+    return new AgentDecisionRepository(container.resolve(TOKENS.PrismaClient));
+  });
+
   container.singleton(TOKENS.ISlaEvaluationService).toFactory(() => {
     return new SlaEvaluationService(
       container.resolve(TOKENS.PrismaClient),
@@ -516,6 +530,23 @@ export function registerDependencies(prisma: PrismaClient): void {
     });
   }
 
+  // LLM provider (optional — for AI agent features)
+  // Set ANTHROPIC_API_KEY to enable the triage agent and other AI features.
+  if (process.env.ANTHROPIC_API_KEY) {
+    container.singleton(TOKENS.ILlmProvider).toFactory(() => {
+      return new AnthropicLlmProvider({
+        apiKey: process.env.ANTHROPIC_API_KEY!,
+        model: process.env.ANTHROPIC_MODEL,
+        baseURL: process.env.ANTHROPIC_BASE_URL,
+      });
+    });
+  }
+  // If no LLM provider configured, ILlmProvider won't be resolvable — agent handlers stay disabled
+
+  // Skill registry — register all available skills
+  // Skills that need dependencies (CommandBus, EmailService) are registered after the CommandBus
+  container.singleton(TOKENS.ISkillRegistry).toFactory(() => new SkillRegistry());
+
   // Command bus — register all command handlers
   container.singleton(TOKENS.ICommandBus).toFactory(() => {
     const bus = new CommandBus();
@@ -598,6 +629,11 @@ export function registerDependencies(prisma: PrismaClient): void {
     // EDI 214 commands
     bus.register(new ProcessInbound214CommandHandler(prisma, eventBus));
 
+    // Agent Decision commands
+    bus.register(new CreateAgentDecisionCommandHandler(prisma, eventBus));
+    bus.register(new RecordDecisionOutcomeCommandHandler(prisma, eventBus));
+    bus.register(new PromoteDecisionCommandHandler(prisma, eventBus));
+
     // Financial commands
     bus.register(new CreateChargeCommandHandler(prisma, eventBus));
     bus.register(new ApproveChargeCommandHandler(prisma, eventBus));
@@ -627,4 +663,19 @@ export function registerDependencies(prisma: PrismaClient): void {
 
     return bus;
   });
+
+  // Register built-in skills (after CommandBus is available)
+  {
+    const registry = container.resolve<SkillRegistry>(TOKENS.ISkillRegistry);
+    const commandBus = container.resolve<import('../commands/CommandBus.js').ICommandBus>(TOKENS.ICommandBus);
+    registry.register(new CreateIssueSkill(commandBus));
+    registry.register(new EscalateIssueSkill(commandBus));
+    registry.register(new CallWebhookSkill());
+
+    // SendEmailSkill only if email service is available
+    if (container.has(TOKENS.IEmailService)) {
+      const emailService = container.resolve<import('../services/IEmailService.js').IEmailService>(TOKENS.IEmailService);
+      registry.register(new SendEmailSkill(emailService));
+    }
+  }
 }

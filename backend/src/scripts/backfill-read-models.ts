@@ -312,6 +312,50 @@ async function backfillIssues(orgId: string): Promise<number> {
   return count;
 }
 
+async function backfillAgentDecisions(): Promise<number> {
+  const decisions = await prisma.agentDecision.findMany();
+
+  let count = 0;
+  for (const d of decisions) {
+    await prisma.agentDecisionReadModel.upsert({
+      where: { id: d.id },
+      create: {
+        id: d.id,
+        orgId: d.orgId,
+        agentType: d.agentType,
+        modelProvider: d.modelProvider,
+        modelId: d.modelId,
+        triggerType: d.triggerType,
+        triggerEventType: d.triggerEventType,
+        entityType: d.entityType,
+        entityId: d.entityId,
+        summary: d.summary,
+        confidence: d.confidence,
+        actionType: d.actionType,
+        actionEntityType: d.actionEntityType,
+        actionEntityId: d.actionEntityId,
+        outcomeStatus: d.outcomeStatus,
+        promotedToAutomation: d.promotedToAutomation,
+        inputTokens: d.inputTokens,
+        outputTokens: d.outputTokens,
+        durationMs: d.durationMs,
+        createdAt: d.createdAt,
+        updatedAt: d.updatedAt,
+      },
+      update: {
+        outcomeStatus: d.outcomeStatus,
+        promotedToAutomation: d.promotedToAutomation,
+        inputTokens: d.inputTokens,
+        outputTokens: d.outputTokens,
+        durationMs: d.durationMs,
+        updatedAt: d.updatedAt,
+      },
+    });
+    count++;
+  }
+  return count;
+}
+
 async function main() {
   console.log('[Backfill] Starting read model backfill...');
   const orgId = await getOrgId();
@@ -333,6 +377,9 @@ async function main() {
 
   const issueCount = await backfillIssues(orgId);
   console.log(`[Backfill] ${issueCount} issues`);
+
+  const agentDecisionCount = await backfillAgentDecisions();
+  console.log(`[Backfill] ${agentDecisionCount} agent decisions`);
 
   console.log('[Backfill] Done.');
 }
