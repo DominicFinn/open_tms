@@ -126,6 +126,20 @@ export class CreateShipmentCommandHandler extends BaseCommandHandler<CreateShipm
           },
         });
         finalOriginId = created.id;
+
+        // Emit audit event for auto-created location
+        emit(this.createEvent(command, {
+          type: EVENT_TYPES.LOCATION_CREATED,
+          entityType: 'location',
+          entityId: created.id,
+          payload: {
+            locationName: body.originData.name,
+            name: body.originData.name,
+            city: body.originData.city,
+            country: body.originData.country,
+            source: 'shipment_resolution',
+          },
+        }));
       }
     }
 
@@ -155,6 +169,20 @@ export class CreateShipmentCommandHandler extends BaseCommandHandler<CreateShipm
           },
         });
         finalDestinationId = created.id;
+
+        // Emit audit event for auto-created location
+        emit(this.createEvent(command, {
+          type: EVENT_TYPES.LOCATION_CREATED,
+          entityType: 'location',
+          entityId: created.id,
+          payload: {
+            locationName: body.destinationData.name,
+            name: body.destinationData.name,
+            city: body.destinationData.city,
+            country: body.destinationData.country,
+            source: 'shipment_resolution',
+          },
+        }));
       }
     }
 

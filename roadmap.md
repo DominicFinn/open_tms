@@ -130,7 +130,7 @@
   - ✅ Arrival criteria management API (CRUD per location)
   - ✅ Configurable default geofence radius at organization level (Admin > Settings)
   - ✅ CreateShipmentCommand accepts originData/destinationData for auto-resolution
-  - Audit events for location creation via resolution 🔲
+  - Audit events for location creation via resolution ✅
 - **Shipment Completion Criteria** ✅
   - ✅ ShipmentCompletionHandler: auto-delivers when destination arrival criteria met
   - ✅ Listens to shipment.stop_arrived and tracking.geofence_entered events

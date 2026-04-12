@@ -168,7 +168,8 @@ export function registerDependencies(prisma: PrismaClient): void {
     return new LocationResolutionService(
       container.resolve(TOKENS.PrismaClient),
       container.resolve(TOKENS.ILocationsRepository),
-      container.resolve(TOKENS.IArrivalCriteriaRepository)
+      container.resolve(TOKENS.IArrivalCriteriaRepository),
+      container.resolve(TOKENS.IEventBus)
     );
   });
 

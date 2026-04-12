@@ -198,6 +198,8 @@ Locations can be classified by type (`warehouse`, `distribution_centre`, `cross_
 |---------|---------|----------------|-------------|
 | `CreateLocationCommand` | `POST /api/v1/locations` | `location.created` | Event payload includes `locationType` |
 | `UpdateLocationCommand` | `PUT /api/v1/locations/:id` | `location.updated` | Event payload includes changed field names |
+| `CreateShipmentCommand` (resolution) | Shipment with `originData`/`destinationData` | `location.created` | `source: 'shipment_resolution'` in payload |
+| `LocationResolutionService` | Order creation, EDI import | `location.created` | `source: 'resolution'` in payload |
 
 ---
 
@@ -743,8 +745,13 @@ When `autoCreateIssue = true` on the rule:
 When `CreateShipmentCommand` receives `originData`/`destinationData` (raw address objects) instead of explicit location IDs:
 1. Searches for existing location by `name + city` (case-insensitive)
 2. If found, reuses the existing location
-3. If not found, creates a new `Location` record
+3. If not found, creates a new `Location` record and emits `location.created` with `source: 'shipment_resolution'`
 4. Default geofence arrival criteria are created for new locations (via `LocationResolutionService`)
+
+When `LocationResolutionService.resolveOrCreate()` creates a new location (used by order creation, EDI import):
+- Emits `location.created` with `source: 'resolution'` and the actor's ID
+- Event is best-effort (location creation succeeds even if event publishing fails)
+- The `AuditHandler` records the source in the audit log description
 
 ### Workers
 
