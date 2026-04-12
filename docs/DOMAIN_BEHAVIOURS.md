@@ -1150,3 +1150,56 @@ Extensible action framework for automation rules and skill chains.
 **Skill chains:** Ordered sequences of skill steps with question branching. Question nodes evaluate conditions and follow matched/unmatched branches. Steps support `{{template}}` variable syntax.
 
 **Skill config:** Org-level configuration for skills needing API keys or webhook URLs. Managed via `SkillConfig` model and `/settings/skills` admin page.
+
+---
+
+## Carrier Tracking Integrations
+
+Links carriers to external tracking APIs (FedEx, UPS, DHL, EasyPost, etc.) for automated shipment status updates.
+
+### Commands
+
+| Command | Events | Side Effects |
+|---------|--------|-------------|
+| `CreateCarrierTrackingIntegration` | `carrier_tracking.integration_created` | None |
+| `UpdateCarrierTrackingIntegration` | `carrier_tracking.integration_updated` | None |
+| `DeleteCarrierTrackingIntegration` | `carrier_tracking.integration_deleted` | Cascades: deletes related tracking events |
+| `RecordCarrierTrackingEvent` | `carrier_tracking.update_received` + conditionally: `carrier_tracking.delivered` or `carrier_tracking.exception` | Writes CarrierTrackingEvent, bridges to shipment lifecycle |
+
+### Provider Interface
+
+`ICarrierTrackingProvider` - provider-agnostic interface (same pattern as `IRoutingProvider`):
+- `authenticate(credentials)` - OAuth token management or API key setup
+- `pollTracking(trackingNumbers[])` - pull status updates in batch
+- `parseWebhook(payload, headers)` - normalize inbound webhook payloads
+- `verifyWebhookSignature(body, signature, secret)` - validate webhook authenticity
+
+### Supported Providers
+
+| Provider | Auth | Webhooks | Polling | Batch Size |
+|----------|------|----------|---------|------------|
+| FedEx | OAuth 2.0 | Yes | Yes | 30 |
+| UPS | OAuth 2.0 | Yes | Yes | 1 |
+| DHL | API Key | Yes | Yes | 1 |
+| EasyPost | API Key | Yes | Yes | 1 |
+| EDI 214 | N/A (via TradingPartner) | Push (EDI) | No | N/A |
+
+### Normalized Status Codes
+
+All providers map to 7 standard statuses: `info_received`, `in_transit`, `out_for_delivery`, `delivered`, `exception`, `return_to_sender`, `unknown`.
+
+### Polling Worker
+
+`carrierTrackingPollWorker` runs every 5 minutes (configurable via `CARRIER_TRACKING_POLL_CRON`). Polls active integrations that have exceeded their polling interval. Respects per-provider rate limits.
+
+### Key Files
+- `backend/src/services/carrierTracking/ICarrierTrackingProvider.ts` - Provider interface
+- `backend/src/services/carrierTracking/CarrierTrackingService.ts` - Orchestrator
+- `backend/src/services/carrierTracking/ProviderRegistry.ts` - Provider factory
+- `backend/src/services/carrierTracking/providers/` - FedEx, UPS, DHL implementations
+- `backend/src/repositories/CarrierTrackingIntegrationRepository.ts` - Integration CRUD
+- `backend/src/routes/carrierTracking.ts` - API endpoints
+- `backend/src/workers/carrierTrackingPollWorker.ts` - Polling cron
+- `frontend/src/vnext-design/VNextCarrierTracking.tsx` - Integration list
+- `frontend/src/vnext-design/VNextCarrierTrackingSetup.tsx` - Setup wizard
+- `frontend/src/vnext-design/VNextCarrierTrackingDetail.tsx` - Integration detail

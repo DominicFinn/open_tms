@@ -88,6 +88,12 @@ import { edi820Routes } from './routes/edi820.js';
 import { financialReportRoutes } from './routes/financialReports.js';
 import { issueRoutes } from './routes/issues.js';
 import { commentRoutes } from './routes/comments.js';
+import { carrierTrackingRoutes } from './routes/carrierTracking.js';
+import {
+  createCarrierTrackingPollWorker, registerCarrierTrackingPollSchedule, CARRIER_TRACKING_POLL_QUEUE,
+} from './workers/carrierTrackingPollWorker.js';
+import { CarrierTrackingService } from './services/carrierTracking/CarrierTrackingService.js';
+import { ICarrierTrackingIntegrationRepository } from './repositories/CarrierTrackingIntegrationRepository.js';
 
 const server = Fastify({ logger: true });
 
@@ -183,6 +189,7 @@ async function start() {
   await server.register(financialReportRoutes);
   await server.register(issueRoutes);
   await server.register(commentRoutes);
+  await server.register(carrierTrackingRoutes);
 
   // Start queue adapter (needed for publishing events, even if workers run elsewhere)
   try {
@@ -243,6 +250,23 @@ async function start() {
         }
       } catch (err) {
         server.log.warn('Financial cron workers failed to register: ' + (err as Error).message);
+      }
+
+      // Carrier Tracking Poll -- register cron schedule and worker (always enabled)
+      try {
+        const carrierTrackingService = container.resolve<CarrierTrackingService>(TOKENS.ICarrierTrackingService);
+        const carrierTrackingRepo = container.resolve<ICarrierTrackingIntegrationRepository>(TOKENS.ICarrierTrackingIntegrationRepository);
+        const ctBoss = (queue as any).boss;
+        if (ctBoss) {
+          await registerCarrierTrackingPollSchedule(ctBoss);
+          await queue.subscribe(
+            CARRIER_TRACKING_POLL_QUEUE,
+            createCarrierTrackingPollWorker(server.prisma, carrierTrackingService, carrierTrackingRepo),
+          );
+          server.log.info('Carrier tracking poll worker registered');
+        }
+      } catch (err) {
+        server.log.warn('Carrier tracking poll worker failed to register: ' + (err as Error).message);
       }
 
       server.log.info('Embedded queue workers registered (set DISABLE_EMBEDDED_WORKERS=true to use separate worker container)');

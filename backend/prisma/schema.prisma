@@ -169,6 +169,10 @@ model Shipment {
   flags             ShipmentFlag[]       // Warehouse user flagged issues
   launchedAt        DateTime?            // When warehouse user completed launch workflow
   launchedBy        String?              // User ID who launched
+
+  // Carrier tracking API
+  trackingNumber          String?              // Carrier tracking number (PRO, AWB, etc.)
+  carrierTrackingEvents   CarrierTrackingEvent[]
 }
 
 model ShipmentStop {
@@ -349,6 +353,10 @@ model Carrier {
 
   // Read model relations
   shipmentReadModels ShipmentReadModel[]
+
+  // Carrier tracking API integration
+  trackingIntegration CarrierTrackingIntegration?
+  trackingEvents      CarrierTrackingEvent[]
 }
 
 model Vehicle {
@@ -3428,4 +3436,96 @@ model KanbanView {
   updatedAt   DateTime @updatedAt
 
   @@index([orgId])
+}
+
+// ===========================================
+// Carrier Tracking API Integrations
+// ===========================================
+
+model CarrierTrackingIntegration {
+  id                    String    @id @default(uuid())
+  carrier               Carrier   @relation(fields: [carrierId], references: [id])
+  carrierId             String    @unique
+
+  // Provider config
+  providerType          String    // fedex, ups, dhl, usps, easypost, aftership, edi_214, manual
+  status                String    @default("pending_setup") // pending_setup, active, error, disabled
+  credentials           Json?     // Encrypted: OAuth client ID/secret, API keys, account numbers
+
+  // Webhook config (push from carrier)
+  webhookEnabled        Boolean   @default(false)
+  webhookSecret         String?   // Shared secret for signature verification
+  webhookEndpointId     String?   // ID of registered webhook at carrier API
+
+  // Polling config (pull from carrier)
+  pollingEnabled        Boolean   @default(false)
+  pollingIntervalSeconds Int      @default(900) // 15 min default
+  lastPolledAt          DateTime?
+
+  // Rate limiting
+  rateLimitDailyMax     Int?      // Provider-specific daily limit
+  rateLimitCallsToday   Int       @default(0)
+  rateLimitResetAt      DateTime?
+
+  // Error tracking
+  lastErrorMessage      String?
+  lastErrorAt           DateTime?
+
+  // Metadata
+  notes                 String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  // Relations
+  trackingEvents        CarrierTrackingEvent[]
+
+  @@index([providerType])
+  @@index([status])
+}
+
+model CarrierTrackingEvent {
+  id                String    @id @default(uuid())
+
+  // Relations
+  shipment          Shipment  @relation(fields: [shipmentId], references: [id])
+  shipmentId        String
+  carrier           Carrier   @relation(fields: [carrierId], references: [id])
+  carrierId         String
+  integration       CarrierTrackingIntegration @relation(fields: [integrationId], references: [id])
+  integrationId     String
+
+  // Tracking data
+  providerType      String    // Denormalized for fast queries
+  trackingNumber    String
+  status            String    // Normalized: info_received, in_transit, out_for_delivery, delivered, exception, return_to_sender, unknown
+  statusDetail      String?   // Provider's original status text
+  statusCode        String?   // Provider's raw status code
+
+  // Location
+  city              String?
+  state             String?
+  country           String?
+  postalCode        String?
+  lat               Float?
+  lng               Float?
+
+  // Timing
+  occurredAt        DateTime  // When the event actually happened at the carrier
+  estimatedDelivery DateTime? // Carrier's predicted delivery
+
+  // Delivery
+  signedBy          String?   // Delivery signature name
+
+  // Audit
+  rawPayload        Json?     // Full provider response for debugging
+  source            String    // webhook, poll, manual
+
+  createdAt         DateTime  @default(now())
+
+  @@index([shipmentId])
+  @@index([carrierId])
+  @@index([integrationId])
+  @@index([trackingNumber])
+  @@index([occurredAt])
+  @@index([status])
 }

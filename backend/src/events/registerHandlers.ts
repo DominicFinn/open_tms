@@ -38,6 +38,7 @@ import { TenderAwardFinancialHandler } from './handlers/TenderAwardFinancialHand
 import { BillingTriggerHandler } from './handlers/BillingTriggerHandler.js';
 import { InvoiceProjection } from './projections/InvoiceProjection.js';
 import { FinancialImpactHandler } from './handlers/FinancialImpactHandler.js';
+import { CarrierTrackingHandler } from './handlers/CarrierTrackingHandler.js';
 
 /** Read concurrency from env with a default */
 function envInt(key: string, fallback: number): number {
@@ -127,6 +128,9 @@ export async function registerEventHandlers(
 
   // Financial: auto-create queries from cargo discrepancies and cold chain events
   handlers.push(new FinancialImpactHandler(prisma));
+
+  // Carrier tracking: handle delivered, exception, and integration error events
+  handlers.push(new CarrierTrackingHandler(prisma));
 
   // Add automation rule handler (runs before triage agent — deterministic rules take priority)
   if (skillRegistry) {

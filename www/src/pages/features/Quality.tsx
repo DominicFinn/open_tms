@@ -122,7 +122,7 @@ export default function Quality() {
                 <QualityPreview />
               </div>
               <p className="text-center text-surface-400 text-sm mt-4 italic">
-                A real CAPA investigation  - from detection to verified resolution
+                CAPA investigation  - from detection to verified resolution
               </p>
             </AnimateIn>
           </div>
