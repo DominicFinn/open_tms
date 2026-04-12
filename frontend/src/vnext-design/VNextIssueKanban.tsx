@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { DndContext, DragOverlay, closestCorners, PointerSensor, KeyboardSensor, useSensor, useSensors, DragStartEvent, DragEndEvent, useDroppable } from '@dnd-kit/core';
 import { useDraggable } from '@dnd-kit/core';
 import { API_URL } from '../api';
+import { VnModal } from './components/VnModal';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -165,6 +166,146 @@ function DroppableColumn({ colKey, label, cssClass, issues, onCardClick }: {
   );
 }
 
+// ─── Create Issue Modal ─────────────────────────────────────────────────────
+
+function CreateIssueModal({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: () => void }) {
+  const navigate = useNavigate();
+  const [form, setForm] = useState({
+    title: '',
+    description: '',
+    priority: 'medium',
+    category: 'exception',
+    sourceEntityType: '',
+    sourceEntityId: '',
+    assigneeName: '',
+  });
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  const update = (field: string, value: string) => setForm(prev => ({ ...prev, [field]: value }));
+
+  const handleSubmit = async () => {
+    if (!form.title.trim()) { setError('Title is required'); return; }
+    setSubmitting(true);
+    setError('');
+    try {
+      const body: Record<string, unknown> = {
+        title: form.title,
+        category: form.category,
+        priority: form.priority,
+      };
+      if (form.description.trim()) body.description = form.description;
+      if (form.sourceEntityType) body.sourceEntityType = form.sourceEntityType;
+      if (form.sourceEntityId.trim()) body.sourceEntityId = form.sourceEntityId;
+      if (form.assigneeName.trim()) {
+        body.assigneeName = form.assigneeName;
+        body.assigneeId = form.assigneeName.toLowerCase().replace(/\s+/g, '.');
+      }
+
+      const res = await fetch(`${API_URL}/api/v1/issues`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const json = await res.json();
+
+      if (!res.ok || json.error) {
+        setError(json.error || 'Failed to create issue');
+        setSubmitting(false);
+        return;
+      }
+
+      // Success - navigate to the new issue
+      const newId = json.data?.id;
+      onClose();
+      onCreated();
+      if (newId) navigate(`/issues/${newId}`);
+    } catch {
+      setError('Network error');
+    }
+    setSubmitting(false);
+  };
+
+  // Reset form on open
+  useEffect(() => {
+    if (open) {
+      setForm({ title: '', description: '', priority: 'medium', category: 'exception', sourceEntityType: '', sourceEntityId: '', assigneeName: '' });
+      setError('');
+    }
+  }, [open]);
+
+  return (
+    <VnModal open={open} onClose={onClose} title="Report Issue" size="lg" footer={
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+        <button className="vn-btn" onClick={onClose} disabled={submitting}>Cancel</button>
+        <button className="vn-btn vn-btn-primary" onClick={handleSubmit} disabled={submitting}>
+          {submitting ? 'Creating...' : 'Create Issue'}
+        </button>
+      </div>
+    }>
+      {error && <div className="vn-alert vn-alert-error" style={{ marginBottom: 16 }}>{error}</div>}
+
+      <div className="vn-form-grid">
+        <div className="vn-field" style={{ gridColumn: '1 / -1' }}>
+          <label className="vn-field-label">Title *</label>
+          <input className="vn-input" placeholder="Brief description of the issue" value={form.title}
+            onChange={e => update('title', e.target.value)} autoFocus />
+        </div>
+
+        <div className="vn-field" style={{ gridColumn: '1 / -1' }}>
+          <label className="vn-field-label">Description</label>
+          <textarea className="vn-input" placeholder="Detailed description, context, impact..." rows={3}
+            value={form.description} onChange={e => update('description', e.target.value)} style={{ resize: 'vertical' }} />
+        </div>
+
+        <div className="vn-field">
+          <label className="vn-field-label">Priority</label>
+          <select className="vn-input" value={form.priority} onChange={e => update('priority', e.target.value)}>
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+            <option value="critical">Critical</option>
+          </select>
+        </div>
+
+        <div className="vn-field">
+          <label className="vn-field-label">Category</label>
+          <select className="vn-input" value={form.category} onChange={e => update('category', e.target.value)}>
+            <option value="exception">Exception</option>
+            <option value="delay">Delay</option>
+            <option value="damage">Damage</option>
+            <option value="compliance">Compliance</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+
+        <div className="vn-field">
+          <label className="vn-field-label">Linked Entity Type</label>
+          <select className="vn-input" value={form.sourceEntityType} onChange={e => update('sourceEntityType', e.target.value)}>
+            <option value="">None</option>
+            <option value="shipment">Shipment</option>
+            <option value="order">Order</option>
+            <option value="carrier">Carrier</option>
+          </select>
+        </div>
+
+        <div className="vn-field">
+          <label className="vn-field-label">Entity ID</label>
+          <input className="vn-input" placeholder="Paste shipment/order/carrier ID" value={form.sourceEntityId}
+            onChange={e => update('sourceEntityId', e.target.value)} disabled={!form.sourceEntityType} />
+          {!form.sourceEntityType && <span className="vn-field-hint">Select an entity type first</span>}
+        </div>
+
+        <div className="vn-field" style={{ gridColumn: '1 / -1' }}>
+          <label className="vn-field-label">Assign To</label>
+          <input className="vn-input" placeholder="Assignee name (optional)" value={form.assigneeName}
+            onChange={e => update('assigneeName', e.target.value)} />
+        </div>
+      </div>
+    </VnModal>
+  );
+}
+
 // ─── Main Component ─────────────────────────────────────────────────────────
 
 export default function VNextIssueKanban() {
@@ -173,6 +314,7 @@ export default function VNextIssueKanban() {
   const [issues, setIssues] = useState<Issue[]>([]);
   const [loading, setLoading] = useState(true);
   const [draggingIssue, setDraggingIssue] = useState<Issue | null>(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   // Filters
   const [filterPriority, setFilterPriority] = useState('all');
@@ -314,7 +456,7 @@ export default function VNextIssueKanban() {
               <span className="material-icons" style={{ fontSize: 20 }}>view_list</span>
             </button>
           </div>
-          <button className="vn-btn vn-btn-primary" onClick={() => alert('Create issue modal coming soon')}>
+          <button className="vn-btn vn-btn-primary" onClick={() => setShowCreateModal(true)}>
             <span className="material-icons">add</span> Report Issue
           </button>
         </div>
@@ -432,6 +574,13 @@ export default function VNextIssueKanban() {
           </div>
         </div>
       )}
+
+      {/* Create Issue Modal */}
+      <CreateIssueModal
+        open={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onCreated={loadData}
+      />
     </>
   );
 }
