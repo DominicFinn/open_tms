@@ -53,6 +53,10 @@ import VNextCustomFields from './vnext-design/VNextCustomFields';
 import VNextMapsSettings from './vnext-design/VNextMapsSettings';
 import VNextDevices from './vnext-design/VNextDevices';
 import VNextDeviceDetail from './vnext-design/VNextDeviceDetail';
+import VNextShipmentMap from './vnext-design/VNextShipmentMap';
+import VNextSlaDashboard from './vnext-design/VNextSlaDashboard';
+import VNextSlaPolicies from './vnext-design/VNextSlaPolicies';
+import VNextLocationOps from './vnext-design/VNextLocationOps';
 
 // Carrier Tendering & Portal
 import Tenders from './pages/Tenders';
@@ -112,6 +116,10 @@ root.render(
           {/* Dashboard */}
           <Route index element={<VNextDashboard />} />
 
+          {/* Map & Dashboard */}
+          <Route path="map" element={<VNextShipmentMap />} />
+          <Route path="sla" element={<VNextSlaDashboard />} />
+
           {/* Shipments */}
           <Route path="shipments" element={<VNextShipments />} />
           <Route path="shipments/create" element={<VNextCreateShipment />} />
@@ -155,6 +163,7 @@ root.render(
           <Route path="locations" element={<VNextLocations />} />
           <Route path="locations/create" element={<VNextCreateLocation />} />
           <Route path="locations/:id/edit" element={<VNextCreateLocation />} />
+          <Route path="locations/:id/ops" element={<VNextLocationOps />} />
 
           {/* Lanes */}
           <Route path="lanes" element={<VNextLanes />} />
@@ -180,6 +189,7 @@ root.render(
           <Route path="settings/document-templates" element={<VNextDocumentTemplates />} />
           <Route path="settings/custom-fields" element={<VNextCustomFields />} />
           <Route path="settings/maps" element={<VNextMapsSettings />} />
+          <Route path="settings/sla" element={<VNextSlaPolicies />} />
 
           {/* Integrations (sub-layout with tabs) */}
           <Route path="integrations" element={<VNextIntegrationsLayout />}>

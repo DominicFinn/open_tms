@@ -67,6 +67,10 @@ export const TOKENS = {
   IEDI214ParseService: Symbol.for('IEDI214ParseService'),
   IEDI214Service: Symbol.for('IEDI214Service'),
 
+  // SLA tokens
+  ISlaRepository: Symbol.for('ISlaRepository'),
+  ISlaEvaluationService: Symbol.for('ISlaEvaluationService'),
+
   // Routing & ETA monitoring tokens
   IRoutingProvider: Symbol.for('IRoutingProvider'),
   IShipmentEtaMonitorService: Symbol.for('IShipmentEtaMonitorService'),

@@ -52,6 +52,8 @@ const APPS: AppDef[] = [
     sections: [
       { title: 'Operations', items: [
         { to: '/', icon: 'space_dashboard', label: 'Dashboard', end: true },
+        { to: '/map', icon: 'map', label: 'Map View' },
+        { to: '/sla', icon: 'timer', label: 'SLA Dashboard' },
         { to: '/shipments', icon: 'local_shipping', label: 'Shipments' },
         { to: '/orders', icon: 'receipt_long', label: 'Orders' },
         { to: '/issues', icon: 'bug_report', label: 'Issues' },
@@ -77,6 +79,7 @@ const APPS: AppDef[] = [
         { to: '/documents', icon: 'description', label: 'Documents' },
         { to: '/reports/daily', icon: 'assessment', label: 'Daily Report' },
         { to: '/reports/locations', icon: 'location_on', label: 'Location Activity' },
+        { to: '/sla', icon: 'timer', label: 'SLA Compliance' },
       ]},
     ],
   },
@@ -105,6 +108,7 @@ const APPS: AppDef[] = [
         { to: '/settings/document-templates', icon: 'article', label: 'Doc Templates' },
         { to: '/settings/custom-fields', icon: 'tune', label: 'Custom Fields' },
         { to: '/settings/maps', icon: 'map', label: 'Maps & Geocoding' },
+        { to: '/settings/sla', icon: 'timer', label: 'SLA Policies' },
       ]},
       { title: 'Apps', items: [
         { to: '/warehouse', icon: 'warehouse', label: 'Warehouse App' },

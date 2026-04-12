@@ -21,6 +21,8 @@ interface Issue {
   resolution: string | null;
   createdAt: string;
   updatedAt: string;
+  // SLA data (attached after fetch)
+  _sla?: { status: string; ruleName: string; slaDueAt: string | null; remainingMinutes?: number } | null;
 }
 
 function timeAgo(dateStr: string): string {
@@ -57,11 +59,26 @@ export default function VNextIssueKanban() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`${API_URL}/api/v1/issues`)
-      .then(r => r.json())
-      .then(json => setIssues(json.data || []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    Promise.all([
+      fetch(`${API_URL}/api/v1/issues`).then(r => r.json()),
+      fetch(`${API_URL}/api/v1/sla/evaluations?status=active,warning,breached&entityType=issue&limit=200`).then(r => r.json()).catch(() => ({ data: { items: [] } })),
+    ]).then(([issueJson, slaJson]) => {
+      const slaItems = slaJson.data?.items || [];
+      // Build a map of issue ID → worst SLA evaluation
+      const slaMap = new Map<string, any>();
+      for (const sla of slaItems) {
+        const existing = slaMap.get(sla.entityId);
+        const order: Record<string, number> = { breached: 0, warning: 1, active: 2 };
+        if (!existing || (order[sla.status] ?? 3) < (order[existing.status] ?? 3)) {
+          slaMap.set(sla.entityId, sla);
+        }
+      }
+      const issues = (issueJson.data || []).map((i: Issue) => ({
+        ...i,
+        _sla: slaMap.get(i.id) || null,
+      }));
+      setIssues(issues);
+    }).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
   const filtered = issues.filter(issue => {
@@ -171,6 +188,21 @@ export default function VNextIssueKanban() {
                         <span className="material-icons">category</span>
                         {issue.category}
                       </div>
+                      {issue._sla && (
+                        <div style={{
+                          display: 'flex', alignItems: 'center', gap: '4px',
+                          padding: '3px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600, marginBottom: '6px',
+                          background: issue._sla.status === 'breached' ? 'var(--color-error)' : issue._sla.status === 'warning' ? 'var(--color-warning)' : 'var(--color-info)',
+                          color: '#fff',
+                        }}>
+                          <span className="material-icons" style={{ fontSize: '13px' }}>timer</span>
+                          {issue._sla.ruleName} — {issue._sla.status}
+                          {issue._sla.slaDueAt && issue._sla.status !== 'breached' && (() => {
+                            const mins = Math.round((new Date(issue._sla!.slaDueAt!).getTime() - Date.now()) / 60_000);
+                            return mins > 0 ? ` (${mins < 60 ? `${mins}m` : `${Math.floor(mins / 60)}h`})` : '';
+                          })()}
+                        </div>
+                      )}
                       <div className="vn-kanban-card-footer">
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <div className="vn-kanban-card-assignee">{getInitials(issue.assigneeName)}</div>

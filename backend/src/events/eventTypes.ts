@@ -116,6 +116,15 @@ export const EVENT_TYPES = {
   CAPA_APPROVED: 'capa.approved',
   CAPA_VERIFIED: 'capa.verified',
 
+  // SLA
+  SLA_POLICY_CREATED: 'sla_policy.created',
+  SLA_POLICY_UPDATED: 'sla_policy.updated',
+  SLA_POLICY_DEACTIVATED: 'sla_policy.deactivated',
+  SLA_EVALUATION_CREATED: 'sla.evaluation_created',
+  SLA_WARNING: 'sla.warning',
+  SLA_BREACHED: 'sla.breached',
+  SLA_MET: 'sla.met',
+
   // Integration
   INTEGRATION_OUTBOUND_SENT: 'integration.outbound_sent',
   INTEGRATION_OUTBOUND_FAILED: 'integration.outbound_failed',
@@ -189,6 +198,13 @@ export const EVENT_SCHEMA_VERSIONS: Record<string, number> = {
   [EVENT_TYPES.CAPA_VERIFIED]: 1,
   [EVENT_TYPES.EDI_214_RECEIVED]: 1,
   [EVENT_TYPES.EDI_214_SENT]: 1,
+  [EVENT_TYPES.SLA_POLICY_CREATED]: 1,
+  [EVENT_TYPES.SLA_POLICY_UPDATED]: 1,
+  [EVENT_TYPES.SLA_POLICY_DEACTIVATED]: 1,
+  [EVENT_TYPES.SLA_EVALUATION_CREATED]: 1,
+  [EVENT_TYPES.SLA_WARNING]: 1,
+  [EVENT_TYPES.SLA_BREACHED]: 1,
+  [EVENT_TYPES.SLA_MET]: 1,
 };
 
 /**
@@ -373,6 +389,57 @@ export interface Edi214ReceivedPayload {
   city: string;
   state: string;
   tradingPartnerId?: string;
+}
+
+// SLA payloads
+export interface SlaPolicyCreatedPayload {
+  name: string;
+  customerId?: string;
+  ruleCount: number;
+}
+
+export interface SlaEvaluationCreatedPayload {
+  evaluationId: string;
+  ruleType: string;
+  ruleName: string;
+  entityType: string;
+  entityId: string;
+  entityReference?: string;
+  slaDueAt?: string;
+}
+
+export interface SlaWarningPayload {
+  evaluationId: string;
+  ruleType: string;
+  ruleName: string;
+  entityType: string;
+  entityId: string;
+  entityReference?: string;
+  remainingMinutes: number;
+  slaDueAt: string;
+}
+
+export interface SlaBreachedPayload {
+  evaluationId: string;
+  ruleType: string;
+  ruleName: string;
+  entityType: string;
+  entityId: string;
+  entityReference?: string;
+  customerId?: string;
+  breachedAt: string;
+  breachDurationMinutes: number;
+  issueId?: string;
+}
+
+export interface SlaMetPayload {
+  evaluationId: string;
+  ruleType: string;
+  ruleName: string;
+  entityType: string;
+  entityId: string;
+  entityReference?: string;
+  metAt: string;
 }
 
 export interface Edi214SentPayload {

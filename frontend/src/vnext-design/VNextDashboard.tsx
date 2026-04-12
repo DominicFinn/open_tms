@@ -7,6 +7,7 @@ export default function VNextDashboard() {
   const [shipments, setShipments] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
   const [activeIssues, setActiveIssues] = useState<any[]>([]);
+  const [slaSummary, setSlaSummary] = useState<{ active: number; warning: number; breached: number; met: number; total: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -37,6 +38,11 @@ export default function VNextDashboard() {
               setActiveIssues(issues);
             }
           })
+          .catch(() => {});
+        // Fetch SLA summary — non-critical
+        fetch(`${API_URL}/api/v1/sla/evaluations/summary`)
+          .then(r => r.json())
+          .then(json => { if (!cancelled) setSlaSummary(json.data || null); })
           .catch(() => {});
       } catch (e: any) {
         if (!cancelled) setError(e.message || 'Failed to load data');
@@ -260,6 +266,37 @@ export default function VNextDashboard() {
           </div>
         </div>
       </div>
+
+      {/* SLA Health */}
+      {slaSummary && slaSummary.total > 0 && (
+        <div className="vn-card" style={{ cursor: 'pointer' }} onClick={() => navigate('/sla')}>
+          <div className="vn-card-header">
+            <h2>SLA Health</h2>
+            <span className="material-icons" style={{ fontSize: 18, color: 'var(--on-surface-variant)' }}>open_in_new</span>
+          </div>
+          <div className="vn-card-body">
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', textAlign: 'center' }}>
+              {[
+                { label: 'Active', value: slaSummary.active, color: 'var(--color-info)' },
+                { label: 'Warning', value: slaSummary.warning, color: 'var(--color-warning)' },
+                { label: 'Breached', value: slaSummary.breached, color: 'var(--color-error)' },
+                { label: 'Met', value: slaSummary.met, color: 'var(--color-success)' },
+              ].map((s) => (
+                <div key={s.label}>
+                  <div style={{ fontSize: '28px', fontWeight: 700, color: s.color }}>{s.value}</div>
+                  <div style={{ fontSize: '12px', color: 'var(--on-surface-variant)', marginTop: '2px' }}>{s.label}</div>
+                </div>
+              ))}
+            </div>
+            {slaSummary.breached > 0 && (
+              <div className="vn-alert vn-alert-error" style={{ marginTop: '12px', padding: '8px 12px', fontSize: '13px' }}>
+                <span className="material-icons" style={{ fontSize: '16px', verticalAlign: 'middle', marginRight: '4px' }}>warning</span>
+                {slaSummary.breached} SLA{slaSummary.breached > 1 ? 's' : ''} breached — click to view details
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* On-time delivery progress */}
       <div className="vn-card">

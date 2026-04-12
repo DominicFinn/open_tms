@@ -17,6 +17,11 @@ import { CustomerProjection } from './projections/CustomerProjection.js';
 import { LaneProjection } from './projections/LaneProjection.js';
 import { IssueProjection } from './projections/IssueProjection.js';
 import { ColdChainComplianceHandler } from './handlers/ColdChainComplianceHandler.js';
+import { AutoTenderHandler } from './handlers/AutoTenderHandler.js';
+import { ShipmentCompletionHandler } from './handlers/ShipmentCompletionHandler.js';
+import { SlaEvaluationHandler } from './handlers/SlaEvaluationHandler.js';
+import { SlaEvaluationService } from '../services/SlaEvaluationService.js';
+import { SlaRepository } from '../repositories/SlaRepository.js';
 import { Edi214ForwardHandler } from './handlers/Edi214ForwardHandler.js';
 import { EDI214Service } from '../services/EDI214Service.js';
 import { OutboundEdiDeliveryService } from '../services/OutboundEdiDeliveryService.js';
@@ -71,6 +76,19 @@ export async function registerEventHandlers(
   // Add cold chain compliance handler if storage provider is available
   if (storageProvider) {
     handlers.push(new ColdChainComplianceHandler(prisma, storageProvider));
+  }
+
+  // Auto-tender handler: creates tenders for laneless shipments when autoTenderEnabled
+  handlers.push(new AutoTenderHandler(prisma));
+
+  // Shipment completion handler: auto-delivers when destination arrival criteria met
+  handlers.push(new ShipmentCompletionHandler(prisma, eventBus));
+
+  // Add SLA evaluation handler
+  {
+    const slaRepo = new SlaRepository(prisma);
+    const slaService = new SlaEvaluationService(prisma, slaRepo, eventBus);
+    handlers.push(new SlaEvaluationHandler(prisma, slaService));
   }
 
   // Add EDI 214 auto-forward handler

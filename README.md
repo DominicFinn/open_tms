@@ -54,11 +54,13 @@ Deploy your own Open TMS instance with one click:
 - **Outbound Integrations** - EDI 856 ASN and JSON payload delivery to carrier and tracking systems
 - **Queue Processing** - pg-boss powered async processing with carrier/tracking workers, retry, and dead letter queues
 - **Integration Dashboard** - Real-time ops dashboard with activity charts, queue monitoring, and DLQ management
-- **Interactive Maps** - OpenStreetMap integration for shipment visualization
+- **Interactive Maps** - Full-page map view with supercluster point clustering, entity switching (shipments/orders/trackable units), location markers, issue/SLA overlay with pulsing breach indicators, fullscreen control centre mode, and 30-second auto-refresh
+- **SLA Management** - Two-tier SLA policy hierarchy (org defaults + customer overrides) with 8 rule types: ETA delivery, issue response/resolution, dwell time, light/seal security events, and temperature excursions. Hybrid event-driven + cron-based breach detection with auto-issue creation. SLA dashboard with compliance rate, at-risk evaluations, and breach history.
 - **Authentication & Authorization** - Standalone auth service with JWT tokens, OAuth 2.0 (Google/Microsoft), RBAC with fine-grained permissions, and account lockout protection
 - **Email Service** - Pluggable email with SMTP and console providers, Handlebars templates, admin-configurable settings, and per-organization overrides
 - **Cold Chain Monitoring** - Temperature profiles, immutable logging, excursion detection, compliance reports (CFR 21 Part 11)
 - **ETA Monitoring** - Cron-driven shipment delay detection using traffic-aware routing APIs (TomTom, HERE, Valhalla), adaptive polling, configurable alert thresholds, and automatic notifications
+- **Location Operations** - Per-location dashboards showing incoming, at-dock, and outgoing shipments with dwell time monitoring. Facility capability display (cross-dock, cold storage, hazmat, docks). Map integration via location marker popups.
 
 ### 🎨 Modern UI/UX
 - **Material Design 3** - Beautiful, consistent design system
@@ -81,7 +83,9 @@ Deploy your own Open TMS instance with one click:
 - **Dependency Injection** - Custom DI container with Symbol-based tokens
 - **Metrics & Monitoring** - `/metrics` endpoint with read model lag detection, event throughput, queue depths
 - **Event Export API** - Queryable event store with wildcard filters, cursor pagination, and aggregate stats — ready for data warehouse and ML pipeline consumption
-- **Test Suite** - 59 tests across 11 suites covering commands, projections, and full CQRS pipeline integration
+- **Location Auto-Creation** - Automatic location resolution from raw address data. Locations matched by name+city or created with default geofence arrival criteria. Shipment completion auto-triggered when destination arrival criteria are met.
+- **Auto-Tender** - Automatic broadcast tenders created for laneless shipments when enabled (org setting). All active carriers receive offers simultaneously.
+- **Test Suite** - 305 tests across 35 suites covering commands, projections, services, and full CQRS pipeline integration
 - **Soft Delete** - Data preservation with archive functionality
 - **Validation** - Comprehensive input validation with Zod schemas
 

@@ -21,6 +21,7 @@ model Customer {
   apiKeys      ApiKey[]
   ediPartners  EdiPartner[]
   tradingPartners TradingPartner[] @relation("CustomerTradingPartners")
+  slaPolicies  SlaPolicy[]
   users        User[]
 
   // Read model relations
@@ -1441,6 +1442,7 @@ model ShipmentReadModel {
   @@index([customerId])
   @@index([carrierId])
   @@index([createdAt])
+  @@index([currentLat, currentLng])              // Composite index for map bbox queries
 }
 
 model CarrierReadModel {
@@ -1574,6 +1576,154 @@ model IssueReadModel {
   @@index([priority])
   @@index([assigneeName])
   @@index([createdAt])
+}
+
+// ─── SLA (Service Level Agreements) ────────────────────────────
+// Two-tier policy hierarchy: org-level defaults + customer-level overrides.
+// Each policy contains typed rules covering ETA, issue response/resolution,
+// dwell time, security events (light/seal), and temperature excursions.
+
+model SlaPolicy {
+  id              String    @id @default(uuid())
+  orgId           String
+  name            String                          // "Standard SLA", "Premium Customer SLA"
+  description     String?
+
+  // Scope: null customerId = org-wide default, non-null = customer override
+  customerId      String?
+  customer        Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  active          Boolean   @default(true)
+
+  rules           SlaRule[]
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([orgId, customerId])                   // One active policy per org or per customer
+  @@index([orgId])
+  @@index([customerId])
+}
+
+model SlaRule {
+  id              String    @id @default(uuid())
+  policy          SlaPolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  policyId        String
+
+  // Rule type discriminator
+  ruleType        String                          // "eta_delivery", "issue_response", "issue_resolution",
+                                                  // "dwell_time", "light_event", "seal_event",
+                                                  // "temperature_excursion", "temperature_out_of_range"
+
+  name            String                          // "Critical Issue Response Time"
+  description     String?
+  active          Boolean   @default(true)
+
+  // Threshold values (interpreted based on ruleType)
+  warningThresholdMinutes   Int?                  // Minutes before warning-level alert
+  breachThresholdMinutes    Int?                  // Minutes before hard breach
+  criticalThresholdMinutes  Int?                  // Minutes before critical escalation
+
+  // Issue SLA filters: which priority/category does this rule apply to?
+  issuePriority   String?                         // "low", "medium", "high", "critical" (null = all)
+  issueCategory   String?                         // "exception", "delay", "damage", "compliance" (null = all)
+
+  // ETA SLA: maximum allowed delivery time from pickup (minutes)
+  maxDeliveryMinutes  Int?
+
+  // Dwell time SLA
+  maxDwellMinutes     Int?                        // Max minutes at a single location before alert
+  dwellLocationType   String?                     // "any", "origin", "intermediate", "destination"
+
+  // Location-type filter: restrict this rule to stops at specific facility types
+  // e.g., "distribution_centre", "cross_dock", "warehouse", "terminal", "port"
+  // null = applies to all location types
+  locationType        String?
+
+  // Security event SLA: allowed occurrences before breach
+  maxOccurrences      Int?                        // e.g., 0 = any occurrence is a breach
+
+  // Temperature SLA
+  maxExcursionMinutes Int?                        // Max cumulative minutes out of range before breach
+
+  // Breach action config
+  autoCreateIssue       Boolean   @default(true)  // Auto-create triage issue on breach
+  issuePriorityOnBreach String    @default("high") // Priority of auto-created issue
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([policyId])
+  @@index([ruleType])
+}
+
+// Tracks individual SLA evaluations against shipments or issues.
+// One record per (SLA rule + entity) combination.
+//
+// Design decision: SlaEvaluation is its own table rather than a CQRS projection
+// because it is written by BOTH event handlers (instant evaluation on state changes)
+// and the cron worker (periodic breach sweep). A projection is a pure read model
+// derived from a single event stream — SlaEvaluation is a stateful tracking record
+// with concurrent writers, so it doesn't fit that pattern.
+//
+// Denormalized fields (ruleName, entityReference, customerId) avoid joins on
+// dashboard queries. The @@unique constraint on (ruleId, entityType, entityId)
+// prevents duplicate evaluations and acts as a natural concurrency guard — if the
+// cron worker and an event handler race to create the same evaluation, one will
+// get a unique constraint violation and gracefully skip.
+
+model SlaEvaluation {
+  id                    String    @id @default(uuid())
+  orgId                 String
+
+  // Which SLA rule is being evaluated
+  ruleId                String
+  ruleType              String                    // Denormalized for querying
+  ruleName              String                    // Denormalized snapshot
+
+  // Subject of evaluation
+  entityType            String                    // "shipment" or "issue"
+  entityId              String
+  entityReference       String?                   // Shipment reference or issue title
+
+  // Policy context
+  policyId              String
+  customerId            String?                   // Denormalized for dashboard filtering
+
+  // Timing
+  slaStartedAt          DateTime                  // When the SLA clock started
+  slaDueAt              DateTime?                 // When the SLA will breach
+  warningAt             DateTime?                 // When warning threshold fires
+
+  // Current state
+  // Design decision: status transitions use optimistic locking via Prisma's
+  // `where` clause (e.g., update where status = 'active'). This prevents race
+  // conditions between the cron worker and event handlers — if both try to
+  // breach the same evaluation simultaneously, only one succeeds and the other
+  // gets zero affected rows, which we treat as a safe no-op.
+  status                String    @default("active") // active, warning, breached, met, cancelled
+  remainingMinutes      Int?
+
+  // Breach details
+  breachedAt            DateTime?
+  breachDurationMinutes Int?
+
+  // Met details
+  metAt                 DateTime?
+
+  // Auto-created issue on breach
+  issueId               String?
+
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@unique([ruleId, entityType, entityId])        // One evaluation per rule + entity
+  @@index([orgId])
+  @@index([entityType, entityId])
+  @@index([status])
+  @@index([slaDueAt])
+  @@index([customerId])
+  @@index([ruleType])
 }
 
 // ============================================================

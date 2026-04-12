@@ -122,35 +122,31 @@
   - ✅ Conversion utilities (backend stores canonical metric, converts on display)
   - ✅ Settings UI updated with temperature and distance unit selectors
 ## **Phase 3b: Location Arrival Criteria & Carrier Tendering**
-- **Location Auto-Creation & Arrival Criteria** 🔲
-  - Locations are always created when orders/shipments arrive (EDI, API, CSV, manual)
-  - Automatic location resolution: match by name + city, create if no match found
-  - Default geofence arrival criteria created for every new location
-  - Three arrival criteria types:
-    - **Geofence** — radius-based detection (GPS coordinates + radius in meters)
-    - **WiFi Network** — IoT device/tracker detects known WiFi SSID/BSSID at location
-    - **BLE Anchor** — Bluetooth Low Energy beacon detection (UUID, major, minor, RSSI threshold)
-  - Arrival criteria management API (CRUD per location)
-  - Configurable default geofence radius at organization level
-  - Audit events for location creation, editing, and arrival criteria changes
-- **Shipment Completion Criteria** 🔲
-  - Shipment regarded as completed when:
-    - Arrival criteria met at destination (geofence entered, WiFi seen, BLE detected)
-    - Manually completed by user
-    - Automatically completed via external API call / integration event
-  - Arrival criteria evaluation integrated with existing geofence + IoT delivery service
-- **Carrier Tendering** 🔲
-  - When a shipment has origin/destination but no lane, a tender is created
-  - Tender lifecycle: draft → published → awarded / cancelled / expired
-  - Carrier responses with pricing, transit time, and notes
-  - Award tender to carrier — automatically assigns carrier to shipment
-  - Auto-publish toggle: admin setting to auto-publish tenders for laneless shipments
-  - Manual publish option for users who want to assign carriers directly
-  - Tender audit trail via domain events
-- **Admin Settings** 🔲
-  - Auto-tender feature toggle (on/off) in organization settings
-  - Default geofence radius configuration
-  - Settings available in Admin > Settings
+- **Location Auto-Creation & Arrival Criteria** ✅
+  - ✅ Locations auto-created when shipments provide raw address data (name+city match or create)
+  - ✅ LocationResolutionService: resolve by name+city (case-insensitive), create if no match
+  - ✅ Default geofence arrival criteria auto-created for every new location
+  - ✅ Three arrival criteria types: Geofence, WiFi Network, BLE Anchor
+  - ✅ Arrival criteria management API (CRUD per location)
+  - ✅ Configurable default geofence radius at organization level (Admin > Settings)
+  - ✅ CreateShipmentCommand accepts originData/destinationData for auto-resolution
+  - Audit events for location creation via resolution 🔲
+- **Shipment Completion Criteria** ✅
+  - ✅ ShipmentCompletionHandler: auto-delivers when destination arrival criteria met
+  - ✅ Listens to shipment.stop_arrived and tracking.geofence_entered events
+  - ✅ Checks if final stop (destination) has arrived status → transitions to delivered
+  - ✅ Publishes shipment.delivered and shipment.status_changed events
+  - ✅ Also supports manual completion and external API calls (existing status update endpoints)
+- **Auto-Tender for Laneless Shipments** ✅
+  - ✅ AutoTenderHandler: event-driven, fires on shipment.created
+  - ✅ Checks org.autoTenderEnabled setting before creating tender
+  - ✅ Creates broadcast tender to all active carriers with 2-hour duration
+  - ✅ Skips if shipment already has carrier/lane or existing tender
+  - ✅ Full tender lifecycle (draft→open→evaluating→awarded) already built in Phase 8
+- **Admin Settings** ✅
+  - ✅ Auto-tender feature toggle in Admin > Settings > General
+  - ✅ Default geofence radius configuration (meters)
+  - ✅ Settings saved via organization settings API
 
 ## **Phase 4: Notifications, Tracking & Exception Management**
 - **Emails & Notifications** ✅
@@ -180,7 +176,20 @@
   - ✅ IssueReadModel projection for fast queries
   - Trello-like kanban board UI 🔲
   - Comments system on orders, shipments, and issues 🔲
-  - SLA tracking and breach alerts 🔲
+  - **SLA Tracking & Breach Alerts** (in progress)
+    - ✅ SLA policy model with two-tier hierarchy (org default + customer override)
+    - ✅ SLA rule types: ETA delivery, issue response, issue resolution, dwell time, light/seal security events, temperature excursion, cumulative out-of-range
+    - ✅ SLA evaluation engine: hybrid event-driven + cron-based breach detection
+    - ✅ SlaEvaluation tracking per (rule + entity) with status lifecycle (active → warning → breached / met)
+    - ✅ Auto-create triage issues on SLA breach with configurable priority
+    - ✅ pg-boss cron worker (2-min cycle) for time-based breach detection
+    - ✅ Event-driven evaluation on shipment/issue/tracking/cold-chain events
+    - ✅ CQRS command handlers (create/update/deactivate SLA policies)
+    - ✅ REST API for policy CRUD, evaluation dashboard, entity-level SLA status
+    - ✅ Frontend: SLA policy config page in Admin (org default + customer overrides, clone, rule editor)
+    - ✅ Frontend: SLA status tab on shipment detail (evaluations table with status/time remaining)
+    - ✅ Frontend: SLA indicators on issue kanban cards (worst SLA status badge with countdown)
+    - ✅ Frontend: SLA Health widget on operations dashboard (active/warning/breached/met counts)
   - Auto-triage handler (exception events → auto-create issues) 🔲
 - **Live Tracking & Status** (partial)
   - ✅ Inbound webhook endpoint for IoT GPS devices
@@ -443,11 +452,65 @@ The current EDI infrastructure handles inbound 850 (SFTP polling) and outbound 8
   - Exportable carrier scorecards for procurement reviews
 
 ## **Phase 9: Routes & Maps Insights**
-- **Map Provider Integration** 🔲
-  - Pluggable map provider interface (Google Maps, Mapbox, HERE, OpenStreetMap fallback)
-  - Admin settings page: API key management for map providers (Admin > Settings > Map Provider)
-  - Provider capabilities matrix — routing, traffic, geocoding, satellite imagery vary per provider
-  - API key storage encrypted at rest, usage metering and quota alerts
+- **Shipment Map View** ✅
+  - ✅ Full-page map at `/map` with OpenStreetMap tiles (Google Maps if API key configured)
+  - ✅ Supercluster (KD-tree) client-side clustering for performance at scale
+  - ✅ Entity type switching: Shipments | Orders | Trackable Units
+  - ✅ Backend bbox-filtered GeoJSON API (`/api/v1/map/shipments`, `/orders`, `/units`)
+  - ✅ Status-coloured markers (in_transit, delivered, exception, draft)
+  - ✅ Status filter chips for shipment filtering
+  - ✅ Location markers overlay (warehouse icons with popups)
+  - ✅ Issue/SLA overlay with pulsing breach/warning markers
+  - ✅ Composite index on ShipmentReadModel (currentLat, currentLng)
+  - ✅ Fullscreen mode for control centre wall monitors (Browser Fullscreen API)
+  - ✅ Auto-refresh (30s polling) with pause/play toggle
+  - ✅ Click-to-zoom on clusters, popups with entity details and navigation links
+  - Route lines between origin and destination 🔲
+- **SLA Dashboard** ✅
+  - ✅ Control centre dashboard at `/sla` with large-format numbers
+  - ✅ Compliance rate, active/warning/breached/met stats
+  - ✅ At-risk evaluations table (sorted by time to breach)
+  - ✅ Breach history table with overdue duration
+  - ✅ Auto-refresh (30s) with pause/play toggle
+  - ✅ Customer-facing SLA compliance reports (CSV export with date range and customer filters)
+  - ✅ SLA summary stats API for compliance rate, breach rate by rule type, avg breach duration
+  - ✅ Export section on SLA dashboard with date pickers and download button
+  - ✅ SLA Compliance link in Reports nav section
+  - Scheduled SLA report delivery via email 🔲
+- **Spatial Indexing & Security Event Geofencing** 🔲
+  - PostGIS extension for inverse geofence queries (`ST_DWithin` with spatial index)
+  - Geography column on Location model for fast spatial lookups
+  - `ISpatialIndexProvider` interface (PostGIS default, Tile38 for scale)
+  - Security event evaluation in SLA cron worker (cron-based, not real-time — see [ADR](./docs/SECURITY_EVENT_GEOFENCING_ADR.md))
+  - Optional Tile38 Docker container for large-scale real-time geofencing
+  - Provider-agnostic: external IoT platforms (System Loco, Shippeo, project44) can push geofence events directly, bypassing built-in spatial evaluation
+- **Map Provider Integration** (partial)
+  - ✅ OpenStreetMap default with Google Maps auto-fallback (existing MapProvider)
+  - ✅ Admin settings page for Google Maps API key (Admin > Settings > Maps)
+  - Pluggable map provider interface for additional providers 🔲
+- **Location Operations View** (partial)
+  - ✅ Per-location operations dashboard at `/locations/:id/ops`
+  - ✅ Backend API: `/api/v1/locations/:id/operations` with incoming/at-location/outgoing data
+  - ✅ Stats: incoming/at-location/outgoing counts, units here, today's arrivals, avg dwell time
+  - ✅ Incoming tab: shipment stops with ETAs + direct inbound shipments
+  - ✅ At-location tab: shipments at dock with dwell time badges, trackable units present
+  - ✅ Outgoing tab: shipments departing from this location
+  - ✅ Facility info bar: dock count, cross-dock capability, cold storage, hazmat, appointment required
+  - ✅ Map integration: location marker popups link to operations view
+  - Per-location operations dashboard: what's incoming, inside, and outgoing at a specific hub/spoke
+  - Distribution centre focus: dock utilization, dwell time, cross-dock throughput
+  - Cross-dock operations: inbound → sort → outbound pipeline visibility
+  - Appointment scheduling view: dock calendars with slot availability
+  - Map view integration: click a location marker to open its operations view
+  - ✅ Location-type-specific SLA rules:
+    - ✅ `dock_turnaround` — max time from arrival to departure at docks (filterable by location type)
+    - ✅ `sort_to_dispatch` — max sort-to-dispatch time at cross-docks
+    - ✅ `facility_dwell` — max dwell time at specific facility types (DC, warehouse, terminal, port)
+    - ✅ `locationType` filter on all dwell/stop rules — only triggers at matching facility types
+    - ✅ Stop-level SLA evaluations created on `shipment.stop_arrived`, met on `shipment.stop_completed`
+    - ✅ Frontend: facility type filter dropdown in SLA policy rule editor
+  - Works with hub-and-spoke routing: visualise spoke → hub → spoke flows
+  - Aggregate metrics: daily throughput (units in/out), average dwell, on-time departure rate
 - **Route Overhaul** 🔲
   - Redesign route model: routes as first-class entities separate from lanes
   - Route builder UI: drag-and-drop waypoints, reordering, named route variants per lane
