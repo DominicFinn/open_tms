@@ -306,13 +306,19 @@
   - LTL rating service (class-based, weight breaks, deficit weight, FAK)
   - Quote-to-order conversion with pre-populated charges
   - Quote expiration cron
-- **Phase 7C: Customer Invoicing (AR)** 🔲
-  - Generate invoices from delivered shipments
-  - Configurable per-customer auto-invoice on delivery
-  - Invoice consolidation (per-shipment, weekly, monthly)
-  - Payment recording and aging
-  - BillingTriggerHandler (shipment.delivered -> ready_to_invoice)
-  - Invoice overdue detection cron
+- **Phase 7C: Customer Invoicing (AR)** (in progress)
+  - ✅ InvoiceRepository + PaymentRepository (interface + DTO + implementation)
+  - ✅ InvoicingService (generate from shipments, find ready-to-invoice)
+  - ✅ CreateInvoice, ApproveInvoice, SendInvoice, RecordPayment, VoidInvoice CQRS commands
+  - ✅ BillingTriggerHandler (shipment.delivered -> ready_to_invoice, auto-draft if customer.autoInvoice)
+  - ✅ InvoiceProjection (InvoiceReadModel maintenance)
+  - ✅ Invoice REST API (8 endpoints with Swagger schemas)
+  - ✅ Void invoice reverts charges to approved and billing status to ready_to_invoice
+  - ✅ Full/partial payment with auto-status transitions (partial_paid / paid)
+  - ✅ 13 unit tests for all invoice command handlers
+  - 🔲 Invoice overdue detection cron
+  - 🔲 Invoice consolidation (weekly, monthly batching)
+  - 🔲 Frontend: VNext Invoices pages
 - **Phase 7D: Carrier Invoices (AP) + Freight Audit** 🔲
   - Carrier invoice receipt and three-way match
   - Auto-approve within configurable variance tolerance

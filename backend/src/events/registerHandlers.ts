@@ -28,6 +28,8 @@ import { OutboundEdiDeliveryService } from '../services/OutboundEdiDeliveryServi
 import { TradingPartnerRepository } from '../repositories/TradingPartnerRepository.js';
 import { IBinaryStorageProvider } from '../storage/IBinaryStorageProvider.js';
 import { TenderAwardFinancialHandler } from './handlers/TenderAwardFinancialHandler.js';
+import { BillingTriggerHandler } from './handlers/BillingTriggerHandler.js';
+import { InvoiceProjection } from './projections/InvoiceProjection.js';
 
 /** Read concurrency from env with a default */
 function envInt(key: string, fallback: number): number {
@@ -100,6 +102,12 @@ export async function registerEventHandlers(
 
   // Financial: auto-create cost charge when tender is awarded
   handlers.push(new TenderAwardFinancialHandler(prisma));
+
+  // Financial: mark shipments ready_to_invoice on delivery, auto-invoice if configured
+  handlers.push(new BillingTriggerHandler(prisma));
+
+  // Financial: invoice read model projection
+  handlers.push(new InvoiceProjection(prisma));
 
   for (const handler of handlers) {
     // Apply env-based concurrency overrides

@@ -338,6 +338,53 @@ Denormalized financial snapshot per shipment. Automatically recalculated wheneve
 
 ---
 
+## Invoices (Customer — Accounts Receivable)
+
+### Commands (CQRS)
+
+| Command | Trigger | Events Emitted |
+|---------|---------|----------------|
+| `CreateInvoiceCommand` | `POST /api/v1/invoices` | `invoice.created` |
+| `ApproveInvoiceCommand` | `POST /api/v1/invoices/:id/approve` | `invoice.approved` |
+| `SendInvoiceCommand` | `POST /api/v1/invoices/:id/send` | `invoice.sent` |
+| `RecordPaymentCommand` | `POST /api/v1/invoices/:id/payments` | `invoice.payment_received`, `invoice.paid` (if fully paid) |
+| `VoidInvoiceCommand` | `POST /api/v1/invoices/:id/void` | `invoice.voided` |
+
+### Service Operations
+
+| Operation | Trigger | What It Does |
+|-----------|---------|-------------|
+| Ready to invoice | `GET /api/v1/invoices/ready-to-invoice` | Lists shipments with approved revenue charges and billing_status=ready_to_invoice |
+| List invoices | `GET /api/v1/invoices` | Filterable by customer, status |
+
+### Side Effects
+
+| Event | What Happens |
+|-------|-------------|
+| `shipment.delivered` | `BillingTriggerHandler`: marks shipment ready_to_invoice. If customer.autoInvoice=true, auto-creates draft invoice from approved revenue charges |
+| `invoice.created` | `InvoiceProjection`: InvoiceReadModel inserted. Charges marked as invoiced. ShipmentFinancialSummary.billingStatus → invoiced |
+| `invoice.payment_received` | `InvoiceProjection`: paidCents, balanceCents, daysPastDue updated |
+| `invoice.paid` | ShipmentFinancialSummary.billingStatus → paid |
+| `invoice.voided` | Charges reverted to approved. ShipmentFinancialSummary.billingStatus → ready_to_invoice |
+
+### Invoice Lifecycle
+
+```
+draft → approved → sent → partial_paid → paid
+                      ↘ overdue (detected by cron)
+draft/approved → void (only if no payments)
+sent/partial_paid → disputed
+```
+
+### Auto-Invoice (Per Customer)
+
+If `Customer.autoInvoice = true`, when a shipment is delivered:
+1. BillingTriggerHandler checks for approved revenue charges
+2. If found, creates a draft invoice automatically
+3. Staff reviews and approves/sends (invoice still needs manual approval)
+
+---
+
 ## Trading Partners
 
 ### Commands

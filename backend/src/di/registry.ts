@@ -97,6 +97,13 @@ import { ChargeService } from '../services/ChargeService.js';
 import { RatingService } from '../services/RatingService.js';
 import { CreateChargeCommandHandler } from '../commands/charges/CreateChargeCommand.js';
 import { ApproveChargeCommandHandler } from '../commands/charges/ApproveChargeCommand.js';
+import { InvoiceRepository, PaymentRepository } from '../repositories/InvoiceRepository.js';
+import { InvoicingService } from '../services/InvoicingService.js';
+import { CreateInvoiceCommandHandler } from '../commands/invoices/CreateInvoiceCommand.js';
+import { ApproveInvoiceCommandHandler } from '../commands/invoices/ApproveInvoiceCommand.js';
+import { SendInvoiceCommandHandler } from '../commands/invoices/SendInvoiceCommand.js';
+import { RecordPaymentCommandHandler } from '../commands/invoices/RecordPaymentCommand.js';
+import { VoidInvoiceCommandHandler } from '../commands/invoices/VoidInvoiceCommand.js';
 import { SlaRepository } from '../repositories/SlaRepository.js';
 import { SlaEvaluationService } from '../services/SlaEvaluationService.js';
 import { CreateSlaPolicyCommandHandler } from '../commands/sla/CreateSlaPolicyCommand.js';
@@ -365,6 +372,22 @@ export function registerDependencies(prisma: PrismaClient): void {
     );
   });
 
+  container.singleton(TOKENS.IInvoiceRepository).toFactory(() => {
+    return new InvoiceRepository(container.resolve(TOKENS.PrismaClient));
+  });
+
+  container.singleton(TOKENS.IPaymentRepository).toFactory(() => {
+    return new PaymentRepository(container.resolve(TOKENS.PrismaClient));
+  });
+
+  container.singleton(TOKENS.IInvoicingService).toFactory(() => {
+    return new InvoicingService(
+      container.resolve(TOKENS.IInvoiceRepository),
+      container.resolve(TOKENS.IChargeRepository),
+      container.resolve(TOKENS.PrismaClient),
+    );
+  });
+
   // Trading Partner / EDI Hub
   container.singleton(TOKENS.ITradingPartnerRepository).toFactory(() => {
     return new TradingPartnerRepository(container.resolve(TOKENS.PrismaClient));
@@ -535,6 +558,13 @@ export function registerDependencies(prisma: PrismaClient): void {
     // Financial commands
     bus.register(new CreateChargeCommandHandler(prisma, eventBus));
     bus.register(new ApproveChargeCommandHandler(prisma, eventBus));
+
+    // Invoice commands
+    bus.register(new CreateInvoiceCommandHandler(prisma, eventBus));
+    bus.register(new ApproveInvoiceCommandHandler(prisma, eventBus));
+    bus.register(new SendInvoiceCommandHandler(prisma, eventBus));
+    bus.register(new RecordPaymentCommandHandler(prisma, eventBus));
+    bus.register(new VoidInvoiceCommandHandler(prisma, eventBus));
 
     return bus;
   });
