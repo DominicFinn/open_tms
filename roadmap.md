@@ -333,7 +333,7 @@
   - ✅ Per-line match results (matched/variance/unmatched) with expected vs actual amounts
   - ✅ Auto-emits CARRIER_INVOICE_DISCREPANCY event for mismatches
   - ✅ 8 unit tests for carrier invoice commands
-  - 🔲 EDI 210 Freight Invoice inbound parsing
+  - ✅ EDI 210 Freight Invoice inbound parsing (B3/N1/LX/L5/L0/L1/L3 segments, auto three-way match)
   - 🔲 Carrier payment scheduling/batching
 - **Phase 7E: Queries, Disputes & Credit Notes** ✅
   - ✅ FinancialQueryRepository + CreditNoteRepository
@@ -352,7 +352,7 @@
   - ✅ 9 unit tests (deficit weight, FAK, minimum charge, accessorials, density calc)
   - ✅ Re-weigh / re-class adjustment workflow (creates cost + revenue adjustment charges)
   - ✅ Multi-order LTL consolidation billing (ConsolidationBillingService, pro-rate by weight)
-  - 🔲 EDI 810 outbound Invoice generation
+  - ✅ EDI 810 outbound Invoice generation (ISA/GS/ST envelope, BIG/N1/ITD/IT1/TDS/CTT segments)
 - **Basic Reporting & Analytics** 🔲
   - Operational dashboards and KPIs (on-time %, cost per shipment, carrier scorecard)
   - Financial reports (lane spend analysis, carrier spend)
