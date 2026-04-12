@@ -90,7 +90,9 @@ export interface Vehicle extends Timestamped {
   carrierId: ID;
   plate: string;
   type: "van" | "box_truck" | "semi" | "container";
+  /** Capacity in whole kilograms (matches Prisma Int type) */
   capacityKg?: number;
+  /** Capacity in whole cubic metres (matches Prisma Int type) */
   capacityM3?: number;
 }
 

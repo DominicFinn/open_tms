@@ -134,23 +134,8 @@ export class PgBossQueueAdapter implements IQueueAdapter {
   }
 
   async peekJobs(queueName: string, state: 'queued' | 'active' | 'failed', limit: number = 20): Promise<QueueJob[]> {
-    try {
-      const targetQueue = state === 'failed' ? queueName + DEAD_LETTER_SUFFIX : queueName;
-
-      const jobs = await this.boss.fetch(targetQueue, {
-        includeMetadata: true,
-        batchSize: limit,
-      } as any);
-
-      if (!jobs || jobs.length === 0) return [];
-
-      // We fetched these jobs, so we need to put them back (complete without processing)
-      // Actually, fetch removes them from the queue. For peeking we should use findJobs or direct SQL.
-      // Let's use findJobs instead.
-      return [];
-    } catch {
-      return [];
-    }
+    // Delegate to the non-destructive implementation
+    return this.peekJobsDirect(queueName, state, limit);
   }
 
   async purgeQueue(queueName: string): Promise<number> {

@@ -232,116 +232,121 @@ export class OrderDeliveryService implements IOrderDeliveryService {
       throw new Error('Shipment stop not found');
     }
 
-    // Update stop status
-    await this.prisma.shipmentStop.update({
-      where: { id: shipmentStopId },
-      data: {
-        status,
-        actualArrival: status === 'arrived' || status === 'in_progress' || status === 'completed' ? new Date() : stop.actualArrival,
-        actualDeparture: status === 'completed' ? new Date() : stop.actualDeparture,
-        updatedAt: new Date()
+    // Wrap stop status + order updates in a transaction for atomicity
+    const result = await this.prisma.$transaction(async (tx) => {
+      // Update stop status
+      await tx.shipmentStop.update({
+        where: { id: shipmentStopId },
+        data: {
+          status,
+          actualArrival: status === 'arrived' || status === 'in_progress' || status === 'completed' ? new Date() : stop.actualArrival,
+          actualDeparture: status === 'completed' ? new Date() : stop.actualDeparture,
+          updatedAt: new Date()
+        }
+      });
+
+      // If stop is completed, mark all orders at this stop as delivered
+      if (status === 'completed') {
+        const affectedOrders = stop.orders;
+        const updateResult = await tx.order.updateMany({
+          where: {
+            deliveryStopId: shipmentStopId,
+            deliveryStatus: {
+              notIn: ['delivered', 'cancelled']
+            }
+          },
+          data: {
+            deliveryStatus: 'delivered',
+            deliveredAt: new Date(),
+            deliveryMethod: method,
+            deliveryConfirmedBy: 'system:shipment_stop_completed',
+            updatedAt: new Date()
+          }
+        });
+
+        // Audit log for each affected order
+        for (const o of affectedOrders) {
+          await tx.auditLog.create({
+            data: {
+              entityType: 'order',
+              entityId: o.id,
+              orderId: o.id,
+              action: 'delivery_status_changed',
+              description: `Order delivered at stop (${stop.location?.name || 'unknown'}) via ${method}`,
+              changes: {
+                before: { deliveryStatus: o.deliveryStatus },
+                after: { deliveryStatus: 'delivered' }
+              },
+            }
+          });
+        }
+
+        return updateResult.count;
       }
+
+      // If stop is in_progress or arrived, mark orders as in_transit
+      if (status === 'arrived' || status === 'in_progress') {
+        const affectedOrders = stop.orders.filter(
+          (o: any) => o.deliveryStatus === 'assigned' || o.deliveryStatus === 'unassigned'
+        );
+        const updateResult = await tx.order.updateMany({
+          where: {
+            deliveryStopId: shipmentStopId,
+            deliveryStatus: {
+              in: ['assigned', 'unassigned']
+            }
+          },
+          data: {
+            deliveryStatus: 'in_transit',
+            deliveryMethod: method,
+            updatedAt: new Date()
+          }
+        });
+
+        for (const o of affectedOrders) {
+          await tx.auditLog.create({
+            data: {
+              entityType: 'order',
+              entityId: o.id,
+              orderId: o.id,
+              action: 'delivery_status_changed',
+              description: `Order in transit - stop ${status} (${stop.location?.name || 'unknown'}) via ${method}`,
+              changes: {
+                before: { deliveryStatus: o.deliveryStatus },
+                after: { deliveryStatus: 'in_transit' }
+              },
+            }
+          });
+        }
+
+        return updateResult.count;
+      }
+
+      return 0;
     });
 
-    // If stop is completed, mark all orders at this stop as delivered
-    if (status === 'completed') {
-      const affectedOrders = stop.orders;
-      const updateResult = await this.prisma.order.updateMany({
-        where: {
-          deliveryStopId: shipmentStopId,
-          deliveryStatus: {
-            notIn: ['delivered', 'cancelled']
-          }
-        },
-        data: {
-          deliveryStatus: 'delivered',
-          deliveredAt: new Date(),
-          deliveryMethod: method,
-          deliveryConfirmedBy: 'system:shipment_stop_completed',
-          updatedAt: new Date()
-        }
-      });
+    // Cargo reconciliation runs outside the transaction (non-blocking side effect)
+    if (status === 'completed' && this.cargoReconciliation) {
+      try {
+        await this.cargoReconciliation.autoReconcileStop(shipmentStopId, method);
+        await this.cargoReconciliation.reconcileStopCompletion(shipmentStopId);
 
-      // Audit log for each affected order
-      for (const o of affectedOrders) {
-        await this.prisma.auditLog.create({
-          data: {
-            entityType: 'order',
-            entityId: o.id,
-            orderId: o.id,
-            action: 'delivery_status_changed',
-            description: `Order delivered at stop (${stop.location?.name || 'unknown'}) via ${method}`,
-            changes: {
-              before: { deliveryStatus: o.deliveryStatus },
-              after: { deliveryStatus: 'delivered' }
-            },
-          }
+        // If this was the last stop, check for cargo left on vehicle
+        const allStops = await this.prisma.shipmentStop.findMany({
+          where: { shipmentId: stop.shipmentId },
         });
-      }
-
-      // Cargo reconciliation: auto-record scans and reconcile for misdrop detection
-      if (this.cargoReconciliation) {
-        try {
-          await this.cargoReconciliation.autoReconcileStop(shipmentStopId, method);
-          await this.cargoReconciliation.reconcileStopCompletion(shipmentStopId);
-
-          // If this was the last stop, check for cargo left on vehicle
-          const allStops = await this.prisma.shipmentStop.findMany({
-            where: { shipmentId: stop.shipmentId },
-          });
-          const allCompleted = allStops.every(
-            (s) => s.id === shipmentStopId || s.status === 'completed' || s.status === 'skipped'
-          );
-          if (allCompleted) {
-            await this.cargoReconciliation.checkLeftOnVehicle(stop.shipmentId);
-          }
-        } catch (err) {
-          console.error('[OrderDeliveryService] Cargo reconciliation failed (non-blocking):', err);
+        const allCompleted = allStops.every(
+          (s) => s.id === shipmentStopId || s.status === 'completed' || s.status === 'skipped'
+        );
+        if (allCompleted) {
+          await this.cargoReconciliation.checkLeftOnVehicle(stop.shipmentId);
         }
+      } catch (err) {
+        console.error('[OrderDeliveryService] Cargo reconciliation failed (non-blocking):', err);
       }
-
-      return updateResult.count;
     }
 
-    // If stop is in_progress or arrived, mark orders as in_transit
-    if (status === 'arrived' || status === 'in_progress') {
-      const affectedOrders = stop.orders.filter(
-        (o: any) => o.deliveryStatus === 'assigned' || o.deliveryStatus === 'unassigned'
-      );
-      const updateResult = await this.prisma.order.updateMany({
-        where: {
-          deliveryStopId: shipmentStopId,
-          deliveryStatus: {
-            in: ['assigned', 'unassigned']
-          }
-        },
-        data: {
-          deliveryStatus: 'in_transit',
-          deliveryMethod: method,
-          updatedAt: new Date()
-        }
-      });
-
-      for (const o of affectedOrders) {
-        await this.prisma.auditLog.create({
-          data: {
-            entityType: 'order',
-            entityId: o.id,
-            orderId: o.id,
-            action: 'delivery_status_changed',
-            description: `Order in transit — stop ${status} (${stop.location?.name || 'unknown'}) via ${method}`,
-            changes: {
-              before: { deliveryStatus: o.deliveryStatus },
-              after: { deliveryStatus: 'in_transit' }
-            },
-          }
-        });
-      }
-
-      return updateResult.count;
-    }
-
-    return 0;
+    return result;
   }
 
   /**

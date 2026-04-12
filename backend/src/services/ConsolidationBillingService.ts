@@ -41,6 +41,7 @@ export class ConsolidationBillingService implements IConsolidationBillingService
           select: {
             id: true,
             orderNumber: true,
+            customerId: true,
             lineItems: {
               select: { weight: true, quantity: true },
             },
@@ -51,6 +52,17 @@ export class ConsolidationBillingService implements IConsolidationBillingService
 
     if (orderShipments.length === 0) {
       throw new Error('No orders found on this shipment');
+    }
+
+    // Validate all orders belong to the same customer
+    const customerIds = new Set(
+      orderShipments.map(os => os.order.customerId).filter(Boolean)
+    );
+    if (customerIds.size > 1) {
+      throw new Error(
+        'Cannot pro-rate costs: shipment contains orders from multiple customers. ' +
+        'LTL consolidation must only combine orders from the same customer.'
+      );
     }
 
     // Calculate weight per order
