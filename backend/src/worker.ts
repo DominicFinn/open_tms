@@ -43,6 +43,7 @@ import { PromoteDecisionCommandHandler } from './commands/agentDecisions/Promote
 import { CreateIssueCommandHandler } from './commands/issues/CreateIssueCommand.js';
 import { UpdateIssueCommandHandler } from './commands/issues/UpdateIssueCommand.js';
 import { EscalateIssueCommandHandler } from './commands/issues/EscalateIssueCommand.js';
+import { DEFAULT_TRIAGE_PROMPT, DEFAULT_TRIAGE_EVENTS } from './events/handlers/TriageAgentHandler.js';
 
 const WORKER_MODE = process.env.WORKER_MODE || 'all';
 
@@ -142,6 +143,41 @@ async function startWorker() {
 
       const source = org?.llmApiKey ? 'org config' : 'env var';
       console.log(`[Worker] LLM provider configured (Anthropic via ${source}), AI agents enabled`);
+
+      // Auto-seed default triage agent config if none exists
+      const orgRecord = await prisma.organization.findFirst({ select: { id: true } });
+      if (orgRecord) {
+        const existingConfig = await prisma.agentConfig.findFirst({
+          where: { orgId: orgRecord.id, agentType: 'triage' },
+        });
+        if (!existingConfig) {
+          const config = await prisma.agentConfig.create({
+            data: {
+              orgId: orgRecord.id,
+              agentType: 'triage',
+              name: 'Shipment Triage Agent',
+              description: 'Analyzes shipment exceptions, SLA breaches, cargo issues, and cold chain excursions using AI to decide what action to take.',
+              enabled: true,
+              subscribedEvents: DEFAULT_TRIAGE_EVENTS,
+              versions: {
+                create: {
+                  versionNumber: 1,
+                  systemPrompt: DEFAULT_TRIAGE_PROMPT,
+                  changeNote: 'Default prompt (auto-seeded)',
+                  createdBy: 'system',
+                },
+              },
+            },
+            include: { versions: true },
+          });
+          // Set active version
+          await prisma.agentConfig.update({
+            where: { id: config.id },
+            data: { activeVersionId: config.versions[0].id },
+          });
+          console.log('[Worker] Auto-seeded default triage agent config (version 1)');
+        }
+      }
     } else if (llmApiKey && !llmEnabled) {
       console.log('[Worker] LLM API key found but agents disabled (llmEnabled=false)');
     }

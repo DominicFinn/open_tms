@@ -1,18 +1,18 @@
 /**
  * TriageAgentHandler — AI-powered event handler that triages shipment issues.
  *
- * Subscribes to exception events (shipment delays, SLA breaches, cargo issues,
- * cold chain excursions) and uses an LLM to decide what action to take:
- * create an issue, escalate an existing one, or take no action.
+ * Subscribes broadly to exception-related events and filters against the
+ * org's AgentConfig to determine which events to process. Uses a configurable
+ * system prompt (with template variables) from the database, falling back
+ * to a hardcoded default if no config exists.
  *
  * Every decision is logged via the AgentDecision system for compliance and
- * automation discovery.
+ * automation discovery, with a link to the prompt version that produced it.
  */
 
 import { PrismaClient } from '@prisma/client';
 import { DomainEvent } from '../DomainEvent.js';
 import { IEventHandler } from '../IEventHandler.js';
-import { EVENT_TYPES } from '../eventTypes.js';
 import { ILlmProvider, LlmMessage } from '../../services/llm/ILlmProvider.js';
 import { ICommandBus } from '../../commands/CommandBus.js';
 import { CREATE_AGENT_DECISION } from '../../commands/agentDecisions/CreateAgentDecisionCommand.js';
@@ -26,16 +26,39 @@ interface TriageDecision {
   reasoning: string;
   actionType: 'create_issue' | 'escalate_issue' | 'no_action';
   confidence: number;
-  /** Only when actionType = create_issue */
   issuePriority?: 'low' | 'medium' | 'high' | 'critical';
   issueCategory?: string;
   issueTitle?: string;
-  /** Only when actionType = escalate_issue */
   escalateIssueId?: string;
   escalateReason?: string;
 }
 
-const SYSTEM_PROMPT = `You are a triage agent for a Transportation Management System (TMS). Your job is to analyze shipment events and decide what action to take.
+/** Cached config loaded from DB */
+interface LoadedConfig {
+  id: string;
+  activeVersionId: string | null;
+  systemPrompt: string;
+  subscribedEvents: string[] | null;
+  temperature: number;
+  maxTokens: number;
+  confidenceThreshold: number;
+  deduplicationWindowMinutes: number;
+  enabled: boolean;
+  loadedAt: number;
+}
+
+/** Default events the triage agent subscribes to */
+export const DEFAULT_TRIAGE_EVENTS = [
+  'shipment.exception',
+  'sla.breached',
+  'cargo.misdrop_detected',
+  'cargo.missing_at_stop',
+  'cargo.left_on_vehicle',
+  'cold_chain.excursion_detected',
+];
+
+/** Default system prompt — used when no AgentConfig exists or as seed for version 1 */
+export const DEFAULT_TRIAGE_PROMPT = `You are a triage agent for a Transportation Management System (TMS). Your job is to analyze shipment events and decide what action to take.
 
 You will receive an event describing something that happened (a delay, SLA breach, cargo issue, temperature excursion, etc.) along with context about the shipment, any existing issues, and SLA status.
 
@@ -61,23 +84,25 @@ Guidelines:
 - Be conservative with critical priority - only use it for genuine emergencies
 - Always explain your reasoning clearly - this will be reviewed by humans`;
 
+const CONFIG_CACHE_TTL_MS = 60_000; // 60 seconds
+
 export class TriageAgentHandler implements IEventHandler {
   readonly name = 'agent.triage';
+  // Subscribe broadly — filter against config in handle()
   readonly eventPatterns = [
-    EVENT_TYPES.SHIPMENT_EXCEPTION,
-    EVENT_TYPES.SLA_BREACHED,
-    EVENT_TYPES.CARGO_MISDROP_DETECTED,
-    EVENT_TYPES.CARGO_MISSING_AT_STOP,
-    EVENT_TYPES.CARGO_LEFT_ON_VEHICLE,
-    EVENT_TYPES.COLD_CHAIN_EXCURSION_DETECTED,
+    'shipment.*',
+    'sla.*',
+    'cargo.*',
+    'cold_chain.*',
   ];
   readonly options = {
     concurrency: 2,
     retryLimit: 2,
-    // LLM calls can be slow — allow up to 3 minutes per job
     expireInSeconds: 180,
-    priority: 1, // Lower priority than projections
+    priority: 1,
   };
+
+  private configCache: LoadedConfig | null = null;
 
   constructor(
     private prisma: PrismaClient,
@@ -86,6 +111,16 @@ export class TriageAgentHandler implements IEventHandler {
   ) {}
 
   async handle(event: DomainEvent): Promise<void> {
+    // 0. Load config (cached, 60s TTL)
+    const config = await this.loadConfig(event.orgId);
+
+    // Check if agent is enabled
+    if (!config.enabled) return;
+
+    // Check if this event type is in the subscribed list
+    const subscribedEvents = config.subscribedEvents || DEFAULT_TRIAGE_EVENTS;
+    if (!subscribedEvents.includes(event.type)) return;
+
     const correlationId = randomUUID();
 
     try {
@@ -93,36 +128,111 @@ export class TriageAgentHandler implements IEventHandler {
       const context = await this.gatherContext(event);
 
       // 2. Check for recent duplicate decisions (debounce)
-      const recentDecision = await this.findRecentDecision(event);
+      const deduplicationWindow = config.deduplicationWindowMinutes;
+      const recentDecision = await this.findRecentDecision(event, deduplicationWindow);
       if (recentDecision) {
         console.log(`[TriageAgent] Skipping ${event.type} for ${event.entityId} — recent decision exists (${recentDecision.id})`);
         return;
       }
 
-      // 3. Build prompt and call LLM
-      const messages = this.buildPrompt(event, context);
+      // 3. Build prompt (with template variable replacement) and call LLM
+      const messages = this.buildPrompt(config.systemPrompt, event, context);
       const llmStart = Date.now();
       const llmResponse = await this.llm.complete({
         messages,
-        maxTokens: 512,
-        temperature: 0.2,
+        maxTokens: config.maxTokens,
+        temperature: config.temperature,
       });
       const durationMs = Date.now() - llmStart;
 
       // 4. Parse the structured response
-      const decision = this.parseDecision(llmResponse.content);
+      let decision = this.parseDecision(llmResponse.content);
 
-      // 5. Execute the action
+      // 5. Apply confidence threshold
+      if (config.confidenceThreshold > 0 && decision.confidence < config.confidenceThreshold && decision.actionType !== 'no_action') {
+        console.log(`[TriageAgent] Confidence ${decision.confidence} below threshold ${config.confidenceThreshold}, overriding to no_action`);
+        decision = {
+          ...decision,
+          actionType: 'no_action',
+          summary: `${decision.summary} (below confidence threshold ${config.confidenceThreshold})`,
+        };
+      }
+
+      // 6. Execute the action
       const actionResult = await this.executeAction(event, decision, correlationId);
 
-      // 6. Log the decision
-      await this.logDecision(event, context, decision, messages, llmResponse, actionResult, correlationId, durationMs);
+      // 7. Log the decision (with config traceability)
+      await this.logDecision(event, context, decision, messages, llmResponse, actionResult, correlationId, durationMs, config);
 
       console.log(`[TriageAgent] ${event.type} on ${event.entityType}/${event.entityId} — ${decision.actionType} (confidence: ${decision.confidence})`);
     } catch (err) {
       console.error(`[TriageAgent] Error processing ${event.type} for ${event.entityId}:`, (err as Error).message);
-      throw err; // Let pg-boss retry
+      throw err;
     }
+  }
+
+  // ── Config loading (with cache) ────────────────────────────────
+
+  private async loadConfig(orgId: string): Promise<LoadedConfig> {
+    if (this.configCache && (Date.now() - this.configCache.loadedAt) < CONFIG_CACHE_TTL_MS) {
+      return this.configCache;
+    }
+
+    const config = await this.prisma.agentConfig.findFirst({
+      where: { orgId, agentType: 'triage' },
+      include: {
+        versions: {
+          orderBy: { versionNumber: 'desc' },
+          take: 1,
+        },
+      },
+    });
+
+    if (config) {
+      // Find the active version (use activeVersionId, or latest)
+      let systemPrompt = DEFAULT_TRIAGE_PROMPT;
+      let activeVersionId = config.activeVersionId;
+
+      if (activeVersionId) {
+        const version = await this.prisma.agentConfigVersion.findUnique({
+          where: { id: activeVersionId },
+          select: { systemPrompt: true },
+        });
+        if (version) systemPrompt = version.systemPrompt;
+      } else if (config.versions.length > 0) {
+        systemPrompt = config.versions[0].systemPrompt;
+        activeVersionId = config.versions[0].id;
+      }
+
+      this.configCache = {
+        id: config.id,
+        activeVersionId,
+        systemPrompt,
+        subscribedEvents: config.subscribedEvents as string[] | null,
+        temperature: config.temperature ?? 0.2,
+        maxTokens: config.maxTokens ?? 512,
+        confidenceThreshold: config.confidenceThreshold ?? 0,
+        deduplicationWindowMinutes: config.deduplicationWindowMinutes ?? 30,
+        enabled: config.enabled,
+        loadedAt: Date.now(),
+      };
+    } else {
+      // No config in DB — use defaults
+      this.configCache = {
+        id: '',
+        activeVersionId: null,
+        systemPrompt: DEFAULT_TRIAGE_PROMPT,
+        subscribedEvents: null,
+        temperature: 0.2,
+        maxTokens: 512,
+        confidenceThreshold: 0,
+        deduplicationWindowMinutes: 30,
+        enabled: true,
+        loadedAt: Date.now(),
+      };
+    }
+
+    return this.configCache;
   }
 
   // ── Context gathering ──────────────────────────────────────────
@@ -138,7 +248,6 @@ export class TriageAgentHandler implements IEventHandler {
       },
     };
 
-    // Get the entity details based on type
     const entityId = this.resolveEntityId(event);
     const entityType = this.resolveEntityType(event);
 
@@ -178,7 +287,6 @@ export class TriageAgentHandler implements IEventHandler {
         };
       }
 
-      // Get open issues linked to this shipment
       const openIssues = await this.prisma.issue.findMany({
         where: {
           sourceEntityType: 'shipment',
@@ -191,7 +299,6 @@ export class TriageAgentHandler implements IEventHandler {
       });
       context.openIssues = openIssues;
 
-      // Get active SLA evaluations
       const slaEvaluations = await this.prisma.slaEvaluation.findMany({
         where: {
           entityType: 'shipment',
@@ -207,20 +314,14 @@ export class TriageAgentHandler implements IEventHandler {
     return context;
   }
 
-  /** Resolve the shipment ID from different event types */
   private resolveEntityId(event: DomainEvent): string | null {
-    // For shipment events, entityId IS the shipment
     if (event.entityType === 'shipment') return event.entityId;
-
-    // For SLA/cargo events, the payload often contains shipmentId
     const payload = event.payload as Record<string, unknown>;
     if (payload.shipmentId && typeof payload.shipmentId === 'string') return payload.shipmentId;
     if (payload.entityId && typeof payload.entityId === 'string') return payload.entityId;
-
     return event.entityId;
   }
 
-  /** Resolve the entity type for context gathering */
   private resolveEntityType(event: DomainEvent): string {
     if (event.entityType === 'shipment') return 'shipment';
     const payload = event.payload as Record<string, unknown>;
@@ -231,9 +332,8 @@ export class TriageAgentHandler implements IEventHandler {
 
   // ── Deduplication ──────────────────────────────────────────────
 
-  private async findRecentDecision(event: DomainEvent) {
-    // Skip if we already made a decision for this exact event + entity in the last 30 minutes
-    const thirtyMinutesAgo = new Date(Date.now() - 30 * 60_000);
+  private async findRecentDecision(event: DomainEvent, windowMinutes: number) {
+    const cutoff = new Date(Date.now() - windowMinutes * 60_000);
 
     return this.prisma.agentDecision.findFirst({
       where: {
@@ -241,16 +341,23 @@ export class TriageAgentHandler implements IEventHandler {
         triggerEventType: event.type,
         entityType: event.entityType,
         entityId: event.entityId,
-        createdAt: { gte: thirtyMinutesAgo },
+        createdAt: { gte: cutoff },
       },
       select: { id: true },
       orderBy: { createdAt: 'desc' },
     });
   }
 
-  // ── Prompt building ────────────────────────────────────────────
+  // ── Prompt building (with template variable replacement) ───────
 
-  private buildPrompt(event: DomainEvent, context: Record<string, unknown>): LlmMessage[] {
+  private buildPrompt(systemPrompt: string, event: DomainEvent, context: Record<string, unknown>): LlmMessage[] {
+    // Replace template variables in the system prompt
+    const resolvedPrompt = systemPrompt
+      .replace(/\{\{event\}\}/g, JSON.stringify(context.event, null, 2))
+      .replace(/\{\{shipment\}\}/g, JSON.stringify(context.shipment ?? 'No shipment data available', null, 2))
+      .replace(/\{\{issues\}\}/g, JSON.stringify(context.openIssues ?? [], null, 2))
+      .replace(/\{\{sla_status\}\}/g, JSON.stringify(context.slaStatus ?? [], null, 2));
+
     const userMessage = `## Event
 Type: ${event.type}
 Time: ${event.timestamp}
@@ -265,7 +372,7 @@ ${JSON.stringify(context, null, 2)}
 Based on this event and context, what action should be taken?`;
 
     return [
-      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'system', content: resolvedPrompt },
       { role: 'user', content: userMessage },
     ];
   }
@@ -273,7 +380,6 @@ Based on this event and context, what action should be taken?`;
   // ── Response parsing ───────────────────────────────────────────
 
   private parseDecision(content: string): TriageDecision {
-    // Strip any markdown code fences if present
     let cleaned = content.trim();
     if (cleaned.startsWith('```')) {
       cleaned = cleaned.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
@@ -300,7 +406,6 @@ Based on this event and context, what action should be taken?`;
         escalateReason: parsed.escalateReason || undefined,
       };
     } catch {
-      // If parsing fails, default to no_action and log the raw response
       console.warn('[TriageAgent] Failed to parse LLM response as JSON, defaulting to no_action');
       return {
         summary: 'LLM response could not be parsed',
@@ -397,6 +502,7 @@ Based on this event and context, what action should be taken?`;
     actionResult: { actionEntityType?: string; actionEntityId?: string; actionPayload?: Record<string, unknown> },
     correlationId: string,
     durationMs?: number,
+    config?: LoadedConfig,
   ): Promise<void> {
     await this.commandBus.dispatch({
       type: CREATE_AGENT_DECISION,
@@ -423,6 +529,8 @@ Based on this event and context, what action should be taken?`;
         inputTokens: llmResponse.usage?.inputTokens,
         outputTokens: llmResponse.usage?.outputTokens,
         durationMs,
+        agentConfigId: config?.id || undefined,
+        promptVersionId: config?.activeVersionId || undefined,
       },
       metadata: { correlationId, source: 'system' },
     });

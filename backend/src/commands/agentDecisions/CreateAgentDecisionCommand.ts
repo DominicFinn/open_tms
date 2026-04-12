@@ -33,6 +33,8 @@ export interface CreateAgentDecisionPayload {
   inputTokens?: number;
   outputTokens?: number;
   durationMs?: number;
+  agentConfigId?: string;
+  promptVersionId?: string;
 }
 
 export const CREATE_AGENT_DECISION = 'agent_decision.create';
@@ -75,6 +77,8 @@ export class CreateAgentDecisionCommandHandler extends BaseCommandHandler<
         inputTokens: command.payload.inputTokens,
         outputTokens: command.payload.outputTokens,
         durationMs: command.payload.durationMs,
+        agentConfigId: command.payload.agentConfigId,
+        promptVersionId: command.payload.promptVersionId,
       },
     });
 

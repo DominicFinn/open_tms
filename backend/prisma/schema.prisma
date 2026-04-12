@@ -631,6 +631,7 @@ model Organization {
   // Agent Decision relations
   agentDecisions          AgentDecision[]
   agentDecisionReadModels AgentDecisionReadModel[]
+  agentConfigs            AgentConfig[]
 }
 
 model TrackableUnit {
@@ -2594,6 +2595,10 @@ model AgentDecision {
   outputTokens      Int?                              // Tokens received from the LLM
   durationMs        Int?                              // Wall-clock time for the LLM call in milliseconds
 
+  // Config traceability (which prompt produced this decision)
+  agentConfigId     String?                           // AgentConfig.id
+  promptVersionId   String?                           // AgentConfigVersion.id
+
   // Automation promotion
   promotedToAutomation Boolean @default(false)
   promotedAt           DateTime?
@@ -2642,4 +2647,57 @@ model AgentDecisionReadModel {
   @@index([actionType])
   @@index([outcomeStatus])
   @@index([createdAt])
+}
+
+// ─── Agent Configuration (configurable prompts & behaviour) ──────────────────
+
+model AgentConfig {
+  id                         String    @id @default(uuid())
+  organization               Organization @relation(fields: [orgId], references: [id])
+  orgId                      String
+
+  agentType                  String                            // "triage" (extensible for future agents)
+  name                       String                            // "Shipment Triage Agent"
+  description                String?
+
+  enabled                    Boolean   @default(true)
+
+  // Which events trigger this agent (null = use code defaults)
+  subscribedEvents           Json?                             // ["shipment.exception", "sla.breached", ...]
+
+  // Active prompt version
+  activeVersionId            String?
+
+  // LLM tuning (null = use code defaults: temp 0.2, tokens 512)
+  temperature                Float?
+  maxTokens                  Int?
+
+  // Behaviour tuning
+  confidenceThreshold        Float?                            // 0-1, below this = override to no_action
+  deduplicationWindowMinutes Int?                              // null = code default (30)
+
+  versions                   AgentConfigVersion[]
+
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @updatedAt
+
+  @@unique([orgId, agentType])
+  @@index([orgId])
+  @@index([agentType])
+}
+
+model AgentConfigVersion {
+  id              String      @id @default(uuid())
+  config          AgentConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+  configId        String
+
+  versionNumber   Int
+  systemPrompt    String      @db.Text
+  changeNote      String?
+
+  createdAt       DateTime    @default(now())
+  createdBy       String?
+
+  @@unique([configId, versionNumber])
+  @@index([configId])
 }

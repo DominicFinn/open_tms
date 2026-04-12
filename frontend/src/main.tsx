@@ -60,6 +60,7 @@ import VNextLocationOps from './vnext-design/VNextLocationOps';
 import VNextAgentDecisions from './vnext-design/VNextAgentDecisions';
 import VNextAgentDecisionDetail from './vnext-design/VNextAgentDecisionDetail';
 import VNextLlmSettings from './vnext-design/VNextLlmSettings';
+import VNextAgentConfig from './vnext-design/VNextAgentConfig';
 
 // Carrier Tendering & Portal
 import Tenders from './pages/Tenders';
@@ -198,6 +199,7 @@ root.render(
           <Route path="settings/maps" element={<VNextMapsSettings />} />
           <Route path="settings/sla" element={<VNextSlaPolicies />} />
           <Route path="settings/llm" element={<VNextLlmSettings />} />
+          <Route path="settings/agents" element={<VNextAgentConfig />} />
 
           {/* Integrations (sub-layout with tabs) */}
           <Route path="integrations" element={<VNextIntegrationsLayout />}>

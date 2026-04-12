@@ -1,4 +1,4 @@
-import { TriageAgentHandler } from '../../events/handlers/TriageAgentHandler';
+import { TriageAgentHandler, DEFAULT_TRIAGE_EVENTS } from '../../events/handlers/TriageAgentHandler';
 import { EVENT_TYPES } from '../../events/eventTypes';
 import { createTestEvent } from '../helpers/testUtils';
 import { ILlmProvider, LlmCompletionRequest, LlmCompletionResponse } from '../../services/llm/ILlmProvider';
@@ -45,6 +45,7 @@ function createMockPrisma(overrides?: {
   openIssues?: unknown[];
   slaEvaluations?: unknown[];
   recentDecision?: unknown;
+  agentConfig?: unknown;
 }) {
   return {
     shipment: {
@@ -70,6 +71,12 @@ function createMockPrisma(overrides?: {
     agentDecision: {
       findFirst: jest.fn().mockResolvedValue(overrides?.recentDecision ?? null),
     },
+    agentConfig: {
+      findFirst: jest.fn().mockResolvedValue(overrides?.agentConfig ?? null),
+    },
+    agentConfigVersion: {
+      findUnique: jest.fn().mockResolvedValue(null),
+    },
   } as any;
 }
 
@@ -84,10 +91,11 @@ describe('TriageAgentHandler', () => {
     );
 
     expect(handler.name).toBe('agent.triage');
-    expect(handler.eventPatterns).toContain(EVENT_TYPES.SHIPMENT_EXCEPTION);
-    expect(handler.eventPatterns).toContain(EVENT_TYPES.SLA_BREACHED);
-    expect(handler.eventPatterns).toContain(EVENT_TYPES.CARGO_MISDROP_DETECTED);
-    expect(handler.eventPatterns).toContain(EVENT_TYPES.COLD_CHAIN_EXCURSION_DETECTED);
+    // Broad subscription patterns (filters against config in handle())
+    expect(handler.eventPatterns).toContain('shipment.*');
+    expect(handler.eventPatterns).toContain('sla.*');
+    expect(handler.eventPatterns).toContain('cargo.*');
+    expect(handler.eventPatterns).toContain('cold_chain.*');
   });
 
   it('calls LLM and logs create_issue decision', async () => {
@@ -328,5 +336,162 @@ describe('TriageAgentHandler', () => {
     // Should have successfully parsed and dispatched create_issue
     expect(dispatched).toHaveLength(2);
     expect(dispatched[0].type).toBe('issue.create');
+  });
+
+  it('skips events not in config subscribedEvents', async () => {
+    const mockLlm = createMockLlm('{}');
+    const { bus, dispatched } = createMockCommandBus();
+    // Config only subscribes to shipment.exception, not sla.breached
+    const mockPrisma = createMockPrisma({
+      agentConfig: {
+        id: 'config-1',
+        activeVersionId: null,
+        enabled: true,
+        subscribedEvents: ['shipment.exception'],
+        temperature: 0.2,
+        maxTokens: 512,
+        confidenceThreshold: null,
+        deduplicationWindowMinutes: null,
+        versions: [],
+      },
+    });
+
+    const handler = new TriageAgentHandler(mockPrisma, mockLlm, bus as any);
+
+    // Send an sla.breached event — should be filtered out
+    const event = createTestEvent(
+      EVENT_TYPES.SLA_BREACHED,
+      'shipment',
+      'ship-1',
+      { evaluationId: 'eval-1', ruleType: 'eta_delivery', entityType: 'shipment', entityId: 'ship-1' },
+    );
+
+    await handler.handle(event);
+
+    // LLM should NOT have been called
+    expect(mockLlm.complete).not.toHaveBeenCalled();
+    expect(dispatched).toHaveLength(0);
+  });
+
+  it('overrides to no_action when confidence below threshold', async () => {
+    const llmResponse = JSON.stringify({
+      summary: 'Created issue for delay',
+      reasoning: 'Shipment is delayed',
+      actionType: 'create_issue',
+      confidence: 0.4,
+      issuePriority: 'medium',
+      issueCategory: 'delay',
+      issueTitle: 'Delay on SH-00001',
+    });
+
+    const mockLlm = createMockLlm(llmResponse);
+    const { bus, dispatched } = createMockCommandBus();
+    // Config has confidence threshold of 0.7
+    const mockPrisma = createMockPrisma({
+      agentConfig: {
+        id: 'config-1',
+        activeVersionId: null,
+        enabled: true,
+        subscribedEvents: DEFAULT_TRIAGE_EVENTS,
+        temperature: 0.2,
+        maxTokens: 512,
+        confidenceThreshold: 0.7,
+        deduplicationWindowMinutes: 30,
+        versions: [],
+      },
+    });
+
+    const handler = new TriageAgentHandler(mockPrisma, mockLlm, bus as any);
+
+    const event = createTestEvent(
+      EVENT_TYPES.SHIPMENT_EXCEPTION,
+      'shipment',
+      'ship-1',
+      { shipmentReference: 'SH-00001', exceptionType: 'eta_critical_delay' },
+    );
+
+    await handler.handle(event);
+
+    // Should only dispatch agent_decision.create (no issue creation — confidence too low)
+    expect(dispatched).toHaveLength(1);
+    expect(dispatched[0].type).toBe('agent_decision.create');
+    expect((dispatched[0].payload as any).actionType).toBe('no_action');
+  });
+
+  it('skips processing when config is disabled', async () => {
+    const mockLlm = createMockLlm('{}');
+    const { bus, dispatched } = createMockCommandBus();
+    const mockPrisma = createMockPrisma({
+      agentConfig: {
+        id: 'config-1',
+        activeVersionId: null,
+        enabled: false,
+        subscribedEvents: DEFAULT_TRIAGE_EVENTS,
+        temperature: 0.2,
+        maxTokens: 512,
+        confidenceThreshold: null,
+        deduplicationWindowMinutes: null,
+        versions: [],
+      },
+    });
+
+    const handler = new TriageAgentHandler(mockPrisma, mockLlm, bus as any);
+
+    const event = createTestEvent(
+      EVENT_TYPES.SHIPMENT_EXCEPTION,
+      'shipment',
+      'ship-1',
+      { shipmentReference: 'SH-00001', exceptionType: 'eta_critical_delay' },
+    );
+
+    await handler.handle(event);
+
+    expect(mockLlm.complete).not.toHaveBeenCalled();
+    expect(dispatched).toHaveLength(0);
+  });
+
+  it('writes agentConfigId and promptVersionId to decision log', async () => {
+    const llmResponse = JSON.stringify({
+      summary: 'No action needed',
+      reasoning: 'Test',
+      actionType: 'no_action',
+      confidence: 0.8,
+    });
+
+    const mockLlm = createMockLlm(llmResponse);
+    const { bus, dispatched } = createMockCommandBus();
+    const mockPrisma = createMockPrisma({
+      agentConfig: {
+        id: 'config-42',
+        activeVersionId: 'version-7',
+        enabled: true,
+        subscribedEvents: DEFAULT_TRIAGE_EVENTS,
+        temperature: 0.3,
+        maxTokens: 256,
+        confidenceThreshold: null,
+        deduplicationWindowMinutes: 15,
+        versions: [{ id: 'version-7', systemPrompt: 'Custom prompt', versionNumber: 7 }],
+      },
+    });
+    mockPrisma.agentConfigVersion.findUnique.mockResolvedValue({
+      id: 'version-7',
+      systemPrompt: 'Custom prompt for testing',
+    });
+
+    const handler = new TriageAgentHandler(mockPrisma, mockLlm, bus as any);
+
+    const event = createTestEvent(
+      EVENT_TYPES.SHIPMENT_EXCEPTION,
+      'shipment',
+      'ship-1',
+      { shipmentReference: 'SH-00001', exceptionType: 'eta_critical_delay' },
+    );
+
+    await handler.handle(event);
+
+    // Decision should have config traceability
+    const decisionPayload = dispatched[0].payload as any;
+    expect(decisionPayload.agentConfigId).toBe('config-42');
+    expect(decisionPayload.promptVersionId).toBe('version-7');
   });
 });

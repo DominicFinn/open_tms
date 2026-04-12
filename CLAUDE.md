@@ -204,6 +204,15 @@ The first agent implementation (`TriageAgentHandler`) subscribes to exception ev
 
 **Subscribed events:** `shipment.exception`, `sla.breached`, `cargo.misdrop_detected`, `cargo.missing_at_stop`, `cargo.left_on_vehicle`, `cold_chain.excursion_detected`
 
+### Configurable Agent Prompts
+Agent behaviour is configurable per-org via `AgentConfig` + versioned prompts (`AgentConfigVersion`). The handler subscribes broadly to wildcard event patterns and filters against config at runtime (no worker restart needed).
+
+**Configurable:** system prompt (with `{{event}}`, `{{shipment}}`, `{{issues}}`, `{{sla_status}}` template variables), subscribed events (checkboxes), temperature, max tokens, confidence threshold, deduplication window, enabled toggle.
+
+**Prompt versioning:** Every prompt change creates an immutable version. Each `AgentDecision` links to the version that produced it via `promptVersionId`. Rollback by activating any previous version.
+
+**Auto-seed:** Default config with hardcoded prompt is created on first worker startup if none exists.
+
 ### Key Files
 - `backend/src/commands/agentDecisions/` — Create, RecordOutcome, Promote command handlers
 - `backend/src/repositories/AgentDecisionRepository.ts` — Repository with filtering and stats
@@ -213,6 +222,8 @@ The first agent implementation (`TriageAgentHandler`) subscribes to exception ev
 - `backend/src/services/llm/AnthropicLlmProvider.ts` — Claude implementation
 - `backend/src/events/handlers/TriageAgentHandler.ts` — AI triage agent event handler
 - `backend/src/__tests__/handlers/TriageAgentHandler.test.ts` — Triage agent tests
+- `backend/src/routes/agentConfig.ts` — Agent config CRUD + prompt versioning API
+- `backend/src/__tests__/handlers/TriageAgentHandler.test.ts` — Triage agent tests (12 tests)
 - `backend/src/__tests__/commands/AgentDecisionCommands.test.ts` — Command handler tests
 - `backend/src/__tests__/projections/AgentDecisionProjection.test.ts` — Projection tests
 

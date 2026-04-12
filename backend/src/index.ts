@@ -69,6 +69,7 @@ import { locationOpsRoutes } from './routes/locationOps.js';
 import { warehouseRoutes } from './routes/warehouse.js';
 import { agentDecisionRoutes } from './routes/agentDecisions.js';
 import { llmSettingsRoutes } from './routes/llmSettings.js';
+import { agentConfigRoutes } from './routes/agentConfig.js';
 
 const server = Fastify({ logger: true });
 
@@ -151,6 +152,7 @@ async function start() {
   await server.register(warehouseRoutes);
   await server.register(agentDecisionRoutes);
   await server.register(llmSettingsRoutes);
+  await server.register(agentConfigRoutes);
 
   // Start queue adapter (needed for publishing events, even if workers run elsewhere)
   try {
