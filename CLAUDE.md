@@ -248,6 +248,7 @@ The tendering system supports **broadcast** (all carriers simultaneously) and **
 6. **Roadmap** — Update `roadmap.md` to mark items complete or add new items
 7. **API docs** — Add Swagger/OpenAPI `schema` blocks to new endpoints
 8. **README** — Update feature list in `README.md` if adding user-facing capability
+9. **Marketing website** — Review and update `www/` feature pages if the new feature is user-facing. Check: feature page content (`www/src/pages/features/`), homepage feature list (`www/src/components/Features.tsx`), hero feature cards (`www/src/components/Hero.tsx`), and UI preview mockups (`www/src/components/previews/`). Keep the website in sync with the roadmap and actual capabilities.
 
 ### Test Requirements
 - Every command handler must have tests verifying: success case, event emission, metadata propagation, error case
@@ -255,6 +256,11 @@ The tendering system supports **broadcast** (all carriers simultaneously) and **
 - Integration tests should verify command → event → projection pipeline for new entities
 - Run `cd backend && npx jest --config jest.config.cjs` to verify all tests pass before committing
 - Test utilities in `backend/src/__tests__/helpers/testUtils.ts`: `mockEventBus()`, `createTestCommand()`, `createTestEvent()`
+
+## Marketing Website (www)
+
+- **NEVER use the em dash character (`—`).** Use a regular hyphen (`-`) or rewrite the sentence instead. This applies to all www content: components, blog articles, page copy.
+- Open TMS is an **independent open source project** maintained by Dominic Finn and the community. It is NOT a System Loco project. System Loco IoT is an integration, not an ownership relationship. Never describe the project as "maintained by System Loco" or "the System Loco team."
 
 ## Git
 

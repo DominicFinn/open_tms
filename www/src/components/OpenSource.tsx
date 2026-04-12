@@ -1,7 +1,7 @@
 const benefits = [
   {
     title: 'Free Forever',
-    description: 'MIT licensed. No per-user fees, no transaction costs, no feature gates. Deploy it, customise it, and run it — at zero software cost.',
+    description: 'MIT licensed. No per-user fees, no transaction costs, no feature gates. Deploy it, customise it, and run it  - at zero software cost.',
     icon: (
       <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z" />
@@ -46,7 +46,7 @@ const benefits = [
   },
   {
     title: 'No Vendor Lock-In',
-    description: 'Pluggable providers for everything — email, file storage, routing, queues. Swap out components without touching business logic.',
+    description: 'Pluggable providers for everything  - email, file storage, routing, queues. Swap out components without touching business logic.',
     icon: (
       <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 10.5V6.75a4.5 4.5 0 119 0v3.75M3.75 21.75h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H3.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
@@ -68,7 +68,7 @@ export default function OpenSource() {
           </h2>
           <p className="text-lg text-surface-400 leading-relaxed">
             Enterprise TMS software costs tens of thousands per year. Open TMS gives you the same
-            capabilities — CQRS architecture, EDI integration, IoT tracking, cold chain compliance —
+            capabilities  - CQRS architecture, EDI integration, IoT tracking, cold chain compliance  -
             without the license fees.
           </p>
         </div>
@@ -92,7 +92,7 @@ export default function OpenSource() {
           </h3>
           <p className="text-surface-400 max-w-2xl mx-auto mb-8">
             Commercial TMS platforms charge $500-$5,000+ per user per month. Open TMS gives you
-            the same order management, carrier tendering, EDI, IoT tracking, and compliance tools — free.
+            the same order management, carrier tendering, EDI, IoT tracking, and compliance tools  - free.
             Invest the savings in your actual operations.
           </p>
           <a

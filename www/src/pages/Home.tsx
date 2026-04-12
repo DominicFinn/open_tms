@@ -5,6 +5,7 @@ import ForShippers from '../components/ForShippers'
 import OpenSource from '../components/OpenSource'
 import Platform from '../components/Platform'
 import Roadmap from '../components/Roadmap'
+import MissingFeature from '../components/MissingFeature'
 import CTA from '../components/CTA'
 
 export default function Home() {
@@ -17,6 +18,7 @@ export default function Home() {
       <Platform />
       <OpenSource />
       <Roadmap />
+      <MissingFeature />
       <CTA />
     </>
   )

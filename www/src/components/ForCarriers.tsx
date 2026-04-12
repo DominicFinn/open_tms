@@ -81,7 +81,7 @@ export default function ForCarriers() {
                 },
                 {
                   title: 'EDI 204/990 Integration',
-                  description: 'Receive load tenders via EDI 204 and respond with EDI 990 — automatically. No portal login needed for EDI-capable carriers.',
+                  description: 'Receive load tenders via EDI 204 and respond with EDI 990  - automatically. No portal login needed for EDI-capable carriers.',
                 },
                 {
                   title: 'Waterfall & Broadcast Tenders',
@@ -89,7 +89,7 @@ export default function ForCarriers() {
                 },
                 {
                   title: 'Full Bid History',
-                  description: 'Track every bid you\'ve submitted — won, lost, pending, or expired. Complete transparency on tender outcomes and historical rates.',
+                  description: 'Track every bid you\'ve submitted  - won, lost, pending, or expired. Complete transparency on tender outcomes and historical rates.',
                 },
               ].map(item => (
                 <div key={item.title} className="flex gap-4">

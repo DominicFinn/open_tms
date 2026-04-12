@@ -1,12 +1,36 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
+
+const featurePages = [
+  { href: '/features/operations', label: 'Operations', description: 'Shipments, tendering & EDI' },
+  { href: '/features/triage', label: 'Triage Centre', description: 'Exception management' },
+  { href: '/features/quality', label: 'Quality Centre', description: 'CAPA & cold chain compliance' },
+  { href: '/features/reports', label: 'Reports', description: 'Analytics & compliance docs' },
+  { href: '/features/warehouse', label: 'Warehouse', description: 'Mobile launch app' },
+]
 
 export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [featuresOpen, setFeaturesOpen] = useState(false)
+  const featuresRef = useRef<HTMLDivElement>(null)
   const location = useLocation()
 
+  useEffect(() => {
+    setFeaturesOpen(false)
+    setMobileOpen(false)
+  }, [location.pathname])
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (featuresRef.current && !featuresRef.current.contains(e.target as Node)) {
+        setFeaturesOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
   const links = [
-    { href: '/#features', label: 'Features' },
     { href: '/#carriers', label: 'For Carriers' },
     { href: '/#open-source', label: 'Open Source' },
     { href: '/blog', label: 'Blog' },
@@ -36,6 +60,37 @@ export default function Navbar() {
 
           {/* Desktop nav */}
           <div className="hidden md:flex items-center gap-1">
+            {/* Features dropdown */}
+            <div ref={featuresRef} className="relative">
+              <button
+                onClick={() => setFeaturesOpen(!featuresOpen)}
+                className={`flex items-center gap-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  location.pathname.startsWith('/features')
+                    ? 'text-white bg-white/5'
+                    : 'text-surface-400 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                Features
+                <svg className={`h-4 w-4 transition-transform ${featuresOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                </svg>
+              </button>
+              {featuresOpen && (
+                <div className="absolute top-full left-0 mt-2 w-64 rounded-xl border border-white/10 bg-surface-950/95 backdrop-blur-xl shadow-2xl overflow-hidden">
+                  {featurePages.map(fp => (
+                    <Link
+                      key={fp.href}
+                      to={fp.href}
+                      className="block px-4 py-3 hover:bg-white/5 transition-colors"
+                    >
+                      <div className="text-sm font-medium text-white">{fp.label}</div>
+                      <div className="text-xs text-surface-400">{fp.description}</div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {links.map(link => (
               <a
                 key={link.href}
@@ -94,6 +149,18 @@ export default function Navbar() {
       {mobileOpen && (
         <div className="md:hidden border-t border-white/5 bg-surface-950/95 backdrop-blur-xl">
           <div className="px-4 py-4 space-y-1">
+            <div className="px-4 py-2 text-xs font-semibold text-surface-500 uppercase tracking-wider">Features</div>
+            {featurePages.map(fp => (
+              <Link
+                key={fp.href}
+                to={fp.href}
+                onClick={() => setMobileOpen(false)}
+                className="block px-4 py-3 rounded-lg text-sm font-medium text-surface-300 hover:text-white hover:bg-white/5"
+              >
+                {fp.label}
+              </Link>
+            ))}
+            <div className="border-t border-white/5 my-2" />
             {links.map(link => (
               <a
                 key={link.href}

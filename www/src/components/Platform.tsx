@@ -84,7 +84,7 @@ export default function Platform() {
             <h3 className="text-lg font-semibold text-white mb-2">System Loco IoT Integration</h3>
             <p className="text-sm text-surface-400 leading-relaxed">
               Works out of the box with System Loco hardware and IoT data platforms. GPS trackers, temperature sensors,
-              door sensors, and BLE beacons — all feeding real-time telemetry into your shipment tracking.
+              door sensors, and BLE beacons  - all feeding real-time telemetry into your shipment tracking.
               WiFi and BLE arrival criteria for automatic stop-level status updates.
             </p>
           </div>

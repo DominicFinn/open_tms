@@ -12,7 +12,7 @@ export default function CTA() {
         </h2>
         <p className="text-xl text-surface-300 leading-relaxed max-w-2xl mx-auto mb-10">
           Deploy Open TMS in minutes with Docker Compose. Full shipment lifecycle,
-          carrier tendering, IoT tracking, and EDI integration — all free, all open source.
+          carrier tendering, IoT tracking, and EDI integration  - all free, all open source.
         </p>
 
         <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">

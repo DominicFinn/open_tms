@@ -13,49 +13,33 @@ export const articles: Article[] = [
   {
     slug: 'why-open-source-tms',
     title: 'Why We Built an Open Source TMS',
-    excerpt: 'Enterprise transportation management software costs tens of thousands per year. We believe logistics teams deserve better — enterprise-grade tools without enterprise-grade bills.',
+    excerpt: 'TMS software costs a fortune and most of it isn\'t even that complex under the hood. So I built one and open sourced it.',
     date: '2026-04-10',
     author: 'Dominic Finn',
     category: 'announcements',
     readTime: '5 min read',
     content: `
-## The Problem with Commercial TMS
+## The Pricing Problem
 
-The logistics industry has a software problem. Enterprise TMS platforms — the kind with proper EDI integration, carrier tendering, and compliance features — typically cost $500 to $5,000+ per user per month. For a mid-size 3PL with 20 dispatchers, that's $120,000 to $1.2M annually just for software licenses.
+Here's what annoys me about TMS software. The commercial platforms - the ones with proper EDI, carrier tendering, and cold chain compliance - charge $500 to $5,000+ per user per month. A mid-size 3PL with 20 dispatchers is looking at $120K to $1.2M a year. Just for software licenses.
 
-Meanwhile, the underlying technology isn't particularly exotic. Order management, shipment tracking, carrier communication — these are well-understood domains. The complexity is in the integration, not the concept.
+And the thing is, the technology underneath isn't magic. Order management, shipment tracking, carrier communication - these are well-understood problems. The complexity is in wiring it all together, not in any individual piece being particularly hard.
 
-## Why Open Source?
+So why does it cost so much? Because the vendors can charge it. There's no credible open source alternative, so you either pay or you build your own from scratch. Most people pay.
 
-Open TMS exists because we believe:
+## Why I Open Sourced It
 
-1. **Logistics software shouldn't be a profit centre for vendors.** Your software costs should be infrastructure (hosting, database) — not per-seat licensing.
+I wanted to prove you could build a proper TMS - not a toy, not a demo, a real one with EDI and tendering and compliance features - and give it away.
 
-2. **You should own your data pipeline.** With a CQRS event architecture, every state change in Open TMS is an immutable event. Export it, pipe it to your data warehouse, train ML models on it. It's your data.
+The thinking is pretty simple:
 
-3. **Integrations shouldn't be gated features.** EDI 850, 856, 204, 990, 214, 997 support is included. IoT tracking is included. Cold chain compliance is included. These aren't premium add-ons.
+Your software costs should be hosting and database, not per-seat licensing. EDI support, IoT tracking, cold chain compliance - these shouldn't be premium add-ons you unlock at a higher tier. And you should be able to read the source code of the software running your logistics operation. Audit the database queries. Understand exactly what happens when a shipment status changes.
 
-4. **Transparency builds trust.** Read every line of code. Audit every database query. Understand exactly what happens when a shipment status changes.
+## What's Actually In Here
 
-## What Makes Open TMS Different
+This isn't a proof of concept. It's a working TMS with 87+ database models, 20+ CQRS command handlers, a full EDI suite (850, 856, 204, 990, 214, 997), carrier tendering with broadcast and waterfall strategies, a dedicated carrier portal, cold chain compliance with CFR 21 Part 11 logging, IoT integration for GPS and temperature and humidity sensors, traffic-aware ETA monitoring, and cargo reconciliation at the pallet level.
 
-This isn't a toy project or a proof of concept. Open TMS ships with:
-
-- **87+ database models** covering the full logistics domain
-- **20+ CQRS command handlers** with immutable event sourcing
-- **Full EDI suite** (850, 856, 204, 990, 214, 997) with SFTP auto-collection
-- **Carrier tendering** with broadcast and waterfall strategies
-- **A dedicated carrier portal** with bid submission and history
-- **Cold chain compliance** with CFR 21 Part 11 immutable logging
-- **IoT integration** — GPS, temperature, humidity, shock, door sensors
-- **Traffic-aware ETA monitoring** via TomTom, HERE, or Valhalla
-- **Cargo reconciliation** at the pallet/tote level with misdrop detection
-
-## The Business Model
-
-Open TMS is MIT licensed and free forever. It's an independent open source project maintained by Dominic Finn and the community.
-
-The software itself? Always free.
+It's a lot. And it's all MIT licensed. No catch.
 
 ## Getting Started
 
@@ -65,13 +49,13 @@ cd open_tms
 npm install && ./run.sh
 \`\`\`
 
-That's it. Docker Compose brings up PostgreSQL, the backend starts with migrations applied, and the frontend dev server launches. Visit localhost:5173 and you're running a full TMS.
+Docker Compose brings up PostgreSQL, the backend starts with migrations applied, and the frontend dev server launches. Visit localhost:5173 and you're running a full TMS. That's genuinely it.
     `,
   },
   {
     slug: 'cqrs-event-architecture-logistics',
     title: 'CQRS & Event Sourcing in Logistics Software',
-    excerpt: 'How we designed Open TMS with Command/Query Responsibility Segregation and immutable domain events — and why it matters for supply chain operations.',
+    excerpt: 'How we designed Open TMS with Command/Query Responsibility Segregation and immutable domain events  - and why it matters for supply chain operations.',
     date: '2026-04-08',
     author: 'Dominic Finn',
     category: 'engineering',
@@ -79,9 +63,9 @@ That's it. Docker Compose brings up PostgreSQL, the backend starts with migratio
     content: `
 ## Why CQRS for a TMS?
 
-Transportation management is fundamentally an event-driven domain. A shipment doesn't just "change status" — it goes through a series of discrete events: picked up, departed origin, arrived at stop, delayed by traffic, temperature excursion detected, delivered.
+Transportation management is fundamentally an event-driven domain. A shipment doesn't just "change status"  - it goes through a series of discrete events: picked up, departed origin, arrived at stop, delayed by traffic, temperature excursion detected, delivered.
 
-Traditional CRUD applications lose this history. They store the current state but not how you got there. For logistics — where audit trails, compliance, and analytics matter — that's a problem.
+Traditional CRUD applications lose this history. They store the current state but not how you got there. For logistics  - where audit trails, compliance, and analytics matter  - that's a problem.
 
 ## Our Architecture
 
@@ -102,34 +86,34 @@ Route (HTTP) → Validate (Zod) → CommandBus.dispatch()
                                 Commit + Publish
 \`\`\`
 
-Commands execute inside database transactions. Events are collected during execution and published AFTER the transaction commits — no partial event emission on rollback.
+Commands execute inside database transactions. Events are collected during execution and published AFTER the transaction commits  - no partial event emission on rollback.
 
 ### Read Side (Projections)
 
 Six denormalized read models are maintained by projection handlers:
 
-- **OrderReadModel** — customerName, originCity, destinationCity, status
-- **ShipmentReadModel** — carrierName, currentLat/Lng, orderCount, stopCount
-- **CarrierReadModel** — vehicleCount, driverCount, activeLaneCount
-- **CustomerReadModel** — activeOrderCount, totalOrderCount
-- **LaneReadModel** — originName, destinationName, carrierCount
-- **IssueReadModel** — assigneeName, escalatedTo, resolvedAt
+- **OrderReadModel**  - customerName, originCity, destinationCity, status
+- **ShipmentReadModel**  - carrierName, currentLat/Lng, orderCount, stopCount
+- **CarrierReadModel**  - vehicleCount, driverCount, activeLaneCount
+- **CustomerReadModel**  - activeOrderCount, totalOrderCount
+- **LaneReadModel**  - originName, destinationName, carrierCount
+- **IssueReadModel**  - assigneeName, escalatedTo, resolvedAt
 
 These are flat tables. List queries hit read models with zero JOINs. Fast, simple, and cache-friendly.
 
 ## Why This Matters for Operations
 
 ### Audit Trail
-Every state change is recorded in the immutable DomainEventLog. When a regulator asks "who changed this shipment's temperature disposition and when?" — the answer is in the event store.
+Every state change is recorded in the immutable DomainEventLog. When a regulator asks "who changed this shipment's temperature disposition and when?"  - the answer is in the event store.
 
 ### Analytics Pipeline
 The event export API gives you cursor-paginated access to every domain event. Pipe it to your data warehouse for operational analytics, ML-driven ETA prediction, or carrier performance scoring.
 
 ### Resilient Integrations
-Side effects (email notifications, EDI delivery, tracking registration) run in separate worker processes via pg-boss queues. If an email provider is down, the shipment still gets created — the notification retries with exponential backoff.
+Side effects (email notifications, EDI delivery, tracking registration) run in separate worker processes via pg-boss queues. If an email provider is down, the shipment still gets created  - the notification retries with exponential backoff.
 
 ### Eventual Consistency
-Read models are eventually consistent — there's a brief lag between command execution and projection update. For a TMS (where users refresh dashboards, not millisecond-sensitive trading), this tradeoff is perfect. You get fast writes AND fast reads.
+Read models are eventually consistent  - there's a brief lag between command execution and projection update. For a TMS (where users refresh dashboards, not millisecond-sensitive trading), this tradeoff is perfect. You get fast writes AND fast reads.
 
 ## Getting Started with the Architecture
 
@@ -139,222 +123,137 @@ See the [Domain Behaviours documentation](https://github.com/dominicfinn/open_tm
   {
     slug: 'cold-chain-compliance-open-tms',
     title: 'Cold Chain Compliance with Open TMS',
-    excerpt: 'How Open TMS handles pharmaceutical and food-grade cold chain requirements — including CFR 21 Part 11 compliance, immutable temperature logging, and automatic excursion management.',
+    excerpt: 'Cold chain compliance in most TMS platforms is either a paid add-on or doesn\'t exist. We built it in from day one.',
     date: '2026-04-05',
     author: 'Dominic Finn',
     category: 'guides',
     readTime: '6 min read',
     content: `
-## The Cold Chain Challenge
+## Why This Matters
 
-Pharmaceutical logistics operates under strict regulatory requirements. CFR 21 Part 11 mandates that electronic records must be tamper-evident, attributed to specific individuals, and maintained with full audit trails.
+If you're shipping pharmaceuticals or temperature-sensitive food products, you're dealing with CFR 21 Part 11. That means your electronic records need to be tamper-evident, attributed to specific people, and kept with full audit trails. It's not optional and getting it wrong is expensive.
 
-Most TMS platforms treat cold chain as a premium add-on. Open TMS includes it as a core feature.
+Most TMS platforms either don't handle this at all, or they charge you extra for a bolt-on module. Open TMS includes cold chain compliance as a core feature. It's not an add-on. It's just there.
 
-## How It Works
+## Temperature Profiles
 
-### Temperature Profiles
+You set up a profile that defines what's acceptable - target temperature range (say 2-8°C for vaccines), alert thresholds, humidity limits if relevant. Assign the profile to a shipment and the system watches it automatically.
 
-Create cold chain profiles defining acceptable ranges:
+## The Logging Bit
 
-- **Target temperature range** (e.g., 2-8°C for vaccines)
-- **Alert range** (when to start watching)
-- **Humidity thresholds** (if applicable)
+This is where it gets important for compliance. Every single temperature reading gets stored with a timestamp, the device ID, its calibration status, and a SHA-256 integrity hash. The hashes chain together, so if anyone tampers with a record, the chain breaks. That's your tamper evidence for auditors.
 
-Profiles are assigned to shipments based on product or customer requirements.
+It's not fancy technology. It's just done properly.
 
-### Immutable Logging
+## What Happens When Something Goes Wrong
 
-Every temperature reading is stored with:
-- Timestamp
-- Device ID and calibration status
-- SHA-256 integrity hash
-- Actor attribution
+When a reading goes out of range:
 
-The integrity hash chains readings together. If any record is modified, the hash chain breaks — providing tamper evidence for regulatory audits.
+1. The system catches it immediately
+2. A triage issue gets created automatically in the Quality Centre with critical priority
+3. The shipment's cold chain status moves to "pending review"
+4. Your quality team decides - release it or quarantine it
 
-### Excursion Management
+No one needs to be watching a dashboard. The system handles the detection and alerting. Your team handles the decision.
 
-When a reading falls outside the acceptable range:
+## Compliance Reports
 
-1. **Detection** — The system identifies the excursion immediately
-2. **Triage** — An issue is auto-created in the Quality Centre with critical priority
-3. **Disposition** — The shipment's cold chain status moves to "pending review"
-4. **Resolution** — Quality team decides: release the shipment or quarantine it
+When a shipment delivers, a compliance report generates automatically. Complete temperature timeline, any excursions with how long they lasted, device calibration status, the full custody chain showing which devices were on which shipment and when. Ready for your auditor without anyone having to compile anything.
 
-### Compliance Reports
+## Device Calibration
 
-When a shipment is delivered, Open TMS automatically generates a compliance report PDF containing:
-- Complete temperature timeline
-- Any excursions with duration and severity
-- Device calibration status at time of monitoring
-- Custody chain (which devices were assigned when)
+The system tracks calibration status for every IoT device - certificate references, calibration dates, expiry dates, accuracy ranges. If a device isn't calibrated, its readings get flagged in reports. Because an auditor will ask, and "I think it was calibrated" isn't an answer.
 
-## Device Calibration Tracking
+## Connecting to CAPA
 
-The system tracks calibration status for every IoT device:
-- Calibration certificate reference
-- Calibration date and expiry
-- Device accuracy within range
+When excursions reveal a pattern - say the same carrier keeps having temperature issues on the same lane - you can escalate from triage into a full CAPA investigation in the Quality Centre. Root cause analysis, corrective actions, preventive measures, verification. The whole lifecycle, tracked.
 
-Readings from uncalibrated devices are flagged in compliance reports.
+## Getting Set Up
 
-## CAPA Integration
+1. Create a cold chain profile in Admin
+2. Assign it to a shipment
+3. Connect your IoT sensors (System Loco devices work out of the box)
+4. Readings flow in, excursions get caught, reports generate themselves
 
-For organisations with quality management requirements, the CAPA (Corrective and Preventive Action) module links issues to root cause analysis and preventive measures. The full lifecycle is tracked: draft → submitted → under review → approved → verified → closed.
-
-## Getting Started
-
-1. Create a cold chain profile in Admin → Cold Chain Profiles
-2. Assign the profile to a shipment
-3. Connect IoT sensors (System Loco devices work out of the box)
-4. Temperature readings flow in automatically
-5. Excursions are detected and triaged in real-time
-
-No additional configuration or premium licenses required.
+No premium license. No per-feature pricing. It's just part of the platform.
     `,
   },
   {
     slug: 'pallet-level-tracking-digital-twins',
     title: 'Pallet-Level Tracking & Digital Twins',
-    excerpt: 'Track cargo at the pallet and tote level — not just the shipment. How Open TMS enables granular visibility with IoT device pairing and cargo scan reconciliation.',
+    excerpt: 'Most TMS platforms tell you where the truck is. That\'s not enough when you\'ve got 24 pallets for 3 customers across 5 stops.',
     date: '2026-04-01',
     author: 'Dominic Finn',
     category: 'product',
     readTime: '5 min read',
     content: `
-## Beyond Shipment-Level Tracking
+## The Problem With Shipment-Level Tracking
 
-Most TMS platforms track at the shipment level: "Shipment X is at Location Y." But supply chain operations need more granularity. When a truck carries 24 pallets for 3 different customers across 5 stops, knowing the truck's location isn't enough.
+"Shipment X is at Location Y." Great. But which of the 24 pallets on that truck are for which customer? Did the right pallets get unloaded at stop 3? Is pallet 17 still at the correct temperature?
 
-Open TMS tracks at the **trackable unit** level — pallets, totes, boxes, bags, or any container type your operation uses.
+Most TMS platforms can't answer those questions because they track trucks, not cargo. Open TMS tracks at the unit level - pallets, totes, boxes, whatever your operation uses.
 
-## How It Works
+## How It Actually Works
 
-### Trackable Units on Orders
+Every order can have trackable units attached to it. A pallet of pharmaceuticals that needs temperature monitoring. A tote of electronics that needs shock detection. Each unit gets a barcode and can be paired with its own IoT device.
 
-Every order can contain trackable units:
-- Pallet of pharmaceuticals (temperature-sensitive)
-- Tote of electronics (shock-sensitive)
-- Box of documents (standard)
+The pairing happens in the Warehouse Launch App. Your floor staff scan barcodes to link devices to shipments and devices to individual units. That creates a digital twin - a live digital representation of each physical pallet with real-time sensor data attached to it.
 
-Each unit gets a unique barcode and can be individually assigned to an IoT device.
+## Cargo Reconciliation
 
-### Device Pairing
+This is where it gets really useful. At each stop, the system knows what should be on the truck, what was actually scanned, and where the discrepancies are. Missing a unit? Flagged. Unexpected unit that shouldn't be there? Flagged. Pallet scanned at the wrong stop? Flagged immediately.
 
-Using the Warehouse Launch App, floor staff scan barcodes to pair:
-- **IoT devices → Shipments** (GPS tracking for the truck)
-- **IoT devices → Trackable Units** (sensor data for individual pallets)
+That last one - the misdrop - is one of the most expensive mistakes in logistics. A pallet gets loaded onto the wrong truck and ends up in the wrong city. Catching it at the loading dock instead of after delivery saves thousands.
 
-This creates a digital twin — a digital representation of each physical unit with real-time sensor data attached.
+## The Warehouse Launch Flow
 
-### Cargo Manifest & Reconciliation
-
-At each stop, the system knows:
-- **Expected cargo** — which units should be loaded/unloaded
-- **Actual scans** — what was actually scanned (barcode, RFID, manual, geofence, or IoT)
-- **Discrepancies** — missing units, unexpected units, misdropped cargo
-
-### Misdrop Detection
-
-If a pallet is scanned at the wrong stop (loaded onto a truck going to the wrong location), the system flags it immediately. This is one of the most expensive errors in logistics — catching it at the loading dock saves thousands in re-delivery costs.
-
-## The Warehouse App Flow
-
-1. **Select shipment** to launch
-2. **Scan IoT devices** (GPS trackers, temperature sensors)
-3. **Attach accessories** (door seals, BLE beacons)
-4. **Pair units to devices** (which pallet gets which sensor)
-5. **Pre-flight check** — resolve any flags before dispatch
-6. **Launch** — shipment status moves to in-transit
-
-The whole flow works on mobile with barcode camera scanning. No desktop required.
+The whole thing runs on mobile. Pick your shipment, scan the IoT devices, pair sensors to pallets, run through the pre-flight checklist, hit launch. Camera barcode scanning, no special hardware needed. The shipment flips to in-transit and monitoring kicks in automatically.
 
 ## Why This Matters
 
-- **Pharmaceutical compliance** — prove each pallet maintained cold chain independently
-- **Multi-customer loads** — track which customer's cargo was delivered where
-- **Loss prevention** — know immediately when cargo is at the wrong location
-- **Insurance claims** — granular proof of custody and condition
+For pharma - you can prove each individual pallet maintained cold chain, not just the truck. For multi-customer loads - you know exactly which customer's cargo went where. For loss prevention - you catch misdrops before the truck leaves the dock. For insurance claims - granular proof of custody and condition for every unit.
 
-## Coming Soon: Digital Twin App
+## What's Coming Next
 
-We're building a dedicated app for associating digital twins at the pallet/unit level. This will provide:
-- Real-time sensor dashboard per unit
-- Historical timeline with all events
-- Condition alerts (temperature, shock, humidity)
-- QR code scanning for instant unit lookup
+We're building a dedicated digital twin app for unit-level visibility. Real-time sensor dashboards per unit, full event timelines, condition alerts, and QR code scanning for instant lookup. It's on the roadmap.
     `,
   },
   {
     slug: 'carrier-tendering-guide',
     title: 'Carrier Tendering: Broadcast vs Waterfall',
-    excerpt: 'A guide to Open TMS carrier tendering strategies — when to use broadcast tenders, when to use waterfall, and how the carrier portal enables real-time bid submission.',
+    excerpt: 'You\'ve got a load that needs covering. Do you blast it to every carrier at once, or work down your preferred list? Here\'s how both strategies work in Open TMS.',
     date: '2026-03-28',
     author: 'Dominic Finn',
     category: 'guides',
     readTime: '4 min read',
     content: `
-## Two Tendering Strategies
+## The Two Approaches
 
-Open TMS supports two carrier tendering strategies, each suited to different operational scenarios.
+You've got a shipment that needs a carrier. There are basically two ways to handle this:
 
-### Broadcast Tendering
+**Broadcast** - send it to everyone at once and compare what comes back. All your selected carriers see the load simultaneously, submit their rates, and you pick the best one. This is your spot market play - when you want the best rate and you don't have a preferred carrier for this lane.
 
-All selected carriers are notified simultaneously. They submit bids (rate + transit time + equipment type) and you compare them side by side.
+**Waterfall** - work down a priority list. Your first-choice carrier gets the offer. If they decline or don't respond before the timeout, it automatically falls to the next one, then the next. This is your contract lane play - when you've got a relationship hierarchy and you want to honour it, but you don't want to waste time chasing people on the phone.
 
-**Best for:**
-- Spot market loads where you want the best rate
-- Lanes without contract carriers
-- High-volume situations where multiple carriers have capacity
+Both strategies are built into Open TMS. You choose which one when you create the tender.
 
-### Waterfall Tendering
+## How a Tender Actually Flows
 
-Carriers are notified one at a time in a pre-defined sequence. If the first carrier declines or doesn't respond within the timeout, it automatically falls to the next carrier.
+You draft it - pick the shipment, choose your strategy, select carriers. Open it - carriers get notified through the portal, email, or EDI 204 if they're set up for that. Bids come in. You compare them. Pick a winner. The carrier confirms. Done.
 
-**Best for:**
-- Contract lanes with preferred carrier priority
-- Time-sensitive loads where you need a quick yes/no
-- Situations where carrier relationship matters more than rate
-
-## The Tender Lifecycle
-
-1. **Draft** — Select the shipment, choose a strategy, pick carriers
-2. **Open** — Carriers are notified (via portal, email, or EDI 204)
-3. **Evaluating** — Bids come in, you compare them
-4. **Awarded** — Winner selected, shipment assigned to carrier
-5. **Confirmed** — Carrier acknowledges the load
+The whole creation process is a 5-step wizard and takes about 30 seconds. Select shipment, choose strategy, pick carriers (drag to reorder for waterfall), set your duration and target rate, review and publish.
 
 ## The Carrier Portal
 
-Carriers access a dedicated portal to:
-- View active tenders with countdown timers
-- Submit bids with rate, transit days, and equipment type
-- Track bid history (won, lost, pending, expired)
-- See their overall win rate
-- Manage their profile and credentials
+This is one of the features I'm most pleased with. Carriers get their own login to a dedicated portal where they can see active tenders with countdown timers, submit bids, track their history - wins, losses, pending, expired - and see their overall win rate.
 
-No phone calls. No email chains. Real-time digital tendering.
+No phone calls. No email threads where someone said they'd take it but actually they meant the other load. It's all tracked, all timestamped, all in one place.
 
-## EDI Integration
+## EDI 204/990
 
-For EDI-capable carriers, the entire flow can happen without portal login:
-- Open TMS generates **EDI 204** (Motor Carrier Load Tender)
-- Carrier responds with **EDI 990** (accept/decline with rate)
-- Bids from EDI 990 responses are automatically added to the tender
+For carriers that do EDI, they don't even need to log into the portal. Open TMS generates an EDI 204 (Load Tender), the carrier responds with an EDI 990 (accept or decline with their rate), and that response automatically shows up as a bid in the tender. They participate using their existing EDI setup without changing anything on their end.
 
-This means a carrier can participate in your tenders purely through their existing EDI infrastructure.
-
-## Creating a Tender
-
-The 5-step wizard guides you through:
-1. Select the shipment
-2. Choose broadcast or waterfall strategy
-3. Pick carriers (with drag-and-drop reordering for waterfall sequence)
-4. Set parameters (duration, target rate)
-5. Review and publish
-
-The whole process takes under 30 seconds.
+This is important because a lot of carriers - especially larger ones - don't want another portal to log into. They want EDI. So they get EDI.
     `,
   },
   {
@@ -372,11 +271,11 @@ You've seen it before. A group of people in the logistics industry get together 
 
 And then nothing happens.
 
-Not because the people involved aren't talented or passionate. But because they've optimised for the wrong thing. They've built the scaffolding of a project — the governance, the processes, the committee structures — without anyone actually sitting down and building features.
+Not because the people involved aren't talented or passionate. But because they've optimised for the wrong thing. They've built the scaffolding of a project  - the governance, the processes, the committee structures  - without anyone actually sitting down and building features.
 
 ## The Real Problem: Nobody Ships
 
-The uncomfortable truth about early-stage open source is that it doesn't need a committee. It needs one person — or a very small number of people — who are relentlessly focused on shipping working software.
+The uncomfortable truth about early-stage open source is that it doesn't need a committee. It needs one person  - or a very small number of people  - who are relentlessly focused on shipping working software.
 
 Most open source logistics projects fail because:
 
@@ -387,7 +286,7 @@ Most open source logistics projects fail because:
 
 ## What Actually Works
 
-At this stage of Open TMS, the project has a single active contributor acting as both product manager and developer. That's not a limitation — it's the strategy.
+At this stage of Open TMS, the project has a single active contributor acting as both product manager and developer. That's not a limitation  - it's the strategy.
 
 Here's what that looks like in practice:
 
@@ -397,17 +296,17 @@ The same person who decides "we need carrier tendering with broadcast and waterf
 
 ### AI as a Force Multiplier
 
-This is where modern tooling changes the equation entirely. Tools like Claude don't just write code — they enable a single person to operate at the speed of a small team.
+This is where modern tooling changes the equation entirely. Tools like Claude don't just write code  - they enable a single person to operate at the speed of a small team.
 
 The human contribution is the part that matters most: **thinking about the problem correctly.** What do logistics operators actually need? How should the data model work at scale? Which integrations matter? What are the right technology choices? How do we handle multi-tenancy, compliance, cold chain regulations?
 
-The AI handles the implementation velocity — generating well-structured code, writing tests, building UI components, handling the repetitive parts of software development. But it's guided by someone who understands the domain, makes architectural decisions deliberately, and documents the reasoning as they go.
+The AI handles the implementation velocity  - generating well-structured code, writing tests, building UI components, handling the repetitive parts of software development. But it's guided by someone who understands the domain, makes architectural decisions deliberately, and documents the reasoning as they go.
 
 This isn't "vibe coding." It's product management with an AI development partner.
 
 ### Moving Fast, Documenting As We Go
 
-Open TMS ships features fast. The event architecture, the carrier tendering system, the Quality Centre with CAPA investigations, the EDI suite, the IoT integration, the warehouse launch app — these were all built in a matter of weeks, not months.
+Open TMS ships features fast. The event architecture, the carrier tendering system, the Quality Centre with CAPA investigations, the EDI suite, the IoT integration, the warehouse launch app  - these were all built in a matter of weeks, not months.
 
 But speed without documentation is tech debt. Every feature ships with:
 - Updated domain behaviour docs
@@ -416,7 +315,7 @@ But speed without documentation is tech debt. Every feature ships with:
 - Test coverage
 - Marketing site updates
 
-The documentation isn't an afterthought — it's part of shipping.
+The documentation isn't an afterthought  - it's part of shipping.
 
 ### Taking Feedback From Everywhere
 
@@ -431,25 +330,313 @@ The difference is that feedback gets turned into features quickly, not added to 
 
 ## Why This Matters for Logistics
 
-The logistics industry is underserved by open source. There are excellent open source tools for CRM, ERP, e-commerce, project management — but almost nothing for transportation management. The commercial options cost hundreds of thousands per year.
+The logistics industry is underserved by open source. There are excellent open source tools for CRM, ERP, e-commerce, project management  - but almost nothing for transportation management. The commercial options cost hundreds of thousands per year.
 
 The path to changing that isn't forming a consortium. It's building software that works, shipping it, and letting the community grow around working code rather than around governance.
 
 ## The Committee Can Come Later
 
-To be clear: governance matters. Contributor guidelines matter. Community structures matter. But they matter at a different stage. They matter when you have something worth governing — when you have working software that people depend on, when you have multiple active contributors who need coordination.
+To be clear: governance matters. Contributor guidelines matter. Community structures matter. But they matter at a different stage. They matter when you have something worth governing  - when you have working software that people depend on, when you have multiple active contributors who need coordination.
 
-Trying to build the community infrastructure before you have the software is putting the cart before the horse. Or, since we're in logistics — it's building the dispatch office before you have any trucks.
+Trying to build the community infrastructure before you have the software is putting the cart before the horse. Or, since we're in logistics  - it's building the dispatch office before you have any trucks.
 
 ## You Don't Need to Be a Developer
 
-If you're reading this and you're a logistics professional — a dispatcher, a warehouse manager, a compliance officer, a carrier relations manager — your contribution to this project is potentially more valuable than any code contribution.
+If you're reading this and you're a logistics professional  - a dispatcher, a warehouse manager, a compliance officer, a carrier relations manager  - your contribution to this project is potentially more valuable than any code contribution.
 
 You know what features matter. You know which workflows are painful. You know what the regulations actually require. You know what carriers need from a TMS.
 
-Open a GitHub issue. Describe the problem. Tell us what your day looks like and where the software falls short. That's not a small contribution — that's the contribution that determines whether this project builds the right thing.
+Open a GitHub issue. Describe the problem. Tell us what your day looks like and where the software falls short. That's not a small contribution  - that's the contribution that determines whether this project builds the right thing.
 
 The code will follow. It always does, when you know what to build.
+    `,
+  },
+  {
+    slug: 'training-content',
+    title: 'Training Content: What\'s Coming and Why It\'s Not Here Yet',
+    excerpt: 'Open TMS doesn\'t have training videos yet. That\'s deliberate. Here\'s the plan for when it will, and why rushing it would be a waste of everyone\'s time.',
+    date: '2026-04-12',
+    author: 'Dominic Finn',
+    category: 'announcements',
+    readTime: '4 min read',
+    content: `
+## Let's Be Honest
+
+There's no training content for Open TMS right now. No video walkthroughs, no how-to guides with screenshots, no onboarding course. If you're looking at this project and thinking "I'd love to try it but I don't know where to start" - that's a fair reaction, and I know it's a gap.
+
+But here's the thing: creating training content for software that's still changing rapidly is a waste of time. You record a 20-minute walkthrough of the shipment creation flow, then two weeks later the UI gets redesigned and the video is wrong. Now you've got training content that actively misleads people. That's worse than having nothing.
+
+## The Plan
+
+Here's what's actually going to happen, in order:
+
+**1. Keep shipping features.** The roadmap still has important items on it. The core platform needs to be solid before we start telling people how to use it.
+
+**2. Hit a testing phase.** Once the feature set is where I want it, we'll slow down on new features and focus on stability. Bug fixes, edge cases, performance, the boring stuff that makes software actually reliable.
+
+**3. Tag a version.** Something very un-committal like 0.1. Not 1.0 - we're not pretending this is production-ready for everyone. But a tagged release that says "this is a known state you can deploy and test against."
+
+**4. Then - video content.** Once we have a stable version to point at, I'll create proper how-to videos for every major feature. The Operations app, the Triage Centre, the Quality Centre, carrier tendering, EDI setup, IoT configuration, the warehouse launch app. Every feature gets a walkthrough.
+
+## What the Training Content Will Look Like
+
+I'm not going to hire a marketing agency to produce polished corporate training videos with stock music and animated intros. It'll be me, screen recording, walking through each feature the way you'd actually use it.
+
+The format:
+
+- **Feature walkthroughs** - "Here's the Triage Centre. Here's how issues get created automatically. Here's how you drag them between columns. Here's how to escalate to a CAPA investigation."
+- **Setup guides** - "Here's how to deploy with Docker. Here's how to configure your first trading partner for EDI. Here's how to connect a System Loco IoT device."
+- **Workflow guides** - "Here's how a shipment goes from order creation to delivery, end to end. Here's where the documents generate. Here's what the carrier sees on their portal."
+
+No padding, no filler. Each video covers one thing and covers it properly.
+
+## Why Not Just Write Documentation?
+
+We do have documentation. The API has Swagger docs. There's a domain behaviours reference. There are architecture guides. That stuff exists and it's kept up to date as features ship.
+
+But written docs and video walkthroughs serve different purposes. Docs are great when you know what you're looking for - "how do I configure the ETA monitoring thresholds?" Video is great when you don't know what you don't know - "show me what this thing can actually do."
+
+Both matter. The written docs come first because they're faster to update when things change. The videos come once things stop changing so much.
+
+## In the Meantime
+
+If you want to get started with Open TMS today:
+
+- **Deploy it.** \`docker compose up\` and poke around. The UI is designed to be explorable - you shouldn't need a manual to figure out the basics.
+- **Read the domain behaviours doc.** It explains what every command does, what events it emits, and what side effects happen. That's the closest thing to a comprehensive guide right now.
+- **Open an issue.** If something is confusing or you can't figure out how to do something, that's useful feedback. It tells me what needs better UX, better docs, or both.
+
+Training content is coming. It's just coming at the right time, not prematurely.
+    `,
+  },
+  {
+    slug: 'cap-theorem-iot-scale-logistics',
+    title: 'Why Your Shipment Data Can\'t Be Everywhere At Once',
+    excerpt: 'CAP theorem, service workers, and what happens when 10,000 IoT devices are all trying to update at the same time. Explained for people who run logistics, not computer science lectures.',
+    date: '2026-04-12',
+    author: 'Dominic Finn',
+    category: 'engineering',
+    readTime: '8 min read',
+    content: `
+## The Problem, In Plain English
+
+You've got a truck with a GPS tracker pinging its location every 30 seconds. You've got a temperature sensor on a pallet reading every 60 seconds. You've got a warehouse scanning barcodes. You've got dispatchers updating shipment statuses. You've got carriers responding to tenders. You've got EDI files landing on an SFTP server.
+
+All of this is happening at the same time. And all of it needs to end up in the same database, consistently, without losing anything.
+
+Now multiply that by hundreds of shipments. Thousands of IoT devices. This is where things get interesting - and where a lot of logistics platforms quietly start dropping data or slowing to a crawl.
+
+## CAP Theorem (Without the Computer Science)
+
+There's a concept in distributed systems called CAP theorem. It says that when you're dealing with data spread across multiple places, you can only guarantee two out of three things:
+
+\`\`\`
+        Pick any two:
+
+    Consistency -------- Availability
+         \\                  /
+          \\                /
+           \\              /
+            \\            /
+         Partition Tolerance
+\`\`\`
+
+- **Consistency** - Everyone sees the same data at the same time. When a dispatcher marks a shipment as delivered, everyone sees "delivered" immediately.
+- **Availability** - The system always responds. You click something, you get an answer. It never just hangs.
+- **Partition Tolerance** - The system keeps working even when parts of the network are unreliable. And networks are always unreliable.
+
+Here's the thing: in the real world, you can't ignore partition tolerance. Networks fail. IoT devices go through tunnels. SFTP servers go down. So the real choice is: do you prioritise consistency or availability?
+
+## What This Means for Logistics Software
+
+Most of the time in a TMS, you want availability. If a dispatcher is trying to assign a carrier and the IoT data pipeline is backed up, the dispatch screen should still work. You don't want the whole application to freeze because a temperature sensor in Nebraska can't reach the server.
+
+But you also can't just throw away consistency entirely. If two people award the same tender to different carriers at the same moment, that's a real problem.
+
+So you make different choices for different parts of the system:
+
+\`\`\`
+  High Consistency (can't get this wrong)
+  ========================================
+  - Tender awards
+  - Shipment status transitions
+  - Financial data (rates, invoices)
+  - Cold chain disposition decisions
+
+  Eventual Consistency (a few seconds delay is fine)
+  ========================================
+  - GPS location updates
+  - Temperature readings
+  - Dashboard metrics
+  - Read model projections
+  - Notification delivery
+\`\`\`
+
+This is why Open TMS uses CQRS - Command Query Responsibility Segregation. The write side (commands) is strongly consistent. When you award a tender, that happens inside a database transaction. It either works or it doesn't. No half-states.
+
+The read side (dashboards, lists, reports) is eventually consistent. There's a brief lag - maybe a second or two - between a command executing and the read models updating. For a logistics dashboard that people refresh every few minutes, that's completely fine.
+
+## The IoT Scale Problem
+
+Here's where it gets properly challenging. Let's use realistic reporting intervals. A GPS tracker reporting every 5 minutes generates 288 data points per day. A temperature sensor reporting every 15 minutes adds another 96. That sounds manageable per device.
+
+But think about the fleet sizes. A mid-size cold chain operator might have 5,000 active devices across their shipments in a given month. A larger logistics company could easily have 15,000 or 30,000. These aren't hypothetical numbers - if you're running a few hundred shipments a month and each one has a GPS tracker plus a couple of temperature sensors, you get there fast.
+
+\`\`\`
+  Active        GPS           Temp          Total/day    Total/month
+  Devices       (every 5m)    (every 15m)
+  -------       ----------    -----------   ---------    -----------
+  1,000         288,000       96,000        384,000      11.5M
+  5,000         1,440,000     480,000       1,920,000    57.6M
+  15,000        4,320,000     1,440,000     5,760,000    172.8M
+  30,000        8,640,000     2,880,000     11,520,000   345.6M
+\`\`\`
+
+At 30,000 devices - which is genuinely realistic for a large 3PL or cold chain operator - you're looking at 345 million data points per month. Even at the "relaxed" 5-minute and 15-minute intervals. Some devices report more frequently than that.
+
+And that's just IoT. It's not the whole picture.
+
+## It's Not Just IoT
+
+IoT devices are the biggest volume source, but they're far from the only thing hammering the system. Think about everything else that's generating data in real time:
+
+- **Carrier webhook updates.** Your carriers are pushing status updates via their APIs. FedEx, XPO, Old Dominion, Schneider - each one sending tracking events, POD confirmations, exception notifications. If you're working with 20 carriers across 500 active shipments, that's thousands of webhook callbacks per day.
+- **EDI transactions.** 214 status updates landing on SFTP. 990 tender responses. 997 acknowledgments. Each one needs to be parsed, validated, matched to the right shipment, and processed.
+- **ETA recalculations.** Every GPS update potentially triggers a routing API call to TomTom or HERE to recalculate the arrival time. That's not just a database write - it's an outbound API call with its own latency.
+- **Triage automation.** Temperature excursion detected? That's not just storing a reading - it's creating an issue, assigning it, potentially sending notifications, updating the shipment's compliance status.
+- **Document generation.** Shipment delivered? Generate the compliance report, the breadcrumb PDF, update the read models, close out the tracking.
+
+So your actual data flow looks more like this:
+
+\`\`\`
+  Source                    Events/day (500 active shipments)
+  ------                    ---------------------------------
+  IoT devices (5,000)       1,920,000
+  Carrier webhooks          5,000 - 15,000
+  EDI transactions          1,000 - 5,000
+  ETA recalculations        10,000 - 50,000
+  Internal state changes    20,000 - 40,000
+  Document generation       500 - 2,000
+                            -------------------------
+  Total                     ~2,000,000+/day
+\`\`\`
+
+The IoT data dominates by volume, but the carrier webhooks and ETA recalculations are often more complex per event. A single carrier webhook might trigger a status update, a read model projection, a notification, and a triage check. That's four operations from one inbound event.
+
+## And Then There Are Agents
+
+This is where it gets really interesting - and where the architecture decisions we're making now will matter most.
+
+AI agents are coming to logistics operations. Not as a vague future concept - this is on the Open TMS roadmap. Agents that can:
+
+- Automatically respond to carrier tender offers based on rate history and lane performance
+- Triage exceptions and assign them based on severity, carrier history, and team workload
+- Detect patterns across shipments that no human would spot at scale - this carrier always runs late on this lane on Fridays, this temperature profile consistently drifts in the last 2 hours of transit
+- Proactively reroute shipments when ETA monitoring detects a delay that will miss a delivery window
+
+Here's the thing about agents: they work at machine speed, not human speed. A dispatcher might check the triage board every 30 minutes. An agent checks it continuously. A human might review 20 tender bids before lunch. An agent evaluates every bid against historical data the moment it arrives.
+
+That means the system needs to handle not just the inbound data volume, but the processing volume that agents generate. An agent responding to events creates more events - decisions, actions, notifications, state changes. The data flow isn't just inbound anymore. It's a feedback loop:
+
+\`\`\`
+  Inbound data -----> Processing -----> Agent decisions
+       ^                                      |
+       |                                      v
+       +--------- New events <----- Agent actions
+\`\`\`
+
+If your architecture can't handle the base IoT and webhook volume without choking, it's got no chance once agents are in the mix generating their own event streams on top. That's why the queue-based worker architecture matters so much. The system needs to be able to absorb spikes, process asynchronously, and scale the workers independently of the API layer.
+
+This isn't theoretical. It's the reason we built it this way from the start.
+
+You can't just INSERT each one into a PostgreSQL table synchronously and hope for the best. The database will choke long before you hit those numbers.
+
+## How Open TMS Handles This
+
+### Service Workers
+
+This is where service workers come in, and it's worth understanding why they exist.
+
+A naive approach would be: IoT device sends data, API receives it, API writes to database, API returns success. Simple. But if that database write takes 50ms and you're getting hundreds of requests per second from IoT devices, you've got a bottleneck. The API is spending all its time waiting for database writes instead of accepting new data.
+
+The solution is to separate receiving data from processing it:
+
+\`\`\`
+  IoT Device
+      |
+      v
+  API Endpoint -----> Queue (pg-boss)
+  (fast - just         |
+   accept & queue)     v
+                   Worker Process
+                   (batch insert,
+                    check thresholds,
+                    trigger alerts)
+\`\`\`
+
+The API endpoint does almost nothing - validates the data, drops it onto a queue, returns 200. Fast. The heavy lifting happens in a background worker process that can:
+
+- Batch-insert readings (100 at a time instead of one at a time)
+- Check temperature thresholds and create triage items if needed
+- Update ETA calculations
+- Trigger notifications for delays
+
+If the worker falls behind, the queue grows, but the API keeps accepting data. Nothing gets lost. The worker catches up when it can.
+
+### Adaptive Polling
+
+Not all data is equally urgent. A shipment that's 12 hours from delivery doesn't need minute-by-minute ETA checks. A shipment that's 30 minutes out does.
+
+Open TMS uses adaptive polling for ETA monitoring:
+
+\`\`\`
+  Time to delivery     Check interval
+  -----------------    ---------------
+  > 8 hours            ~40 minutes
+  2-8 hours            ~20 minutes
+  < 2 hours            ~10 minutes
+  Stale GPS (>60min)   Skip entirely
+\`\`\`
+
+This dramatically reduces the number of routing API calls. Instead of checking every shipment every 10 minutes regardless, you focus computational resources on the shipments that are actually close to delivery - where a delay actually matters.
+
+### Data Retention
+
+You don't need sub-second GPS resolution from six months ago. At scale, you need a retention strategy:
+
+\`\`\`
+  Age              Resolution        Storage
+  ----             ----------        -------
+  < 7 days         Full (every ping) Hot (PostgreSQL)
+  7-30 days        Downsampled       Warm
+  30-180 days      Aggregated        Cold
+  > 180 days       Summary only      Archive
+\`\`\`
+
+Open TMS currently keeps everything in PostgreSQL, which works fine up to a few hundred devices. For larger deployments, a tiered storage approach is on the roadmap.
+
+## The Network Reality
+
+IoT devices in logistics don't have reliable internet connections. Trucks go through tunnels. Rural areas have patchy coverage. Cellular networks drop. This is just reality.
+
+So the system has to handle gaps gracefully:
+
+- GPS data arrives out of order? Sort by device timestamp, not receive time.
+- 30-minute gap in temperature readings? Flag it in the compliance report but don't assume the worst.
+- Device goes completely dark? After 60 minutes of no data, skip it for ETA calculations rather than using stale coordinates.
+
+This is partition tolerance in practice. The system keeps working with whatever data it has and reconciles when the missing data eventually arrives.
+
+## Why This Matters To You
+
+If you're running a logistics operation, you probably don't care about CAP theorem as a concept. But you do care about:
+
+- **Will my dashboard show the right data?** Yes, within a second or two of it happening.
+- **Will I lose IoT data if there's a spike?** No, it queues and processes when it can.
+- **Will the system slow down as I add more devices?** Not with the worker architecture. The API and the processing scale independently.
+- **What happens when a device loses signal?** The system handles gaps and catches up when data resumes.
+
+The technical decisions behind all of this exist so that you don't have to think about them. The system just works, even when the network doesn't.
     `,
   },
 ]

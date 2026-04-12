@@ -28,7 +28,7 @@ const sections = [
   {
     title: 'Integrations',
     items: [
-      { title: 'EDI Configuration', description: 'X12 850, 856, 204, 990, 214, 997 — Trading Partner setup guide' },
+      { title: 'EDI Configuration', description: 'X12 850, 856, 204, 990, 214, 997  - Trading Partner setup guide' },
       { title: 'IoT & Webhooks', description: 'GPS/sensor data ingestion via webhook endpoints' },
       { title: 'System Loco', description: 'Out-of-the-box integration with System Loco IoT hardware' },
     ],

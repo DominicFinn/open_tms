@@ -1,0 +1,85 @@
+/* Mockup background animations for hero section */
+
+/* Gentle vertical float for each panel */
+@keyframes panel-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+/* Kanban card sliding from column 1 to column 2 */
+@keyframes kanban-card-move {
+  0%, 10% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  15% {
+    transform: translateX(4px);
+    opacity: 0.6;
+  }
+  20%, 80% {
+    transform: translateX(82px);
+    opacity: 1;
+  }
+  85% {
+    transform: translateX(86px);
+    opacity: 0.6;
+  }
+  90%, 100% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* Progress bar fill animation */
+@keyframes progress-fill-1 {
+  0%, 5% { width: 12%; }
+  20%, 80% { width: 72%; }
+  95%, 100% { width: 12%; }
+}
+
+@keyframes progress-fill-2 {
+  0%, 5% { width: 20%; }
+  25%, 75% { width: 94%; }
+  95%, 100% { width: 20%; }
+}
+
+/* Stat number pulse */
+@keyframes stat-pulse {
+  0%, 100% { opacity: 0.9; }
+  50% { opacity: 1; }
+}
+
+/* Map route dot travel */
+@keyframes route-dot-1 {
+  0% { offset-distance: 0%; }
+  100% { offset-distance: 100%; }
+}
+
+/* Fallback route dot for browsers without offset-path */
+@keyframes route-dot-fallback {
+  0%, 100% { cx: 60; cy: 90; }
+  25% { cx: 110; cy: 55; }
+  50% { cx: 180; cy: 70; }
+  75% { cx: 230; cy: 45; }
+}
+
+/* Dot pulse effect */
+@keyframes dot-ping {
+  0%, 100% { r: 3; opacity: 1; }
+  50% { r: 5; opacity: 0.6; }
+}
+
+/* Respect reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .mockup-panel,
+  .mockup-panel * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* Pause animations when container has paused class */
+.mockup-paused .mockup-panel,
+.mockup-paused .mockup-panel * {
+  animation-play-state: paused !important;
+}
