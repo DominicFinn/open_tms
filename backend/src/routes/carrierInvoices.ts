@@ -6,6 +6,7 @@ import { ICommandBus } from '../commands/CommandBus.js';
 import { RECEIVE_CARRIER_INVOICE, ReceiveCarrierInvoicePayload } from '../commands/carrierInvoices/ReceiveCarrierInvoiceCommand.js';
 import { APPROVE_CARRIER_INVOICE, ApproveCarrierInvoicePayload } from '../commands/carrierInvoices/ApproveCarrierInvoiceCommand.js';
 import { RECORD_CARRIER_PAYMENT, RecordCarrierPaymentPayload } from '../commands/carrierInvoices/RecordCarrierPaymentCommand.js';
+import { CarrierPaymentBatchService } from '../services/CarrierPaymentBatchService.js';
 
 export async function carrierInvoiceRoutes(server: FastifyInstance) {
   const carrierInvoiceRepo = container.resolve<ICarrierInvoiceRepository>(TOKENS.ICarrierInvoiceRepository);
@@ -196,6 +197,114 @@ export async function carrierInvoiceRoutes(server: FastifyInstance) {
         return { data: null, error: result.error };
       }
       return { data: result.data, error: null };
+    } catch (err: any) {
+      reply.code(400);
+      return { data: null, error: err.message };
+    }
+  });
+
+  // ─── Payment Batching ──────────────────────────────────────────────────────
+
+  const batchService = new CarrierPaymentBatchService(
+    container.resolve(TOKENS.PrismaClient)
+  );
+
+  // Get pending payment batches (approved invoices grouped by carrier)
+  server.get('/api/v1/carrier-invoices/payment-batches', {
+    schema: {
+      tags: ['Financial - Carrier Payment Batching'],
+      summary: 'Get approved carrier invoices grouped by carrier for batch payment',
+      querystring: {
+        type: 'object',
+        properties: {
+          carrierId: { type: 'string' },
+          dueBefore: { type: 'string', format: 'date', description: 'Only include invoices due on or before this date (YYYY-MM-DD)' },
+        },
+      },
+    },
+  }, async (req: FastifyRequest) => {
+    const query = req.query as Record<string, string>;
+    const batches = await batchService.getPendingBatches({
+      carrierId: query.carrierId,
+      dueBefore: query.dueBefore ? new Date(query.dueBefore) : undefined,
+    });
+    return { data: batches, error: null };
+  });
+
+  // Get scheduled payment summary
+  server.get('/api/v1/carrier-invoices/payment-batches/scheduled', {
+    schema: {
+      tags: ['Financial - Carrier Payment Batching'],
+      summary: 'Get summary of scheduled carrier payments by date',
+    },
+  }, async () => {
+    const summary = await batchService.getScheduledSummary();
+    return { data: summary, error: null };
+  });
+
+  // Schedule a batch of invoices for payment
+  server.post('/api/v1/carrier-invoices/payment-batches/schedule', {
+    schema: {
+      tags: ['Financial - Carrier Payment Batching'],
+      summary: 'Schedule approved carrier invoices for payment on a specific date',
+      body: {
+        type: 'object',
+        required: ['scheduledPayDate'],
+        properties: {
+          carrierInvoiceIds: { type: 'array', items: { type: 'string' }, description: 'Specific invoice IDs to schedule (optional - if omitted, uses carrierId/dueBefore filters)' },
+          carrierId: { type: 'string', description: 'Schedule all approved invoices for this carrier' },
+          dueBefore: { type: 'string', format: 'date', description: 'Schedule all approved invoices due on or before this date' },
+          scheduledPayDate: { type: 'string', format: 'date', description: 'Date to execute payment (YYYY-MM-DD)' },
+        },
+      },
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const body = z.object({
+      carrierInvoiceIds: z.array(z.string()).optional(),
+      carrierId: z.string().optional(),
+      dueBefore: z.string().optional(),
+      scheduledPayDate: z.string().min(1),
+    }).parse((req as any).body);
+
+    try {
+      const result = await batchService.scheduleBatch({
+        carrierInvoiceIds: body.carrierInvoiceIds,
+        carrierId: body.carrierId,
+        dueBefore: body.dueBefore ? new Date(body.dueBefore) : undefined,
+        scheduledPayDate: new Date(body.scheduledPayDate),
+      });
+      return { data: result, error: null };
+    } catch (err: any) {
+      reply.code(400);
+      return { data: null, error: err.message };
+    }
+  });
+
+  // Execute scheduled payments now (manual trigger)
+  server.post('/api/v1/carrier-invoices/payment-batches/execute', {
+    schema: {
+      tags: ['Financial - Carrier Payment Batching'],
+      summary: 'Execute all scheduled carrier payments due on or before today (or specified date)',
+      body: {
+        type: 'object',
+        properties: {
+          payDate: { type: 'string', format: 'date', description: 'Execute payments scheduled on or before this date (default: today)' },
+          paymentReference: { type: 'string', description: 'Payment reference to apply to all payments in this batch' },
+        },
+      },
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const body = z.object({
+      payDate: z.string().optional(),
+      paymentReference: z.string().optional(),
+    }).parse((req as any).body ?? {});
+
+    try {
+      const result = await batchService.executeScheduledPayments({
+        payDate: body.payDate ? new Date(body.payDate) : undefined,
+        paymentReference: body.paymentReference,
+      });
+      return { data: result, error: null };
     } catch (err: any) {
       reply.code(400);
       return { data: null, error: err.message };

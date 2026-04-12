@@ -300,7 +300,7 @@
   - ✅ Financial event types (charge.created, charge.approved, invoice.*, carrier_invoice.*, financial_query.*, credit_note.*)
   - ✅ 9 unit tests for charge command handlers
   - ✅ Full data models for Invoice, InvoiceLineItem, Payment, CarrierInvoice, CarrierInvoiceLineItem, FinancialQuery, CreditNote, InvoiceReadModel
-  - 🔲 Frontend: Financial tab on VNext Shipment Detail
+  - ✅ Frontend: Financial tab on VNext Shipment Detail (charges table, revenue/cost/margin summary, billing/payment status)
 - **Phase 7B: Quotes** ✅
   - ✅ Quote + QuoteLineItem Prisma models with revision tracking
   - ✅ QuoteRepository (interface + DTO + implementation)
@@ -323,7 +323,7 @@
   - ✅ 13 unit tests for all invoice command handlers
   - ✅ Invoice overdue detection cron (pg-boss, hourly, 7-day reminder cadence)
   - ✅ Invoice consolidation (weekly Monday / monthly 1st batching via pg-boss cron, manual trigger endpoint)
-  - 🔲 Frontend: VNext Invoices pages
+  - ✅ Frontend: VNext Finance app with 15 pages (dashboard, invoices list/detail/create, carrier invoices list/detail, quotes list/detail/create, queries/disputes, credit notes, AR aging report, record payments, CSV exports)
 - **Phase 7D: Carrier Invoices (AP) + Freight Audit** ✅
   - ✅ CarrierInvoiceRepository (interface + DTO + implementation)
   - ✅ FreightAuditService (three-way match: tender rate vs expected charges vs carrier invoice)
@@ -334,7 +334,7 @@
   - ✅ Auto-emits CARRIER_INVOICE_DISCREPANCY event for mismatches
   - ✅ 8 unit tests for carrier invoice commands
   - ✅ EDI 210 Freight Invoice inbound parsing (B3/N1/LX/L5/L0/L1/L3 segments, auto three-way match)
-  - 🔲 Carrier payment scheduling/batching
+  - ✅ Carrier payment scheduling/batching (CarrierPaymentBatchService, batch by carrier/due date, schedule future payments, auto-execute via daily pg-boss cron, manual trigger endpoint, batch summary API)
 - **Phase 7E: Queries, Disputes & Credit Notes** ✅
   - ✅ FinancialQueryRepository + CreditNoteRepository
   - ✅ RaiseQuery + ResolveQuery CQRS commands with events
