@@ -19,6 +19,7 @@ import VNextLanes from './vnext-design/VNextLanes';
 import VNextLaneDetail from './vnext-design/VNextLaneDetail';
 import VNextDocuments from './vnext-design/VNextDocuments';
 import VNextDailyReport from './vnext-design/VNextDailyReport';
+import VNextLocationReport from './vnext-design/VNextLocationReport';
 import VNextSettings from './vnext-design/VNextSettings';
 import VNextStyleGuide from './vnext-design/VNextStyleGuide';
 
@@ -169,6 +170,7 @@ root.render(
           <Route path="documents" element={<VNextDocuments />} />
           <Route path="documents/:id/view" element={<VNextBolView />} />
           <Route path="reports/daily" element={<VNextDailyReport />} />
+          <Route path="reports/locations" element={<VNextLocationReport />} />
 
           {/* Settings */}
           <Route path="settings" element={<VNextSettings />} />

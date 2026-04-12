@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { API_URL } from '../api';
+import { LOCATION_TYPE_META, getLocationTypeMeta } from './locationTypesMeta';
 
 export default function VNextCreateLocation() {
   const { id } = useParams();
@@ -184,18 +185,23 @@ export default function VNextCreateLocation() {
             <div className="vn-form-grid">
               <div className="vn-field">
                 <label className="vn-field-label">Location Type</label>
-                <select className="vn-select" value={locationType} onChange={e => setLocationType(e.target.value)}>
-                  <option value="">Select type...</option>
-                  <option value="warehouse">Warehouse</option>
-                  <option value="distribution_centre">Distribution Centre</option>
-                  <option value="cross_dock">Cross Dock</option>
-                  <option value="terminal">Terminal</option>
-                  <option value="port">Port</option>
-                  <option value="rail_yard">Rail Yard</option>
-                  <option value="customer">Customer</option>
-                  <option value="store">Store</option>
-                  <option value="manufacturing">Manufacturing</option>
-                </select>
+                <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                  <select className="vn-select" style={{ flex: 1 }} value={locationType} onChange={e => setLocationType(e.target.value)}>
+                    <option value="">Select type...</option>
+                    {Object.entries(LOCATION_TYPE_META).map(([value, meta]) => (
+                      <option key={value} value={value}>{meta.label}</option>
+                    ))}
+                  </select>
+                  {(() => {
+                    const meta = getLocationTypeMeta(locationType);
+                    return meta ? (
+                      <span className={`vn-chip ${meta.chip}`} style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
+                        <span className="material-icons" style={{ fontSize: 16 }}>{meta.icon}</span>
+                        {meta.label}
+                      </span>
+                    ) : null;
+                  })()}
+                </div>
               </div>
               <div className="vn-field">
                 <label className="vn-field-label">Dock Count</label>

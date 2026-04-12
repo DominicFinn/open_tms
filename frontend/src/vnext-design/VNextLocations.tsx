@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { API_URL } from '../api';
+import { LOCATION_TYPE_META, getLocationTypeMeta } from './locationTypesMeta';
 
 interface ArrivalCriteriaSummary {
   id: string;
@@ -23,17 +24,9 @@ interface Location {
   arrivalCriteria?: ArrivalCriteriaSummary[];
 }
 
-const LOCATION_TYPE_LABELS: Record<string, string> = {
-  warehouse: 'Warehouse',
-  distribution_centre: 'Distribution Centre',
-  cross_dock: 'Cross Dock',
-  terminal: 'Terminal',
-  port: 'Port',
-  rail_yard: 'Rail Yard',
-  customer: 'Customer',
-  store: 'Store',
-  manufacturing: 'Manufacturing',
-};
+const LOCATION_TYPE_LABELS = Object.fromEntries(
+  Object.entries(LOCATION_TYPE_META).map(([k, v]) => [k, v.label])
+);
 
 export default function VNextLocations() {
   const [locations, setLocations] = useState<Location[]>([]);
@@ -213,13 +206,17 @@ export default function VNextLocations() {
                       <div className="vn-table-secondary">{l.id}</div>
                     </td>
                     <td>
-                      {l.locationType ? (
-                        <span className="vn-chip vn-chip-primary" style={{ fontSize: 11 }}>
-                          {LOCATION_TYPE_LABELS[l.locationType] || l.locationType}
-                        </span>
-                      ) : (
-                        <span style={{ fontSize: 12, color: 'var(--on-surface-variant)', fontStyle: 'italic' }}>Unclassified</span>
-                      )}
+                      {(() => {
+                        const meta = getLocationTypeMeta(l.locationType);
+                        return meta ? (
+                          <span className={`vn-chip ${meta.chip}`} style={{ fontSize: 11 }}>
+                            <span className="material-icons" style={{ fontSize: 14 }}>{meta.icon}</span>
+                            {meta.label}
+                          </span>
+                        ) : (
+                          <span style={{ fontSize: 12, color: 'var(--on-surface-variant)', fontStyle: 'italic' }}>Unclassified</span>
+                        );
+                      })()}
                     </td>
                     <td style={{ fontSize: 13 }}>{l.address1}{l.address2 ? `, ${l.address2}` : ''}</td>
                     <td style={{ fontSize: 13 }}>{l.city}, {l.state}</td>
