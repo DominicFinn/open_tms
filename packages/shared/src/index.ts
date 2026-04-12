@@ -12,6 +12,30 @@ export interface Customer extends Timestamped {
   contactEmail?: string;
 }
 
+export type LocationType =
+  | 'warehouse'
+  | 'distribution_centre'
+  | 'cross_dock'
+  | 'terminal'
+  | 'port'
+  | 'rail_yard'
+  | 'customer'
+  | 'store'
+  | 'manufacturing';
+
+export interface FacilityCapabilities {
+  crossDockCapable?: boolean;
+  hasColdStorage?: boolean;
+  hasHazmatCert?: boolean;
+  hasBondedStorage?: boolean;
+  [key: string]: boolean | undefined;
+}
+
+export interface OperatingHoursEntry {
+  open: string;   // e.g. "08:00"
+  close: string;  // e.g. "17:00"
+}
+
 export interface Location {
   id: ID;
   name: string;
@@ -23,6 +47,15 @@ export interface Location {
   country: string;
   lat?: number;
   lng?: number;
+  locationType?: LocationType;
+  facilityCapabilities?: FacilityCapabilities;
+  operatingHours?: Record<string, OperatingHoursEntry>;
+  appointmentRequired?: boolean;
+  dockCount?: number;
+  maxTrailerLengthFt?: number;
+  contactName?: string;
+  contactPhone?: string;
+  contactEmail?: string;
 }
 
 export type ShipmentStatus =

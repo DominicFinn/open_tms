@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { API_URL } from '../api';
+import { LOCATION_TYPE_META, getLocationTypeMeta } from './locationTypesMeta';
 
 interface ArrivalCriteriaSummary {
   id: string;
@@ -18,8 +19,14 @@ interface Location {
   lat: number | null;
   lng: number | null;
   archived: boolean;
+  locationType?: string;
+  appointmentRequired?: boolean;
   arrivalCriteria?: ArrivalCriteriaSummary[];
 }
+
+const LOCATION_TYPE_LABELS = Object.fromEntries(
+  Object.entries(LOCATION_TYPE_META).map(([k, v]) => [k, v.label])
+);
 
 export default function VNextLocations() {
   const [locations, setLocations] = useState<Location[]>([]);
@@ -28,6 +35,7 @@ export default function VNextLocations() {
   const [search, setSearch] = useState('');
   const [countryFilter, setCountryFilter] = useState('all');
   const [viewMode, setViewMode] = useState<'table' | 'map'>('table');
+  const [typeFilter, setTypeFilter] = useState('all');
 
   useEffect(() => {
     async function fetchLocations() {
@@ -54,6 +62,7 @@ export default function VNextLocations() {
 
   const filtered = locations.filter(l => {
     if (countryFilter !== 'all' && l.country !== countryFilter) return false;
+    if (typeFilter !== 'all' && (l.locationType || '') !== typeFilter) return false;
     if (search) {
       const q = search.toLowerCase();
       return l.name.toLowerCase().includes(q) || l.city.toLowerCase().includes(q) || l.state.toLowerCase().includes(q) || (l.address1 || '').toLowerCase().includes(q);
@@ -144,6 +153,12 @@ export default function VNextLocations() {
               style={{ width: '100%' }}
             />
           </div>
+          <select className="vn-filter-select" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
+            <option value="all">All Types</option>
+            {Object.entries(LOCATION_TYPE_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
+          </select>
           <select className="vn-filter-select" value={countryFilter} onChange={e => setCountryFilter(e.target.value)}>
             <option value="all">All Countries</option>
             <option value="US">United States</option>
@@ -174,6 +189,7 @@ export default function VNextLocations() {
               <thead>
                 <tr>
                   <th>Name</th>
+                  <th>Type</th>
                   <th>Address</th>
                   <th>City / State</th>
                   <th>Country</th>
@@ -188,6 +204,19 @@ export default function VNextLocations() {
                     <td>
                       <span style={{ fontWeight: 600, color: 'var(--on-surface)' }}>{l.name}</span>
                       <div className="vn-table-secondary">{l.id}</div>
+                    </td>
+                    <td>
+                      {(() => {
+                        const meta = getLocationTypeMeta(l.locationType);
+                        return meta ? (
+                          <span className={`vn-chip ${meta.chip}`} style={{ fontSize: 11 }}>
+                            <span className="material-icons" style={{ fontSize: 14 }}>{meta.icon}</span>
+                            {meta.label}
+                          </span>
+                        ) : (
+                          <span style={{ fontSize: 12, color: 'var(--on-surface-variant)', fontStyle: 'italic' }}>Unclassified</span>
+                        );
+                      })()}
                     </td>
                     <td style={{ fontSize: 13 }}>{l.address1}{l.address2 ? `, ${l.address2}` : ''}</td>
                     <td style={{ fontSize: 13 }}>{l.city}, {l.state}</td>
@@ -224,7 +253,7 @@ export default function VNextLocations() {
                 ))}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={7}>
+                    <td colSpan={8}>
                       <div className="vn-empty">
                         <span className="material-icons">search_off</span>
                         <h3>No locations found</h3>

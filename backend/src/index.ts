@@ -38,6 +38,7 @@ import { ediFileRoutes } from './routes/ediFiles.js';
 import { queueMonitoringRoutes } from './routes/queueMonitoring.js';
 import { documentRoutes } from './routes/documents.js';
 import { dailyReportRoutes } from './routes/dailyReport.js';
+import { locationReportRoutes } from './routes/locationReports.js';
 import { attachmentRoutes } from './routes/attachments.js';
 import { customFieldRoutes } from './routes/customFields.js';
 import { themeRoutes } from './routes/theme.js';
@@ -113,6 +114,7 @@ async function start() {
   await server.register(queueMonitoringRoutes);
   await server.register(documentRoutes);
   await server.register(dailyReportRoutes);
+  await server.register(locationReportRoutes);
   await server.register(attachmentRoutes);
   await server.register(customFieldRoutes);
   await server.register(themeRoutes);

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { API_URL } from '../api';
+import { LOCATION_TYPE_META, getLocationTypeMeta } from './locationTypesMeta';
 
 export default function VNextCreateLocation() {
   const { id } = useParams();
@@ -21,6 +22,19 @@ export default function VNextCreateLocation() {
   const [contactName, setContactName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
+
+  // Location metadata
+  const [locationType, setLocationType] = useState('');
+  const [appointmentRequired, setAppointmentRequired] = useState(false);
+  const [dockCount, setDockCount] = useState('');
+  const [maxTrailerLengthFt, setMaxTrailerLengthFt] = useState('');
+
+  // Facility capabilities
+  const [crossDockCapable, setCrossDockCapable] = useState(false);
+  const [hasColdStorage, setHasColdStorage] = useState(false);
+  const [hasHazmatCert, setHasHazmatCert] = useState(false);
+  const [hasBondedStorage, setHasBondedStorage] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -42,6 +56,18 @@ export default function VNextCreateLocation() {
         setCountry(l.country || '');
         setLatitude(l.lat != null ? String(l.lat) : '');
         setLongitude(l.lng != null ? String(l.lng) : '');
+        setContactName(l.contactName || '');
+        setPhone(l.contactPhone || '');
+        setEmail(l.contactEmail || '');
+        setLocationType(l.locationType || '');
+        setAppointmentRequired(l.appointmentRequired || false);
+        setDockCount(l.dockCount != null ? String(l.dockCount) : '');
+        setMaxTrailerLengthFt(l.maxTrailerLengthFt != null ? String(l.maxTrailerLengthFt) : '');
+        const caps = l.facilityCapabilities || {};
+        setCrossDockCapable(caps.crossDockCapable || false);
+        setHasColdStorage(caps.hasColdStorage || false);
+        setHasHazmatCert(caps.hasHazmatCert || false);
+        setHasBondedStorage(caps.hasBondedStorage || false);
       })
       .catch(err => setSubmitError(err.message))
       .finally(() => setLoading(false));
@@ -55,6 +81,19 @@ export default function VNextCreateLocation() {
         name, address1, address2, city, state, postalCode, country,
         lat: latitude ? parseFloat(latitude) : undefined,
         lng: longitude ? parseFloat(longitude) : undefined,
+        locationType: locationType || undefined,
+        appointmentRequired,
+        dockCount: dockCount ? parseInt(dockCount, 10) : undefined,
+        maxTrailerLengthFt: maxTrailerLengthFt ? parseInt(maxTrailerLengthFt, 10) : undefined,
+        contactName: contactName || undefined,
+        contactPhone: phone || undefined,
+        contactEmail: email || undefined,
+        facilityCapabilities: {
+          crossDockCapable,
+          hasColdStorage,
+          hasHazmatCert,
+          hasBondedStorage,
+        },
       };
       const url = isEdit ? `${API_URL}/api/v1/locations/${id}` : `${API_URL}/api/v1/locations`;
       const res = await fetch(url, {
@@ -134,6 +173,74 @@ export default function VNextCreateLocation() {
                   <option value="AU">Australia</option>
                 </select>
               </div>
+            </div>
+          </div>
+
+          {/* Classification & Facility */}
+          <div className="vn-form-section">
+            <h3 className="vn-form-section-title">
+              <span className="material-icons">category</span>
+              Classification &amp; Facility
+            </h3>
+            <div className="vn-form-grid">
+              <div className="vn-field">
+                <label className="vn-field-label">Location Type</label>
+                <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                  <select className="vn-select" style={{ flex: 1 }} value={locationType} onChange={e => setLocationType(e.target.value)}>
+                    <option value="">Select type...</option>
+                    {Object.entries(LOCATION_TYPE_META).map(([value, meta]) => (
+                      <option key={value} value={value}>{meta.label}</option>
+                    ))}
+                  </select>
+                  {(() => {
+                    const meta = getLocationTypeMeta(locationType);
+                    return meta ? (
+                      <span className={`vn-chip ${meta.chip}`} style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
+                        <span className="material-icons" style={{ fontSize: 16 }}>{meta.icon}</span>
+                        {meta.label}
+                      </span>
+                    ) : null;
+                  })()}
+                </div>
+              </div>
+              <div className="vn-field">
+                <label className="vn-field-label">Dock Count</label>
+                <input className="vn-input" type="number" min="0" step="1" placeholder="Number of docks" value={dockCount} onChange={e => setDockCount(e.target.value)} />
+              </div>
+              <div className="vn-field">
+                <label className="vn-field-label">Max Trailer Length (ft)</label>
+                <input className="vn-input" type="number" min="0" step="1" placeholder="e.g. 53" value={maxTrailerLengthFt} onChange={e => setMaxTrailerLengthFt(e.target.value)} />
+              </div>
+              <div className="vn-field" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', paddingTop: '1.5rem' }}>
+                <input type="checkbox" id="appointmentRequired" checked={appointmentRequired} onChange={e => setAppointmentRequired(e.target.checked)} />
+                <label htmlFor="appointmentRequired" style={{ cursor: 'pointer', color: 'var(--text-primary)' }}>Appointment Required</label>
+              </div>
+            </div>
+          </div>
+
+          {/* Facility Capabilities */}
+          <div className="vn-form-section">
+            <h3 className="vn-form-section-title">
+              <span className="material-icons">verified</span>
+              Facility Capabilities
+            </h3>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.5rem' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', color: 'var(--text-primary)' }}>
+                <input type="checkbox" checked={crossDockCapable} onChange={e => setCrossDockCapable(e.target.checked)} />
+                Cross-Dock Capable
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', color: 'var(--text-primary)' }}>
+                <input type="checkbox" checked={hasColdStorage} onChange={e => setHasColdStorage(e.target.checked)} />
+                Cold Storage
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', color: 'var(--text-primary)' }}>
+                <input type="checkbox" checked={hasHazmatCert} onChange={e => setHasHazmatCert(e.target.checked)} />
+                Hazmat Certified
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', color: 'var(--text-primary)' }}>
+                <input type="checkbox" checked={hasBondedStorage} onChange={e => setHasBondedStorage(e.target.checked)} />
+                Bonded Storage
+              </label>
             </div>
           </div>
 

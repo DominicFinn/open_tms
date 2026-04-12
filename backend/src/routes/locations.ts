@@ -47,6 +47,22 @@ export async function locationRoutes(server: FastifyInstance) {
     return { data: locations, error: null };
   });
 
+  // Valid location types
+  const LOCATION_TYPES = ['warehouse', 'distribution_centre', 'cross_dock', 'terminal', 'port', 'rail_yard', 'customer', 'store', 'manufacturing'] as const;
+
+  // Shared schema for location metadata fields
+  const locationMetadataSchema = {
+    locationType: z.enum(LOCATION_TYPES).optional(),
+    facilityCapabilities: z.record(z.boolean()).optional(),
+    operatingHours: z.record(z.object({ open: z.string(), close: z.string() })).optional(),
+    appointmentRequired: z.boolean().optional(),
+    dockCount: z.number().int().min(0).optional(),
+    maxTrailerLengthFt: z.number().int().min(0).optional(),
+    contactName: z.string().optional(),
+    contactPhone: z.string().optional(),
+    contactEmail: z.string().email().optional().or(z.literal('')),
+  };
+
   // Create location — always creates a default geofence arrival criteria
   server.post('/api/v1/locations', async (req: FastifyRequest, reply: FastifyReply) => {
     const body = z
@@ -59,7 +75,8 @@ export async function locationRoutes(server: FastifyInstance) {
         postalCode: z.string().optional(),
         country: z.string().min(2),
         lat: z.number().optional(),
-        lng: z.number().optional()
+        lng: z.number().optional(),
+        ...locationMetadataSchema,
       })
       .parse((req as any).body);
 
@@ -108,7 +125,8 @@ export async function locationRoutes(server: FastifyInstance) {
       postalCode: z.string().optional(),
       country: z.string().min(2).optional(),
       lat: z.number().optional(),
-      lng: z.number().optional()
+      lng: z.number().optional(),
+      ...locationMetadataSchema,
     }).parse((req as any).body);
 
     const location = await locationsRepo.findById(id);
