@@ -113,6 +113,7 @@ const APPS: AppDef[] = [
         { to: '/settings/sla', icon: 'timer', label: 'SLA Policies' },
         { to: '/settings/llm', icon: 'smart_toy', label: 'AI / LLM' },
         { to: '/settings/agents', icon: 'psychology', label: 'Agent Config' },
+        { to: '/settings/skills', icon: 'build', label: 'Skills' },
       ]},
       { title: 'Apps', items: [
         { to: '/warehouse', icon: 'warehouse', label: 'Warehouse App' },

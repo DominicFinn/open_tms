@@ -81,6 +81,9 @@ export const TOKENS = {
   // LLM tokens
   ILlmProvider: Symbol.for('ILlmProvider'),
 
+  // Skills tokens
+  ISkillRegistry: Symbol.for('ISkillRegistry'),
+
   // Infrastructure tokens
   PrismaClient: Symbol.for('PrismaClient'),
   IFileStorageProvider: Symbol.for('IFileStorageProvider'),

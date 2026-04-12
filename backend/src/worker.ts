@@ -44,6 +44,11 @@ import { CreateIssueCommandHandler } from './commands/issues/CreateIssueCommand.
 import { UpdateIssueCommandHandler } from './commands/issues/UpdateIssueCommand.js';
 import { EscalateIssueCommandHandler } from './commands/issues/EscalateIssueCommand.js';
 import { DEFAULT_TRIAGE_PROMPT, DEFAULT_TRIAGE_EVENTS } from './events/handlers/TriageAgentHandler.js';
+import { SkillRegistry } from './services/skills/SkillRegistry.js';
+import { CreateIssueSkill } from './services/skills/CreateIssueSkill.js';
+import { EscalateIssueSkill } from './services/skills/EscalateIssueSkill.js';
+import { SendEmailSkill } from './services/skills/SendEmailSkill.js';
+import { CallWebhookSkill } from './services/skills/CallWebhookSkill.js';
 
 const WORKER_MODE = process.env.WORKER_MODE || 'all';
 
@@ -182,7 +187,19 @@ async function startWorker() {
       console.log('[Worker] LLM API key found but agents disabled (llmEnabled=false)');
     }
 
-    await registerEventHandlers(eventBus, prisma, emailService, storageProvider, llmProvider, workerCommandBus);
+    // Build skill registry for automation rules (always available, even without LLM)
+    const skillRegistry = new SkillRegistry();
+    if (workerCommandBus) {
+      skillRegistry.register(new CreateIssueSkill(workerCommandBus));
+      skillRegistry.register(new EscalateIssueSkill(workerCommandBus));
+    }
+    skillRegistry.register(new CallWebhookSkill());
+    if (emailService) {
+      skillRegistry.register(new SendEmailSkill(emailService));
+    }
+    console.log(`[Worker] Skill registry: ${skillRegistry.getAll().length} skills registered`);
+
+    await registerEventHandlers(eventBus, prisma, emailService, storageProvider, llmProvider, workerCommandBus, skillRegistry);
     await eventBus.start();
     console.log('[Worker] Event handlers registered and started');
   }

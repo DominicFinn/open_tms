@@ -633,6 +633,8 @@ model Organization {
   agentDecisionReadModels AgentDecisionReadModel[]
   agentConfigs            AgentConfig[]
   automationRules         AutomationRule[]
+  skillConfigs            SkillConfig[]
+  skillChains             SkillChain[]
 }
 
 model TrackableUnit {
@@ -2730,6 +2732,10 @@ model AutomationRule {
   // Provenance: which agent decision was this promoted from?
   sourceDecisionId  String?                           // AgentDecision.id (null if manually created)
 
+  // Skill chain support (for complex multi-step actions)
+  skillChainId      String?                           // SkillChain.id (when actionType = "skill_chain")
+  inlineSteps       Json?                             // Inline SkillChainStep[] for one-off chains
+
   // Stats
   executionCount    Int       @default(0)
   lastExecutedAt    DateTime?
@@ -2771,4 +2777,41 @@ model AutomationExecutionLog {
   @@index([orgId])
   @@index([ruleId])
   @@index([createdAt])
+}
+
+// ─── Skills (extensible action system) ───────────────────────────────────────
+
+model SkillConfig {
+  id            String    @id @default(uuid())
+  organization  Organization @relation(fields: [orgId], references: [id])
+  orgId         String
+
+  skillType     String                            // "send_email", "call_webhook", etc.
+  name          String                            // "Ops Webhook" or "Company SMTP"
+  config        Json                              // Skill-specific config (API keys, URLs, etc.)
+  enabled       Boolean   @default(true)
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([orgId, skillType, name])
+  @@index([orgId])
+  @@index([skillType])
+}
+
+model SkillChain {
+  id            String    @id @default(uuid())
+  organization  Organization @relation(fields: [orgId], references: [id])
+  orgId         String
+
+  name          String                            // "Critical Delay Response"
+  description   String?
+
+  // Ordered array of SkillChainStep[] (skill nodes + question nodes)
+  steps         Json                              // SkillChainStep[]
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([orgId])
 }

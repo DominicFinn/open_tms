@@ -71,6 +71,7 @@ import { agentDecisionRoutes } from './routes/agentDecisions.js';
 import { llmSettingsRoutes } from './routes/llmSettings.js';
 import { agentConfigRoutes } from './routes/agentConfig.js';
 import { automationRuleRoutes } from './routes/automationRules.js';
+import { skillRoutes } from './routes/skills.js';
 
 const server = Fastify({ logger: true });
 
@@ -155,6 +156,7 @@ async function start() {
   await server.register(llmSettingsRoutes);
   await server.register(agentConfigRoutes);
   await server.register(automationRuleRoutes);
+  await server.register(skillRoutes);
 
   // Start queue adapter (needed for publishing events, even if workers run elsewhere)
   try {

@@ -106,6 +106,11 @@ import { TomTomRoutingProvider } from '../services/routing/TomTomRoutingProvider
 import { ValhallaRoutingProvider } from '../services/routing/ValhallaRoutingProvider.js';
 import { ShipmentEtaMonitorService } from '../services/routing/ShipmentEtaMonitorService.js';
 import { AnthropicLlmProvider } from '../services/llm/AnthropicLlmProvider.js';
+import { SkillRegistry } from '../services/skills/SkillRegistry.js';
+import { CreateIssueSkill } from '../services/skills/CreateIssueSkill.js';
+import { EscalateIssueSkill } from '../services/skills/EscalateIssueSkill.js';
+import { SendEmailSkill } from '../services/skills/SendEmailSkill.js';
+import { CallWebhookSkill } from '../services/skills/CallWebhookSkill.js';
 
 /**
  * Register all application dependencies
@@ -452,6 +457,10 @@ export function registerDependencies(prisma: PrismaClient): void {
   }
   // If no LLM provider configured, ILlmProvider won't be resolvable — agent handlers stay disabled
 
+  // Skill registry — register all available skills
+  // Skills that need dependencies (CommandBus, EmailService) are registered after the CommandBus
+  container.singleton(TOKENS.ISkillRegistry).toFactory(() => new SkillRegistry());
+
   // Command bus — register all command handlers
   container.singleton(TOKENS.ICommandBus).toFactory(() => {
     const bus = new CommandBus();
@@ -541,4 +550,19 @@ export function registerDependencies(prisma: PrismaClient): void {
 
     return bus;
   });
+
+  // Register built-in skills (after CommandBus is available)
+  {
+    const registry = container.resolve<SkillRegistry>(TOKENS.ISkillRegistry);
+    const commandBus = container.resolve<import('../commands/CommandBus.js').ICommandBus>(TOKENS.ICommandBus);
+    registry.register(new CreateIssueSkill(commandBus));
+    registry.register(new EscalateIssueSkill(commandBus));
+    registry.register(new CallWebhookSkill());
+
+    // SendEmailSkill only if email service is available
+    if (container.has(TOKENS.IEmailService)) {
+      const emailService = container.resolve<import('../services/IEmailService.js').IEmailService>(TOKENS.IEmailService);
+      registry.register(new SendEmailSkill(emailService));
+    }
+  }
 }

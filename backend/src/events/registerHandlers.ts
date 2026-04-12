@@ -32,6 +32,7 @@ import { TriageAgentHandler } from './handlers/TriageAgentHandler.js';
 import { AutomationRuleHandler } from './handlers/AutomationRuleHandler.js';
 import { ILlmProvider } from '../services/llm/ILlmProvider.js';
 import { ICommandBus } from '../commands/CommandBus.js';
+import { SkillRegistry } from '../services/skills/SkillRegistry.js';
 
 /** Read concurrency from env with a default */
 function envInt(key: string, fallback: number): number {
@@ -65,6 +66,7 @@ export async function registerEventHandlers(
   storageProvider?: IBinaryStorageProvider,
   llmProvider?: ILlmProvider,
   commandBus?: ICommandBus,
+  skillRegistry?: SkillRegistry,
 ): Promise<void> {
   const handlers: IEventHandler[] = [
     new AuditHandler(prisma),
@@ -109,8 +111,8 @@ export async function registerEventHandlers(
   handlers.push(new Edi214ForwardHandler(prisma, edi214GenerationService, outboundDeliveryService));
 
   // Add automation rule handler (runs before triage agent — deterministic rules take priority)
-  if (commandBus) {
-    handlers.push(new AutomationRuleHandler(prisma, commandBus));
+  if (skillRegistry) {
+    handlers.push(new AutomationRuleHandler(prisma, skillRegistry));
     console.log('[EventBus] Automation rule handler enabled');
   }
 
