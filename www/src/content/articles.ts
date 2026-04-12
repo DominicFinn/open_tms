@@ -785,6 +785,127 @@ When we do implement language support, this is going to be one of the best ways 
 If you want to be involved when this happens, open a GitHub issue or just keep an eye on the project. We'll need native speakers who understand logistics terminology, and that's a genuinely valuable contribution.
     `,
   },
+  {
+    slug: 'multi-tenancy-shared-installations',
+    title: 'Multi-Tenancy: One Installation, Many Organisations',
+    excerpt: 'Right now, supporting multiple organisations means multiple installations. That works, but it doesn\'t scale for teams managing several orgs centrally. Here\'s what a proper multi-tenant architecture might look like - and why I need your input before building it.',
+    date: '2026-04-12',
+    author: 'Dominic Finn',
+    category: 'product',
+    readTime: '6 min read',
+    content: `
+## How It Works Today
+
+Open TMS already has the concept of an organisation. Every shipment, every order, every carrier, every user - it all belongs to an \`orgId\`. That's how data is segregated. If you're running a single logistics operation, this is fine. One installation, one org, done.
+
+But what if you're running multiple organisations? Maybe you're a 3PL operating different brands. Maybe you're a logistics consultancy managing operations for several clients. Maybe you're an enterprise with regional divisions that each need their own TMS instance with separate customers, carriers, and billing.
+
+Right now, the answer is: you run separate installations. Each org gets its own deployment - its own database, its own backend, its own frontend. The data is completely isolated, which is great for security. But it means the person administering all of this has multiple URLs, multiple logins, multiple sets of infrastructure to maintain. If you've got three organisations, you've got three PostgreSQL databases, three backend processes, three sets of environment variables to manage.
+
+That works. It's simple and it's secure. But it doesn't scale well for centralised teams.
+
+## The Problem
+
+Picture this: you're a small team running logistics operations for five different organisations. Each org has its own customers, its own carriers, its own rate agreements, its own EDI trading partners. They need to be separate - you can't have Org A's customers showing up in Org B's shipment list.
+
+But your operations team works across all five. The same dispatcher might handle exceptions for three different orgs. Your admin needs to configure settings, manage users, and update trading partners across all of them. Your finance team needs to review invoices from multiple orgs.
+
+With separate installations, that team is constantly switching between five different browser tabs, five different logins, five different dashboards. They can't see a unified view of exceptions across all their orgs. They can't compare carrier performance across organisations. Every configuration change needs to be done five times in five places.
+
+This is the kind of friction that's manageable at two organisations and unbearable at ten.
+
+## What Multi-Tenancy Would Look Like
+
+The core idea is a new hierarchical level above the existing organisation. You'd have one installation that supports multiple organisations, with clear boundaries between them.
+
+### Data Segregation
+
+This is non-negotiable. Organisation A must never see Organisation B's data. Not in API responses, not in database queries, not in background workers, not in EDI processing. The existing \`orgId\` pattern already enforces this at the application level - every query is scoped by org. Multi-tenancy would keep that model and add infrastructure around it.
+
+### User Hierarchy
+
+This is where it gets interesting. You'd need at least two levels:
+
+- **Super Admin** - Can see and manage all organisations on the installation. Can switch between orgs, configure system-wide settings, manage billing at the platform level. Think of this as the person running the infrastructure.
+- **Org Admin** - Can only see and manage their own organisation. This is the existing admin role, unchanged. They manage users, settings, carriers, and trading partners within their org.
+
+A super admin should be able to impersonate any organisation. Not in a creepy way - in a practical way. If an org admin reports a problem with their EDI configuration, the super admin needs to be able to switch into that org's context and see exactly what they see. Same UI, same data, same permissions - just viewed through that org's lens.
+
+### Organisation-Level Settings
+
+Each organisation already has its own settings in the current system. Multi-tenancy wouldn't change that. What it would add is a platform level above it:
+
+- **Platform settings** - Database connection, deployment config, feature flags that apply to all orgs, platform-wide defaults
+- **Organisation settings** - Everything that exists today: theme, EDI config, notification preferences, custom fields, document templates
+
+An org admin only sees their org settings. A super admin sees both levels.
+
+## The Open Questions
+
+Here's where I'm going to be honest: I haven't fully scoped this. There are real architectural questions I don't have answers to yet.
+
+### Cross-Org Operations
+
+Should a super admin be able to see a unified triage board across all organisations? The current Triage Centre shows issues for one org. If you're managing five orgs, you probably want to see all critical issues in one place, sorted by severity, regardless of which org they belong to.
+
+But that raises UX questions. Do you show the org name on every issue? Do you colour-code by org? Can you drag an issue from Org A's board into a different status? What about the automation rules - do they run per-org or can you have platform-wide rules?
+
+Same question applies to the carrier tendering pipeline, the financial dashboards, the ETA monitoring. All of these are currently org-scoped. Making them work across orgs isn't just a backend query change - it's a UX redesign.
+
+### Agent Behaviour
+
+The AI triage agent currently runs per-org with per-org prompt configuration. In a multi-tenant setup, do you want:
+
+- One agent config per org (each org gets its own triage behaviour)?
+- One agent config at the platform level (all orgs triaged the same way)?
+- Both, with platform defaults that orgs can override?
+
+The answer probably depends on who's operating it. A 3PL running five similar operations might want the same triage rules everywhere. An enterprise with a pharma division and a retail division might need completely different agent behaviour per org.
+
+### Billing and Financial Isolation
+
+Invoices, charges, carrier payments, financial queries - these absolutely must stay org-scoped. But should there be a platform-level financial overview? A super admin dashboard showing AR aging across all orgs, total carrier spend, consolidated margin analysis?
+
+That's useful data for the platform operator, but it means building aggregation layers that span org boundaries. Every financial query today assumes a single orgId. Cross-org aggregation is a different pattern entirely.
+
+### Shared Resources
+
+Some things might genuinely be shared across organisations:
+
+- Carrier definitions (the carrier company itself, not the rate agreements)
+- Document templates (maybe a platform default that orgs can customise)
+- NMFC freight class tables
+- System-wide reference data
+
+Others must never be shared:
+
+- Customer records
+- Rate agreements
+- EDI trading partner configs
+- User accounts (probably - though maybe a super admin account spans orgs?)
+
+Drawing that line correctly matters. Get it wrong and you leak data between orgs. Get it too conservative and you duplicate data unnecessarily.
+
+## Why I'm Writing This Before Building It
+
+I could start building multi-tenancy right now. The \`orgId\` pattern means the backend is already structured for it. The database queries are already scoped. Adding a "switch org" capability for super admins is technically straightforward.
+
+But the hard part isn't the implementation. It's the product decisions. Who operates this? What do they actually need to see across orgs? What should stay isolated? How does the agent system work at platform scale?
+
+These aren't questions I can answer from first principles. They need input from people who'd actually use this - someone running operations for multiple organisations who can say "yes, I need a unified triage view" or "no, each org's triage is completely independent and I don't want them mixed."
+
+## What Would Help
+
+If multi-tenancy is something you'd use, I want to hear from you. Specifically:
+
+- **How many organisations would you run on one installation?** Two? Five? Fifty? The answer changes the architecture significantly.
+- **What does your team structure look like?** Is it one team managing all orgs, or separate teams per org with a shared admin layer?
+- **What needs to be cross-org?** Triage? Financial reporting? Carrier management? Everything? Nothing?
+- **How do your orgs relate to each other?** Are they divisions of the same company? Completely separate clients? Something in between?
+
+Open an issue on GitHub with the "multi-tenancy" label, or comment on the existing discussion thread. This is one of those features where building the wrong thing is worse than building nothing, so I'd rather get it right than get it fast.
+    `,
+  },
 ]
 
 export function getArticle(slug: string): Article | undefined {
