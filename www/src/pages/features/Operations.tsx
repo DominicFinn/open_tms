@@ -261,56 +261,6 @@ export default function Operations() {
           </div>
         </div>
 
-        {/* Mobile: compact animated SVG instead of full dashboard preview */}
-        <div className="lg:hidden px-4 pb-12 flex justify-center">
-          <AnimateIn animation="scale-up">
-            <div className="glass-card rounded-2xl p-6 max-w-sm w-full">
-              <svg viewBox="0 0 320 180" fill="none" className="w-full h-auto">
-                <style>{`
-                  @keyframes ops-m-pulse { 0%,100% { opacity: 0.3; } 50% { opacity: 0.7; } }
-                  @keyframes ops-m-slide { 0% { transform: translateX(-4px); opacity: 0; } 30%,70% { transform: translateX(0); opacity: 1; } 100% { transform: translateX(4px); opacity: 0; } }
-                  .ops-m-row1 { animation: ops-m-slide 4s ease-in-out infinite; }
-                  .ops-m-row2 { animation: ops-m-slide 4s ease-in-out 0.8s infinite; }
-                  .ops-m-row3 { animation: ops-m-slide 4s ease-in-out 1.6s infinite; }
-                  .ops-m-dot { animation: ops-m-pulse 2s ease-in-out infinite; }
-                `}</style>
-                {/* Stats row */}
-                <rect x="16" y="12" width="56" height="28" rx="6" fill="rgba(59,130,246,0.1)" stroke="rgba(59,130,246,0.25)" strokeWidth="1"/>
-                <rect x="24" y="19" width="20" height="5" rx="2.5" fill="rgba(59,130,246,0.4)"/>
-                <rect x="24" y="28" width="36" height="3" rx="1.5" fill="rgba(59,130,246,0.15)"/>
-                <rect x="82" y="12" width="56" height="28" rx="6" fill="rgba(139,92,246,0.1)" stroke="rgba(139,92,246,0.25)" strokeWidth="1"/>
-                <rect x="90" y="19" width="16" height="5" rx="2.5" fill="rgba(139,92,246,0.4)"/>
-                <rect x="90" y="28" width="36" height="3" rx="1.5" fill="rgba(139,92,246,0.15)"/>
-                <rect x="148" y="12" width="56" height="28" rx="6" fill="rgba(34,197,94,0.1)" stroke="rgba(34,197,94,0.25)" strokeWidth="1"/>
-                <rect x="156" y="19" width="24" height="5" rx="2.5" fill="rgba(34,197,94,0.4)"/>
-                <rect x="156" y="28" width="36" height="3" rx="1.5" fill="rgba(34,197,94,0.15)"/>
-                {/* Table rows */}
-                <g className="ops-m-row1">
-                  <rect x="16" y="52" width="288" height="32" rx="6" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.06)" strokeWidth="1"/>
-                  <circle cx="34" cy="68" r="4" fill="rgba(59,130,246,0.4)" className="ops-m-dot"/>
-                  <rect x="46" y="62" width="60" height="4" rx="2" fill="rgba(255,255,255,0.12)"/>
-                  <rect x="46" y="70" width="40" height="3" rx="1.5" fill="rgba(255,255,255,0.06)"/>
-                  <rect x="240" y="63" width="48" height="10" rx="5" fill="rgba(59,130,246,0.15)" stroke="rgba(59,130,246,0.25)" strokeWidth="0.5"/>
-                </g>
-                <g className="ops-m-row2">
-                  <rect x="16" y="90" width="288" height="32" rx="6" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.06)" strokeWidth="1"/>
-                  <circle cx="34" cy="106" r="4" fill="rgba(34,197,94,0.4)" className="ops-m-dot" style={{animationDelay: '0.5s'}}/>
-                  <rect x="46" y="100" width="52" height="4" rx="2" fill="rgba(255,255,255,0.12)"/>
-                  <rect x="46" y="108" width="36" height="3" rx="1.5" fill="rgba(255,255,255,0.06)"/>
-                  <rect x="240" y="101" width="48" height="10" rx="5" fill="rgba(34,197,94,0.15)" stroke="rgba(34,197,94,0.25)" strokeWidth="0.5"/>
-                </g>
-                <g className="ops-m-row3">
-                  <rect x="16" y="128" width="288" height="32" rx="6" fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.06)" strokeWidth="1"/>
-                  <circle cx="34" cy="144" r="4" fill="rgba(245,158,11,0.4)" className="ops-m-dot" style={{animationDelay: '1s'}}/>
-                  <rect x="46" y="138" width="56" height="4" rx="2" fill="rgba(255,255,255,0.12)"/>
-                  <rect x="46" y="146" width="44" height="3" rx="1.5" fill="rgba(255,255,255,0.06)"/>
-                  <rect x="240" y="139" width="48" height="10" rx="5" fill="rgba(245,158,11,0.15)" stroke="rgba(245,158,11,0.25)" strokeWidth="0.5"/>
-                </g>
-              </svg>
-              <p className="text-center text-surface-500 text-xs mt-3">Shipment dashboard with live status tracking</p>
-            </div>
-          </AnimateIn>
-        </div>
       </section>
 
       {/* Alternating Split Sections */}
