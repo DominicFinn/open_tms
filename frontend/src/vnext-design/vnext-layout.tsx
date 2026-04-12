@@ -107,6 +107,7 @@ const APPS: AppDef[] = [
         { to: '/settings/document-templates', icon: 'article', label: 'Doc Templates' },
         { to: '/settings/custom-fields', icon: 'tune', label: 'Custom Fields' },
         { to: '/settings/maps', icon: 'map', label: 'Maps & Geocoding' },
+        { to: '/settings/sla', icon: 'timer', label: 'SLA Policies' },
       ]},
       { title: 'Apps', items: [
         { to: '/warehouse', icon: 'warehouse', label: 'Warehouse App' },

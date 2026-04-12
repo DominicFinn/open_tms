@@ -190,10 +190,10 @@
     - ✅ Event-driven evaluation on shipment/issue/tracking/cold-chain events
     - ✅ CQRS command handlers (create/update/deactivate SLA policies)
     - ✅ REST API for policy CRUD, evaluation dashboard, entity-level SLA status
-    - Frontend: SLA policy config page in Admin 🔲
-    - Frontend: SLA status tab on shipment detail 🔲
-    - Frontend: SLA indicators on issue kanban cards 🔲
-    - Frontend: SLA Health dashboard widget 🔲
+    - ✅ Frontend: SLA policy config page in Admin (org default + customer overrides, clone, rule editor)
+    - ✅ Frontend: SLA status tab on shipment detail (evaluations table with status/time remaining)
+    - ✅ Frontend: SLA indicators on issue kanban cards (worst SLA status badge with countdown)
+    - ✅ Frontend: SLA Health widget on operations dashboard (active/warning/breached/met counts)
   - Auto-triage handler (exception events → auto-create issues) 🔲
 - **Live Tracking & Status** (partial)
   - ✅ Inbound webhook endpoint for IoT GPS devices
