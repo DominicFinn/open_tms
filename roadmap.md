@@ -285,25 +285,83 @@
   - ✅ Frontend: CAPA reports page (VNext)
 
 ## **Phase 7: Financial & Commercial**
-- **Rate Management** 🔲
-  - Contract rates vs spot rates with effective date ranges
-  - Accessorial charges (fuel surcharge, liftgate, detention, demurrage, lumper fees)
-  - Multi-currency support
-- **Quoting Engine** 🔲
-  - Request and compare quotes from multiple carriers
-  - Auto-select based on cost, service level, and rules
-- **Basic Invoicing** 🔲
-  - Generate invoices from completed shipments
-  - Track payment status, match invoices to purchase orders
-  - Freight bill pay
-- **Freight Audit** 🔲
-  - Compare carrier invoices against contracted rates
-  - Flag discrepancies for review
-- **Basic Reporting & Analytics** 🔲
-  - Operational dashboards and KPIs (on-time %, cost per shipment, carrier scorecard)
-  - Financial reports (lane spend analysis, carrier spend)
-  - CSV/PDF report export
-  - Scheduled reports via email
+- **Phase 7A: Financial Foundation (Charges + Rating)** ✅
+  - ✅ Customer billing fields (billing address, payment terms, credit limit, invoice consolidation, auto-invoice)
+  - ✅ Carrier payment terms (payment terms, remit-to address)
+  - ✅ OrderLineItem pricing fields (unitPriceCents, totalPriceCents, freightClass, nmfcCode)
+  - ✅ LaneCarrier priceCents field (integer cents alongside deprecated Float price)
+  - ✅ Charge model (revenue/cost line items on orders and shipments, full lifecycle)
+  - ✅ ShipmentFinancialSummary (expected vs actual revenue/cost/margin, billing status)
+  - ✅ CreateCharge + ApproveCharge CQRS commands with events
+  - ✅ TenderAwardFinancialHandler (auto-creates cost charge on tender award)
+  - ✅ RatingService (lane-carrier rate lookup, fuel surcharge calculation)
+  - ✅ ChargeService (charge CRUD, shipment financial summary recalculation)
+  - ✅ Charges REST API with Swagger schemas
+  - ✅ Financial event types (charge.created, charge.approved, invoice.*, carrier_invoice.*, financial_query.*, credit_note.*)
+  - ✅ 9 unit tests for charge command handlers
+  - ✅ Full data models for Invoice, InvoiceLineItem, Payment, CarrierInvoice, CarrierInvoiceLineItem, FinancialQuery, CreditNote, InvoiceReadModel
+  - 🔲 Frontend: Financial tab on VNext Shipment Detail
+- **Phase 7B: Quotes** ✅
+  - ✅ Quote + QuoteLineItem Prisma models with revision tracking
+  - ✅ QuoteRepository (interface + DTO + implementation)
+  - ✅ CreateQuote, AcceptQuote, DeclineQuote CQRS commands with events
+  - ✅ Quote acceptance creates Order with pre-populated approved revenue charges
+  - ✅ Configurable markup percentage and validity period
+  - ✅ Quote REST API (5 endpoints) + LTL rate calc endpoints
+  - ✅ 8 unit tests for quote command handlers
+  - ✅ Quote expiration cron (pg-boss, every 30 min)
+  - ✅ Quote revision workflow (supersede + create new version with parentQuoteId linking)
+- **Phase 7C: Customer Invoicing (AR)** ✅
+  - ✅ InvoiceRepository + PaymentRepository (interface + DTO + implementation)
+  - ✅ InvoicingService (generate from shipments, find ready-to-invoice)
+  - ✅ CreateInvoice, ApproveInvoice, SendInvoice, RecordPayment, VoidInvoice CQRS commands
+  - ✅ BillingTriggerHandler (shipment.delivered -> ready_to_invoice, auto-draft if customer.autoInvoice)
+  - ✅ InvoiceProjection (InvoiceReadModel maintenance)
+  - ✅ Invoice REST API (8 endpoints with Swagger schemas)
+  - ✅ Void invoice reverts charges to approved and billing status to ready_to_invoice
+  - ✅ Full/partial payment with auto-status transitions (partial_paid / paid)
+  - ✅ 13 unit tests for all invoice command handlers
+  - ✅ Invoice overdue detection cron (pg-boss, hourly, 7-day reminder cadence)
+  - ✅ Invoice consolidation (weekly Monday / monthly 1st batching via pg-boss cron, manual trigger endpoint)
+  - 🔲 Frontend: VNext Invoices pages
+- **Phase 7D: Carrier Invoices (AP) + Freight Audit** ✅
+  - ✅ CarrierInvoiceRepository (interface + DTO + implementation)
+  - ✅ FreightAuditService (three-way match: tender rate vs expected charges vs carrier invoice)
+  - ✅ ReceiveCarrierInvoice command with automatic three-way match and auto-approve (2% tolerance)
+  - ✅ ApproveCarrierInvoice + RecordCarrierPayment commands
+  - ✅ Carrier invoice REST API (5 endpoints with Swagger schemas)
+  - ✅ Per-line match results (matched/variance/unmatched) with expected vs actual amounts
+  - ✅ Auto-emits CARRIER_INVOICE_DISCREPANCY event for mismatches
+  - ✅ 8 unit tests for carrier invoice commands
+  - ✅ EDI 210 Freight Invoice inbound parsing (B3/N1/LX/L5/L0/L1/L3 segments, auto three-way match)
+  - 🔲 Carrier payment scheduling/batching
+- **Phase 7E: Queries, Disputes & Credit Notes** ✅
+  - ✅ FinancialQueryRepository + CreditNoteRepository
+  - ✅ RaiseQuery + ResolveQuery CQRS commands with events
+  - ✅ ResolveQuery with optional auto-generated credit note
+  - ✅ FinancialImpactHandler: auto-creates queries from cargo.missing_at_stop, cargo.misdrop_detected, cold_chain.disposition_changed (quarantined)
+  - ✅ Financial queries REST API (5 endpoints) + Credit notes API (2 endpoints)
+  - ✅ 4 unit tests for query command handlers
+- **Phase 7F: LTL Enhancements + EDI 810** ✅
+  - ✅ LtlRatingService: class-based rating, weight break matrix, deficit weight optimization
+  - ✅ FAK (Freight All Kinds) override support
+  - ✅ Minimum charge threshold
+  - ✅ LTL accessorial codes (liftgate, residential, inside delivery, notification, limited access)
+  - ✅ Density-based freight class calculator
+  - ✅ LTL rate + freight class REST API endpoints
+  - ✅ 9 unit tests (deficit weight, FAK, minimum charge, accessorials, density calc)
+  - ✅ Re-weigh / re-class adjustment workflow (creates cost + revenue adjustment charges)
+  - ✅ Multi-order LTL consolidation billing (ConsolidationBillingService, pro-rate by weight)
+  - ✅ EDI 810 outbound Invoice generation (ISA/GS/ST envelope, BIG/N1/ITD/IT1/TDS/CTT segments)
+- **Basic Reporting & Analytics** (partial)
+  - ✅ AR aging report (JSON API + CSV export, aging buckets by customer, date picker)
+  - ✅ Carrier spend summary (total invoiced/approved/paid per carrier)
+  - ✅ Margin analysis by customer (revenue/cost/margin from shipment summaries)
+  - ✅ Frontend: AR Aging Report page with distribution bar chart and customer breakdown
+  - ✅ CSV exports for accounting: invoice register, carrier invoice register, payment ledger, charge detail (with date range + status filters)
+  - ✅ Frontend: Export to CSV page with date range presets and per-export filters
+  - Operational dashboards and KPIs (on-time %, cost per shipment, carrier scorecard) 🔲
+  - Scheduled reports via email 🔲
 
 ## **Phase 8: Portals, Tendering & Integration**
 - **Carrier Tendering System** ✅

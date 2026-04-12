@@ -37,6 +37,82 @@ function ShipmentTempChart({ readings }: { readings: any[] }) {
   );
 }
 
+function FinancialsTab({ shipmentId }: { shipmentId: string }) {
+  const [data, setData] = React.useState<any>(null);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    fetch(`${API_URL}/api/v1/shipments/${shipmentId}/financials`)
+      .then(r => r.json())
+      .then(j => setData(j.data))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [shipmentId]);
+
+  if (loading) return <div className="vn-card"><div className="vn-card-body"><p>Loading financials...</p></div></div>;
+
+  if (!data || (data.charges && data.charges.length === 0)) {
+    return (
+      <div className="vn-card">
+        <div className="vn-card-header"><h2>Financials</h2></div>
+        <div className="vn-card-body">
+          <div className="vn-empty">
+            <span className="material-icons" style={{ fontSize: 48, color: 'var(--on-surface-variant)' }}>payments</span>
+            <p>No charges recorded on this shipment yet.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const fmtMoney = (c: number) => `$${(c / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const margin = data.expectedRevenueCents - data.expectedCostCents;
+  const marginPct = data.expectedRevenueCents > 0 ? Math.round((margin / data.expectedRevenueCents) * 100) : 0;
+
+  return (
+    <>
+      {/* Summary stats */}
+      <div className="vn-stats" style={{ marginBottom: 16 }}>
+        <div className="vn-stat">
+          <div className="vn-stat-icon primary"><span className="material-icons">attach_money</span></div>
+          <div><div className="vn-stat-value">{fmtMoney(data.expectedRevenueCents)}</div><div className="vn-stat-label">Expected Revenue</div></div>
+        </div>
+        <div className="vn-stat">
+          <div className="vn-stat-icon warning"><span className="material-icons">local_shipping</span></div>
+          <div><div className="vn-stat-value">{fmtMoney(data.expectedCostCents)}</div><div className="vn-stat-label">Expected Cost</div></div>
+        </div>
+        <div className="vn-stat">
+          <div className="vn-stat-icon success"><span className="material-icons">trending_up</span></div>
+          <div><div className="vn-stat-value" style={{ color: margin >= 0 ? 'var(--success)' : 'var(--error)' }}>{fmtMoney(margin)} ({marginPct}%)</div><div className="vn-stat-label">Margin</div></div>
+        </div>
+      </div>
+
+      {/* Charges table */}
+      <div className="vn-card">
+        <div className="vn-card-header"><h2>Charges ({data.charges?.length || 0})</h2></div>
+        <div className="vn-table-wrap">
+          <table className="vn-table">
+            <thead>
+              <tr><th>Description</th><th>Category</th><th>Type</th><th>Status</th><th style={{ textAlign: 'right' }}>Amount</th></tr>
+            </thead>
+            <tbody>
+              {(data.charges || []).map((c: any) => (
+                <tr key={c.id}>
+                  <td>{c.description}</td>
+                  <td><span className={`vn-chip vn-chip-${c.chargeCategory === 'revenue' ? 'primary' : 'warning'}`}>{c.chargeCategory}</span></td>
+                  <td className="vn-table-secondary">{c.chargeType.replace(/_/g, ' ')}</td>
+                  <td><span className={`vn-chip vn-chip-${c.status === 'approved' ? 'success' : c.status === 'invoiced' ? 'info' : 'secondary'}`}>{c.status}</span></td>
+                  <td style={{ textAlign: 'right', fontWeight: 500 }}>{fmtMoney(c.amountCents)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </>
+  );
+}
+
 function TelemetryTab({ shipmentId }: { shipmentId: string }) {
   const [telemetry, setTelemetry] = useState<any>(null);
   const [tLoading, setTLoading] = useState(true);
@@ -1130,16 +1206,7 @@ export default function VNextShipmentDetail() {
           )}
 
           {activeTab === 'financials' && (
-            <div className="vn-card">
-              <div className="vn-card-header"><h2>Financials</h2></div>
-              <div className="vn-card-body">
-                <div className="vn-empty">
-                  <span className="material-icons" style={{ fontSize: 48, color: 'var(--on-surface-variant)' }}>payments</span>
-                  <p>Financial data will be available when Rate Management is enabled.</p>
-                  <p style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>See Phase 7 — Rate Management, Invoicing &amp; Freight Audit</p>
-                </div>
-              </div>
-            </div>
+            <FinancialsTab shipmentId={id!} />
           )}
 
           {activeTab === 'notes' && (

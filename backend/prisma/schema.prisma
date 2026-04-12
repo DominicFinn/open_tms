@@ -24,9 +24,29 @@ model Customer {
   slaPolicies  SlaPolicy[]
   users        User[]
 
+  // Billing & Financial
+  billingEmail          String?
+  billingAddress1       String?
+  billingAddress2       String?
+  billingCity           String?
+  billingState          String?
+  billingPostalCode     String?
+  billingCountry        String?
+  paymentTermsDays      Int       @default(30)    // Net 30, Net 45, etc.
+  creditLimitCents      Int?                       // null = no limit
+  currency              String   @default("USD")
+  invoiceConsolidation  String   @default("per_shipment")  // per_shipment | weekly | monthly
+  autoInvoice           Boolean  @default(false)            // auto-generate draft invoice on delivery
+  taxId                 String?                             // VAT / EIN
+
   // Read model relations
   orderReadModels    OrderReadModel[]
   shipmentReadModels ShipmentReadModel[]
+
+  // Financial relations
+  quotes             Quote[]
+  invoices           Invoice[]
+  creditNotes        CreditNote[]  @relation("CustomerCreditNotes")
 
   // Custom fields
   customFieldVersionId String?              // Version of custom field definitions used
@@ -139,6 +159,10 @@ model Shipment {
   // Custom fields
   customFieldVersionId String?
   customFieldValues    Json?
+
+  // Financial
+  charges                Charge[]
+  shipmentFinancialSummary ShipmentFinancialSummary?
 
   // Warehouse app
   accessories       ShipmentAccessory[]  // Door seals, BLE sensors, etc.
@@ -299,6 +323,16 @@ model Carrier {
   // Standard Carrier Alpha Code (needed for EDI 204)
   scacCode     String?
 
+  // Payment & Remittance
+  paymentTermsDays      Int       @default(30)
+  remitToName           String?
+  remitToAddress1       String?
+  remitToCity           String?
+  remitToState          String?
+  remitToPostalCode     String?
+  remitToCountry        String?
+  currency              String   @default("USD")
+
   // Custom fields
   customFieldVersionId String?
   customFieldValues    Json?
@@ -308,6 +342,10 @@ model Carrier {
   tenderOffers   TenderOffer[]
   tenderBids     TenderBid[]
   tradingPartners TradingPartner[] @relation("CarrierTradingPartners")
+
+  // Financial relations
+  carrierInvoices  CarrierInvoice[]
+  creditNotes      CreditNote[]  @relation("CarrierCreditNotes")
 
   // Read model relations
   shipmentReadModels ShipmentReadModel[]
@@ -400,7 +438,8 @@ model LaneCarrier {
   laneId       String
   carrier      Carrier  @relation(fields: [carrierId], references: [id])
   carrierId    String
-  price        Float?   // Price per shipment or per km
+  price        Float?   // Price per shipment or per km (deprecated — use priceCents)
+  priceCents   Int?     // Price in cents — canonical field for financial calculations
   currency     String   @default("USD")
   serviceLevel String?  // e.g., "Standard", "Express", "Economy"
   notes        String?
@@ -510,6 +549,9 @@ model Order {
   deviceAssignments     DeviceAssignment[]
   sensorReadings        SensorReading[]
 
+  // Financial
+  charges               Charge[]
+
   // Custom fields
   customFieldVersionId String?
   customFieldValues    Json?
@@ -537,6 +579,15 @@ model OrderLineItem {
   // Additional fields
   hazmat      Boolean @default(false)
   temperature String? // e.g., "ambient", "refrigerated", "frozen"
+
+  // Pricing
+  unitPriceCents  Int?                  // Price per unit in cents
+  totalPriceCents Int?                  // quantity * unitPriceCents
+  priceCurrency   String  @default("USD")
+
+  // LTL classification
+  freightClass    String?               // 50, 55, 60, 65, 70, 77.5, 85, 92.5, 100, 110, 125, 150, 175, 200, 250, 300, 400, 500
+  nmfcCode        String?               // National Motor Freight Classification code
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -2532,4 +2583,474 @@ model ConnectivityLog {
 
   @@index([createdAt])
   @@index([locationId])
+}
+
+// ─── Financial: Quotes ──────────────────────────────────────────────────────
+
+model Quote {
+  id                  String    @id @default(uuid())
+  orgId               String
+  quoteNumber         String    @unique           // QTE-0001
+  version             Int       @default(1)       // For revisions
+  parentQuoteId       String?                     // Links revisions
+  parentQuote         Quote?    @relation("QuoteRevisions", fields: [parentQuoteId], references: [id])
+  revisions           Quote[]   @relation("QuoteRevisions")
+  status              String    @default("draft") // draft, sent, accepted, declined, expired, superseded
+
+  customer            Customer  @relation(fields: [customerId], references: [id])
+  customerId          String
+
+  // Route details (snapshot at time of quote)
+  originId            String?
+  destinationId       String?
+  serviceLevel        String    @default("FTL")   // FTL, LTL
+  equipmentType       String?
+
+  // Financial
+  totalRevenueCents   Int                         // What we charge customer
+  totalCostCents      Int                         // Expected carrier cost
+  marginCents         Int                         // revenue - cost
+  marginPercent       Decimal   @db.Decimal(5,2)
+  currency            String    @default("USD")
+
+  // Validity
+  validFrom           DateTime  @default(now())
+  validUntil          DateTime                    // Expiration
+
+  // Conversion
+  orderId             String?                     // Set when quote is accepted and converted
+
+  notes               String?
+  createdBy           String?
+
+  lineItems           QuoteLineItem[]
+
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([orgId])
+  @@index([customerId])
+  @@index([status])
+}
+
+model QuoteLineItem {
+  id                  String    @id @default(uuid())
+  quote               Quote     @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  quoteId             String
+
+  chargeType          String    // linehaul, fuel_surcharge, accessorial, discount
+  description         String
+  amountCents         Int       // Positive = charge, negative = discount
+  currency            String    @default("USD")
+
+  // For accessorials
+  accessorialCode     String?
+
+  // For LTL
+  freightClass        String?
+  weight              Decimal?  @db.Decimal(10,2)
+  ratePerCwt          Int?      // Rate per hundredweight in cents
+
+  quantity            Int       @default(1)
+
+  createdAt           DateTime  @default(now())
+
+  @@index([quoteId])
+}
+
+// ─── Financial: Charges ─────────────────────────────────────────────────────
+
+model Charge {
+  id                  String    @id @default(uuid())
+  orgId               String
+
+  // Polymorphic: a charge can be on an order, a shipment, or both
+  order               Order?    @relation(fields: [orderId], references: [id])
+  orderId             String?
+  shipment            Shipment? @relation(fields: [shipmentId], references: [id])
+  shipmentId          String?
+
+  // Charge classification
+  chargeType          String    // linehaul, fuel_surcharge, accessorial, discount, adjustment, claim_deduction
+  chargeCategory      String    // revenue (what customer pays) | cost (what we pay carrier)
+  description         String
+
+  // Amount — always in integer cents to avoid floating-point errors
+  amountCents         Int       // Positive = charge, negative = credit/discount
+  currency            String    @default("USD")
+
+  // Source of this charge
+  source              String    @default("manual") // manual, contract_rate, quote, tender_bid, carrier_invoice, adjustment
+  sourceId            String?                      // ID of quote, tender bid, carrier invoice line, etc.
+
+  // For accessorials
+  accessorialCode     String?
+
+  // LTL-specific
+  freightClass        String?
+  nmfcCode            String?
+  ratedWeight         Decimal?  @db.Decimal(10,2)  // Actual rated weight (may differ from declared)
+  ratePerCwt          Int?                         // Rate per hundredweight in cents
+
+  // Lifecycle
+  status              String    @default("pending") // pending, approved, invoiced, disputed, written_off
+  approvedBy          String?
+  approvedAt          DateTime?
+
+  createdBy           String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([orgId])
+  @@index([orderId])
+  @@index([shipmentId])
+  @@index([chargeCategory])
+  @@index([status])
+}
+
+// ─── Financial: Shipment Financial Summary ──────────────────────────────────
+
+model ShipmentFinancialSummary {
+  id                       String   @id @default(uuid())
+  orgId                    String
+
+  shipment                 Shipment @relation(fields: [shipmentId], references: [id])
+  shipmentId               String   @unique
+
+  // Expected (from quote/contract/tender)
+  expectedRevenueCents     Int      @default(0)
+  expectedCostCents        Int      @default(0)
+  expectedMarginCents      Int      @default(0)
+
+  // Actual (from charges posted)
+  actualRevenueCents       Int      @default(0)
+  actualCostCents          Int      @default(0)
+  actualMarginCents        Int      @default(0)
+
+  currency                 String   @default("USD")
+
+  // Billing readiness
+  billingStatus            String   @default("not_ready") // not_ready, ready_to_invoice, invoiced, paid
+  podReceived              Boolean  @default(false)
+
+  // Carrier payment status
+  carrierPaymentStatus     String   @default("not_ready") // not_ready, invoice_received, approved, paid
+
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  @@index([orgId])
+  @@index([billingStatus])
+  @@index([carrierPaymentStatus])
+}
+
+// ─── Financial: Customer Invoices (Accounts Receivable) ─────────────────────
+
+model Invoice {
+  id                  String    @id @default(uuid())
+  orgId               String
+  invoiceNumber       String    @unique           // INV-20260401-0001
+
+  customer            Customer  @relation(fields: [customerId], references: [id])
+  customerId          String
+
+  // Status
+  status              String    @default("draft") // draft, approved, sent, partial_paid, paid, overdue, void, disputed
+
+  // Financial totals (computed from line items)
+  subtotalCents       Int
+  taxCents            Int       @default(0)
+  totalCents          Int
+  paidCents           Int       @default(0)
+  balanceCents        Int                         // total - paid
+  currency            String    @default("USD")
+
+  // Terms
+  paymentTermsDays    Int       @default(30)
+  issueDate           DateTime  @default(now())
+  dueDate             DateTime
+
+  // Dates
+  sentAt              DateTime?
+  paidAt              DateTime?
+
+  // Reminders
+  lastReminderSentAt  DateTime?
+  reminderCount       Int       @default(0)
+
+  notes               String?
+  internalNotes       String?
+  createdBy           String?
+
+  lineItems           InvoiceLineItem[]
+  payments            Payment[]
+  creditNotes         CreditNote[]  @relation("InvoiceCreditNotes")
+
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([orgId])
+  @@index([customerId])
+  @@index([status])
+  @@index([dueDate])
+}
+
+model InvoiceLineItem {
+  id                  String    @id @default(uuid())
+  invoice             Invoice   @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  invoiceId           String
+
+  // Link to source
+  shipmentId          String?
+  orderId             String?
+  chargeId            String?   // Links back to the Charge record
+
+  // Line item details
+  chargeType          String    // linehaul, fuel_surcharge, accessorial, discount
+  description         String
+  quantity            Int       @default(1)
+  unitPriceCents      Int
+  totalCents          Int
+  currency            String    @default("USD")
+
+  // LTL-specific
+  freightClass        String?
+  weight              Decimal?  @db.Decimal(10,2)
+
+  createdAt           DateTime  @default(now())
+
+  @@index([invoiceId])
+  @@index([shipmentId])
+}
+
+// ─── Financial: Payments (Customer) ─────────────────────────────────────────
+
+model Payment {
+  id                  String    @id @default(uuid())
+  orgId               String
+
+  invoice             Invoice   @relation(fields: [invoiceId], references: [id])
+  invoiceId           String
+
+  amountCents         Int
+  currency            String    @default("USD")
+
+  paymentMethod       String?   // check, ach, wire, credit_card
+  referenceNumber     String?   // Check number, transaction ID
+
+  receivedDate        DateTime  @default(now())
+  recordedBy          String?
+
+  notes               String?
+
+  createdAt           DateTime  @default(now())
+
+  @@index([orgId])
+  @@index([invoiceId])
+}
+
+// ─── Financial: Carrier Invoices (Accounts Payable) ─────────────────────────
+
+model CarrierInvoice {
+  id                  String    @id @default(uuid())
+  orgId               String
+  invoiceNumber       String                      // Carrier's invoice number
+
+  carrier             Carrier   @relation(fields: [carrierId], references: [id])
+  carrierId           String
+
+  // Status
+  status              String    @default("received") // received, matched, discrepancy, approved, scheduled, paid, disputed
+
+  // Financial totals
+  totalCents          Int
+  approvedCents       Int?      // May differ from totalCents after audit
+  paidCents           Int       @default(0)
+  currency            String    @default("USD")
+
+  // Terms
+  paymentTermsDays    Int       @default(30)
+  receivedDate        DateTime  @default(now())
+  dueDate             DateTime
+
+  // Three-way match
+  matchStatus         String    @default("pending") // pending, matched, partial_match, mismatch
+  varianceCents       Int?      // Difference between expected and invoiced
+  variancePercent     Decimal?  @db.Decimal(5,2)
+  autoApproved        Boolean   @default(false)
+
+  // EDI 210
+  edi210Content       String?   // Raw EDI 210 content
+  ediTransactionLogId String?   // Link to EdiTransactionLog
+
+  // Approval
+  approvedBy          String?
+  approvedAt          DateTime?
+
+  // Payment
+  scheduledPayDate    DateTime?
+  paidAt              DateTime?
+  paymentReference    String?   // Check number, ACH reference, etc.
+
+  notes               String?
+
+  lineItems           CarrierInvoiceLineItem[]
+
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@unique([orgId, carrierId, invoiceNumber])
+  @@index([orgId])
+  @@index([carrierId])
+  @@index([status])
+  @@index([dueDate])
+  @@index([matchStatus])
+}
+
+model CarrierInvoiceLineItem {
+  id                  String    @id @default(uuid())
+  carrierInvoice      CarrierInvoice @relation(fields: [carrierInvoiceId], references: [id], onDelete: Cascade)
+  carrierInvoiceId    String
+
+  shipmentId          String?
+  chargeId            String?
+
+  chargeType          String    // linehaul, fuel_surcharge, accessorial, detention, reweigh_adjustment
+  description         String
+  amountCents         Int
+  currency            String    @default("USD")
+
+  // Match result against expected
+  expectedAmountCents Int?
+  varianceCents       Int?
+  matchStatus         String    @default("pending") // pending, matched, variance, unmatched
+
+  // LTL-specific
+  freightClass        String?
+  billedWeight        Decimal?  @db.Decimal(10,2)
+  actualWeight        Decimal?  @db.Decimal(10,2)   // From re-weigh
+
+  createdAt           DateTime  @default(now())
+
+  @@index([carrierInvoiceId])
+  @@index([shipmentId])
+}
+
+// ─── Financial: Queries & Disputes ──────────────────────────────────────────
+
+model FinancialQuery {
+  id                  String    @id @default(uuid())
+  orgId               String
+  queryNumber         String    @unique           // QRY-0001
+
+  // Source: customer or carrier
+  queryType           String    // customer_dispute, carrier_dispute
+
+  // Related entities
+  invoiceId           String?
+  carrierInvoiceId    String?
+  shipmentId          String?
+
+  // Query details
+  reason              String    // overcharge, service_failure, missing_pod, wrong_rate, damage_claim, missing_items, temperature_excursion
+  description         String
+  disputedAmountCents Int?
+
+  // Lifecycle
+  status              String    @default("raised") // raised, investigating, resolved_adjusted, resolved_upheld, closed
+
+  // Resolution
+  resolvedBy          String?
+  resolvedAt          DateTime?
+  resolutionNotes     String?
+  adjustmentCents     Int?      // Positive = credit to querying party
+
+  // Link to credit/debit note if adjustment made
+  creditNoteId        String?
+
+  // Link to cargo discrepancy or excursion if applicable
+  cargoDiscrepancyId  String?
+  coldChainExcursionId String?
+
+  assigneeId          String?
+
+  createdBy           String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([orgId])
+  @@index([status])
+  @@index([queryType])
+  @@index([invoiceId])
+  @@index([carrierInvoiceId])
+}
+
+// ─── Financial: Credit & Debit Notes ────────────────────────────────────────
+
+model CreditNote {
+  id                  String    @id @default(uuid())
+  orgId               String
+  creditNoteNumber    String    @unique           // CN-0001
+
+  noteType            String    // credit, debit
+
+  invoice             Invoice?  @relation("InvoiceCreditNotes", fields: [invoiceId], references: [id])
+  invoiceId           String?
+
+  customer            Customer? @relation("CustomerCreditNotes", fields: [customerId], references: [id])
+  customerId          String?
+  carrier             Carrier?  @relation("CarrierCreditNotes", fields: [carrierId], references: [id])
+  carrierId           String?
+
+  amountCents         Int
+  currency            String    @default("USD")
+
+  reason              String
+  description         String
+
+  // Source
+  queryId             String?   // From a resolved FinancialQuery
+
+  // Lifecycle
+  status              String    @default("draft") // draft, approved, applied
+  approvedBy          String?
+  approvedAt          DateTime?
+  appliedAt           DateTime?
+
+  createdBy           String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([orgId])
+  @@index([invoiceId])
+  @@index([customerId])
+  @@index([carrierId])
+}
+
+// ─── Financial: Invoice Read Model ──────────────────────────────────────────
+
+model InvoiceReadModel {
+  id                  String    @id
+  orgId               String
+  invoiceNumber       String    @unique
+  customerId          String
+  customerName        String
+  status              String
+  totalCents          Int
+  paidCents           Int
+  balanceCents        Int
+  currency            String
+  issueDate           DateTime
+  dueDate             DateTime
+  daysPastDue         Int       @default(0)
+  shipmentCount       Int       @default(0)
+  lineItemCount       Int       @default(0)
+  createdAt           DateTime
+  updatedAt           DateTime
+
+  @@index([orgId])
+  @@index([status])
+  @@index([customerId])
+  @@index([dueDate])
+  @@index([daysPastDue])
 }

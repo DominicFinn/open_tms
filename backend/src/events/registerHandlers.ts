@@ -27,6 +27,10 @@ import { EDI214Service } from '../services/EDI214Service.js';
 import { OutboundEdiDeliveryService } from '../services/OutboundEdiDeliveryService.js';
 import { TradingPartnerRepository } from '../repositories/TradingPartnerRepository.js';
 import { IBinaryStorageProvider } from '../storage/IBinaryStorageProvider.js';
+import { TenderAwardFinancialHandler } from './handlers/TenderAwardFinancialHandler.js';
+import { BillingTriggerHandler } from './handlers/BillingTriggerHandler.js';
+import { InvoiceProjection } from './projections/InvoiceProjection.js';
+import { FinancialImpactHandler } from './handlers/FinancialImpactHandler.js';
 
 /** Read concurrency from env with a default */
 function envInt(key: string, fallback: number): number {
@@ -96,6 +100,18 @@ export async function registerEventHandlers(
   const edi214GenerationService = new EDI214Service();
   const outboundDeliveryService = new OutboundEdiDeliveryService(tradingPartnerRepo);
   handlers.push(new Edi214ForwardHandler(prisma, edi214GenerationService, outboundDeliveryService));
+
+  // Financial: auto-create cost charge when tender is awarded
+  handlers.push(new TenderAwardFinancialHandler(prisma));
+
+  // Financial: mark shipments ready_to_invoice on delivery, auto-invoice if configured
+  handlers.push(new BillingTriggerHandler(prisma));
+
+  // Financial: invoice read model projection
+  handlers.push(new InvoiceProjection(prisma));
+
+  // Financial: auto-create queries from cargo discrepancies and cold chain events
+  handlers.push(new FinancialImpactHandler(prisma));
 
   for (const handler of handlers) {
     // Apply env-based concurrency overrides
