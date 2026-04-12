@@ -1,4 +1,5 @@
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, useLocation } from 'react-router-dom'
+import { useEffect } from 'react'
 import Home from './pages/Home'
 import Blog from './pages/Blog'
 import BlogPost from './pages/BlogPost'
@@ -12,8 +13,16 @@ import AiAgents from './pages/features/AiAgents'
 import Financial from './pages/features/Financial'
 import Layout from './components/Layout'
 
+function ScrollToTop() {
+  const { pathname } = useLocation()
+  useEffect(() => { window.scrollTo(0, 0) }, [pathname])
+  return null
+}
+
 export default function App() {
   return (
+    <>
+    <ScrollToTop />
     <Routes>
       <Route element={<Layout />}>
         <Route path="/" element={<Home />} />
@@ -29,5 +38,6 @@ export default function App() {
         <Route path="/docs" element={<Docs />} />
       </Route>
     </Routes>
+    </>
   )
 }
