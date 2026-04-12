@@ -29,6 +29,7 @@ import { TradingPartnerRepository } from '../repositories/TradingPartnerReposito
 import { IBinaryStorageProvider } from '../storage/IBinaryStorageProvider.js';
 import { AgentDecisionProjection } from './projections/AgentDecisionProjection.js';
 import { TriageAgentHandler } from './handlers/TriageAgentHandler.js';
+import { AutomationRuleHandler } from './handlers/AutomationRuleHandler.js';
 import { ILlmProvider } from '../services/llm/ILlmProvider.js';
 import { ICommandBus } from '../commands/CommandBus.js';
 
@@ -54,6 +55,7 @@ const CONCURRENCY_OVERRIDES: Record<string, () => number> = {
   'projection.agent_decision': () => envInt('PROJECTION_CONCURRENCY', 3),
   'notification.email': () => envInt('EMAIL_CONCURRENCY', 2),
   'agent.triage': () => envInt('AGENT_TRIAGE_CONCURRENCY', 2),
+  'automation.rules': () => envInt('AUTOMATION_RULES_CONCURRENCY', 4),
 };
 
 export async function registerEventHandlers(
@@ -105,6 +107,12 @@ export async function registerEventHandlers(
   const edi214GenerationService = new EDI214Service();
   const outboundDeliveryService = new OutboundEdiDeliveryService(tradingPartnerRepo);
   handlers.push(new Edi214ForwardHandler(prisma, edi214GenerationService, outboundDeliveryService));
+
+  // Add automation rule handler (runs before triage agent — deterministic rules take priority)
+  if (commandBus) {
+    handlers.push(new AutomationRuleHandler(prisma, commandBus));
+    console.log('[EventBus] Automation rule handler enabled');
+  }
 
   // Add triage agent handler if LLM provider and command bus are available
   if (llmProvider && commandBus) {

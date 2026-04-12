@@ -35,6 +35,7 @@ export interface CreateAgentDecisionPayload {
   durationMs?: number;
   agentConfigId?: string;
   promptVersionId?: string;
+  matchedConditions?: Array<{ field: string; operator: string; value?: unknown }>;
 }
 
 export const CREATE_AGENT_DECISION = 'agent_decision.create';
@@ -79,6 +80,7 @@ export class CreateAgentDecisionCommandHandler extends BaseCommandHandler<
         durationMs: command.payload.durationMs,
         agentConfigId: command.payload.agentConfigId,
         promptVersionId: command.payload.promptVersionId,
+        matchedConditions: command.payload.matchedConditions as Prisma.InputJsonValue ?? undefined,
       },
     });
 

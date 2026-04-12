@@ -58,6 +58,7 @@ const APPS: AppDef[] = [
         { to: '/orders', icon: 'receipt_long', label: 'Orders' },
         { to: '/issues', icon: 'bug_report', label: 'Issues' },
         { to: '/agent-decisions', icon: 'smart_toy', label: 'Agent Decisions' },
+        { to: '/automation-rules', icon: 'bolt', label: 'Automation Rules' },
         { to: '/devices', icon: 'sensors', label: 'Devices' },
       ]},
       { title: 'Network', items: [

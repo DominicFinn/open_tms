@@ -32,6 +32,9 @@ interface Decision {
   inputTokens: number | null;
   outputTokens: number | null;
   durationMs: number | null;
+  matchedConditions: { field: string; operator: string; value?: unknown }[] | null;
+  agentConfigId: string | null;
+  promptVersionId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -122,17 +125,26 @@ export default function VNextAgentDecisionDetail() {
 
   async function promoteDecision() {
     try {
-      const res = await fetch(`${API_URL}/api/v1/agent-decisions/${id}/promote`, {
+      // Create automation rule from this decision's matched conditions
+      const res = await fetch(`${API_URL}/api/v1/automation-rules/from-decision/${id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
       });
-      if (!res.ok) throw new Error('Failed to promote');
-      const json = await res.json();
-      setDecision(json.data);
-      setSuccessMsg('Decision promoted to automation');
+      if (!res.ok) {
+        const json = await res.json();
+        throw new Error(json.error || 'Failed to promote');
+      }
+
+      // Refresh decision
+      const refreshRes = await fetch(`${API_URL}/api/v1/agent-decisions/${id}`);
+      const refreshJson = await refreshRes.json();
+      setDecision(refreshJson.data);
+      setSuccessMsg('Automation rule created from this decision');
       setTimeout(() => setSuccessMsg(''), 3000);
     } catch (err: any) {
       setSaveError(err.message);
+      setTimeout(() => setSaveError(''), 5000);
     }
   }
 
@@ -208,6 +220,32 @@ export default function VNextAgentDecisionDetail() {
               <p style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6, margin: 0 }}>{decision.reasoning}</p>
             </div>
           </div>
+
+          {/* Matched conditions (for automation promotion) */}
+          {decision.matchedConditions && decision.matchedConditions.length > 0 && (
+            <div className="vn-card">
+              <div className="vn-card-header">
+                <h2>Matched Conditions</h2>
+                <span style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>Used for automation rule promotion</span>
+              </div>
+              <div className="vn-card-body">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {decision.matchedConditions.map((c, i) => (
+                    <div key={i} style={{
+                      display: 'flex', gap: 8, alignItems: 'center', padding: '8px 12px',
+                      background: 'var(--surface-container)', borderRadius: 8, fontFamily: 'monospace', fontSize: 13,
+                    }}>
+                      <span style={{ color: 'var(--primary)', fontWeight: 600 }}>{c.field}</span>
+                      <span style={{ color: 'var(--on-surface-variant)' }}>{c.operator}</span>
+                      {c.value !== undefined && (
+                        <span style={{ color: 'var(--on-surface)' }}>{JSON.stringify(c.value)}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Action details */}
           {decision.actionPayload && Object.keys(decision.actionPayload).length > 0 && (

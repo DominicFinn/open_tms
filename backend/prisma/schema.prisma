@@ -632,6 +632,7 @@ model Organization {
   agentDecisions          AgentDecision[]
   agentDecisionReadModels AgentDecisionReadModel[]
   agentConfigs            AgentConfig[]
+  automationRules         AutomationRule[]
 }
 
 model TrackableUnit {
@@ -2598,6 +2599,7 @@ model AgentDecision {
   // Config traceability (which prompt produced this decision)
   agentConfigId     String?                           // AgentConfig.id
   promptVersionId   String?                           // AgentConfigVersion.id
+  matchedConditions Json?                             // Conditions in unified format [{field,operator,value}...]
 
   // Automation promotion
   promotedToAutomation Boolean @default(false)
@@ -2700,4 +2702,73 @@ model AgentConfigVersion {
 
   @@unique([configId, versionNumber])
   @@index([configId])
+}
+
+// ─── Automation Rules (deterministic rules promoted from agent decisions) ─────
+
+model AutomationRule {
+  id                String    @id @default(uuid())
+  organization      Organization @relation(fields: [orgId], references: [id])
+  orgId             String
+
+  name              String                            // "Critical delay auto-escalation"
+  description       String?
+
+  enabled           Boolean   @default(true)
+  priority          Int       @default(50)            // 1-100, lower = evaluated first
+
+  // Trigger: which events this rule listens to
+  eventPattern      String                            // "shipment.exception", "sla.breached", "shipment.*"
+
+  // Conditions: JSON array of {field, operator, value}
+  conditions        Json                              // [{ field, operator, value }, ...]
+
+  // Action
+  actionType        String                            // "create_issue", "escalate_issue"
+  actionConfig      Json                              // { issuePriority, issueCategory, issueTitle, ... }
+
+  // Provenance: which agent decision was this promoted from?
+  sourceDecisionId  String?                           // AgentDecision.id (null if manually created)
+
+  // Stats
+  executionCount    Int       @default(0)
+  lastExecutedAt    DateTime?
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  executions        AutomationExecutionLog[]
+
+  @@index([orgId, enabled])
+  @@index([eventPattern])
+  @@index([priority])
+}
+
+model AutomationExecutionLog {
+  id                String    @id @default(uuid())
+  orgId             String
+
+  rule              AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  ruleId            String
+  ruleName          String                            // Denormalized for audit
+
+  // What triggered it
+  eventType         String
+  eventId           String                            // DomainEventLog.id
+  entityType        String
+  entityId          String
+
+  // What it did
+  actionType        String
+  actionResult      Json?                             // { issueId, success, error }
+
+  // Evaluation trace
+  conditionsMatched Boolean
+  evaluationMs      Int?
+
+  createdAt         DateTime  @default(now())
+
+  @@index([orgId])
+  @@index([ruleId])
+  @@index([createdAt])
 }

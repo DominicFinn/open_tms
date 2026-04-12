@@ -20,10 +20,18 @@ import { CREATE_ISSUE } from '../../commands/issues/CreateIssueCommand.js';
 import { ESCALATE_ISSUE } from '../../commands/issues/EscalateIssueCommand.js';
 import { randomUUID } from 'crypto';
 
+/** Unified condition format shared between agent decisions and automation rules */
+export interface RuleCondition {
+  field: string;
+  operator: 'equals' | 'notEquals' | 'contains' | 'in' | 'greaterThan' | 'lessThan' | 'greaterThanOrEqual' | 'lessThanOrEqual' | 'exists' | 'notExists';
+  value?: unknown;
+}
+
 /** Structured response expected from the LLM */
 interface TriageDecision {
   summary: string;
   reasoning: string;
+  conditions: RuleCondition[];
   actionType: 'create_issue' | 'escalate_issue' | 'no_action';
   confidence: number;
   issuePriority?: 'low' | 'medium' | 'high' | 'critical';
@@ -67,6 +75,10 @@ You must respond with ONLY a JSON object (no markdown, no explanation outside th
 {
   "summary": "One-line human-readable summary of your decision",
   "reasoning": "2-3 sentences explaining WHY you made this decision",
+  "conditions": [
+    { "field": "event.type", "operator": "equals", "value": "the.event.type" },
+    { "field": "payload.fieldName", "operator": "greaterThan", "value": 123 }
+  ],
   "actionType": "create_issue" | "escalate_issue" | "no_action",
   "confidence": 0.0-1.0,
   "issuePriority": "low" | "medium" | "high" | "critical",
@@ -76,13 +88,16 @@ You must respond with ONLY a JSON object (no markdown, no explanation outside th
   "escalateReason": "Reason for escalation (if escalating)"
 }
 
+The "conditions" array is critical. It describes the specific conditions you matched to make this decision, in a structured format that can later be turned into a deterministic automation rule. Use these operators: equals, notEquals, contains, in, greaterThan, lessThan, greaterThanOrEqual, lessThanOrEqual, exists, notExists. Fields can reference: event.type, event.entityType, payload.* (any event payload field), context.shipment.* (shipment fields), context.openIssues.length (issue count).
+
 Guidelines:
 - If there's already an open issue for this exact problem, choose "no_action" to avoid duplicates
 - If there's an open issue but the situation has worsened, choose "escalate_issue"
 - For new problems with no existing issue, choose "create_issue"
 - Set priority based on business impact: critical = customer SLA breach or safety, high = significant delay, medium = minor delay, low = informational
 - Be conservative with critical priority - only use it for genuine emergencies
-- Always explain your reasoning clearly - this will be reviewed by humans`;
+- Always explain your reasoning clearly - this will be reviewed by humans
+- Always include specific, accurate conditions that describe what you matched`;
 
 const CONFIG_CACHE_TTL_MS = 60_000; // 60 seconds
 
@@ -388,9 +403,19 @@ Based on this event and context, what action should be taken?`;
     try {
       const parsed = JSON.parse(cleaned);
 
+      // Parse conditions (validate structure)
+      const conditions: RuleCondition[] = Array.isArray(parsed.conditions)
+        ? parsed.conditions.filter((c: unknown) => {
+            if (!c || typeof c !== 'object') return false;
+            const cond = c as Record<string, unknown>;
+            return typeof cond.field === 'string' && typeof cond.operator === 'string';
+          })
+        : [];
+
       return {
         summary: String(parsed.summary || 'No summary provided'),
         reasoning: String(parsed.reasoning || 'No reasoning provided'),
+        conditions,
         actionType: ['create_issue', 'escalate_issue', 'no_action'].includes(parsed.actionType)
           ? parsed.actionType
           : 'no_action',
@@ -410,6 +435,7 @@ Based on this event and context, what action should be taken?`;
       return {
         summary: 'LLM response could not be parsed',
         reasoning: `Raw response: ${content.substring(0, 500)}`,
+        conditions: [],
         actionType: 'no_action',
         confidence: 0,
       };
@@ -531,6 +557,7 @@ Based on this event and context, what action should be taken?`;
         durationMs,
         agentConfigId: config?.id || undefined,
         promptVersionId: config?.activeVersionId || undefined,
+        matchedConditions: decision.conditions.length > 0 ? decision.conditions : undefined,
       },
       metadata: { correlationId, source: 'system' },
     });
