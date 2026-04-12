@@ -456,6 +456,13 @@ The current EDI infrastructure handles inbound 850 (SFTP polling) and outbound 8
   - Exportable carrier scorecards for procurement reviews
 
 ## **Phase 9: Routes & Maps Insights**
+- **Spatial Indexing & Security Event Geofencing** 🔲
+  - PostGIS extension for inverse geofence queries (`ST_DWithin` with spatial index)
+  - Geography column on Location model for fast spatial lookups
+  - `ISpatialIndexProvider` interface (PostGIS default, Tile38 for scale)
+  - Security event evaluation in SLA cron worker (cron-based, not real-time — see [ADR](./docs/SECURITY_EVENT_GEOFENCING_ADR.md))
+  - Optional Tile38 Docker container for large-scale real-time geofencing
+  - Provider-agnostic: external IoT platforms (System Loco, Shippeo, project44) can push geofence events directly, bypassing built-in spatial evaluation
 - **Map Provider Integration** 🔲
   - Pluggable map provider interface (Google Maps, Mapbox, HERE, OpenStreetMap fallback)
   - Admin settings page: API key management for map providers (Admin > Settings > Map Provider)
