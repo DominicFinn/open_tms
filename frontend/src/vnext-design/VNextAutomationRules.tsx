@@ -81,6 +81,8 @@ export default function VNextAutomationRules() {
     { field: 'payload.exceptionType', operator: 'equals', value: '' },
   ]);
   const [formActionType, setFormActionType] = useState('create_issue');
+  const [formSkillChainId, setFormSkillChainId] = useState('');
+  const [skillChains, setSkillChains] = useState<{ id: string; name: string; description: string | null }[]>([]);
   const [formIssuePriority, setFormIssuePriority] = useState('high');
   const [formIssueCategory, setFormIssueCategory] = useState('exception');
   const [formIssueTitle, setFormIssueTitle] = useState('');
@@ -89,9 +91,14 @@ export default function VNextAutomationRules() {
 
   const loadRules = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/v1/automation-rules`);
-      const json = await res.json();
+      const [rulesRes, chainsRes] = await Promise.all([
+        fetch(`${API_URL}/api/v1/automation-rules`),
+        fetch(`${API_URL}/api/v1/skill-chains`),
+      ]);
+      const json = await rulesRes.json();
+      const chainsJson = await chainsRes.json();
       setRules(json.data || []);
+      setSkillChains(chainsJson.data || []);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -135,12 +142,15 @@ export default function VNextAutomationRules() {
           eventPattern: formEventPattern,
           conditions,
           actionType: formActionType,
-          actionConfig: {
-            issuePriority: formIssuePriority,
-            issueCategory: formIssueCategory,
-            issueTitle: formIssueTitle || formName,
-          },
+          actionConfig: formActionType === 'skill_chain'
+            ? {}
+            : {
+                issuePriority: formIssuePriority,
+                issueCategory: formIssueCategory,
+                issueTitle: formIssueTitle || formName,
+              },
           priority: formPriority,
+          ...(formActionType === 'skill_chain' && formSkillChainId ? { skillChainId: formSkillChainId } : {}),
         }),
       });
       const json = await res.json();
@@ -368,6 +378,7 @@ export default function VNextAutomationRules() {
               <select className="vn-input" value={formActionType} onChange={(e) => setFormActionType(e.target.value)}>
                 <option value="create_issue">Create Issue</option>
                 <option value="escalate_issue">Escalate Issue</option>
+                {skillChains.length > 0 && <option value="skill_chain">Skill Chain</option>}
               </select>
             </div>
             {formActionType === 'create_issue' && (
@@ -396,6 +407,22 @@ export default function VNextAutomationRules() {
                   <input className="vn-input" placeholder="Leave blank to use rule name" value={formIssueTitle} onChange={(e) => setFormIssueTitle(e.target.value)} />
                 </div>
               </>
+            )}
+            {formActionType === 'skill_chain' && (
+              <div className="vn-field" style={{ gridColumn: '1 / -1' }}>
+                <label className="vn-field-label">Skill Chain</label>
+                <select className="vn-input" value={formSkillChainId} onChange={(e) => setFormSkillChainId(e.target.value)}>
+                  <option value="">Select a skill chain...</option>
+                  {skillChains.map((sc) => (
+                    <option key={sc.id} value={sc.id}>{sc.name}{sc.description ? ` - ${sc.description}` : ''}</option>
+                  ))}
+                </select>
+                {skillChains.length === 0 && (
+                  <span style={{ fontSize: 12, color: 'var(--warning)', marginTop: 4, display: 'block' }}>
+                    No skill chains created yet. Create one at Settings &gt; Skill Chains first.
+                  </span>
+                )}
+              </div>
             )}
           </div>
         </div>

@@ -12,7 +12,6 @@ import { IAgentDecisionRepository } from '../repositories/AgentDecisionRepositor
 import { CommandBus } from '../commands/CommandBus.js';
 import { CREATE_AGENT_DECISION } from '../commands/agentDecisions/CreateAgentDecisionCommand.js';
 import { RECORD_DECISION_OUTCOME } from '../commands/agentDecisions/RecordDecisionOutcomeCommand.js';
-import { PROMOTE_DECISION } from '../commands/agentDecisions/PromoteDecisionCommand.js';
 import { randomUUID } from 'crypto';
 
 export const agentDecisionRoutes: FastifyPluginAsync = async (server) => {
@@ -302,47 +301,6 @@ export const agentDecisionRoutes: FastifyPluginAsync = async (server) => {
     return { data: decision, error: null };
   });
 
-  // ── POST /api/v1/agent-decisions/:id/promote — Promote to automation ──
-
-  server.post<{ Params: { id: string } }>('/api/v1/agent-decisions/:id/promote', {
-    schema: {
-      tags: ['Agent Decisions'],
-      summary: 'Promote a decision pattern to a deterministic automation',
-      params: {
-        type: 'object',
-        required: ['id'],
-        properties: { id: { type: 'string' } },
-      },
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            data: { type: 'object' },
-            error: { type: 'string', nullable: true },
-          },
-        },
-      },
-    },
-  }, async (request, reply) => {
-    const commandBus = container.resolve<CommandBus>(TOKENS.ICommandBus);
-    const org = await server.prisma.organization.findFirst();
-    const orgId = org?.id || 'default';
-
-    const result = await commandBus.dispatch({
-      type: PROMOTE_DECISION,
-      orgId,
-      actorId: null,
-      payload: { id: request.params.id },
-      metadata: { correlationId: randomUUID(), source: 'api' },
-    });
-
-    if (!result.success) {
-      reply.code(400);
-      return { data: null, error: result.error };
-    }
-
-    const repo = container.resolve<IAgentDecisionRepository>(TOKENS.IAgentDecisionRepository);
-    const decision = await repo.findById(request.params.id);
-    return { data: decision, error: null };
-  });
+  // Note: Promote flow uses POST /api/v1/automation-rules/from-decision/:id instead.
+  // That endpoint creates a full automation rule with conditions pre-filled from the decision.
 };

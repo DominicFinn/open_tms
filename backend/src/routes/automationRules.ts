@@ -39,6 +39,8 @@ export const automationRuleRoutes: FastifyPluginAsync = async (server) => {
       actionConfig: Record<string, unknown>;
       priority?: number;
       sourceDecisionId?: string;
+      skillChainId?: string;
+      inlineSteps?: unknown[];
     };
   }>('/api/v1/automation-rules', {
     schema: {
@@ -76,6 +78,8 @@ export const automationRuleRoutes: FastifyPluginAsync = async (server) => {
         actionConfig: body.actionConfig,
         priority: body.priority ?? 50,
         sourceDecisionId: body.sourceDecisionId || null,
+        skillChainId: body.skillChainId || null,
+        inlineSteps: body.inlineSteps || undefined,
       },
     });
 
