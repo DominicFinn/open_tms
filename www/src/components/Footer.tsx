@@ -41,6 +41,7 @@ export default function Footer() {
               <li><a href="https://github.com/dominicfinn/open_tms/issues" target="_blank" rel="noopener noreferrer" className="text-sm text-surface-400 hover:text-white transition-colors">Issues</a></li>
               <li><a href="https://github.com/dominicfinn/open_tms/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener noreferrer" className="text-sm text-surface-400 hover:text-white transition-colors">Contributing</a></li>
               <li><Link to="/blog" className="text-sm text-surface-400 hover:text-white transition-colors">Blog</Link></li>
+              <li><a href="https://www.linkedin.com/in/dominicfinn?utm_source=opentms" target="_blank" rel="noopener noreferrer" className="text-sm text-surface-400 hover:text-white transition-colors">LinkedIn</a></li>
             </ul>
           </div>
 
@@ -59,9 +60,13 @@ export default function Footer() {
           <p className="text-sm text-surface-500">
             &copy; {new Date().getFullYear()} Open TMS. Released under the MIT License.
           </p>
-          <p className="text-sm text-surface-500">
-            Integrates with System Loco IoT hardware
-          </p>
+          <div className="flex items-center gap-4 text-sm text-surface-500">
+            <span>Integrates with System Loco IoT hardware</span>
+            <span className="hidden sm:inline">·</span>
+            <a href="https://www.linkedin.com/in/dominicfinn?utm_source=opentms" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">
+              Maintained by Dominic Finn
+            </a>
+          </div>
         </div>
       </div>
     </footer>
