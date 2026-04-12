@@ -8,16 +8,13 @@
 
 A simple, open-source Transport Management System built with TypeScript, featuring a CQRS event-driven backend, React frontend, and comprehensive domain modelling. Designed for managing shipments, customers, carriers, orders, and operational issues with real-time IoT tracking, EDI integration, and a beautiful Material Design 3 interface.
 
-## 🚨 Help needed please
-Under development at the moment. I have really made this as a demo to show off our data platform capabilities at System Loco, we develop IoT devices and the supporting data and intelligence platform. We integrate with real time visibility platforms and TMS systems to provide a complete end to end solution.
+## Contributing
 
-Please feel free to contribute to the project, ideally with feature requests, bug reports, or documentation improvements.
+Open TMS is under active development. We welcome contributions — feature requests, bug reports, code, and documentation improvements are all appreciated.
 
-I'm outlining a roadmap. It's high level. It can be ticketed up as it goes along as issues [Roadmap](./roadmap.md)
+See the [Contributing Guide](./CONTRIBUTING.md) for details, and the [Roadmap](./roadmap.md) for what's planned.
 
-> **🌟 Live Demo**: [Try it now!](https://open-tms-frontend-iutj2b4iaa-uc.a.run.app) | **📖 API Docs**: [View API](https://open-tms-backend-iutj2b4iaa-uc.a.run.app/docs)
->
-> *Note: The demo URLs above are for the project maintainer's deployment. Deploy your own instance using the deploy buttons below.*
+> **📖 API Docs**: Deploy your own instance and visit `/docs` for full interactive Swagger/OpenAPI documentation.
 
 ## Deploy
 
@@ -822,7 +819,7 @@ We welcome contributions from the community! Whether you're fixing bugs, adding 
 
 - 💬 **Discussions**: [GitHub Discussions](https://github.com/DominicFinn/open_tms/discussions) for questions and ideas
 - 🐛 **Issues**: [GitHub Issues](https://github.com/DominicFinn/open_tms/issues) for bug reports and feature requests
-- 📖 **Documentation**: Check the [deployment guide](./DEPLOYMENT.md) and [API docs](https://open-tms-backend-iutj2b4iaa-uc.a.run.app/docs)
+- 📖 **Documentation**: Check the [deployment guide](./DEPLOYMENT.md) and deploy your own instance to access interactive API docs at `/docs`
 
 ## 📄 License
 
@@ -841,6 +838,30 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Prisma** team for the amazing database ORM
 - **React** team for the powerful UI library
 
+## Marketing Site
+
+The `www/` directory contains the Open TMS marketing and landing page — a standalone React + Vite + Tailwind CSS site deployable to Firebase Hosting (or any static host).
+
+```bash
+cd www
+npm install
+npm run dev      # Development server
+npm run build    # Production build → www/dist/
+```
+
+The site includes:
+- Product landing page with feature overview
+- Carrier and shipper-focused sections
+- Blog system (articles committed as TypeScript in `www/src/content/`)
+- Documentation hub linking to API docs and guides
+
+Deploy to Firebase:
+```bash
+cd www
+npm run build
+npx firebase deploy
+```
+
 ---
 
-**Ready to get started?** Check out the [Quick Start](#-quick-start) section or [deploy a demo](./HOSTING-DEMO-GCP.md) in 5 minutes! 🚀
+**Ready to get started?** Check out the [Quick Start](#-quick-start) section above!
