@@ -30,6 +30,8 @@ export default function VNextCreateCarrier() {
   const [insuranceAmount, setInsuranceAmount] = useState('');
   const [expiryDate, setExpiryDate] = useState('');
   const [notes, setNotes] = useState('');
+  const [paymentTermsDays, setPaymentTermsDays] = useState('30');
+  const [carrierCurrency, setCarrierCurrency] = useState('USD');
   const [loading, setLoading] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -54,6 +56,8 @@ export default function VNextCreateCarrier() {
         setState(c.state || '');
         setPostalCode(c.postalCode || '');
         setCountry(c.country || 'US');
+        setPaymentTermsDays(c.paymentTermsDays ? String(c.paymentTermsDays) : '30');
+        setCarrierCurrency(c.currency || 'USD');
       })
       .catch(err => setSubmitError(err.message))
       .finally(() => setLoading(false));
@@ -66,6 +70,8 @@ export default function VNextCreateCarrier() {
       const body: any = {
         name, mcNumber, dotNumber, contactName, contactEmail: email, contactPhone: phone,
         address1, address2, city, state, postalCode, country,
+        paymentTermsDays: parseInt(paymentTermsDays) || 30,
+        currency: carrierCurrency,
       };
       const url = isEdit ? `${API_URL}/api/v1/carriers/${id}` : `${API_URL}/api/v1/carriers`;
       const res = await fetch(url, {
@@ -222,6 +228,34 @@ export default function VNextCreateCarrier() {
                     </label>
                   ))}
                 </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Payment Terms */}
+          <div className="vn-form-section">
+            <div className="vn-form-section-title">
+              <span className="material-icons">payments</span>
+              Payment Terms
+            </div>
+            <div className="vn-form-grid">
+              <div className="vn-field">
+                <label className="vn-field-label">Payment Terms (days)</label>
+                <select className="vn-select" value={paymentTermsDays} onChange={e => setPaymentTermsDays(e.target.value)}>
+                  <option value="15">Net 15</option>
+                  <option value="30">Net 30</option>
+                  <option value="45">Net 45</option>
+                  <option value="60">Net 60</option>
+                </select>
+              </div>
+              <div className="vn-field">
+                <label className="vn-field-label">Currency</label>
+                <select className="vn-select" value={carrierCurrency} onChange={e => setCarrierCurrency(e.target.value)}>
+                  <option value="USD">USD</option>
+                  <option value="EUR">EUR</option>
+                  <option value="GBP">GBP</option>
+                  <option value="CAD">CAD</option>
+                </select>
               </div>
             </div>
           </div>

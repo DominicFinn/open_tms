@@ -288,6 +288,234 @@ draft → open → evaluating → awarded
 | `tender.published` | All offers marked 'sent', carriers notified, EDI 204 sent if trading partner configured |
 | `tender.awarded` | Winning bid recorded, carrier assigned to shipment |
 | `tender.response_received` | Bid recorded or offer declined, waterfall auto-progresses |
+| `tender.awarded` | **Financial side effect:** `TenderAwardFinancialHandler` creates a `Charge` (category=cost, type=linehaul, source=tender_bid) on the shipment from the winning bid rate. Recalculates `ShipmentFinancialSummary`. |
+
+---
+
+## Charges (Financial)
+
+### Commands (CQRS)
+
+| Command | Trigger | Events Emitted |
+|---------|---------|----------------|
+| `CreateChargeCommand` | `POST /api/v1/charges` | `charge.created` |
+| `ApproveChargeCommand` | `POST /api/v1/charges/:id/approve` | `charge.approved` |
+
+### Service Operations
+
+| Operation | Trigger | What It Does |
+|-----------|---------|-------------|
+| Get shipment financials | `GET /api/v1/shipments/:id/financials` | Returns charges, expected vs actual revenue/cost/margin |
+| Calculate rate | `POST /api/v1/rates/calculate` | Looks up LaneCarrier rates, computes linehaul + fuel surcharge breakdown |
+| Delete charge | `DELETE /api/v1/charges/:id` | Removes a pending charge, recalculates summary |
+
+### Side Effects
+
+| Event | What Happens |
+|-------|-------------|
+| `charge.created` | `ShipmentFinancialSummary` upserted with recalculated totals |
+| `charge.approved` | `ShipmentFinancialSummary` actual figures updated |
+| `tender.awarded` | `TenderAwardFinancialHandler` auto-creates cost charge from winning bid |
+
+### Charge Lifecycle
+
+```
+pending → approved → invoiced
+              ↘ disputed → (resolved)
+pending → written_off
+```
+
+### Charge Categories
+
+- **revenue**: What the customer pays us (linehaul, fuel surcharge, accessorials)
+- **cost**: What we pay the carrier (linehaul, fuel surcharge, detention, adjustments)
+
+### ShipmentFinancialSummary
+
+Denormalized financial snapshot per shipment. Automatically recalculated whenever charges are created, approved, or deleted. Tracks:
+- Expected revenue/cost/margin (all non-written-off charges)
+- Actual revenue/cost/margin (only approved/invoiced charges)
+- Billing status: `not_ready` → `ready_to_invoice` → `invoiced` → `paid`
+- Carrier payment status: `not_ready` → `invoice_received` → `approved` → `paid`
+
+---
+
+## Invoices (Customer — Accounts Receivable)
+
+### Commands (CQRS)
+
+| Command | Trigger | Events Emitted |
+|---------|---------|----------------|
+| `CreateInvoiceCommand` | `POST /api/v1/invoices` | `invoice.created` |
+| `ApproveInvoiceCommand` | `POST /api/v1/invoices/:id/approve` | `invoice.approved` |
+| `SendInvoiceCommand` | `POST /api/v1/invoices/:id/send` | `invoice.sent` |
+| `RecordPaymentCommand` | `POST /api/v1/invoices/:id/payments` | `invoice.payment_received`, `invoice.paid` (if fully paid) |
+| `VoidInvoiceCommand` | `POST /api/v1/invoices/:id/void` | `invoice.voided` |
+
+### Service Operations
+
+| Operation | Trigger | What It Does |
+|-----------|---------|-------------|
+| Ready to invoice | `GET /api/v1/invoices/ready-to-invoice` | Lists shipments with approved revenue charges and billing_status=ready_to_invoice |
+| List invoices | `GET /api/v1/invoices` | Filterable by customer, status |
+
+### Side Effects
+
+| Event | What Happens |
+|-------|-------------|
+| `shipment.delivered` | `BillingTriggerHandler`: marks shipment ready_to_invoice. If customer.autoInvoice=true, auto-creates draft invoice from approved revenue charges |
+| `invoice.created` | `InvoiceProjection`: InvoiceReadModel inserted. Charges marked as invoiced. ShipmentFinancialSummary.billingStatus → invoiced |
+| `invoice.payment_received` | `InvoiceProjection`: paidCents, balanceCents, daysPastDue updated |
+| `invoice.paid` | ShipmentFinancialSummary.billingStatus → paid |
+| `invoice.voided` | Charges reverted to approved. ShipmentFinancialSummary.billingStatus → ready_to_invoice |
+
+### Invoice Lifecycle
+
+```
+draft → approved → sent → partial_paid → paid
+                      ↘ overdue (detected by cron)
+draft/approved → void (only if no payments)
+sent/partial_paid → disputed
+```
+
+### Auto-Invoice (Per Customer)
+
+If `Customer.autoInvoice = true`, when a shipment is delivered:
+1. BillingTriggerHandler checks for approved revenue charges
+2. If found, creates a draft invoice automatically
+3. Staff reviews and approves/sends (invoice still needs manual approval)
+
+---
+
+## Carrier Invoices (Accounts Payable)
+
+### Commands (CQRS)
+
+| Command | Trigger | Events Emitted |
+|---------|---------|----------------|
+| `ReceiveCarrierInvoiceCommand` | `POST /api/v1/carrier-invoices` | `carrier_invoice.received`, `carrier_invoice.discrepancy` (if mismatch) |
+| `ApproveCarrierInvoiceCommand` | `POST /api/v1/carrier-invoices/:id/approve` | `carrier_invoice.approved` |
+| `RecordCarrierPaymentCommand` | `POST /api/v1/carrier-invoices/:id/pay` | `carrier_invoice.paid` |
+
+### Three-Way Match (Freight Audit)
+
+When a carrier invoice is received, `ReceiveCarrierInvoiceCommand` automatically performs a three-way match:
+
+1. For each line item, finds expected cost `Charge` records on the referenced shipment
+2. Compares invoiced amount vs expected amount per charge type
+3. Calculates variance per line and overall
+4. Line match statuses: `matched` (exact) | `variance` (amount differs) | `unmatched` (no expected charge)
+5. Overall: `matched` | `partial_match` (variance only) | `mismatch` (has unmatched lines)
+6. **Auto-approve**: If no unmatched lines AND variance <= 2%, invoice is auto-approved
+
+### Carrier Invoice Lifecycle
+
+```
+received → matched/discrepancy → approved → scheduled → paid
+                    ↘ disputed
+```
+
+### Side Effects
+
+| Event | What Happens |
+|-------|-------------|
+| `carrier_invoice.received` | ShipmentFinancialSummary.carrierPaymentStatus → invoice_received (or approved if auto) |
+| `carrier_invoice.approved` | ShipmentFinancialSummary.carrierPaymentStatus → approved |
+| `carrier_invoice.paid` | ShipmentFinancialSummary.carrierPaymentStatus → paid |
+
+---
+
+## Quotes
+
+Quotes let operations staff price a potential shipment for a customer before it becomes a live order. A quote can be revised multiple times; accepting a quote auto-creates an order with pre-populated revenue charges.
+
+### Commands (CQRS)
+
+| Command | Trigger | Events Emitted |
+|---------|---------|----------------|
+| `CreateQuoteCommand` | `POST /api/v1/quotes` | `quote.created` |
+| `AcceptQuoteCommand` | `POST /api/v1/quotes/:id/accept` | `quote.accepted` |
+| `DeclineQuoteCommand` | `POST /api/v1/quotes/:id/decline` | `quote.declined` |
+| `ReviseQuoteCommand` | `POST /api/v1/quotes/:id/revise` | `quote.revised` |
+
+### Side Effects
+
+| Event | What Happens |
+|-------|-------------|
+| `quote.created` | Quote + QuoteLineItem records created. Validity period starts (configurable, default from org settings) |
+| `quote.accepted` | Order auto-created from quote data. Approved revenue charges added to order from quote line items. Quote marked accepted |
+| `quote.declined` | Quote marked declined. No further action |
+| `quote.revised` | Original quote status → superseded. New quote version created with `parentQuoteId` linking to original. Revision number incremented |
+| (cron) | Quote expiration cron (pg-boss, every 30 min) marks expired quotes past their validity date |
+
+### Quote Lifecycle
+
+```
+draft → sent → accepted
+             → declined
+             → expired (cron-detected)
+             → superseded (when revised)
+```
+
+---
+
+## Financial Queries & Credit Notes
+
+Financial queries track disputes, discrepancies, and cargo-related claims. They can be raised manually or auto-created by the `FinancialImpactHandler` when cargo events occur. Resolving a query can optionally generate a credit note.
+
+### Commands (CQRS)
+
+| Command | Trigger | Events Emitted |
+|---------|---------|----------------|
+| `RaiseQueryCommand` | `POST /api/v1/financial-queries` | `financial_query.raised` |
+| `ResolveQueryCommand` | `POST /api/v1/financial-queries/:id/resolve` | `financial_query.resolved`, `credit_note.created` (if adjustment) |
+
+### Auto-Created Queries (FinancialImpactHandler)
+
+The `FinancialImpactHandler` listens to cargo and cold-chain events and automatically raises financial queries:
+
+| Source Event | Query Created |
+|-------------|---------------|
+| `cargo.missing_at_stop` | Query for missing cargo at delivery stop — potential claim for undelivered goods |
+| `cargo.misdrop_detected` | Query for cargo delivered to wrong stop — investigation needed for mis-delivery |
+| `cold_chain.disposition_changed` (quarantined) | Query for quarantined goods — cold chain excursion rendered cargo unsaleable |
+
+### Side Effects
+
+| Event | What Happens |
+|-------|-------------|
+| `financial_query.raised` | Query record created with status=raised, linked to shipment/order |
+| `financial_query.resolved` | Query status updated. If resolution=resolved_adjusted, a CreditNote is auto-generated with the adjustment amount |
+| `credit_note.created` | Credit note linked to query and customer. Can offset future invoices |
+
+### Query Lifecycle
+
+```
+raised → investigating → resolved_adjusted (credit note generated)
+                       → resolved_upheld (no financial adjustment)
+```
+
+---
+
+## EDI Financial Transactions
+
+### EDI 210 — Freight Invoice (Inbound)
+
+Carrier sends an EDI 210 freight invoice. The `EDI210ParseService` parses B3/N1/LX/L5/L0/L1/L3 segments and creates a `CarrierInvoice` with line items. The `ReceiveCarrierInvoiceCommand` then performs the automatic three-way match (see Carrier Invoices section above).
+
+**Flow:** SFTP poll → edi-collector detects 210 → `POST /api/v1/edi/210/inbound` → `EDI210ParseService` → `ReceiveCarrierInvoiceCommand` → three-way match → auto-approve or flag discrepancy
+
+### EDI 810 — Invoice (Outbound)
+
+TMS generates an EDI 810 invoice for the customer. The `EDI810Service` produces the full X12 envelope (ISA/GS/ST) with BIG (invoice header), N1 (name/address), ITD (payment terms), IT1 (line items), TDS (total), and CTT (transaction count) segments.
+
+**Flow:** Invoice approved + customer has TradingPartner with outbound 810 enabled → `EDI810Service.generate()` → `OutboundEdiDeliveryService` delivers via SFTP or HTTP
+
+### EDI 820 — Payment Order/Remittance (Inbound)
+
+Customer sends an EDI 820 remittance advice. The `EDI820ParseService` parses payment details and matches to outstanding invoices via invoice number.
+
+**Flow:** SFTP poll → edi-collector detects 820 → `POST /api/v1/edi/820/inbound` → `EDI820ParseService` → `RecordPaymentCommand` → invoice payment applied
 
 ---
 
@@ -541,7 +769,6 @@ UpdateCapaCommand emits different events based on what changed:
 
 ---
 
-<<<<<<< HEAD
 ## ETA Monitoring
 
 The ETA monitor is a cron-driven background service (not a CQRS command) that checks in-transit shipments against traffic-aware routing APIs. It runs via pg-boss schedule and publishes events through the standard event bus.

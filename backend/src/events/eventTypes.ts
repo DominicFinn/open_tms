@@ -138,6 +138,47 @@ export const EVENT_TYPES = {
   AGENT_DECISION_CREATED: 'agent_decision.created',
   AGENT_DECISION_OUTCOME_RECORDED: 'agent_decision.outcome_recorded',
   AGENT_DECISION_PROMOTED: 'agent_decision.promoted',
+
+  // Financial: Quotes
+  QUOTE_CREATED: 'quote.created',
+  QUOTE_UPDATED: 'quote.updated',
+  QUOTE_SENT: 'quote.sent',
+  QUOTE_ACCEPTED: 'quote.accepted',
+  QUOTE_DECLINED: 'quote.declined',
+  QUOTE_EXPIRED: 'quote.expired',
+
+  // Financial: Charges
+  CHARGE_CREATED: 'charge.created',
+  CHARGE_APPROVED: 'charge.approved',
+  CHARGE_DISPUTED: 'charge.disputed',
+
+  // Financial: Customer Invoices (AR)
+  INVOICE_CREATED: 'invoice.created',
+  INVOICE_APPROVED: 'invoice.approved',
+  INVOICE_SENT: 'invoice.sent',
+  INVOICE_PAYMENT_RECEIVED: 'invoice.payment_received',
+  INVOICE_PAID: 'invoice.paid',
+  INVOICE_OVERDUE: 'invoice.overdue',
+  INVOICE_VOIDED: 'invoice.voided',
+
+  // Financial: Carrier Invoices (AP)
+  CARRIER_INVOICE_RECEIVED: 'carrier_invoice.received',
+  CARRIER_INVOICE_MATCHED: 'carrier_invoice.matched',
+  CARRIER_INVOICE_DISCREPANCY: 'carrier_invoice.discrepancy',
+  CARRIER_INVOICE_APPROVED: 'carrier_invoice.approved',
+  CARRIER_INVOICE_PAID: 'carrier_invoice.paid',
+
+  // Financial: Queries & Disputes
+  FINANCIAL_QUERY_RAISED: 'financial_query.raised',
+  FINANCIAL_QUERY_ASSIGNED: 'financial_query.assigned',
+  FINANCIAL_QUERY_RESOLVED: 'financial_query.resolved',
+
+  // Financial: Credit Notes
+  CREDIT_NOTE_CREATED: 'credit_note.created',
+  CREDIT_NOTE_APPLIED: 'credit_note.applied',
+
+  // Financial: Billing Triggers
+  SHIPMENT_READY_TO_INVOICE: 'shipment.ready_to_invoice',
 } as const;
 
 export type EventType = typeof EVENT_TYPES[keyof typeof EVENT_TYPES];
@@ -213,6 +254,35 @@ export const EVENT_SCHEMA_VERSIONS: Record<string, number> = {
   [EVENT_TYPES.AGENT_DECISION_CREATED]: 1,
   [EVENT_TYPES.AGENT_DECISION_OUTCOME_RECORDED]: 1,
   [EVENT_TYPES.AGENT_DECISION_PROMOTED]: 1,
+  // Financial: Quotes
+  [EVENT_TYPES.QUOTE_CREATED]: 1,
+  [EVENT_TYPES.QUOTE_UPDATED]: 1,
+  [EVENT_TYPES.QUOTE_SENT]: 1,
+  [EVENT_TYPES.QUOTE_ACCEPTED]: 1,
+  [EVENT_TYPES.QUOTE_DECLINED]: 1,
+  [EVENT_TYPES.QUOTE_EXPIRED]: 1,
+  // Financial: Charges
+  [EVENT_TYPES.CHARGE_CREATED]: 1,
+  [EVENT_TYPES.CHARGE_APPROVED]: 1,
+  [EVENT_TYPES.CHARGE_DISPUTED]: 1,
+  [EVENT_TYPES.INVOICE_CREATED]: 1,
+  [EVENT_TYPES.INVOICE_APPROVED]: 1,
+  [EVENT_TYPES.INVOICE_SENT]: 1,
+  [EVENT_TYPES.INVOICE_PAYMENT_RECEIVED]: 1,
+  [EVENT_TYPES.INVOICE_PAID]: 1,
+  [EVENT_TYPES.INVOICE_OVERDUE]: 1,
+  [EVENT_TYPES.INVOICE_VOIDED]: 1,
+  [EVENT_TYPES.CARRIER_INVOICE_RECEIVED]: 1,
+  [EVENT_TYPES.CARRIER_INVOICE_MATCHED]: 1,
+  [EVENT_TYPES.CARRIER_INVOICE_DISCREPANCY]: 1,
+  [EVENT_TYPES.CARRIER_INVOICE_APPROVED]: 1,
+  [EVENT_TYPES.CARRIER_INVOICE_PAID]: 1,
+  [EVENT_TYPES.FINANCIAL_QUERY_RAISED]: 1,
+  [EVENT_TYPES.FINANCIAL_QUERY_ASSIGNED]: 1,
+  [EVENT_TYPES.FINANCIAL_QUERY_RESOLVED]: 1,
+  [EVENT_TYPES.CREDIT_NOTE_CREATED]: 1,
+  [EVENT_TYPES.CREDIT_NOTE_APPLIED]: 1,
+  [EVENT_TYPES.SHIPMENT_READY_TO_INVOICE]: 1,
 };
 
 /**
@@ -482,4 +552,30 @@ export interface AgentDecisionOutcomeRecordedPayload {
 export interface AgentDecisionPromotedPayload {
   agentType: string;
   actionType: string;
+}
+
+// ─── Financial Event Payloads ───────────────────────────────────────────────
+
+export interface ChargeCreatedPayload {
+  chargeId: string;
+  shipmentId?: string;
+  orderId?: string;
+  chargeType: string;
+  chargeCategory: string;
+  amountCents: number;
+  currency: string;
+  source: string;
+}
+
+export interface ChargeApprovedPayload {
+  chargeId: string;
+  shipmentId?: string;
+  orderId?: string;
+  approvedBy: string;
+}
+
+export interface ShipmentReadyToInvoicePayload {
+  shipmentId: string;
+  shipmentReference: string;
+  customerId: string;
 }

@@ -84,6 +84,20 @@ export const TOKENS = {
   // Skills tokens
   ISkillRegistry: Symbol.for('ISkillRegistry'),
 
+  // Financial tokens
+  IChargeRepository: Symbol.for('IChargeRepository'),
+  IChargeService: Symbol.for('IChargeService'),
+  IRatingService: Symbol.for('IRatingService'),
+  IInvoiceRepository: Symbol.for('IInvoiceRepository'),
+  IPaymentRepository: Symbol.for('IPaymentRepository'),
+  IInvoicingService: Symbol.for('IInvoicingService'),
+  ICarrierInvoiceRepository: Symbol.for('ICarrierInvoiceRepository'),
+  IFreightAuditService: Symbol.for('IFreightAuditService'),
+  IFinancialQueryRepository: Symbol.for('IFinancialQueryRepository'),
+  ICreditNoteRepository: Symbol.for('ICreditNoteRepository'),
+  IQuoteRepository: Symbol.for('IQuoteRepository'),
+  ILtlRatingService: Symbol.for('ILtlRatingService'),
+
   // Infrastructure tokens
   PrismaClient: Symbol.for('PrismaClient'),
   IFileStorageProvider: Symbol.for('IFileStorageProvider'),

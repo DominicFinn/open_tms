@@ -86,6 +86,26 @@ const APPS: AppDef[] = [
     ],
   },
   {
+    key: 'finance', icon: 'account_balance', label: 'Finance', basePath: '/finance',
+    sections: [
+      { title: 'Finance', items: [
+        { to: '/finance', icon: 'space_dashboard', label: 'Dashboard', end: true },
+        { to: '/finance/quotes', icon: 'request_quote', label: 'Quotes' },
+        { to: '/finance/invoices', icon: 'receipt', label: 'Invoices' },
+        { to: '/finance/carrier-invoices', icon: 'local_shipping', label: 'Carrier Invoices' },
+        { to: '/finance/payments', icon: 'payment', label: 'Record Payments' },
+      ]},
+      { title: 'Disputes', items: [
+        { to: '/finance/queries', icon: 'help_outline', label: 'Queries & Disputes' },
+        { to: '/finance/credit-notes', icon: 'note', label: 'Credit Notes' },
+      ]},
+      { title: 'Reports', items: [
+        { to: '/finance/aging', icon: 'assessment', label: 'AR Aging' },
+        { to: '/finance/exports', icon: 'download', label: 'Export to CSV' },
+      ]},
+    ],
+  },
+  {
     key: 'integrations', icon: 'hub', label: 'Integrations', basePath: '/integrations',
     sections: [
       { title: 'Integrations', items: [
@@ -127,6 +147,7 @@ const APPS: AppDef[] = [
 ];
 
 function detectApp(pathname: string): string {
+  if (pathname.startsWith('/finance')) return 'finance';
   if (pathname.startsWith('/integrations')) return 'integrations';
   if (pathname.startsWith('/settings') || pathname === '/style-guide') return 'admin';
   if (pathname.startsWith('/documents') || pathname.startsWith('/reports')) return 'reports';

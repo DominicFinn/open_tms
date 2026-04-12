@@ -14,6 +14,11 @@ import { createOutboundTrackingWorker } from './workers/outboundTrackingWorker.j
 import { createInboundWebhookWorker } from './workers/inboundWebhookWorker.js';
 import { createEtaMonitorWorker, registerEtaMonitorSchedule, ETA_MONITOR_QUEUE } from './workers/etaMonitorWorker.js';
 import { createSlaMonitorWorker, registerSlaMonitorSchedule, SLA_MONITOR_QUEUE } from './workers/slaMonitorWorker.js';
+import {
+  createQuoteExpirationWorker, registerQuoteExpirationSchedule, QUOTE_EXPIRATION_QUEUE,
+  createInvoiceOverdueWorker, registerInvoiceOverdueSchedule, INVOICE_OVERDUE_QUEUE,
+  createInvoiceConsolidationWorker, registerInvoiceConsolidationSchedule, INVOICE_CONSOLIDATION_QUEUE,
+} from './workers/financialCronWorkers.js';
 import { ISlaEvaluationService } from './services/SlaEvaluationService.js';
 import { OrderDeliveryService } from './services/OrderDeliveryService.js';
 import { ArrivalCriteriaEvaluationService } from './services/ArrivalCriteriaEvaluationService.js';
@@ -72,6 +77,14 @@ import { llmSettingsRoutes } from './routes/llmSettings.js';
 import { agentConfigRoutes } from './routes/agentConfig.js';
 import { automationRuleRoutes } from './routes/automationRules.js';
 import { skillRoutes } from './routes/skills.js';
+import { chargeRoutes } from './routes/charges.js';
+import { invoiceRoutes } from './routes/invoices.js';
+import { carrierInvoiceRoutes } from './routes/carrierInvoices.js';
+import { financialQueryRoutes } from './routes/financialQueries.js';
+import { quoteRoutes } from './routes/quotes.js';
+import { edi210Routes } from './routes/edi210.js';
+import { edi820Routes } from './routes/edi820.js';
+import { financialReportRoutes } from './routes/financialReports.js';
 
 const server = Fastify({ logger: true });
 
@@ -157,6 +170,14 @@ async function start() {
   await server.register(agentConfigRoutes);
   await server.register(automationRuleRoutes);
   await server.register(skillRoutes);
+  await server.register(chargeRoutes);
+  await server.register(invoiceRoutes);
+  await server.register(carrierInvoiceRoutes);
+  await server.register(financialQueryRoutes);
+  await server.register(quoteRoutes);
+  await server.register(edi210Routes);
+  await server.register(edi820Routes);
+  await server.register(financialReportRoutes);
 
   // Start queue adapter (needed for publishing events, even if workers run elsewhere)
   try {
@@ -199,6 +220,22 @@ async function start() {
         }
       } catch (err) {
         server.log.warn('SLA monitor worker failed to register: ' + (err as Error).message);
+      }
+
+      // Financial cron workers — always enabled
+      try {
+        const finBoss = (queue as any).boss;
+        if (finBoss) {
+          await registerQuoteExpirationSchedule(finBoss);
+          await queue.subscribe(QUOTE_EXPIRATION_QUEUE, createQuoteExpirationWorker(server.prisma));
+          await registerInvoiceOverdueSchedule(finBoss);
+          await queue.subscribe(INVOICE_OVERDUE_QUEUE, createInvoiceOverdueWorker(server.prisma));
+          await registerInvoiceConsolidationSchedule(finBoss);
+          await queue.subscribe(INVOICE_CONSOLIDATION_QUEUE, createInvoiceConsolidationWorker(server.prisma));
+          server.log.info('Financial cron workers registered (quote expiration, invoice overdue, invoice consolidation)');
+        }
+      } catch (err) {
+        server.log.warn('Financial cron workers failed to register: ' + (err as Error).message);
       }
 
       server.log.info('Embedded queue workers registered (set DISABLE_EMBEDDED_WORKERS=true to use separate worker container)');

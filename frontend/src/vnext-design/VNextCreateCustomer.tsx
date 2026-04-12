@@ -15,6 +15,10 @@ export default function VNextCreateCustomer() {
   const [paymentTerms, setPaymentTerms] = useState('Net 30');
   const [billingEmail, setBillingEmail] = useState('');
   const [currency, setCurrency] = useState('USD');
+  const [creditLimit, setCreditLimit] = useState('');
+  const [invoiceConsolidation, setInvoiceConsolidation] = useState('per_shipment');
+  const [autoInvoice, setAutoInvoice] = useState(false);
+  const [taxId, setTaxId] = useState('');
   const [defaultMode, setDefaultMode] = useState('FTL');
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
@@ -31,6 +35,13 @@ export default function VNextCreateCustomer() {
         if (!c) return;
         setCompanyName(c.name || '');
         setEmail(c.contactEmail || '');
+        setBillingEmail(c.billingEmail || '');
+        setCurrency(c.currency || 'USD');
+        setCreditLimit(c.creditLimitCents ? String(c.creditLimitCents / 100) : '');
+        setInvoiceConsolidation(c.invoiceConsolidation || 'per_shipment');
+        setAutoInvoice(c.autoInvoice || false);
+        setTaxId(c.taxId || '');
+        setPaymentTerms(c.paymentTermsDays ? `Net ${c.paymentTermsDays}` : 'Net 30');
       })
       .catch(err => setSubmitError(err.message))
       .finally(() => setLoading(false));
@@ -40,7 +51,18 @@ export default function VNextCreateCustomer() {
     setSubmitError('');
     setSubmitting(true);
     try {
-      const body: any = { name: companyName, contactEmail: email };
+      const paymentTermsDays = parseInt(paymentTerms.replace(/\D/g, '')) || 30;
+      const body: any = {
+        name: companyName,
+        contactEmail: email,
+        billingEmail: billingEmail || undefined,
+        currency,
+        paymentTermsDays,
+        creditLimitCents: creditLimit ? Math.round(parseFloat(creditLimit) * 100) : undefined,
+        invoiceConsolidation,
+        autoInvoice,
+        taxId: taxId || undefined,
+      };
       const url = isEdit ? `${API_URL}/api/v1/customers/${id}` : `${API_URL}/api/v1/customers`;
       const res = await fetch(url, {
         method: isEdit ? 'PUT' : 'POST',
@@ -149,7 +171,30 @@ export default function VNextCreateCustomer() {
                   <option value="USD">USD</option>
                   <option value="EUR">EUR</option>
                   <option value="GBP">GBP</option>
+                  <option value="CAD">CAD</option>
                 </select>
+              </div>
+              <div className="vn-field">
+                <label className="vn-field-label">Credit Limit ($)</label>
+                <input className="vn-input" type="number" min="0" step="100" placeholder="No limit" value={creditLimit} onChange={e => setCreditLimit(e.target.value)} />
+              </div>
+              <div className="vn-field">
+                <label className="vn-field-label">Invoice Consolidation</label>
+                <select className="vn-select" value={invoiceConsolidation} onChange={e => setInvoiceConsolidation(e.target.value)}>
+                  <option value="per_shipment">Per Shipment</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="monthly">Monthly</option>
+                </select>
+              </div>
+              <div className="vn-field">
+                <label className="vn-field-label">Tax ID (VAT/EIN)</label>
+                <input className="vn-input" type="text" placeholder="e.g. 12-3456789" value={taxId} onChange={e => setTaxId(e.target.value)} />
+              </div>
+              <div className="vn-field">
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={autoInvoice} onChange={e => setAutoInvoice(e.target.checked)} />
+                  <span className="vn-field-label" style={{ margin: 0 }}>Auto-generate draft invoices on delivery</span>
+                </label>
               </div>
             </div>
           </div>
