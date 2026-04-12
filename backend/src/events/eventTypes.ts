@@ -137,6 +137,15 @@ export const EVENT_TYPES = {
   SLA_BREACHED: 'sla.breached',
   SLA_MET: 'sla.met',
 
+  // Carrier Tracking
+  CARRIER_TRACKING_INTEGRATION_CREATED: 'carrier_tracking_integration.created',
+  CARRIER_TRACKING_INTEGRATION_UPDATED: 'carrier_tracking_integration.updated',
+  CARRIER_TRACKING_INTEGRATION_DELETED: 'carrier_tracking_integration.deleted',
+  CARRIER_TRACKING_INTEGRATION_ERROR: 'carrier_tracking_integration.error',
+  CARRIER_TRACKING_UPDATE_RECEIVED: 'carrier_tracking.update_received',
+  CARRIER_TRACKING_DELIVERED: 'carrier_tracking.delivered',
+  CARRIER_TRACKING_EXCEPTION: 'carrier_tracking.exception',
+
   // Integration
   INTEGRATION_OUTBOUND_SENT: 'integration.outbound_sent',
   INTEGRATION_OUTBOUND_FAILED: 'integration.outbound_failed',
@@ -308,6 +317,14 @@ export const EVENT_SCHEMA_VERSIONS: Record<string, number> = {
   [EVENT_TYPES.CREDIT_NOTE_CREATED]: 1,
   [EVENT_TYPES.CREDIT_NOTE_APPLIED]: 1,
   [EVENT_TYPES.SHIPMENT_READY_TO_INVOICE]: 1,
+  // Carrier Tracking
+  [EVENT_TYPES.CARRIER_TRACKING_INTEGRATION_CREATED]: 1,
+  [EVENT_TYPES.CARRIER_TRACKING_INTEGRATION_UPDATED]: 1,
+  [EVENT_TYPES.CARRIER_TRACKING_INTEGRATION_DELETED]: 1,
+  [EVENT_TYPES.CARRIER_TRACKING_INTEGRATION_ERROR]: 1,
+  [EVENT_TYPES.CARRIER_TRACKING_UPDATE_RECEIVED]: 1,
+  [EVENT_TYPES.CARRIER_TRACKING_DELIVERED]: 1,
+  [EVENT_TYPES.CARRIER_TRACKING_EXCEPTION]: 1,
 };
 
 /**

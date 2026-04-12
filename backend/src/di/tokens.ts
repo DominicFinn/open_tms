@@ -75,6 +75,11 @@ export const TOKENS = {
   IRoutingProvider: Symbol.for('IRoutingProvider'),
   IShipmentEtaMonitorService: Symbol.for('IShipmentEtaMonitorService'),
 
+  // Carrier Tracking tokens
+  ICarrierTrackingIntegrationRepository: Symbol.for('ICarrierTrackingIntegrationRepository'),
+  ICarrierTrackingService: Symbol.for('ICarrierTrackingService'),
+  ICarrierTrackingProviderRegistry: Symbol.for('ICarrierTrackingProviderRegistry'),
+
   // Agent Decision tokens
   IAgentDecisionRepository: Symbol.for('IAgentDecisionRepository'),
   IIssueRepository: Symbol.for('IIssueRepository'),

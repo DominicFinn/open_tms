@@ -41,6 +41,9 @@ import VNextOutboundIntegrations from './vnext-design/VNextOutboundIntegrations'
 import VNextOutboundLogs from './vnext-design/VNextOutboundLogs';
 import VNextEdiPartners from './vnext-design/VNextEdiPartners';
 import VNextEdiFiles from './vnext-design/VNextEdiFiles';
+import VNextCarrierTracking from './vnext-design/VNextCarrierTracking';
+import VNextCarrierTrackingSetup from './vnext-design/VNextCarrierTrackingSetup';
+import VNextCarrierTrackingDetail from './vnext-design/VNextCarrierTrackingDetail';
 import VNextOrderDetail from './vnext-design/VNextOrderDetail';
 import VNextPendingLaneRequests from './vnext-design/VNextPendingLaneRequests';
 import VNextOrderImportCSV from './vnext-design/VNextOrderImportCSV';
@@ -257,6 +260,9 @@ root.render(
             <Route path="trading-partners" element={<TradingPartners />} />
             <Route path="edi-partners" element={<VNextEdiPartners />} />
             <Route path="edi-files" element={<VNextEdiFiles />} />
+            <Route path="carrier-tracking" element={<VNextCarrierTracking />} />
+            <Route path="carrier-tracking/setup" element={<VNextCarrierTrackingSetup />} />
+            <Route path="carrier-tracking/:id" element={<VNextCarrierTrackingDetail />} />
           </Route>
 
           {/* Style Guide */}

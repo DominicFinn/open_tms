@@ -141,6 +141,13 @@ import { AddCommentSkill } from '../services/skills/AddCommentSkill.js';
 import { ContactDriverSkill } from '../services/skills/ContactDriverSkill.js';
 import { SendEmailSkill } from '../services/skills/SendEmailSkill.js';
 import { CallWebhookSkill } from '../services/skills/CallWebhookSkill.js';
+import { CarrierTrackingIntegrationRepository } from '../repositories/CarrierTrackingIntegrationRepository.js';
+import { CarrierTrackingProviderRegistry } from '../services/carrierTracking/ProviderRegistry.js';
+import { CarrierTrackingService } from '../services/carrierTracking/CarrierTrackingService.js';
+import { CreateCarrierTrackingIntegrationCommandHandler } from '../commands/carrierTracking/CreateCarrierTrackingIntegrationCommand.js';
+import { UpdateCarrierTrackingIntegrationCommandHandler } from '../commands/carrierTracking/UpdateCarrierTrackingIntegrationCommand.js';
+import { DeleteCarrierTrackingIntegrationCommandHandler } from '../commands/carrierTracking/DeleteCarrierTrackingIntegrationCommand.js';
+import { RecordCarrierTrackingEventCommandHandler } from '../commands/carrierTracking/RecordCarrierTrackingEventCommand.js';
 
 /**
  * Register all application dependencies
@@ -493,6 +500,24 @@ export function registerDependencies(prisma: PrismaClient): void {
     );
   });
 
+  // Carrier Tracking
+  container.singleton(TOKENS.ICarrierTrackingIntegrationRepository).toFactory(() => {
+    return new CarrierTrackingIntegrationRepository(container.resolve(TOKENS.PrismaClient));
+  });
+
+  container.singleton(TOKENS.ICarrierTrackingProviderRegistry).toFactory(() => {
+    return new CarrierTrackingProviderRegistry();
+    // Concrete providers (FedEx, UPS, etc.) will be registered in Phase 2
+  });
+
+  container.singleton(TOKENS.ICarrierTrackingService).toFactory(() => {
+    return new CarrierTrackingService(
+      container.resolve(TOKENS.PrismaClient),
+      container.resolve(TOKENS.IEventBus),
+      container.resolve(TOKENS.ICarrierTrackingProviderRegistry),
+    );
+  });
+
   // Routing provider — env-based provider selection
   const routingProvider = process.env.ROUTING_PROVIDER || 'none';
   if (routingProvider === 'here' && process.env.HERE_API_KEY) {
@@ -640,6 +665,12 @@ export function registerDependencies(prisma: PrismaClient): void {
     bus.register(new CreateAgentDecisionCommandHandler(prisma, eventBus));
     bus.register(new RecordDecisionOutcomeCommandHandler(prisma, eventBus));
     bus.register(new PromoteDecisionCommandHandler(prisma, eventBus));
+
+    // Carrier Tracking commands
+    bus.register(new CreateCarrierTrackingIntegrationCommandHandler(prisma, eventBus));
+    bus.register(new UpdateCarrierTrackingIntegrationCommandHandler(prisma, eventBus));
+    bus.register(new DeleteCarrierTrackingIntegrationCommandHandler(prisma, eventBus));
+    bus.register(new RecordCarrierTrackingEventCommandHandler(prisma, eventBus));
 
     // Financial commands
     bus.register(new CreateChargeCommandHandler(prisma, eventBus));

@@ -116,6 +116,7 @@ const APPS: AppDef[] = [
         { to: '/integrations/outbound-logs', icon: 'list_alt', label: 'Outbound Logs' },
         { to: '/integrations/edi-partners', icon: 'swap_horiz', label: 'EDI Partners' },
         { to: '/integrations/edi-files', icon: 'description', label: 'EDI Files' },
+        { to: '/integrations/carrier-tracking', icon: 'gps_fixed', label: 'Carrier Tracking' },
       ]},
     ],
   },

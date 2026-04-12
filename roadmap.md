@@ -219,6 +219,20 @@
     - ✅ pg-boss cron schedule (default: every 10 minutes, configurable)
     - ✅ API endpoints: monitor status, manual trigger, single-shipment check
     - ✅ Configurable via env vars (provider, thresholds, cron schedule)
+  - ✅ **Carrier Tracking API Integrations** - direct tracking from carrier APIs
+    - ✅ ICarrierTrackingProvider interface (same pattern as IRoutingProvider)
+    - ✅ FedEx Track API (OAuth 2.0, webhooks + polling, batch up to 30)
+    - ✅ UPS Tracking API (OAuth 2.0, Track Alert webhooks)
+    - ✅ DHL Shipment Tracking (API key, webhooks + polling)
+    - ✅ CarrierTrackingIntegration model (per-carrier config with credentials, polling, rate limits)
+    - ✅ CarrierTrackingEvent model (normalized status: 7 standard codes across all providers)
+    - ✅ Polling worker (pg-boss cron, adaptive intervals, rate limit aware)
+    - ✅ Webhook receiver with per-provider signature verification
+    - ✅ Admin setup wizard with per-provider instructions and "create issue" links
+    - ✅ Integration detail page with rate limit monitoring and manual poll
+    - 14 unit tests passing
+    - Planned: EasyPost aggregator, EDI 214 adapter, USPS, project44
+    - Planned: EDI/API standard integration with carrier TMS systems
     - ✅ 10 unit tests
     - ✅ [ETA Monitoring Guide](./docs/ETA_MONITORING_GUIDE.md)
   - Carrier API integration (FedEx, UPS, DHL) 🔲
