@@ -421,7 +421,19 @@ received → matched/discrepancy → approved → scheduled → paid
 |-------|-------------|
 | `carrier_invoice.received` | ShipmentFinancialSummary.carrierPaymentStatus → invoice_received (or approved if auto) |
 | `carrier_invoice.approved` | ShipmentFinancialSummary.carrierPaymentStatus → approved |
+| `carrier_invoice.scheduled` | scheduledPayDate set, status → scheduled |
 | `carrier_invoice.paid` | ShipmentFinancialSummary.carrierPaymentStatus → paid |
+
+### Payment Batching
+
+The `CarrierPaymentBatchService` groups approved carrier invoices by carrier for batch payment scheduling:
+
+- **GET /api/v1/carrier-invoices/payment-batches** - View approved invoices grouped by carrier (filterable by carrierId, dueBefore)
+- **GET /api/v1/carrier-invoices/payment-batches/scheduled** - View scheduled payments grouped by date
+- **POST /api/v1/carrier-invoices/payment-batches/schedule** - Schedule invoices for payment on a future date (by specific IDs, carrier, or due date filter)
+- **POST /api/v1/carrier-invoices/payment-batches/execute** - Execute all scheduled payments due on or before today
+
+A daily pg-boss cron job (`carrier-payment-batch`, 7am UTC) auto-executes scheduled payments that are due.
 
 ---
 

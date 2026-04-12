@@ -384,3 +384,103 @@ export async function registerInvoiceConsolidationSchedule(
 }
 
 export const INVOICE_CONSOLIDATION_QUEUE = 'invoice-consolidation';
+
+// ─── Carrier Payment Batch Execution ───────────────────────────────────────
+
+/**
+ * Runs daily. Executes payment for all carrier invoices that are in
+ * 'scheduled' status with a scheduledPayDate on or before today.
+ * Marks invoices as paid and updates shipment financial summaries.
+ */
+export function createCarrierPaymentBatchWorker(prisma: PrismaClient) {
+  return async () => {
+    console.log('[CarrierPaymentBatchWorker] Scanning for scheduled carrier payments due today');
+
+    try {
+      const today = new Date();
+      today.setHours(23, 59, 59, 999); // End of day
+
+      const scheduled = await prisma.carrierInvoice.findMany({
+        where: {
+          status: 'scheduled',
+          scheduledPayDate: { lte: today },
+        },
+        include: {
+          carrier: { select: { id: true, name: true } },
+          lineItems: { select: { shipmentId: true } },
+        },
+      });
+
+      if (scheduled.length === 0) {
+        console.log('[CarrierPaymentBatchWorker] No scheduled payments due today');
+        return;
+      }
+
+      let paidCount = 0;
+      let totalPaidCents = 0;
+
+      for (const inv of scheduled) {
+        const amount = inv.approvedCents ?? inv.totalCents;
+
+        await prisma.carrierInvoice.update({
+          where: { id: inv.id },
+          data: {
+            status: 'paid',
+            paidCents: amount,
+            paidAt: new Date(),
+            paymentReference: inv.paymentReference || `AUTO-BATCH-${today.toISOString().slice(0, 10)}`,
+          },
+        });
+
+        // Update shipment carrier payment status
+        const shipmentIds = [...new Set(inv.lineItems.map((l: { shipmentId: string | null }) => l.shipmentId).filter(Boolean) as string[])];
+        if (shipmentIds.length > 0) {
+          await prisma.shipmentFinancialSummary.updateMany({
+            where: { shipmentId: { in: shipmentIds } },
+            data: { carrierPaymentStatus: 'paid' },
+          });
+        }
+
+        paidCount++;
+        totalPaidCents += amount;
+
+        console.log(
+          `[CarrierPaymentBatchWorker] Paid ${inv.invoiceNumber} (${inv.carrier.name}): ${amount}c`
+        );
+      }
+
+      console.log(
+        `[CarrierPaymentBatchWorker] Complete - ${paidCount} invoices paid, total ${totalPaidCents}c`
+      );
+    } catch (err) {
+      console.error('[CarrierPaymentBatchWorker] Error:', (err as Error).message);
+      throw err;
+    }
+  };
+}
+
+export async function registerCarrierPaymentBatchSchedule(
+  boss: any,
+  cronExpression?: string,
+): Promise<void> {
+  // Runs daily at 7am UTC
+  const cron = cronExpression || process.env.CARRIER_PAYMENT_BATCH_CRON || '0 7 * * *';
+  const queueName = 'carrier-payment-batch';
+
+  try {
+    await boss.createQueue(queueName, {
+      retryLimit: 1,
+      retryDelay: 300,
+      expireInSeconds: 600,
+      deleteAfterSeconds: 86400,
+    }).catch(() => {});
+
+    await boss.schedule(queueName, cron, {}, { tz: 'UTC' });
+
+    console.log(`[CarrierPaymentBatch] Cron schedule registered: "${cron}" on queue "${queueName}"`);
+  } catch (err) {
+    console.error('[CarrierPaymentBatch] Failed to register cron schedule:', (err as Error).message);
+  }
+}
+
+export const CARRIER_PAYMENT_BATCH_QUEUE = 'carrier-payment-batch';

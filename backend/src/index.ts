@@ -18,6 +18,7 @@ import {
   createQuoteExpirationWorker, registerQuoteExpirationSchedule, QUOTE_EXPIRATION_QUEUE,
   createInvoiceOverdueWorker, registerInvoiceOverdueSchedule, INVOICE_OVERDUE_QUEUE,
   createInvoiceConsolidationWorker, registerInvoiceConsolidationSchedule, INVOICE_CONSOLIDATION_QUEUE,
+  createCarrierPaymentBatchWorker, registerCarrierPaymentBatchSchedule, CARRIER_PAYMENT_BATCH_QUEUE,
 } from './workers/financialCronWorkers.js';
 import { ISlaEvaluationService } from './services/SlaEvaluationService.js';
 import { OrderDeliveryService } from './services/OrderDeliveryService.js';
@@ -232,7 +233,9 @@ async function start() {
           await queue.subscribe(INVOICE_OVERDUE_QUEUE, createInvoiceOverdueWorker(server.prisma));
           await registerInvoiceConsolidationSchedule(finBoss);
           await queue.subscribe(INVOICE_CONSOLIDATION_QUEUE, createInvoiceConsolidationWorker(server.prisma));
-          server.log.info('Financial cron workers registered (quote expiration, invoice overdue, invoice consolidation)');
+          await registerCarrierPaymentBatchSchedule(finBoss);
+          await queue.subscribe(CARRIER_PAYMENT_BATCH_QUEUE, createCarrierPaymentBatchWorker(server.prisma));
+          server.log.info('Financial cron workers registered (quote expiration, invoice overdue, invoice consolidation, carrier payment batch)');
         }
       } catch (err) {
         server.log.warn('Financial cron workers failed to register: ' + (err as Error).message);

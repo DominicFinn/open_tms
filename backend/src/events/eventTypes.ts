@@ -166,6 +166,7 @@ export const EVENT_TYPES = {
   CARRIER_INVOICE_MATCHED: 'carrier_invoice.matched',
   CARRIER_INVOICE_DISCREPANCY: 'carrier_invoice.discrepancy',
   CARRIER_INVOICE_APPROVED: 'carrier_invoice.approved',
+  CARRIER_INVOICE_SCHEDULED: 'carrier_invoice.scheduled',
   CARRIER_INVOICE_PAID: 'carrier_invoice.paid',
 
   // Financial: Queries & Disputes
@@ -276,6 +277,7 @@ export const EVENT_SCHEMA_VERSIONS: Record<string, number> = {
   [EVENT_TYPES.CARRIER_INVOICE_MATCHED]: 1,
   [EVENT_TYPES.CARRIER_INVOICE_DISCREPANCY]: 1,
   [EVENT_TYPES.CARRIER_INVOICE_APPROVED]: 1,
+  [EVENT_TYPES.CARRIER_INVOICE_SCHEDULED]: 1,
   [EVENT_TYPES.CARRIER_INVOICE_PAID]: 1,
   [EVENT_TYPES.FINANCIAL_QUERY_RAISED]: 1,
   [EVENT_TYPES.FINANCIAL_QUERY_ASSIGNED]: 1,
