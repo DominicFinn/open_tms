@@ -133,6 +133,11 @@ export const EVENT_TYPES = {
   // EDI 214 (Shipment Status)
   EDI_214_RECEIVED: 'edi_status.received',
   EDI_214_SENT: 'edi_status.sent',
+
+  // Agent Decisions
+  AGENT_DECISION_CREATED: 'agent_decision.created',
+  AGENT_DECISION_OUTCOME_RECORDED: 'agent_decision.outcome_recorded',
+  AGENT_DECISION_PROMOTED: 'agent_decision.promoted',
 } as const;
 
 export type EventType = typeof EVENT_TYPES[keyof typeof EVENT_TYPES];
@@ -205,6 +210,9 @@ export const EVENT_SCHEMA_VERSIONS: Record<string, number> = {
   [EVENT_TYPES.SLA_WARNING]: 1,
   [EVENT_TYPES.SLA_BREACHED]: 1,
   [EVENT_TYPES.SLA_MET]: 1,
+  [EVENT_TYPES.AGENT_DECISION_CREATED]: 1,
+  [EVENT_TYPES.AGENT_DECISION_OUTCOME_RECORDED]: 1,
+  [EVENT_TYPES.AGENT_DECISION_PROMOTED]: 1,
 };
 
 /**
@@ -447,4 +455,31 @@ export interface Edi214SentPayload {
   shipmentReference: string;
   tradingPartnerId: string;
   statusCode: string;
+}
+
+// Agent Decision payloads
+export interface AgentDecisionCreatedPayload {
+  agentType: string;
+  modelProvider?: string;
+  modelId?: string;
+  triggerType: string;
+  triggerEventType?: string;
+  entityType?: string;
+  entityId?: string;
+  summary: string;
+  confidence?: number;
+  actionType: string;
+  actionEntityType?: string;
+  actionEntityId?: string;
+}
+
+export interface AgentDecisionOutcomeRecordedPayload {
+  outcomeStatus: string;
+  outcomeNotes?: string;
+  reviewedBy?: string;
+}
+
+export interface AgentDecisionPromotedPayload {
+  agentType: string;
+  actionType: string;
 }

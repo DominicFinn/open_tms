@@ -180,6 +180,31 @@ The EDI system uses a **unified Trading Partner model** (`TradingPartner`) that 
 ### Legacy Compatibility
 The old `EdiPartner` and `OutboundIntegration` models still exist. The migration copies their data into TradingPartner. The edi-collector fetches from both endpoints during transition. Old UI pages are preserved as "(Legacy)" in the integrations nav.
 
+## Agent Decision Logging (AI Compliance & Audit)
+
+### Architecture
+Every AI agent decision is logged through a dedicated "decision endpoint" for compliance and automation discovery. The system captures: what was decided, why (reasoning), what context the agent had, what action was taken, and the outcome (recorded later via human review).
+
+### Key Concepts
+- **Decision** — A logged judgment call by an AI agent, including full reasoning chain and context snapshot
+- **Outcome** — Human review of whether the decision was correct/incorrect/partially correct
+- **Promotion** — "Graduating" a proven decision pattern into a deterministic automation rule (no AI needed)
+
+### Decision Flow
+1. Agent receives trigger (domain event, schedule, manual)
+2. Agent gathers context, calls LLM, produces decision
+3. Decision logged via `POST /api/v1/agent-decisions` (the "decision endpoint")
+4. Human reviews and records outcome via `PUT /api/v1/agent-decisions/:id/outcome`
+5. Proven patterns promoted to automation via `POST /api/v1/agent-decisions/:id/promote`
+
+### Key Files
+- `backend/src/commands/agentDecisions/` — Create, RecordOutcome, Promote command handlers
+- `backend/src/repositories/AgentDecisionRepository.ts` — Repository with filtering and stats
+- `backend/src/events/projections/AgentDecisionProjection.ts` — Read model projection
+- `backend/src/routes/agentDecisions.ts` — API routes (6 endpoints)
+- `backend/src/__tests__/commands/AgentDecisionCommands.test.ts` — Command handler tests
+- `backend/src/__tests__/projections/AgentDecisionProjection.test.ts` — Projection tests
+
 ## Carrier Tendering
 
 ### Architecture

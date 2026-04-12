@@ -97,6 +97,10 @@ import { SlaEvaluationService } from '../services/SlaEvaluationService.js';
 import { CreateSlaPolicyCommandHandler } from '../commands/sla/CreateSlaPolicyCommand.js';
 import { UpdateSlaPolicyCommandHandler } from '../commands/sla/UpdateSlaPolicyCommand.js';
 import { DeactivateSlaPolicyCommandHandler } from '../commands/sla/DeactivateSlaPolicyCommand.js';
+import { AgentDecisionRepository } from '../repositories/AgentDecisionRepository.js';
+import { CreateAgentDecisionCommandHandler } from '../commands/agentDecisions/CreateAgentDecisionCommand.js';
+import { RecordDecisionOutcomeCommandHandler } from '../commands/agentDecisions/RecordDecisionOutcomeCommand.js';
+import { PromoteDecisionCommandHandler } from '../commands/agentDecisions/PromoteDecisionCommand.js';
 import { HereRoutingProvider } from '../services/routing/HereRoutingProvider.js';
 import { TomTomRoutingProvider } from '../services/routing/TomTomRoutingProvider.js';
 import { ValhallaRoutingProvider } from '../services/routing/ValhallaRoutingProvider.js';
@@ -316,6 +320,10 @@ export function registerDependencies(prisma: PrismaClient): void {
     return new SlaRepository(container.resolve(TOKENS.PrismaClient));
   });
 
+  container.singleton(TOKENS.IAgentDecisionRepository).toFactory(() => {
+    return new AgentDecisionRepository(container.resolve(TOKENS.PrismaClient));
+  });
+
   container.singleton(TOKENS.ISlaEvaluationService).toFactory(() => {
     return new SlaEvaluationService(
       container.resolve(TOKENS.PrismaClient),
@@ -511,6 +519,11 @@ export function registerDependencies(prisma: PrismaClient): void {
 
     // EDI 214 commands
     bus.register(new ProcessInbound214CommandHandler(prisma, eventBus));
+
+    // Agent Decision commands
+    bus.register(new CreateAgentDecisionCommandHandler(prisma, eventBus));
+    bus.register(new RecordDecisionOutcomeCommandHandler(prisma, eventBus));
+    bus.register(new PromoteDecisionCommandHandler(prisma, eventBus));
 
     return bus;
   });

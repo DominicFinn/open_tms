@@ -758,3 +758,25 @@ When `LocationResolutionService.resolveOrCreate()` creates a new location (used 
 | Worker | Queue | Schedule | What It Does |
 |--------|-------|----------|-------------|
 | SLA Monitor | `sla-monitor` | Every 2 min (configurable via `SLA_MONITOR_CRON`) | Sweeps active evaluations, transitions to warning/breached, auto-creates issues |
+
+---
+
+## Agent Decisions
+
+Agent Decisions provide the compliance and audit layer for AI agent actions. Every decision made by an AI agent is logged with full context, and outcomes can be recorded after the fact. Decisions can also be promoted to serve as training examples or policy references.
+
+### Commands
+
+| Command | Type | Trigger | Events Emitted |
+|---------|------|---------|----------------|
+| `CreateAgentDecisionCommand` | `agent_decision.create` | `POST /api/v1/agent-decisions` | `agent_decision.created` |
+| `RecordDecisionOutcomeCommand` | `agent_decision.record_outcome` | `PUT /api/v1/agent-decisions/:id/outcome` | `agent_decision.outcome_recorded` |
+| `PromoteDecisionCommand` | `agent_decision.promote` | `POST /api/v1/agent-decisions/:id/promote` | `agent_decision.promoted` |
+
+### Side Effects
+
+| Event | Projection | Notification | Other |
+|-------|-----------|--------------|-------|
+| `agent_decision.created` | AgentDecisionReadModel upsert | -- | Audit log |
+| `agent_decision.outcome_recorded` | AgentDecisionReadModel outcome update | -- | Audit log |
+| `agent_decision.promoted` | AgentDecisionReadModel promotion flag | -- | Audit log |

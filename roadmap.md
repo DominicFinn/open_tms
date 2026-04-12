@@ -565,6 +565,11 @@ The current EDI infrastructure handles inbound 850 (SFTP polling) and outbound 8
   - Pre-built report templates for SOC 2, ISO 27001 evidence gathering
 
 ## **Phase 9b: Intelligence & AI**
+- **Agent Decision Logging** ✅
+  - ✅ Agent Decision Logging infrastructure complete - compliance/audit layer for AI agent decisions
+  - ✅ CQRS commands: CreateAgentDecision, RecordDecisionOutcome, PromoteDecision
+  - ✅ Domain events: agent_decision.created, outcome_recorded, promoted
+  - ✅ AgentDecisionReadModel projection with full audit trail
 - **AI Triage Agent** 🔲
   - AgentConfig model: configurable prompts, LLM provider settings (LLM-independent)
   - AgentConversation model: context stored in database, not tied to any specific LLM

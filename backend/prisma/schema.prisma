@@ -621,6 +621,10 @@ model Organization {
   laneReadModels      LaneReadModel[]
   orderReadModels     OrderReadModel[]
   shipmentReadModels  ShipmentReadModel[]
+
+  // Agent Decision relations
+  agentDecisions          AgentDecision[]
+  agentDecisionReadModels AgentDecisionReadModel[]
 }
 
 model TrackableUnit {
@@ -2532,4 +2536,96 @@ model ConnectivityLog {
 
   @@index([createdAt])
   @@index([locationId])
+}
+
+// ─── Agent Decision Logging (AI Compliance & Audit) ───────────────────────────
+// Every AI agent decision is logged for compliance, auditability, and
+// automation discovery. Captures what was decided, why, what context was
+// available, what action was taken, and the outcome.
+
+model AgentDecision {
+  id                String    @id @default(uuid())
+  organization      Organization @relation(fields: [orgId], references: [id])
+  orgId             String
+
+  // What agent made this decision
+  agentType         String                            // triage, quality_analysis, route_optimization, carrier_selection
+
+  // Which LLM produced this decision (for compliance - whose key, which model)
+  modelProvider     String?                           // "anthropic", "openai", etc. - nullable for non-AI automations
+  modelId           String?                           // "claude-sonnet-4-20250514", "gpt-4o", etc.
+
+  // What triggered the agent
+  triggerType       String                            // domain_event, schedule, manual, api
+  triggerEventType  String?                           // e.g. "shipment.exception" - the domain event type that triggered this
+  triggerEventId    String?                           // DomainEventLog.id of the triggering event
+
+  // What entity this decision is about
+  entityType        String?                           // "shipment", "order", "issue", etc.
+  entityId          String?
+
+  // The decision itself
+  summary           String                            // Short human-readable summary: "Escalated issue to critical priority"
+  reasoning         String                            // Full reasoning chain from the agent
+  context           Json                              // Snapshot of data the agent had when deciding
+  conversationLog   Json?                             // Raw LLM message exchange [{role, content}...] for audit/debugging
+  confidence        Float?                            // 0.0 - 1.0, how confident the agent was
+
+  // What action was taken
+  actionType        String                            // create_issue, escalate_issue, change_priority, notify, no_action, etc.
+  actionPayload     Json?                             // Details of the action taken (e.g. { issueId, newPriority })
+  actionEntityType  String?                           // Entity created/modified by the action
+  actionEntityId    String?                           // ID of entity created/modified
+
+  // Outcome tracking (filled in later by human review or automated feedback)
+  outcomeStatus     String    @default("pending")     // pending, correct, incorrect, partially_correct
+  outcomeNotes      String?                           // Human reviewer's notes
+  outcomeRecordedAt DateTime?
+  outcomeRecordedBy String?                           // User who reviewed
+
+  // Automation promotion
+  promotedToAutomation Boolean @default(false)
+  promotedAt           DateTime?
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([orgId])
+  @@index([agentType])
+  @@index([entityType, entityId])
+  @@index([actionType])
+  @@index([outcomeStatus])
+  @@index([triggerEventType])
+  @@index([createdAt])
+  @@index([promotedToAutomation])
+}
+
+model AgentDecisionReadModel {
+  id                   String    @id
+  organization         Organization @relation(fields: [orgId], references: [id])
+  orgId                String
+
+  agentType            String
+  modelProvider        String?
+  modelId              String?
+  triggerType          String
+  triggerEventType     String?
+  entityType           String?
+  entityId             String?
+  summary              String
+  confidence           Float?
+  actionType           String
+  actionEntityType     String?
+  actionEntityId       String?
+  outcomeStatus        String    @default("pending")
+  promotedToAutomation Boolean   @default(false)
+
+  createdAt            DateTime
+  updatedAt            DateTime
+
+  @@index([orgId])
+  @@index([agentType])
+  @@index([actionType])
+  @@index([outcomeStatus])
+  @@index([createdAt])
 }

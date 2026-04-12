@@ -27,6 +27,7 @@ import { EDI214Service } from '../services/EDI214Service.js';
 import { OutboundEdiDeliveryService } from '../services/OutboundEdiDeliveryService.js';
 import { TradingPartnerRepository } from '../repositories/TradingPartnerRepository.js';
 import { IBinaryStorageProvider } from '../storage/IBinaryStorageProvider.js';
+import { AgentDecisionProjection } from './projections/AgentDecisionProjection.js';
 
 /** Read concurrency from env with a default */
 function envInt(key: string, fallback: number): number {
@@ -47,6 +48,7 @@ const CONCURRENCY_OVERRIDES: Record<string, () => number> = {
   'projection.customer': () => envInt('PROJECTION_CONCURRENCY', 3),
   'projection.lane': () => envInt('PROJECTION_CONCURRENCY', 3),
   'projection.issue': () => envInt('PROJECTION_CONCURRENCY', 3),
+  'projection.agent_decision': () => envInt('PROJECTION_CONCURRENCY', 3),
   'notification.email': () => envInt('EMAIL_CONCURRENCY', 2),
 };
 
@@ -66,6 +68,7 @@ export async function registerEventHandlers(
     new CustomerProjection(prisma),
     new LaneProjection(prisma),
     new IssueProjection(prisma),
+    new AgentDecisionProjection(prisma),
   ];
 
   // Add email handler if email service is available

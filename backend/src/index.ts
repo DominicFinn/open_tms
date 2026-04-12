@@ -67,6 +67,7 @@ import { slaReportRoutes } from './routes/slaReports.js';
 import { mapRoutes } from './routes/map.js';
 import { locationOpsRoutes } from './routes/locationOps.js';
 import { warehouseRoutes } from './routes/warehouse.js';
+import { agentDecisionRoutes } from './routes/agentDecisions.js';
 
 const server = Fastify({ logger: true });
 
@@ -147,6 +148,7 @@ async function start() {
   await server.register(mapRoutes);
   await server.register(locationOpsRoutes);
   await server.register(warehouseRoutes);
+  await server.register(agentDecisionRoutes);
 
   // Start queue adapter (needed for publishing events, even if workers run elsewhere)
   try {
