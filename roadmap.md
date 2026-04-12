@@ -596,6 +596,89 @@ The current EDI infrastructure handles inbound 850 (SFTP polling) and outbound 8
   - File and track claims for damaged or lost goods
   - Resolution workflow and reporting
 
+## **Phase 12: Hub-and-Spoke & Multi-Modal Transport** 🔲
+
+Extends the shipment and routing model to support distribution networks and multi-modal freight.
+
+- **Hub-and-Spoke Network Modeling** 🔲
+  - Add `locationType` classification to Location model: `hub | spoke | cross_dock | port | rail_terminal | airport | warehouse | customer`
+  - Hub configuration: throughput capacity, operating hours, supported transfer types
+  - Spoke-to-hub assignment: which spokes feed into which hubs
+  - Network graph model: directed edges between locations with transit time and cost
+  - Cross-dock transfer logic: cargo arrives on inbound vehicle, sorted, leaves on outbound vehicle
+  - Transfer events at hubs: `cargo.arrived_at_hub`, `cargo.sorted`, `cargo.departed_hub`
+  - Network visualization: map view showing hubs, spokes, and flow volumes
+  - Lane auto-generation from network topology (hub-to-spoke lanes derived from network config)
+- **Multi-Modal Transport** 🔲
+  - Add `transportMode` enum to shipment legs: `road | air | ocean | rail | intermodal`
+  - Mode-specific fields per leg:
+    - Ocean: vessel name, IMO number, voyage number, container number, port of loading/discharge
+    - Air: flight number, MAWB/HAWB, airline, airport codes
+    - Rail: rail car number, train ID, intermodal terminal, rail carrier
+    - Road: (existing fields — vehicle, driver, carrier)
+  - Multi-leg shipments: a single shipment can have legs across different modes (truck → ocean → truck)
+  - Leg-level status tracking: each leg has its own status lifecycle
+  - Mode-specific tracking integration points (feeds from Phase 9c data providers):
+    - Ocean: AIS vessel tracking, port milestone events
+    - Air: flight tracking, cargo milestone events (booked, tendered, departed, arrived)
+    - Rail: terminal events, estimated arrival
+  - Handoff events between modes: `leg.completed` → `leg.started` with transfer location
+  - Intermodal container tracking: track a container across truck→rail→truck or truck→ocean→truck
+  - UI: shipment detail shows leg-by-leg timeline with mode icons and per-leg status
+
+## **Phase 13: Warehouse Management System (WMS)** 🔲
+
+Foundation for Open WMS — warehouse operations integrated with the transport management layer.
+
+- **Inventory Management** 🔲
+  - Inventory model: SKU, lot number, serial number, quantity, location within warehouse
+  - Inventory by owner/client: track which inventory belongs to which customer
+  - Inventory zones: bulk storage, pick face, staging, dock, quarantine, returns
+  - Stock levels: on-hand, allocated, available, in-transit, on-hold
+  - Inventory adjustments with reason codes and audit trail
+  - Cycle counting and physical inventory workflows
+  - Lot tracking and FIFO/FEFO/LIFO pick strategies
+  - Expiry date tracking for perishable goods
+- **Warehouse Layout & Locations** 🔲
+  - Warehouse zone/aisle/rack/shelf/bin hierarchy
+  - Bin capacity and dimension constraints
+  - Location types: receiving dock, storage, pick face, packing station, shipping dock
+  - Warehouse map visualization (2D layout)
+  - Slotting optimization: suggest optimal bin placement based on velocity and pick frequency
+- **Inbound Operations (Receiving)** 🔲
+  - Advance Ship Notice (EDI 856) integration: know what's coming before it arrives
+  - Receiving workflow: dock assignment → unload → inspect → put-away
+  - Quality inspection checkpoints with pass/fail/quarantine outcomes
+  - Discrepancy handling: over/short/damage on receipt vs ASN
+  - Put-away rules: directed put-away based on product attributes, zone rules, and available space
+  - Receiving dock scheduling (ties into Phase 11 appointment scheduling)
+- **Outbound Operations (Fulfillment)** 🔲
+  - Order allocation: reserve inventory against outbound orders
+  - Wave planning: group orders into waves by carrier, destination zone, priority, or cutoff time
+  - Pick strategies: discrete (one order at a time), batch (multiple orders), zone (by warehouse area)
+  - Pick list generation with optimized walk path
+  - Pack station workflow: scan items, verify quantities, select packaging, generate labels
+  - Shipping station: carrier selection, rate shopping, label printing, manifest creation
+  - Short pick handling: backorder, substitute, or cancel line items
+- **Warehouse Tasks & Labor** 🔲
+  - Task model: receiving, put-away, replenishment, picking, packing, shipping, cycle count
+  - Task assignment to warehouse workers (manual or auto-assign based on zone/skill)
+  - Task prioritization based on order SLAs and cutoff times
+  - Worker productivity tracking: units per hour, tasks completed, idle time
+  - Mobile-friendly task execution UI (scan-driven workflows)
+- **Integration with Transport Layer** 🔲
+  - Outbound shipment creation from fulfilled orders: packed orders → create shipment automatically
+  - Inbound shipment to receiving: arriving shipment triggers receiving workflow
+  - Dock-to-stock time tracking: measure time from truck arrival to inventory availability
+  - Cross-dock support: inbound goods routed directly to outbound staging without put-away
+  - Inventory visibility in order management: show available stock when creating orders
+- **Returns Processing** 🔲
+  - Return authorization (RMA) workflow
+  - Returns receiving: inspect, grade condition, determine disposition
+  - Disposition rules: restock, refurbish, scrap, return-to-vendor
+  - Inventory adjustment on return receipt
+  - Return reason tracking and analytics
+
 ---
 
 🔥 **Priorities:**
@@ -605,10 +688,12 @@ The current EDI infrastructure handles inbound 850 (SFTP polling) and outbound 8
 - **Long term:** **Phase 7–8** remaining items (financials, customer portal, N8N integration). Event export API is warehouse-ready for financial analytics.
 - **Strategic:** **Phase 9–9c** (routes & maps, AI agents, data providers) — DomainEventLog + ML pipeline readiness means AI agents can consume the full event stream.
 - **Operational:** **Phase 10** (SRE & observability) — `/metrics` endpoint and projection checkpointing in place. Next: Prometheus format, Grafana dashboards, OpenTelemetry tracing.
-- **Future:** **Phase 11** (advanced operations) for enterprise depth.
+- **Platform expansion:** **Phase 11** (advanced operations) for enterprise depth. **Phase 12** (hub-and-spoke & multi-modal) for 3PL and global logistics support. **Phase 13** (WMS) as the foundation for Open WMS — warehouse operations integrated with the transport layer.
 
 ---
 
 ## Considerations (Outside Roadmap)
 
-- **Multi-Tenancy Support** — Extend existing Organization model for true multi-tenant isolation. Significant architectural decision: row-level security vs schema-per-tenant vs database-per-tenant. Impacts every query, every route, every permission check. Should be evaluated when there is a concrete need (multiple paying customers on a single deployment) rather than built speculatively. Current single-org model works for self-hosted and single-tenant SaaS deployments.
+- **Multi-Tenancy Support** — Extend existing Organization model for true multi-tenant isolation. Significant architectural decision: row-level security vs schema-per-tenant vs database-per-tenant. Impacts every query, every route, every permission check. Should be evaluated when there is a concrete need (multiple paying customers on a single deployment) rather than built speculatively. Current single-org model works for self-hosted and single-tenant SaaS deployments. An alternative for 3PL deployments is one instance per client, which avoids the architectural complexity but limits the cross-client "control tower" view.
+- **Control Tower Dashboard** — A real-time command center with live maps, alert streams, SLA gauges, and drill-down. Required for 3PL control tower, enterprise shipper visibility, and security monitoring use cases. Depends on WebSocket/SSE for real-time push. Should be evaluated alongside Phase 4 (triage centre) and Phase 9 (route monitoring).
+- **SLA Management Framework** — SLA definitions (target metrics, thresholds per lane/carrier/customer), monitoring engine with breach detection, SLA dashboard. Cross-cutting concern that benefits all target profiles.
