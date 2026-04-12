@@ -17,6 +17,9 @@ import { CustomerProjection } from './projections/CustomerProjection.js';
 import { LaneProjection } from './projections/LaneProjection.js';
 import { IssueProjection } from './projections/IssueProjection.js';
 import { ColdChainComplianceHandler } from './handlers/ColdChainComplianceHandler.js';
+import { SlaEvaluationHandler } from './handlers/SlaEvaluationHandler.js';
+import { SlaEvaluationService } from '../services/SlaEvaluationService.js';
+import { SlaRepository } from '../repositories/SlaRepository.js';
 import { Edi214ForwardHandler } from './handlers/Edi214ForwardHandler.js';
 import { EDI214Service } from '../services/EDI214Service.js';
 import { OutboundEdiDeliveryService } from '../services/OutboundEdiDeliveryService.js';
@@ -71,6 +74,13 @@ export async function registerEventHandlers(
   // Add cold chain compliance handler if storage provider is available
   if (storageProvider) {
     handlers.push(new ColdChainComplianceHandler(prisma, storageProvider));
+  }
+
+  // Add SLA evaluation handler
+  {
+    const slaRepo = new SlaRepository(prisma);
+    const slaService = new SlaEvaluationService(prisma, slaRepo, eventBus);
+    handlers.push(new SlaEvaluationHandler(prisma, slaService));
   }
 
   // Add EDI 214 auto-forward handler

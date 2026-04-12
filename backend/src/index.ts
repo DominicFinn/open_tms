@@ -13,6 +13,8 @@ import { createOutboundCarrierWorker } from './workers/outboundCarrierWorker.js'
 import { createOutboundTrackingWorker } from './workers/outboundTrackingWorker.js';
 import { createInboundWebhookWorker } from './workers/inboundWebhookWorker.js';
 import { createEtaMonitorWorker, registerEtaMonitorSchedule, ETA_MONITOR_QUEUE } from './workers/etaMonitorWorker.js';
+import { createSlaMonitorWorker, registerSlaMonitorSchedule, SLA_MONITOR_QUEUE } from './workers/slaMonitorWorker.js';
+import { ISlaEvaluationService } from './services/SlaEvaluationService.js';
 import { OrderDeliveryService } from './services/OrderDeliveryService.js';
 import { ArrivalCriteriaEvaluationService } from './services/ArrivalCriteriaEvaluationService.js';
 import { IShipmentEtaMonitorService } from './services/routing/ShipmentEtaMonitorService.js';
@@ -60,6 +62,7 @@ import telemetryRoutes from './routes/telemetry.js';
 import { cargoTrackingRoutes } from './routes/cargoTracking.js';
 import { coldChainRoutes } from './routes/coldChain.js';
 import { etaMonitorRoutes } from './routes/etaMonitor.js';
+import { slaRoutes } from './routes/sla.js';
 import { warehouseRoutes } from './routes/warehouse.js';
 
 const server = Fastify({ logger: true });
@@ -136,6 +139,7 @@ async function start() {
   await server.register(cargoTrackingRoutes);
   await server.register(coldChainRoutes);
   await server.register(etaMonitorRoutes);
+  await server.register(slaRoutes);
   await server.register(warehouseRoutes);
 
   // Start queue adapter (needed for publishing events, even if workers run elsewhere)
@@ -166,6 +170,19 @@ async function start() {
         } catch (err) {
           server.log.warn('ETA monitor worker failed to register: ' + (err as Error).message);
         }
+      }
+
+      // SLA Monitor — register cron schedule and worker (always enabled)
+      try {
+        const slaService = container.resolve<ISlaEvaluationService>(TOKENS.ISlaEvaluationService);
+        const slaBoss = (queue as any).boss;
+        if (slaBoss) {
+          await registerSlaMonitorSchedule(slaBoss);
+          await queue.subscribe(SLA_MONITOR_QUEUE, createSlaMonitorWorker(server.prisma, slaService));
+          server.log.info('SLA monitor worker registered');
+        }
+      } catch (err) {
+        server.log.warn('SLA monitor worker failed to register: ' + (err as Error).message);
       }
 
       server.log.info('Embedded queue workers registered (set DISABLE_EMBEDDED_WORKERS=true to use separate worker container)');

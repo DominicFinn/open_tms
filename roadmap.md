@@ -180,7 +180,20 @@
   - ✅ IssueReadModel projection for fast queries
   - Trello-like kanban board UI 🔲
   - Comments system on orders, shipments, and issues 🔲
-  - SLA tracking and breach alerts 🔲
+  - **SLA Tracking & Breach Alerts** (in progress)
+    - ✅ SLA policy model with two-tier hierarchy (org default + customer override)
+    - ✅ SLA rule types: ETA delivery, issue response, issue resolution, dwell time, light/seal security events, temperature excursion, cumulative out-of-range
+    - ✅ SLA evaluation engine: hybrid event-driven + cron-based breach detection
+    - ✅ SlaEvaluation tracking per (rule + entity) with status lifecycle (active → warning → breached / met)
+    - ✅ Auto-create triage issues on SLA breach with configurable priority
+    - ✅ pg-boss cron worker (2-min cycle) for time-based breach detection
+    - ✅ Event-driven evaluation on shipment/issue/tracking/cold-chain events
+    - ✅ CQRS command handlers (create/update/deactivate SLA policies)
+    - ✅ REST API for policy CRUD, evaluation dashboard, entity-level SLA status
+    - Frontend: SLA policy config page in Admin 🔲
+    - Frontend: SLA status tab on shipment detail 🔲
+    - Frontend: SLA indicators on issue kanban cards 🔲
+    - Frontend: SLA Health dashboard widget 🔲
   - Auto-triage handler (exception events → auto-create issues) 🔲
 - **Live Tracking & Status** (partial)
   - ✅ Inbound webhook endpoint for IoT GPS devices
