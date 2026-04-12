@@ -32,7 +32,7 @@ interface TriageDecision {
   summary: string;
   reasoning: string;
   conditions: RuleCondition[];
-  actionType: 'create_issue' | 'escalate_issue' | 'no_action';
+  actionType: 'create_issue' | 'escalate_issue' | 'contact_driver' | 'no_action';
   confidence: number;
   issuePriority?: 'low' | 'medium' | 'high' | 'critical';
   issueCategory?: string;
@@ -281,6 +281,18 @@ export class TriageAgentHandler implements IEventHandler {
         },
       });
       if (shipment) {
+        // Fetch loads with driver and vehicle info
+        const loads = await this.prisma.load.findMany({
+          where: { shipmentId: entityId },
+          include: {
+            driver: { select: { id: true, name: true, phone: true, email: true } },
+            vehicle: { select: { id: true, plate: true, type: true } },
+          },
+        });
+        const primaryLoad = loads[0];
+        const driver = primaryLoad?.driver;
+        const vehicle = primaryLoad?.vehicle;
+
         context.shipment = {
           id: shipment.id,
           reference: shipment.reference,
@@ -300,6 +312,27 @@ export class TriageAgentHandler implements IEventHandler {
             actualArrival: s.actualArrival,
           })),
         };
+
+        // Driver context - critical for contact_driver action
+        if (driver) {
+          context.driver = {
+            id: driver.id,
+            name: driver.name,
+            phone: driver.phone || null,
+            email: driver.email || null,
+            hasContactInfo: !!(driver.phone || driver.email),
+          };
+        } else {
+          context.driver = null; // No driver assigned - agent should not attempt contact_driver
+        }
+
+        if (vehicle) {
+          context.vehicle = {
+            id: vehicle.id,
+            plate: vehicle.plate,
+            type: vehicle.type,
+          };
+        }
       }
 
       const openIssues = await this.prisma.issue.findMany({
@@ -371,7 +404,8 @@ export class TriageAgentHandler implements IEventHandler {
       .replace(/\{\{event\}\}/g, JSON.stringify(context.event, null, 2))
       .replace(/\{\{shipment\}\}/g, JSON.stringify(context.shipment ?? 'No shipment data available', null, 2))
       .replace(/\{\{issues\}\}/g, JSON.stringify(context.openIssues ?? [], null, 2))
-      .replace(/\{\{sla_status\}\}/g, JSON.stringify(context.slaStatus ?? [], null, 2));
+      .replace(/\{\{sla_status\}\}/g, JSON.stringify(context.slaStatus ?? [], null, 2))
+      .replace(/\{\{driver\}\}/g, JSON.stringify(context.driver ?? 'No driver assigned - do not use contact_driver action', null, 2));
 
     const userMessage = `## Event
 Type: ${event.type}
@@ -483,6 +517,105 @@ Based on this event and context, what action should be taken?`;
       }
 
       console.warn(`[TriageAgent] Failed to create issue: ${result.error}`);
+      return {};
+    }
+
+    if (decision.actionType === 'contact_driver') {
+      // Agent wants to contact the driver about this issue.
+      // Gate: only proceed if driver info is available in context.
+      const driverCtx = (arguments[0] as any)?._context?.driver;
+      // We need the context passed in - but it's not in the method signature.
+      // Instead, we create an issue first (if one doesn't exist for this event),
+      // then add a comment with driver contact details for the dispatcher.
+
+      // First, create an issue if needed
+      const existingIssue = await this.prisma.issue.findFirst({
+        where: {
+          sourceEntityType: event.entityType,
+          sourceEntityId: event.entityId,
+          status: { in: ['open', 'in_progress'] },
+        },
+        select: { id: true },
+      });
+
+      let issueId = existingIssue?.id;
+      if (!issueId) {
+        // Create the issue first
+        const createResult = await this.commandBus.dispatch({
+          type: CREATE_ISSUE,
+          orgId: event.orgId,
+          actorId: 'system:triage-agent',
+          payload: {
+            title: decision.issueTitle || `Driver contact needed: ${decision.summary}`,
+            description: decision.reasoning,
+            priority: decision.issuePriority || 'high',
+            category: decision.issueCategory || 'exception',
+            sourceEntityType: event.entityType,
+            sourceEntityId: event.entityId,
+            sourceEventId: event.id,
+          },
+          metadata: { correlationId, source: 'system' },
+        });
+        if (createResult.success) {
+          issueId = (createResult.data as { id: string })?.id;
+        }
+      }
+
+      // Now fetch driver info from shipment loads
+      if (issueId) {
+        const loads = await this.prisma.load.findMany({
+          where: { shipmentId: event.entityId },
+          include: { driver: true, vehicle: true },
+          take: 1,
+        });
+        const driver = loads[0]?.driver;
+        const vehicle = loads[0]?.vehicle;
+
+        let commentBody: string;
+        if (driver && (driver.phone || driver.email)) {
+          commentBody = `**Agent requests driver contact**\n\n`
+            + `Driver: ${driver.name}\n`
+            + (driver.phone ? `Phone: ${driver.phone}\n` : '')
+            + (driver.email ? `Email: ${driver.email}\n` : '')
+            + (vehicle ? `Vehicle: ${vehicle.plate} (${vehicle.type})\n` : '')
+            + `\nReason: ${decision.reasoning}`;
+        } else {
+          commentBody = `**Agent attempted driver contact but no driver info available**\n\n`
+            + `No driver is assigned to this shipment. Please assign a driver or contact the carrier directly.\n`
+            + `Carrier should be contacted about: ${decision.reasoning}`;
+        }
+
+        // Add comment to issue
+        await this.prisma.comment.create({
+          data: {
+            orgId: event.orgId,
+            entityType: 'issue',
+            entityId: issueId,
+            authorId: null,
+            authorName: 'AI Triage Agent',
+            authorType: 'agent',
+            body: commentBody,
+          },
+        });
+
+        // Increment comment count on read model
+        await this.prisma.issueReadModel.update({
+          where: { id: issueId },
+          data: { commentCount: { increment: 1 }, updatedAt: new Date() },
+        }).catch(() => {});
+
+        return {
+          actionEntityType: 'issue',
+          actionEntityId: issueId,
+          actionPayload: {
+            action: 'contact_driver',
+            driverName: driver?.name ?? null,
+            driverPhone: driver?.phone ?? null,
+            hasDriverInfo: !!(driver?.phone || driver?.email),
+          },
+        };
+      }
+
       return {};
     }
 

@@ -77,6 +77,7 @@ export const TOKENS = {
 
   // Agent Decision tokens
   IAgentDecisionRepository: Symbol.for('IAgentDecisionRepository'),
+  IIssueRepository: Symbol.for('IIssueRepository'),
 
   // LLM tokens
   ILlmProvider: Symbol.for('ILlmProvider'),

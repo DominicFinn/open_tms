@@ -96,6 +96,18 @@ export const EVENT_TYPES = {
   ISSUE_STATUS_CHANGED: 'issue.status_changed',
   ISSUE_ESCALATED: 'issue.escalated',
   ISSUE_RESOLVED: 'issue.resolved',
+  ISSUE_SNOOZED: 'issue.snoozed',
+  ISSUE_UNSNOOZED: 'issue.unsnoozed',
+  ISSUE_CLOSED: 'issue.closed',
+  ISSUE_REOPENED: 'issue.reopened',
+  ISSUE_NEEDS_CAPA_MARKED: 'issue.needs_capa_marked',
+  ISSUE_LABEL_ADDED: 'issue.label_added',
+  ISSUE_LABEL_REMOVED: 'issue.label_removed',
+
+  // Comments
+  COMMENT_ADDED: 'comment.added',
+  COMMENT_UPDATED: 'comment.updated',
+  COMMENT_DELETED: 'comment.deleted',
 
   // Cold Chain
   COLD_CHAIN_PROFILE_CREATED: 'cold_chain_profile.created',
@@ -228,6 +240,17 @@ export const EVENT_SCHEMA_VERSIONS: Record<string, number> = {
   [EVENT_TYPES.ISSUE_STATUS_CHANGED]: 1,
   [EVENT_TYPES.ISSUE_ESCALATED]: 1,
   [EVENT_TYPES.ISSUE_RESOLVED]: 1,
+  [EVENT_TYPES.ISSUE_SNOOZED]: 1,
+  [EVENT_TYPES.ISSUE_UNSNOOZED]: 1,
+  [EVENT_TYPES.ISSUE_CLOSED]: 1,
+  [EVENT_TYPES.ISSUE_REOPENED]: 1,
+  [EVENT_TYPES.ISSUE_NEEDS_CAPA_MARKED]: 1,
+  [EVENT_TYPES.ISSUE_LABEL_ADDED]: 1,
+  [EVENT_TYPES.ISSUE_LABEL_REMOVED]: 1,
+  // Comments
+  [EVENT_TYPES.COMMENT_ADDED]: 1,
+  [EVENT_TYPES.COMMENT_UPDATED]: 1,
+  [EVENT_TYPES.COMMENT_DELETED]: 1,
   [EVENT_TYPES.COLD_CHAIN_PROFILE_CREATED]: 1,
   [EVENT_TYPES.COLD_CHAIN_PROFILE_UPDATED]: 1,
   [EVENT_TYPES.COLD_CHAIN_PROFILE_DEACTIVATED]: 1,

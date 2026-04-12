@@ -97,6 +97,87 @@ function buildNotification(event: DomainEvent): { title: string; body: string; c
         severity: delaySeverity,
       };
     }
+
+    // ── Issue / Triage events ──
+    case 'issue.created':
+      return {
+        title: `New issue: ${p.title || event.entityId.slice(0, 8)}`,
+        body: `${(p.priority || 'medium').toUpperCase()} ${p.category || 'issue'} - ${p.title || 'New issue created'}`,
+        category: 'issue',
+        severity: p.priority === 'critical' ? 'error' : p.priority === 'high' ? 'warning' : 'info',
+      };
+    case 'issue.assigned':
+      return {
+        title: `Issue assigned: ${p.title || event.entityId.slice(0, 8)}`,
+        body: `Assigned to ${p.assigneeName || 'someone'}${p.previousAssigneeId ? ' (reassigned)' : ''}`,
+        category: 'issue',
+        severity: 'info',
+      };
+    case 'issue.status_changed':
+      return {
+        title: `Issue updated: ${p.title || event.entityId.slice(0, 8)}`,
+        body: `Status changed from ${p.previousStatus} to ${p.newStatus}`,
+        category: 'issue',
+        severity: 'info',
+      };
+    case 'issue.escalated':
+      return {
+        title: `Issue escalated: ${p.title || event.entityId.slice(0, 8)}`,
+        body: `Escalated to ${p.escalatedTo || 'management'}${p.reason ? ': ' + p.reason : ''}`,
+        category: 'issue',
+        severity: 'error',
+      };
+    case 'issue.resolved':
+      return {
+        title: `Issue resolved: ${p.title || event.entityId.slice(0, 8)}`,
+        body: p.resolution || 'Issue has been resolved',
+        category: 'issue',
+        severity: 'success',
+      };
+    case 'issue.closed':
+      return {
+        title: `Issue closed: ${p.title || event.entityId.slice(0, 8)}`,
+        body: 'Issue has been closed',
+        category: 'issue',
+        severity: 'success',
+      };
+    case 'issue.reopened':
+      return {
+        title: `Issue reopened: ${p.title || event.entityId.slice(0, 8)}`,
+        body: `Issue was reopened from ${p.previousStatus || 'closed'}`,
+        category: 'issue',
+        severity: 'warning',
+      };
+    case 'issue.snoozed':
+      return {
+        title: `Issue snoozed: ${p.title || event.entityId.slice(0, 8)}`,
+        body: `Snoozed until ${p.snoozedUntil ? new Date(p.snoozedUntil).toLocaleString() : 'later'}`,
+        category: 'issue',
+        severity: 'info',
+      };
+    case 'issue.unsnoozed':
+      return {
+        title: `Issue woke up: ${p.title || event.entityId.slice(0, 8)}`,
+        body: 'Issue snooze has expired - needs attention',
+        category: 'issue',
+        severity: 'warning',
+      };
+    case 'issue.needs_capa_marked':
+      return p.needsCapa ? {
+        title: `CAPA required: ${p.title || event.entityId.slice(0, 8)}`,
+        body: 'This issue has been flagged as requiring a CAPA report',
+        category: 'issue',
+        severity: 'warning',
+      } : null;
+    case 'comment.added': {
+      if (p.entityType !== 'issue') return null;
+      return {
+        title: `New comment on issue ${(p.entityId || event.entityId || '').slice(0, 8)}`,
+        body: `${p.authorName || 'Someone'}: ${(p.body || '').slice(0, 100)}${(p.body || '').length > 100 ? '...' : ''}`,
+        category: 'issue',
+        severity: 'info',
+      };
+    }
     default:
       return null;
   }
@@ -116,6 +197,18 @@ export class InAppNotificationHandler implements IEventHandler {
     'cargo.left_on_vehicle',
     'cargo.discrepancy_resolved',
     'tracking.eta_updated',
+    // Issue / Triage events
+    'issue.created',
+    'issue.assigned',
+    'issue.status_changed',
+    'issue.escalated',
+    'issue.resolved',
+    'issue.closed',
+    'issue.reopened',
+    'issue.snoozed',
+    'issue.unsnoozed',
+    'issue.needs_capa_marked',
+    'comment.added',
   ];
   readonly options: SubscribeOptions = {
     concurrency: 3,
@@ -137,6 +230,17 @@ export class InAppNotificationHandler implements IEventHandler {
 
     if (users.length === 0) return;
 
+    // Build the correct action URL based on event type
+    const p = event.payload as any;
+    let actionEntityType = event.entityType;
+    let actionEntityId = event.entityId;
+    // For comment events, link to the commented entity (e.g., issue) not the comment itself
+    if (event.type === 'comment.added' && p.entityType && p.entityId) {
+      actionEntityType = p.entityType;
+      actionEntityId = p.entityId;
+    }
+    const actionUrl = `/${actionEntityType}s/${actionEntityId}`;
+
     // Batch create notifications
     await this.prisma.notification.createMany({
       data: users.map((user) => ({
@@ -146,9 +250,9 @@ export class InAppNotificationHandler implements IEventHandler {
         body: content.body,
         category: content.category,
         severity: content.severity,
-        entityType: event.entityType,
-        entityId: event.entityId,
-        actionUrl: `/${event.entityType}s/${event.entityId}`,
+        entityType: actionEntityType,
+        entityId: actionEntityId,
+        actionUrl,
         eventId: event.id,
         eventType: event.type,
       })),

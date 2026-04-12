@@ -17,6 +17,7 @@ import { CustomerProjection } from './projections/CustomerProjection.js';
 import { LaneProjection } from './projections/LaneProjection.js';
 import { IssueProjection } from './projections/IssueProjection.js';
 import { ColdChainComplianceHandler } from './handlers/ColdChainComplianceHandler.js';
+import { IssueClosureReportHandler } from './handlers/IssueClosureReportHandler.js';
 import { AutoTenderHandler } from './handlers/AutoTenderHandler.js';
 import { ShipmentCompletionHandler } from './handlers/ShipmentCompletionHandler.js';
 import { SlaEvaluationHandler } from './handlers/SlaEvaluationHandler.js';
@@ -93,6 +94,7 @@ export async function registerEventHandlers(
   // Add cold chain compliance handler if storage provider is available
   if (storageProvider) {
     handlers.push(new ColdChainComplianceHandler(prisma, storageProvider));
+    handlers.push(new IssueClosureReportHandler(prisma, storageProvider));
   }
 
   // Auto-tender handler: creates tenders for laneless shipments when autoTenderEnabled

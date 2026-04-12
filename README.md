@@ -85,7 +85,7 @@ Deploy your own Open TMS instance with one click:
 - **Event-Driven** - Every state change emits a domain event to an immutable event store (DomainEventLog)
 - **Read Model Projections** - 6 denormalized read models (Order, Shipment, Carrier, Customer, Lane, Issue) built from events, optimized for fast list queries with zero joins
 - **Event Bus** - pg-boss fan-out with per-handler queues, wildcard subscriptions, configurable concurrency
-- **Issue/Triage System** - Operational issue tracking with status lifecycle, priority escalation, and source entity linking
+- **Issue/Triage Centre** - Drag-and-drop kanban board with saved views. Full issue lifecycle: create, assign, escalate, snooze, resolve, close, and reopen. Collaborative comments on issues, shipments, and orders. Issue labels for categorization. PDF closure reports auto-generated on close. AI agent driver contact action. Full in-app notification support for all issue events
 - **TypeScript** - Full type safety across frontend and backend
 - **RESTful API** - Well-documented API with Swagger/OpenAPI
 - **Database Migrations** - Prisma-powered database management (45+ models)

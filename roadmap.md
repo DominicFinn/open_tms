@@ -167,15 +167,25 @@
   - ✅ Backfill script for populating read models from existing data
   - ✅ 59 tests across 11 suites (commands, projections, integration)
   - ✅ [Domain Behaviours documentation](./docs/DOMAIN_BEHAVIOURS.md)
-- **Triage Centre / Issue Management** (partial)
-  - ✅ Issue model with status lifecycle (open → in_progress → resolved → closed)
+- **Triage Centre / Issue Management** ✅
+  - ✅ Issue model with status lifecycle (open -> in_progress -> resolved -> closed)
   - ✅ Priority levels (low, medium, high, critical)
   - ✅ Category classification (exception, delay, damage, compliance, other)
   - ✅ Source entity linking (which shipment/order/carrier triggered it)
   - ✅ Assignment and escalation with CQRS commands
   - ✅ IssueReadModel projection for fast queries
-  - Trello-like kanban board UI 🔲
-  - Comments system on orders, shipments, and issues 🔲
+  - ✅ Trello-like kanban board UI (drag-and-drop with @dnd-kit, columns by status)
+  - ✅ Comments system on orders, shipments, and issues (polymorphic comments with activity timeline)
+  - ✅ Drag-and-drop kanban board with @dnd-kit
+  - ✅ Issue detail page with activity timeline, comments, SLA sidebar
+  - ✅ Generic comments system (issues, shipments, orders)
+  - ✅ Issue labels and saved kanban views
+  - ✅ Snooze, close/reopen, needs-CAPA workflows
+  - ✅ PDF closure reports auto-generated on issue close
+  - ✅ Agent driver contact flow with context enrichment
+  - ✅ In-app notifications for all issue events
+  - ✅ Entity search dropdown in create issue modal
+  - ✅ Create issue modal from kanban board
   - **SLA Tracking & Breach Alerts** (in progress)
     - ✅ SLA policy model with two-tier hierarchy (org default + customer override)
     - ✅ SLA rule types: ETA delivery, issue response, issue resolution, dwell time, light/seal security events, temperature excursion, cumulative out-of-range

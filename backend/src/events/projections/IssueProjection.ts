@@ -10,7 +10,7 @@ import { EVENT_TYPES } from '../eventTypes.js';
 
 export class IssueProjection implements IEventHandler {
   readonly name = 'projection.issue';
-  readonly eventPatterns = ['issue.*'];
+  readonly eventPatterns = ['issue.*', 'comment.*'];
   readonly options: SubscribeOptions = {
     concurrency: 3,
     priority: 5,
@@ -33,6 +33,23 @@ export class IssueProjection implements IEventHandler {
         return this.onIssueEscalated(event);
       case EVENT_TYPES.ISSUE_RESOLVED:
         return this.onIssueResolved(event);
+      case EVENT_TYPES.ISSUE_SNOOZED:
+        return this.onIssueSnoozed(event);
+      case EVENT_TYPES.ISSUE_UNSNOOZED:
+        return this.onIssueUnsnoozed(event);
+      case EVENT_TYPES.ISSUE_CLOSED:
+        return this.onIssueClosed(event);
+      case EVENT_TYPES.ISSUE_REOPENED:
+        return this.onIssueReopened(event);
+      case EVENT_TYPES.ISSUE_NEEDS_CAPA_MARKED:
+        return this.onIssueNeedsCapaMarked(event);
+      case EVENT_TYPES.ISSUE_LABEL_ADDED:
+      case EVENT_TYPES.ISSUE_LABEL_REMOVED:
+        return this.onIssueLabelChanged(event);
+      case EVENT_TYPES.COMMENT_ADDED:
+        return this.onCommentAdded(event);
+      case EVENT_TYPES.COMMENT_DELETED:
+        return this.onCommentDeleted(event);
       default:
         break;
     }
@@ -51,18 +68,30 @@ export class IssueProjection implements IEventHandler {
         id: issue.id,
         orgId: issue.orgId,
         title: issue.title,
+        description: issue.description ?? null,
         status: issue.status,
         priority: issue.priority,
         category: issue.category,
         sourceEntityType: issue.sourceEntityType,
         sourceEntityId: issue.sourceEntityId,
+        sourceEventId: issue.sourceEventId ?? null,
+        assigneeId: issue.assigneeId ?? null,
         assigneeName: issue.assigneeName,
+        needsCapa: issue.needsCapa ?? false,
+        snoozedUntil: issue.snoozedUntil ?? null,
+        labels: [],
         createdAt: issue.createdAt,
         updatedAt: issue.updatedAt,
       },
       update: {
         title: issue.title,
+        description: issue.description ?? null,
         status: issue.status,
+        sourceEventId: issue.sourceEventId ?? null,
+        assigneeId: issue.assigneeId ?? null,
+        needsCapa: issue.needsCapa ?? false,
+        snoozedUntil: issue.snoozedUntil ?? null,
+        labels: [],
         updatedAt: issue.updatedAt,
       },
     });
@@ -76,10 +105,16 @@ export class IssueProjection implements IEventHandler {
       where: { id: issue.id },
       data: {
         title: issue.title,
+        description: issue.description ?? null,
         status: issue.status,
         priority: issue.priority,
         category: issue.category,
+        resolution: issue.resolution ?? null,
+        assigneeId: issue.assigneeId ?? null,
         assigneeName: issue.assigneeName,
+        needsCapa: issue.needsCapa ?? false,
+        snoozedUntil: issue.snoozedUntil ?? null,
+        snoozedBy: issue.snoozedBy ?? null,
         updatedAt: new Date(),
       },
     }).catch((err: Error) => {
@@ -124,6 +159,127 @@ export class IssueProjection implements IEventHandler {
       },
     }).catch((err: Error) => {
       console.error(`[IssueProjection] Failed to update resolution for ${event.entityId}: ${err.message}`);
+    });
+  }
+
+  private async onIssueSnoozed(event: DomainEvent): Promise<void> {
+    const payload = event.payload as { snoozedUntil: string; snoozedBy: string };
+    await this.prisma.issueReadModel.update({
+      where: { id: event.entityId },
+      data: {
+        snoozedUntil: new Date(payload.snoozedUntil),
+        snoozedBy: payload.snoozedBy,
+        updatedAt: new Date(),
+      },
+    }).catch((err: Error) => {
+      console.error(`[IssueProjection] Failed to update snooze for ${event.entityId}: ${err.message}`);
+    });
+  }
+
+  private async onIssueUnsnoozed(event: DomainEvent): Promise<void> {
+    await this.prisma.issueReadModel.update({
+      where: { id: event.entityId },
+      data: {
+        snoozedUntil: null,
+        snoozedBy: null,
+        updatedAt: new Date(),
+      },
+    }).catch((err: Error) => {
+      console.error(`[IssueProjection] Failed to clear snooze for ${event.entityId}: ${err.message}`);
+    });
+  }
+
+  private async onIssueClosed(event: DomainEvent): Promise<void> {
+    const payload = event.payload as { closedAt: string };
+    await this.prisma.issueReadModel.update({
+      where: { id: event.entityId },
+      data: {
+        status: 'closed',
+        closedAt: new Date(payload.closedAt),
+        updatedAt: new Date(),
+      },
+    }).catch((err: Error) => {
+      console.error(`[IssueProjection] Failed to close issue ${event.entityId}: ${err.message}`);
+    });
+  }
+
+  private async onIssueReopened(event: DomainEvent): Promise<void> {
+    await this.prisma.issueReadModel.update({
+      where: { id: event.entityId },
+      data: {
+        status: 'open',
+        closedAt: null,
+        updatedAt: new Date(),
+      },
+    }).catch((err: Error) => {
+      console.error(`[IssueProjection] Failed to reopen issue ${event.entityId}: ${err.message}`);
+    });
+  }
+
+  private async onIssueNeedsCapaMarked(event: DomainEvent): Promise<void> {
+    const payload = event.payload as { needsCapa: boolean };
+    await this.prisma.issueReadModel.update({
+      where: { id: event.entityId },
+      data: {
+        needsCapa: payload.needsCapa,
+        updatedAt: new Date(),
+      },
+    }).catch((err: Error) => {
+      console.error(`[IssueProjection] Failed to update needsCapa for ${event.entityId}: ${err.message}`);
+    });
+  }
+
+  private async onIssueLabelChanged(event: DomainEvent): Promise<void> {
+    const issueId = event.entityId;
+    try {
+      const assignments = await this.prisma.issueLabelAssignment.findMany({
+        where: { issueId },
+        include: { label: true },
+      });
+      const labels = assignments.map((a: any) => ({
+        id: a.label.id,
+        name: a.label.name,
+        color: a.label.color,
+      }));
+      await this.prisma.issueReadModel.update({
+        where: { id: issueId },
+        data: {
+          labels,
+          updatedAt: new Date(),
+        },
+      });
+    } catch (err: any) {
+      console.error(`[IssueProjection] Failed to update labels for ${issueId}: ${err.message}`);
+    }
+  }
+
+  private async onCommentAdded(event: DomainEvent): Promise<void> {
+    const payload = event.payload as { entityType?: string; entityId?: string };
+    if (payload.entityType !== 'issue') return;
+    const issueId = payload.entityId ?? event.entityId;
+    await this.prisma.issueReadModel.update({
+      where: { id: issueId },
+      data: {
+        commentCount: { increment: 1 },
+        updatedAt: new Date(),
+      },
+    }).catch((err: Error) => {
+      console.error(`[IssueProjection] Failed to increment commentCount for ${issueId}: ${err.message}`);
+    });
+  }
+
+  private async onCommentDeleted(event: DomainEvent): Promise<void> {
+    const payload = event.payload as { entityType?: string; entityId?: string };
+    if (payload.entityType !== 'issue') return;
+    const issueId = payload.entityId ?? event.entityId;
+    await this.prisma.issueReadModel.update({
+      where: { id: issueId },
+      data: {
+        commentCount: { decrement: 1 },
+        updatedAt: new Date(),
+      },
+    }).catch((err: Error) => {
+      console.error(`[IssueProjection] Failed to decrement commentCount for ${issueId}: ${err.message}`);
     });
   }
 }
