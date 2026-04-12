@@ -57,6 +57,7 @@ const APPS: AppDef[] = [
         { to: '/shipments', icon: 'local_shipping', label: 'Shipments' },
         { to: '/orders', icon: 'receipt_long', label: 'Orders' },
         { to: '/issues', icon: 'bug_report', label: 'Issues' },
+        { to: '/agent-decisions', icon: 'smart_toy', label: 'Agent Decisions' },
         { to: '/devices', icon: 'sensors', label: 'Devices' },
       ]},
       { title: 'Network', items: [

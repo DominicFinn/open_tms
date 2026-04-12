@@ -57,6 +57,8 @@ import VNextShipmentMap from './vnext-design/VNextShipmentMap';
 import VNextSlaDashboard from './vnext-design/VNextSlaDashboard';
 import VNextSlaPolicies from './vnext-design/VNextSlaPolicies';
 import VNextLocationOps from './vnext-design/VNextLocationOps';
+import VNextAgentDecisions from './vnext-design/VNextAgentDecisions';
+import VNextAgentDecisionDetail from './vnext-design/VNextAgentDecisionDetail';
 
 // Carrier Tendering & Portal
 import Tenders from './pages/Tenders';
@@ -144,6 +146,10 @@ root.render(
           {/* Issues & Carrier Bidding */}
           <Route path="issues" element={<VNextIssueKanban />} />
           <Route path="carrier-bidding" element={<VNextCarrierBidding />} />
+
+          {/* Agent Decisions */}
+          <Route path="agent-decisions" element={<VNextAgentDecisions />} />
+          <Route path="agent-decisions/:id" element={<VNextAgentDecisionDetail />} />
 
           {/* Devices */}
           <Route path="devices" element={<VNextDevices />} />
