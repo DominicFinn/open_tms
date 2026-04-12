@@ -102,6 +102,36 @@ const sections = [
     ),
   },
   {
+    problem: 'A driver takes a wrong turn or skips a stop and nobody notices until the customer calls',
+    solution: 'Route deviation alerts',
+    description: 'Define planned routes per lane using Google Maps with drag-to-adjust editing and hub-and-spoke waypoints. The system continuously compares GPS positions against the planned path and alerts when shipments stray beyond a configurable corridor. Warning and critical severity levels trigger automatic exceptions and triage agent evaluation. No Google Maps key? The feature gracefully disables itself - no errors, no broken UI.',
+    illustration: (
+      <svg viewBox="0 0 280 200" fill="none" className="w-full h-auto">
+        {/* Planned route */}
+        <path d="M30 160 Q80 120 140 100 Q200 80 250 40" stroke="rgba(99,102,241,0.4)" strokeWidth="2.5" fill="none" strokeLinecap="round" />
+        {/* Corridor boundary */}
+        <path d="M30 140 Q80 100 140 80 Q200 60 250 20" stroke="rgba(99,102,241,0.1)" strokeWidth="1" fill="none" strokeDasharray="4 4" />
+        <path d="M30 180 Q80 140 140 120 Q200 100 250 60" stroke="rgba(99,102,241,0.1)" strokeWidth="1" fill="none" strokeDasharray="4 4" />
+        {/* On-route truck */}
+        <circle cx="140" cy="100" r="5" fill="rgba(34,197,94,0.6)" />
+        <circle cx="140" cy="100" r="12" stroke="rgba(34,197,94,0.2)" strokeWidth="1" fill="none" />
+        {/* Deviated truck */}
+        <circle cx="200" cy="140" r="5" fill="rgba(239,68,68,0.7)" />
+        <circle cx="200" cy="140" r="12" stroke="rgba(239,68,68,0.3)" strokeWidth="1.5" fill="none" />
+        <circle cx="200" cy="140" r="22" stroke="rgba(239,68,68,0.15)" strokeWidth="1" fill="none" />
+        {/* Deviation line */}
+        <line x1="200" y1="80" x2="200" y2="128" stroke="rgba(239,68,68,0.3)" strokeWidth="1" strokeDasharray="3 3" />
+        {/* Origin marker */}
+        <circle cx="30" cy="160" r="6" fill="rgba(34,197,94,0.4)" stroke="rgba(34,197,94,0.6)" strokeWidth="1.5" />
+        {/* Destination marker */}
+        <circle cx="250" cy="40" r="6" fill="rgba(99,102,241,0.4)" stroke="rgba(99,102,241,0.6)" strokeWidth="1.5" />
+        {/* Alert badge */}
+        <rect x="210" y="128" width="48" height="18" rx="9" fill="rgba(239,68,68,0.2)" stroke="rgba(239,68,68,0.4)" strokeWidth="1" />
+        <text x="234" y="140" textAnchor="middle" fill="rgba(239,68,68,0.8)" fontSize="8" fontWeight="600">OFF ROUTE</text>
+      </svg>
+    ),
+  },
+  {
     problem: 'Your IoT data is trapped in a vendor dashboard you can\'t query or act on',
     solution: 'Integrated IoT & sensor telemetry',
     description: 'GPS, temperature, humidity, shock, and light sensor data flows directly into your shipment records. Set thresholds, trigger automatic exceptions, and generate compliance breadcrumb reports  - all without leaving the TMS.',

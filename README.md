@@ -60,6 +60,7 @@ Deploy your own Open TMS instance with one click:
 - **Email Service** - Pluggable email with SMTP and console providers, Handlebars templates, admin-configurable settings, and per-organization overrides
 - **Cold Chain Monitoring** - Temperature profiles, immutable logging, excursion detection, compliance reports (CFR 21 Part 11)
 - **ETA Monitoring** - Cron-driven shipment delay detection using traffic-aware routing APIs (TomTom, HERE, Valhalla), adaptive polling, configurable alert thresholds, and automatic notifications
+- **Route Deviation Alerts** - Per-lane planned routes via Google Maps Directions API with draggable route editing, encoded polyline storage, configurable deviation corridors, real-time deviation detection during ETA monitor cycles, and alert banners on shipment detail pages. Supports hub-and-spoke waypoints and auto-populates distance from the planned route
 - **Agent Decision Logging (AI compliance & audit)** - Full audit trail for AI agent decisions with outcome recording, decision promotion, and read model projections for compliance review
 - **AI Triage Agent** - Event-driven agent that uses Claude to triage shipment exceptions, SLA breaches, cargo issues, and cold chain excursions. Automatically creates or escalates issues with full decision logging for compliance
 - **Configurable Agent Prompts** - Per-org prompt templates with immutable versioning, template variables (`{{shipment}}`, `{{event}}`, etc.), event subscription checkboxes, confidence thresholds, and instant rollback

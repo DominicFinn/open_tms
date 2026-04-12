@@ -423,6 +423,7 @@ model Lane {
   customerLanes CustomerLane[]
   laneCarriers  LaneCarrier[]
   stops         LaneStop[]
+  route         LaneRoute?
 
   // Read model relations
   shipmentReadModels ShipmentReadModel[]
@@ -3528,4 +3529,36 @@ model CarrierTrackingEvent {
   @@index([trackingNumber])
   @@index([occurredAt])
   @@index([status])
+}
+
+// ─── Lane Route (Planned Route Polyline) ──────────────────────────────────────
+
+model LaneRoute {
+  id              String   @id @default(uuid())
+  lane            Lane     @relation(fields: [laneId], references: [id], onDelete: Cascade)
+  laneId          String   @unique // One route per lane
+  orgId           String
+
+  // The planned route geometry - Google-encoded polyline string
+  encodedPolyline String   @db.Text
+
+  // Decoded waypoints snapshot (JSON array of {lat, lng}) for quick access
+  waypoints       Json     // [{lat: number, lng: number}, ...]
+
+  // Route metadata from Google Maps Directions API
+  distanceMeters  Int
+  durationSeconds Int
+  summary         String?  // Google's route summary (e.g., "via I-95 N")
+
+  // Corridor config for deviation detection
+  corridorMeters  Int      @default(5000) // How far off-route before alerting
+
+  // Source tracking
+  provider        String   @default("google") // "google" | "manual"
+  createdBy       String?
+  updatedBy       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([orgId])
 }

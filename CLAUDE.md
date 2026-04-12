@@ -127,6 +127,34 @@ The monitor uses adaptive polling to minimize API costs:
 - `backend/src/routes/etaMonitor.ts` — API routes (status, manual run, single-shipment check)
 - Full documentation: `docs/ETA_MONITORING_GUIDE.md`
 
+### Route Deviation Alerts
+The ETA monitor also checks for route deviations on shipments with a lane that has a planned route (`LaneRoute`). During each cycle, it compares the shipment's GPS position against the lane route's encoded polyline using point-to-segment distance calculation.
+
+**LaneRoute model** stores per-lane planned routes with:
+- Google-encoded polyline string of the planned path
+- Decoded waypoints JSON for quick access
+- Distance/duration metadata from Google Maps Directions API
+- Configurable corridor (default: 5000m) for deviation threshold
+
+**Route Planning** is done on the lane create/edit page (`VNextCreateLane.tsx`) using a Google Maps DirectionsRenderer with drag support. Users auto-fill from origin/destination, add hub-and-spoke stops as waypoints, and drag the route to adjust.
+
+**Requires:** Google Maps API key configured in organization settings. Without it, the route planning UI shows a warning and route deviation detection is skipped.
+
+#### Deviation Events
+| Severity | Condition | Event |
+|----------|-----------|-------|
+| Warning | Distance > corridor | `tracking.route_deviation` |
+| Critical | Distance > 2x corridor | `tracking.route_deviation` + `shipment.exception` (type: `route_deviation`) |
+
+#### Key Files (Route Deviation)
+- `backend/src/services/routing/GoogleMapsDirectionsService.ts` - Google Maps API + polyline encode/decode
+- `backend/src/services/routing/RouteDeviationService.ts` - Point-to-polyline deviation detection
+- `backend/src/routes/laneRoutes.ts` - Lane route CRUD + calculate + check-deviation API
+- `frontend/src/components/GoogleMapsRouteEditor.tsx` - Draggable Google Maps route editor
+- `frontend/src/vnext-design/VNextCreateLane.tsx` - Lane form with integrated route planning
+- `frontend/src/vnext-design/VNextLaneDetail.tsx` - Lane detail with route visualization
+- `backend/src/__tests__/services/RouteDeviationService.test.ts` - 15 tests (deviation detection, polyline, haversine)
+
 ## EDI Communication Hub
 
 ### Architecture

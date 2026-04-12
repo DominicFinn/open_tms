@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { API_URL } from '../api';
+import GoogleMapsRouteEditor from '../components/GoogleMapsRouteEditor';
 
 export default function VNextLaneDetail() {
   const { id } = useParams();
@@ -33,7 +34,15 @@ export default function VNextLaneDetail() {
   const destination = lane.destination || {};
   const carriers = lane.laneCarriers || [];
   const stops = lane.stops || [];
+  const route = lane.route || null;
   const laneName = lane.name || `${origin.city || '?'}, ${origin.state || '?'} → ${destination.city || '?'}, ${destination.state || '?'}`;
+
+  // Build LatLng for origin/destination for read-only map
+  const originLatLng = origin.lat && origin.lng ? { lat: origin.lat, lng: origin.lng } : null;
+  const destLatLng = destination.lat && destination.lng ? { lat: destination.lat, lng: destination.lng } : null;
+  const stopLatLngs = stops
+    .filter((s: any) => s.location?.lat && s.location?.lng)
+    .map((s: any) => ({ lat: s.location.lat, lng: s.location.lng }));
 
   return (
     <>
@@ -51,9 +60,15 @@ export default function VNextLaneDetail() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
           <h1>{laneName}</h1>
           <span className={`vn-chip vn-chip-${lane.status === 'active' ? 'success' : 'secondary'}`}>{lane.status || 'Unknown'}</span>
+          {route && (
+            <span className="vn-chip vn-chip-info">
+              <span className="material-icons" style={{ fontSize: 14 }}>route</span>
+              Route Planned
+            </span>
+          )}
         </div>
         <div className="vn-page-actions">
-          <button className="vn-btn vn-btn-outline vn-btn-sm">
+          <button className="vn-btn vn-btn-outline vn-btn-sm" onClick={() => navigate(`/lanes/${id}/edit`)}>
             <span className="material-icons">edit</span>
             Edit
           </button>
@@ -67,20 +82,73 @@ export default function VNextLaneDetail() {
       <div className="vn-detail-grid">
         {/* Main Area */}
         <div className="vn-detail-main">
-          {/* Map Placeholder */}
-          <div className="vn-map tall" style={{
-            marginBottom: 24,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'var(--surface-container)',
-            border: '1px solid var(--outline-variant)',
-            borderRadius: 'var(--border-radius)',
-          }}>
-            <div style={{ textAlign: 'center', color: 'var(--on-surface-variant)' }}>
-              <span className="material-icons" style={{ fontSize: 48, opacity: 0.4 }}>map</span>
-              <div style={{ fontSize: 14, marginTop: 8 }}>Lane Route: {laneName}</div>
-              <div style={{ fontSize: 12, marginTop: 4 }}>{lane.distance ? `${lane.distance} miles` : ''}</div>
+          {/* Route Map */}
+          <div className="vn-card" style={{ marginBottom: 24 }}>
+            <div className="vn-card-header">
+              <h2>
+                <span className="material-icons" style={{ fontSize: 20, verticalAlign: 'middle', marginRight: 6 }}>map</span>
+                {route ? 'Planned Route' : 'Lane Route'}
+              </h2>
+              {!route && (
+                <button className="vn-btn vn-btn-outline vn-btn-sm" onClick={() => navigate(`/lanes/${id}/edit`)}>
+                  <span className="material-icons">add</span>
+                  Plan Route
+                </button>
+              )}
+            </div>
+            <div className="vn-card-body">
+              {route ? (
+                <>
+                  <GoogleMapsRouteEditor
+                    origin={originLatLng}
+                    destination={destLatLng}
+                    stops={stopLatLngs}
+                    existingPolyline={route.encodedPolyline}
+                    corridorMeters={route.corridorMeters}
+                    height={350}
+                    editable={false}
+                  />
+
+                  {/* Route details */}
+                  <div style={{ display: 'flex', gap: 24, marginTop: 16, flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--on-surface)' }}>
+                      <span className="material-icons" style={{ fontSize: 16, color: 'var(--primary)' }}>straighten</span>
+                      <strong>{(route.distanceMeters / 1609.34).toFixed(1)} mi</strong>
+                      <span style={{ color: 'var(--on-surface-variant)' }}>({(route.distanceMeters / 1000).toFixed(1)} km)</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--on-surface)' }}>
+                      <span className="material-icons" style={{ fontSize: 16, color: 'var(--primary)' }}>schedule</span>
+                      <strong>{Math.floor(route.durationSeconds / 3600)}h {Math.round((route.durationSeconds % 3600) / 60)}m</strong>
+                    </div>
+                    {route.summary && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--on-surface-variant)' }}>
+                        <span className="material-icons" style={{ fontSize: 16 }}>directions</span>
+                        via {route.summary}
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--on-surface-variant)' }}>
+                      <span className="material-icons" style={{ fontSize: 16 }}>radar</span>
+                      Deviation corridor: {(route.corridorMeters / 1000).toFixed(1)} km
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div style={{
+                  height: 200,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: 'var(--surface-container)',
+                  border: '1px solid var(--outline-variant)',
+                  borderRadius: 'var(--border-radius)',
+                }}>
+                  <div style={{ textAlign: 'center', color: 'var(--on-surface-variant)' }}>
+                    <span className="material-icons" style={{ fontSize: 48, opacity: 0.4 }}>map</span>
+                    <div style={{ fontSize: 14, marginTop: 8 }}>No planned route configured</div>
+                    <div style={{ fontSize: 12, marginTop: 4 }}>Edit this lane to plan a route for deviation alerts</div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -110,9 +178,9 @@ export default function VNextLaneDetail() {
                     )}
                     {carriers.map((c: any, i: number) => (
                       <tr key={i}>
-                        <td><span style={{ fontWeight: 500 }}>{c.carrier?.name || '—'}{c.carrier?.mcNumber ? ` (${c.carrier.mcNumber})` : ''}</span></td>
-                        <td>{c.price != null ? `${c.currency || '$'}${c.price}` : '—'}</td>
-                        <td>{c.serviceLevel || '—'}</td>
+                        <td><span style={{ fontWeight: 500 }}>{c.carrier?.name || '-'}{c.carrier?.mcNumber ? ` (${c.carrier.mcNumber})` : ''}</span></td>
+                        <td>{c.price != null ? `${c.currency || '$'}${c.price}` : '-'}</td>
+                        <td>{c.serviceLevel || '-'}</td>
                         <td>
                           {c.assigned
                             ? <span className="vn-chip vn-chip-success">Assigned</span>
@@ -167,13 +235,39 @@ export default function VNextLaneDetail() {
             <div className="vn-card-header"><h2>Lane Info</h2></div>
             <div className="vn-card-body">
               <div className="vn-info-grid">
-                <div className="vn-info-item"><label>Distance</label><span>{lane.distance ? `${lane.distance} miles` : '—'}</span></div>
-                <div className="vn-info-item"><label>Status</label><span>{lane.status || '—'}</span></div>
-                <div className="vn-info-item"><label>Service Level</label><span>{lane.serviceLevel || '—'}</span></div>
-                <div className="vn-info-item"><label>Notes</label><span>{lane.notes || '—'}</span></div>
+                <div className="vn-info-item"><label>Distance</label><span>{lane.distance ? `${lane.distance} miles` : '-'}</span></div>
+                <div className="vn-info-item"><label>Status</label><span>{lane.status || '-'}</span></div>
+                <div className="vn-info-item"><label>Service Level</label><span>{lane.serviceLevel || '-'}</span></div>
+                <div className="vn-info-item"><label>Notes</label><span>{lane.notes || '-'}</span></div>
               </div>
             </div>
           </div>
+
+          {/* Route Deviation Alerts */}
+          {route && (
+            <div className="vn-card">
+              <div className="vn-card-header"><h2>Route Deviation</h2></div>
+              <div className="vn-card-body">
+                <div className="vn-info-grid">
+                  <div className="vn-info-item">
+                    <label>Status</label>
+                    <span className="vn-chip vn-chip-success" style={{ fontSize: 11 }}>Active</span>
+                  </div>
+                  <div className="vn-info-item">
+                    <label>Corridor</label>
+                    <span>{(route.corridorMeters / 1000).toFixed(1)} km</span>
+                  </div>
+                  <div className="vn-info-item">
+                    <label>Provider</label>
+                    <span style={{ textTransform: 'capitalize' }}>{route.provider || 'Google'}</span>
+                  </div>
+                </div>
+                <p style={{ fontSize: 12, color: 'var(--on-surface-variant)', marginTop: 12 }}>
+                  In-transit shipments on this lane will be monitored for route deviations beyond {(route.corridorMeters / 1000).toFixed(1)} km from the planned route.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Origin */}
           <div className="vn-card">
@@ -183,10 +277,10 @@ export default function VNextLaneDetail() {
                 <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--on-surface)' }}>Origin</span>
               </div>
               <div className="vn-info-item" style={{ marginBottom: 8 }}>
-                <label>Facility</label><span>{origin.name || '—'}</span>
+                <label>Facility</label><span>{origin.name || '-'}</span>
               </div>
               <div className="vn-info-item">
-                <label>Address</label><span>{[origin.city, origin.state].filter(Boolean).join(', ') || '—'}</span>
+                <label>Address</label><span>{[origin.city, origin.state].filter(Boolean).join(', ') || '-'}</span>
               </div>
             </div>
           </div>
@@ -199,10 +293,10 @@ export default function VNextLaneDetail() {
                 <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--on-surface)' }}>Destination</span>
               </div>
               <div className="vn-info-item" style={{ marginBottom: 8 }}>
-                <label>Facility</label><span>{destination.name || '—'}</span>
+                <label>Facility</label><span>{destination.name || '-'}</span>
               </div>
               <div className="vn-info-item">
-                <label>Address</label><span>{[destination.city, destination.state].filter(Boolean).join(', ') || '—'}</span>
+                <label>Address</label><span>{[destination.city, destination.state].filter(Boolean).join(', ') || '-'}</span>
               </div>
             </div>
           </div>

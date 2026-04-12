@@ -133,6 +133,7 @@ import { HereRoutingProvider } from '../services/routing/HereRoutingProvider.js'
 import { TomTomRoutingProvider } from '../services/routing/TomTomRoutingProvider.js';
 import { ValhallaRoutingProvider } from '../services/routing/ValhallaRoutingProvider.js';
 import { ShipmentEtaMonitorService } from '../services/routing/ShipmentEtaMonitorService.js';
+import { RouteDeviationService } from '../services/routing/RouteDeviationService.js';
 import { AnthropicLlmProvider } from '../services/llm/AnthropicLlmProvider.js';
 import { SkillRegistry } from '../services/skills/SkillRegistry.js';
 import { CreateIssueSkill } from '../services/skills/CreateIssueSkill.js';
@@ -558,6 +559,7 @@ export function registerDependencies(prisma: PrismaClient): void {
           routeDeviationMeters: Number(process.env.ETA_ROUTE_DEVIATION_METERS || 5000),
           staleGpsThresholdMinutes: Number(process.env.ETA_STALE_GPS_THRESHOLD_MINUTES || 60),
         },
+        new RouteDeviationService(),
       );
     });
   }

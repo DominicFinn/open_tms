@@ -1,11 +1,20 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { API_URL } from '../api';
+import GoogleMapsRouteEditor from '../components/GoogleMapsRouteEditor';
 
 interface Stop {
   id: number;
   location: string;
   order: number;
+}
+
+interface RouteData {
+  encodedPolyline: string;
+  distanceMeters: number;
+  durationSeconds: number;
+  summary: string;
+  waypoints: Array<{ lat: number; lng: number }>;
 }
 
 let stopIdCounter = 0;
@@ -29,6 +38,12 @@ export default function VNextCreateLane() {
   const [loading, setLoading] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  // Route planning state
+  const [routeData, setRouteData] = useState<RouteData | null>(null);
+  const [corridorMeters, setCorridorMeters] = useState(5000);
+  const [existingRoute, setExistingRoute] = useState<any>(null);
+  const [savingRoute, setSavingRoute] = useState(false);
 
   useEffect(() => {
     fetch(`${API_URL}/api/v1/locations`).then(r => r.json())
@@ -55,6 +70,10 @@ export default function VNextCreateLane() {
             return { id: stopIdCounter, location: s.locationId || '', order: s.order || i + 1 };
           }));
         }
+        if (l.route) {
+          setExistingRoute(l.route);
+          setCorridorMeters(l.route.corridorMeters || 5000);
+        }
       })
       .catch(err => setSubmitError(err.message))
       .finally(() => setLoading(false));
@@ -79,6 +98,31 @@ export default function VNextCreateLane() {
       if (!res.ok) throw new Error('Failed to save lane');
       const json = await res.json();
       if (json.error) throw new Error(json.error);
+      const savedLaneId = json.data?.id || id;
+
+      // Save route if we have route data
+      if (routeData && savedLaneId) {
+        setSavingRoute(true);
+        try {
+          await fetch(`${API_URL}/api/v1/lanes/${savedLaneId}/route`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              encodedPolyline: routeData.encodedPolyline,
+              distanceMeters: routeData.distanceMeters,
+              durationSeconds: routeData.durationSeconds,
+              summary: routeData.summary,
+              corridorMeters,
+              waypoints: routeData.waypoints,
+            }),
+          });
+        } catch {
+          // Route save is best-effort; lane was already saved
+          console.warn('Failed to save route data');
+        }
+        setSavingRoute(false);
+      }
+
       navigate('/lanes');
     } catch (err: any) {
       setSubmitError(err.message);
@@ -89,8 +133,27 @@ export default function VNextCreateLane() {
 
   if (loading) return <div className="loading-spinner" style={{ margin: '2rem auto' }} />;
 
-  const originLabel = apiLocations.find(l => l.id === origin)?.name || '';
-  const destLabel = apiLocations.find(l => l.id === destination)?.name || '';
+  // Resolve location LatLngs for the route editor
+  const originLoc = apiLocations.find(l => l.id === origin);
+  const destLoc = apiLocations.find(l => l.id === destination);
+  const originLabel = originLoc?.name || '';
+  const destLabel = destLoc?.name || '';
+
+  const originLatLng = originLoc?.lat && originLoc?.lng
+    ? { lat: originLoc.lat, lng: originLoc.lng }
+    : null;
+  const destLatLng = destLoc?.lat && destLoc?.lng
+    ? { lat: destLoc.lat, lng: destLoc.lng }
+    : null;
+
+  // Resolve stop LatLngs for waypoints
+  const stopLatLngs = stops
+    .filter(s => s.location)
+    .map(s => {
+      const loc = apiLocations.find(l => l.id === s.location);
+      return loc?.lat && loc?.lng ? { lat: loc.lat, lng: loc.lng } : null;
+    })
+    .filter(Boolean) as Array<{ lat: number; lng: number }>;
 
   const addStop = () => {
     stopIdCounter += 1;
@@ -103,6 +166,14 @@ export default function VNextCreateLane() {
 
   const removeStop = (id: number) => {
     setStops(prev => prev.filter(s => s.id !== id).map((s, i) => ({ ...s, order: i + 1 })));
+  };
+
+  const handleRouteChange = (route: RouteData) => {
+    setRouteData(route);
+    // Auto-update distance from the route
+    const distanceMiles = (route.distanceMeters / 1609.34).toFixed(1);
+    setDistance(distanceMiles);
+    setDistanceUnit('mi');
   };
 
   return (
@@ -133,7 +204,7 @@ export default function VNextCreateLane() {
                 <select className="vn-select" value={origin} onChange={e => setOrigin(e.target.value)}>
                   <option value="">Select origin...</option>
                   {apiLocations.map((loc: any) => (
-                    <option key={loc.id} value={loc.id}>{loc.name} — {loc.city}, {loc.state}</option>
+                    <option key={loc.id} value={loc.id}>{loc.name} - {loc.city}, {loc.state}</option>
                   ))}
                 </select>
               </div>
@@ -142,7 +213,7 @@ export default function VNextCreateLane() {
                 <select className="vn-select" value={destination} onChange={e => setDestination(e.target.value)}>
                   <option value="">Select destination...</option>
                   {apiLocations.map((loc: any) => (
-                    <option key={loc.id} value={loc.id}>{loc.name} — {loc.city}, {loc.state}</option>
+                    <option key={loc.id} value={loc.id}>{loc.name} - {loc.city}, {loc.state}</option>
                   ))}
                 </select>
               </div>
@@ -176,6 +247,55 @@ export default function VNextCreateLane() {
             )}
           </div>
 
+          {/* Route Map Editor */}
+          <div className="vn-form-section">
+            <div className="vn-form-section-title">
+              <span className="material-icons">map</span>
+              Planned Route
+            </div>
+            <p style={{ fontSize: 13, color: 'var(--on-surface-variant)', margin: '0 0 12px' }}>
+              The planned route is used for deviation detection. Select origin and destination locations with coordinates to auto-calculate the route.
+              {originLatLng && destLatLng && ' Drag the blue route line on the map to adjust the planned path.'}
+            </p>
+
+            <GoogleMapsRouteEditor
+              origin={originLatLng}
+              destination={destLatLng}
+              stops={stopLatLngs}
+              existingPolyline={existingRoute?.encodedPolyline}
+              corridorMeters={corridorMeters}
+              onRouteChange={handleRouteChange}
+              height={400}
+              editable={true}
+            />
+
+            {/* Corridor setting */}
+            {(routeData || existingRoute) && (
+              <div style={{ marginTop: 16 }}>
+                <div className="vn-field" style={{ maxWidth: 300 }}>
+                  <label className="vn-field-label">Deviation Corridor (meters)</label>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <input
+                      className="vn-input"
+                      type="number"
+                      min={100}
+                      max={50000}
+                      step={500}
+                      value={corridorMeters}
+                      onChange={e => setCorridorMeters(parseInt(e.target.value) || 5000)}
+                    />
+                    <span style={{ fontSize: 12, color: 'var(--on-surface-variant)', whiteSpace: 'nowrap' }}>
+                      ({(corridorMeters / 1000).toFixed(1)} km / {(corridorMeters / 1609.34).toFixed(1)} mi)
+                    </span>
+                  </div>
+                  <span style={{ fontSize: 11, color: 'var(--on-surface-variant)', marginTop: 4, display: 'block' }}>
+                    Alerts trigger when a shipment moves further than this distance from the planned route
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Details */}
           <div className="vn-form-section">
             <div className="vn-form-section-title">
@@ -192,6 +312,11 @@ export default function VNextCreateLane() {
                     <option value="km">km</option>
                   </select>
                 </div>
+                {routeData && (
+                  <span style={{ fontSize: 11, color: 'var(--success)', marginTop: 4, display: 'block' }}>
+                    Auto-calculated from route
+                  </span>
+                )}
               </div>
               <div className="vn-field">
                 <label className="vn-field-label">Target Rate</label>
@@ -223,8 +348,11 @@ export default function VNextCreateLane() {
           <div className="vn-form-section">
             <div className="vn-form-section-title">
               <span className="material-icons">pin_drop</span>
-              Stops
+              Stops (Hub &amp; Spoke)
             </div>
+            <p style={{ fontSize: 13, color: 'var(--on-surface-variant)', margin: '0 0 12px' }}>
+              Add intermediate stops for hub-and-spoke routing. These become waypoints in the planned route.
+            </p>
 
             {stops.length === 0 && (
               <p style={{ color: 'var(--on-surface-variant)', fontSize: 13, margin: '0 0 12px' }}>
@@ -239,7 +367,7 @@ export default function VNextCreateLane() {
                   <select className="vn-select" value={stop.location} onChange={e => updateStop(stop.id, 'location', e.target.value)}>
                     <option value="">Select location...</option>
                     {apiLocations.map((loc: any) => (
-                      <option key={loc.id} value={loc.id}>{loc.name} — {loc.city}, {loc.state}</option>
+                      <option key={loc.id} value={loc.id}>{loc.name} - {loc.city}, {loc.state}</option>
                     ))}
                   </select>
                 </div>
@@ -271,9 +399,9 @@ export default function VNextCreateLane() {
       {/* Form Actions */}
       <div className="vn-form-actions">
         <Link to="/lanes" className="vn-btn vn-btn-outline">Cancel</Link>
-        <button className="vn-btn vn-btn-primary" onClick={handleSubmit} disabled={submitting}>
+        <button className="vn-btn vn-btn-primary" onClick={handleSubmit} disabled={submitting || savingRoute}>
           <span className="material-icons">save</span>
-          {submitting ? 'Saving...' : isEdit ? 'Update Lane' : 'Create Lane'}
+          {submitting || savingRoute ? 'Saving...' : isEdit ? 'Update Lane' : 'Create Lane'}
         </button>
       </div>
     </>

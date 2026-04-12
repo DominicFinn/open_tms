@@ -148,7 +148,8 @@ export async function laneRoutes(server: FastifyInstance) {
         },
         laneCarriers: {
           include: { carrier: true }
-        }
+        },
+        route: true,
       }
     });
     if (!lane) {

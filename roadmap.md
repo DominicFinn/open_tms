@@ -242,7 +242,7 @@
   - ✅ Exception resolution workflow
   - ✅ Event-driven notifications on exceptions
   - ✅ ETA-based exception auto-detection (critical delays auto-create shipment.exception events)
-  - Alerts for route deviations 🔲
+  - ✅ Route deviation alerts (planned route per lane via Google Maps, corridor-based deviation detection, real-time alerts on shipment detail)
 - **Driver Mobile App** 🔲
   - Mobile app for drivers to update order/shipment status in the field
   - Delivery confirmation with signature capture
