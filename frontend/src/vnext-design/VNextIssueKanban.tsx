@@ -168,6 +168,162 @@ function DroppableColumn({ colKey, label, cssClass, issues, onCardClick }: {
 
 // ─── Create Issue Modal ─────────────────────────────────────────────────────
 
+// ─── Entity Search Dropdown ─────────────────────────────────────────────────
+
+function EntitySearchField({ entityType, value, onSelect }: {
+  entityType: string;
+  value: string;
+  onSelect: (id: string, label: string) => void;
+}) {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<Array<{ id: string; label: string; sub: string }>>([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [selectedLabel, setSelectedLabel] = useState('');
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) setShowDropdown(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  // Reset when entity type changes
+  useEffect(() => {
+    setQuery('');
+    setResults([]);
+    setSelectedLabel('');
+  }, [entityType]);
+
+  const search = useCallback((q: string) => {
+    if (!entityType || q.length < 1) { setResults([]); return; }
+    setLoading(true);
+
+    const endpoint = entityType === 'shipment' ? 'shipments' : entityType === 'order' ? 'orders' : 'carriers';
+    fetch(`${API_URL}/api/v1/${endpoint}`)
+      .then(r => r.json())
+      .then(json => {
+        const items = json.data || [];
+        const qLower = q.toLowerCase();
+        const mapped = items
+          .map((item: any) => {
+            if (entityType === 'shipment') {
+              return {
+                id: item.id,
+                label: item.reference || item.id.slice(0, 8),
+                sub: `${item.status || ''} - ${item.customer?.name || item.origin?.name || ''}`.trim(),
+              };
+            }
+            if (entityType === 'order') {
+              return {
+                id: item.id,
+                label: item.reference || item.id.slice(0, 8),
+                sub: `${item.status || ''} - ${item.customer?.name || ''}`.trim(),
+              };
+            }
+            // carrier
+            return {
+              id: item.id,
+              label: item.name || item.id.slice(0, 8),
+              sub: item.contactEmail || '',
+            };
+          })
+          .filter((r: any) =>
+            r.label.toLowerCase().includes(qLower) ||
+            r.sub.toLowerCase().includes(qLower) ||
+            r.id.toLowerCase().includes(qLower)
+          )
+          .slice(0, 10);
+        setResults(mapped);
+      })
+      .catch(() => setResults([]))
+      .finally(() => setLoading(false));
+  }, [entityType]);
+
+  const handleInputChange = (val: string) => {
+    setQuery(val);
+    setShowDropdown(true);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => search(val), 250);
+  };
+
+  const handleSelect = (r: { id: string; label: string }) => {
+    onSelect(r.id, r.label);
+    setSelectedLabel(r.label);
+    setQuery('');
+    setShowDropdown(false);
+  };
+
+  if (!entityType) {
+    return (
+      <div>
+        <input className="vn-input" disabled placeholder="Select an entity type first" />
+        <span className="vn-field-hint">Select an entity type first</span>
+      </div>
+    );
+  }
+
+  return (
+    <div ref={wrapperRef} style={{ position: 'relative' }}>
+      {value && selectedLabel ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', border: '1px solid var(--outline-variant)', borderRadius: 'var(--border-radius-sm)', background: 'var(--surface-container)' }}>
+          <span className="material-icons" style={{ fontSize: 16, color: 'var(--primary)' }}>
+            {entityType === 'shipment' ? 'local_shipping' : entityType === 'order' ? 'receipt_long' : 'business'}
+          </span>
+          <span style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>{selectedLabel}</span>
+          <span style={{ fontSize: 11, color: 'var(--on-surface-variant)' }}>{value.slice(0, 8)}</span>
+          <button type="button" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--on-surface-variant)' }}
+            onClick={() => { onSelect('', ''); setSelectedLabel(''); }}>
+            <span className="material-icons" style={{ fontSize: 16 }}>close</span>
+          </button>
+        </div>
+      ) : (
+        <input
+          className="vn-input"
+          placeholder={`Search ${entityType}s by reference, name, or ID...`}
+          value={query}
+          onChange={e => handleInputChange(e.target.value)}
+          onFocus={() => { if (query.length >= 1 || results.length > 0) setShowDropdown(true); }}
+        />
+      )}
+      {showDropdown && (query.length >= 1 || results.length > 0) && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 20,
+          background: 'var(--surface)', border: '1px solid var(--outline-variant)',
+          borderRadius: 'var(--border-radius-sm)', boxShadow: 'var(--modal-shadow)',
+          maxHeight: 240, overflowY: 'auto', marginTop: 4,
+        }}>
+          {loading && <div style={{ padding: 12, textAlign: 'center', fontSize: 12, color: 'var(--on-surface-variant)' }}>Searching...</div>}
+          {!loading && results.length === 0 && query.length >= 1 && (
+            <div style={{ padding: 12, textAlign: 'center', fontSize: 12, color: 'var(--on-surface-variant)' }}>No results found</div>
+          )}
+          {results.map(r => (
+            <div key={r.id} onClick={() => handleSelect(r)}
+              style={{ padding: '8px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid var(--outline-variant)' }}
+              onMouseOver={e => (e.currentTarget.style.background = 'var(--surface-container)')}
+              onMouseOut={e => (e.currentTarget.style.background = 'transparent')}>
+              <span className="material-icons" style={{ fontSize: 16, color: 'var(--on-surface-variant)' }}>
+                {entityType === 'shipment' ? 'local_shipping' : entityType === 'order' ? 'receipt_long' : 'business'}
+              </span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>{r.label}</div>
+                {r.sub && <div style={{ fontSize: 11, color: 'var(--on-surface-variant)' }}>{r.sub}</div>}
+              </div>
+              <span style={{ fontSize: 10, color: 'var(--on-surface-variant)', fontFamily: 'monospace' }}>{r.id.slice(0, 8)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Create Issue Modal ─────────────────────────────────────────────────────
+
 function CreateIssueModal({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: () => void }) {
   const navigate = useNavigate();
   const [form, setForm] = useState({
@@ -177,6 +333,7 @@ function CreateIssueModal({ open, onClose, onCreated }: { open: boolean; onClose
     category: 'exception',
     sourceEntityType: '',
     sourceEntityId: '',
+    sourceEntityLabel: '',
     assigneeName: '',
   });
   const [submitting, setSubmitting] = useState(false);
@@ -229,7 +386,7 @@ function CreateIssueModal({ open, onClose, onCreated }: { open: boolean; onClose
   // Reset form on open
   useEffect(() => {
     if (open) {
-      setForm({ title: '', description: '', priority: 'medium', category: 'exception', sourceEntityType: '', sourceEntityId: '', assigneeName: '' });
+      setForm({ title: '', description: '', priority: 'medium', category: 'exception', sourceEntityType: '', sourceEntityId: '', sourceEntityLabel: '', assigneeName: '' });
       setError('');
     }
   }, [open]);
@@ -281,7 +438,7 @@ function CreateIssueModal({ open, onClose, onCreated }: { open: boolean; onClose
 
         <div className="vn-field">
           <label className="vn-field-label">Linked Entity Type</label>
-          <select className="vn-input" value={form.sourceEntityType} onChange={e => update('sourceEntityType', e.target.value)}>
+          <select className="vn-input" value={form.sourceEntityType} onChange={e => { update('sourceEntityType', e.target.value); update('sourceEntityId', ''); update('sourceEntityLabel', ''); }}>
             <option value="">None</option>
             <option value="shipment">Shipment</option>
             <option value="order">Order</option>
@@ -290,10 +447,12 @@ function CreateIssueModal({ open, onClose, onCreated }: { open: boolean; onClose
         </div>
 
         <div className="vn-field">
-          <label className="vn-field-label">Entity ID</label>
-          <input className="vn-input" placeholder="Paste shipment/order/carrier ID" value={form.sourceEntityId}
-            onChange={e => update('sourceEntityId', e.target.value)} disabled={!form.sourceEntityType} />
-          {!form.sourceEntityType && <span className="vn-field-hint">Select an entity type first</span>}
+          <label className="vn-field-label">Linked {form.sourceEntityType ? form.sourceEntityType.charAt(0).toUpperCase() + form.sourceEntityType.slice(1) : 'Entity'}</label>
+          <EntitySearchField
+            entityType={form.sourceEntityType}
+            value={form.sourceEntityId}
+            onSelect={(id, label) => { update('sourceEntityId', id); update('sourceEntityLabel', label); }}
+          />
         </div>
 
         <div className="vn-field" style={{ gridColumn: '1 / -1' }}>
