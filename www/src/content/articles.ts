@@ -639,6 +639,152 @@ If you're running a logistics operation, you probably don't care about CAP theor
 The technical decisions behind all of this exist so that you don't have to think about them. The system just works, even when the network doesn't.
     `,
   },
+  {
+    slug: 'the-name-open-tms',
+    title: 'The Name: Open TMS',
+    excerpt: 'There were other projects called OpenTMS before this one. None of them are what you\'d call active. So do we keep the name, or does this project need a different one?',
+    date: '2026-04-12',
+    author: 'Dominic Finn',
+    category: 'announcements',
+    readTime: '4 min read',
+    content: `
+## The Elephant in the Room
+
+If you search for "OpenTMS" you'll find this project isn't the first to use the name. There are at least three others:
+
+**fossabot/open-tms on GitHub** - A Node.js/React TMS aimed at small to medium transport companies. Described itself as "ALPHA DEVELOPMENT" in the repo title. The last meaningful activity was years ago. It never got past the initial scaffolding stage.
+
+**kongko/OpenTMS on GitHub** - A PHP-based Transportation Management System. Also inactive. The repo exists but there's nothing you'd call a working product.
+
+**openTMS on SourceForge** - This one's actually nothing to do with transportation at all. It stands for Open Source Translation Management System, built by the Forum Open Language Tools. Different domain entirely, just an unfortunate naming collision.
+
+There's also **OpenTMS ATMS** by Q-Free, which is a commercial Advanced Traffic Management System for road infrastructure. Again, completely different thing - traffic signals and highway management, not freight logistics.
+
+## Are Any of Them Active?
+
+In short: no. The two transportation-focused projects both stalled at the very early stages. This is exactly the pattern I wrote about in the "Why Most Open Source Logistics Projects Fail" post - initial enthusiasm, a repo gets created, maybe some scaffolding goes in, and then nothing happens. Nobody ships features.
+
+That said, the names exist. The repos are still up on GitHub. It's worth being honest about that.
+
+## So Do We Keep the Name?
+
+I'm genuinely undecided on this. Here's my thinking:
+
+**Arguments for keeping "Open TMS":**
+
+- It describes exactly what this is. Open source. TMS. Done.
+- The previous projects are inactive and have been for a long time. Nobody is going to confuse a project with 87 database models and a full EDI suite with an empty repo that has a README and not much else.
+- Name recognition matters, and "Open TMS" is intuitive. If someone searches for an open source TMS, they should find this.
+- Renaming a project is disruptive - new URLs, new repos, new documentation, confused users.
+
+**Arguments for changing it:**
+
+- There's a legitimate question about namespace collision. Even if the other projects are dead, their repos still exist.
+- The scope of this project is growing. WMS features are on the roadmap. Once you're managing warehouses as well as transportation, "TMS" doesn't fully describe what the platform does.
+- Something like "Open Logistics" or "OpenFreight" might better capture the ambition of the project as it expands.
+
+## The WMS Question
+
+This is actually the bigger factor in the naming discussion. Right now, Open TMS is a transportation management system. But the warehouse launch app is already blurring that line - it's managing shipment preparation workflows on the warehouse floor. And the roadmap includes proper WMS features: inventory management, pick/pack workflows, receiving, put-away.
+
+At that point, calling it a "TMS" is underselling it. You're running a logistics platform that handles both transportation and warehousing. "TMS" becomes limiting.
+
+Some options I've been thinking about:
+
+- **Open TMS** - keep it, accept that it'll outgrow the name, deal with it later
+- **Open Logistics** - broader, but maybe too generic. Also, the Open Logistics Foundation already exists as an industry body in Germany, which could cause confusion
+- **OpenFreight** - specific to the domain, not taken by any active project that I can find
+- **Something entirely different** - start fresh with a name that doesn't describe the category at all
+
+## Where I'm At Right Now
+
+Honestly? I'm keeping the name for now. The project is still early. Renaming before there's a significant user base is easier than renaming after, but renaming before there's a reason to is just procrastination.
+
+When WMS features land and the platform genuinely spans both domains, that's probably the right time to have this conversation properly. Until then, Open TMS describes what the project does today, and today is what matters.
+
+If you've got strong feelings about this - or a name suggestion that's better than anything I've come up with - open an issue on GitHub. I'm genuinely interested in what people think.
+    `,
+  },
+  {
+    slug: 'language-support',
+    title: 'Language Support: It\'s Coming, But Not Yet',
+    excerpt: 'Open TMS is English-only right now. That needs to change. Here\'s the plan for internationalisation and why it\'s not at the top of the list yet.',
+    date: '2026-04-12',
+    author: 'Dominic Finn',
+    category: 'product',
+    readTime: '4 min read',
+    content: `
+## The Current State
+
+Open TMS is English-only. Every label, every button, every error message, every status name. If you don't read English, you can't use it. That's obviously not acceptable long term for a platform that's supposed to serve the global logistics industry.
+
+I'm being upfront about this because I think it's better to say "we know, it's on the roadmap, here's how we'll do it" than to pretend the problem doesn't exist.
+
+## How It'll Work
+
+This isn't a mystery to solve. Language file based internationalisation is a well-established pattern. I've implemented it before at scale - at UNiDAYS we had extensive multi-language support across the platform and it worked well.
+
+The approach:
+
+Every piece of user-facing text gets replaced with a key that maps to a language file. Instead of hardcoding "Shipment Created" in the UI, the component references something like t('shipment.created'), and the actual string comes from a JSON language file. English gets en.json, French gets fr.json, German gets de.json, and so on.
+
+The language files look something like this:
+
+**en.json:**
+"shipment.status.created": "Created",
+"shipment.status.in_transit": "In Transit",
+"shipment.status.delivered": "Delivered",
+"triage.priority.critical": "Critical",
+"tender.strategy.broadcast": "Broadcast",
+"tender.strategy.waterfall": "Waterfall"
+
+**de.json:**
+"shipment.status.created": "Erstellt",
+"shipment.status.in_transit": "Unterwegs",
+"shipment.status.delivered": "Zugestellt",
+"triage.priority.critical": "Kritisch",
+"tender.strategy.broadcast": "Rundschreiben",
+"tender.strategy.waterfall": "Kaskade"
+
+The UI loads the right file based on user preference. Same components, same code, different text. It's clean and it scales to any number of languages without touching application logic.
+
+## Why It's Not Done Yet
+
+Honestly? Because it adds complexity to every single piece of UI work, and right now the priority is shipping features.
+
+When you internationalise a codebase, every new component needs to use translation keys instead of raw strings. Every form label, every validation message, every tooltip. It's not hard per feature, but it adds friction to everything. And when you're one person trying to ship a carrier tendering system, a quality centre, a warehouse app, and an EDI suite, that friction adds up.
+
+There's also the question of what to translate. It's not just the UI. There are:
+
+- Email notification templates
+- Document templates (BOLs, compliance reports)
+- EDI transaction descriptions
+- Error messages from the API
+- The marketing site and documentation
+
+Doing it properly means doing all of it. Doing half of it just creates a weird experience where some things are in your language and some aren't.
+
+## Where It Sits on the Roadmap
+
+I'm going to be honest about priorities. The agentic features - AI-powered triage, automated tender responses, pattern detection across shipments - that's more interesting work and arguably higher impact for early adopters. Language support is important, but it's not what's going to differentiate this platform right now.
+
+The plan is:
+
+1. Ship the remaining core features
+2. Build the agent capabilities
+3. Then internationalise the platform, probably as a dedicated sprint
+
+When it happens, it'll be done properly. Every string extracted, every component updated, a contribution workflow for community translations. Logistics is global and the software needs to reflect that.
+
+## Contributing Translations
+
+When we do implement language support, this is going to be one of the best ways for non-developers to contribute to the project. If you speak a language that isn't English and you work in logistics, you'll know the correct terminology far better than any automated translation.
+
+"In Transit" doesn't just need translating - it needs translating by someone who knows what logistics companies in that country actually call it. Google Translate won't give you that. A dispatcher in Hamburg will.
+
+If you want to be involved when this happens, open a GitHub issue or just keep an eye on the project. We'll need native speakers who understand logistics terminology, and that's a genuinely valuable contribution.
+    `,
+  },
 ]
 
 export function getArticle(slug: string): Article | undefined {
