@@ -91,10 +91,15 @@ export const createOrderSchema = z.object({
   notes: z.string().optional()
 });
 
+const ORDER_STATUSES = ['pending', 'validated', 'location_error', 'converted', 'cancelled', 'archived'] as const;
+const DELIVERY_STATUSES = ['unassigned', 'assigned', 'in_transit', 'delivered', 'exception', 'cancelled'] as const;
+const DELIVERY_METHODS = ['manual', 'geofence', 'geofence_iot', 'auto', 'driver_app'] as const;
+const EXCEPTION_TYPES = ['delay', 'damage', 'refused', 'address_issue', 'weather', 'other'] as const;
+
 const updateOrderSchema = z.object({
   orderNumber: z.string().min(1).optional(),
   poNumber: z.string().optional(),
-  status: z.string().optional(),
+  status: z.enum(ORDER_STATUSES).optional(),
   originId: z.string().uuid().optional(),
   destinationId: z.string().uuid().optional(),
   requestedPickupDate: z.string().datetime().optional(),
@@ -720,23 +725,32 @@ export async function orderRoutes(server: FastifyInstance) {
   // Update order delivery status
   server.post('/api/v1/orders/:id/delivery-status', async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const body = req.body as {
-      deliveryStatus: string;
-      deliveryMethod?: string;
-      deliveryConfirmedBy?: string;
-      deliveryNotes?: string;
-      exceptionType?: string;
-      exceptionNotes?: string;
-    };
+
+    const deliveryStatusSchema = z.object({
+      deliveryStatus: z.enum(DELIVERY_STATUSES),
+      deliveryMethod: z.enum(DELIVERY_METHODS).optional(),
+      deliveryConfirmedBy: z.string().optional(),
+      deliveryNotes: z.string().optional(),
+      exceptionType: z.enum(EXCEPTION_TYPES).optional(),
+      exceptionNotes: z.string().optional(),
+    });
+
+    const parsed = deliveryStatusSchema.safeParse(req.body);
+    if (!parsed.success) {
+      reply.code(400);
+      return { data: null, error: parsed.error.issues.map(i => i.message).join(', ') };
+    }
+
+    const body = parsed.data;
 
     try {
       const updatedOrder = await deliveryService.updateOrderDeliveryStatus({
         orderId: id,
-        deliveryStatus: body.deliveryStatus as any,
-        deliveryMethod: body.deliveryMethod as any,
+        deliveryStatus: body.deliveryStatus,
+        deliveryMethod: body.deliveryMethod,
         deliveryConfirmedBy: body.deliveryConfirmedBy,
         deliveryNotes: body.deliveryNotes,
-        exceptionType: body.exceptionType as any,
+        exceptionType: body.exceptionType,
         exceptionNotes: body.exceptionNotes
       });
 
@@ -774,16 +788,25 @@ export async function orderRoutes(server: FastifyInstance) {
   // Create delivery exception
   server.post('/api/v1/orders/:id/delivery-exception', async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const body = req.body as {
-      exceptionType: string;
-      exceptionNotes: string;
-      reportedBy?: string;
-    };
+
+    const exceptionSchema = z.object({
+      exceptionType: z.enum(EXCEPTION_TYPES),
+      exceptionNotes: z.string(),
+      reportedBy: z.string().optional(),
+    });
+
+    const parsed = exceptionSchema.safeParse(req.body);
+    if (!parsed.success) {
+      reply.code(400);
+      return { data: null, error: parsed.error.issues.map(i => i.message).join(', ') };
+    }
+
+    const body = parsed.data;
 
     try {
       const updatedOrder = await deliveryService.createDeliveryException({
         orderId: id,
-        exceptionType: body.exceptionType as any,
+        exceptionType: body.exceptionType,
         exceptionNotes: body.exceptionNotes,
         reportedBy: body.reportedBy
       });

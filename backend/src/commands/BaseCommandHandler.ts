@@ -54,7 +54,7 @@ export abstract class BaseCommandHandler<TPayload = unknown, TResult = unknown>
     }
 
     try {
-      const data = await this.prisma.$transaction(async (tx) => {
+      const data = await this.prisma.$transaction(async (tx: TransactionClient) => {
         // Execute the command handler logic
         const result = await this.handle(command, tx, emit);
 

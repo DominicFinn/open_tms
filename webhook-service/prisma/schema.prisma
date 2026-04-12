@@ -7,39 +7,9 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Customer {
-  id           String   @id @default(uuid())
-  name         String
-  contactEmail String?
-  archived     Boolean  @default(false)
-  archivedAt   DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  shipments    Shipment[]
-  customerLanes CustomerLane[]
-}
-
-model Location {
-  id         String   @id @default(uuid())
-  name       String
-  address1   String
-  address2   String?
-  city       String
-  state      String?
-  postalCode String?
-  country    String
-  lat        Float?
-  lng        Float?
-  archived   Boolean  @default(false)
-  archivedAt DateTime?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  originFor  Shipment[] @relation("Origin")
-  destFor    Shipment[] @relation("Destination")
-  lanesAsOrigin Lane[] @relation("LaneOrigin")
-  lanesAsDestination Lane[] @relation("LaneDestination")
-  laneStops  LaneStop[]
-}
+// The webhook-service only needs read access to Shipment (lookup by reference)
+// and write access to ShipmentEvent (recording location events from IoT webhooks).
+// All other models are managed by the main backend service.
 
 model Shipment {
   id            String   @id @default(uuid())
@@ -52,144 +22,12 @@ model Shipment {
   archivedAt    DateTime?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
-  customer      Customer @relation(fields: [customerId], references: [id])
   customerId    String
-  origin        Location @relation("Origin", fields: [originId], references: [id])
   originId      String
-  destination   Location @relation("Destination", fields: [destinationId], references: [id])
   destinationId String
-  lane          Lane?    @relation(fields: [laneId], references: [id])
   laneId        String?
-  carrier       Carrier? @relation(fields: [carrierId], references: [id])
-  carrierId     String?  // Manual carrier assignment for non-lane shipments
-  loads         Load[]
+  carrierId     String?
   events        ShipmentEvent[]
-}
-
-model Carrier {
-  id           String   @id @default(uuid())
-  name         String
-  mcNumber     String?
-  dotNumber    String?
-  contactName  String?
-  contactEmail String?
-  contactPhone String?
-  address1     String?
-  address2     String?
-  city         String?
-  state        String?
-  postalCode   String?
-  country      String?
-  archived     Boolean  @default(false)
-  archivedAt   DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  vehicles     Vehicle[]
-  drivers      Driver[]
-  laneCarriers LaneCarrier[]
-  shipments    Shipment[]
-}
-
-model Vehicle {
-  id         String   @id @default(uuid())
-  carrier    Carrier  @relation(fields: [carrierId], references: [id])
-  carrierId  String
-  plate      String
-  type       String
-  capacityKg Int?
-  capacityM3 Int?
-  loads      Load[]
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-}
-
-model Driver {
-  id        String   @id @default(uuid())
-  carrier   Carrier  @relation(fields: [carrierId], references: [id])
-  carrierId String
-  name      String
-  phone     String?
-  email     String?
-  loads     Load[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model Load {
-  id         String   @id @default(uuid())
-  shipment   Shipment @relation(fields: [shipmentId], references: [id])
-  shipmentId String
-  vehicle    Vehicle? @relation(fields: [vehicleId], references: [id])
-  vehicleId  String?
-  driver     Driver?  @relation(fields: [driverId], references: [id])
-  driverId   String?
-  assignedAt DateTime?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-}
-
-model Lane {
-  id            String   @id @default(uuid())
-  name          String   // Auto-generated: "Origin → Destination"
-  origin        Location @relation("LaneOrigin", fields: [originId], references: [id])
-  originId      String
-  destination   Location @relation("LaneDestination", fields: [destinationId], references: [id])
-  destinationId String
-  distance      Float?   // Optional distance in km
-  notes         String?
-  status        String   @default("active") // active/archived
-  archived      Boolean  @default(false)
-  archivedAt    DateTime?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  shipments     Shipment[]
-  customerLanes CustomerLane[]
-  laneCarriers  LaneCarrier[]
-  stops         LaneStop[]
-}
-
-model CustomerLane {
-  id         String   @id @default(uuid())
-  customer   Customer @relation(fields: [customerId], references: [id])
-  customerId String
-  lane       Lane     @relation(fields: [laneId], references: [id])
-  laneId     String
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  @@unique([customerId, laneId])
-}
-
-model LaneCarrier {
-  id           String   @id @default(uuid())
-  lane         Lane     @relation(fields: [laneId], references: [id])
-  laneId       String
-  carrier      Carrier  @relation(fields: [carrierId], references: [id])
-  carrierId    String
-  price        Float?   // Price per shipment or per km
-  currency     String   @default("USD")
-  serviceLevel String?  // e.g., "Standard", "Express", "Economy"
-  notes        String?
-  assigned     Boolean  @default(false) // True if this carrier is assigned to the lane
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  @@unique([laneId, carrierId])
-}
-
-model LaneStop {
-  id         String   @id @default(uuid())
-  lane       Lane     @relation(fields: [laneId], references: [id], onDelete: Cascade)
-  laneId     String
-  location   Location @relation(fields: [locationId], references: [id])
-  locationId String
-  order      Int      // Order of the stop in the lane (1, 2, 3, etc.)
-  notes      String?  // Optional notes for this specific stop
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  @@unique([laneId, order])
-  @@unique([laneId, locationId])
 }
 
 model ShipmentEvent {
