@@ -130,6 +130,62 @@ function SourceEntityCard({ entityType, entityId }: { entityType: string | null;
 
 // ─── Main Component ─────────────────────────────────────────────────────────
 
+function IssueReportSection({ issueId }: { issueId: string }) {
+  const [report, setReport] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
+
+  useEffect(() => {
+    fetch(`${API_URL}/api/v1/issues/${issueId}/report`)
+      .then(r => r.json())
+      .then(json => { if (json.data) setReport(json.data); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [issueId]);
+
+  const handleGenerate = async () => {
+    setGenerating(true);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/issues/${issueId}/report`, { method: 'POST' });
+      const json = await res.json();
+      if (json.data) {
+        // Re-fetch to get file info
+        const docRes = await fetch(`${API_URL}/api/v1/issues/${issueId}/report`);
+        const docJson = await docRes.json();
+        if (docJson.data) setReport(docJson.data);
+      }
+    } catch { /* ignore */ }
+    setGenerating(false);
+  };
+
+  if (loading) return <div className="loading-spinner" />;
+
+  if (report) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <span className="material-icons" style={{ fontSize: 32, color: 'var(--color-error)' }}>picture_as_pdf</span>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 600, fontSize: 13 }}>{report.fileName}</div>
+          <div style={{ fontSize: 11, color: 'var(--on-surface-variant)' }}>Generated {new Date(report.createdAt).toLocaleString()}</div>
+        </div>
+        <a href={`${API_URL}/api/v1/documents/${report.id}/download`} className="vn-btn vn-btn-primary" style={{ textDecoration: 'none', fontSize: 12 }}>
+          <span className="material-icons" style={{ fontSize: 16 }}>download</span> Download
+        </a>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <span style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>No closure report generated yet.</span>
+      <button className="vn-btn vn-btn-primary" onClick={handleGenerate} disabled={generating} style={{ fontSize: 12 }}>
+        <span className="material-icons" style={{ fontSize: 16 }}>description</span>
+        {generating ? 'Generating...' : 'Generate Report'}
+      </button>
+    </div>
+  );
+}
+
 export default function VNextIssueDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -445,6 +501,11 @@ export default function VNextIssueDetail() {
                   {issue.resolvedAt && <div className="vn-field"><label className="vn-field-label">Resolved At</label><div style={{ fontSize: 13 }}>{new Date(issue.resolvedAt).toLocaleString()}</div></div>}
                   {issue.closedBy && <div className="vn-field"><label className="vn-field-label">Closed By</label><div style={{ fontSize: 13 }}>{issue.closedBy}</div></div>}
                   {issue.closedAt && <div className="vn-field"><label className="vn-field-label">Closed At</label><div style={{ fontSize: 13 }}>{new Date(issue.closedAt).toLocaleString()}</div></div>}
+                </div>
+                {/* Closure Report */}
+                <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--outline-variant)' }}>
+                  <h3 style={{ fontSize: 14, margin: '0 0 12px 0' }}><span className="material-icons" style={{ fontSize: 16, verticalAlign: 'middle', marginRight: 4 }}>description</span>Closure Report</h3>
+                  <IssueReportSection issueId={id!} />
                 </div>
               </div>
             </div>

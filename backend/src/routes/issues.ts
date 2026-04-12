@@ -496,6 +496,40 @@ export const issueRoutes: FastifyPluginAsync = async (server) => {
     return { data: activity, error: null };
   });
 
+  // ─── Issue Closure Report ──────────────────────────────────────────────
+
+  // POST /api/v1/issues/:id/report — generate or retrieve closure report PDF
+  server.post<{ Params: { id: string } }>('/api/v1/issues/:id/report', {
+    schema: { tags: ['Issues'], summary: 'Generate issue closure report PDF' },
+  }, async (req: FastifyRequest<{ Params: { id: string } }>, reply) => {
+    const { IssueClosureReportService } = await import('../services/IssueClosureReportService.js');
+    const storageProvider = container.resolve<any>(TOKENS.IBinaryStorageProvider);
+    const reportService = new IssueClosureReportService(prisma, storageProvider);
+    try {
+      const result = await reportService.generateReport(req.params.id);
+      reply.code(201);
+      return { data: result, error: null };
+    } catch (err: any) {
+      reply.code(400);
+      return { data: null, error: err.message };
+    }
+  });
+
+  // GET /api/v1/issues/:id/report — get existing report document
+  server.get<{ Params: { id: string } }>('/api/v1/issues/:id/report', {
+    schema: { tags: ['Issues'], summary: 'Get issue closure report document' },
+  }, async (req: FastifyRequest<{ Params: { id: string } }>, reply) => {
+    const doc = await prisma.generatedDocument.findFirst({
+      where: { documentType: 'issue_closure_report', metadata: { path: ['issueId'], equals: req.params.id } },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!doc) {
+      reply.code(404);
+      return { data: null, error: 'No report generated yet. Use POST to generate.' };
+    }
+    return { data: { id: doc.id, fileName: doc.fileName, createdAt: doc.createdAt }, error: null };
+  });
+
   // ─── Issue Labels CRUD ───────────────────────────────────────────────────
 
   // GET /api/v1/issue-labels
