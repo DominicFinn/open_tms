@@ -41,6 +41,9 @@ import VNextOutboundIntegrations from './vnext-design/VNextOutboundIntegrations'
 import VNextOutboundLogs from './vnext-design/VNextOutboundLogs';
 import VNextEdiPartners from './vnext-design/VNextEdiPartners';
 import VNextEdiFiles from './vnext-design/VNextEdiFiles';
+import VNextEdiDashboard from './vnext-design/VNextEdiDashboard';
+import VNextTradingPartnersPage from './vnext-design/VNextTradingPartners';
+import VNextEdiTransactionLog from './vnext-design/VNextEdiTransactionLog';
 import VNextCarrierTracking from './vnext-design/VNextCarrierTracking';
 import VNextCarrierTrackingSetup from './vnext-design/VNextCarrierTrackingSetup';
 import VNextCarrierTrackingDetail from './vnext-design/VNextCarrierTrackingDetail';
@@ -257,6 +260,9 @@ root.render(
             <Route path="webhook-logs" element={<VNextWebhookLogs />} />
             <Route path="outbound" element={<VNextOutboundIntegrations />} />
             <Route path="outbound-logs" element={<VNextOutboundLogs />} />
+            <Route path="edi" element={<VNextEdiDashboard />} />
+            <Route path="edi/partners" element={<VNextTradingPartnersPage />} />
+            <Route path="edi/logs" element={<VNextEdiTransactionLog />} />
             <Route path="trading-partners" element={<TradingPartners />} />
             <Route path="edi-partners" element={<VNextEdiPartners />} />
             <Route path="edi-files" element={<VNextEdiFiles />} />
