@@ -10,6 +10,15 @@ import { UPDATE_CARRIER_TRACKING_INTEGRATION } from '../commands/carrierTracking
 import { DELETE_CARRIER_TRACKING_INTEGRATION } from '../commands/carrierTracking/DeleteCarrierTrackingIntegrationCommand.js';
 import { container, TOKENS } from '../di/index.js';
 
+/** Standard { data, error } response schema for Swagger */
+const dataErrorResponse = {
+  type: 'object' as const,
+  properties: {
+    data: { type: 'object' as const },
+    error: { type: ['string', 'null'] as const },
+  },
+};
+
 /** Map raw DB integration to the shape the frontend expects */
 function mapIntegration(i: any) {
   return {
@@ -105,6 +114,7 @@ export async function carrierTrackingRoutes(server: FastifyInstance) {
           status: { type: 'string' },
         },
       },
+      response: { 200: dataErrorResponse },
     },
   }, async (req: FastifyRequest, _reply: FastifyReply) => {
     const { providerType, status } = req.query as { providerType?: string; status?: string };
@@ -117,6 +127,7 @@ export async function carrierTrackingRoutes(server: FastifyInstance) {
     schema: {
       tags: ['Carrier Tracking'],
       summary: 'Get carrier tracking integration by ID',
+      response: { 200: dataErrorResponse },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
@@ -142,19 +153,44 @@ export async function carrierTrackingRoutes(server: FastifyInstance) {
           credentials: { type: 'object' },
           pollingEnabled: { type: 'boolean' },
           pollingIntervalSeconds: { type: 'number' },
+          pollingIntervalMinutes: { type: 'number' },
           notes: { type: 'string' },
+        },
+      },
+      response: {
+        201: {
+          type: 'object',
+          properties: {
+            data: { type: 'object' },
+            error: { type: ['string', 'null'] },
+          },
         },
       },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const body = z.object({
+    const raw = z.object({
       carrierId: z.string().min(1),
       providerType: z.string().min(1),
       credentials: z.record(z.unknown()).optional(),
       pollingEnabled: z.boolean().optional(),
       pollingIntervalSeconds: z.number().min(60).optional(),
+      pollingIntervalMinutes: z.number().min(1).optional(),
       notes: z.string().optional(),
     }).parse((req as any).body);
+
+    // Accept pollingIntervalMinutes from frontend, convert to seconds
+    const pollingIntervalSeconds = raw.pollingIntervalMinutes
+      ? raw.pollingIntervalMinutes * 60
+      : raw.pollingIntervalSeconds;
+
+    const body = {
+      carrierId: raw.carrierId,
+      providerType: raw.providerType,
+      credentials: raw.credentials,
+      pollingEnabled: raw.pollingEnabled,
+      pollingIntervalSeconds,
+      notes: raw.notes,
+    };
 
     try {
       const result = await commandBus.dispatch({
@@ -197,6 +233,7 @@ export async function carrierTrackingRoutes(server: FastifyInstance) {
           notes: { type: 'string' },
         },
       },
+      response: { 200: dataErrorResponse },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
@@ -253,6 +290,7 @@ export async function carrierTrackingRoutes(server: FastifyInstance) {
           notes: { type: 'string' },
         },
       },
+      response: { 200: dataErrorResponse },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
@@ -295,6 +333,7 @@ export async function carrierTrackingRoutes(server: FastifyInstance) {
     schema: {
       tags: ['Carrier Tracking'],
       summary: 'Delete a carrier tracking integration',
+      response: { 200: dataErrorResponse },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
@@ -327,6 +366,7 @@ export async function carrierTrackingRoutes(server: FastifyInstance) {
     schema: {
       tags: ['Carrier Tracking'],
       summary: 'Test a carrier tracking integration connection',
+      response: { 200: dataErrorResponse },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
@@ -345,6 +385,7 @@ export async function carrierTrackingRoutes(server: FastifyInstance) {
     schema: {
       tags: ['Carrier Tracking'],
       summary: 'Enable a carrier tracking integration',
+      response: { 200: dataErrorResponse },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
@@ -375,6 +416,7 @@ export async function carrierTrackingRoutes(server: FastifyInstance) {
     schema: {
       tags: ['Carrier Tracking'],
       summary: 'Disable a carrier tracking integration',
+      response: { 200: dataErrorResponse },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
@@ -411,6 +453,7 @@ export async function carrierTrackingRoutes(server: FastifyInstance) {
           limit: { type: 'number' },
         },
       },
+      response: { 200: dataErrorResponse },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
@@ -453,6 +496,7 @@ export async function carrierTrackingRoutes(server: FastifyInstance) {
     schema: {
       tags: ['Carrier Tracking'],
       summary: 'Manually trigger polling for a carrier tracking integration',
+      response: { 200: dataErrorResponse },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
@@ -484,6 +528,7 @@ export async function carrierTrackingRoutes(server: FastifyInstance) {
     schema: {
       tags: ['Carrier Tracking'],
       summary: 'Get carrier tracking events for a shipment',
+      response: { 200: dataErrorResponse },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { shipmentId } = req.params as { shipmentId: string };
@@ -505,6 +550,7 @@ export async function carrierTrackingRoutes(server: FastifyInstance) {
     schema: {
       tags: ['Carrier Tracking'],
       summary: 'Manually poll carrier tracking for a shipment',
+      response: { 200: dataErrorResponse },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { shipmentId } = req.params as { shipmentId: string };
@@ -558,6 +604,7 @@ export async function carrierTrackingRoutes(server: FastifyInstance) {
     schema: {
       tags: ['Carrier Tracking'],
       summary: 'Receive inbound webhook from a carrier tracking provider',
+      response: { 200: dataErrorResponse },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { providerType } = req.params as { providerType: string };
