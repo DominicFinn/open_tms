@@ -38,28 +38,22 @@ export function IntegrationsLayout() {
             Webhook Logs
           </NavLink>
 
-          <div className="sidebar-section-label">Outbound</div>
-          <NavLink to="/integrations/outbound" onClick={closeMobileMenu}>
-            <span className="material-icons">send</span>
-            Integrations
-          </NavLink>
-          <NavLink to="/integrations/outbound-logs" onClick={closeMobileMenu}>
-            <span className="material-icons">description</span>
-            Outbound Logs
-          </NavLink>
-
           <div className="sidebar-section-label">EDI</div>
-          <NavLink to="/integrations/trading-partners" onClick={closeMobileMenu}>
+          <NavLink to="/integrations/edi" onClick={closeMobileMenu}>
             <span className="material-icons">hub</span>
+            EDI Dashboard
+          </NavLink>
+          <NavLink to="/integrations/edi/partners" onClick={closeMobileMenu}>
+            <span className="material-icons">handshake</span>
             Trading Partners
           </NavLink>
-          <NavLink to="/integrations/edi-partners" onClick={closeMobileMenu}>
-            <span className="material-icons">swap_horiz</span>
-            EDI Partners (Legacy)
+          <NavLink to="/integrations/edi/logs" onClick={closeMobileMenu}>
+            <span className="material-icons">receipt_long</span>
+            Transaction Log
           </NavLink>
-          <NavLink to="/integrations/edi-files" onClick={closeMobileMenu}>
-            <span className="material-icons">insert_drive_file</span>
-            EDI Files
+          <NavLink to="/integrations/edi/import" onClick={closeMobileMenu}>
+            <span className="material-icons">upload_file</span>
+            EDI Import
           </NavLink>
         </nav>
       </aside>

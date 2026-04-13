@@ -9,8 +9,6 @@ import { container } from './di/container.js';
 import { TOKENS } from './di/tokens.js';
 import { IQueueAdapter } from './queue/IQueueAdapter.js';
 import { QUEUES } from './queue/events.js';
-import { createOutboundCarrierWorker } from './workers/outboundCarrierWorker.js';
-import { createOutboundTrackingWorker } from './workers/outboundTrackingWorker.js';
 import { createInboundWebhookWorker } from './workers/inboundWebhookWorker.js';
 import { createEtaMonitorWorker, registerEtaMonitorSchedule, ETA_MONITOR_QUEUE } from './workers/etaMonitorWorker.js';
 import { createSlaMonitorWorker, registerSlaMonitorSchedule, SLA_MONITOR_QUEUE } from './workers/slaMonitorWorker.js';
@@ -38,12 +36,8 @@ import { distanceRoutes } from './routes/distance.js';
 import { apiKeyRoutes } from './routes/apiKeys.js';
 import { webhookRoutes } from './routes/webhook.js';
 import { webhookLogRoutes } from './routes/webhookLogs.js';
-import { outboundIntegrationRoutes } from './routes/outboundIntegrations.js';
-import { outboundIntegrationLogRoutes } from './routes/outboundIntegrationLogs.js';
 import { customerApiRoutes } from './routes/customerApi.js';
 import { ediImportRoutes } from './routes/ediImport.js';
-import { ediPartnerRoutes } from './routes/ediPartners.js';
-import { ediFileRoutes } from './routes/ediFiles.js';
 import { queueMonitoringRoutes } from './routes/queueMonitoring.js';
 import { documentRoutes } from './routes/documents.js';
 import { dailyReportRoutes } from './routes/dailyReport.js';
@@ -142,12 +136,8 @@ async function start() {
   await server.register(apiKeyRoutes);
   await server.register(webhookRoutes);
   await server.register(webhookLogRoutes);
-  await server.register(outboundIntegrationRoutes);
-  await server.register(outboundIntegrationLogRoutes);
   await server.register(customerApiRoutes);
   await server.register(ediImportRoutes);
-  await server.register(ediPartnerRoutes);
-  await server.register(ediFileRoutes);
   await server.register(queueMonitoringRoutes);
   await server.register(documentRoutes);
   await server.register(dailyReportRoutes);
@@ -208,8 +198,7 @@ async function start() {
     if (process.env.DISABLE_EMBEDDED_WORKERS !== 'true') {
       const deliveryService = new OrderDeliveryService(server.prisma);
       const arrivalCriteriaService = new ArrivalCriteriaEvaluationService(server.prisma, deliveryService);
-      await queue.subscribe(QUEUES.OUTBOUND_CARRIER, createOutboundCarrierWorker(server.prisma));
-      await queue.subscribe(QUEUES.OUTBOUND_TRACKING, createOutboundTrackingWorker(server.prisma));
+      // Legacy outbound carrier/tracking workers removed — replaced by Edi856AutoSendHandler + Edi810AutoSendHandler
       await queue.subscribe(QUEUES.INBOUND_WEBHOOK, createInboundWebhookWorker(server.prisma, deliveryService, arrivalCriteriaService));
 
       // ETA Monitor — register cron schedule and worker if routing provider is configured

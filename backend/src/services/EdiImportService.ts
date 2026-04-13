@@ -7,9 +7,6 @@
  * 3. Resolves customers and locations
  * 4. Creates orders via OrdersRepository
  * 5. Tracks results in EdiTransactionLog (unified logging)
- *
- * Also maintains backwards compatibility with EdiFile for the legacy
- * /api/v1/edi-files endpoints until they are fully migrated.
  */
 import { PrismaClient } from '@prisma/client';
 import { createHash } from 'crypto';
@@ -64,7 +61,6 @@ export class EdiImportService implements IEdiImportService {
     // Load partner field mapping if partnerId provided
     let fieldMapping = options?.fieldMapping;
     if (options?.partnerId && !fieldMapping) {
-      // Try TradingPartner first, fall back to EdiPartner
       const tp = this.tradingPartnerRepo
         ? await this.tradingPartnerRepo.findById(options.partnerId)
         : null;
@@ -75,14 +71,6 @@ export class EdiImportService implements IEdiImportService {
         if (txn?.fieldMapping) {
           fieldMapping = txn.fieldMapping as Partial<EdiFieldMappingConfig>;
         }
-      } else {
-        const partner = await this.prisma.ediPartner.findUnique({
-          where: { id: options.partnerId },
-          select: { fieldMapping: true }
-        });
-        if (partner?.fieldMapping) {
-          fieldMapping = partner.fieldMapping as Partial<EdiFieldMappingConfig>;
-        }
       }
     }
 
@@ -90,7 +78,7 @@ export class EdiImportService implements IEdiImportService {
   }
 
   /**
-   * Full import: parse EDI, create orders, track in EdiTransactionLog + EdiFile
+   * Full import: parse EDI, create orders, track in EdiTransactionLog
    */
   async importEdi(ediContent: string, options: EdiImportOptions = {}): Promise<EdiImportResult> {
     const fileHash = createHash('sha256').update(ediContent).digest('hex');
@@ -112,23 +100,7 @@ export class EdiImportService implements IEdiImportService {
       };
     }
 
-    // Also check legacy EdiFile for duplicates
-    const existingFile = await this.prisma.ediFile.findFirst({
-      where: { fileHash, status: { in: ['completed', 'processing'] } }
-    });
-    if (existingFile) {
-      return {
-        success: false,
-        fileId: existingFile.id,
-        transactionType: existingFile.transactionType || '',
-        transactionCount: existingFile.transactionCount,
-        ordersCreated: 0,
-        orders: [],
-        errors: ['Duplicate EDI file - this content has already been imported.']
-      };
-    }
-
-    // Load partner config — try TradingPartner first, fall back to EdiPartner
+    // Load partner config from TradingPartner
     let customerId = options.customerId;
     let fieldMapping = options.fieldMapping;
     let tradingPartnerId: string | null = null;
@@ -145,18 +117,6 @@ export class EdiImportService implements IEdiImportService {
         );
         if (!fieldMapping && txn?.fieldMapping) {
           fieldMapping = txn.fieldMapping as Partial<EdiFieldMappingConfig>;
-        }
-      } else {
-        // Fall back to legacy EdiPartner
-        const partner = await this.prisma.ediPartner.findUnique({
-          where: { id: options.partnerId },
-          select: { customerId: true, fieldMapping: true, autoAssignShipments: true }
-        });
-        if (partner) {
-          if (!customerId) customerId = partner.customerId;
-          if (!fieldMapping && partner.fieldMapping) {
-            fieldMapping = partner.fieldMapping as Partial<EdiFieldMappingConfig>;
-          }
         }
       }
     }
@@ -177,22 +137,11 @@ export class EdiImportService implements IEdiImportService {
         })
       : null;
 
-    // Also create legacy EdiFile for backwards compat
-    const ediFile = await this.prisma.ediFile.create({
-      data: {
-        partnerId: options.partnerId || null,
-        fileName: options.fileName || `edi-${Date.now()}.x12`,
-        fileSize: Buffer.byteLength(ediContent, 'utf-8'),
-        fileContent: ediContent,
-        fileHash,
-        source: options.source || 'manual',
-        status: 'processing'
-      }
-    });
+    const fileId = logEntry?.id || `edi-${Date.now()}`;
 
     const result: EdiImportResult = {
       success: false,
-      fileId: ediFile.id,
+      fileId,
       logId: logEntry?.id,
       transactionType: '',
       transactionCount: 0,
@@ -209,19 +158,9 @@ export class EdiImportService implements IEdiImportService {
       result.errors.push(...parseResult.errors);
 
       if (!parseResult.success || parseResult.orders.length === 0) {
-        await this.updateStatus(ediFile.id, logEntry?.id, 'failed', result, parseResult);
+        await this.updateStatus(logEntry?.id, 'failed', result, parseResult);
         return result;
       }
-
-      // Update records with parsed data
-      await this.prisma.ediFile.update({
-        where: { id: ediFile.id },
-        data: {
-          parsedData: parseResult.orders as any,
-          transactionType: parseResult.transactionType,
-          transactionCount: parseResult.transactionCount
-        }
-      });
 
       // Process each parsed order
       for (const parsedOrder of parseResult.orders) {
@@ -342,35 +281,22 @@ export class EdiImportService implements IEdiImportService {
       }
 
       result.success = result.ordersCreated > 0;
-      await this.updateStatus(ediFile.id, logEntry?.id, result.success ? 'completed' : 'failed', result, parseResult);
+      await this.updateStatus(logEntry?.id, result.success ? 'completed' : 'failed', result, parseResult);
 
     } catch (err: any) {
       result.errors.push(`Import failed: ${err.message}`);
-      await this.updateStatus(ediFile.id, logEntry?.id, 'failed', result);
+      await this.updateStatus(logEntry?.id, 'failed', result);
     }
 
     return result;
   }
 
   private async updateStatus(
-    fileId: string,
     logId: string | undefined,
     status: string,
     result: EdiImportResult,
     parseResult?: ParseResult,
   ): Promise<void> {
-    // Update legacy EdiFile
-    await this.prisma.ediFile.update({
-      where: { id: fileId },
-      data: {
-        status,
-        processedAt: new Date(),
-        ordersCreated: result.ordersCreated,
-        orderIds: result.orders.map(o => o.id),
-        errorMessage: result.errors.length > 0 ? result.errors.join('; ') : null
-      }
-    });
-
     // Update EdiTransactionLog
     if (logId && this.tradingPartnerRepo) {
       await this.tradingPartnerRepo.updateLog(logId, {

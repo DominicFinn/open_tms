@@ -1,24 +1,5 @@
 import 'dotenv/config';
 
-export interface EdiPartnerConfig {
-  id: string;
-  name: string;
-  customerId: string;
-  sftpHost: string;
-  sftpPort: number;
-  sftpUsername: string;
-  sftpPassword?: string;
-  sftpPrivateKey?: string;
-  sftpRemoteDir: string;
-  sftpFilePattern: string;
-  pollingEnabled: boolean;
-  pollingInterval: number; // seconds
-  pollingCron?: string;
-  autoCreateOrders: boolean;
-  autoAssignShipments: boolean;
-}
-
-// New TradingPartner config format
 export interface TradingPartnerConfig {
   id: string;
   name: string;
@@ -67,26 +48,7 @@ export function loadAppConfig(): AppConfig {
   };
 }
 
-// Legacy: fetch from old EdiPartner endpoint (for backward compatibility during migration)
-export async function fetchPartnerConfigs(config: AppConfig): Promise<EdiPartnerConfig[]> {
-  const url = `${config.backendUrl}/api/v1/edi-partners?active=true&pollingEnabled=true`;
-
-  const response = await fetch(url, {
-    headers: {
-      'x-api-key': config.apiKey,
-      'Content-Type': 'application/json',
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch partner configs: ${response.status} ${response.statusText}`);
-  }
-
-  const result = await response.json() as { data?: EdiPartnerConfig[] };
-  return result.data || [];
-}
-
-// New: fetch from TradingPartner endpoint
+// Fetch TradingPartner configs from backend
 export async function fetchTradingPartnerConfigs(config: AppConfig): Promise<TradingPartnerConfig[]> {
   const url = `${config.backendUrl}/api/v1/trading-partners?active=true`;
 

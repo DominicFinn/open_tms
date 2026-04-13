@@ -25,23 +25,21 @@ export default function VNextIntegrationsDashboard() {
     setLoading(true);
     setError('');
     try {
-      const [keysRes, intRes, ediRes] = await Promise.all([
+      const [keysRes, tpRes] = await Promise.all([
         fetch(`${API_URL}/api/v1/api-keys`),
-        fetch(`${API_URL}/api/v1/outbound-integrations`),
-        fetch(`${API_URL}/api/v1/edi-partners`),
+        fetch(`${API_URL}/api/v1/trading-partners`),
       ]);
 
-      if (!keysRes.ok || !intRes.ok || !ediRes.ok) {
+      if (!keysRes.ok || !tpRes.ok) {
         setError('Failed to load some integration data');
       }
 
       const keysData = keysRes.ok ? await keysRes.json() : { data: [] };
-      const intData = intRes.ok ? await intRes.json() : { data: [] };
-      const ediData = ediRes.ok ? await ediRes.json() : { data: [] };
+      const tpData = tpRes.ok ? await tpRes.json() : { data: [] };
 
       setApiKeys(keysData.data || []);
-      setIntegrations(intData.data || []);
-      setEdiPartners(ediData.data || []);
+      setIntegrations(tpData.data?.filter((p: any) => p.outboundEnabled) || []);
+      setEdiPartners(tpData.data?.filter((p: any) => p.inboundEnabled) || []);
 
       // Optionally try queue stats
       try {
@@ -246,7 +244,7 @@ export default function VNextIntegrationsDashboard() {
               <span className="material-icons">list_alt</span>
               Webhook Logs
             </Link>
-            <Link to="/integrations/edi-partners" className="vn-btn vn-btn-outline">
+            <Link to="/integrations/edi/partners" className="vn-btn vn-btn-outline">
               <span className="material-icons">swap_horiz</span>
               EDI Partners
             </Link>
