@@ -920,6 +920,142 @@ function ShipmentNotesTab({ shipmentId }: { shipmentId: string }) {
   );
 }
 
+const TRACKING_STATUS_CHIP: Record<string, string> = {
+  delivered: 'vn-chip-success',
+  in_transit: 'vn-chip-info',
+  out_for_delivery: 'vn-chip-primary',
+  exception: 'vn-chip-error',
+  info_received: 'vn-chip-warning',
+  return_to_sender: 'vn-chip-error',
+  unknown: 'vn-chip-secondary',
+};
+
+const TRACKING_STATUS_ICON: Record<string, string> = {
+  delivered: 'check_circle',
+  in_transit: 'local_shipping',
+  out_for_delivery: 'directions_car',
+  exception: 'error',
+  info_received: 'info',
+  return_to_sender: 'undo',
+  unknown: 'help_outline',
+};
+
+function CarrierTrackingTab({ shipmentId }: { shipmentId: string }) {
+  const [events, setEvents] = React.useState<any[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [polling, setPolling] = React.useState(false);
+  const [message, setMessage] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    fetch(`${API_URL}/api/v1/shipments/${shipmentId}/carrier-tracking`)
+      .then(r => r.json())
+      .then(j => setEvents(j.data || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [shipmentId]);
+
+  const handlePoll = async () => {
+    setPolling(true);
+    setMessage(null);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/shipments/${shipmentId}/carrier-tracking/poll`, { method: 'POST' });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Poll failed');
+      setMessage(`Poll complete: ${json.data?.eventsCreated ?? 0} new events`);
+      // Refresh events
+      const evRes = await fetch(`${API_URL}/api/v1/shipments/${shipmentId}/carrier-tracking`);
+      const evJson = await evRes.json();
+      setEvents(evJson.data || []);
+    } catch (err) {
+      setMessage(`Error: ${(err as Error).message}`);
+    } finally {
+      setPolling(false);
+    }
+  };
+
+  if (loading) {
+    return <div style={{ padding: 24, textAlign: 'center' }}><div className="loading-spinner" /></div>;
+  }
+
+  return (
+    <div className="vn-card">
+      <div className="vn-card-header">
+        <h2>Carrier Tracking Events</h2>
+        <button className="vn-btn vn-btn-outline vn-btn-sm" onClick={handlePoll} disabled={polling}>
+          <span className="material-icons" style={polling ? { fontSize: 16, animation: 'spin 1s linear infinite' } : { fontSize: 16 }}>
+            {polling ? 'sync' : 'refresh'}
+          </span>
+          {polling ? 'Polling...' : 'Poll Now'}
+        </button>
+      </div>
+      <div className="vn-card-body">
+        {message && (
+          <div className={`vn-alert ${message.startsWith('Error') ? 'vn-alert-error' : 'vn-alert-success'}`} style={{ marginBottom: 16 }}>
+            {message}
+          </div>
+        )}
+
+        {events.length === 0 ? (
+          <div style={{ padding: 32, textAlign: 'center', color: 'var(--on-surface-variant)' }}>
+            <span className="material-icons" style={{ fontSize: 40, opacity: 0.4, marginBottom: 8, display: 'block' }}>gps_off</span>
+            <p style={{ fontSize: 14 }}>No carrier tracking events yet.</p>
+            <p style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>
+              Events will appear here once the carrier's tracking API reports updates.
+            </p>
+          </div>
+        ) : (
+          <div className="vn-timeline">
+            {events.map((ev: any, i: number) => {
+              const statusLabel = (ev.status || 'unknown').replace(/_/g, ' ');
+              const chipClass = TRACKING_STATUS_CHIP[ev.status] || 'vn-chip-secondary';
+              const icon = TRACKING_STATUS_ICON[ev.status] || 'help_outline';
+              const location = [ev.city, ev.state, ev.country].filter(Boolean).join(', ');
+              return (
+                <div className="vn-timeline-item" key={ev.id || i}>
+                  <div className={`vn-timeline-dot ${ev.status === 'delivered' ? 'success' : ev.status === 'exception' ? 'error' : 'info'}`} />
+                  <div className="vn-timeline-time">
+                    {ev.occurredAt ? new Date(ev.occurredAt).toLocaleString() : ''}
+                  </div>
+                  <div className="vn-timeline-title" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <span className="material-icons" style={{ fontSize: 16, color: 'var(--on-surface-variant)' }}>{icon}</span>
+                    <span className={`vn-chip ${chipClass}`} style={{ fontSize: 11 }}>{statusLabel}</span>
+                    <span style={{ fontSize: 12, color: 'var(--on-surface-variant)', fontFamily: 'monospace' }}>
+                      {ev.trackingNumber}
+                    </span>
+                    <span className="vn-chip vn-chip-secondary" style={{ fontSize: 10 }}>{ev.source}</span>
+                  </div>
+                  {ev.statusDetail && (
+                    <div className="vn-timeline-desc">{ev.statusDetail}</div>
+                  )}
+                  {location && (
+                    <div className="vn-timeline-location">
+                      <span className="material-icons">place</span>
+                      {location}
+                    </div>
+                  )}
+                  {ev.signedBy && (
+                    <div style={{ fontSize: 12, color: 'var(--on-surface-variant)', marginTop: 2 }}>
+                      <span className="material-icons" style={{ fontSize: 14, verticalAlign: 'text-bottom', marginRight: 4 }}>draw</span>
+                      Signed by: {ev.signedBy}
+                    </div>
+                  )}
+                  {ev.estimatedDelivery && (
+                    <div style={{ fontSize: 12, color: 'var(--on-surface-variant)', marginTop: 2 }}>
+                      <span className="material-icons" style={{ fontSize: 14, verticalAlign: 'text-bottom', marginRight: 4 }}>schedule</span>
+                      ETA: {new Date(ev.estimatedDelivery).toLocaleString()}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
+}
+
 export default function VNextShipmentDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -1228,6 +1364,10 @@ export default function VNextShipmentDetail() {
               <span className="material-icons" style={{ fontSize: 16, marginRight: 4, verticalAlign: 'middle' }}>timer</span>
               SLA
             </button>
+            <button className={`vn-tab ${activeTab === 'carrier-tracking' ? 'active' : ''}`} onClick={() => setActiveTab('carrier-tracking')}>
+              <span className="material-icons" style={{ fontSize: 16, marginRight: 4, verticalAlign: 'middle' }}>gps_fixed</span>
+              Carrier Tracking
+            </button>
           </div>
 
           {/* Events Timeline */}
@@ -1352,6 +1492,9 @@ export default function VNextShipmentDetail() {
           )}
           {activeTab === 'sla' && (
             <SlaTab shipmentId={id!} />
+          )}
+          {activeTab === 'carrier-tracking' && (
+            <CarrierTrackingTab shipmentId={id!} />
           )}
         </div>
 

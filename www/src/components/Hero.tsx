@@ -174,8 +174,8 @@ export default function Hero() {
 
           <p className="text-xl sm:text-2xl text-surface-300 leading-relaxed max-w-3xl mb-10">
             The open-source Transportation Management System built for modern supply chains.
-            Full shipment lifecycle, carrier tendering, IoT tracking, cold chain compliance,
-            and EDI integration  - out of the box.
+            Full shipment lifecycle, carrier tendering, IoT tracking, carrier API integration
+            (FedEx, UPS, DHL), cold chain compliance, and EDI integration - out of the box.
           </p>
 
           {/* CTAs */}

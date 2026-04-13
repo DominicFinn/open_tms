@@ -145,6 +145,9 @@ import { CallWebhookSkill } from '../services/skills/CallWebhookSkill.js';
 import { CarrierTrackingIntegrationRepository } from '../repositories/CarrierTrackingIntegrationRepository.js';
 import { CarrierTrackingProviderRegistry } from '../services/carrierTracking/ProviderRegistry.js';
 import { CarrierTrackingService } from '../services/carrierTracking/CarrierTrackingService.js';
+import { FedExTrackingProvider } from '../services/carrierTracking/providers/FedExTrackingProvider.js';
+import { UPSTrackingProvider } from '../services/carrierTracking/providers/UPSTrackingProvider.js';
+import { DHLTrackingProvider } from '../services/carrierTracking/providers/DHLTrackingProvider.js';
 import { CreateCarrierTrackingIntegrationCommandHandler } from '../commands/carrierTracking/CreateCarrierTrackingIntegrationCommand.js';
 import { UpdateCarrierTrackingIntegrationCommandHandler } from '../commands/carrierTracking/UpdateCarrierTrackingIntegrationCommand.js';
 import { DeleteCarrierTrackingIntegrationCommandHandler } from '../commands/carrierTracking/DeleteCarrierTrackingIntegrationCommand.js';
@@ -512,8 +515,11 @@ export function registerDependencies(prisma: PrismaClient): void {
   });
 
   container.singleton(TOKENS.ICarrierTrackingProviderRegistry).toFactory(() => {
-    return new CarrierTrackingProviderRegistry();
-    // Concrete providers (FedEx, UPS, etc.) will be registered in Phase 2
+    const registry = new CarrierTrackingProviderRegistry();
+    registry.register('fedex', () => new FedExTrackingProvider());
+    registry.register('ups', () => new UPSTrackingProvider());
+    registry.register('dhl', () => new DHLTrackingProvider());
+    return registry;
   });
 
   container.singleton(TOKENS.ICarrierTrackingService).toFactory(() => {

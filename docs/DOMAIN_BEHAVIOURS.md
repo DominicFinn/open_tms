@@ -1301,6 +1301,23 @@ Links carriers to external tracking APIs (FedEx, UPS, DHL, EasyPost, etc.) for a
 
 All providers map to 7 standard statuses: `info_received`, `in_transit`, `out_for_delivery`, `delivered`, `exception`, `return_to_sender`, `unknown`.
 
+### Event Handler Side Effects
+
+The `CarrierTrackingHandler` bridges carrier tracking events to the shipment lifecycle:
+
+| Event | Side Effect |
+|-------|-------------|
+| `carrier_tracking.delivered` | Updates shipment status to `delivered`, emits `shipment.delivered` + `shipment.status_changed` |
+| `carrier_tracking.exception` | Updates shipment status to `exception`, emits `shipment.exception` + `shipment.status_changed` |
+| `carrier_tracking.update_received` (in_transit) | Advances shipment status forward (draft -> in_transit), emits `shipment.status_changed` |
+| `carrier_tracking.integration_error` | Sets integration status to `error`, pauses polling |
+
+Status bridging rules:
+- Delivery only applied to shipments in `in_transit`, `dispatched`, or `picked_up` status
+- Exception not applied to already-delivered shipments
+- Status never regresses (e.g., in_transit will not go back to draft)
+- Delivered and exception events from `update_received` are handled by their dedicated handlers
+
 ### Polling Worker
 
 `carrierTrackingPollWorker` runs every 5 minutes (configurable via `CARRIER_TRACKING_POLL_CRON`). Polls active integrations that have exceeded their polling interval. Respects per-provider rate limits.

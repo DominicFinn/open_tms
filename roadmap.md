@@ -230,13 +230,18 @@
     - ✅ Webhook receiver with per-provider signature verification
     - ✅ Admin setup wizard with per-provider instructions and "create issue" links
     - ✅ Integration detail page with rate limit monitoring and manual poll
-    - 14 unit tests passing
+    - ✅ Provider registration in DI registry (FedEx, UPS, DHL wired at startup)
+    - ✅ Shipment status bridging: carrier delivery -> shipment delivered, carrier exception -> shipment exception
+    - ✅ In-transit milestone bridging: auto-advances shipment status on tracking updates
+    - ✅ Carrier tracking events timeline on shipment detail page
+    - ✅ PATCH endpoint for frontend integration detail page
+    - ✅ Integration events and manual poll endpoints
+    - ✅ 18 unit tests passing (command handlers + event handler bridging)
     - Planned: EasyPost aggregator, EDI 214 adapter, USPS, project44
     - Planned: EDI/API standard integration with carrier TMS systems
-    - ✅ 10 unit tests
     - ✅ [ETA Monitoring Guide](./docs/ETA_MONITORING_GUIDE.md)
-  - Carrier API integration (FedEx, UPS, DHL) 🔲
-  - Update shipments automatically from carrier feeds 🔲
+  - ✅ Carrier API integration (FedEx, UPS, DHL) - providers registered, full status bridging
+  - ✅ Update shipments automatically from carrier feeds - delivery, exception, in-transit milestones
 - **Exceptions** (partial)
   - ✅ Exception status on orders with type classification
   - ✅ Exception resolution workflow
