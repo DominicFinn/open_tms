@@ -1923,12 +1923,12 @@ model TradingPartnerTransaction {
 }
 
 model EdiTransactionLog {
-  id             String         @id @default(uuid())
-  partner        TradingPartner @relation(fields: [partnerId], references: [id])
-  partnerId      String
+  id             String          @id @default(uuid())
+  partner        TradingPartner? @relation(fields: [partnerId], references: [id])
+  partnerId      String?
 
   // What was exchanged
-  transactionType String                  // "850", "856", "204", "990", "997", etc.
+  transactionType String                  // "850", "856", "204", "990", "997", "214", "210", "810", "820"
   direction       String                  // "inbound" | "outbound"
 
   // File details
@@ -1938,7 +1938,7 @@ model EdiTransactionLog {
   fileHash        String?                 // SHA-256 for dedup
 
   // Transport details
-  transport       String                  // "sftp" | "http"
+  transport       String    @default("api") // "sftp" | "http" | "api" | "manual"
   url             String?                 // HTTP URL or SFTP path
   responseCode    Int?                    // HTTP response code
   responseBody    String?
@@ -1948,11 +1948,22 @@ model EdiTransactionLog {
   processedAt     DateTime?
   errorMessage    String?
 
+  // Parse result (for inbound) — replaces EdiFile.parsedData
+  parsedData      Json?
+  transactionCount Int     @default(0)     // Number of transactions in file
+
+  // Created entities tracking — replaces EdiFile.ordersCreated/orderIds
+  entitiesCreated Int      @default(0)     // Orders, invoices, payments created
+  entityIds       Json?                    // Array of created entity IDs
+  source          String   @default("api") // "manual" | "sftp" | "api"
+
   // Linked entities
   shipmentId      String?
   shipmentReference String?
   orderId         String?
   tenderId        String?
+  invoiceId       String?
+  invoiceNumber   String?
 
   // 997 acknowledgment tracking
   ack997Sent      Boolean  @default(false)
@@ -1972,6 +1983,7 @@ model EdiTransactionLog {
   @@index([shipmentId])
   @@index([fileHash])
   @@index([createdAt])
+  @@index([source])
 }
 
 // ============================================================

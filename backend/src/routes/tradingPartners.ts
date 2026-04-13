@@ -246,11 +246,11 @@ export async function tradingPartnerRoutes(server: FastifyInstance) {
     return { data: logs, error: null };
   });
 
-  // All logs (cross-partner)
+  // All logs (cross-partner) with pagination
   server.get('/api/v1/edi-logs', {
     schema: {
-      tags: ['Trading Partners'],
-      summary: 'List all EDI transaction logs',
+      tags: ['EDI Logs'],
+      summary: 'List all EDI transaction logs with pagination and filtering',
       querystring: {
         type: 'object',
         properties: {
@@ -258,31 +258,107 @@ export async function tradingPartnerRoutes(server: FastifyInstance) {
           direction: { type: 'string' },
           status: { type: 'string' },
           partnerId: { type: 'string' },
+          source: { type: 'string' },
+          search: { type: 'string' },
+          limit: { type: 'integer', default: 50 },
+          offset: { type: 'integer', default: 0 },
         },
       },
     },
   }, async (req: FastifyRequest, _reply: FastifyReply) => {
-    const { transactionType, direction, status, partnerId } = req.query as any;
-    const logs = await partnerRepo.findLogs({ partnerId, transactionType, direction, status });
-    return { data: logs, error: null };
+    const { transactionType, direction, status, partnerId, source, search, limit, offset } = req.query as any;
+    const result = await partnerRepo.findLogsWithPagination(
+      { partnerId, transactionType, direction, status, source, search },
+      parseInt(limit) || 50,
+      parseInt(offset) || 0,
+    );
+    return { data: result.logs, total: result.total, error: null };
+  });
+
+  // Single log detail
+  server.get('/api/v1/edi-logs/:id', {
+    schema: {
+      tags: ['EDI Logs'],
+      summary: 'Get EDI transaction log detail (including raw content)',
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const log = await partnerRepo.findLogById(id);
+    if (!log) {
+      reply.code(404);
+      return { data: null, error: 'EDI transaction log not found' };
+    }
+    return { data: log, error: null };
+  });
+
+  // Log stats
+  server.get('/api/v1/edi-logs/stats', {
+    schema: {
+      tags: ['EDI Logs'],
+      summary: 'Get EDI transaction log statistics',
+      querystring: {
+        type: 'object',
+        properties: {
+          partnerId: { type: 'string' },
+          transactionType: { type: 'string' },
+          direction: { type: 'string' },
+        },
+      },
+    },
+  }, async (req: FastifyRequest, _reply: FastifyReply) => {
+    const { partnerId, transactionType, direction } = req.query as any;
+    const stats = await partnerRepo.getLogStats({ partnerId, transactionType, direction });
+    return { data: stats, error: null };
+  });
+
+  // Retry a failed log entry
+  server.post('/api/v1/edi-logs/:id/retry', {
+    schema: {
+      tags: ['EDI Logs'],
+      summary: 'Retry a failed EDI transaction (re-process inbound or re-deliver outbound)',
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const log = await partnerRepo.findLogById(id);
+    if (!log) {
+      reply.code(404);
+      return { data: null, error: 'EDI transaction log not found' };
+    }
+    if (log.status !== 'error') {
+      reply.code(400);
+      return { data: null, error: `Cannot retry a log with status "${log.status}" — only "error" logs can be retried` };
+    }
+    if (log.retryCount >= 3) {
+      reply.code(400);
+      return { data: null, error: 'Maximum retry count (3) reached' };
+    }
+
+    // Mark as pending for retry
+    await partnerRepo.updateLog(id, {
+      status: 'pending',
+      retryCount: log.retryCount + 1,
+      lastRetryAt: new Date(),
+      errorMessage: null,
+    });
+
+    return { data: { id, status: 'pending', retryCount: log.retryCount + 1 }, error: null };
   });
 
   // ── EDI Router info (for UI to show supported types) ──
 
   server.get('/api/v1/edi/transaction-types', {
-    schema: { tags: ['Trading Partners'], summary: 'List supported EDI transaction types' },
+    schema: { tags: ['EDI'], summary: 'List supported EDI transaction types' },
   }, async (_req: FastifyRequest, _reply: FastifyReply) => {
     const types = [
       { code: '850', name: 'Purchase Order', directions: ['inbound'], status: 'active' },
-      { code: '855', name: 'PO Acknowledgment', directions: ['outbound'], status: 'planned' },
       { code: '856', name: 'Advance Ship Notice', directions: ['outbound'], status: 'active' },
       { code: '204', name: 'Motor Carrier Load Tender', directions: ['outbound'], status: 'active' },
       { code: '990', name: 'Response to Load Tender', directions: ['inbound'], status: 'active' },
-      { code: '214', name: 'Shipment Status Message', directions: ['inbound', 'outbound'], status: 'planned' },
-      { code: '210', name: 'Freight Invoice', directions: ['inbound'], status: 'planned' },
+      { code: '214', name: 'Shipment Status Message', directions: ['inbound', 'outbound'], status: 'active' },
+      { code: '210', name: 'Freight Invoice', directions: ['inbound'], status: 'active' },
       { code: '997', name: 'Functional Acknowledgment', directions: ['inbound', 'outbound'], status: 'active' },
-      { code: '810', name: 'Invoice', directions: ['outbound'], status: 'planned' },
-      { code: '820', name: 'Payment Order', directions: ['inbound'], status: 'planned' },
+      { code: '810', name: 'Invoice', directions: ['outbound'], status: 'active' },
+      { code: '820', name: 'Payment Order/Remittance', directions: ['inbound'], status: 'active' },
     ];
     return { data: types, error: null };
   });

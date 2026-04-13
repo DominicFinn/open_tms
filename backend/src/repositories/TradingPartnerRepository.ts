@@ -70,7 +70,10 @@ export interface ITradingPartnerRepository {
   removeTransaction(id: string): Promise<void>;
   // Logs
   createLog(data: any): Promise<any>;
+  findLogById(id: string): Promise<any>;
   findLogs(filters: { partnerId?: string; transactionType?: string; direction?: string; status?: string }): Promise<any[]>;
+  findLogsWithPagination(filters: { partnerId?: string; transactionType?: string; direction?: string; status?: string; source?: string; search?: string }, limit?: number, offset?: number): Promise<{ logs: any[]; total: number }>;
+  getLogStats(filters?: { partnerId?: string; transactionType?: string; direction?: string }): Promise<{ total: number; pending: number; processing: number; success: number; error: number; duplicate: number; totalEntitiesCreated: number }>;
   updateLog(id: string, data: any): Promise<any>;
 }
 
@@ -171,6 +174,13 @@ export class TradingPartnerRepository implements ITradingPartnerRepository {
     return this.prisma.ediTransactionLog.create({ data });
   }
 
+  async findLogById(id: string): Promise<any> {
+    return this.prisma.ediTransactionLog.findUnique({
+      where: { id },
+      include: { partner: { select: { id: true, name: true } } },
+    });
+  }
+
   async findLogs(filters: { partnerId?: string; transactionType?: string; direction?: string; status?: string }): Promise<any[]> {
     const where: any = {};
     if (filters.partnerId) where.partnerId = filters.partnerId;
@@ -184,6 +194,60 @@ export class TradingPartnerRepository implements ITradingPartnerRepository {
       orderBy: { createdAt: 'desc' },
       take: 200,
     });
+  }
+
+  async findLogsWithPagination(
+    filters: { partnerId?: string; transactionType?: string; direction?: string; status?: string; source?: string; search?: string },
+    limit = 50,
+    offset = 0,
+  ): Promise<{ logs: any[]; total: number }> {
+    const where: any = {};
+    if (filters.partnerId) where.partnerId = filters.partnerId;
+    if (filters.transactionType) where.transactionType = filters.transactionType;
+    if (filters.direction) where.direction = filters.direction;
+    if (filters.status) where.status = filters.status;
+    if (filters.source) where.source = filters.source;
+    if (filters.search) {
+      where.OR = [
+        { fileName: { contains: filters.search, mode: 'insensitive' } },
+        { shipmentReference: { contains: filters.search, mode: 'insensitive' } },
+        { invoiceNumber: { contains: filters.search, mode: 'insensitive' } },
+      ];
+    }
+
+    const [logs, total] = await Promise.all([
+      this.prisma.ediTransactionLog.findMany({
+        where,
+        include: { partner: { select: { id: true, name: true } } },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: offset,
+      }),
+      this.prisma.ediTransactionLog.count({ where }),
+    ]);
+
+    return { logs, total };
+  }
+
+  async getLogStats(filters?: { partnerId?: string; transactionType?: string; direction?: string }): Promise<{
+    total: number; pending: number; processing: number; success: number; error: number; duplicate: number; totalEntitiesCreated: number;
+  }> {
+    const where: any = {};
+    if (filters?.partnerId) where.partnerId = filters.partnerId;
+    if (filters?.transactionType) where.transactionType = filters.transactionType;
+    if (filters?.direction) where.direction = filters.direction;
+
+    const [total, pending, processing, success, error, duplicate, entityAgg] = await Promise.all([
+      this.prisma.ediTransactionLog.count({ where }),
+      this.prisma.ediTransactionLog.count({ where: { ...where, status: 'pending' } }),
+      this.prisma.ediTransactionLog.count({ where: { ...where, status: 'processing' } }),
+      this.prisma.ediTransactionLog.count({ where: { ...where, status: 'success' } }),
+      this.prisma.ediTransactionLog.count({ where: { ...where, status: 'error' } }),
+      this.prisma.ediTransactionLog.count({ where: { ...where, status: 'duplicate' } }),
+      this.prisma.ediTransactionLog.aggregate({ where, _sum: { entitiesCreated: true } }),
+    ]);
+
+    return { total, pending, processing, success, error, duplicate, totalEntitiesCreated: entityAgg._sum.entitiesCreated || 0 };
   }
 
   async updateLog(id: string, data: any): Promise<any> {
