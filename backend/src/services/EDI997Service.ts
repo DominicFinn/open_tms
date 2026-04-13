@@ -6,7 +6,7 @@
  */
 
 import { X12EnvelopeBuilder } from './edi/X12EnvelopeBuilder.js';
-import { TRANSACTION_TO_GS } from './edi/types.js';
+import { TRANSACTION_TO_GS, EdiOperationResult } from './edi/types.js';
 
 export interface EDI997Config {
   senderId?: string;
@@ -19,11 +19,30 @@ export interface EDI997Config {
 
 export interface IEDI997Service {
   generate997(config: EDI997Config): string;
+  validateAndGenerate(config: EDI997Config): EdiOperationResult<string>;
   extractControlInfo(ediContent: string): { gsControlNumber: string; stControlNumber: string; transactionType: string } | null;
 }
 
 export class EDI997Service implements IEDI997Service {
   private envelope = new X12EnvelopeBuilder();
+
+  /** Validate input and generate EDI 997, returning errors instead of crashing */
+  validateAndGenerate(config: EDI997Config): EdiOperationResult<string> {
+    const errors: string[] = [];
+    if (!config.originalTransactionType) errors.push('originalTransactionType is required');
+    if (!config.originalControlNumber) errors.push('originalControlNumber is required');
+
+    if (errors.length > 0) {
+      return { success: false, errors, warnings: [] };
+    }
+
+    try {
+      const ediContent = this.generate997(config);
+      return { success: true, data: ediContent, errors: [], warnings: [] };
+    } catch (err: any) {
+      return { success: false, errors: [`Generation failed: ${err.message}`], warnings: [] };
+    }
+  }
 
   /**
    * Generate an EDI 997 Functional Acknowledgment

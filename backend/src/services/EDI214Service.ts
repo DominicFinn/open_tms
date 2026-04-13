@@ -13,6 +13,7 @@
  */
 
 import { X12EnvelopeBuilder } from './edi/X12EnvelopeBuilder.js';
+import { EdiOperationResult } from './edi/types.js';
 
 export interface EDI214ShipmentData {
   shipmentReference: string;
@@ -48,10 +49,34 @@ export interface EDI214Config {
 
 export interface IEDI214Service {
   generateEDI214(data: EDI214ShipmentData, config?: EDI214Config): string;
+  validateAndGenerate(data: EDI214ShipmentData, config?: EDI214Config): EdiOperationResult<string>;
 }
 
 export class EDI214Service implements IEDI214Service {
   private envelope = new X12EnvelopeBuilder();
+
+  /** Validate input and generate EDI 214, returning errors instead of crashing */
+  validateAndGenerate(data: EDI214ShipmentData, config?: EDI214Config): EdiOperationResult<string> {
+    const errors: string[] = [];
+    const warnings: string[] = [];
+
+    if (!data.shipmentReference) errors.push('shipmentReference is required');
+    if (!data.carrierScac) errors.push('carrierScac is required');
+    if (!data.statusCode) errors.push('statusCode is required');
+    if (!data.statusDate) errors.push('statusDate is required');
+    if (!data.city && !data.state) warnings.push('No location (city/state) provided');
+
+    if (errors.length > 0) {
+      return { success: false, errors, warnings };
+    }
+
+    try {
+      const ediContent = this.generateEDI214(data, config);
+      return { success: true, data: ediContent, errors: [], warnings };
+    } catch (err: any) {
+      return { success: false, errors: [`Generation failed: ${err.message}`], warnings };
+    }
+  }
 
   generateEDI214(data: EDI214ShipmentData, config?: EDI214Config): string {
     const e = this.envelope.e;

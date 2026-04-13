@@ -14,6 +14,7 @@
  */
 
 import { X12EnvelopeBuilder } from './edi/X12EnvelopeBuilder.js';
+import { EdiOperationResult } from './edi/types.js';
 
 export interface EDI204ShipmentData {
   // Shipment
@@ -80,10 +81,37 @@ export interface EDI204Config {
 
 export interface IEDI204Service {
   generateEDI204(shipment: EDI204ShipmentData, config?: EDI204Config): string;
+  validateAndGenerate(shipment: EDI204ShipmentData, config?: EDI204Config): EdiOperationResult<string>;
 }
 
 export class EDI204Service implements IEDI204Service {
   private envelope = new X12EnvelopeBuilder();
+
+  /** Validate input and generate EDI 204, returning errors instead of crashing */
+  validateAndGenerate(shipment: EDI204ShipmentData, config?: EDI204Config): EdiOperationResult<string> {
+    const errors: string[] = [];
+    const warnings: string[] = [];
+
+    if (!shipment.shipmentReference) errors.push('shipmentReference is required');
+    if (!shipment.carrierScac) errors.push('carrierScac is required');
+    if (shipment.carrierScac && (shipment.carrierScac.length < 2 || shipment.carrierScac.length > 4)) {
+      warnings.push(`carrierScac "${shipment.carrierScac}" should be 2-4 characters`);
+    }
+    if (!shipment.origin?.city) errors.push('origin.city is required');
+    if (!shipment.destination?.city) errors.push('destination.city is required');
+    if (!shipment.mustRespondBy) errors.push('mustRespondBy date is required');
+
+    if (errors.length > 0) {
+      return { success: false, errors, warnings };
+    }
+
+    try {
+      const ediContent = this.generateEDI204(shipment, config);
+      return { success: true, data: ediContent, errors: [], warnings };
+    } catch (err: any) {
+      return { success: false, errors: [`Generation failed: ${err.message}`], warnings };
+    }
+  }
 
   generateEDI204(shipment: EDI204ShipmentData, config?: EDI204Config): string {
     const e = this.envelope.e;

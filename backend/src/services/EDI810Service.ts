@@ -17,6 +17,7 @@
  */
 
 import { X12EnvelopeBuilder } from './edi/X12EnvelopeBuilder.js';
+import { EdiOperationResult } from './edi/types.js';
 
 export interface EDI810InvoiceData {
   invoiceNumber: string;
@@ -83,10 +84,35 @@ export interface EDI810Config {
 
 export interface IEDI810Service {
   generateEDI810(invoice: EDI810InvoiceData, config?: EDI810Config): string;
+  validateAndGenerate(invoice: EDI810InvoiceData, config?: EDI810Config): EdiOperationResult<string>;
 }
 
 export class EDI810Service implements IEDI810Service {
   private envelope = new X12EnvelopeBuilder();
+
+  /** Validate input and generate EDI 810, returning errors instead of crashing */
+  validateAndGenerate(invoice: EDI810InvoiceData, config?: EDI810Config): EdiOperationResult<string> {
+    const errors: string[] = [];
+    const warnings: string[] = [];
+
+    if (!invoice.invoiceNumber) errors.push('invoiceNumber is required');
+    if (!invoice.invoiceDate) errors.push('invoiceDate is required');
+    if (!invoice.seller?.name) errors.push('seller.name is required');
+    if (!invoice.buyer?.name) errors.push('buyer.name is required');
+    if (!invoice.lineItems || invoice.lineItems.length === 0) errors.push('At least one line item is required');
+    if (invoice.totalCents <= 0) warnings.push('totalCents is zero or negative');
+
+    if (errors.length > 0) {
+      return { success: false, errors, warnings };
+    }
+
+    try {
+      const ediContent = this.generateEDI810(invoice, config);
+      return { success: true, data: ediContent, errors: [], warnings };
+    } catch (err: any) {
+      return { success: false, errors: [`Generation failed: ${err.message}`], warnings };
+    }
+  }
 
   generateEDI810(invoice: EDI810InvoiceData, config?: EDI810Config): string {
     const e = this.envelope.e;
