@@ -39,7 +39,7 @@ export class VoidInvoiceCommandHandler extends BaseCommandHandler<VoidInvoicePay
 
     // Revert charges back to approved status
     const chargeIds = invoice.lineItems
-      .map(li => li.chargeId)
+      .map((li: any) => li.chargeId)
       .filter(Boolean) as string[];
 
     if (chargeIds.length > 0) {
@@ -50,7 +50,7 @@ export class VoidInvoiceCommandHandler extends BaseCommandHandler<VoidInvoicePay
     }
 
     // Revert shipment billing status to ready_to_invoice
-    const shipmentIds = [...new Set(invoice.lineItems.map(li => li.shipmentId).filter(Boolean) as string[])];
+    const shipmentIds = [...new Set(invoice.lineItems.map((li: any) => li.shipmentId).filter(Boolean) as string[])];
     if (shipmentIds.length > 0) {
       await tx.shipmentFinancialSummary.updateMany({
         where: { shipmentId: { in: shipmentIds } },

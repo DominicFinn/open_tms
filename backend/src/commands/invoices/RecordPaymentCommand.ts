@@ -107,7 +107,7 @@ export class RecordPaymentCommandHandler extends BaseCommandHandler<RecordPaymen
         where: { invoiceId: invoice.id },
         select: { shipmentId: true },
       });
-      const shipmentIds = [...new Set(lineItems.map(l => l.shipmentId).filter(Boolean) as string[])];
+      const shipmentIds = [...new Set(lineItems.map((l: any) => l.shipmentId).filter(Boolean) as string[])];
       if (shipmentIds.length > 0) {
         await tx.shipmentFinancialSummary.updateMany({
           where: { shipmentId: { in: shipmentIds } },
