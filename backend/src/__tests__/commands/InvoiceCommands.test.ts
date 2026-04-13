@@ -17,8 +17,10 @@ const mockCharge = {
   status: 'approved', freightClass: null,
 };
 
+const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+
 const mockInvoice = {
-  id: 'inv-1', orgId: 'test-org', invoiceNumber: 'INV-20260412-0001',
+  id: 'inv-1', orgId: 'test-org', invoiceNumber: `INV-${todayStr}-0001`,
   customerId: 'cust-1', status: 'draft',
   subtotalCents: 150000, taxCents: 0, totalCents: 150000,
   paidCents: 0, balanceCents: 150000, currency: 'USD',
@@ -74,7 +76,7 @@ describe('Invoice Command Handlers', () => {
       );
 
       expect(result.success).toBe(true);
-      expect(result.data?.invoiceNumber).toBe('INV-20260412-0001');
+      expect(result.data?.invoiceNumber).toBe(`INV-${todayStr}-0001`);
       expect(result.events).toHaveLength(1);
       expect(result.events[0].type).toBe(EVENT_TYPES.INVOICE_CREATED);
       expect(result.events[0].payload).toEqual(

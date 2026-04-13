@@ -47,7 +47,7 @@ export class CreateInvoiceCommandHandler extends BaseCommandHandler<CreateInvoic
       throw new Error('No approved revenue charges found for the selected shipments');
     }
 
-    const subtotalCents = charges.reduce((sum, c) => sum + c.amountCents, 0);
+    const subtotalCents = charges.reduce((sum: number, c: any) => sum + c.amountCents, 0);
     const totalCents = subtotalCents;
     const currency = charges[0].currency;
 
@@ -87,7 +87,7 @@ export class CreateInvoiceCommandHandler extends BaseCommandHandler<CreateInvoic
         internalNotes: payload.internalNotes,
         createdBy: command.actorId,
         lineItems: {
-          create: charges.map(charge => ({
+          create: charges.map((charge: any) => ({
             shipmentId: charge.shipmentId,
             orderId: charge.orderId,
             chargeId: charge.id,
@@ -105,12 +105,12 @@ export class CreateInvoiceCommandHandler extends BaseCommandHandler<CreateInvoic
 
     // Mark charges as invoiced
     await tx.charge.updateMany({
-      where: { id: { in: charges.map(c => c.id) } },
+      where: { id: { in: charges.map((c: any) => c.id) } },
       data: { status: 'invoiced' },
     });
 
     // Update shipment billing status
-    const shipmentIds = [...new Set(charges.map(c => c.shipmentId).filter(Boolean) as string[])];
+    const shipmentIds = [...new Set(charges.map((c: any) => c.shipmentId).filter(Boolean) as string[])];
     await tx.shipmentFinancialSummary.updateMany({
       where: { shipmentId: { in: shipmentIds } },
       data: { billingStatus: 'invoiced' },
