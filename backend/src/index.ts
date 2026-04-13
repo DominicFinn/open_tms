@@ -87,6 +87,7 @@ import { quoteRoutes } from './routes/quotes.js';
 import { edi210Routes } from './routes/edi210.js';
 import { edi820Routes } from './routes/edi820.js';
 import { ediInboundRoutes } from './routes/ediInbound.js';
+import { edi997Routes } from './routes/edi997.js';
 import { financialReportRoutes } from './routes/financialReports.js';
 import { issueRoutes } from './routes/issues.js';
 import { commentRoutes } from './routes/comments.js';
@@ -190,6 +191,7 @@ async function start() {
   await server.register(edi210Routes);
   await server.register(edi820Routes);
   await server.register(ediInboundRoutes);
+  await server.register(edi997Routes);
   await server.register(financialReportRoutes);
   await server.register(issueRoutes);
   await server.register(commentRoutes);
