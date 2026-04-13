@@ -16,6 +16,9 @@
  *   CTT  — Transaction totals
  */
 
+import { X12EnvelopeBuilder } from './edi/X12EnvelopeBuilder.js';
+import { EdiOperationResult } from './edi/types.js';
+
 export interface EDI810InvoiceData {
   invoiceNumber: string;
   invoiceDate: Date;
@@ -81,161 +84,125 @@ export interface EDI810Config {
 
 export interface IEDI810Service {
   generateEDI810(invoice: EDI810InvoiceData, config?: EDI810Config): string;
+  validateAndGenerate(invoice: EDI810InvoiceData, config?: EDI810Config): EdiOperationResult<string>;
 }
 
 export class EDI810Service implements IEDI810Service {
-  private t = '~';  // segment terminator
-  private e = '*';  // element separator
+  private envelope = new X12EnvelopeBuilder();
+
+  /** Validate input and generate EDI 810, returning errors instead of crashing */
+  validateAndGenerate(invoice: EDI810InvoiceData, config?: EDI810Config): EdiOperationResult<string> {
+    const errors: string[] = [];
+    const warnings: string[] = [];
+
+    if (!invoice.invoiceNumber) errors.push('invoiceNumber is required');
+    if (!invoice.invoiceDate) errors.push('invoiceDate is required');
+    if (!invoice.seller?.name) errors.push('seller.name is required');
+    if (!invoice.buyer?.name) errors.push('buyer.name is required');
+    if (!invoice.lineItems || invoice.lineItems.length === 0) errors.push('At least one line item is required');
+    if (invoice.totalCents <= 0) warnings.push('totalCents is zero or negative');
+
+    if (errors.length > 0) {
+      return { success: false, errors, warnings };
+    }
+
+    try {
+      const ediContent = this.generateEDI810(invoice, config);
+      return { success: true, data: ediContent, errors: [], warnings };
+    } catch (err: any) {
+      return { success: false, errors: [`Generation failed: ${err.message}`], warnings };
+    }
+  }
 
   generateEDI810(invoice: EDI810InvoiceData, config?: EDI810Config): string {
-    const segments: string[] = [];
-    const controlNumber = config?.interchangeControlNumber || this.generateControlNumber();
+    const e = this.envelope.e;
     const senderId = config?.senderId || 'OPENTMS';
     const receiverId = config?.receiverId || 'CUSTOMER';
-
-    // ISA — Interchange Control Header
-    segments.push(this.buildISA(senderId, receiverId, controlNumber));
-
-    // GS — Functional Group Header
-    segments.push(this.buildGS(senderId, receiverId, controlNumber));
-
-    // ST — Transaction Set Header (810)
-    segments.push(`ST${this.e}810${this.e}0001`);
+    const bodySegments: string[] = [];
 
     // BIG — Beginning Segment for Invoice
-    // BIG*invoice_date*invoice_number*po_date*po_number
-    const invoiceDate = this.formatDate(invoice.invoiceDate);
-    segments.push(
-      `BIG${this.e}${invoiceDate}${this.e}${invoice.invoiceNumber}` +
-      `${this.e}${this.e}${invoice.purchaseOrderNumber || ''}`
+    const invoiceDate = this.envelope.formatDateLong(invoice.invoiceDate);
+    bodySegments.push(
+      `BIG${e}${invoiceDate}${e}${invoice.invoiceNumber}` +
+      `${e}${e}${invoice.purchaseOrderNumber || ''}`
     );
 
     // N1 — Seller (SE = Selling Party)
-    segments.push(`N1${this.e}SE${this.e}${invoice.seller.name}${this.e}92${this.e}${invoice.seller.id || senderId}`);
+    bodySegments.push(`N1${e}SE${e}${invoice.seller.name}${e}92${e}${invoice.seller.id || senderId}`);
     if (invoice.seller.address1) {
-      segments.push(`N3${this.e}${invoice.seller.address1}`);
+      bodySegments.push(`N3${e}${invoice.seller.address1}`);
     }
     if (invoice.seller.city) {
-      segments.push(
-        `N4${this.e}${invoice.seller.city}${this.e}${invoice.seller.state || ''}` +
-        `${this.e}${invoice.seller.postalCode || ''}${this.e}${invoice.seller.country || 'US'}`
+      bodySegments.push(
+        `N4${e}${invoice.seller.city}${e}${invoice.seller.state || ''}` +
+        `${e}${invoice.seller.postalCode || ''}${e}${invoice.seller.country || 'US'}`
       );
     }
 
     // N1 — Buyer (BY = Buying Party)
-    segments.push(`N1${this.e}BY${this.e}${invoice.buyer.name}${this.e}92${this.e}${invoice.buyer.id || receiverId}`);
+    bodySegments.push(`N1${e}BY${e}${invoice.buyer.name}${e}92${e}${invoice.buyer.id || receiverId}`);
     if (invoice.buyer.address1) {
-      segments.push(`N3${this.e}${invoice.buyer.address1}`);
+      bodySegments.push(`N3${e}${invoice.buyer.address1}`);
     }
     if (invoice.buyer.city) {
-      segments.push(
-        `N4${this.e}${invoice.buyer.city}${this.e}${invoice.buyer.state || ''}` +
-        `${this.e}${invoice.buyer.postalCode || ''}${this.e}${invoice.buyer.country || 'US'}`
+      bodySegments.push(
+        `N4${e}${invoice.buyer.city}${e}${invoice.buyer.state || ''}` +
+        `${e}${invoice.buyer.postalCode || ''}${e}${invoice.buyer.country || 'US'}`
       );
     }
 
     // ITD — Terms of Sale/Deferred Payment
-    // ITD*payment_type*terms_basis*terms_discount_percent*terms_discount_date*terms_net_days
-    segments.push(`ITD${this.e}01${this.e}3${this.e}${this.e}${this.e}${invoice.paymentTermsDays}`);
+    bodySegments.push(`ITD${e}01${e}3${e}${e}${e}${invoice.paymentTermsDays}`);
 
     // Shipment references
     if (invoice.shipmentReferences) {
       for (const ref of invoice.shipmentReferences) {
-        segments.push(`REF${this.e}SI${this.e}${ref}`);
+        bodySegments.push(`REF${e}SI${e}${ref}`);
       }
     }
 
     // CAD — Transport/carrier info
     if (invoice.carrier) {
-      segments.push(
-        `CAD${this.e}M${this.e}${this.e}${this.e}${this.e}${invoice.carrier.name}` +
-        `${this.e}${this.e}${this.e}${this.e}${invoice.carrier.scacCode || ''}`
+      bodySegments.push(
+        `CAD${e}M${e}${e}${e}${e}${invoice.carrier.name}` +
+        `${e}${e}${e}${e}${invoice.carrier.scacCode || ''}`
       );
     }
 
     // IT1 — Line items
-    let segmentCount = 0;
     for (const item of invoice.lineItems) {
-      // IT1*line_number*quantity_invoiced*unit*unit_price*basis*product_code*description
       const unitPriceDollars = (item.unitPriceCents / 100).toFixed(2);
-      segments.push(
-        `IT1${this.e}${item.lineNumber}${this.e}${item.quantity}${this.e}EA` +
-        `${this.e}${unitPriceDollars}${this.e}PE` +
-        `${this.e}${this.e}${item.description}`
+      bodySegments.push(
+        `IT1${e}${item.lineNumber}${e}${item.quantity}${e}EA` +
+        `${e}${unitPriceDollars}${e}PE` +
+        `${e}${e}${item.description}`
       );
 
       // PID — Free-form description
       if (item.shipmentReference) {
-        segments.push(`PID${this.e}F${this.e}${this.e}${this.e}${this.e}Shipment ${item.shipmentReference} - ${item.chargeType}`);
+        bodySegments.push(`PID${e}F${e}${e}${e}${e}Shipment ${item.shipmentReference} - ${item.chargeType}`);
       }
 
       // L7 — freight class if LTL
       if (item.freightClass) {
-        segments.push(`L7${this.e}${item.lineNumber}${this.e}${this.e}${this.e}${this.e}${this.e}${this.e}${item.freightClass}`);
+        bodySegments.push(`L7${e}${item.lineNumber}${e}${e}${e}${e}${e}${e}${item.freightClass}`);
       }
-
-      segmentCount++;
     }
 
     // TDS — Total Monetary Value Summary
-    // TDS*total_invoice_amount (in cents as X12 expects implied decimal)
     const totalDollars = (invoice.totalCents / 100).toFixed(2);
-    segments.push(`TDS${this.e}${totalDollars}`);
+    bodySegments.push(`TDS${e}${totalDollars}`);
 
     // CTT — Transaction Totals
-    segments.push(`CTT${this.e}${invoice.lineItems.length}`);
+    bodySegments.push(`CTT${e}${invoice.lineItems.length}`);
 
-    // SE — Transaction Set Trailer
-    // Count segments from ST to SE inclusive
-    const stIndex = segments.findIndex(s => s.startsWith('ST'));
-    const seCount = segments.length - stIndex + 1; // +1 for SE itself
-    segments.push(`SE${this.e}${seCount}${this.e}0001`);
-
-    // GE — Functional Group Trailer
-    segments.push(`GE${this.e}1${this.e}${controlNumber}`);
-
-    // IEA — Interchange Control Trailer
-    segments.push(`IEA${this.e}1${this.e}${controlNumber.padStart(9, '0')}`);
-
-    return segments.map(s => s + this.t).join('\n');
-  }
-
-  private buildISA(senderId: string, receiverId: string, controlNumber: string): string {
-    const now = new Date();
-    const date = this.formatDateShort(now);
-    const time = now.toISOString().slice(11, 13) + now.toISOString().slice(14, 16);
-
-    return (
-      `ISA${this.e}00${this.e}          ${this.e}00${this.e}          ` +
-      `${this.e}ZZ${this.e}${senderId.padEnd(15)}` +
-      `${this.e}ZZ${this.e}${receiverId.padEnd(15)}` +
-      `${this.e}${date}${this.e}${time}` +
-      `${this.e}U${this.e}00401${this.e}${controlNumber.padStart(9, '0')}` +
-      `${this.e}0${this.e}P${this.e}>`
-    );
-  }
-
-  private buildGS(senderId: string, receiverId: string, controlNumber: string): string {
-    const now = new Date();
-    const date = now.toISOString().slice(0, 10).replace(/-/g, '');
-    const time = now.toISOString().slice(11, 13) + now.toISOString().slice(14, 16);
-
-    return (
-      `GS${this.e}IN${this.e}${senderId}${this.e}${receiverId}` +
-      `${this.e}${date}${this.e}${time}${this.e}${controlNumber}` +
-      `${this.e}X${this.e}004010`
-    );
-  }
-
-  private formatDate(d: Date): string {
-    return d.toISOString().slice(0, 10).replace(/-/g, '');
-  }
-
-  private formatDateShort(d: Date): string {
-    return d.toISOString().slice(2, 10).replace(/-/g, '');
-  }
-
-  private generateControlNumber(): string {
-    return String(Math.floor(Math.random() * 999999999)).padStart(9, '0');
+    // Wrap in ISA/GS/ST/SE/GE/IEA envelope
+    return this.envelope.wrap(bodySegments, {
+      senderId,
+      receiverId,
+      functionalIdentifier: 'IN',
+      transactionType: '810',
+      controlNumber: config?.interchangeControlNumber,
+    });
   }
 }

@@ -9,6 +9,7 @@ import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { container, TOKENS } from '../di/index.js';
 import { EDI820ParseService } from '../services/EDI820ParseService.js';
+import { ITradingPartnerRepository } from '../repositories/TradingPartnerRepository.js';
 import { ICommandBus } from '../commands/CommandBus.js';
 import { RECORD_PAYMENT, RecordPaymentPayload } from '../commands/invoices/RecordPaymentCommand.js';
 import { PrismaClient } from '@prisma/client';
@@ -23,6 +24,7 @@ interface PaymentResult {
 
 export async function edi820Routes(server: FastifyInstance) {
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
+  const tradingPartnerRepo = container.resolve<ITradingPartnerRepository>(TOKENS.ITradingPartnerRepository);
   const prisma = container.resolve<PrismaClient>(TOKENS.PrismaClient);
   const edi820ParseService = new EDI820ParseService();
 
@@ -44,11 +46,30 @@ export async function edi820Routes(server: FastifyInstance) {
     const body = z.object({
       content: z.string().min(10),
       partnerId: z.string().optional(),
+      fileName: z.string().optional(),
     }).parse((req as any).body);
+
+    // Create transaction log entry
+    const logEntry = await tradingPartnerRepo.createLog({
+      partnerId: body.partnerId || null,
+      transactionType: '820',
+      direction: 'inbound',
+      fileName: body.fileName || 'edi820_inbound.edi',
+      fileSize: body.content.length,
+      fileContent: body.content,
+      transport: 'api',
+      status: 'processing',
+      source: body.partnerId ? 'sftp' : 'api',
+    });
 
     const parsed = edi820ParseService.parseEDI820(body.content);
 
     if (!parsed.success) {
+      await tradingPartnerRepo.updateLog(logEntry.id, {
+        status: 'error',
+        errorMessage: parsed.errors.join('; '),
+        processedAt: new Date(),
+      });
       reply.code(400);
       return { data: null, error: `EDI 820 parse failed: ${parsed.errors.join('; ')}` };
     }
@@ -148,9 +169,20 @@ export async function edi820Routes(server: FastifyInstance) {
       }
     }
 
+    // Update log with results
+    const appliedIds = results.filter(r => r.status === 'applied').map(r => r.invoiceId).filter(Boolean);
+    await tradingPartnerRepo.updateLog(logEntry.id, {
+      status: appliedCount > 0 ? 'success' : 'error',
+      errorMessage: appliedCount === 0 ? 'No payments could be applied' : null,
+      entitiesCreated: appliedCount,
+      entityIds: appliedIds,
+      processedAt: new Date(),
+    });
+
     reply.code(appliedCount > 0 ? 201 : 400);
     return {
       data: {
+        logId: logEntry.id,
         parsed: {
           payerName: parsed.payerName,
           paymentReference: parsed.paymentReference,

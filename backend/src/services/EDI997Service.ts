@@ -5,6 +5,10 @@
  * Per X12 standard, every inbound transaction should receive a 997 confirming receipt.
  */
 
+import { X12EnvelopeBuilder } from './edi/X12EnvelopeBuilder.js';
+import { X12EnvelopeParser } from './edi/X12EnvelopeParser.js';
+import { TRANSACTION_TO_GS, GS_TO_TRANSACTION, EdiOperationResult } from './edi/types.js';
+
 export interface EDI997Config {
   senderId?: string;
   receiverId?: string;
@@ -14,61 +18,153 @@ export interface EDI997Config {
   errorCodes?: string[];
 }
 
+export interface EDI997ParseResult {
+  success: boolean;
+  /** AK9-01: A=Accepted, E=Accepted with Errors, R=Rejected */
+  ackCode: string;
+  accepted: boolean;
+  /** AK1-01: Functional group identifier being acknowledged */
+  functionalGroupId: string;
+  /** AK1-02: Group control number being acknowledged */
+  groupControlNumber: string;
+  /** Resolved transaction type from AK1 functional group ID */
+  acknowledgedTransactionType: string;
+  /** AK9-02: Number of transaction sets included */
+  setsIncluded: number;
+  /** AK9-03: Number of sets received */
+  setsReceived: number;
+  /** AK9-04: Number of sets accepted */
+  setsAccepted: number;
+  errors: string[];
+  warnings: string[];
+}
+
 export interface IEDI997Service {
   generate997(config: EDI997Config): string;
+  validateAndGenerate(config: EDI997Config): EdiOperationResult<string>;
+  parse997(content: string): EDI997ParseResult;
   extractControlInfo(ediContent: string): { gsControlNumber: string; stControlNumber: string; transactionType: string } | null;
 }
 
 export class EDI997Service implements IEDI997Service {
-  private e = '*';
-  private t = '~';
+  private envelope = new X12EnvelopeBuilder();
+  private envelopeParser = new X12EnvelopeParser();
+
+  /**
+   * Parse an inbound EDI 997 Functional Acknowledgment.
+   * Extracts AK1 (what was acknowledged) and AK9 (accept/reject result).
+   */
+  parse997(content: string): EDI997ParseResult {
+    const errors: string[] = [];
+    const warnings: string[] = [];
+    let functionalGroupId = '';
+    let groupControlNumber = '';
+    let ackCode = '';
+    let setsIncluded = 0;
+    let setsReceived = 0;
+    let setsAccepted = 0;
+
+    try {
+      const envelopeResult = this.envelopeParser.parse(content);
+      warnings.push(...envelopeResult.warnings);
+
+      if (!envelopeResult.success) {
+        errors.push(...envelopeResult.errors);
+        return { success: false, ackCode: '', accepted: false, functionalGroupId, groupControlNumber, acknowledgedTransactionType: '', setsIncluded, setsReceived, setsAccepted, errors, warnings };
+      }
+
+      const env = envelopeResult.envelope!;
+      if (env.transactionType !== '997') {
+        errors.push(`Transaction set is not 997 (got ${env.transactionType})`);
+        return { success: false, ackCode: '', accepted: false, functionalGroupId, groupControlNumber, acknowledgedTransactionType: '', setsIncluded, setsReceived, setsAccepted, errors, warnings };
+      }
+
+      for (const seg of env.segments) {
+        switch (seg.id) {
+          case 'AK1':
+            // AK1*functionalGroupId*groupControlNumber
+            functionalGroupId = seg.elements[1] || '';
+            groupControlNumber = seg.elements[2] || '';
+            break;
+          case 'AK9':
+            // AK9*ackCode*setsIncluded*setsReceived*setsAccepted
+            ackCode = seg.elements[1] || '';
+            setsIncluded = parseInt(seg.elements[2] || '0', 10);
+            setsReceived = parseInt(seg.elements[3] || '0', 10);
+            setsAccepted = parseInt(seg.elements[4] || '0', 10);
+            break;
+        }
+      }
+
+      if (!functionalGroupId) {
+        errors.push('Missing AK1 segment - cannot determine which group is being acknowledged');
+      }
+      if (!ackCode) {
+        errors.push('Missing AK9 segment - cannot determine accept/reject status');
+      }
+
+    } catch (err: any) {
+      errors.push(`Parse error: ${err.message}`);
+    }
+
+    const acknowledgedTransactionType = GS_TO_TRANSACTION[functionalGroupId] || '';
+    const accepted = ackCode === 'A' || ackCode === 'E';
+
+    return {
+      success: errors.length === 0,
+      ackCode,
+      accepted,
+      functionalGroupId,
+      groupControlNumber,
+      acknowledgedTransactionType,
+      setsIncluded,
+      setsReceived,
+      setsAccepted,
+      errors,
+      warnings,
+    };
+  }
+
+  /** Validate input and generate EDI 997, returning errors instead of crashing */
+  validateAndGenerate(config: EDI997Config): EdiOperationResult<string> {
+    const errors: string[] = [];
+    if (!config.originalTransactionType) errors.push('originalTransactionType is required');
+    if (!config.originalControlNumber) errors.push('originalControlNumber is required');
+
+    if (errors.length > 0) {
+      return { success: false, errors, warnings: [] };
+    }
+
+    try {
+      const ediContent = this.generate997(config);
+      return { success: true, data: ediContent, errors: [], warnings: [] };
+    } catch (err: any) {
+      return { success: false, errors: [`Generation failed: ${err.message}`], warnings: [] };
+    }
+  }
 
   /**
    * Generate an EDI 997 Functional Acknowledgment
    */
   generate997(config: EDI997Config): string {
-    const segments: string[] = [];
-    const controlNumber = Math.floor(Math.random() * 999999999).toString().padStart(9, '0');
-    const now = new Date();
-
-    // ISA
-    segments.push(this.buildISA(config.senderId || 'OPENTMS', config.receiverId || '', controlNumber, now));
-
-    // GS — Functional Group (FA = Functional Acknowledgment)
-    segments.push([
-      'GS', 'FA',
-      config.senderId || 'OPENTMS',
-      config.receiverId || '',
-      this.formatDate(now),
-      this.formatTime(now),
-      controlNumber.slice(0, 9),
-      'X', '004010',
-    ].join(this.e));
-
-    // ST 997
-    segments.push(`ST${this.e}997${this.e}0001`);
+    const e = this.envelope.e;
+    const bodySegments: string[] = [];
 
     // AK1 — Functional Group Response Header
-    // AK1*{functionalId}*{gsControlNumber}
-    const gsId = this.transactionTypeToGsId(config.originalTransactionType);
-    segments.push(`AK1${this.e}${gsId}${this.e}${config.originalControlNumber}`);
+    const gsId = TRANSACTION_TO_GS[config.originalTransactionType] || 'FA';
+    bodySegments.push(`AK1${e}${gsId}${e}${config.originalControlNumber}`);
 
     // AK9 — Functional Group Response Trailer
-    // AK9*{ackCode}*{numberOfSetsIncluded}*{numberOfSetsReceived}*{numberOfSetsAccepted}
     const ackCode = config.accepted ? 'A' : 'R'; // A=Accepted, R=Rejected
-    segments.push(`AK9${this.e}${ackCode}${this.e}1${this.e}1${this.e}${config.accepted ? '1' : '0'}`);
+    bodySegments.push(`AK9${e}${ackCode}${e}1${e}1${e}${config.accepted ? '1' : '0'}`);
 
-    // SE
-    const segCount = segments.length - 2 + 1; // Exclude ISA/GS, include SE
-    segments.push(`SE${this.e}${segCount}${this.e}0001`);
-
-    // GE
-    segments.push(`GE${this.e}1${this.e}${controlNumber.slice(0, 9)}`);
-
-    // IEA
-    segments.push(`IEA${this.e}1${this.e}${controlNumber}`);
-
-    return segments.map(s => s + this.t).join('\n');
+    // Wrap in ISA/GS/ST/SE/GE/IEA envelope
+    return this.envelope.wrap(bodySegments, {
+      senderId: config.senderId || 'OPENTMS',
+      receiverId: config.receiverId || '',
+      functionalIdentifier: 'FA',
+      transactionType: '997',
+    });
   }
 
   /**
@@ -96,37 +192,5 @@ export class EDI997Service implements IEDI997Service {
 
     if (!transactionType) return null;
     return { gsControlNumber, stControlNumber, transactionType };
-  }
-
-  // ── Private helpers ──
-
-  private buildISA(senderId: string, receiverId: string, controlNumber: string, now: Date): string {
-    return [
-      'ISA', '00', '          ', '00', '          ',
-      'ZZ', senderId.padEnd(15),
-      'ZZ', receiverId.padEnd(15),
-      this.formatDateISA(now), this.formatTime(now),
-      'U', '00401', controlNumber, '0', 'P', ':',
-    ].join(this.e);
-  }
-
-  private transactionTypeToGsId(txnType: string): string {
-    const map: Record<string, string> = {
-      '850': 'PO', '855': 'PR', '856': 'SH', '204': 'SM',
-      '990': 'GF', '214': 'QM', '210': 'IM', '810': 'IN',
-    };
-    return map[txnType] || 'FA';
-  }
-
-  private formatDate(d: Date): string {
-    return `${d.getFullYear()}${(d.getMonth()+1).toString().padStart(2,'0')}${d.getDate().toString().padStart(2,'0')}`;
-  }
-
-  private formatDateISA(d: Date): string {
-    return `${d.getFullYear().toString().slice(2)}${(d.getMonth()+1).toString().padStart(2,'0')}${d.getDate().toString().padStart(2,'0')}`;
-  }
-
-  private formatTime(d: Date): string {
-    return `${d.getHours().toString().padStart(2,'0')}${d.getMinutes().toString().padStart(2,'0')}`;
   }
 }

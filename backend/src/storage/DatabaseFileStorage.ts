@@ -1,9 +1,8 @@
 /**
  * Database File Storage Provider
  *
- * Stores file content directly in the EdiFile.fileContent column.
- * This is the simplest approach — zero extra infrastructure.
- * The storage key is just the EdiFile ID.
+ * Stores file content directly in EdiTransactionLog.fileContent column.
+ * This is the simplest approach - zero extra infrastructure.
  *
  * For higher volumes, swap this out for an S3 or filesystem adapter.
  */
@@ -14,39 +13,36 @@ export class DatabaseFileStorage implements IFileStorageProvider {
   constructor(private prisma: PrismaClient) {}
 
   async store(fileId: string, content: string): Promise<string> {
-    // Content is written directly when the EdiFile record is created,
-    // so this is a no-op update to confirm storage.
-    await this.prisma.ediFile.update({
+    await this.prisma.ediTransactionLog.update({
       where: { id: fileId },
       data: { fileContent: content }
     });
-    return fileId; // storage key = record ID
+    return fileId;
   }
 
   async retrieve(storageKey: string): Promise<string> {
-    const file = await this.prisma.ediFile.findUnique({
+    const log = await this.prisma.ediTransactionLog.findUnique({
       where: { id: storageKey },
       select: { fileContent: true }
     });
-    if (!file) {
-      throw new Error(`EDI file not found: ${storageKey}`);
+    if (!log || !log.fileContent) {
+      throw new Error(`EDI transaction log not found: ${storageKey}`);
     }
-    return file.fileContent;
+    return log.fileContent;
   }
 
   async delete(storageKey: string): Promise<void> {
-    // For database storage, clearing content but keeping metadata
-    await this.prisma.ediFile.update({
+    await this.prisma.ediTransactionLog.update({
       where: { id: storageKey },
       data: { fileContent: '' }
     });
   }
 
   async exists(storageKey: string): Promise<boolean> {
-    const file = await this.prisma.ediFile.findUnique({
+    const log = await this.prisma.ediTransactionLog.findUnique({
       where: { id: storageKey },
       select: { id: true }
     });
-    return !!file;
+    return !!log;
   }
 }

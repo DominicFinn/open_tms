@@ -156,6 +156,11 @@ export const EVENT_TYPES = {
   EDI_214_RECEIVED: 'edi_status.received',
   EDI_214_SENT: 'edi_status.sent',
 
+  // EDI — generic events for all transaction types
+  EDI_FILE_RECEIVED: 'edi.file_received',
+  EDI_FILE_SENT: 'edi.file_sent',
+  EDI_FILE_FAILED: 'edi.file_failed',
+
   // Agent Decisions
   AGENT_DECISION_CREATED: 'agent_decision.created',
   AGENT_DECISION_OUTCOME_RECORDED: 'agent_decision.outcome_recorded',
@@ -291,6 +296,9 @@ export const EVENT_SCHEMA_VERSIONS: Record<string, number> = {
   [EVENT_TYPES.CAPA_VERIFIED]: 1,
   [EVENT_TYPES.EDI_214_RECEIVED]: 1,
   [EVENT_TYPES.EDI_214_SENT]: 1,
+  [EVENT_TYPES.EDI_FILE_RECEIVED]: 1,
+  [EVENT_TYPES.EDI_FILE_SENT]: 1,
+  [EVENT_TYPES.EDI_FILE_FAILED]: 1,
   [EVENT_TYPES.SLA_POLICY_CREATED]: 1,
   [EVENT_TYPES.SLA_POLICY_UPDATED]: 1,
   [EVENT_TYPES.SLA_POLICY_DEACTIVATED]: 1,
@@ -604,6 +612,23 @@ export interface Edi214SentPayload {
   shipmentReference: string;
   tradingPartnerId: string;
   statusCode: string;
+}
+
+/** Generic payload for any EDI file received/sent/failed */
+export interface EdiFileEventPayload {
+  logId: string;
+  transactionType: string;
+  direction: 'inbound' | 'outbound';
+  partnerId?: string;
+  partnerName?: string;
+  fileName?: string;
+  shipmentId?: string;
+  shipmentReference?: string;
+  orderId?: string;
+  tenderId?: string;
+  invoiceId?: string;
+  status: 'success' | 'error';
+  errorMessage?: string;
 }
 
 // Agent Decision payloads

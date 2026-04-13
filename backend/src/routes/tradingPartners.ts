@@ -235,6 +235,100 @@ export async function tradingPartnerRoutes(server: FastifyInstance) {
     }
   });
 
+  // ── Connection test ──
+
+  server.post('/api/v1/trading-partners/:id/test-connection', {
+    schema: {
+      tags: ['Trading Partners'],
+      summary: 'Test SFTP or HTTP connection for a trading partner',
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const partner = await partnerRepo.findById(id);
+    if (!partner) {
+      reply.code(404);
+      return { data: null, error: 'Trading partner not found' };
+    }
+
+    // Test SFTP connection
+    if (partner.sftpHost) {
+      try {
+        const SftpClient = (await import('ssh2-sftp-client')).default;
+        const sftp = new SftpClient();
+        const connectConfig: any = {
+          host: partner.sftpHost,
+          port: partner.sftpPort || 22,
+          username: partner.sftpUsername || '',
+          readyTimeout: 10000,
+        };
+        if (partner.sftpPrivateKey) {
+          connectConfig.privateKey = partner.sftpPrivateKey;
+        } else if (partner.sftpPassword) {
+          connectConfig.password = partner.sftpPassword;
+        }
+
+        await sftp.connect(connectConfig);
+
+        // Try to list the inbound directory if configured
+        let dirListing: string[] = [];
+        const testDir = partner.inboundEnabled ? (partner.inboundDir || '/') : '/';
+        try {
+          const files = await sftp.list(testDir);
+          dirListing = files.slice(0, 5).map((f: any) => f.name);
+        } catch {
+          // Directory might not exist but connection works
+        }
+
+        await sftp.end();
+
+        return {
+          data: {
+            sftp: { success: true, host: partner.sftpHost, port: partner.sftpPort, directory: testDir, sampleFiles: dirListing },
+          },
+          error: null,
+        };
+      } catch (err: any) {
+        return {
+          data: { sftp: { success: false, host: partner.sftpHost, error: err.message } },
+          error: `SFTP connection failed: ${err.message}`,
+        };
+      }
+    }
+
+    // Test HTTP connection
+    if (partner.httpUrl) {
+      try {
+        const headers: Record<string, string> = { 'Content-Type': 'application/edi-x12' };
+        if (partner.httpAuthType === 'bearer' && partner.httpAuthValue) {
+          headers['Authorization'] = `Bearer ${partner.httpAuthValue}`;
+        } else if (partner.httpAuthType === 'api_key' && partner.httpAuthHeader && partner.httpAuthValue) {
+          headers[partner.httpAuthHeader] = partner.httpAuthValue;
+        }
+
+        const response = await fetch(partner.httpUrl, {
+          method: 'HEAD',
+          headers,
+          signal: AbortSignal.timeout(10000),
+        });
+
+        return {
+          data: {
+            http: { success: response.ok, url: partner.httpUrl, statusCode: response.status },
+          },
+          error: response.ok ? null : `HTTP returned ${response.status}`,
+        };
+      } catch (err: any) {
+        return {
+          data: { http: { success: false, url: partner.httpUrl, error: err.message } },
+          error: `HTTP connection failed: ${err.message}`,
+        };
+      }
+    }
+
+    reply.code(400);
+    return { data: null, error: 'No SFTP or HTTP connection configured for this partner' };
+  });
+
   // ── Transaction logs ──
 
   server.get('/api/v1/trading-partners/:id/logs', {
@@ -246,11 +340,11 @@ export async function tradingPartnerRoutes(server: FastifyInstance) {
     return { data: logs, error: null };
   });
 
-  // All logs (cross-partner)
+  // All logs (cross-partner) with pagination
   server.get('/api/v1/edi-logs', {
     schema: {
-      tags: ['Trading Partners'],
-      summary: 'List all EDI transaction logs',
+      tags: ['EDI Logs'],
+      summary: 'List all EDI transaction logs with pagination and filtering',
       querystring: {
         type: 'object',
         properties: {
@@ -258,31 +352,108 @@ export async function tradingPartnerRoutes(server: FastifyInstance) {
           direction: { type: 'string' },
           status: { type: 'string' },
           partnerId: { type: 'string' },
+          source: { type: 'string' },
+          search: { type: 'string' },
+          limit: { type: 'integer', default: 50 },
+          offset: { type: 'integer', default: 0 },
         },
       },
     },
   }, async (req: FastifyRequest, _reply: FastifyReply) => {
-    const { transactionType, direction, status, partnerId } = req.query as any;
-    const logs = await partnerRepo.findLogs({ partnerId, transactionType, direction, status });
-    return { data: logs, error: null };
+    const { transactionType, direction, status, partnerId, source, search, limit, offset } = req.query as any;
+    const result = await partnerRepo.findLogsWithPagination(
+      { partnerId, transactionType, direction, status, source, search },
+      parseInt(limit) || 50,
+      parseInt(offset) || 0,
+    );
+    return { data: result.logs, total: result.total, error: null };
+  });
+
+  // Single log detail
+  server.get('/api/v1/edi-logs/:id', {
+    schema: {
+      tags: ['EDI Logs'],
+      summary: 'Get EDI transaction log detail (including raw content)',
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const log = await partnerRepo.findLogById(id);
+    if (!log) {
+      reply.code(404);
+      return { data: null, error: 'EDI transaction log not found' };
+    }
+    return { data: log, error: null };
+  });
+
+  // Log stats
+  server.get('/api/v1/edi-logs/stats', {
+    schema: {
+      tags: ['EDI Logs'],
+      summary: 'Get EDI transaction log statistics',
+      querystring: {
+        type: 'object',
+        properties: {
+          partnerId: { type: 'string' },
+          transactionType: { type: 'string' },
+          direction: { type: 'string' },
+        },
+      },
+    },
+  }, async (req: FastifyRequest, _reply: FastifyReply) => {
+    const { partnerId, transactionType, direction } = req.query as any;
+    const stats = await partnerRepo.getLogStats({ partnerId, transactionType, direction });
+    return { data: stats, error: null };
+  });
+
+  // Retry a failed log entry
+  server.post('/api/v1/edi-logs/:id/retry', {
+    schema: {
+      tags: ['EDI Logs'],
+      summary: 'Retry a failed EDI transaction (re-process inbound or re-deliver outbound)',
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const log = await partnerRepo.findLogById(id);
+    if (!log) {
+      reply.code(404);
+      return { data: null, error: 'EDI transaction log not found' };
+    }
+    if (log.status !== 'error') {
+      reply.code(400);
+      return { data: null, error: `Cannot retry a log with status "${log.status}" — only "error" logs can be retried` };
+    }
+    if (log.retryCount >= 3) {
+      reply.code(400);
+      return { data: null, error: 'Maximum retry count (3) reached' };
+    }
+
+    // Mark as pending for retry
+    await partnerRepo.updateLog(id, {
+      status: 'pending',
+      retryCount: log.retryCount + 1,
+      lastRetryAt: new Date(),
+      errorMessage: null,
+    });
+
+    return { data: { id, status: 'pending', retryCount: log.retryCount + 1 }, error: null };
   });
 
   // ── EDI Router info (for UI to show supported types) ──
 
   server.get('/api/v1/edi/transaction-types', {
-    schema: { tags: ['Trading Partners'], summary: 'List supported EDI transaction types' },
+    schema: { tags: ['EDI'], summary: 'List supported EDI transaction types' },
   }, async (_req: FastifyRequest, _reply: FastifyReply) => {
     const types = [
       { code: '850', name: 'Purchase Order', directions: ['inbound'], status: 'active' },
-      { code: '855', name: 'PO Acknowledgment', directions: ['outbound'], status: 'planned' },
+      { code: '855', name: 'PO Acknowledgment', directions: ['outbound'], status: 'active' },
       { code: '856', name: 'Advance Ship Notice', directions: ['outbound'], status: 'active' },
       { code: '204', name: 'Motor Carrier Load Tender', directions: ['outbound'], status: 'active' },
       { code: '990', name: 'Response to Load Tender', directions: ['inbound'], status: 'active' },
-      { code: '214', name: 'Shipment Status Message', directions: ['inbound', 'outbound'], status: 'planned' },
-      { code: '210', name: 'Freight Invoice', directions: ['inbound'], status: 'planned' },
+      { code: '214', name: 'Shipment Status Message', directions: ['inbound', 'outbound'], status: 'active' },
+      { code: '210', name: 'Freight Invoice', directions: ['inbound'], status: 'active' },
       { code: '997', name: 'Functional Acknowledgment', directions: ['inbound', 'outbound'], status: 'active' },
-      { code: '810', name: 'Invoice', directions: ['outbound'], status: 'planned' },
-      { code: '820', name: 'Payment Order', directions: ['inbound'], status: 'planned' },
+      { code: '810', name: 'Invoice', directions: ['outbound'], status: 'active' },
+      { code: '820', name: 'Payment Order/Remittance', directions: ['inbound'], status: 'active' },
     ];
     return { data: types, error: null };
   });

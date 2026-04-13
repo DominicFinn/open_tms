@@ -2,11 +2,11 @@
  * EDI Import Service
  *
  * Orchestrates the EDI import flow:
- * 1. Stores raw EDI file in database
+ * 1. Stores raw EDI file in EdiTransactionLog
  * 2. Calls EDI850ParseService to parse the file
  * 3. Resolves customers and locations
  * 4. Creates orders via OrdersRepository
- * 5. Tracks results in EdiFile record
+ * 5. Tracks results in EdiTransactionLog (unified logging)
  */
 import { PrismaClient } from '@prisma/client';
 import { createHash } from 'crypto';
@@ -15,6 +15,7 @@ import { ICustomersRepository } from '../repositories/CustomersRepository.js';
 import { ILocationsRepository } from '../repositories/LocationsRepository.js';
 import { IEDI850ParseService, ParseResult, EdiFieldMappingConfig } from './EDI850ParseService.js';
 import { ILocationResolutionService } from './LocationResolutionService.js';
+import { ITradingPartnerRepository } from '../repositories/TradingPartnerRepository.js';
 
 export interface EdiImportOptions {
   partnerId?: string;
@@ -28,6 +29,7 @@ export interface EdiImportOptions {
 export interface EdiImportResult {
   success: boolean;
   fileId: string;
+  logId?: string; // EdiTransactionLog ID
   transactionType: string;
   transactionCount: number;
   ordersCreated: number;
@@ -48,7 +50,8 @@ export class EdiImportService implements IEdiImportService {
     private ordersRepo: IOrdersRepository,
     private customersRepo: ICustomersRepository,
     private locationsRepo: ILocationsRepository,
-    private locationResolutionService?: ILocationResolutionService
+    private locationResolutionService?: ILocationResolutionService,
+    private tradingPartnerRepo?: ITradingPartnerRepository
   ) {}
 
   /**
@@ -58,12 +61,16 @@ export class EdiImportService implements IEdiImportService {
     // Load partner field mapping if partnerId provided
     let fieldMapping = options?.fieldMapping;
     if (options?.partnerId && !fieldMapping) {
-      const partner = await this.prisma.ediPartner.findUnique({
-        where: { id: options.partnerId },
-        select: { fieldMapping: true }
-      });
-      if (partner?.fieldMapping) {
-        fieldMapping = partner.fieldMapping as Partial<EdiFieldMappingConfig>;
+      const tp = this.tradingPartnerRepo
+        ? await this.tradingPartnerRepo.findById(options.partnerId)
+        : null;
+      if (tp) {
+        const txn = tp.transactions?.find(
+          (t: any) => t.transactionType === '850' && t.direction === 'inbound'
+        );
+        if (txn?.fieldMapping) {
+          fieldMapping = txn.fieldMapping as Partial<EdiFieldMappingConfig>;
+        }
       }
     }
 
@@ -71,59 +78,71 @@ export class EdiImportService implements IEdiImportService {
   }
 
   /**
-   * Full import: parse EDI, create orders, track in EdiFile
+   * Full import: parse EDI, create orders, track in EdiTransactionLog
    */
   async importEdi(ediContent: string, options: EdiImportOptions = {}): Promise<EdiImportResult> {
     const fileHash = createHash('sha256').update(ediContent).digest('hex');
 
-    // Check for duplicate file
-    const existing = await this.prisma.ediFile.findFirst({
-      where: { fileHash, status: { in: ['completed', 'processing'] } }
+    // Check for duplicate in EdiTransactionLog
+    const existingLog = await this.prisma.ediTransactionLog.findFirst({
+      where: { fileHash, status: { in: ['success', 'processing'] }, transactionType: '850' }
     });
-    if (existing) {
+    if (existingLog) {
       return {
         success: false,
-        fileId: existing.id,
-        transactionType: existing.transactionType || '',
-        transactionCount: existing.transactionCount,
+        fileId: existingLog.id,
+        logId: existingLog.id,
+        transactionType: '850',
+        transactionCount: existingLog.transactionCount || 0,
         ordersCreated: 0,
         orders: [],
-        errors: ['Duplicate EDI file — this content has already been imported.']
+        errors: ['Duplicate EDI file - this content has already been imported.']
       };
     }
 
-    // Load partner config if provided
+    // Load partner config from TradingPartner
     let customerId = options.customerId;
     let fieldMapping = options.fieldMapping;
+    let tradingPartnerId: string | null = null;
+
     if (options.partnerId) {
-      const partner = await this.prisma.ediPartner.findUnique({
-        where: { id: options.partnerId },
-        select: { customerId: true, fieldMapping: true, autoAssignShipments: true }
-      });
-      if (partner) {
-        if (!customerId) customerId = partner.customerId;
-        if (!fieldMapping && partner.fieldMapping) {
-          fieldMapping = partner.fieldMapping as Partial<EdiFieldMappingConfig>;
+      const tp = this.tradingPartnerRepo
+        ? await this.tradingPartnerRepo.findById(options.partnerId)
+        : null;
+      if (tp) {
+        tradingPartnerId = tp.id;
+        if (!customerId) customerId = tp.customerId || undefined;
+        const txn = tp.transactions?.find(
+          (t: any) => t.transactionType === '850' && t.direction === 'inbound'
+        );
+        if (!fieldMapping && txn?.fieldMapping) {
+          fieldMapping = txn.fieldMapping as Partial<EdiFieldMappingConfig>;
         }
       }
     }
 
-    // Create EdiFile record
-    const ediFile = await this.prisma.ediFile.create({
-      data: {
-        partnerId: options.partnerId || null,
-        fileName: options.fileName || `edi-${Date.now()}.x12`,
-        fileSize: Buffer.byteLength(ediContent, 'utf-8'),
-        fileContent: ediContent,
-        fileHash,
-        source: options.source || 'manual',
-        status: 'processing'
-      }
-    });
+    // Create EdiTransactionLog entry
+    const logEntry = this.tradingPartnerRepo
+      ? await this.tradingPartnerRepo.createLog({
+          partnerId: tradingPartnerId,
+          transactionType: '850',
+          direction: 'inbound',
+          fileName: options.fileName || `edi-${Date.now()}.x12`,
+          fileSize: Buffer.byteLength(ediContent, 'utf-8'),
+          fileContent: ediContent,
+          fileHash,
+          transport: 'api',
+          status: 'processing',
+          source: options.source || 'manual',
+        })
+      : null;
+
+    const fileId = logEntry?.id || `edi-${Date.now()}`;
 
     const result: EdiImportResult = {
       success: false,
-      fileId: ediFile.id,
+      fileId,
+      logId: logEntry?.id,
       transactionType: '',
       transactionCount: 0,
       ordersCreated: 0,
@@ -139,19 +158,9 @@ export class EdiImportService implements IEdiImportService {
       result.errors.push(...parseResult.errors);
 
       if (!parseResult.success || parseResult.orders.length === 0) {
-        await this.updateFileStatus(ediFile.id, 'failed', result);
+        await this.updateStatus(logEntry?.id, 'failed', result, parseResult);
         return result;
       }
-
-      // Update file with parsed data
-      await this.prisma.ediFile.update({
-        where: { id: ediFile.id },
-        data: {
-          parsedData: parseResult.orders as any,
-          transactionType: parseResult.transactionType,
-          transactionCount: parseResult.transactionCount
-        }
-      });
 
       // Process each parsed order
       for (const parsedOrder of parseResult.orders) {
@@ -174,12 +183,12 @@ export class EdiImportService implements IEdiImportService {
             continue;
           }
 
-          // Resolve origin location — always create if not found
+          // Resolve origin location
           let originId: string | undefined;
           let originData: any;
           if (parsedOrder.origin) {
             if (this.locationResolutionService) {
-              const result = await this.locationResolutionService.resolveOrCreate({
+              const locResult = await this.locationResolutionService.resolveOrCreate({
                 name: parsedOrder.origin.name,
                 address1: parsedOrder.origin.address1 || parsedOrder.origin.name,
                 city: parsedOrder.origin.city,
@@ -187,9 +196,8 @@ export class EdiImportService implements IEdiImportService {
                 postalCode: parsedOrder.origin.postalCode,
                 country: parsedOrder.origin.country || 'US',
               });
-              originId = result.location.id;
+              originId = locResult.location.id;
             } else {
-              // Fallback: search for existing match
               const locations = await this.locationsRepo.all();
               const match = locations.find(l =>
                 l.name.toLowerCase() === parsedOrder.origin!.name.toLowerCase() &&
@@ -203,12 +211,12 @@ export class EdiImportService implements IEdiImportService {
             }
           }
 
-          // Resolve destination location — always create if not found
+          // Resolve destination location
           let destinationId: string | undefined;
           let destinationData: any;
           if (parsedOrder.destination) {
             if (this.locationResolutionService) {
-              const result = await this.locationResolutionService.resolveOrCreate({
+              const locResult = await this.locationResolutionService.resolveOrCreate({
                 name: parsedOrder.destination.name,
                 address1: parsedOrder.destination.address1 || parsedOrder.destination.name,
                 city: parsedOrder.destination.city,
@@ -216,9 +224,8 @@ export class EdiImportService implements IEdiImportService {
                 postalCode: parsedOrder.destination.postalCode,
                 country: parsedOrder.destination.country || 'US',
               });
-              destinationId = result.location.id;
+              destinationId = locResult.location.id;
             } else {
-              // Fallback: search for existing match
               const locations = await this.locationsRepo.all();
               const match = locations.find(l =>
                 l.name.toLowerCase() === parsedOrder.destination!.name.toLowerCase() &&
@@ -233,7 +240,6 @@ export class EdiImportService implements IEdiImportService {
           }
 
           // Build trackable units from line items
-          // Group all line items into a single default unit (EDI 850 doesn't have package-level info)
           const trackableUnits = parsedOrder.lineItems.length > 0 ? [{
             identifier: `EDI-${parsedOrder.orderNumber}-001`,
             unitType: 'pallet',
@@ -275,26 +281,33 @@ export class EdiImportService implements IEdiImportService {
       }
 
       result.success = result.ordersCreated > 0;
-      await this.updateFileStatus(ediFile.id, result.success ? 'completed' : 'failed', result);
+      await this.updateStatus(logEntry?.id, result.success ? 'completed' : 'failed', result, parseResult);
 
     } catch (err: any) {
       result.errors.push(`Import failed: ${err.message}`);
-      await this.updateFileStatus(ediFile.id, 'failed', result);
+      await this.updateStatus(logEntry?.id, 'failed', result);
     }
 
     return result;
   }
 
-  private async updateFileStatus(fileId: string, status: string, result: EdiImportResult): Promise<void> {
-    await this.prisma.ediFile.update({
-      where: { id: fileId },
-      data: {
-        status,
+  private async updateStatus(
+    logId: string | undefined,
+    status: string,
+    result: EdiImportResult,
+    parseResult?: ParseResult,
+  ): Promise<void> {
+    // Update EdiTransactionLog
+    if (logId && this.tradingPartnerRepo) {
+      await this.tradingPartnerRepo.updateLog(logId, {
+        status: status === 'completed' ? 'success' : status === 'failed' ? 'error' : status,
         processedAt: new Date(),
-        ordersCreated: result.ordersCreated,
-        orderIds: result.orders.map(o => o.id),
-        errorMessage: result.errors.length > 0 ? result.errors.join('; ') : null
-      }
-    });
+        transactionCount: result.transactionCount,
+        entitiesCreated: result.ordersCreated,
+        entityIds: result.orders.map(o => o.id),
+        parsedData: parseResult?.orders || null,
+        errorMessage: result.errors.length > 0 ? result.errors.join('; ') : null,
+      });
+    }
   }
 }

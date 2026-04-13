@@ -3,12 +3,14 @@ import { z } from 'zod';
 import { container, TOKENS } from '../di/index.js';
 import { EDI210ParseService } from '../services/EDI210ParseService.js';
 import { EDI810Service, EDI810InvoiceData } from '../services/EDI810Service.js';
+import { ITradingPartnerRepository } from '../repositories/TradingPartnerRepository.js';
 import { ICommandBus } from '../commands/CommandBus.js';
 import { RECEIVE_CARRIER_INVOICE, ReceiveCarrierInvoicePayload } from '../commands/carrierInvoices/ReceiveCarrierInvoiceCommand.js';
 import { PrismaClient } from '@prisma/client';
 
 export async function edi210Routes(server: FastifyInstance) {
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
+  const tradingPartnerRepo = container.resolve<ITradingPartnerRepository>(TOKENS.ITradingPartnerRepository);
   const prisma = container.resolve<PrismaClient>(TOKENS.PrismaClient);
   const edi210ParseService = new EDI210ParseService();
   const edi810Service = new EDI810Service();
@@ -31,12 +33,31 @@ export async function edi210Routes(server: FastifyInstance) {
     const body = z.object({
       content: z.string().min(10),
       partnerId: z.string().optional(),
+      fileName: z.string().optional(),
     }).parse((req as any).body);
+
+    // Create transaction log entry
+    const logEntry = await tradingPartnerRepo.createLog({
+      partnerId: body.partnerId || null,
+      transactionType: '210',
+      direction: 'inbound',
+      fileName: body.fileName || 'edi210_inbound.edi',
+      fileSize: body.content.length,
+      fileContent: body.content,
+      transport: 'api',
+      status: 'processing',
+      source: body.partnerId ? 'sftp' : 'api',
+    });
 
     // Parse the EDI 210
     const parsed = edi210ParseService.parseEDI210(body.content);
 
     if (!parsed.success) {
+      await tradingPartnerRepo.updateLog(logEntry.id, {
+        status: 'error',
+        errorMessage: parsed.errors.join('; '),
+        processedAt: new Date(),
+      });
       reply.code(400);
       return { data: null, error: `EDI 210 parse failed: ${parsed.errors.join('; ')}` };
     }
@@ -119,14 +140,32 @@ export async function edi210Routes(server: FastifyInstance) {
       });
 
       if (!result.success) {
+        await tradingPartnerRepo.updateLog(logEntry.id, {
+          status: 'error',
+          errorMessage: result.error,
+          shipmentReference: parsed.shipmentReference,
+          invoiceNumber: parsed.invoiceNumber,
+          processedAt: new Date(),
+        });
         reply.code(400);
         return { data: null, error: result.error };
       }
+
+      await tradingPartnerRepo.updateLog(logEntry.id, {
+        status: 'success',
+        shipmentId: shipmentId || null,
+        shipmentReference: parsed.shipmentReference,
+        invoiceNumber: parsed.invoiceNumber,
+        entitiesCreated: 1,
+        entityIds: [result.data?.id],
+        processedAt: new Date(),
+      });
 
       reply.code(201);
       return {
         data: {
           ...result.data,
+          logId: logEntry.id,
           parsed: {
             invoiceNumber: parsed.invoiceNumber,
             carrierScac: parsed.carrierScac,
@@ -138,6 +177,11 @@ export async function edi210Routes(server: FastifyInstance) {
         error: null,
       };
     } catch (err: any) {
+      await tradingPartnerRepo.updateLog(logEntry.id, {
+        status: 'error',
+        errorMessage: err.message,
+        processedAt: new Date(),
+      });
       reply.code(400);
       return { data: null, error: err.message };
     }
@@ -248,6 +292,22 @@ export async function edi210Routes(server: FastifyInstance) {
     const ediContent = edi810Service.generateEDI810(edi810Data, {
       senderId: body.senderId,
       receiverId: body.receiverId,
+    });
+
+    // Log the outbound generation
+    await tradingPartnerRepo.createLog({
+      partnerId: null,
+      transactionType: '810',
+      direction: 'outbound',
+      fileName: `810_${invoice.invoiceNumber}_${Date.now()}.edi`,
+      fileSize: ediContent.length,
+      fileContent: ediContent,
+      transport: 'api',
+      status: 'success',
+      source: 'api',
+      invoiceId: invoice.id,
+      invoiceNumber: invoice.invoiceNumber,
+      processedAt: new Date(),
     });
 
     return { data: { ediContent, invoiceNumber: invoice.invoiceNumber }, error: null };

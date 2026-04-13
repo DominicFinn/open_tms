@@ -9,8 +9,6 @@ import { container } from './di/container.js';
 import { TOKENS } from './di/tokens.js';
 import { IQueueAdapter } from './queue/IQueueAdapter.js';
 import { QUEUES } from './queue/events.js';
-import { createOutboundCarrierWorker } from './workers/outboundCarrierWorker.js';
-import { createOutboundTrackingWorker } from './workers/outboundTrackingWorker.js';
 import { createInboundWebhookWorker } from './workers/inboundWebhookWorker.js';
 import { createEtaMonitorWorker, registerEtaMonitorSchedule, ETA_MONITOR_QUEUE } from './workers/etaMonitorWorker.js';
 import { createSlaMonitorWorker, registerSlaMonitorSchedule, SLA_MONITOR_QUEUE } from './workers/slaMonitorWorker.js';
@@ -38,12 +36,8 @@ import { distanceRoutes } from './routes/distance.js';
 import { apiKeyRoutes } from './routes/apiKeys.js';
 import { webhookRoutes } from './routes/webhook.js';
 import { webhookLogRoutes } from './routes/webhookLogs.js';
-import { outboundIntegrationRoutes } from './routes/outboundIntegrations.js';
-import { outboundIntegrationLogRoutes } from './routes/outboundIntegrationLogs.js';
 import { customerApiRoutes } from './routes/customerApi.js';
 import { ediImportRoutes } from './routes/ediImport.js';
-import { ediPartnerRoutes } from './routes/ediPartners.js';
-import { ediFileRoutes } from './routes/ediFiles.js';
 import { queueMonitoringRoutes } from './routes/queueMonitoring.js';
 import { documentRoutes } from './routes/documents.js';
 import { dailyReportRoutes } from './routes/dailyReport.js';
@@ -86,6 +80,8 @@ import { financialQueryRoutes } from './routes/financialQueries.js';
 import { quoteRoutes } from './routes/quotes.js';
 import { edi210Routes } from './routes/edi210.js';
 import { edi820Routes } from './routes/edi820.js';
+import { ediInboundRoutes } from './routes/ediInbound.js';
+import { edi997Routes } from './routes/edi997.js';
 import { financialReportRoutes } from './routes/financialReports.js';
 import { issueRoutes } from './routes/issues.js';
 import { commentRoutes } from './routes/comments.js';
@@ -141,12 +137,8 @@ async function start() {
   await server.register(apiKeyRoutes);
   await server.register(webhookRoutes);
   await server.register(webhookLogRoutes);
-  await server.register(outboundIntegrationRoutes);
-  await server.register(outboundIntegrationLogRoutes);
   await server.register(customerApiRoutes);
   await server.register(ediImportRoutes);
-  await server.register(ediPartnerRoutes);
-  await server.register(ediFileRoutes);
   await server.register(queueMonitoringRoutes);
   await server.register(documentRoutes);
   await server.register(dailyReportRoutes);
@@ -189,6 +181,8 @@ async function start() {
   await server.register(quoteRoutes);
   await server.register(edi210Routes);
   await server.register(edi820Routes);
+  await server.register(ediInboundRoutes);
+  await server.register(edi997Routes);
   await server.register(financialReportRoutes);
   await server.register(issueRoutes);
   await server.register(commentRoutes);
@@ -206,8 +200,7 @@ async function start() {
     if (process.env.DISABLE_EMBEDDED_WORKERS !== 'true') {
       const deliveryService = new OrderDeliveryService(server.prisma);
       const arrivalCriteriaService = new ArrivalCriteriaEvaluationService(server.prisma, deliveryService);
-      await queue.subscribe(QUEUES.OUTBOUND_CARRIER, createOutboundCarrierWorker(server.prisma));
-      await queue.subscribe(QUEUES.OUTBOUND_TRACKING, createOutboundTrackingWorker(server.prisma));
+      // Legacy outbound carrier/tracking workers removed — replaced by Edi856AutoSendHandler + Edi810AutoSendHandler
       await queue.subscribe(QUEUES.INBOUND_WEBHOOK, createInboundWebhookWorker(server.prisma, deliveryService, arrivalCriteriaService));
 
       // ETA Monitor — register cron schedule and worker if routing provider is configured
@@ -271,6 +264,21 @@ async function start() {
         }
       } catch (err) {
         server.log.warn('Carrier tracking poll worker failed to register: ' + (err as Error).message);
+      }
+
+      // EDI Retry Worker — retries failed outbound EDI deliveries
+      try {
+        const ediRetryBoss = (queue as any).boss;
+        if (ediRetryBoss) {
+          const { createEdiRetryWorker, registerEdiRetrySchedule, EDI_RETRY_QUEUE } = await import('./workers/ediRetryWorker.js');
+          const ediPartnerRepo = container.resolve<ITradingPartnerRepository>(TOKENS.ITradingPartnerRepository);
+          const ediDeliveryService = container.resolve<IOutboundEdiDeliveryService>(TOKENS.IOutboundEdiDeliveryService);
+          await registerEdiRetrySchedule(ediRetryBoss);
+          await queue.subscribe(EDI_RETRY_QUEUE, createEdiRetryWorker(server.prisma, ediPartnerRepo, ediDeliveryService));
+          server.log.info('EDI retry worker registered');
+        }
+      } catch (err) {
+        server.log.warn('EDI retry worker failed to register: ' + (err as Error).message);
       }
 
       server.log.info('Embedded queue workers registered (set DISABLE_EMBEDDED_WORKERS=true to use separate worker container)');

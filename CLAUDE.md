@@ -197,55 +197,85 @@ The `CarrierTrackingHandler` automatically bridges carrier tracking events to sh
 ## EDI Communication Hub
 
 ### Architecture
-The EDI system uses a **unified Trading Partner model** (`TradingPartner`) that replaces the older separate `EdiPartner` (inbound) and `OutboundIntegration` (outbound) models. A single trading partner handles both directions and multiple EDI transaction types.
+The EDI system uses a **unified Trading Partner model** (`TradingPartner`) for all EDI communication. A single trading partner handles both inbound and outbound directions and multiple EDI transaction types. All EDI activity is logged to `EdiTransactionLog` with a unified schema.
+
+The system has **shared X12 infrastructure** (`backend/src/services/edi/`) providing envelope building and parsing utilities used by all EDI services. A **universal inbound endpoint** (`POST /api/v1/edi/inbound`) auto-detects transaction types, routes to handlers, logs everything, and auto-generates 997 acknowledgments.
 
 ### Key Models
 - **TradingPartner** — Represents any entity you exchange EDI with (customer, carrier, 3PL, ERP, etc.). Has SFTP + HTTP connection config, inbound polling config, and outbound delivery config.
 - **TradingPartnerTransaction** — Registry of which EDI types a partner supports. Each entry has: `transactionType` (850, 204, 990, etc.), `direction` (inbound/outbound), `enabled`, `autoProcess`, `ack997Required`.
-- **EdiTransactionLog** — Unified audit log for all inbound/outbound EDI files with delivery status tracking.
+- **EdiTransactionLog** — Unified audit log for ALL inbound/outbound EDI files. Tracks parse results, created entities, 997 ack status, retry counts. `partnerId` is nullable for manual imports.
 
 ### Supported Transaction Types
 | Code | Name | Direction | Status |
 |------|------|-----------|--------|
 | 850 | Purchase Order | Inbound | Active |
+| 855 | PO Acknowledgment | Outbound | Active |
 | 856 | Advance Ship Notice | Outbound | Active |
 | 204 | Motor Carrier Load Tender | Outbound | Active |
 | 990 | Response to Load Tender | Inbound | Active |
 | 997 | Functional Acknowledgment | Both | Active |
 | 214 | Shipment Status | Both | Active |
-| 210 | Freight Invoice | Inbound | Planned |
+| 210 | Freight Invoice | Inbound | Active |
+| 810 | Invoice | Outbound | Active |
+| 820 | Payment Order/Remittance | Inbound | Active |
 
-### EDI Flow — How It Works
-1. **Inbound**: The `edi-collector` service polls SFTP directories for each TradingPartner with `inboundEnabled=true`. It downloads files, detects the transaction type from the ST segment, and routes to the correct backend endpoint (850→orders, 990→tenders).
-2. **Outbound**: The `OutboundEdiDeliveryService` writes EDI files to SFTP or POSTs via HTTP. Called automatically when tenders are opened (EDI 204) and extensible for other outbound types.
-3. **Auto-204 Delivery**: When `TenderService.openTender()` sends offers, it checks if each carrier has a TradingPartner with outbound 204 enabled. If so, generates and delivers the EDI 204 automatically via SFTP.
+### EDI Flow - How It Works
+1. **Inbound (SFTP)**: The `edi-collector` service polls SFTP directories for each TradingPartner with `inboundEnabled=true`. It downloads files and POSTs them to the **universal inbound endpoint** (`POST /api/v1/edi/inbound`). The backend auto-detects the type, validates partner support, routes to the correct handler, logs to EdiTransactionLog, and auto-generates 997 acknowledgments if configured.
+2. **Inbound (API)**: Any system can POST EDI content directly to `/api/v1/edi/inbound` or to type-specific endpoints (e.g., `/api/v1/edi/214/inbound`).
+3. **Outbound**: The `OutboundEdiDeliveryService` writes EDI files to SFTP or POSTs via HTTP. Called automatically when tenders are opened (EDI 204) and extensible for other outbound types.
+4. **All routes log to EdiTransactionLog** - 990 inbound, 210 inbound, 820 inbound, 810 generate, 214 inbound/outbound.
+
+### Shared X12 Infrastructure
+- `X12EnvelopeBuilder` - Builds ISA/GS/ST/SE/GE/IEA envelopes with fixed-width ISA fields, GS functional identifiers, and accurate SE segment counts
+- `X12EnvelopeParser` - Parses raw X12 with ISA separator detection, envelope validation, and body segment extraction
+- `EdiOperationResult<T>` - Standard result type for all EDI operations (success, data, errors, warnings)
+- `TRANSACTION_TO_GS` / `GS_TO_TRANSACTION` - Bidirectional mapping between transaction types and GS functional identifiers
+- All generators have `validateAndGenerate()` methods that validate required fields before building
 
 ### Adding a New EDI Transaction Type
 1. Write a parser service (for inbound) or generator service (for outbound) in `backend/src/services/`
-2. Add the transaction type to the route map in `EdiRouterService.ts`
-3. Add a backend endpoint for processing
-4. Trading partners can then add the type to their config via the UI
+2. Use `X12EnvelopeBuilder` / `X12EnvelopeParser` from `backend/src/services/edi/`
+3. Add the transaction type to the route map in `EdiRouterService.ts`
+4. Register the service in DI (`tokens.ts` + `registry.ts`)
+5. Add a backend endpoint for processing, or use the universal inbound endpoint
+6. All inbound routes should log to `EdiTransactionLog` via `TradingPartnerRepository`
+7. Trading partners can then add the type to their config via the UI
 
 ### Key Files
-- `backend/src/repositories/TradingPartnerRepository.ts` — CRUD + query methods
+- `backend/src/services/edi/X12EnvelopeBuilder.ts` — Shared X12 envelope builder (ISA/GS/ST/SE)
+- `backend/src/services/edi/X12EnvelopeParser.ts` — Shared X12 envelope parser with validation
+- `backend/src/services/edi/types.ts` — Shared types (EdiOperationResult, X12EnvelopeConfig, etc.)
+- `backend/src/repositories/TradingPartnerRepository.ts` — CRUD + log methods (findLogsWithPagination, getLogStats)
 - `backend/src/services/EdiRouterService.ts` — Transaction type detection and routing
 - `backend/src/services/OutboundEdiDeliveryService.ts` — SFTP/HTTP delivery engine
 - `backend/src/services/EDI204Service.ts` — EDI 204 Motor Carrier Load Tender generator
-- `backend/src/services/EDI990ParseService.ts` — EDI 990 Response to Load Tender parser
-- `backend/src/services/EDI997Service.ts` — Functional Acknowledgment generator
-- `backend/src/services/EDI850ParseService.ts` — Purchase Order parser
-- `backend/src/services/EDI856Service.ts` — Advance Ship Notice generator
+- `backend/src/services/EDI210ParseService.ts` — EDI 210 Freight Invoice parser (inbound)
 - `backend/src/services/EDI214ParseService.ts` — EDI 214 Shipment Status parser (inbound)
 - `backend/src/services/EDI214Service.ts` — EDI 214 Shipment Status generator (outbound)
+- `backend/src/services/EDI810Service.ts` — EDI 810 Invoice generator (outbound)
+- `backend/src/services/EDI820ParseService.ts` — EDI 820 Payment/Remittance parser (inbound)
+- `backend/src/services/EDI850ParseService.ts` — Purchase Order parser
+- `backend/src/services/EDI855Service.ts` — EDI 855 PO Acknowledgment generator (outbound)
+- `backend/src/services/EDI856Service.ts` — Advance Ship Notice generator
+- `backend/src/services/EDI990ParseService.ts` — EDI 990 Response to Load Tender parser
+- `backend/src/services/EDI997Service.ts` — Functional Acknowledgment generator
 - `backend/src/services/edi214StatusMapping.ts` — AT7 status code to internal status mapping
-- `backend/src/routes/tradingPartners.ts` — API routes for partner management
+- `backend/src/routes/ediInbound.ts` — Universal inbound endpoint (auto-detect, route, log, 997)
+- `backend/src/routes/tradingPartners.ts` — Partner management + unified EDI log endpoints
 - `backend/src/routes/ediTender.ts` — EDI 204 preview and 990 inbound endpoints
 - `backend/src/routes/edi214.ts` — EDI 214 inbound, generate, and preview endpoints
-- `edi-collector/src/collector.ts` — SFTP polling with multi-type routing
-- `frontend/src/pages/TradingPartners.tsx` — Partner management UI (Integrations app)
+- `backend/src/routes/edi210.ts` — EDI 210 inbound, preview, and 810 generate
+- `backend/src/routes/edi820.ts` — EDI 820 inbound and preview
+- `edi-collector/src/collector.ts` — SFTP polling, sends to universal inbound endpoint
+- `frontend/src/vnext-design/VNextEdiDashboard.tsx` — EDI health dashboard
+- `frontend/src/vnext-design/VNextTradingPartners.tsx` — Partner management (VNext)
+- `frontend/src/vnext-design/VNextEdiTransactionLog.tsx` — Unified transaction log viewer
+- `backend/src/__tests__/services/X12EnvelopeBuilder.test.ts` — 19 builder tests
+- `backend/src/__tests__/services/X12EnvelopeParser.test.ts` — 21 parser tests
 
 ### Legacy Compatibility
-The old `EdiPartner` and `OutboundIntegration` models still exist. The migration copies their data into TradingPartner. The edi-collector fetches from both endpoints during transition. Old UI pages are preserved as "(Legacy)" in the integrations nav.
+The old `EdiPartner` and `OutboundIntegration` models still exist. The migration copies their data into TradingPartner. The edi-collector's legacy `collectFromPartner()` function is preserved but deprecated. Old UI pages are preserved as "(Legacy)" in the integrations nav.
 
 ## Agent Decision Logging (AI Compliance & Audit)
 

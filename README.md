@@ -48,10 +48,9 @@ Deploy your own Open TMS instance with one click:
 - **Shipment Tracking** - Complete shipment lifecycle management with status tracking
 - **Order-to-Shipment Conversion** - Combine multiple orders into one shipment, split large orders across multiple shipments, or convert individually with a conversion wizard
 - **CSV Import** - Bulk order creation from CSV files with automatic customer/location matching
-- **EDI Integration** - X12 850 Purchase Order import, partner configuration, SFTP auto-collection
+- **EDI Communication Hub** - 9 X12 transaction types (850, 856, 204, 990, 997, 214, 210, 810, 820) with unified Trading Partner model, universal inbound endpoint, event-driven outbound (856 on delivery, 810 on invoice), 997 auto-ack, SFTP/HTTP delivery, shared X12 envelope utilities, and EDI Portal UI
 - **Customer API** - External REST API for customers to create and track orders programmatically
 - **Webhooks** - Receive GPS/location updates from IoT devices with automatic shipment matching
-- **Outbound Integrations** - EDI 856 ASN and JSON payload delivery to carrier and tracking systems
 - **Queue Processing** - pg-boss powered async processing with carrier/tracking workers, retry, and dead letter queues
 - **Integration Dashboard** - Real-time ops dashboard with activity charts, queue monitoring, and DLQ management
 - **Interactive Maps** - Full-page map view with supercluster point clustering, entity switching (shipments/orders/trackable units), location markers, issue/SLA overlay with pulsing breach indicators, fullscreen control centre mode, and 30-second auto-refresh

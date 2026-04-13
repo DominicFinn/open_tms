@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { ITenderRepository } from '../repositories/TenderRepository.js';
 import { ITenderService } from '../services/TenderService.js';
+import { ITradingPartnerRepository } from '../repositories/TradingPartnerRepository.js';
 import { EDI204Service, EDI204ShipmentData } from '../services/EDI204Service.js';
 import { EDI990ParseService } from '../services/EDI990ParseService.js';
 import { container, TOKENS } from '../di/index.js';
@@ -10,6 +11,7 @@ import { PrismaClient } from '@prisma/client';
 export async function ediTenderRoutes(server: FastifyInstance) {
   const tenderRepo = container.resolve<ITenderRepository>(TOKENS.ITenderRepository);
   const tenderService = container.resolve<ITenderService>(TOKENS.ITenderService);
+  const tradingPartnerRepo = container.resolve<ITradingPartnerRepository>(TOKENS.ITradingPartnerRepository);
   const prisma = container.resolve<PrismaClient>(TOKENS.PrismaClient);
   const edi204Service = new EDI204Service();
   const edi990Parser = new EDI990ParseService();
@@ -140,13 +142,33 @@ export async function ediTenderRoutes(server: FastifyInstance) {
       },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const { content } = z.object({
+    const { content, partnerId, fileName } = z.object({
       content: z.string().min(1),
+      partnerId: z.string().optional(),
+      fileName: z.string().optional(),
     }).parse((req as any).body);
+
+    // Create transaction log entry
+    const logEntry = await tradingPartnerRepo.createLog({
+      partnerId: partnerId || null,
+      transactionType: '990',
+      direction: 'inbound',
+      fileName: fileName || 'edi990_inbound.edi',
+      fileSize: content.length,
+      fileContent: content,
+      transport: 'api',
+      status: 'processing',
+      source: partnerId ? 'sftp' : 'api',
+    });
 
     const result = edi990Parser.parseEDI990(content);
 
     if (!result.success) {
+      await tradingPartnerRepo.updateLog(logEntry.id, {
+        status: 'error',
+        errorMessage: result.errors.join('; '),
+        processedAt: new Date(),
+      });
       reply.code(400);
       return { data: null, error: `EDI 990 parse failed: ${result.errors.join('; ')}` };
     }
@@ -171,6 +193,12 @@ export async function ediTenderRoutes(server: FastifyInstance) {
     }
 
     if (!matchedOffer || !matchedTender) {
+      await tradingPartnerRepo.updateLog(logEntry.id, {
+        status: 'error',
+        errorMessage: `No matching open tender offer found for shipment ${result.shipmentReference} / carrier ${result.carrierScac}`,
+        shipmentReference: result.shipmentReference,
+        processedAt: new Date(),
+      });
       reply.code(404);
       return {
         data: null,
@@ -180,7 +208,7 @@ export async function ediTenderRoutes(server: FastifyInstance) {
 
     // Process response
     if (result.responseCode === 'A') {
-      // Accept — create a bid at the target rate
+      // Accept - create a bid at the target rate
       const bid = await tenderService.submitBid({
         tenderOfferId: matchedOffer.id,
         carrierId: matchedOffer.carrierId,
@@ -188,27 +216,48 @@ export async function ediTenderRoutes(server: FastifyInstance) {
         sourceType: 'edi_990',
         edi990Content: content,
       });
+      await tradingPartnerRepo.updateLog(logEntry.id, {
+        status: 'success',
+        tenderId: matchedTender.id,
+        shipmentReference: result.shipmentReference,
+        processedAt: new Date(),
+        entitiesCreated: 1,
+        entityIds: [bid.id],
+      });
       return {
         data: {
           action: 'accepted',
           bidId: bid.id,
           tenderReference: matchedTender.reference,
           carrierScac: result.carrierScac,
+          logId: logEntry.id,
         },
         error: null,
       };
     } else if (result.responseCode === 'D') {
-      // Decline — mark offer as expired and progress waterfall
+      // Decline - mark offer as expired and progress waterfall
       await tenderService.declineTenderOffer(matchedOffer.id, matchedOffer.carrierId);
+      await tradingPartnerRepo.updateLog(logEntry.id, {
+        status: 'success',
+        tenderId: matchedTender.id,
+        shipmentReference: result.shipmentReference,
+        processedAt: new Date(),
+      });
       return {
         data: {
           action: 'declined',
           tenderReference: matchedTender.reference,
           carrierScac: result.carrierScac,
+          logId: logEntry.id,
         },
         error: null,
       };
     } else {
+      await tradingPartnerRepo.updateLog(logEntry.id, {
+        status: 'error',
+        errorMessage: `Unknown response code: ${result.responseCode}`,
+        processedAt: new Date(),
+      });
       reply.code(400);
       return { data: null, error: `Unknown response code: ${result.responseCode}` };
     }

@@ -37,17 +37,16 @@ import VNextIntegrationsLayout from './vnext-design/VNextIntegrationsLayout';
 import VNextIntegrationsDashboard from './vnext-design/VNextIntegrationsDashboard';
 import VNextApiKeys from './vnext-design/VNextApiKeys';
 import VNextWebhookLogs from './vnext-design/VNextWebhookLogs';
-import VNextOutboundIntegrations from './vnext-design/VNextOutboundIntegrations';
-import VNextOutboundLogs from './vnext-design/VNextOutboundLogs';
-import VNextEdiPartners from './vnext-design/VNextEdiPartners';
-import VNextEdiFiles from './vnext-design/VNextEdiFiles';
+import VNextEdiDashboard from './vnext-design/VNextEdiDashboard';
+import VNextTradingPartnersPage from './vnext-design/VNextTradingPartners';
+import VNextEdiTransactionLog from './vnext-design/VNextEdiTransactionLog';
+import VNextEdiImport from './vnext-design/VNextEdiImport';
 import VNextCarrierTracking from './vnext-design/VNextCarrierTracking';
 import VNextCarrierTrackingSetup from './vnext-design/VNextCarrierTrackingSetup';
 import VNextCarrierTrackingDetail from './vnext-design/VNextCarrierTrackingDetail';
 import VNextOrderDetail from './vnext-design/VNextOrderDetail';
 import VNextPendingLaneRequests from './vnext-design/VNextPendingLaneRequests';
 import VNextOrderImportCSV from './vnext-design/VNextOrderImportCSV';
-import VNextOrderImportEDI from './vnext-design/VNextOrderImportEDI';
 import VNextThemeSettings from './vnext-design/VNextThemeSettings';
 import VNextEmailSettings from './vnext-design/VNextEmailSettings';
 import VNextEmailTemplates from './vnext-design/VNextEmailTemplates';
@@ -98,7 +97,6 @@ import CarrierTenderView from './pages/carrier-portal/CarrierTenderView';
 import CarrierBidHistory from './pages/carrier-portal/CarrierBidHistory';
 import CarrierTenderHistory from './pages/carrier-portal/CarrierTenderHistory';
 import CarrierProfile from './pages/carrier-portal/CarrierProfile';
-import TradingPartners from './pages/TradingPartners';
 import VNextColdChainProfiles from './pages/VNextColdChainProfiles';
 import VNextCAPAReports from './pages/VNextCAPAReports';
 
@@ -169,7 +167,7 @@ root.render(
           <Route path="orders" element={<VNextOrders />} />
           <Route path="orders/create" element={<VNextCreateOrder />} />
           <Route path="orders/import/csv" element={<VNextOrderImportCSV />} />
-          <Route path="orders/import/edi" element={<VNextOrderImportEDI />} />
+          <Route path="orders/import/edi" element={<VNextEdiImport />} />
           <Route path="orders/:id" element={<VNextOrderDetail />} />
 
           {/* Pending Lane Requests */}
@@ -275,11 +273,10 @@ root.render(
             <Route index element={<VNextIntegrationsDashboard />} />
             <Route path="api-keys" element={<VNextApiKeys />} />
             <Route path="webhook-logs" element={<VNextWebhookLogs />} />
-            <Route path="outbound" element={<VNextOutboundIntegrations />} />
-            <Route path="outbound-logs" element={<VNextOutboundLogs />} />
-            <Route path="trading-partners" element={<TradingPartners />} />
-            <Route path="edi-partners" element={<VNextEdiPartners />} />
-            <Route path="edi-files" element={<VNextEdiFiles />} />
+            <Route path="edi" element={<VNextEdiDashboard />} />
+            <Route path="edi/partners" element={<VNextTradingPartnersPage />} />
+            <Route path="edi/logs" element={<VNextEdiTransactionLog />} />
+            <Route path="edi/import" element={<VNextEdiImport />} />
             <Route path="carrier-tracking" element={<VNextCarrierTracking />} />
             <Route path="carrier-tracking/setup" element={<VNextCarrierTrackingSetup />} />
             <Route path="carrier-tracking/:id" element={<VNextCarrierTrackingDetail />} />

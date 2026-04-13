@@ -91,6 +91,12 @@ import { OutboundEdiDeliveryService } from '../services/OutboundEdiDeliveryServi
 import { EDI997Service } from '../services/EDI997Service.js';
 import { EDI214ParseService } from '../services/EDI214ParseService.js';
 import { EDI214Service } from '../services/EDI214Service.js';
+import { EDI204Service } from '../services/EDI204Service.js';
+import { EDI990ParseService } from '../services/EDI990ParseService.js';
+import { EDI210ParseService } from '../services/EDI210ParseService.js';
+import { EDI810Service } from '../services/EDI810Service.js';
+import { EDI820ParseService } from '../services/EDI820ParseService.js';
+import { EDI855Service } from '../services/EDI855Service.js';
 import { ProcessInbound214CommandHandler } from '../commands/shipments/ProcessInbound214Command.js';
 import { ChargeRepository } from '../repositories/ChargeRepository.js';
 import { ChargeService } from '../services/ChargeService.js';
@@ -493,6 +499,30 @@ export function registerDependencies(prisma: PrismaClient): void {
     return new EDI214Service();
   });
 
+  container.singleton(TOKENS.IEDI204Service).toFactory(() => {
+    return new EDI204Service();
+  });
+
+  container.singleton(TOKENS.IEDI990ParseService).toFactory(() => {
+    return new EDI990ParseService();
+  });
+
+  container.singleton(TOKENS.IEDI210ParseService).toFactory(() => {
+    return new EDI210ParseService();
+  });
+
+  container.singleton(TOKENS.IEDI810Service).toFactory(() => {
+    return new EDI810Service();
+  });
+
+  container.singleton(TOKENS.IEDI820ParseService).toFactory(() => {
+    return new EDI820ParseService();
+  });
+
+  container.singleton(TOKENS.IEDI855Service).toFactory(() => {
+    return new EDI855Service();
+  });
+
   // EDI services
   container.singleton(TOKENS.IEDI850ParseService).toFactory(() => {
     return new EDI850ParseService();
@@ -505,7 +535,8 @@ export function registerDependencies(prisma: PrismaClient): void {
       container.resolve(TOKENS.IOrdersRepository),
       container.resolve(TOKENS.ICustomersRepository),
       container.resolve(TOKENS.ILocationsRepository),
-      container.resolve(TOKENS.ILocationResolutionService)
+      container.resolve(TOKENS.ILocationResolutionService),
+      container.resolve(TOKENS.ITradingPartnerRepository)
     );
   });
 

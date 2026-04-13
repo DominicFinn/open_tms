@@ -24,6 +24,10 @@ import { SlaEvaluationHandler } from './handlers/SlaEvaluationHandler.js';
 import { SlaEvaluationService } from '../services/SlaEvaluationService.js';
 import { SlaRepository } from '../repositories/SlaRepository.js';
 import { Edi214ForwardHandler } from './handlers/Edi214ForwardHandler.js';
+import { Edi856AutoSendHandler } from './handlers/Edi856AutoSendHandler.js';
+import { Edi810AutoSendHandler } from './handlers/Edi810AutoSendHandler.js';
+import { EDI856Service } from '../services/EDI856Service.js';
+import { EDI810Service } from '../services/EDI810Service.js';
 import { EDI214Service } from '../services/EDI214Service.js';
 import { OutboundEdiDeliveryService } from '../services/OutboundEdiDeliveryService.js';
 import { TradingPartnerRepository } from '../repositories/TradingPartnerRepository.js';
@@ -119,6 +123,14 @@ export async function registerEventHandlers(
   const edi214GenerationService = new EDI214Service();
   const outboundDeliveryService = new OutboundEdiDeliveryService(tradingPartnerRepo);
   handlers.push(new Edi214ForwardHandler(prisma, edi214GenerationService, outboundDeliveryService));
+
+  // EDI 856: auto-send ASN on shipment delivered
+  const edi856Service = new EDI856Service();
+  handlers.push(new Edi856AutoSendHandler(prisma, edi856Service, outboundDeliveryService));
+
+  // EDI 810: auto-send invoice on invoice.sent
+  const edi810Service = new EDI810Service();
+  handlers.push(new Edi810AutoSendHandler(prisma, edi810Service, outboundDeliveryService));
 
   // Financial: auto-create cost charge when tender is awarded
   handlers.push(new TenderAwardFinancialHandler(prisma));

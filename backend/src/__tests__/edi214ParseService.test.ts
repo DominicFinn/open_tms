@@ -108,7 +108,7 @@ describe('EDI214ParseService', () => {
     const result = parser.parseEDI214(wrong);
 
     expect(result.success).toBe(false);
-    expect(result.errors).toContain('Transaction set is not 214');
+    expect(result.errors.some(e => e.includes('not 214'))).toBe(true);
   });
 
   it('should handle SCAC fallback from MS3 segment', () => {

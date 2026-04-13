@@ -5,10 +5,11 @@ const TABS = [
   { to: '/integrations', label: 'Dashboard', icon: 'space_dashboard', end: true },
   { to: '/integrations/api-keys', label: 'API Keys', icon: 'vpn_key', end: false },
   { to: '/integrations/webhook-logs', label: 'Webhooks', icon: 'webhook', end: false },
-  { to: '/integrations/outbound', label: 'Outbound', icon: 'send', end: false },
-  { to: '/integrations/outbound-logs', label: 'Outbound Logs', icon: 'list_alt', end: false },
-  { to: '/integrations/edi-partners', label: 'EDI Partners', icon: 'handshake', end: false },
-  { to: '/integrations/edi-files', label: 'EDI Files', icon: 'description', end: false },
+  { to: '/integrations/edi', label: 'EDI Dashboard', icon: 'hub', end: true },
+  { to: '/integrations/edi/partners', label: 'Trading Partners', icon: 'handshake', end: false },
+  { to: '/integrations/edi/logs', label: 'Transaction Log', icon: 'receipt_long', end: false },
+  { to: '/integrations/edi/import', label: 'EDI Import', icon: 'upload_file', end: false },
+  { to: '/integrations/carrier-tracking', label: 'Carrier Tracking', icon: 'local_shipping', end: false },
 ];
 
 export default function VNextIntegrationsLayout() {

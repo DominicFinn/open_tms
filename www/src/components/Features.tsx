@@ -72,6 +72,16 @@ const features = [
     highlight: true,
   },
   {
+    title: 'EDI Communication Hub',
+    description: '10 X12 transaction types (850, 855, 856, 204, 990, 997, 214, 210, 810, 820) with a unified Trading Partner model. Universal inbound endpoint with auto-type detection, event-driven outbound (856 on delivery, 810 on invoice), automatic 997 acknowledgments, SFTP and HTTP delivery, shared X12 envelope utilities, and an EDI Portal UI with dashboard, partner management, transaction log, and manual import.',
+    icon: (
+      <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
+      </svg>
+    ),
+    highlight: true,
+  },
+  {
     title: 'Cold Chain Compliance',
     description: 'CFR 21 Part 11 compliant temperature logging with SHA-256 integrity hashes. Excursion detection, automatic quarantine workflows, and compliance report generation.',
     icon: (

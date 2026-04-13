@@ -19,7 +19,6 @@ model Customer {
   customerLanes CustomerLane[]
   orders       Order[]
   apiKeys      ApiKey[]
-  ediPartners  EdiPartner[]
   tradingPartners TradingPartner[] @relation("CustomerTradingPartners")
   slaPolicies  SlaPolicy[]
   users        User[]
@@ -129,7 +128,6 @@ model Shipment {
   events        ShipmentEvent[]
   orderShipments OrderShipment[]
   stops         ShipmentStop[] // Multi-stop route support
-  outboundLogs  OutboundIntegrationLog[] // Outbound integration logs
   tenders       Tender[] // Carrier tenders for this shipment
   deviceAssignments DeviceAssignment[]    // IoT device assignments
   sensorReadings    SensorReading[]       // Sensor telemetry data
@@ -867,123 +865,6 @@ model WebhookLog {
   @@index([deviceName])
 }
 
-model OutboundIntegration {
-  id          String   @id @default(uuid())
-  name        String   // User-friendly name
-  url         String   // URL to send EDI 856 to
-  active      Boolean  @default(true)
-  description String?  // Optional description
-  
-  // EDI Configuration
-  senderId     String?  // ISA06 - Sender ID
-  receiverId  String?  // ISA08 - Receiver ID
-  interchangeControlNumber String? // ISA13 - Control number prefix
-  
-  // Integration type and format
-  integrationType  String   @default("carrier")  // "carrier" | "tracking"
-  payloadFormat    String   @default("edi_856")   // "edi_856" | "json"
-  carrierMatch     String?  // Carrier name pattern to match (e.g., "FedEx*")
-
-  // Authentication (optional)
-  authType    String?  // "none", "basic", "bearer", "api_key"
-  authHeader  String?  // Header name for auth (e.g., "X-API-Key")
-  authValue   String?  // Encrypted/hashed auth value
-
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  logs        OutboundIntegrationLog[]
-
-  @@index([active])
-  @@index([active, integrationType])
-  @@index([createdAt])
-}
-
-model OutboundIntegrationLog {
-  id                String   @id @default(uuid())
-  integration       OutboundIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
-  integrationId     String
-  
-  // Shipment details
-  shipment          Shipment? @relation(fields: [shipmentId], references: [id], onDelete: SetNull)
-  shipmentId        String?
-  shipmentReference String?  // For easier filtering
-  
-  // Request details
-  url               String
-  method            String   @default("POST")
-  headers           Json?    // Request headers (redacted auth)
-  ediPayload        String?  // The EDI 856 document sent
-  payloadSize       Int?     // Size in bytes
-  
-  // Response details
-  status            String   // "success", "error", "pending"
-  responseCode      Int?
-  responseBody      String?  // Response body received
-  responseHeaders   Json?    // Response headers
-  errorMessage      String?  // Error message if failed
-  
-  // Retry information
-  retryCount        Int      @default(0)
-  lastRetryAt       DateTime?
-  
-  // Timestamps
-  sentAt            DateTime @default(now())
-  respondedAt       DateTime?
-  
-  @@index([integrationId])
-  @@index([shipmentId])
-  @@index([shipmentReference])
-  @@index([status])
-  @@index([sentAt])
-}
-
-model EdiPartner {
-  id              String   @id @default(uuid())
-  name            String
-  active          Boolean  @default(true)
-
-  // Link to customer
-  customer        Customer @relation(fields: [customerId], references: [id])
-  customerId      String
-
-  // SFTP Configuration
-  sftpHost        String?
-  sftpPort        Int      @default(22)
-  sftpUsername     String?
-  sftpPassword    String?
-  sftpPrivateKey  String?
-  sftpRemoteDir   String   @default("/")
-  sftpFilePattern String   @default("*.edi,*.x12,*.850")
-
-  // Polling schedule
-  pollingEnabled  Boolean  @default(false)
-  pollingInterval Int      @default(900) // seconds (15 min default)
-  pollingCron     String?
-  lastPolledAt    DateTime?
-
-  // EDI Configuration
-  senderId        String?
-  receiverId      String?
-  ediVersion      String   @default("005010")
-
-  // Processing options
-  autoCreateOrders    Boolean @default(true)
-  autoAssignShipments Boolean @default(false)
-
-  // Field mapping template (JSON)
-  fieldMapping    Json?
-
-  // Outbound EDI tendering
-  ediTenderEnabled Boolean  @default(false) // Can send/receive EDI 204/990
-  ediOutboundDir   String?                  // SFTP directory for outbound EDI 204 files
-
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  ediFiles        EdiFile[]
-
-  @@index([customerId])
-  @@index([active])
-}
 
 // ─── Auth Models ─────────────────────────────────────────────────────────────
 
@@ -1108,44 +989,6 @@ model Session {
 
 // ─── EDI Models ──────────────────────────────────────────────────────────────
 
-model EdiFile {
-  id              String   @id @default(uuid())
-
-  // Link to partner (optional — manual uploads won't have one)
-  partner         EdiPartner? @relation(fields: [partnerId], references: [id])
-  partnerId       String?
-
-  // File metadata
-  fileName        String
-  fileSize        Int?
-  fileContent     String   // Raw EDI content (database storage adapter)
-  fileHash        String?  // SHA-256 for dedup
-
-  // Source tracking
-  source          String   @default("manual") // manual, sftp, api
-
-  // Processing status
-  status          String   @default("pending") // pending, processing, completed, failed, duplicate
-  processedAt     DateTime?
-  errorMessage    String?
-
-  // Parsing results
-  parsedData      Json?
-  transactionType String?
-  transactionCount Int     @default(0)
-
-  // Orders created from this file
-  ordersCreated   Int      @default(0)
-  orderIds        Json?
-
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  @@index([partnerId])
-  @@index([status])
-  @@index([fileHash])
-  @@index([createdAt])
-}
 
 // ─── Binary Storage (fallback when S3 not configured) ───────────────────────
 
@@ -1923,12 +1766,12 @@ model TradingPartnerTransaction {
 }
 
 model EdiTransactionLog {
-  id             String         @id @default(uuid())
-  partner        TradingPartner @relation(fields: [partnerId], references: [id])
-  partnerId      String
+  id             String          @id @default(uuid())
+  partner        TradingPartner? @relation(fields: [partnerId], references: [id])
+  partnerId      String?
 
   // What was exchanged
-  transactionType String                  // "850", "856", "204", "990", "997", etc.
+  transactionType String                  // "850", "856", "204", "990", "997", "214", "210", "810", "820"
   direction       String                  // "inbound" | "outbound"
 
   // File details
@@ -1938,7 +1781,7 @@ model EdiTransactionLog {
   fileHash        String?                 // SHA-256 for dedup
 
   // Transport details
-  transport       String                  // "sftp" | "http"
+  transport       String    @default("api") // "sftp" | "http" | "api" | "manual"
   url             String?                 // HTTP URL or SFTP path
   responseCode    Int?                    // HTTP response code
   responseBody    String?
@@ -1948,11 +1791,22 @@ model EdiTransactionLog {
   processedAt     DateTime?
   errorMessage    String?
 
+  // Parse result (for inbound) — replaces EdiFile.parsedData
+  parsedData      Json?
+  transactionCount Int     @default(0)     // Number of transactions in file
+
+  // Created entities tracking — replaces EdiFile.ordersCreated/orderIds
+  entitiesCreated Int      @default(0)     // Orders, invoices, payments created
+  entityIds       Json?                    // Array of created entity IDs
+  source          String   @default("api") // "manual" | "sftp" | "api"
+
   // Linked entities
   shipmentId      String?
   shipmentReference String?
   orderId         String?
   tenderId        String?
+  invoiceId       String?
+  invoiceNumber   String?
 
   // 997 acknowledgment tracking
   ack997Sent      Boolean  @default(false)
@@ -1972,6 +1826,7 @@ model EdiTransactionLog {
   @@index([shipmentId])
   @@index([fileHash])
   @@index([createdAt])
+  @@index([source])
 }
 
 // ============================================================
