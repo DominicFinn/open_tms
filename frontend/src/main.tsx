@@ -44,6 +44,7 @@ import VNextEdiFiles from './vnext-design/VNextEdiFiles';
 import VNextEdiDashboard from './vnext-design/VNextEdiDashboard';
 import VNextTradingPartnersPage from './vnext-design/VNextTradingPartners';
 import VNextEdiTransactionLog from './vnext-design/VNextEdiTransactionLog';
+import VNextEdiImport from './vnext-design/VNextEdiImport';
 import VNextCarrierTracking from './vnext-design/VNextCarrierTracking';
 import VNextCarrierTrackingSetup from './vnext-design/VNextCarrierTrackingSetup';
 import VNextCarrierTrackingDetail from './vnext-design/VNextCarrierTrackingDetail';
@@ -263,6 +264,7 @@ root.render(
             <Route path="edi" element={<VNextEdiDashboard />} />
             <Route path="edi/partners" element={<VNextTradingPartnersPage />} />
             <Route path="edi/logs" element={<VNextEdiTransactionLog />} />
+            <Route path="edi/import" element={<VNextEdiImport />} />
             <Route path="trading-partners" element={<TradingPartners />} />
             <Route path="edi-partners" element={<VNextEdiPartners />} />
             <Route path="edi-files" element={<VNextEdiFiles />} />

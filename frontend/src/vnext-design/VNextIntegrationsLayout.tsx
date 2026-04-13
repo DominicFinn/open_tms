@@ -10,6 +10,7 @@ const TABS = [
   { to: '/integrations/edi', label: 'EDI Dashboard', icon: 'hub', end: true },
   { to: '/integrations/edi/partners', label: 'Trading Partners', icon: 'handshake', end: false },
   { to: '/integrations/edi/logs', label: 'Transaction Log', icon: 'receipt_long', end: false },
+  { to: '/integrations/edi/import', label: 'EDI Import', icon: 'upload_file', end: false },
   { to: '/integrations/edi-partners', label: 'EDI Partners (Legacy)', icon: 'history', end: false },
 ];
 

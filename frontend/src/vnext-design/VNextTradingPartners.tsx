@@ -72,6 +72,17 @@ const EMPTY_FORM: FormData = {
 };
 
 const ENTITY_TYPES = ['customer', 'carrier', '3pl', 'warehouse', 'erp', 'other'];
+const ALL_TXN_TYPES = [
+  { code: '850', name: 'Purchase Order', directions: ['inbound'] },
+  { code: '856', name: 'Ship Notice', directions: ['outbound'] },
+  { code: '204', name: 'Load Tender', directions: ['outbound'] },
+  { code: '990', name: 'Tender Response', directions: ['inbound'] },
+  { code: '997', name: 'Func. Ack', directions: ['inbound', 'outbound'] },
+  { code: '214', name: 'Status', directions: ['inbound', 'outbound'] },
+  { code: '210', name: 'Freight Invoice', directions: ['inbound'] },
+  { code: '810', name: 'Invoice', directions: ['outbound'] },
+  { code: '820', name: 'Payment', directions: ['inbound'] },
+];
 
 export default function VNextTradingPartners() {
   const [partners, setPartners] = useState<TradingPartner[]>([]);
@@ -160,6 +171,26 @@ export default function VNextTradingPartners() {
       return;
     }
     setShowForm(false);
+    fetchPartners();
+  };
+
+  // Transaction type management
+  const [newTxnType, setNewTxnType] = useState('850');
+  const [newTxnDirection, setNewTxnDirection] = useState('inbound');
+
+  const addTransaction = async (partnerId: string) => {
+    await fetch(`${API_URL}/api/v1/trading-partners/${partnerId}/transactions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ transactionType: newTxnType, direction: newTxnDirection, enabled: true, autoProcess: true, ack997Required: true }),
+    });
+    fetchPartners();
+    setNewTxnType('850');
+    setNewTxnDirection('inbound');
+  };
+
+  const removeTransaction = async (partnerId: string, txnId: string) => {
+    await fetch(`${API_URL}/api/v1/trading-partners/${partnerId}/transactions/${txnId}`, { method: 'DELETE' });
     fetchPartners();
   };
 
@@ -357,6 +388,43 @@ export default function VNextTradingPartners() {
                   </>
                 )}
               </div>
+              {/* Transaction Types - only shown when editing */}
+              {editingId && (() => {
+                const partner = partners.find(p => p.id === editingId);
+                if (!partner) return null;
+                return (
+                  <>
+                    <h3 style={{ marginTop: '1.5rem', marginBottom: '0.75rem', fontSize: '1rem' }}>Transaction Types</h3>
+                    {partner.transactions.length > 0 && (
+                      <div className="vn-table-wrap" style={{ marginBottom: '0.75rem' }}>
+                        <table className="vn-table">
+                          <thead><tr><th>Type</th><th>Direction</th><th>Status</th><th></th></tr></thead>
+                          <tbody>
+                            {partner.transactions.map(t => (
+                              <tr key={t.id}>
+                                <td><strong>{t.transactionType}</strong> - {ALL_TXN_TYPES.find(a => a.code === t.transactionType)?.name || ''}</td>
+                                <td>{t.direction}</td>
+                                <td><span className={t.enabled ? 'vn-chip vn-chip-success' : 'vn-chip vn-chip-secondary'}>{t.enabled ? 'Enabled' : 'Disabled'}</span></td>
+                                <td><button className="vn-btn vn-btn-danger" style={{ fontSize: '0.7rem', padding: '0.2rem 0.4rem' }} onClick={() => removeTransaction(partner.id, t.id)}>Remove</button></td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                      <select className="vn-input" style={{ flex: 1 }} value={newTxnType} onChange={e => setNewTxnType(e.target.value)}>
+                        {ALL_TXN_TYPES.map(t => <option key={t.code} value={t.code}>{t.code} - {t.name}</option>)}
+                      </select>
+                      <select className="vn-input" style={{ width: '120px' }} value={newTxnDirection} onChange={e => setNewTxnDirection(e.target.value)}>
+                        <option value="inbound">Inbound</option>
+                        <option value="outbound">Outbound</option>
+                      </select>
+                      <button className="vn-btn vn-btn-primary" style={{ whiteSpace: 'nowrap' }} onClick={() => addTransaction(partner.id)}>Add</button>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
             <div className="vn-modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', padding: '1rem' }}>
               <button className="vn-btn" onClick={() => setShowForm(false)}>Cancel</button>
