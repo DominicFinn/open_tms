@@ -522,7 +522,8 @@ export function registerDependencies(prisma: PrismaClient): void {
       container.resolve(TOKENS.IOrdersRepository),
       container.resolve(TOKENS.ICustomersRepository),
       container.resolve(TOKENS.ILocationsRepository),
-      container.resolve(TOKENS.ILocationResolutionService)
+      container.resolve(TOKENS.ILocationResolutionService),
+      container.resolve(TOKENS.ITradingPartnerRepository)
     );
   });
 
