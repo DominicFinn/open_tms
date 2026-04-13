@@ -13,6 +13,8 @@
  *   NTE    — Special instructions
  */
 
+import { X12EnvelopeBuilder } from './edi/X12EnvelopeBuilder.js';
+
 export interface EDI204ShipmentData {
   // Shipment
   shipmentReference: string;
@@ -81,188 +83,105 @@ export interface IEDI204Service {
 }
 
 export class EDI204Service implements IEDI204Service {
-  private segmentTerminator = '~';
-  private elementSeparator = '*';
-  private subElementSeparator = ':';
+  private envelope = new X12EnvelopeBuilder();
 
   generateEDI204(shipment: EDI204ShipmentData, config?: EDI204Config): string {
-    const segments: string[] = [];
-    const controlNumber = config?.interchangeControlNumber || this.generateControlNumber();
+    const e = this.envelope.e;
     const purposeCode = config?.purposeCode || '00';
-
-    // ISA — Interchange Control Header
-    segments.push(this.buildISA(config?.senderId || 'OPENTMS', config?.receiverId || shipment.carrierScac, controlNumber));
-
-    // GS — Functional Group Header
-    segments.push(this.buildGS(config?.senderId || 'OPENTMS', config?.receiverId || shipment.carrierScac, controlNumber));
-
-    // ST — Transaction Set Header (204)
-    segments.push(`ST${this.e}204${this.e}0001`);
+    const bodySegments: string[] = [];
 
     // B2 — Beginning Segment for Shipment Information
-    segments.push(`B2${this.e}${this.e}${shipment.carrierScac}${this.e}${shipment.shipmentReference}${this.e}${this.e}PP`);
+    bodySegments.push(`B2${e}${e}${shipment.carrierScac}${e}${shipment.shipmentReference}${e}${e}PP`);
 
     // B2A — Set Purpose
-    segments.push(`B2A${this.e}${purposeCode}`);
+    bodySegments.push(`B2A${e}${purposeCode}`);
 
     // L11 — Reference Number
-    segments.push(`L11${this.e}${shipment.shipmentReference}${this.e}SI`);
+    bodySegments.push(`L11${e}${shipment.shipmentReference}${e}SI`);
 
     // G62 — Pickup Date
     if (shipment.pickupDate) {
-      segments.push(`G62${this.e}10${this.e}${this.formatDate(shipment.pickupDate)}`);
+      bodySegments.push(`G62${e}10${e}${this.envelope.formatDateLong(shipment.pickupDate)}`);
     }
 
     // G62 — Delivery Date
     if (shipment.deliveryDate) {
-      segments.push(`G62${this.e}02${this.e}${this.formatDate(shipment.deliveryDate)}`);
+      bodySegments.push(`G62${e}02${e}${this.envelope.formatDateLong(shipment.deliveryDate)}`);
     }
 
     // G62 — Must Respond By
-    segments.push(`G62${this.e}64${this.e}${this.formatDate(shipment.mustRespondBy)}${this.e}${this.formatTime(shipment.mustRespondBy)}`);
+    bodySegments.push(`G62${e}64${e}${this.envelope.formatDateLong(shipment.mustRespondBy)}${e}${this.envelope.formatTime(shipment.mustRespondBy)}`);
 
     // AT8 — Shipment Weight
     if (shipment.totalWeight) {
       const unit = (shipment.weightUnit || 'lb').toUpperCase() === 'KG' ? 'K' : 'L';
-      segments.push(`AT8${this.e}G${this.e}${unit}${this.e}${shipment.totalWeight}`);
+      bodySegments.push(`AT8${e}G${e}${unit}${e}${shipment.totalWeight}`);
     }
 
     // NTE — Special Instructions
     if (shipment.specialInstructions) {
-      segments.push(`NTE${this.e}OTH${this.e}${this.sanitize(shipment.specialInstructions).substring(0, 264)}`);
+      bodySegments.push(`NTE${e}OTH${e}${this.envelope.sanitize(shipment.specialInstructions, 264)}`);
     }
 
     // Equipment type
     if (shipment.equipmentType) {
       const eqCode = this.mapEquipmentCode(shipment.equipmentType);
-      segments.push(`N7${this.e}${this.e}${this.e}${this.e}${this.e}${this.e}${this.e}${this.e}${this.e}${this.e}${this.e}${eqCode}`);
+      bodySegments.push(`N7${e}${e}${e}${e}${e}${e}${e}${e}${e}${e}${e}${eqCode}`);
     }
 
     // ── Stop Details ──
 
     // S5 — Stop 1: Pickup (Origin)
-    segments.push(`S5${this.e}1${this.e}CL`); // CL = Complete Load pickup
-    this.addPartySegments(segments, 'SH', shipment.origin);
+    bodySegments.push(`S5${e}1${e}CL`); // CL = Complete Load pickup
+    this.addPartySegments(bodySegments, 'SH', shipment.origin);
 
     // Intermediate stops
     if (shipment.stops && shipment.stops.length > 0) {
       for (const stop of shipment.stops) {
         const reasonCode = stop.stopType === 'pickup' ? 'CL' : 'CU';
-        segments.push(`S5${this.e}${stop.sequenceNumber + 1}${this.e}${reasonCode}`);
-        this.addPartySegments(segments, stop.stopType === 'pickup' ? 'SH' : 'CN', stop.location);
+        bodySegments.push(`S5${e}${stop.sequenceNumber + 1}${e}${reasonCode}`);
+        this.addPartySegments(bodySegments, stop.stopType === 'pickup' ? 'SH' : 'CN', stop.location);
       }
     }
 
     // S5 — Last Stop: Delivery (Destination)
     const lastStopNum = (shipment.stops?.length || 0) + 2;
-    segments.push(`S5${this.e}${lastStopNum}${this.e}CU`); // CU = Complete Unload delivery
-    this.addPartySegments(segments, 'CN', shipment.destination);
+    bodySegments.push(`S5${e}${lastStopNum}${e}CU`); // CU = Complete Unload delivery
+    this.addPartySegments(bodySegments, 'CN', shipment.destination);
 
-    // SE — Transaction Set Trailer
-    const segmentCount = segments.length - 2 + 1; // Exclude ISA/GS, include SE
-    segments.push(`SE${this.e}${segmentCount}${this.e}0001`);
-
-    // GE — Functional Group Trailer
-    segments.push(`GE${this.e}1${this.e}${controlNumber}`);
-
-    // IEA — Interchange Control Trailer
-    segments.push(`IEA${this.e}1${this.e}${controlNumber.padStart(9, '0')}`);
-
-    return segments.map(s => s + this.segmentTerminator).join('\n');
+    // Wrap in ISA/GS/ST/SE/GE/IEA envelope
+    return this.envelope.wrap(bodySegments, {
+      senderId: config?.senderId || 'OPENTMS',
+      receiverId: config?.receiverId || shipment.carrierScac,
+      functionalIdentifier: 'SM',
+      transactionType: '204',
+      controlNumber: config?.interchangeControlNumber,
+    });
   }
 
   // ── Private helpers ──
-
-  private get e(): string {
-    return this.elementSeparator;
-  }
-
-  private buildISA(senderId: string, receiverId: string, controlNumber: string): string {
-    const now = new Date();
-    return [
-      'ISA',
-      '00',                                        // Auth Info Qualifier
-      '          ',                                 // Auth Info (10 chars)
-      '00',                                        // Security Info Qualifier
-      '          ',                                 // Security Info (10 chars)
-      'ZZ',                                        // Sender Qualifier
-      senderId.padEnd(15),                         // Sender ID (15 chars)
-      'ZZ',                                        // Receiver Qualifier
-      receiverId.padEnd(15),                       // Receiver ID (15 chars)
-      this.formatDateISA(now),                     // Date YYMMDD
-      this.formatTimeISA(now),                     // Time HHMM
-      'U',                                         // Repetition Separator
-      '00401',                                     // Version
-      controlNumber.padStart(9, '0'),              // Control Number
-      '0',                                         // Ack Requested
-      'P',                                         // Usage (P=Production)
-      this.subElementSeparator,                    // Sub-element separator
-    ].join(this.elementSeparator);
-  }
-
-  private buildGS(senderId: string, receiverId: string, controlNumber: string): string {
-    const now = new Date();
-    return [
-      'GS',
-      'SM',                                        // Functional ID (SM = Motor Carrier Load Tender)
-      senderId,
-      receiverId,
-      this.formatDate(now),
-      this.formatTime(now),
-      controlNumber,
-      'X',                                         // Responsible Agency
-      '004010',                                    // Version
-    ].join(this.elementSeparator);
-  }
 
   private addPartySegments(
     segments: string[],
     entityCode: string,
     location: { name: string; address1: string; address2?: string | null; city: string; state?: string | null; postalCode?: string | null; country: string },
   ): void {
+    const e = this.envelope.e;
+
     // N1 — Party name
-    segments.push(`N1${this.e}${entityCode}${this.e}${this.sanitize(location.name)}`);
+    segments.push(`N1${e}${entityCode}${e}${this.envelope.sanitize(location.name)}`);
 
     // N3 — Address
-    let n3 = `N3${this.e}${this.sanitize(location.address1)}`;
+    let n3 = `N3${e}${this.envelope.sanitize(location.address1)}`;
     if (location.address2) {
-      n3 += `${this.e}${this.sanitize(location.address2)}`;
+      n3 += `${e}${this.envelope.sanitize(location.address2)}`;
     }
     segments.push(n3);
 
     // N4 — City, State, Zip
     segments.push(
-      `N4${this.e}${this.sanitize(location.city)}${this.e}${location.state || ''}${this.e}${location.postalCode || ''}${this.e}${location.country || 'US'}`
+      `N4${e}${this.envelope.sanitize(location.city)}${e}${location.state || ''}${e}${location.postalCode || ''}${e}${location.country || 'US'}`
     );
-  }
-
-  private formatDate(date: Date): string {
-    const y = date.getFullYear().toString();
-    const m = (date.getMonth() + 1).toString().padStart(2, '0');
-    const d = date.getDate().toString().padStart(2, '0');
-    return `${y}${m}${d}`;
-  }
-
-  private formatDateISA(date: Date): string {
-    const y = date.getFullYear().toString().slice(2);
-    const m = (date.getMonth() + 1).toString().padStart(2, '0');
-    const d = date.getDate().toString().padStart(2, '0');
-    return `${y}${m}${d}`;
-  }
-
-  private formatTime(date: Date): string {
-    const h = date.getHours().toString().padStart(2, '0');
-    const m = date.getMinutes().toString().padStart(2, '0');
-    return `${h}${m}`;
-  }
-
-  private formatTimeISA(date: Date): string {
-    return this.formatTime(date);
-  }
-
-  private sanitize(str: string): string {
-    // Remove characters that conflict with X12 delimiters
-    return str.replace(/[*~:]/g, ' ').trim();
   }
 
   private mapEquipmentCode(equipmentType: string): string {
@@ -272,9 +191,5 @@ export class EDI204Service implements IEDI204Service {
     if (lower.includes('tanker')) return 'TK';
     if (lower.includes('van') || lower.includes('dry')) return 'TF';
     return 'TL'; // Trailer unspecified
-  }
-
-  private generateControlNumber(): string {
-    return Math.floor(Math.random() * 999999999).toString().padStart(9, '0');
   }
 }

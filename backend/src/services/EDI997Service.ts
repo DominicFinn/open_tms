@@ -5,6 +5,9 @@
  * Per X12 standard, every inbound transaction should receive a 997 confirming receipt.
  */
 
+import { X12EnvelopeBuilder } from './edi/X12EnvelopeBuilder.js';
+import { TRANSACTION_TO_GS } from './edi/types.js';
+
 export interface EDI997Config {
   senderId?: string;
   receiverId?: string;
@@ -20,55 +23,30 @@ export interface IEDI997Service {
 }
 
 export class EDI997Service implements IEDI997Service {
-  private e = '*';
-  private t = '~';
+  private envelope = new X12EnvelopeBuilder();
 
   /**
    * Generate an EDI 997 Functional Acknowledgment
    */
   generate997(config: EDI997Config): string {
-    const segments: string[] = [];
-    const controlNumber = Math.floor(Math.random() * 999999999).toString().padStart(9, '0');
-    const now = new Date();
-
-    // ISA
-    segments.push(this.buildISA(config.senderId || 'OPENTMS', config.receiverId || '', controlNumber, now));
-
-    // GS — Functional Group (FA = Functional Acknowledgment)
-    segments.push([
-      'GS', 'FA',
-      config.senderId || 'OPENTMS',
-      config.receiverId || '',
-      this.formatDate(now),
-      this.formatTime(now),
-      controlNumber.slice(0, 9),
-      'X', '004010',
-    ].join(this.e));
-
-    // ST 997
-    segments.push(`ST${this.e}997${this.e}0001`);
+    const e = this.envelope.e;
+    const bodySegments: string[] = [];
 
     // AK1 — Functional Group Response Header
-    // AK1*{functionalId}*{gsControlNumber}
-    const gsId = this.transactionTypeToGsId(config.originalTransactionType);
-    segments.push(`AK1${this.e}${gsId}${this.e}${config.originalControlNumber}`);
+    const gsId = TRANSACTION_TO_GS[config.originalTransactionType] || 'FA';
+    bodySegments.push(`AK1${e}${gsId}${e}${config.originalControlNumber}`);
 
     // AK9 — Functional Group Response Trailer
-    // AK9*{ackCode}*{numberOfSetsIncluded}*{numberOfSetsReceived}*{numberOfSetsAccepted}
     const ackCode = config.accepted ? 'A' : 'R'; // A=Accepted, R=Rejected
-    segments.push(`AK9${this.e}${ackCode}${this.e}1${this.e}1${this.e}${config.accepted ? '1' : '0'}`);
+    bodySegments.push(`AK9${e}${ackCode}${e}1${e}1${e}${config.accepted ? '1' : '0'}`);
 
-    // SE
-    const segCount = segments.length - 2 + 1; // Exclude ISA/GS, include SE
-    segments.push(`SE${this.e}${segCount}${this.e}0001`);
-
-    // GE
-    segments.push(`GE${this.e}1${this.e}${controlNumber.slice(0, 9)}`);
-
-    // IEA
-    segments.push(`IEA${this.e}1${this.e}${controlNumber}`);
-
-    return segments.map(s => s + this.t).join('\n');
+    // Wrap in ISA/GS/ST/SE/GE/IEA envelope
+    return this.envelope.wrap(bodySegments, {
+      senderId: config.senderId || 'OPENTMS',
+      receiverId: config.receiverId || '',
+      functionalIdentifier: 'FA',
+      transactionType: '997',
+    });
   }
 
   /**
@@ -96,37 +74,5 @@ export class EDI997Service implements IEDI997Service {
 
     if (!transactionType) return null;
     return { gsControlNumber, stControlNumber, transactionType };
-  }
-
-  // ── Private helpers ──
-
-  private buildISA(senderId: string, receiverId: string, controlNumber: string, now: Date): string {
-    return [
-      'ISA', '00', '          ', '00', '          ',
-      'ZZ', senderId.padEnd(15),
-      'ZZ', receiverId.padEnd(15),
-      this.formatDateISA(now), this.formatTime(now),
-      'U', '00401', controlNumber, '0', 'P', ':',
-    ].join(this.e);
-  }
-
-  private transactionTypeToGsId(txnType: string): string {
-    const map: Record<string, string> = {
-      '850': 'PO', '855': 'PR', '856': 'SH', '204': 'SM',
-      '990': 'GF', '214': 'QM', '210': 'IM', '810': 'IN',
-    };
-    return map[txnType] || 'FA';
-  }
-
-  private formatDate(d: Date): string {
-    return `${d.getFullYear()}${(d.getMonth()+1).toString().padStart(2,'0')}${d.getDate().toString().padStart(2,'0')}`;
-  }
-
-  private formatDateISA(d: Date): string {
-    return `${d.getFullYear().toString().slice(2)}${(d.getMonth()+1).toString().padStart(2,'0')}${d.getDate().toString().padStart(2,'0')}`;
-  }
-
-  private formatTime(d: Date): string {
-    return `${d.getHours().toString().padStart(2,'0')}${d.getMinutes().toString().padStart(2,'0')}`;
   }
 }
