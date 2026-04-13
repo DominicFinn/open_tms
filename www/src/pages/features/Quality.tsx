@@ -6,27 +6,39 @@ import QualityPreview from '../../components/previews/QualityPreview'
 const problems = [
   {
     problem: 'A temperature excursion happens and you have no structured way to investigate it',
-    solution: 'CAPA workflow engine',
-    description: 'Corrective and Preventive Action (CAPA) reports follow a structured lifecycle: Draft \u2192 Investigation \u2192 Root Cause Identified \u2192 Action Plan \u2192 Implementation \u2192 Verification \u2192 Closed. Every step is documented, timestamped, and auditable. When a regulator asks "what did you do about it?", you have the answer.',
+    solution: 'CAPA workflow engine with 30/60/90 follow-ups',
+    description: 'Corrective and Preventive Action (CAPA) reports follow a structured lifecycle from Draft through Investigation, Root Cause, Action Plan, Implementation, Verification, to Closed. Every step is documented and auditable. Automatic 30/60/90-day follow-up scheduling ensures corrective actions stick - with effectiveness tracking so you know if the fix actually worked.',
     color: '#22c55e',
+  },
+  {
+    problem: 'You know there are problem carriers and lanes but you cannot prove it with data',
+    solution: 'Quality Centre dashboard with issue analytics',
+    description: 'A dedicated Quality Centre aggregates issues by carrier, lane, location, and customer. See which carriers have the highest exception rates, which lanes generate the most delays, and which locations have compliance problems. Drill down from the dashboard into carrier scorecards and lane analysis reports.',
+    color: '#3b82f6',
   },
   {
     problem: 'Cold chain compliance is a nightmare of spreadsheets and manual temperature logs',
     solution: 'Automated cold chain compliance',
     description: 'CFR 21 Part 11 compliant temperature logging with SHA-256 integrity hashes. The system continuously monitors temperature, humidity, and other sensor data. When an excursion is detected, it automatically triggers quarantine workflows and creates investigation records. Compliance reports generate themselves.',
-    color: '#3b82f6',
+    color: '#8b5cf6',
   },
   {
-    problem: 'The same types of failures keep happening and nobody\u0027s tracking root causes',
-    solution: 'Root cause analysis & prevention',
-    description: 'CAPA reports separate the immediate corrective action from the long-term preventive action. Identify root causes, assign preventive measures with due dates, and verify that they actually worked. Over time, you build a knowledge base of what went wrong and how you fixed it.',
+    problem: 'GDP and SOP audits are paper-based and nobody knows if they are overdue',
+    solution: 'SOP checklists and GDP audit management',
+    description: 'Create reusable SOP checklists for GDP, cold chain, warehouse, and transport processes. Schedule audits on monthly, quarterly, or annual cycles. Each audit walks the auditor through every item with pass/fail/N-A responses, evidence uploads, and automatic scoring. Critical items that fail automatically flag the entire audit. Overdue checklists surface on the Quality Centre dashboard.',
+    color: '#f59e0b',
+  },
+  {
+    problem: 'The same types of failures keep happening and nobody is tracking root causes',
+    solution: 'Root cause analysis and CAPA effectiveness tracking',
+    description: 'CAPA reports separate the immediate corrective action from the long-term preventive action. Track root cause categories (equipment, process, personnel, environmental) across your operation. The CAPA effectiveness report shows follow-up completion rates and whether corrective actions were actually effective.',
     color: '#a855f7',
   },
   {
     problem: 'Audit time means weeks of frantic document gathering',
     solution: 'Audit-ready by design',
-    description: 'Every event in the system is immutable and timestamped. CAPA reports, temperature logs, exception timelines, and resolution actions are all queryable and exportable. When the auditor arrives, you pull the report \u2014 you don\u0027t scramble to reconstruct what happened.',
-    color: '#f59e0b',
+    description: 'Every event in the system is immutable and timestamped. CAPA reports, temperature logs, SOP audit results, exception timelines, and resolution actions are all queryable and exportable. When the auditor arrives, you pull the report - you do not scramble to reconstruct what happened.',
+    color: '#ef4444',
   },
 ]
 

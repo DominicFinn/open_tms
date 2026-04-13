@@ -842,6 +842,48 @@ UpdateCapaCommand emits different events based on what changed:
 
 ---
 
+## Quality Centre
+
+The Quality Centre provides aggregated quality metrics, CAPA follow-up management, and SOP/GDP audit capabilities.
+
+### Quality Issue Summary (Projection)
+
+The `QualityIssueSummaryProjection` maintains aggregated issue metrics by dimension (carrier, lane, location, customer). On every issue event, it resolves the source shipment's linked carrier, lane, origin/destination locations, and customer, then upserts the corresponding `QualityIssueSummary` rows with updated counts.
+
+### CAPA Follow-Ups
+
+| Command | Trigger | Events Emitted |
+|---------|---------|----------------|
+| `capa_follow_up.create` | `POST /api/v1/quality/capa-follow-ups` | `capa.follow_up_created` |
+| `capa_follow_up.complete` | `PUT /api/v1/quality/capa-follow-ups/:id/complete` | `capa.follow_up_completed` |
+
+Follow-up types: `30_day`, `60_day`, `90_day`, `ad_hoc`, `effectiveness_check`
+Outcomes: `on_track`, `needs_attention`, `escalated`, `closed_effective`, `closed_ineffective`
+
+The `POST /api/v1/quality/capa-follow-ups/schedule` endpoint auto-creates 30, 60, and 90-day follow-ups from the CAPA creation date.
+
+### SOP Checklists & Audits
+
+| Command | Trigger | Events Emitted |
+|---------|---------|----------------|
+| `sop_checklist.create` | `POST /api/v1/quality/sop-checklists` | `sop_checklist.created` |
+| `sop_audit.start` | `POST /api/v1/quality/sop-audits` | `sop_audit.started` |
+| `sop_audit.complete` | `PUT /api/v1/quality/sop-audits/:id/complete` | `sop_audit.completed` or `sop_audit.failed` |
+
+Audit scoring: pass rate calculated from responses. Critical item failure automatically fails the entire audit. Passing threshold: 80% with no critical failures.
+
+### Side Effects
+
+| Event | What Happens |
+|-------|-------------|
+| `issue.*` (created/updated/closed/resolved/needs_capa_marked) | `QualityIssueSummaryProjection` rebuilds aggregated metrics for linked carrier/lane/location/customer |
+| `capa.follow_up_created` | -- |
+| `capa.follow_up_completed` | -- |
+| `sop_audit.completed` | Updates checklist `lastCompletedAt` |
+| `sop_audit.failed` | Updates checklist `lastCompletedAt` |
+
+---
+
 ## ETA Monitoring
 
 The ETA monitor is a cron-driven background service (not a CQRS command) that checks in-transit shipments against traffic-aware routing APIs. It runs via pg-boss schedule and publishes events through the standard event bus.

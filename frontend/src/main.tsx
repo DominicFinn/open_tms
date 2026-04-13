@@ -102,6 +102,16 @@ import TradingPartners from './pages/TradingPartners';
 import VNextColdChainProfiles from './pages/VNextColdChainProfiles';
 import VNextCAPAReports from './pages/VNextCAPAReports';
 
+// VNext Quality Centre Pages
+import VNextQualityDashboard from './vnext-design/VNextQualityDashboard';
+import VNextQualityIssueSummaries from './vnext-design/VNextQualityIssueSummaries';
+import VNextQualityCapa from './vnext-design/VNextQualityCapa';
+import VNextQualitySopChecklists from './vnext-design/VNextQualitySopChecklists';
+import VNextQualitySopAudits from './vnext-design/VNextQualitySopAudits';
+import VNextQualityCarrierScorecard from './vnext-design/VNextQualityCarrierScorecard';
+import VNextQualityLaneAnalysis from './vnext-design/VNextQualityLaneAnalysis';
+import VNextQualityCapaEffectiveness from './vnext-design/VNextQualityCapaEffectiveness';
+
 // Warehouse App
 import { WarehouseLayout } from './warehouse/warehouse-layout';
 import WarehouseLogin from './warehouse/WarehouseLogin';
@@ -212,6 +222,16 @@ root.render(
           {/* Cold Chain & Compliance */}
           <Route path="cold-chain/profiles" element={<VNextColdChainProfiles />} />
           <Route path="cold-chain/capa" element={<VNextCAPAReports />} />
+
+          {/* Quality Centre */}
+          <Route path="quality" element={<VNextQualityDashboard />} />
+          <Route path="quality/summaries" element={<VNextQualityIssueSummaries />} />
+          <Route path="quality/capa" element={<VNextQualityCapa />} />
+          <Route path="quality/sop-checklists" element={<VNextQualitySopChecklists />} />
+          <Route path="quality/sop-audits" element={<VNextQualitySopAudits />} />
+          <Route path="quality/carrier-scorecard" element={<VNextQualityCarrierScorecard />} />
+          <Route path="quality/lane-analysis" element={<VNextQualityLaneAnalysis />} />
+          <Route path="quality/capa-effectiveness" element={<VNextQualityCapaEffectiveness />} />
 
           {/* Documents & Reports */}
           <Route path="documents" element={<VNextDocuments />} />

@@ -557,7 +557,7 @@ export default function VNextIssueDetail() {
               ) : (
                 (issue.capaReports || []).map((capa: any) => (
                   <div key={capa.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
-                    <Link to={`/cold-chain/capa`} style={{ color: 'var(--primary)', textDecoration: 'none', fontSize: 12 }}>{capa.reportNumber}</Link>
+                    <Link to={`/quality/capa`} style={{ color: 'var(--primary)', textDecoration: 'none', fontSize: 12 }}>{capa.reportNumber}</Link>
                     <span className="vn-chip" style={{ fontSize: 10 }}>{capa.status}</span>
                   </div>
                 ))
@@ -567,7 +567,7 @@ export default function VNextIssueDetail() {
                   <span className="material-icons" style={{ fontSize: 14, verticalAlign: 'middle' }}>assignment_late</span> CAPA required for this issue
                 </div>
               )}
-              <Link to={`/cold-chain/capa?issueId=${id}`} className="vn-btn" style={{ marginTop: 8, fontSize: 12, width: '100%', textAlign: 'center', textDecoration: 'none', display: 'block' }}>
+              <Link to={`/quality/capa?createFromIssue=${id}`} className="vn-btn" style={{ marginTop: 8, fontSize: 12, width: '100%', textAlign: 'center', textDecoration: 'none', display: 'block' }}>
                 Create CAPA Report
               </Link>
             </div>
