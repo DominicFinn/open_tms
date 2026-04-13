@@ -235,6 +235,100 @@ export async function tradingPartnerRoutes(server: FastifyInstance) {
     }
   });
 
+  // ── Connection test ──
+
+  server.post('/api/v1/trading-partners/:id/test-connection', {
+    schema: {
+      tags: ['Trading Partners'],
+      summary: 'Test SFTP or HTTP connection for a trading partner',
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const partner = await partnerRepo.findById(id);
+    if (!partner) {
+      reply.code(404);
+      return { data: null, error: 'Trading partner not found' };
+    }
+
+    // Test SFTP connection
+    if (partner.sftpHost) {
+      try {
+        const SftpClient = (await import('ssh2-sftp-client')).default;
+        const sftp = new SftpClient();
+        const connectConfig: any = {
+          host: partner.sftpHost,
+          port: partner.sftpPort || 22,
+          username: partner.sftpUsername || '',
+          readyTimeout: 10000,
+        };
+        if (partner.sftpPrivateKey) {
+          connectConfig.privateKey = partner.sftpPrivateKey;
+        } else if (partner.sftpPassword) {
+          connectConfig.password = partner.sftpPassword;
+        }
+
+        await sftp.connect(connectConfig);
+
+        // Try to list the inbound directory if configured
+        let dirListing: string[] = [];
+        const testDir = partner.inboundEnabled ? (partner.inboundDir || '/') : '/';
+        try {
+          const files = await sftp.list(testDir);
+          dirListing = files.slice(0, 5).map((f: any) => f.name);
+        } catch {
+          // Directory might not exist but connection works
+        }
+
+        await sftp.end();
+
+        return {
+          data: {
+            sftp: { success: true, host: partner.sftpHost, port: partner.sftpPort, directory: testDir, sampleFiles: dirListing },
+          },
+          error: null,
+        };
+      } catch (err: any) {
+        return {
+          data: { sftp: { success: false, host: partner.sftpHost, error: err.message } },
+          error: `SFTP connection failed: ${err.message}`,
+        };
+      }
+    }
+
+    // Test HTTP connection
+    if (partner.httpUrl) {
+      try {
+        const headers: Record<string, string> = { 'Content-Type': 'application/edi-x12' };
+        if (partner.httpAuthType === 'bearer' && partner.httpAuthValue) {
+          headers['Authorization'] = `Bearer ${partner.httpAuthValue}`;
+        } else if (partner.httpAuthType === 'api_key' && partner.httpAuthHeader && partner.httpAuthValue) {
+          headers[partner.httpAuthHeader] = partner.httpAuthValue;
+        }
+
+        const response = await fetch(partner.httpUrl, {
+          method: 'HEAD',
+          headers,
+          signal: AbortSignal.timeout(10000),
+        });
+
+        return {
+          data: {
+            http: { success: response.ok, url: partner.httpUrl, statusCode: response.status },
+          },
+          error: response.ok ? null : `HTTP returned ${response.status}`,
+        };
+      } catch (err: any) {
+        return {
+          data: { http: { success: false, url: partner.httpUrl, error: err.message } },
+          error: `HTTP connection failed: ${err.message}`,
+        };
+      }
+    }
+
+    reply.code(400);
+    return { data: null, error: 'No SFTP or HTTP connection configured for this partner' };
+  });
+
   // ── Transaction logs ──
 
   server.get('/api/v1/trading-partners/:id/logs', {

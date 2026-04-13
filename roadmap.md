@@ -443,64 +443,53 @@
   - OAuth/API key authentication for N8N callbacks into Open TMS
   - Pre-built workflow templates (e.g., auto-notify on exception, escalate delayed shipments)
 
-## **Phase 8b: EDI Communication Hub**
-The current EDI infrastructure handles inbound 850 (SFTP polling) and outbound 856 (HTTP push) as separate systems. This phase unifies all EDI communication into a single **Trading Partner** model that handles any transaction type, any direction, and any transport method.
+## **Phase 8b: EDI Communication Hub** ✅
+Unified EDI infrastructure with 9 X12 transaction types, shared X12 envelope utilities, universal inbound endpoint, event-driven outbound, and EDI Portal UI.
 
-- **Unified Trading Partner Model** 🔲
-  - Replace separate EdiPartner (inbound-only) and OutboundIntegration (outbound-only) with a unified TradingPartner model
-  - Each partner has: entity type (customer, carrier, 3PL, warehouse, ERP), transport config (SFTP, HTTP/API, AS2), and direction (inbound, outbound, bidirectional)
-  - TradingPartnerTransaction registry: which EDI types each partner supports, with per-type config overrides
-  - Support multiple connections per partner (e.g., carrier has SFTP for inbound 990 + HTTP for outbound 204)
-  - Migration path from existing EdiPartner and OutboundIntegration data
-- **Transaction Type Registry** 🔲
-  - EDI 850 (Purchase Order): Customer/ERP → TMS (inbound) ✅ exists
-  - EDI 855 (PO Acknowledgment): TMS → Customer/ERP (outbound)
-  - EDI 856 (Advance Ship Notice): TMS → Customer/Carrier/ERP (outbound) ✅ exists
-  - EDI 204 (Motor Carrier Load Tender): TMS → Carrier (outbound) ✅ exists
-  - EDI 990 (Response to Load Tender): Carrier → TMS (inbound) ✅ exists
-  - EDI 214 (Shipment Status Message): Carrier → TMS (inbound) + TMS → Customer (outbound)
-  - EDI 210 (Freight Invoice): Carrier → TMS (inbound)
-  - EDI 997 (Functional Acknowledgment): bidirectional — auto-generated on every inbound transaction
-  - EDI 810 (Invoice): TMS → Customer (outbound)
-  - EDI 820 (Payment Order/Remittance): Customer → TMS (inbound)
-- **Outbound EDI Delivery Engine** 🔲
-  - Queue-based outbound delivery worker (extends existing outboundCarrierWorker pattern)
-  - SFTP writer: connect to partner's SFTP, write EDI file to configured outbound directory
-  - HTTP/API sender: POST EDI content to partner's endpoint (existing pattern from GenericEdiCarrierAdapter)
-  - AS2 transport: Applicability Statement 2 for enterprise trading partners (MDN receipts, encryption)
-  - Outbound file naming conventions (configurable per partner: date-based, sequence-based, etc.)
-  - Delivery confirmation tracking and retry logic
-  - Outbound EDI audit log (what was sent, when, to whom, delivery status)
-- **Inbound EDI Router** 🔲
-  - Extend edi-collector to detect transaction type from ST segment (850, 990, 214, 210, etc.)
-  - Route to appropriate parser service based on transaction type
-  - Support multiple inbound file patterns per partner (*.850, *.990, *.214, *.210)
-  - Inbound EDI 997 auto-generation: acknowledge every received transaction
-  - Inbound file archival after processing
-- **EDI 214 (Shipment Status) Service** ✅
-  - ✅ Inbound: parse carrier status updates (pickup, in-transit, delivered) → update shipment status
-  - ✅ Outbound: generate status messages for customers based on shipment events
-  - ✅ Status code mapping: AF (pickup), X1/X3 (arrived), X6 (en route), D1 (delivered), A7 (refused), A9 (damaged), etc.
-  - ✅ Integration with existing ShipmentEvent model
-  - ✅ Auto-forward inbound 214 to customer trading partners
-  - ✅ Stop-level status updates from AT7+MS1 location matching
-  - ✅ 997 acknowledgment auto-generation for inbound 214
-  - ✅ EDI collector SFTP polling support for 214 files
-- **EDI 210 (Freight Invoice) Service** 🔲
-  - Inbound: parse carrier freight invoices → create billing records
-  - Three-way matching: tender rate vs shipment status vs invoice amount
-  - Discrepancy detection and flagging
-  - Feeds into Phase 7 (Financial & Commercial) freight audit
-- **EDI 997 (Functional Acknowledgment)** 🔲
-  - Auto-generate 997 for every inbound EDI transaction
-  - Track 997 receipt for outbound transactions (was our 204 acknowledged?)
-  - Configurable: require 997 within N hours or alert
-- **Trading Partner Management UI** 🔲
-  - Unified partner configuration page in Integrations app
-  - Per-partner: connection config, supported transaction types, field mappings, test connection
-  - Transaction activity dashboard: sent/received counts per type, error rates
-  - EDI file browser: view all inbound/outbound files per partner with content preview
-  - Replace separate EDI Partners and Outbound Integrations pages
+- **Unified Trading Partner Model** ✅
+  - ✅ TradingPartner replaces separate EdiPartner and OutboundIntegration models
+  - ✅ Entity types: customer, carrier, 3PL, warehouse, ERP, other
+  - ✅ Transport config: SFTP + HTTP/API with auth (basic, bearer, api_key)
+  - ✅ TradingPartnerTransaction registry per partner per type per direction
+  - ✅ EdiTransactionLog unified audit log (nullable partnerId for manual imports)
+- **Transaction Type Registry** ✅ (9 types active)
+  - ✅ EDI 850 (Purchase Order): inbound parser + order creation
+  - ✅ EDI 856 (Advance Ship Notice): outbound generator + auto-send on delivery
+  - ✅ EDI 204 (Motor Carrier Load Tender): outbound generator
+  - ✅ EDI 990 (Response to Load Tender): inbound parser + bid/decline processing
+  - ✅ EDI 214 (Shipment Status): both directions, auto-forward to customers
+  - ✅ EDI 210 (Freight Invoice): inbound parser + three-way match
+  - ✅ EDI 997 (Functional Acknowledgment): both directions, auto-ack for all inbound
+  - ✅ EDI 810 (Invoice): outbound generator + auto-send on invoice sent
+  - ✅ EDI 820 (Payment/Remittance): inbound parser + auto-record payments
+  - 🔲 EDI 855 (PO Acknowledgment): planned
+- **Shared X12 Infrastructure** ✅
+  - ✅ X12EnvelopeBuilder: ISA/GS/ST/SE/GE/IEA with fixed-width ISA, GS functional IDs
+  - ✅ X12EnvelopeParser: separator detection, envelope validation, body extraction
+  - ✅ All parsers use X12EnvelopeParser, all generators use X12EnvelopeBuilder
+  - ✅ validateAndGenerate() on all generators with EdiOperationResult<T>
+  - ✅ TRANSACTION_TO_GS / GS_TO_TRANSACTION bidirectional maps
+- **Universal Inbound Endpoint** ✅
+  - ✅ POST /api/v1/edi/inbound: auto-detect type, validate partner, route, log, 997 ack
+  - ✅ EdiRouterService: type detection from ST + GS fallback, route map
+  - ✅ edi-collector simplified to send all files to universal endpoint
+  - ✅ Failed files retried on next poll (not marked as seen)
+- **Outbound EDI Delivery Engine** ✅
+  - ✅ OutboundEdiDeliveryService: SFTP writer + HTTP sender with auth
+  - ✅ File naming: date, sequence, reference strategies
+  - ✅ Delivery logging with status tracking
+  - ✅ Event-driven auto-send: Edi856AutoSendHandler (on delivered), Edi810AutoSendHandler (on invoice sent), Edi214ForwardHandler (on 214 received)
+  - 🔲 AS2 transport (enterprise)
+  - 🔲 Queue-based retry with exponential backoff
+- **EDI Portal UI** ✅
+  - ✅ EDI Dashboard: stats, recent activity, partner health
+  - ✅ Trading Partners: full CRUD, transaction type management, connection test
+  - ✅ Transaction Log: unified viewer with filters, pagination, detail modal, retry
+  - ✅ EDI Import: universal import page with file upload, paste, auto-type detection
+- **Test Coverage** ✅
+  - ✅ 167 EDI tests across 15 test suites
+  - ✅ X12EnvelopeBuilder (19 tests), X12EnvelopeParser (21 tests)
+  - ✅ Tests for 204, 210, 214, 810, 820, 990, 997, Router, OutboundDelivery
 - **SAP / ERP Integration Patterns** 🔲
   - SAP iDoc ↔ X12 EDI mapping templates
   - Configurable field mapping UI for non-standard ERP formats

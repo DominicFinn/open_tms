@@ -570,25 +570,54 @@ raised → investigating → resolved_adjusted (credit note generated)
 
 ---
 
-## EDI Financial Transactions
+## EDI Communication Hub
 
-### EDI 210 — Freight Invoice (Inbound)
+### Universal Inbound Processing
 
-Carrier sends an EDI 210 freight invoice. The `EDI210ParseService` parses B3/N1/LX/L5/L0/L1/L3 segments and creates a `CarrierInvoice` with line items. The `ReceiveCarrierInvoiceCommand` then performs the automatic three-way match (see Carrier Invoices section above).
+All inbound EDI is processed through the **universal inbound endpoint** (`POST /api/v1/edi/inbound`). The endpoint auto-detects the transaction type, validates partner support, routes to the correct handler, logs to `EdiTransactionLog`, and auto-generates 997 acknowledgments.
 
-**Flow:** SFTP poll → edi-collector detects 210 → `POST /api/v1/edi/210/inbound` → `EDI210ParseService` → `ReceiveCarrierInvoiceCommand` → three-way match → auto-approve or flag discrepancy
+**Flow:** SFTP poll (edi-collector) or API POST → `/api/v1/edi/inbound` → `EdiRouterService` detects type → route to handler → log result → send 997 ack if configured
 
-### EDI 810 — Invoice (Outbound)
+### Inbound Transaction Types
 
-TMS generates an EDI 810 invoice for the customer. The `EDI810Service` produces the full X12 envelope (ISA/GS/ST) with BIG (invoice header), N1 (name/address), ITD (payment terms), IT1 (line items), TDS (total), and CTT (transaction count) segments.
+| Type | Parser | Route | Handler Action |
+|------|--------|-------|----------------|
+| 850 | `EDI850ParseService` | `/api/v1/orders/import/edi` | Parse PO, create Orders |
+| 990 | `EDI990ParseService` | `/api/v1/edi/tender/990` | Parse accept/decline, submit bid or decline offer |
+| 997 | `EDI997Service.parse997()` | `/api/v1/edi/997/inbound` | Parse ack, update original outbound log |
+| 214 | `EDI214ParseService` | `/api/v1/edi/214/inbound` | Parse status, update Shipment via `ProcessInbound214Command` |
+| 210 | `EDI210ParseService` | `/api/v1/edi/210/inbound` | Parse freight invoice, `ReceiveCarrierInvoiceCommand`, three-way match |
+| 820 | `EDI820ParseService` | `/api/v1/edi/820/inbound` | Parse remittance, `RecordPaymentCommand` per invoice |
 
-**Flow:** Invoice approved + customer has TradingPartner with outbound 810 enabled → `EDI810Service.generate()` → `OutboundEdiDeliveryService` delivers via SFTP or HTTP
+### Outbound Transaction Types
 
-### EDI 820 — Payment Order/Remittance (Inbound)
+| Type | Generator | Trigger |
+|------|-----------|---------|
+| 204 | `EDI204Service` | Tender opened (manual via API) |
+| 214 | `EDI214Service` | Inbound 214 received → `Edi214ForwardHandler` auto-forwards to customer |
+| 810 | `EDI810Service` | Invoice sent → `Edi810AutoSendHandler` sends to customer partner |
+| 856 | `EDI856Service` | Shipment delivered → `Edi856AutoSendHandler` sends to customer partner |
+| 997 | `EDI997Service` | Any inbound processed → auto-ack if partner config `ack997Required` |
 
-Customer sends an EDI 820 remittance advice. The `EDI820ParseService` parses payment details and matches to outstanding invoices via invoice number.
+### EDI Events
 
-**Flow:** SFTP poll → edi-collector detects 820 → `POST /api/v1/edi/820/inbound` → `EDI820ParseService` → `RecordPaymentCommand` → invoice payment applied
+| Event | Trigger | Side Effects |
+|-------|---------|-------------|
+| `edi_status.received` | Inbound 214 processed | `Edi214ForwardHandler` auto-forwards to customer partners |
+| `edi_status.sent` | Outbound 214 delivered | Logged to `EdiTransactionLog` |
+| `edi.file_received` | Any inbound EDI processed | Generic tracking |
+| `edi.file_sent` | Any outbound EDI delivered | Generic tracking |
+| `edi.file_failed` | Parse or delivery failure | Error logged |
+| `shipment.delivered` | Shipment delivery confirmed | `Edi856AutoSendHandler` sends 856 to customer partners |
+| `invoice.sent` | Invoice sent to customer | `Edi810AutoSendHandler` sends 810 to customer partners |
+
+### Shared X12 Infrastructure
+
+All EDI generators use `X12EnvelopeBuilder` for ISA/GS/ST/SE/GE/IEA envelope construction. All parsers use `X12EnvelopeParser` for envelope validation and body segment extraction. Generators have `validateAndGenerate()` methods returning `EdiOperationResult<T>` with errors/warnings instead of crashing.
+
+### Logging
+
+All EDI operations log to `EdiTransactionLog` with: transaction type, direction, partner, raw content, file hash (dedup), parse result, created entities, 997 ack status, retry count. The unified log viewer at `/integrations/edi/logs` shows all types in one table.
 
 ---
 
@@ -600,6 +629,10 @@ Customer sends an EDI 820 remittance advice. The `EDI820ParseService` parses pay
 |---------|---------|----------------|
 | `CreateTradingPartnerCommand` | `POST /api/v1/trading-partners` | `trading_partner.created` |
 | `UpdateTradingPartnerCommand` | `PUT /api/v1/trading-partners/:id` | `trading_partner.updated` |
+
+### Connection Testing
+
+`POST /api/v1/trading-partners/:id/test-connection` tests SFTP (connect + list directory) or HTTP (HEAD request with auth) and returns success/failure with details.
 
 ---
 

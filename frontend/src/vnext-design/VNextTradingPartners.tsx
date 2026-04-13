@@ -93,6 +93,8 @@ export default function VNextTradingPartners() {
   const [form, setForm] = useState<FormData>(EMPTY_FORM);
   const [typeFilter, setTypeFilter] = useState('');
   const [search, setSearch] = useState('');
+  const [connTestResult, setConnTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [connTestLoading, setConnTestLoading] = useState(false);
 
   const fetchPartners = useCallback(async () => {
     setLoading(true);
@@ -172,6 +174,32 @@ export default function VNextTradingPartners() {
     }
     setShowForm(false);
     fetchPartners();
+  };
+
+  const testConnection = async (partnerId: string) => {
+    setConnTestLoading(true);
+    setConnTestResult(null);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/trading-partners/${partnerId}/test-connection`, { method: 'POST' });
+      const json = await res.json();
+      if (json.error) {
+        setConnTestResult({ success: false, message: json.error });
+      } else {
+        const sftp = json.data?.sftp;
+        const http = json.data?.http;
+        if (sftp?.success) {
+          setConnTestResult({ success: true, message: `SFTP connected to ${sftp.host}. Files: ${sftp.sampleFiles?.join(', ') || 'none visible'}` });
+        } else if (http?.success) {
+          setConnTestResult({ success: true, message: `HTTP OK (${http.statusCode}) at ${http.url}` });
+        } else {
+          setConnTestResult({ success: false, message: sftp?.error || http?.error || 'Connection failed' });
+        }
+      }
+    } catch (err: any) {
+      setConnTestResult({ success: false, message: err.message });
+    } finally {
+      setConnTestLoading(false);
+    }
   };
 
   // Transaction type management
@@ -328,6 +356,21 @@ export default function VNextTradingPartners() {
                   <input className="vn-input" type="password" value={form.sftpPassword} onChange={e => setForm({ ...form, sftpPassword: e.target.value })} placeholder={editingId ? '(unchanged)' : ''} />
                 </div>
               </div>
+
+              {editingId && (
+                <div style={{ marginTop: '0.75rem' }}>
+                  <button className="vn-btn" onClick={() => testConnection(editingId)} disabled={connTestLoading}
+                    style={{ fontSize: '0.8rem' }}>
+                    {connTestLoading ? 'Testing...' : 'Test Connection'}
+                  </button>
+                  {connTestResult && (
+                    <div className={`vn-alert ${connTestResult.success ? 'vn-alert-success' : 'vn-alert-error'}`}
+                      style={{ marginTop: '0.5rem', fontSize: '0.8rem' }}>
+                      {connTestResult.message}
+                    </div>
+                  )}
+                </div>
+              )}
 
               <h3 style={{ marginTop: '1.5rem', marginBottom: '0.75rem', fontSize: '1rem' }}>Inbound (Polling)</h3>
               <div className="vn-form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
