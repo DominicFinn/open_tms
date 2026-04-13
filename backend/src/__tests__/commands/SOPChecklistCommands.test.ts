@@ -105,7 +105,7 @@ describe('SOP Checklist Command Handlers', () => {
       );
 
       expect(result.success).toBe(true);
-      expect(result.data?.auditNumber).toBe('AUDIT-20260412-001');
+      expect(result.data?.auditNumber).toMatch(/^AUDIT-\d{8}-001$/);
       expect(result.events).toHaveLength(1);
       expect(result.events[0].type).toBe(EVENT_TYPES.SOP_AUDIT_STARTED);
       expect(result.events[0].payload).toEqual(

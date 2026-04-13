@@ -13,6 +13,7 @@ export interface CompleteCAPAFollowUpPayload {
   notes?: string;
   outcome: string;   // "on_track", "needs_attention", "escalated", "closed_effective", "closed_ineffective"
   actionItems?: string;
+  completedByName?: string;
 }
 
 export const COMPLETE_CAPA_FOLLOW_UP = 'capa_follow_up.complete';
@@ -29,7 +30,7 @@ export class CompleteCAPAFollowUpCommandHandler extends BaseCommandHandler<Compl
     tx: TransactionClient,
     emit: EmitFn,
   ): Promise<{ id: string }> {
-    const { followUpId, notes, outcome, actionItems } = command.payload;
+    const { followUpId, notes, outcome, actionItems, completedByName } = command.payload;
 
     const followUp = await tx.cAPAFollowUp.findFirst({
       where: { id: followUpId, orgId: command.orgId },
@@ -45,7 +46,7 @@ export class CompleteCAPAFollowUpCommandHandler extends BaseCommandHandler<Compl
         status: 'completed',
         completedAt: new Date(),
         completedById: command.actorId,
-        completedByName: null,
+        completedByName: completedByName ?? null,
         notes: notes ?? followUp.notes,
         outcome,
         actionItems: actionItems ?? followUp.actionItems,

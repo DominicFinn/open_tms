@@ -357,6 +357,7 @@ export async function qualityCentreRoutes(server: FastifyInstance) {
           outcome: { type: 'string', enum: ['on_track', 'needs_attention', 'escalated', 'closed_effective', 'closed_ineffective'] },
           notes: { type: 'string' },
           actionItems: { type: 'string' },
+          completedByName: { type: 'string', description: 'Name of person completing the review' },
         },
       },
     },
