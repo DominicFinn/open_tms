@@ -5,7 +5,7 @@ import { TOKENS } from '../di/tokens.js';
 import { IAttachmentRepository } from '../repositories/AttachmentRepository.js';
 import { IBinaryStorageProvider } from '../storage/IBinaryStorageProvider.js';
 
-const VALID_ENTITY_TYPES = ['shipment', 'order', 'carrier', 'customer', 'location'];
+const VALID_ENTITY_TYPES = ['shipment', 'order', 'carrier', 'customer', 'location', 'sop_audit'];
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
 
 const attachmentObject = {

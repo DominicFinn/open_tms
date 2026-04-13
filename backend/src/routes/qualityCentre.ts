@@ -9,6 +9,8 @@ import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { randomUUID } from 'crypto';
 import { container, TOKENS } from '../di/index.js';
 import { ICommandBus } from '../commands/CommandBus.js';
+import { IBinaryStorageProvider } from '../storage/IBinaryStorageProvider.js';
+import { IAttachmentRepository } from '../repositories/AttachmentRepository.js';
 import { CREATE_CAPA_FOLLOW_UP } from '../commands/capaFollowUps/CreateCAPAFollowUpCommand.js';
 import { COMPLETE_CAPA_FOLLOW_UP } from '../commands/capaFollowUps/CompleteCAPAFollowUpCommand.js';
 import { CREATE_SOP_CHECKLIST } from '../commands/sopChecklists/CreateSOPChecklistCommand.js';
@@ -826,5 +828,156 @@ export async function qualityCentreRoutes(server: FastifyInstance) {
     });
 
     return { data: report, error: null };
+  });
+
+  // ─── SOP Audit Evidence Upload ─────────────────────────────────────────────
+
+  const storageProvider = container.resolve<IBinaryStorageProvider>(TOKENS.IBinaryStorageProvider);
+  const attachmentRepo = container.resolve<IAttachmentRepository>(TOKENS.IAttachmentRepository);
+
+  server.post('/api/v1/quality/sop-audits/:auditId/evidence', {
+    schema: {
+      tags: ['Quality Centre'],
+      summary: 'Upload evidence for an SOP audit item',
+      description: 'Uploads a file as evidence for a specific checklist item in an audit. Returns the attachment with storageKey for use in audit completion.',
+      params: {
+        type: 'object',
+        required: ['auditId'],
+        properties: { auditId: { type: 'string' } },
+      },
+      consumes: ['multipart/form-data'],
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { auditId } = req.params as { auditId: string };
+    const orgId = await getOrgId();
+
+    // Verify audit exists and belongs to org
+    const audit = await server.prisma.sOPAudit.findFirst({
+      where: { id: auditId, orgId },
+    });
+    if (!audit) {
+      reply.code(404);
+      return { data: null, error: 'Audit not found' };
+    }
+
+    const data = await req.file();
+    if (!data) {
+      reply.code(400);
+      return { data: null, error: 'No file uploaded. Send multipart form with field "file".' };
+    }
+
+    const checklistItemId = (data.fields.checklistItemId as any)?.value as string | undefined;
+    const description = (data.fields.description as any)?.value as string | undefined;
+
+    const fileBuffer = await data.toBuffer();
+    const maxSize = 50 * 1024 * 1024;
+    if (fileBuffer.length > maxSize) {
+      reply.code(400);
+      return { data: null, error: 'File too large. Maximum size is 50 MB.' };
+    }
+
+    const fileName = data.filename;
+    const mimeType = data.mimetype || 'application/octet-stream';
+    const storageKey = `files/${randomUUID()}`;
+
+    const retentionExpiresAt = new Date();
+    retentionExpiresAt.setFullYear(retentionExpiresAt.getFullYear() + 10);
+
+    await storageProvider.store(storageKey, fileBuffer, {
+      'content-type': mimeType,
+      'original-filename': fileName,
+    });
+
+    const storageBackend = process.env.S3_ENDPOINT && process.env.S3_BUCKET ? 's3' : 'database';
+
+    const attachment = await attachmentRepo.create({
+      entityType: 'sop_audit',
+      entityId: auditId,
+      fileName,
+      mimeType,
+      fileSize: fileBuffer.length,
+      storageKey,
+      storageBackend,
+      uploadedBy: 'system',
+      description: description || (checklistItemId ? `Evidence for checklist item ${checklistItemId}` : 'Audit evidence'),
+      retentionExpiresAt,
+    });
+
+    return {
+      data: {
+        id: attachment.id,
+        storageKey,
+        fileName,
+        mimeType,
+        fileSize: fileBuffer.length,
+        checklistItemId: checklistItemId || null,
+      },
+      error: null,
+    };
+  });
+
+  server.get('/api/v1/quality/sop-audits/:auditId/evidence', {
+    schema: {
+      tags: ['Quality Centre'],
+      summary: 'List evidence files for an SOP audit',
+      params: {
+        type: 'object',
+        required: ['auditId'],
+        properties: { auditId: { type: 'string' } },
+      },
+    },
+  }, async (req: FastifyRequest, _reply: FastifyReply) => {
+    const { auditId } = req.params as { auditId: string };
+    const attachments = await attachmentRepo.findByEntity('sop_audit', auditId);
+    return { data: attachments, error: null };
+  });
+
+  // Update a single audit response (for adding evidence/corrective actions after audit starts)
+  server.put('/api/v1/quality/sop-audits/:auditId/responses/:responseId', {
+    schema: {
+      tags: ['Quality Centre'],
+      summary: 'Update an audit response',
+      description: 'Updates evidence reference or corrective action for a specific audit response.',
+      params: {
+        type: 'object',
+        required: ['auditId', 'responseId'],
+        properties: {
+          auditId: { type: 'string' },
+          responseId: { type: 'string' },
+        },
+      },
+      body: {
+        type: 'object',
+        properties: {
+          evidenceRef: { type: 'string', description: 'Storage key of uploaded evidence file' },
+          correctiveAction: { type: 'string', description: 'Corrective action required for this item' },
+          notes: { type: 'string' },
+          result: { type: 'string', enum: ['pass', 'fail', 'na', 'observation'] },
+        },
+      },
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { responseId } = req.params as { auditId: string; responseId: string };
+    const body = req.body as any;
+
+    const existing = await server.prisma.sOPAuditResponse.findUnique({
+      where: { id: responseId },
+    });
+    if (!existing) {
+      reply.code(404);
+      return { data: null, error: 'Audit response not found' };
+    }
+
+    const updated = await server.prisma.sOPAuditResponse.update({
+      where: { id: responseId },
+      data: {
+        evidenceRef: body.evidenceRef !== undefined ? body.evidenceRef : undefined,
+        correctiveAction: body.correctiveAction !== undefined ? body.correctiveAction : undefined,
+        notes: body.notes !== undefined ? body.notes : undefined,
+        result: body.result !== undefined ? body.result : undefined,
+      },
+    });
+
+    return { data: updated, error: null };
   });
 }

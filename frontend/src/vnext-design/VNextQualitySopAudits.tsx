@@ -48,6 +48,15 @@ interface AuditResponse {
   checklistItemId: string;
   result: string;
   notes: string | null;
+  evidenceRef: string | null;
+  correctiveAction: string | null;
+}
+
+interface EvidenceFile {
+  id: string;
+  fileName: string;
+  storageKey: string;
+  checklistItemId: string | null;
 }
 
 const STATUS_CHIPS: Record<string, string> = {
@@ -78,9 +87,12 @@ export default function VNextQualitySopAudits() {
 
   // Audit detail / complete
   const [detail, setDetail] = useState<AuditDetail | null>(null);
-  const [responses, setResponses] = useState<Record<string, { result: string; notes: string }>>({});
+  const [responses, setResponses] = useState<Record<string, { result: string; notes: string; correctiveAction: string; evidenceRef: string }>>({});
   const [completingFindings, setCompletingFindings] = useState('');
+  const [completingCorrectiveActions, setCompletingCorrectiveActions] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [evidenceFiles, setEvidenceFiles] = useState<Record<string, EvidenceFile>>({});
+  const [uploadingItem, setUploadingItem] = useState<string | null>(null);
 
   const fetchAudits = useCallback(async () => {
     setLoading(true);
@@ -129,11 +141,27 @@ export default function VNextQualitySopAudits() {
       const json = await res.json();
       setDetail(json.data);
       // Pre-fill responses from existing
-      const resps: Record<string, { result: string; notes: string }> = {};
+      const resps: Record<string, { result: string; notes: string; correctiveAction: string; evidenceRef: string }> = {};
       for (const r of (json.data?.responses || [])) {
-        resps[r.checklistItemId] = { result: r.result, notes: r.notes || '' };
+        resps[r.checklistItemId] = {
+          result: r.result,
+          notes: r.notes || '',
+          correctiveAction: r.correctiveAction || '',
+          evidenceRef: r.evidenceRef || '',
+        };
       }
       setResponses(resps);
+      // Load existing evidence files
+      try {
+        const evRes = await fetch(`${API_URL}/api/v1/quality/sop-audits/${auditId}/evidence`);
+        const evJson = await evRes.json();
+        const evMap: Record<string, EvidenceFile> = {};
+        for (const att of (evJson.data || [])) {
+          // Match by description pattern or storageKey
+          evMap[att.id] = att;
+        }
+        // We don't map evidence to items here since we track by storageKey in responses
+      } catch { /* ignore */ }
     } catch { /* ignore */ }
   };
 
@@ -144,6 +172,8 @@ export default function VNextQualitySopAudits() {
       checklistItemId,
       result: r.result,
       notes: r.notes || undefined,
+      correctiveAction: r.correctiveAction || undefined,
+      evidenceRef: r.evidenceRef || undefined,
     }));
 
     try {
@@ -153,6 +183,7 @@ export default function VNextQualitySopAudits() {
         body: JSON.stringify({
           responses: responseList,
           findings: completingFindings || undefined,
+          correctiveActions: completingCorrectiveActions || undefined,
         }),
       });
       const json = await res.json();
@@ -164,11 +195,40 @@ export default function VNextQualitySopAudits() {
     setSubmitting(false);
   };
 
-  const setResponse = (itemId: string, field: 'result' | 'notes', value: string) => {
+  const setResponse = (itemId: string, field: 'result' | 'notes' | 'correctiveAction' | 'evidenceRef', value: string) => {
     setResponses(prev => ({
       ...prev,
-      [itemId]: { ...prev[itemId], [field]: value, result: prev[itemId]?.result || 'pass' },
+      [itemId]: {
+        result: prev[itemId]?.result || '',
+        notes: prev[itemId]?.notes || '',
+        correctiveAction: prev[itemId]?.correctiveAction || '',
+        evidenceRef: prev[itemId]?.evidenceRef || '',
+        [field]: value,
+      },
     }));
+  };
+
+  const uploadEvidence = async (itemId: string, file: File) => {
+    if (!detail) return;
+    setUploadingItem(itemId);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('checklistItemId', itemId);
+      const res = await fetch(`${API_URL}/api/v1/quality/sop-audits/${detail.id}/evidence`, {
+        method: 'POST',
+        body: formData,
+      });
+      const json = await res.json();
+      if (json.data) {
+        setResponse(itemId, 'evidenceRef', json.data.storageKey);
+        setEvidenceFiles(prev => ({
+          ...prev,
+          [itemId]: { id: json.data.id, fileName: json.data.fileName, storageKey: json.data.storageKey, checklistItemId: itemId },
+        }));
+      }
+    } catch { /* ignore */ }
+    setUploadingItem(null);
   };
 
   const stats = {
@@ -279,24 +339,84 @@ export default function VNextQualitySopAudits() {
                           ))}
                         </div>
                       </div>
-                      {responses[item.id]?.result === 'fail' && (
+                      {/* Notes - shown when any result is selected */}
+                      {responses[item.id]?.result && (
                         <textarea
                           className="vn-input"
                           style={{ marginTop: 8, fontSize: 12 }}
                           rows={2}
-                          placeholder="Notes / corrective action needed..."
+                          placeholder="Notes..."
                           value={responses[item.id]?.notes || ''}
                           onChange={e => setResponse(item.id, 'notes', e.target.value)}
                         />
+                      )}
+
+                      {/* Corrective action - shown on fail or observation */}
+                      {(responses[item.id]?.result === 'fail' || responses[item.id]?.result === 'observation') && (
+                        <textarea
+                          className="vn-input"
+                          style={{ marginTop: 8, fontSize: 12, borderColor: 'var(--color-warning)' }}
+                          rows={2}
+                          placeholder="Corrective action required..."
+                          value={responses[item.id]?.correctiveAction || ''}
+                          onChange={e => setResponse(item.id, 'correctiveAction', e.target.value)}
+                        />
+                      )}
+
+                      {/* Evidence upload - shown when evidence is required OR any result selected */}
+                      {(item.evidenceRequired || responses[item.id]?.result) && (
+                        <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+                          {responses[item.id]?.evidenceRef ? (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--color-success)' }}>
+                              <span className="material-icons" style={{ fontSize: 16 }}>check_circle</span>
+                              {evidenceFiles[item.id]?.fileName || 'Evidence uploaded'}
+                              <button
+                                className="vn-btn"
+                                style={{ fontSize: 10, padding: '2px 6px' }}
+                                onClick={() => {
+                                  setResponse(item.id, 'evidenceRef', '');
+                                  setEvidenceFiles(prev => {
+                                    const next = { ...prev };
+                                    delete next[item.id];
+                                    return next;
+                                  });
+                                }}
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          ) : (
+                            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer', fontSize: 12, color: 'var(--text-secondary)' }}>
+                              <span className="material-icons" style={{ fontSize: 16 }}>upload_file</span>
+                              {uploadingItem === item.id ? 'Uploading...' : (item.evidenceRequired ? 'Upload evidence (required)' : 'Upload evidence')}
+                              <input
+                                type="file"
+                                style={{ display: 'none' }}
+                                disabled={uploadingItem === item.id}
+                                onChange={e => {
+                                  const file = e.target.files?.[0];
+                                  if (file) uploadEvidence(item.id, file);
+                                  e.target.value = '';
+                                }}
+                              />
+                            </label>
+                          )}
+                        </div>
                       )}
                     </div>
                   ))}
                 </div>
               ))}
 
-              <div className="vn-field" style={{ marginBottom: 16 }}>
-                <label className="vn-field-label">Overall Findings</label>
-                <textarea className="vn-input" rows={3} value={completingFindings} onChange={e => setCompletingFindings(e.target.value)} placeholder="Summarize audit findings..." />
+              <div className="vn-form-grid" style={{ marginBottom: 16 }}>
+                <div className="vn-field">
+                  <label className="vn-field-label">Overall Findings</label>
+                  <textarea className="vn-input" rows={3} value={completingFindings} onChange={e => setCompletingFindings(e.target.value)} placeholder="Summarize audit findings..." />
+                </div>
+                <div className="vn-field">
+                  <label className="vn-field-label">Corrective Actions Required</label>
+                  <textarea className="vn-input" rows={3} value={completingCorrectiveActions} onChange={e => setCompletingCorrectiveActions(e.target.value)} placeholder="List corrective actions needed from this audit..." />
+                </div>
               </div>
 
               <button className="vn-btn vn-btn-primary" onClick={completeAudit} disabled={submitting}>
