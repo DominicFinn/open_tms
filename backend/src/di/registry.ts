@@ -96,6 +96,7 @@ import { EDI990ParseService } from '../services/EDI990ParseService.js';
 import { EDI210ParseService } from '../services/EDI210ParseService.js';
 import { EDI810Service } from '../services/EDI810Service.js';
 import { EDI820ParseService } from '../services/EDI820ParseService.js';
+import { EDI855Service } from '../services/EDI855Service.js';
 import { ProcessInbound214CommandHandler } from '../commands/shipments/ProcessInbound214Command.js';
 import { ChargeRepository } from '../repositories/ChargeRepository.js';
 import { ChargeService } from '../services/ChargeService.js';
@@ -508,6 +509,10 @@ export function registerDependencies(prisma: PrismaClient): void {
 
   container.singleton(TOKENS.IEDI820ParseService).toFactory(() => {
     return new EDI820ParseService();
+  });
+
+  container.singleton(TOKENS.IEDI855Service).toFactory(() => {
+    return new EDI855Service();
   });
 
   // EDI services

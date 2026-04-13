@@ -69,6 +69,7 @@ export const TOKENS = {
   IEDI210ParseService: Symbol.for('IEDI210ParseService'),
   IEDI810Service: Symbol.for('IEDI810Service'),
   IEDI820ParseService: Symbol.for('IEDI820ParseService'),
+  IEDI855Service: Symbol.for('IEDI855Service'),
 
   // SLA tokens
   ISlaRepository: Symbol.for('ISlaRepository'),

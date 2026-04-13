@@ -171,6 +171,7 @@ The system has **shared X12 infrastructure** (`backend/src/services/edi/`) provi
 | Code | Name | Direction | Status |
 |------|------|-----------|--------|
 | 850 | Purchase Order | Inbound | Active |
+| 855 | PO Acknowledgment | Outbound | Active |
 | 856 | Advance Ship Notice | Outbound | Active |
 | 204 | Motor Carrier Load Tender | Outbound | Active |
 | 990 | Response to Load Tender | Inbound | Active |
@@ -216,6 +217,7 @@ The system has **shared X12 infrastructure** (`backend/src/services/edi/`) provi
 - `backend/src/services/EDI810Service.ts` — EDI 810 Invoice generator (outbound)
 - `backend/src/services/EDI820ParseService.ts` — EDI 820 Payment/Remittance parser (inbound)
 - `backend/src/services/EDI850ParseService.ts` — Purchase Order parser
+- `backend/src/services/EDI855Service.ts` — EDI 855 PO Acknowledgment generator (outbound)
 - `backend/src/services/EDI856Service.ts` — Advance Ship Notice generator
 - `backend/src/services/EDI990ParseService.ts` — EDI 990 Response to Load Tender parser
 - `backend/src/services/EDI997Service.ts` — Functional Acknowledgment generator

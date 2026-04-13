@@ -139,21 +139,26 @@ export async function refreshSchedule(appConfig: AppConfig) {
     log.warn(`Failed to fetch TradingPartner configs (may not exist yet): ${err.message}`);
   }
 
-  // 2. Fetch legacy EdiPartner configs (backward compatibility)
-  try {
-    const partners = await fetchPartnerConfigs(appConfig);
-    log.info(`Fetched ${partners.length} legacy EdiPartner(s)`);
-
-    for (const partner of partners) {
-      if (!partner.sftpHost || !partner.sftpUsername) {
-        log.warn(`[${partner.name}] Missing SFTP credentials, skipping`);
-        continue;
+  // 2. Fetch legacy EdiPartner configs (DEPRECATED - will be removed in future release)
+  //    Set SKIP_LEGACY_EDI_PARTNERS=true to disable legacy polling
+  if (process.env.SKIP_LEGACY_EDI_PARTNERS !== 'true') {
+    try {
+      const partners = await fetchPartnerConfigs(appConfig);
+      if (partners.length > 0) {
+        log.warn(`[DEPRECATED] Fetched ${partners.length} legacy EdiPartner(s) — migrate to TradingPartner model. Set SKIP_LEGACY_EDI_PARTNERS=true to disable.`);
       }
-      allActiveIds.add(partner.id);
-      schedulePartner(partner, appConfig);
+
+      for (const partner of partners) {
+        if (!partner.sftpHost || !partner.sftpUsername) {
+          log.warn(`[${partner.name}] Missing SFTP credentials, skipping`);
+          continue;
+        }
+        allActiveIds.add(partner.id);
+        schedulePartner(partner, appConfig);
+      }
+    } catch (err: any) {
+      log.error(`Failed to fetch legacy partner configs: ${err.message}`);
     }
-  } catch (err: any) {
-    log.error(`Failed to fetch legacy partner configs: ${err.message}`);
   }
 
   // 3. Stop jobs for partners no longer active

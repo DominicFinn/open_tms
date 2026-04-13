@@ -275,6 +275,21 @@ async function start() {
         server.log.warn('Carrier tracking poll worker failed to register: ' + (err as Error).message);
       }
 
+      // EDI Retry Worker — retries failed outbound EDI deliveries
+      try {
+        const ediRetryBoss = (queue as any).boss;
+        if (ediRetryBoss) {
+          const { createEdiRetryWorker, registerEdiRetrySchedule, EDI_RETRY_QUEUE } = await import('./workers/ediRetryWorker.js');
+          const ediPartnerRepo = container.resolve<ITradingPartnerRepository>(TOKENS.ITradingPartnerRepository);
+          const ediDeliveryService = container.resolve<IOutboundEdiDeliveryService>(TOKENS.IOutboundEdiDeliveryService);
+          await registerEdiRetrySchedule(ediRetryBoss);
+          await queue.subscribe(EDI_RETRY_QUEUE, createEdiRetryWorker(server.prisma, ediPartnerRepo, ediDeliveryService));
+          server.log.info('EDI retry worker registered');
+        }
+      } catch (err) {
+        server.log.warn('EDI retry worker failed to register: ' + (err as Error).message);
+      }
+
       server.log.info('Embedded queue workers registered (set DISABLE_EMBEDDED_WORKERS=true to use separate worker container)');
     } else {
       server.log.info('Embedded workers disabled — using separate worker container');

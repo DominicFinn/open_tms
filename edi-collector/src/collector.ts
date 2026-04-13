@@ -33,7 +33,10 @@ function matchesPattern(fileName: string, pattern: string): boolean {
 const UNIVERSAL_INBOUND_ENDPOINT = '/api/v1/edi/inbound';
 
 // ══════════════════════════════════════════════════════════════
-// Legacy collector: works with old EdiPartner model
+// DEPRECATED: Legacy collector for old EdiPartner model.
+// Use collectFromTradingPartner() instead, which sends all files
+// to the universal /api/v1/edi/inbound endpoint.
+// Set SKIP_LEGACY_EDI_PARTNERS=true to disable legacy polling.
 // ══════════════════════════════════════════════════════════════
 
 export async function collectFromPartner(

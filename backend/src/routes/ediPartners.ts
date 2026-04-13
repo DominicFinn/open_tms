@@ -1,3 +1,14 @@
+/**
+ * DEPRECATED: Legacy EDI Partner routes.
+ *
+ * These endpoints manage the old EdiPartner model which only supports
+ * inbound 850 via SFTP. Use the TradingPartner model and routes instead:
+ *   - GET/POST/PUT /api/v1/trading-partners
+ *   - POST /api/v1/edi/inbound (universal inbound)
+ *
+ * These routes are preserved for backwards compatibility during migration.
+ * They will be removed in a future release.
+ */
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 

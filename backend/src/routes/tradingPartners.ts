@@ -445,6 +445,7 @@ export async function tradingPartnerRoutes(server: FastifyInstance) {
   }, async (_req: FastifyRequest, _reply: FastifyReply) => {
     const types = [
       { code: '850', name: 'Purchase Order', directions: ['inbound'], status: 'active' },
+      { code: '855', name: 'PO Acknowledgment', directions: ['outbound'], status: 'active' },
       { code: '856', name: 'Advance Ship Notice', directions: ['outbound'], status: 'active' },
       { code: '204', name: 'Motor Carrier Load Tender', directions: ['outbound'], status: 'active' },
       { code: '990', name: 'Response to Load Tender', directions: ['inbound'], status: 'active' },
