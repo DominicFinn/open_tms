@@ -2,12 +2,14 @@
  * EDI 990 (Response to Load Tender) Parse Service
  *
  * Parses inbound X12 990 documents to extract carrier responses.
- * The 990 is the carrier's response to an EDI 204 load tender.
+ * Uses X12EnvelopeParser for envelope validation, then processes body segments.
  *
  * Key segments:
  *   B1 — Response header (carrier SCAC, shipment reference, response code)
  *   N9 — Reference numbers
  */
+
+import { X12EnvelopeParser } from './edi/X12EnvelopeParser.js';
 
 export interface EDI990ParseResult {
   success: boolean;
@@ -18,6 +20,7 @@ export interface EDI990ParseResult {
   referenceNumbers: Array<{ qualifier: string; number: string }>;
   rawContent: string;
   errors: string[];
+  warnings: string[];
 }
 
 export interface IEDI990ParseService {
@@ -25,8 +28,11 @@ export interface IEDI990ParseService {
 }
 
 export class EDI990ParseService implements IEDI990ParseService {
+  private envelopeParser = new X12EnvelopeParser();
+
   parseEDI990(content: string): EDI990ParseResult {
     const errors: string[] = [];
+    const warnings: string[] = [];
     const referenceNumbers: Array<{ qualifier: string; number: string }> = [];
     let responseCode = '';
     let shipmentReference = '';
@@ -34,119 +40,98 @@ export class EDI990ParseService implements IEDI990ParseService {
     let responseDate = '';
 
     try {
-      // Normalize content: handle both newline and tilde delimiters
-      const normalized = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+      // Parse envelope for validation
+      const envelopeResult = this.envelopeParser.parse(content);
+      warnings.push(...envelopeResult.warnings);
 
-      // Detect segment terminator
-      let terminator = '~';
-      if (normalized.includes('~')) {
-        terminator = '~';
+      if (!envelopeResult.success) {
+        errors.push(...envelopeResult.errors);
+        return this.buildResult({ responseCode, shipmentReference, carrierScac, responseDate, referenceNumbers, content, errors, warnings });
       }
 
-      // Split into segments
-      const rawSegments = normalized.split(terminator)
-        .map(s => s.trim().replace(/^\n+/, ''))
-        .filter(s => s.length > 0);
+      const envelope = envelopeResult.envelope!;
 
-      // Detect element separator (usually *)
-      const separator = '*';
+      if (envelope.transactionType !== '990') {
+        errors.push(`Transaction set is not 990 (got ${envelope.transactionType})`);
+        return this.buildResult({ responseCode, shipmentReference, carrierScac, responseDate, referenceNumbers, content, errors, warnings });
+      }
 
-      let foundST = false;
-      let found990 = false;
-
-      for (const rawSeg of rawSegments) {
-        const elements = rawSeg.split(separator);
-        const segId = elements[0]?.toUpperCase();
-
-        if (segId === 'ST') {
-          foundST = true;
-          if (elements[1] === '990') {
-            found990 = true;
-          }
-        }
-
-        if (segId === 'B1') {
-          // B1 segment: B1*SCAC*ShipmentRef*Date*ResponseCode
-          carrierScac = elements[1] || '';
-          shipmentReference = elements[2] || '';
-          responseDate = elements[3] || '';
-
-          // Response code may be in position 4 or in a separate segment
-          // Some implementations put it in B1*SCAC*REF*DATE*CODE
-          if (elements.length > 4) {
-            responseCode = elements[4] || '';
-          }
-        }
-
-        // Some implementations use N9 for additional reference numbers
-        if (segId === 'N9') {
-          const qualifier = elements[1] || '';
-          const number = elements[2] || '';
-          referenceNumbers.push({ qualifier, number });
-
-          // Some carriers put the response in N9 with qualifier "AW" (acceptance)
-          if (qualifier === 'AW' || qualifier === 'RD') {
-            if (!responseCode) {
-              responseCode = qualifier === 'AW' ? 'A' : 'D';
+      for (const seg of envelope.segments) {
+        switch (seg.id) {
+          case 'B1':
+            // B1*SCAC*ShipmentRef*Date*ResponseCode
+            carrierScac = seg.elements[1] || '';
+            shipmentReference = seg.elements[2] || '';
+            responseDate = seg.elements[3] || '';
+            if (seg.elements.length > 4) {
+              responseCode = seg.elements[4] || '';
             }
-          }
-        }
+            break;
 
-        // L11 reference numbers (alternative format)
-        if (segId === 'L11') {
-          const number = elements[1] || '';
-          const qualifier = elements[2] || '';
-          referenceNumbers.push({ qualifier, number });
-        }
-
-        // Some implementations use SE2 or status segment for response
-        if (segId === 'MS3') {
-          // Interline info — may contain response indicator
-          if (!carrierScac && elements[1]) {
-            carrierScac = elements[1];
+          case 'N9': {
+            const qualifier = seg.elements[1] || '';
+            const number = seg.elements[2] || '';
+            referenceNumbers.push({ qualifier, number });
+            // Some carriers put the response in N9 with qualifier "AW" (acceptance) or "RD" (rejection)
+            if (qualifier === 'AW' || qualifier === 'RD') {
+              if (!responseCode) {
+                responseCode = qualifier === 'AW' ? 'A' : 'D';
+              }
+            }
+            break;
           }
+
+          case 'L11': {
+            const number = seg.elements[1] || '';
+            const qualifier = seg.elements[2] || '';
+            referenceNumbers.push({ qualifier, number });
+            break;
+          }
+
+          case 'MS3':
+            if (!carrierScac && seg.elements[1]) {
+              carrierScac = seg.elements[1];
+            }
+            break;
         }
       }
 
       // Validate required fields
-      if (!found990 && foundST) {
-        errors.push('Transaction set is not 990');
-      }
-
       if (!carrierScac) {
         errors.push('Missing carrier SCAC code in B1 segment');
       }
-
       if (!shipmentReference) {
         errors.push('Missing shipment reference in B1 segment');
       }
-
       if (!responseCode) {
-        // Default interpretation: if we got a 990 with a B1 but no explicit code,
-        // check if there's any indicator. Some older implementations are accept-only.
-        errors.push('No response code found — could not determine accept/decline');
+        errors.push('No response code found - could not determine accept/decline');
       }
 
-      return {
-        success: errors.length === 0,
-        responseCode: responseCode.toUpperCase() as 'A' | 'D',
-        shipmentReference,
-        carrierScac,
-        responseDate,
-        referenceNumbers,
-        rawContent: content,
-        errors,
-      };
+      return this.buildResult({ responseCode, shipmentReference, carrierScac, responseDate, referenceNumbers, content, errors, warnings });
     } catch (err: any) {
-      return {
-        success: false,
-        responseCode: '',
-        shipmentReference: '',
-        carrierScac: '',
-        referenceNumbers: [],
-        rawContent: content,
-        errors: [`Parse error: ${err.message}`],
-      };
+      return this.buildResult({
+        responseCode: '', shipmentReference: '', carrierScac: '',
+        responseDate: '', referenceNumbers: [], content,
+        errors: [`Parse error: ${err.message}`], warnings,
+      });
     }
+  }
+
+  private buildResult(data: {
+    responseCode: string; shipmentReference: string; carrierScac: string;
+    responseDate?: string; referenceNumbers: Array<{ qualifier: string; number: string }>;
+    content: string; errors: string[]; warnings: string[];
+  }): EDI990ParseResult {
+    return {
+      success: data.errors.length === 0,
+      responseCode: (data.responseCode.toUpperCase() || '') as 'A' | 'D',
+      shipmentReference: data.shipmentReference,
+      carrierScac: data.carrierScac,
+      responseDate: data.responseDate,
+      referenceNumbers: data.referenceNumbers,
+      rawContent: data.content,
+      errors: data.errors,
+      warnings: data.warnings,
+    };
   }
 }

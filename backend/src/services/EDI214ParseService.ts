@@ -4,6 +4,8 @@
  * Parses inbound X12 214 documents to extract carrier shipment status updates.
  * Carriers send 214s to report pickup, in-transit, delivery, and exception statuses.
  *
+ * Uses X12EnvelopeParser for envelope validation, then processes body segments.
+ *
  * Key segments:
  *   B10 — Shipment identification (reference, carrier SCAC, pro number)
  *   L11 — Business reference numbers
@@ -11,6 +13,9 @@
  *   MS1 — Equipment location (city, state, country)
  *   AT8 — Shipment weight and piece count
  */
+
+import { X12EnvelopeParser } from './edi/X12EnvelopeParser.js';
+import type { X12Segment } from './edi/types.js';
 
 export interface EDI214StatusDetail {
   /** AT7-01: Status code (AF, X1, D1, A7, etc.) */
@@ -49,6 +54,8 @@ export interface EDI214ParseResult {
   rawContent: string;
   /** Parse errors */
   errors: string[];
+  /** Envelope validation warnings */
+  warnings: string[];
 }
 
 export interface IEDI214ParseService {
@@ -56,8 +63,11 @@ export interface IEDI214ParseService {
 }
 
 export class EDI214ParseService implements IEDI214ParseService {
+  private envelopeParser = new X12EnvelopeParser();
+
   parseEDI214(content: string): EDI214ParseResult {
     const errors: string[] = [];
+    const warnings: string[] = [];
     const referenceNumbers: Array<{ qualifier: string; number: string }> = [];
     const statusDetails: EDI214StatusDetail[] = [];
     let shipmentReference = '';
@@ -66,99 +76,85 @@ export class EDI214ParseService implements IEDI214ParseService {
     let weight: { weight: number; qualifier: string; ladingQuantity?: number } | undefined;
 
     try {
-      // Normalize content: handle both newline and tilde delimiters
-      const normalized = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+      // Parse envelope first for validation
+      const envelopeResult = this.envelopeParser.parse(content);
+      warnings.push(...envelopeResult.warnings);
 
-      // Split into segments by tilde terminator
-      const rawSegments = normalized.split('~')
-        .map(s => s.trim().replace(/^\n+/, ''))
-        .filter(s => s.length > 0);
+      if (!envelopeResult.success) {
+        errors.push(...envelopeResult.errors);
+        return this.buildResult(false, { shipmentReference, carrierScac, proNumber, statusDetails, referenceNumbers, weight, content, errors, warnings });
+      }
 
-      const separator = '*';
-      let foundST = false;
-      let found214 = false;
+      const envelope = envelopeResult.envelope!;
+
+      // Validate transaction type
+      if (envelope.transactionType !== '214') {
+        errors.push(`Transaction set is not 214 (got ${envelope.transactionType})`);
+        return this.buildResult(false, { shipmentReference, carrierScac, proNumber, statusDetails, referenceNumbers, weight, content, errors, warnings });
+      }
 
       // Track current AT7 to pair with following MS1
       let pendingStatus: Partial<EDI214StatusDetail> | null = null;
 
-      for (const rawSeg of rawSegments) {
-        const elements = rawSeg.split(separator);
-        const segId = elements[0]?.toUpperCase();
+      for (const seg of envelope.segments) {
+        switch (seg.id) {
+          case 'B10':
+            shipmentReference = seg.elements[1] || '';
+            carrierScac = seg.elements[2] || '';
+            proNumber = seg.elements[3] || '';
+            break;
 
-        // ST — Transaction Set Header
-        if (segId === 'ST') {
-          foundST = true;
-          if (elements[1] === '214') {
-            found214 = true;
-          }
-        }
-
-        // B10 — Shipment identification
-        if (segId === 'B10') {
-          shipmentReference = elements[1] || '';
-          carrierScac = elements[2] || '';
-          proNumber = elements[3] || '';
-        }
-
-        // L11 — Reference numbers
-        if (segId === 'L11') {
-          const number = elements[1] || '';
-          const qualifier = elements[2] || '';
-          if (number || qualifier) {
-            referenceNumbers.push({ qualifier, number });
-          }
-        }
-
-        // AT7 — Shipment status detail
-        if (segId === 'AT7') {
-          // Flush any pending status without MS1
-          if (pendingStatus) {
-            statusDetails.push(this.finalizePendingStatus(pendingStatus));
+          case 'L11': {
+            const number = seg.elements[1] || '';
+            const qualifier = seg.elements[2] || '';
+            if (number || qualifier) {
+              referenceNumbers.push({ qualifier, number });
+            }
+            break;
           }
 
-          pendingStatus = {
-            statusCode: elements[1] || '',
-            reasonCode: elements[2] || '',
-            // AT7 can have date/time in positions 5/6/7
-            date: elements[5] || '',
-            time: elements[6] || '',
-            timeZone: elements[7] || '',
-            city: '',
-            state: '',
-            country: '',
-          };
-        }
+          case 'AT7':
+            // Flush any pending status without MS1
+            if (pendingStatus) {
+              statusDetails.push(this.finalizePendingStatus(pendingStatus));
+            }
+            pendingStatus = {
+              statusCode: seg.elements[1] || '',
+              reasonCode: seg.elements[2] || '',
+              date: seg.elements[5] || '',
+              time: seg.elements[6] || '',
+              timeZone: seg.elements[7] || '',
+              city: '',
+              state: '',
+              country: '',
+            };
+            break;
 
-        // MS1 — Equipment location (follows AT7)
-        if (segId === 'MS1') {
-          const city = elements[1] || '';
-          const state = elements[2] || '';
-          const country = elements[3] || '';
+          case 'MS1':
+            if (pendingStatus) {
+              pendingStatus.city = seg.elements[1] || '';
+              pendingStatus.state = seg.elements[2] || '';
+              pendingStatus.country = seg.elements[3] || '';
+              statusDetails.push(this.finalizePendingStatus(pendingStatus));
+              pendingStatus = null;
+            }
+            break;
 
-          if (pendingStatus) {
-            pendingStatus.city = city;
-            pendingStatus.state = state;
-            pendingStatus.country = country;
-            statusDetails.push(this.finalizePendingStatus(pendingStatus));
-            pendingStatus = null;
+          case 'AT8': {
+            const weightQualifier = seg.elements[1] || '';
+            const weightValue = parseFloat(seg.elements[3] || '0');
+            const ladingQty = seg.elements[4] ? parseInt(seg.elements[4], 10) : undefined;
+            if (weightValue > 0) {
+              weight = { weight: weightValue, qualifier: weightQualifier, ladingQuantity: ladingQty };
+            }
+            break;
           }
-        }
 
-        // AT8 — Shipment weight
-        if (segId === 'AT8') {
-          const weightQualifier = elements[1] || '';
-          const weightValue = parseFloat(elements[3] || '0');
-          const ladingQty = elements[4] ? parseInt(elements[4], 10) : undefined;
-          if (weightValue > 0) {
-            weight = { weight: weightValue, qualifier: weightQualifier, ladingQuantity: ladingQty };
-          }
-        }
-
-        // MS3 — Interline carrier info (fallback for SCAC)
-        if (segId === 'MS3') {
-          if (!carrierScac && elements[1]) {
-            carrierScac = elements[1];
-          }
+          case 'MS3':
+            if (!carrierScac && seg.elements[1]) {
+              carrierScac = seg.elements[1];
+            }
+            break;
         }
       }
 
@@ -168,45 +164,44 @@ export class EDI214ParseService implements IEDI214ParseService {
       }
 
       // Validation
-      if (!found214 && foundST) {
-        errors.push('Transaction set is not 214');
-      }
-
       if (!carrierScac) {
         errors.push('Missing carrier SCAC code in B10 segment');
       }
-
       if (!shipmentReference && !proNumber) {
         errors.push('Missing shipment reference and pro number in B10 segment');
       }
-
       if (statusDetails.length === 0) {
         errors.push('No AT7 status details found');
       }
 
-      return {
-        success: errors.length === 0,
-        shipmentReference,
-        carrierScac,
-        proNumber,
-        statusDetails,
-        referenceNumbers,
-        weight,
-        rawContent: content,
-        errors,
-      };
+      return this.buildResult(errors.length === 0, { shipmentReference, carrierScac, proNumber, statusDetails, referenceNumbers, weight, content, errors, warnings });
     } catch (err: any) {
-      return {
-        success: false,
-        shipmentReference: '',
-        carrierScac: '',
-        proNumber: '',
-        statusDetails: [],
-        referenceNumbers: [],
-        rawContent: content,
-        errors: [`Parse error: ${err.message}`],
-      };
+      return this.buildResult(false, {
+        shipmentReference: '', carrierScac: '', proNumber: '',
+        statusDetails: [], referenceNumbers: [], weight: undefined,
+        content, errors: [`Parse error: ${err.message}`], warnings,
+      });
     }
+  }
+
+  private buildResult(success: boolean, data: {
+    shipmentReference: string; carrierScac: string; proNumber: string;
+    statusDetails: EDI214StatusDetail[]; referenceNumbers: Array<{ qualifier: string; number: string }>;
+    weight?: { weight: number; qualifier: string; ladingQuantity?: number };
+    content: string; errors: string[]; warnings: string[];
+  }): EDI214ParseResult {
+    return {
+      success,
+      shipmentReference: data.shipmentReference,
+      carrierScac: data.carrierScac,
+      proNumber: data.proNumber,
+      statusDetails: data.statusDetails,
+      referenceNumbers: data.referenceNumbers,
+      weight: data.weight,
+      rawContent: data.content,
+      errors: data.errors,
+      warnings: data.warnings,
+    };
   }
 
   private finalizePendingStatus(pending: Partial<EDI214StatusDetail>): EDI214StatusDetail {
