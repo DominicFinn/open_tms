@@ -155,6 +155,45 @@ The ETA monitor also checks for route deviations on shipments with a lane that h
 - `frontend/src/vnext-design/VNextLaneDetail.tsx` - Lane detail with route visualization
 - `backend/src/__tests__/services/RouteDeviationService.test.ts` - 15 tests (deviation detection, polyline, haversine)
 
+## Carrier API Integration (FedEx, UPS, DHL)
+
+### Architecture
+The carrier tracking system provides automatic shipment status updates from carrier APIs. It uses a **provider-agnostic interface** (`ICarrierTrackingProvider`) so the tracking backend can be swapped or extended. Each carrier gets a `CarrierTrackingIntegration` record with credentials, polling/webhook config, and rate limits.
+
+### Providers
+- **FedEx** - OAuth 2.0, batch polling (up to 30), webhooks, 10K/day rate limit
+- **UPS** - OAuth 2.0, single-tracking polling, Track Alert webhooks, 5K/day rate limit
+- **DHL** - API key, single-tracking polling, webhooks, 250/day rate limit
+
+Provider selection is per-carrier via the setup wizard in the Integrations app.
+
+### Status Bridging
+The `CarrierTrackingHandler` automatically bridges carrier tracking events to shipment lifecycle:
+- **Delivery**: carrier `delivered` -> shipment status `delivered`, emits `shipment.delivered`
+- **Exception**: carrier `exception` -> shipment status `exception`, emits `shipment.exception`
+- **In-transit milestones**: carrier `in_transit` -> advances shipment status forward (never regresses)
+
+### Polling Worker
+`carrierTrackingPollWorker` runs every 5 minutes (configurable via `CARRIER_TRACKING_POLL_CRON`). Respects per-provider rate limits and polling intervals.
+
+### Key Files
+- `backend/src/services/carrierTracking/ICarrierTrackingProvider.ts` - Provider interface
+- `backend/src/services/carrierTracking/CarrierTrackingService.ts` - Orchestrator
+- `backend/src/services/carrierTracking/ProviderRegistry.ts` - Provider factory
+- `backend/src/services/carrierTracking/providers/FedExTrackingProvider.ts` - FedEx implementation
+- `backend/src/services/carrierTracking/providers/UPSTrackingProvider.ts` - UPS implementation
+- `backend/src/services/carrierTracking/providers/DHLTrackingProvider.ts` - DHL implementation
+- `backend/src/events/handlers/CarrierTrackingHandler.ts` - Status bridging handler
+- `backend/src/repositories/CarrierTrackingIntegrationRepository.ts` - Integration CRUD
+- `backend/src/routes/carrierTracking.ts` - API endpoints (CRUD, test, poll, webhook, events)
+- `backend/src/workers/carrierTrackingPollWorker.ts` - Polling cron worker
+- `backend/src/commands/carrierTracking/` - Command handlers
+- `frontend/src/vnext-design/VNextCarrierTracking.tsx` - Integration list page
+- `frontend/src/vnext-design/VNextCarrierTrackingSetup.tsx` - Setup wizard
+- `frontend/src/vnext-design/VNextCarrierTrackingDetail.tsx` - Integration detail page
+- `backend/src/__tests__/handlers/CarrierTrackingHandler.test.ts` - 16 handler tests
+- `backend/src/__tests__/commands/CarrierTrackingCommands.test.ts` - 14 command tests
+
 ## EDI Communication Hub
 
 ### Architecture

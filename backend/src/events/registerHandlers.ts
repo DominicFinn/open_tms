@@ -132,8 +132,8 @@ export async function registerEventHandlers(
   // Financial: auto-create queries from cargo discrepancies and cold chain events
   handlers.push(new FinancialImpactHandler(prisma));
 
-  // Carrier tracking: handle delivered, exception, and integration error events
-  handlers.push(new CarrierTrackingHandler(prisma));
+  // Carrier tracking: handle delivered, exception, integration error, and status bridging
+  handlers.push(new CarrierTrackingHandler(prisma, eventBus));
 
   // Add automation rule handler (runs before triage agent — deterministic rules take priority)
   if (skillRegistry) {

@@ -51,6 +51,17 @@ const features = [
     highlight: true,
   },
   {
+    title: 'Carrier API Integration',
+    description: 'Automatic shipment tracking from FedEx, UPS, and DHL APIs. OAuth 2.0 and API key auth, webhook receivers with signature verification, adaptive polling with rate limiting, normalized status codes, and automatic shipment status bridging for delivery confirmation and exception detection.',
+    icon: (
+      <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+      </svg>
+    ),
+    highlight: true,
+  },
+  {
     title: 'Financial Operations',
     description: 'Full AR/AP lifecycle: customer invoicing with auto-invoice on delivery, carrier invoice audit with three-way freight matching, and quotes with margin calculation. LTL class-based rating, EDI 210/810/820 support, AR aging reports, batch payment recording, weekly and monthly invoice consolidation, dispute resolution with credit notes, and CSV exports for accounting.',
     icon: (
