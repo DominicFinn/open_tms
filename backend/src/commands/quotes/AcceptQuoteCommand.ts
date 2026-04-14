@@ -6,11 +6,12 @@ import { Command } from '../types.js';
 
 export interface AcceptQuotePayload {
   quoteId: string;
+  createShipment?: boolean; // For broker orgs: also create a shipment that flows to the load board
 }
 
 export const ACCEPT_QUOTE = 'quote.accept';
 
-export class AcceptQuoteCommandHandler extends BaseCommandHandler<AcceptQuotePayload, { id: string; orderId: string }> {
+export class AcceptQuoteCommandHandler extends BaseCommandHandler<AcceptQuotePayload, { id: string; orderId: string; shipmentId?: string | null }> {
   readonly commandType = ACCEPT_QUOTE;
 
   constructor(prisma: PrismaClient, eventBus: PgBossEventBus) {
@@ -70,6 +71,90 @@ export class AcceptQuoteCommandHandler extends BaseCommandHandler<AcceptQuotePay
       });
     }
 
+    // For broker orgs: also create a shipment so it flows to the load board
+    let shipmentId: string | null = null;
+    let shipmentReference: string | null = null;
+
+    const shouldCreateShipment = command.payload.createShipment ?? false;
+    if (shouldCreateShipment) {
+      // Check if org is broker/3pl, or just honor the flag
+      const org = await tx.organization.findFirst({
+        select: { organizationType: true },
+      });
+      const isBrokerOrg = org?.organizationType === 'broker' || org?.organizationType === '3pl';
+
+      if (isBrokerOrg || command.payload.createShipment) {
+        // Generate shipment reference
+        const shipmentCount = await tx.shipment.count();
+        shipmentReference = `SH-Q-${String(shipmentCount + 1).padStart(4, '0')}`;
+
+        const shipment = await tx.shipment.create({
+          data: {
+            reference: shipmentReference,
+            customerId: quote.customerId,
+            originId: quote.originId!,
+            destinationId: quote.destinationId!,
+            status: 'booked',
+            items: [],
+          },
+        });
+        shipmentId = shipment.id;
+
+        // Link order to shipment
+        await tx.orderShipment.create({
+          data: { orderId: order.id, shipmentId: shipment.id },
+        });
+
+        // Create financial summary with the sell rate (revenue from quote)
+        await tx.shipmentFinancialSummary.create({
+          data: {
+            orgId: command.orgId,
+            shipmentId: shipment.id,
+            expectedRevenueCents: quote.totalRevenueCents,
+            expectedCostCents: quote.totalCostCents,
+            expectedMarginCents: quote.marginCents,
+            actualRevenueCents: quote.totalRevenueCents,
+          },
+        });
+
+        // Copy revenue charges to shipment as well
+        for (const item of quote.lineItems) {
+          await tx.charge.create({
+            data: {
+              orgId: command.orgId,
+              shipmentId: shipment.id,
+              chargeType: item.chargeType,
+              chargeCategory: 'revenue',
+              description: item.description,
+              amountCents: item.amountCents * item.quantity,
+              currency: item.currency,
+              source: 'quote',
+              sourceId: quote.id,
+              accessorialCode: item.accessorialCode,
+              freightClass: item.freightClass,
+              ratePerCwt: item.ratePerCwt,
+              status: 'approved',
+              approvedBy: command.actorId,
+              approvedAt: new Date(),
+            },
+          });
+        }
+
+        emit(this.createEvent(command, {
+          type: EVENT_TYPES.SHIPMENT_CREATED,
+          entityType: 'shipment',
+          entityId: shipment.id,
+          payload: {
+            shipmentReference,
+            customerId: quote.customerId,
+            originId: quote.originId,
+            destinationId: quote.destinationId,
+            status: 'booked',
+          },
+        }));
+      }
+    }
+
     // Update quote status
     await tx.quote.update({
       where: { id: quote.id },
@@ -85,6 +170,8 @@ export class AcceptQuoteCommandHandler extends BaseCommandHandler<AcceptQuotePay
         quoteNumber: quote.quoteNumber,
         orderId: order.id,
         orderNumber,
+        shipmentId,
+        shipmentReference,
         customerId: quote.customerId,
         totalRevenueCents: quote.totalRevenueCents,
       },
@@ -101,6 +188,6 @@ export class AcceptQuoteCommandHandler extends BaseCommandHandler<AcceptQuotePay
       },
     }));
 
-    return { id: quote.id, orderId: order.id };
+    return { id: quote.id, orderId: order.id, shipmentId };
   }
 }

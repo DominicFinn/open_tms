@@ -1416,16 +1416,56 @@ Quick-assigns a carrier with a cost rate. In a single transaction:
 
 The `ShipmentProjection` subscribes to `charge.*` events in addition to `shipment.*` and `tracking.*`. On charge events, it denormalizes the `ShipmentFinancialSummary` fields (expectedRevenueCents, expectedCostCents, expectedMarginCents, actualRevenueCents, actualCostCents, actualMarginCents) into the `ShipmentReadModel` for fast list queries.
 
+### Quick Quote
+
+**Endpoint:** `POST /api/v1/quotes/quick`
+
+Given a `customerId`, `laneId`, and optional `carrierId`/`markupPercent`, auto-populates a quote from `RatingService` lane-carrier rates. Calculates cost (carrier buy rate) and revenue (cost + markup %) line items, then dispatches `CreateQuoteCommand`. Returns the created quote plus a cost/revenue breakdown with margin.
+
+### Quote-to-Book (Broker Flow)
+
+**Endpoint:** `POST /api/v1/quotes/:id/accept` with `{ createShipment: true }`
+
+When `createShipment` is true and the org type is broker or 3PL, the `AcceptQuoteCommand` additionally:
+1. Creates a Shipment (status: `booked`, no carrier) from the quote's origin/destination
+2. Links Order to Shipment via `OrderShipment`
+3. Creates a `ShipmentFinancialSummary` with expected revenue from the quote
+4. Copies revenue charges to the shipment
+5. Emits `SHIPMENT_CREATED` event (shipment appears on load board for carrier assignment)
+
+The frontend "Accept & Book" button (visible for broker orgs) triggers this flow and navigates to the load board.
+
+### Customer Credit Check
+
+**Endpoint:** `GET /api/v1/customers/:id/credit-status?additionalAmountCents=N`
+
+`CreditCheckService` sums unpaid invoices (draft, approved, sent, overdue, partial) and compares against `Customer.creditLimitCents`. Returns pass/fail with outstanding balance and available credit. Null credit limit = unlimited.
+
+### Rate Confirmation PDF
+
+**Endpoint:** `POST /api/v1/documents/rate-confirmation`
+
+Generates a carrier-facing PDF showing the agreed carrier rate (cost charges only). Does NOT show customer sell rate or broker margin. Uses the same `DocumentGenerationService` + Handlebars template pattern as BOL/customs forms. Stored via `IBinaryStorageProvider` as a `GeneratedDocument` (documentType: `rate_confirmation`).
+
 ### Key Files
 - `backend/prisma/schema.prisma` - Organization brokerage fields, ShipmentReadModel financial columns
 - `backend/src/routes/loadboard.ts` - Load board API (list, matching carriers, quick assign)
+- `backend/src/routes/quotes.ts` - Quick quote + credit check endpoints
 - `backend/src/routes/organization.ts` - Organization settings (includes brokerage fields)
+- `backend/src/services/CreditCheckService.ts` - Customer credit validation
+- `backend/src/services/templates/rateConfirmationTemplate.ts` - Rate confirmation Handlebars template
+- `backend/src/services/DocumentGenerationService.ts` - Rate confirmation PDF generation
+- `backend/src/commands/quotes/AcceptQuoteCommand.ts` - Quote-to-book with shipment creation
 - `backend/src/events/handlers/MarginAlertHandler.ts` - Margin alert event handler
 - `backend/src/events/projections/ShipmentProjection.ts` - Financial column denormalization
 - `backend/src/events/eventTypes.ts` - margin.alert event type
 - `frontend/src/vnext-design/VNextLoadBoard.tsx` - Load board page
 - `frontend/src/vnext-design/VNextShipments.tsx` - Margin columns on shipment list
+- `frontend/src/vnext-design/VNextFinanceQuoteDetail.tsx` - Accept & Book button for brokers
+- `frontend/src/vnext-design/VNextShipmentDetail.tsx` - Rate Confirmation button
 - `frontend/src/vnext-design/VNextSettings.tsx` - Brokerage settings tab
 - `frontend/src/hooks/useOrgContext.ts` - Organization context hook
 - `backend/src/__tests__/handlers/MarginAlertHandler.test.ts` - 8 margin alert tests
 - `backend/src/__tests__/projections/ShipmentProjectionFinancial.test.ts` - 5 projection tests
+- `backend/src/__tests__/services/CreditCheckService.test.ts` - 7 credit check tests
+- `backend/src/__tests__/commands/BrokerQuoteToBook.test.ts` - 5 quote-to-book tests

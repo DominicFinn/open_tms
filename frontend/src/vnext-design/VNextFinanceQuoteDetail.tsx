@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { API_URL } from '../api';
+import { useOrgContext } from '../hooks/useOrgContext';
 
 interface QuoteLineItem {
   id: string;
@@ -55,6 +56,7 @@ export default function VNextFinanceQuoteDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionLoading, setActionLoading] = useState('');
+  const { isBroker } = useOrgContext();
 
   const load = async () => {
     try {
@@ -78,6 +80,10 @@ export default function VNextFinanceQuoteDetail() {
       });
       const json = await res.json();
       if (json.error) throw new Error(json.error);
+      if (action === 'accept' && json.data?.shipmentId) {
+        navigate(`/loadboard`);
+        return;
+      }
       if (action === 'accept' && json.data?.orderId) {
         navigate(`/orders/${json.data.orderId}`);
         return;
@@ -112,6 +118,12 @@ export default function VNextFinanceQuoteDetail() {
         <div className="vn-page-actions">
           {['draft', 'sent'].includes(q.status) && !isExpired && (
             <>
+              {isBroker && (
+                <button className="vn-btn vn-btn-primary vn-btn-sm" onClick={() => doAction('accept', { createShipment: true })} disabled={!!actionLoading}>
+                  <span className="material-icons">rocket_launch</span>
+                  {actionLoading === 'accept' ? 'Booking...' : 'Accept & Book'}
+                </button>
+              )}
               <button className="vn-btn vn-btn-success vn-btn-sm" onClick={() => doAction('accept')} disabled={!!actionLoading}>
                 <span className="material-icons">check</span>
                 {actionLoading === 'accept' ? 'Accepting...' : 'Accept'}

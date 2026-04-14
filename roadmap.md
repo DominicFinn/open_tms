@@ -132,12 +132,12 @@ The system models the world as "shipper has carriers" but never accounts for the
   - Financial columns denormalized to ShipmentReadModel for fast list queries
   - Margin reporting by customer, carrier, lane, and time period 🔲
   - Target margin by lane/customer with variance tracking 🔲
-- **Broker Quoting Workflow** 🔲
-  - Customer rate request intake (phone, email, portal, API)
-  - Quick quote from rate history and lane-carrier pricing
-  - Quote-to-book conversion: accepted quote creates shipment with pre-set buy/sell rates
-  - Rate confirmation document generation (PDF) - broker version of the BOL
-  - Customer credit check integration with existing billing infrastructure
+- **Broker Quoting Workflow** ✅
+  - Quick quote endpoint: auto-populate from lane-carrier rates via RatingService + configurable markup percentage
+  - Quote-to-book conversion: "Accept & Book" creates shipment with pre-set sell rate, flows directly to load board
+  - Rate confirmation PDF generation (carrier-facing, hides customer sell rate and broker margin)
+  - Customer credit check service: validates outstanding balance against creditLimitCents before quoting
+  - Customer rate request intake (phone, email, portal, API) 🔲
 - **Broker Load Board** ✅
   - Internal load board: unmatched shipments needing carrier assignment
   - Carrier capacity search: find carriers with lane rates and historical usage on matching lanes

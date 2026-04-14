@@ -345,6 +345,31 @@ export async function documentRoutes(server: FastifyInstance) {
     }
   });
 
+  // Generate rate confirmation (broker: carrier-facing document showing agreed cost rate)
+  server.post('/api/v1/documents/rate-confirmation', {
+    schema: {
+      description: 'Generate a rate confirmation PDF for a shipment (carrier-facing, hides customer sell rate)',
+      tags: ['Documents'],
+      body: {
+        type: 'object',
+        required: ['shipmentId'],
+        properties: {
+          shipmentId: { type: 'string' },
+        },
+      },
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { shipmentId } = (req as any).body;
+    try {
+      const result = await docService.generateRateConfirmation(shipmentId);
+      reply.code(201);
+      return { data: result, error: null };
+    } catch (err: any) {
+      reply.code(400);
+      return { data: null, error: err.message };
+    }
+  });
+
   // ── Generated Documents ───────────────────────────────────────────────
 
   server.get('/api/v1/documents', {

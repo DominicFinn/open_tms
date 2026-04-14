@@ -8,11 +8,13 @@ import { IBinaryStorageProvider } from '../storage/IBinaryStorageProvider.js';
 import { defaultBolTemplate } from './templates/bolTemplate.js';
 import { defaultLabelTemplate } from './templates/labelTemplate.js';
 import { defaultCustomsTemplate } from './templates/customsTemplate.js';
+import { defaultRateConfirmationTemplate } from './templates/rateConfirmationTemplate.js';
 
 export interface IDocumentGenerationService {
   generateBOL(shipmentId: string, templateId?: string, userId?: string): Promise<{ id: string; fileName: string }>;
   generateLabels(orderId: string, templateId?: string, userId?: string): Promise<{ id: string; fileName: string }>;
   generateCustomsForm(shipmentId: string, templateId?: string, userId?: string): Promise<{ id: string; fileName: string }>;
+  generateRateConfirmation(shipmentId: string, userId?: string): Promise<{ id: string; fileName: string }>;
 }
 
 function formatDate(d: Date | null | undefined): string {
@@ -293,6 +295,79 @@ export class DocumentGenerationService implements IDocumentGenerationService {
     return { id: doc.id, fileName };
   }
 
+  async generateRateConfirmation(shipmentId: string, userId?: string) {
+    const shipment = await this.prisma.shipment.findUniqueOrThrow({
+      where: { id: shipmentId },
+      include: {
+        origin: true,
+        destination: true,
+        customer: true,
+        carrier: true,
+        charges: {
+          where: { chargeCategory: 'cost', status: { not: 'written_off' } },
+        },
+        shipmentFinancialSummary: true,
+      },
+    });
+
+    if (!shipment.carrier) throw new Error('Shipment has no carrier assigned');
+
+    const branding = await this.loadBranding();
+    const org = await this.prisma.organization.findFirst({
+      select: { mcNumber: true },
+    });
+
+    const costCharges = shipment.charges.map(c => ({
+      description: c.description,
+      amount: (c.amountCents / 100).toFixed(2),
+    }));
+
+    const totalCostCents = shipment.charges.reduce((sum, c) => sum + c.amountCents, 0);
+
+    const data = {
+      branding,
+      org: { mcNumber: (org as any)?.mcNumber },
+      confirmationNumber: `RC-${shipment.reference}`,
+      date: formatDate(new Date()),
+      shipment: {
+        reference: shipment.reference,
+        origin: shipment.origin,
+        destination: shipment.destination,
+      },
+      customer: shipment.customer,
+      carrier: shipment.carrier,
+      serviceLevel: 'FTL',
+      equipmentType: '',
+      pickupDate: formatDate(shipment.pickupDate),
+      deliveryDate: formatDate(shipment.deliveryDate),
+      charges: costCharges,
+      totalRate: (totalCostCents / 100).toFixed(2),
+      paymentTermsDays: shipment.carrier ? 30 : 30,
+      specialInstructions: '',
+    };
+
+    const html = Handlebars.compile(defaultRateConfirmationTemplate)(data);
+    const pdfBytes = await this.htmlToPdf(html, `Rate Confirmation - ${shipment.reference}`);
+
+    const fileName = `RateConfirmation-${shipment.reference}.pdf`;
+    const buffer = Buffer.from(pdfBytes);
+    const storageKey = `files/${randomUUID()}`;
+
+    const doc = await this.storeDocument({
+      documentType: 'rate_confirmation',
+      fileName,
+      mimeType: 'application/pdf',
+      fileSize: pdfBytes.length,
+      fileContent: buffer,
+      shipmentId,
+      customerId: shipment.customerId,
+      generatedBy: userId,
+      metadata: data,
+    }, storageKey);
+
+    return { id: doc.id, fileName };
+  }
+
   /**
    * Store document content via IBinaryStorageProvider (if available) or inline in DB.
    * When a storage provider is configured, fileContent is not stored in the DB row.
@@ -339,6 +414,7 @@ export class DocumentGenerationService implements IDocumentGenerationService {
       case 'bol': return defaultBolTemplate;
       case 'label': return defaultLabelTemplate;
       case 'customs': return defaultCustomsTemplate;
+      case 'rate_confirmation': return defaultRateConfirmationTemplate;
       default: return '<p>No template available for document type: {{documentType}}</p>';
     }
   }

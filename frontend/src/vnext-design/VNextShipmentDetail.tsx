@@ -1120,11 +1120,14 @@ export default function VNextShipmentDetail() {
       .catch(() => {});
   }, [shipment?.laneId, shipment?.status, shipment?.currentLat, shipment?.currentLng]);
 
-  const handleGenerateDoc = async (type: 'bol' | 'customs') => {
+  const handleGenerateDoc = async (type: 'bol' | 'customs' | 'rate_confirmation') => {
     if (!id) return;
     setGenerating(type);
     try {
-      const res = await fetch(`${API_URL}/api/v1/documents/generate/${type}`, {
+      const endpoint = type === 'rate_confirmation'
+        ? `${API_URL}/api/v1/documents/rate-confirmation`
+        : `${API_URL}/api/v1/documents/generate/${type}`;
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ shipmentId: id }),
@@ -1132,12 +1135,12 @@ export default function VNextShipmentDetail() {
       const json = await res.json();
       if (json.error) { alert(`Error: ${json.error}`); return; }
       loadDocuments();
-      // Navigate to BOL view for BOL documents
       if (type === 'bol') {
         navigate(`/documents/${json.data.id}/view`);
       }
     } catch {
-      alert(`Failed to generate ${type === 'bol' ? 'Bill of Lading' : 'Customs Form'}`);
+      const names: Record<string, string> = { bol: 'Bill of Lading', customs: 'Customs Form', rate_confirmation: 'Rate Confirmation' };
+      alert(`Failed to generate ${names[type] || type}`);
     } finally {
       setGenerating(null);
     }
@@ -1429,6 +1432,16 @@ export default function VNextShipmentDetail() {
                     <span className="material-icons">public</span>
                     {generating === 'customs' ? 'Generating...' : 'Customs Form'}
                   </button>
+                  {shipment?.carrierId && (
+                    <button
+                      className="vn-btn vn-btn-outline vn-btn-sm"
+                      disabled={generating !== null}
+                      onClick={() => handleGenerateDoc('rate_confirmation')}
+                    >
+                      <span className="material-icons">handshake</span>
+                      {generating === 'rate_confirmation' ? 'Generating...' : 'Rate Confirmation'}
+                    </button>
+                  )}
                 </div>
               </div>
               <div className="vn-card-body vn-card-flush">
