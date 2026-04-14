@@ -203,6 +203,47 @@ export async function carrierInvoiceRoutes(server: FastifyInstance) {
     }
   });
 
+  // Request quick pay on a carrier invoice (broker feature)
+  server.post('/api/v1/carrier-invoices/:id/quick-pay', {
+    schema: {
+      tags: ['Financial - Carrier Invoices'],
+      summary: 'Request quick pay for a carrier invoice (accelerated payment with discount)',
+      body: {
+        type: 'object',
+        required: ['discountPercent', 'daysToPayment'],
+        properties: {
+          discountPercent: { type: 'number', minimum: 0, maximum: 100 },
+          daysToPayment: { type: 'integer', minimum: 1 },
+        },
+      },
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const body = z.object({
+      discountPercent: z.number().min(0).max(100),
+      daysToPayment: z.number().int().min(1),
+    }).parse((req as any).body);
+
+    const invoice = await server.prisma.carrierInvoice.findUnique({ where: { id } });
+    if (!invoice) { reply.code(404); return { data: null, error: 'Invoice not found' }; }
+
+    const discountCents = Math.round(invoice.totalCents * body.discountPercent / 100);
+    const quickPayDueDate = new Date();
+    quickPayDueDate.setDate(quickPayDueDate.getDate() + body.daysToPayment);
+
+    const updated = await server.prisma.carrierInvoice.update({
+      where: { id },
+      data: {
+        quickPayRequested: true,
+        quickPayDiscountPct: body.discountPercent,
+        quickPayDiscountCents: discountCents,
+        quickPayDueDate: quickPayDueDate,
+      },
+    });
+
+    return { data: updated, error: null };
+  });
+
   // ─── Payment Batching ──────────────────────────────────────────────────────
 
   const batchService = new CarrierPaymentBatchService(

@@ -70,6 +70,8 @@ import VNextSkillsConfig from './vnext-design/VNextSkillsConfig';
 import VNextSkillChains from './vnext-design/VNextSkillChains';
 import VNextLoadBoard from './vnext-design/VNextLoadBoard';
 import VNextRoles from './vnext-design/VNextRoles';
+import VNextMarginReports from './vnext-design/VNextMarginReports';
+import VNextCommissions from './vnext-design/VNextCommissions';
 
 // VNext Finance Pages
 import VNextFinanceDashboard from './vnext-design/VNextFinanceDashboard';
@@ -271,6 +273,8 @@ root.render(
           <Route path="finance/aging" element={<VNextFinanceAgingReport />} />
           <Route path="finance/payments" element={<VNextFinanceRecordPayments />} />
           <Route path="finance/exports" element={<VNextFinanceExports />} />
+          <Route path="finance/margin-reports" element={<VNextMarginReports />} />
+          <Route path="finance/commissions" element={<VNextCommissions />} />
 
           {/* Integrations (sub-layout with tabs) */}
           <Route path="integrations" element={<VNextIntegrationsLayout />}>

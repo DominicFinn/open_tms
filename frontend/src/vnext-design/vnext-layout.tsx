@@ -96,6 +96,10 @@ const APPS: AppDef[] = [
         { to: '/finance/carrier-invoices', icon: 'local_shipping', label: 'Carrier Invoices' },
         { to: '/finance/payments', icon: 'payment', label: 'Record Payments' },
       ]},
+      { title: 'Brokerage', items: [
+        { to: '/finance/commissions', icon: 'payments', label: 'Commissions' },
+        { to: '/finance/margin-reports', icon: 'trending_up', label: 'Margin Reports' },
+      ]},
       { title: 'Disputes', items: [
         { to: '/finance/queries', icon: 'help_outline', label: 'Queries & Disputes' },
         { to: '/finance/credit-notes', icon: 'note', label: 'Credit Notes' },

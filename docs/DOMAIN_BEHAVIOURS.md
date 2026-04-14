@@ -1468,6 +1468,40 @@ Generates a carrier-facing PDF showing the agreed carrier rate (cost charges onl
 
 **Middleware:** `requirePermission(...perms)` in `jwtAuth.ts` checks JWT permissions. `optionalAuth` sets `req.user` when token present without blocking unauthenticated requests.
 
+### Margin Reports
+
+Four report endpoints in `brokerReports.ts`:
+- `GET /api/v1/reports/margin/by-customer` - Revenue, cost, margin by customer with target margin variance
+- `GET /api/v1/reports/margin/by-carrier` - Revenue, cost, margin by carrier
+- `GET /api/v1/reports/margin/by-lane` - Revenue, cost, margin by lane
+- `GET /api/v1/reports/margin/over-time` - Margin trends with daily/weekly/monthly granularity
+
+All support `dateFrom`/`dateTo` query parameters. Customer report includes `targetMarginPercent` and `varianceFromTarget` fields.
+
+### Target Margin
+
+- `Customer.targetMarginPercent` - Per-customer target margin (e.g., 15.00%)
+- `LaneCarrier.targetMarginPercent` - Per-lane-carrier target margin
+
+Used in margin reports to show variance (actual margin % - target %).
+
+### Commission Tracking
+
+**Model:** `Commission` with `userId` (broker agent), `shipmentId`, `basisType` (margin or revenue), `commissionPercent`, computed `commissionCents`, and lifecycle: accrued -> approved -> paid.
+
+**Endpoints:**
+- `GET /api/v1/commissions` - List with filters (userId, shipmentId, status)
+- `POST /api/v1/commissions` - Create (auto-computes amount from ShipmentFinancialSummary)
+- `POST /api/v1/commissions/:id/approve` - Approve
+- `POST /api/v1/commissions/:id/pay` - Mark paid
+- `GET /api/v1/commissions/summary` - Totals grouped by agent
+
+### Carrier Quick Pay
+
+**Endpoint:** `POST /api/v1/carrier-invoices/:id/quick-pay`
+
+Requests accelerated payment on a carrier invoice with a discount. Sets `quickPayRequested`, `quickPayDiscountPct`, `quickPayDiscountCents` (computed), and `quickPayDueDate` (today + N days).
+
 ### Key Files
 - `backend/src/auth/permissions.ts` - Permission constants and system role definitions
 - `backend/src/auth/seedRoles.ts` - Role seeding service
@@ -1496,3 +1530,8 @@ Generates a carrier-facing PDF showing the agreed carrier rate (cost charges onl
 - `backend/src/__tests__/projections/ShipmentProjectionFinancial.test.ts` - 5 projection tests
 - `backend/src/__tests__/services/CreditCheckService.test.ts` - 7 credit check tests
 - `backend/src/__tests__/commands/BrokerQuoteToBook.test.ts` - 5 quote-to-book tests
+- `backend/src/routes/brokerReports.ts` - Margin reports (by customer/carrier/lane/time)
+- `backend/src/routes/commissions.ts` - Commission CRUD + summary
+- `backend/src/routes/carrierInvoices.ts` - Quick pay endpoint
+- `frontend/src/vnext-design/VNextMarginReports.tsx` - Margin reports page
+- `frontend/src/vnext-design/VNextCommissions.tsx` - Commission management page

@@ -38,6 +38,9 @@ model Customer {
   autoInvoice           Boolean  @default(false)            // auto-generate draft invoice on delivery
   taxId                 String?                             // VAT / EIN
 
+  // Broker: Target Margin
+  targetMarginPercent   Decimal?  @db.Decimal(5,2)          // Target margin % for this customer (e.g., 15.00)
+
   // Read model relations
   orderReadModels    OrderReadModel[]
   shipmentReadModels ShipmentReadModel[]
@@ -171,6 +174,9 @@ model Shipment {
   // Carrier tracking API
   trackingNumber          String?              // Carrier tracking number (PRO, AWB, etc.)
   carrierTrackingEvents   CarrierTrackingEvent[]
+
+  // Brokerage
+  commissions             Commission[]
 }
 
 model ShipmentStop {
@@ -461,6 +467,9 @@ model LaneCarrier {
   fuelSurchargePercent  Float?
   accessorialRates      Json?     // { "detention": 50, "lumper": 75, ... }
   isContractRate        Boolean   @default(false)
+
+  // Broker: Target margin for this lane-carrier combo
+  targetMarginPercent   Decimal?  @db.Decimal(5,2)
 
   @@unique([laneId, carrierId])
 }
@@ -931,6 +940,7 @@ model User {
   auditLogs      AuditLog[] @relation("AuditUser")
   magicLinks     MagicLink[]
   loginAuditLogs LoginAuditLog[]
+  commissions    Commission[]
 
   @@index([email])
   @@index([organizationId])
@@ -3095,6 +3105,12 @@ model CarrierInvoice {
 
   notes               String?
 
+  // Quick Pay / Factoring (broker feature)
+  quickPayRequested     Boolean   @default(false)
+  quickPayDiscountPct   Decimal?  @db.Decimal(5,2)  // e.g., 2.00 = 2% discount for quick pay
+  quickPayDiscountCents Int?                         // Computed: totalCents * discountPct / 100
+  quickPayDueDate       DateTime?                    // Accelerated payment date
+
   lineItems           CarrierInvoiceLineItem[]
 
   createdAt           DateTime  @default(now())
@@ -3226,6 +3242,41 @@ model CreditNote {
   @@index([invoiceId])
   @@index([customerId])
   @@index([carrierId])
+}
+
+// ─── Brokerage: Commission Tracking ────────────────────────────────────────
+
+model Commission {
+  id                  String    @id @default(uuid())
+  orgId               String
+
+  user                User      @relation(fields: [userId], references: [id])
+  userId              String                                // The broker agent / sales rep
+  shipment            Shipment  @relation(fields: [shipmentId], references: [id])
+  shipmentId          String
+
+  // Calculation
+  basisType           String    @default("margin")          // "margin" | "revenue"
+  basisAmountCents    Int                                   // The amount the commission is calculated on
+  commissionPercent   Decimal   @db.Decimal(5,2)            // e.g., 10.00 = 10%
+  commissionCents     Int                                   // Computed: basisAmountCents * percent / 100
+  currency            String    @default("USD")
+
+  // Lifecycle
+  status              String    @default("accrued")         // accrued | approved | paid
+  approvedBy          String?
+  approvedAt          DateTime?
+  paidAt              DateTime?
+  paymentReference    String?
+
+  notes               String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([orgId])
+  @@index([userId])
+  @@index([shipmentId])
+  @@index([status])
 }
 
 // ─── Financial: Invoice Read Model ──────────────────────────────────────────

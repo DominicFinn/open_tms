@@ -130,8 +130,8 @@ The system models the world as "shipper has carriers" but never accounts for the
   - Real-time margin visibility on shipment list (togglable Revenue/Cost/Margin columns) and detail pages
   - Margin alerts: auto-create issues when margin drops below configurable threshold (MarginAlertHandler)
   - Financial columns denormalized to ShipmentReadModel for fast list queries
-  - Margin reporting by customer, carrier, lane, and time period 🔲
-  - Target margin by lane/customer with variance tracking 🔲
+  - Margin reporting by customer, carrier, lane, and time period with date range filtering
+  - Target margin per customer and per lane-carrier with variance tracking (actual vs target %)
 - **Broker Quoting Workflow** ✅
   - Quick quote endpoint: auto-populate from lane-carrier rates via RatingService + configurable markup percentage
   - Quote-to-book conversion: "Accept & Book" creates shipment with pre-set sell rate, flows directly to load board
@@ -145,12 +145,12 @@ The system models the world as "shipper has carriers" but never accounts for the
   - Integration with carrier tendering (existing broadcast/waterfall) for larger operations
   - Tender acceptance rate stats per carrier
   - Load matching suggestions based on carrier lane history and equipment type 🔲
-- **Broker-Specific Financials** 🔲
-  - Carrier quick pay / factoring support (pay carrier in N days for a fee)
-  - Customer invoice with broker markup (not showing carrier cost)
-  - Carrier settlement: batch payments to carriers grouped by payment terms
-  - Receivables aging from broker perspective (customer owes broker, broker owes carrier)
-  - Commission tracking for broker agents/sales reps (if multi-user brokerage)
+- **Broker-Specific Financials** ✅
+  - Carrier quick pay / factoring: request accelerated payment with configurable discount % and payment days
+  - Customer invoice with broker markup (not showing carrier cost) - already worked via existing Invoice system
+  - Carrier settlement: batch payments to carriers grouped by payment terms - already existed
+  - Receivables aging from broker perspective - already existed via AR aging report
+  - Commission tracking for broker agents: Commission model with accrued/approved/paid lifecycle, basis on margin or revenue, per-agent summary, management UI
 
 ### **Track 2: Reporting & Analytics** (Biggest Credibility Gap - ~40% Coverage)
 
