@@ -13,7 +13,7 @@ import { EVENT_TYPES } from '../eventTypes.js';
 
 export class ShipmentProjection implements IEventHandler {
   readonly name = 'projection.shipment';
-  readonly eventPatterns = ['shipment.*', 'tracking.*'];
+  readonly eventPatterns = ['shipment.*', 'tracking.*', 'charge.*'];
   readonly options: SubscribeOptions = {
     concurrency: 3,
     priority: 5,
@@ -40,6 +40,10 @@ export class ShipmentProjection implements IEventHandler {
         return this.onStopUpdate(event);
       case EVENT_TYPES.TRACKING_LOCATION_RECEIVED:
         return this.onLocationReceived(event);
+      case EVENT_TYPES.CHARGE_CREATED:
+      case EVENT_TYPES.CHARGE_APPROVED:
+      case EVENT_TYPES.CHARGE_DISPUTED:
+        return this.onChargeChanged(event);
       default:
         break;
     }
@@ -198,6 +202,34 @@ export class ShipmentProjection implements IEventHandler {
       data: { stopCount, updatedAt: new Date() },
     }).catch((err: Error) => {
       console.error(`[ShipmentProjection] Failed to update read model for ${event.entityId}: ${err.message}`);
+    });
+  }
+
+  private async onChargeChanged(event: DomainEvent): Promise<void> {
+    const payload = event.payload as { shipmentId?: string };
+    const shipmentId = payload.shipmentId;
+    if (!shipmentId) return;
+
+    // Look up the ShipmentFinancialSummary for this shipment
+    const summary = await this.prisma.shipmentFinancialSummary.findUnique({
+      where: { shipmentId },
+    });
+
+    if (!summary) return;
+
+    await this.prisma.shipmentReadModel.update({
+      where: { id: shipmentId },
+      data: {
+        expectedRevenueCents: summary.expectedRevenueCents,
+        expectedCostCents: summary.expectedCostCents,
+        expectedMarginCents: summary.expectedMarginCents,
+        actualRevenueCents: summary.actualRevenueCents,
+        actualCostCents: summary.actualCostCents,
+        actualMarginCents: summary.actualMarginCents,
+        updatedAt: new Date(),
+      },
+    }).catch((err: Error) => {
+      console.error(`[ShipmentProjection] Failed to update financial columns for ${shipmentId}: ${err.message}`);
     });
   }
 

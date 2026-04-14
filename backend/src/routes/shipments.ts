@@ -34,7 +34,8 @@ export async function shipmentRoutes(server: FastifyInstance) {
             }
           }
         },
-        carrier: true
+        carrier: true,
+        shipmentFinancialSummary: true,
       },
       orderBy: { createdAt: 'desc' }
     });

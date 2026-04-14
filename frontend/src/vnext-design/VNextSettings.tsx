@@ -16,6 +16,7 @@ import { API_URL } from '../api';
 
 const tabs = [
   { key: 'general', label: 'General', icon: 'settings' },
+  { key: 'brokerage', label: 'Brokerage', icon: 'handshake' },
   { key: 'warehouse', label: 'Warehouse', icon: 'warehouse' },
   { key: 'notifications', label: 'Notifications', icon: 'notifications' },
   { key: 'integrations', label: 'Integrations', icon: 'extension' },
@@ -591,6 +592,145 @@ function ThemeTab() {
   );
 }
 
+/* ── Brokerage Tab ────────────────────────────────────── */
+
+function BrokerageTab() {
+  const [orgType, setOrgType] = useState('shipper');
+  const [mcNumber, setMcNumber] = useState('');
+  const [bondAmount, setBondAmount] = useState('');
+  const [bondExpiration, setBondExpiration] = useState('');
+  const [authorityStatus, setAuthorityStatus] = useState('active');
+  const [marginAlertEnabled, setMarginAlertEnabled] = useState(false);
+  const [minMarginPercent, setMinMarginPercent] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<{ text: string; variant: 'success' | 'error' } | null>(null);
+
+  useEffect(() => {
+    fetch(`${API_URL}/api/v1/organization/settings`)
+      .then(r => r.json())
+      .then(json => {
+        const s = json.data;
+        if (s) {
+          setOrgType(s.organizationType || 'shipper');
+          setMcNumber(s.mcNumber || '');
+          setBondAmount(s.bondAmountCents ? (s.bondAmountCents / 100).toFixed(2) : '');
+          setBondExpiration(s.bondExpirationDate ? s.bondExpirationDate.split('T')[0] : '');
+          setAuthorityStatus(s.operatingAuthorityStatus || 'active');
+          setMarginAlertEnabled(s.marginAlertEnabled || false);
+          setMinMarginPercent(s.minMarginPercent != null ? String(s.minMarginPercent) : '');
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setSaveMessage(null);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/organization/settings`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          organizationType: orgType,
+          mcNumber: mcNumber || null,
+          bondAmountCents: bondAmount ? Math.round(parseFloat(bondAmount) * 100) : null,
+          bondExpirationDate: bondExpiration || null,
+          operatingAuthorityStatus: authorityStatus || null,
+          marginAlertEnabled,
+          minMarginPercent: minMarginPercent ? parseFloat(minMarginPercent) : null,
+        }),
+      });
+      if (res.ok) setSaveMessage({ text: 'Brokerage settings saved', variant: 'success' });
+      else setSaveMessage({ text: 'Failed to save settings', variant: 'error' });
+    } catch {
+      setSaveMessage({ text: 'Failed to save settings', variant: 'error' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) return <div className="loading-spinner" style={{ margin: '40px auto' }} />;
+
+  const isBroker = orgType === 'broker' || orgType === '3pl';
+
+  return (
+    <VnCard>
+      <VnFormSection title="Organization Type">
+        <VnFormGrid>
+          <VnField label="Organization Type">
+            <VnSelect value={orgType} onChange={e => setOrgType(e.target.value)}>
+              <option value="shipper">Shipper</option>
+              <option value="broker">Broker</option>
+              <option value="carrier">Carrier</option>
+              <option value="3pl">3PL</option>
+            </VnSelect>
+          </VnField>
+        </VnFormGrid>
+        <p style={{ fontSize: 13, color: 'var(--on-surface-variant)', marginTop: 8 }}>
+          This determines the default UI experience and available features. Brokers and 3PLs get the load board,
+          margin tracking, and broker-specific workflows.
+        </p>
+      </VnFormSection>
+
+      {isBroker && (
+        <>
+          <VnFormSection title="Authority & Compliance">
+            <VnFormGrid>
+              <VnField label="MC Number">
+                <VnInput value={mcNumber} onChange={e => setMcNumber(e.target.value)} placeholder="e.g. 123456" />
+              </VnField>
+              <VnField label="Operating Authority Status">
+                <VnSelect value={authorityStatus} onChange={e => setAuthorityStatus(e.target.value)}>
+                  <option value="active">Active</option>
+                  <option value="pending">Pending</option>
+                  <option value="revoked">Revoked</option>
+                </VnSelect>
+              </VnField>
+              <VnField label="Bond Amount ($)">
+                <VnInput type="number" step="0.01" value={bondAmount} onChange={e => setBondAmount(e.target.value)} placeholder="0.00" />
+              </VnField>
+              <VnField label="Bond Expiration">
+                <VnInput type="date" value={bondExpiration} onChange={e => setBondExpiration(e.target.value)} />
+              </VnField>
+            </VnFormGrid>
+          </VnFormSection>
+
+          <VnFormSection title="Margin Alerts">
+            <Switch label="Enable margin alerts" checked={marginAlertEnabled} onChange={setMarginAlertEnabled} />
+            <p style={{ fontSize: 13, color: 'var(--on-surface-variant)', margin: '8px 0 12px' }}>
+              When enabled, an issue is automatically created when a shipment's margin drops below the threshold.
+            </p>
+            {marginAlertEnabled && (
+              <VnFormGrid>
+                <VnField label="Minimum Margin (%)">
+                  <VnInput
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="100"
+                    value={minMarginPercent}
+                    onChange={e => setMinMarginPercent(e.target.value)}
+                    placeholder="e.g. 10"
+                  />
+                </VnField>
+              </VnFormGrid>
+            )}
+          </VnFormSection>
+        </>
+      )}
+
+      {saveMessage && <VnAlert variant={saveMessage.variant}>{saveMessage.text}</VnAlert>}
+      <VnFormActions>
+        <VnButton onClick={handleSave} disabled={saving}>
+          {saving ? 'Saving...' : 'Save Brokerage Settings'}
+        </VnButton>
+      </VnFormActions>
+    </VnCard>
+  );
+}
+
 /* ── Warehouse Tab ─────────────────────────────────────── */
 
 function WarehouseTab() {
@@ -864,6 +1004,7 @@ export default function VNextSettings() {
 
       <div style={{ marginTop: '24px' }}>
         {activeTab === 'general' && <GeneralTab />}
+        {activeTab === 'brokerage' && <BrokerageTab />}
         {activeTab === 'warehouse' && <WarehouseTab />}
         {activeTab === 'notifications' && <NotificationsTab />}
         {activeTab === 'integrations' && <IntegrationsTab />}

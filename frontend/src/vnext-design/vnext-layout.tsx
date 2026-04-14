@@ -62,6 +62,7 @@ const APPS: AppDef[] = [
         { to: '/devices', icon: 'sensors', label: 'Devices' },
       ]},
       { title: 'Network', items: [
+        { to: '/loadboard', icon: 'dashboard_customize', label: 'Load Board' },
         { to: '/carriers', icon: 'airport_shuttle', label: 'Carriers' },
         { to: '/carrier-bidding', icon: 'gavel', label: 'Carrier Bidding' },
         { to: '/customers', icon: 'people', label: 'Customers' },

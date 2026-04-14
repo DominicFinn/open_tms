@@ -3,6 +3,16 @@ import { useNavigate } from 'react-router-dom';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { API_URL } from '../api';
+import { useOrgContext } from '../hooks/useOrgContext';
+
+interface FinancialSummary {
+  actualRevenueCents?: number;
+  actualCostCents?: number;
+  actualMarginCents?: number;
+  expectedRevenueCents?: number;
+  expectedCostCents?: number;
+  expectedMarginCents?: number;
+}
 
 interface Shipment {
   id: string;
@@ -16,6 +26,7 @@ interface Shipment {
   destination?: { name: string; city: string; state: string };
   lane?: { name: string };
   carrier?: { name: string };
+  shipmentFinancialSummary?: FinancialSummary | null;
 }
 
 function statusColor(status: string): string {
@@ -28,13 +39,33 @@ function statusColor(status: string): string {
 }
 
 function formatDate(d?: string): string {
-  if (!d) return '—';
+  if (!d) return '-';
   const date = new Date(d);
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
+function formatCents(cents?: number | null): string {
+  if (cents == null) return '-';
+  return `$${(cents / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function marginColor(marginCents?: number | null, revenueCents?: number | null): string {
+  if (marginCents == null || revenueCents == null || revenueCents === 0) return 'var(--on-surface-variant)';
+  const pct = (marginCents / revenueCents) * 100;
+  if (pct >= 15) return 'var(--color-success)';
+  if (pct >= 5) return 'var(--color-warning)';
+  return 'var(--color-error)';
+}
+
+function marginPercent(marginCents?: number | null, revenueCents?: number | null): string {
+  if (marginCents == null || revenueCents == null || revenueCents === 0) return '-';
+  return `${((marginCents / revenueCents) * 100).toFixed(1)}%`;
+}
+
 export default function VNextShipments() {
   const navigate = useNavigate();
+  const { isBroker } = useOrgContext();
+  const [showFinancials, setShowFinancials] = useState(isBroker);
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<L.Map | null>(null);
   const markersRef = useRef<L.LayerGroup | null>(null);
@@ -238,6 +269,15 @@ export default function VNextShipments() {
             <option>Reefer</option>
             <option>Flatbed</option>
           </select>
+          <button
+            className={`vn-btn vn-btn-sm ${showFinancials ? 'vn-btn-primary' : 'vn-btn-outline'}`}
+            onClick={() => setShowFinancials(!showFinancials)}
+            title="Toggle financial columns"
+            style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13 }}
+          >
+            <span className="material-icons" style={{ fontSize: 16 }}>attach_money</span>
+            Margin
+          </button>
           <div style={{ display: 'flex', border: '1px solid var(--outline-variant)', borderRadius: 'var(--border-radius-sm)', overflow: 'hidden' }}>
             <button
               className="vn-btn-icon"
@@ -268,6 +308,9 @@ export default function VNextShipments() {
                 <th>Pickup</th>
                 <th>Delivery</th>
                 <th>PRO #</th>
+                {showFinancials && <th style={{ textAlign: 'right' }}>Revenue</th>}
+                {showFinancials && <th style={{ textAlign: 'right' }}>Cost</th>}
+                {showFinancials && <th style={{ textAlign: 'right' }}>Margin</th>}
                 <th>Status</th>
               </tr>
             </thead>
@@ -290,13 +333,33 @@ export default function VNextShipments() {
                   <td>{s.lane ? <span className="vn-chip vn-chip-secondary">{s.lane.name}</span> : '—'}</td>
                   <td style={{ fontSize: 13, whiteSpace: 'nowrap' }}>{formatDate(s.pickupDate)}</td>
                   <td style={{ fontSize: 13, whiteSpace: 'nowrap' }}>{formatDate(s.deliveryDate)}</td>
-                  <td style={{ fontSize: 13 }}>{s.proNumber || '—'}</td>
+                  <td style={{ fontSize: 13 }}>{s.proNumber || '-'}</td>
+                  {showFinancials && (
+                    <td style={{ fontSize: 13, textAlign: 'right', whiteSpace: 'nowrap' }}>
+                      {formatCents(s.shipmentFinancialSummary?.actualRevenueCents ?? s.shipmentFinancialSummary?.expectedRevenueCents)}
+                    </td>
+                  )}
+                  {showFinancials && (
+                    <td style={{ fontSize: 13, textAlign: 'right', whiteSpace: 'nowrap' }}>
+                      {formatCents(s.shipmentFinancialSummary?.actualCostCents ?? s.shipmentFinancialSummary?.expectedCostCents)}
+                    </td>
+                  )}
+                  {showFinancials && (() => {
+                    const fin = s.shipmentFinancialSummary;
+                    const margin = fin?.actualMarginCents ?? fin?.expectedMarginCents;
+                    const revenue = fin?.actualRevenueCents ?? fin?.expectedRevenueCents;
+                    return (
+                      <td style={{ fontSize: 13, textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 600, color: marginColor(margin, revenue) }}>
+                        {formatCents(margin)} <span style={{ fontSize: 11, fontWeight: 400 }}>({marginPercent(margin, revenue)})</span>
+                      </td>
+                    );
+                  })()}
                   <td><span className={`vn-chip vn-chip-${statusColor(s.status)}`}>{s.status}</span></td>
                 </tr>
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={9}>
+                  <td colSpan={showFinancials ? 12 : 9}>
                     <div className="vn-empty">
                       <span className="material-icons">search_off</span>
                       <h3>No shipments found</h3>

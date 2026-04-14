@@ -1366,3 +1366,66 @@ Status bridging rules:
 - `frontend/src/vnext-design/VNextCarrierTracking.tsx` - Integration list
 - `frontend/src/vnext-design/VNextCarrierTrackingSetup.tsx` - Setup wizard
 - `frontend/src/vnext-design/VNextCarrierTrackingDetail.tsx` - Integration detail
+
+---
+
+## Brokerage Operations
+
+### Organization Type
+
+The `Organization` model has an `organizationType` field that determines the UI experience and available features. Valid values: `shipper` (default), `broker`, `carrier`, `3pl`.
+
+Broker and 3PL organizations get:
+- Load Board in sidebar navigation
+- Margin columns on shipment list (on by default)
+- Brokerage settings tab in admin (MC number, bond, operating authority, margin alerts)
+
+### Margin Alert
+
+**Event:** `margin.alert`
+
+**Trigger:** `MarginAlertHandler` subscribes to `charge.created` and `charge.approved` events. When a charge is created or approved, it checks the shipment's `ShipmentFinancialSummary` margin against the org's `minMarginPercent` threshold.
+
+**Side Effects:**
+- Creates an Issue with category `margin_alert` and priority based on severity (negative margin = critical, low margin = high)
+- Deduplicates: will not create a second alert if an open margin_alert issue already exists for the shipment
+
+**Configuration:** Set `marginAlertEnabled = true` and `minMarginPercent` on the Organization model via Settings > Brokerage.
+
+### Load Board
+
+**Endpoint:** `GET /api/v1/loadboard`
+
+Returns shipments where `carrierId IS NULL` and `status IN ('booked', 'confirmed', 'ready', 'pending')`, ordered by pickup date. Includes customer, origin/destination, lane, financial summary, and active tenders.
+
+**Endpoint:** `GET /api/v1/loadboard/:shipmentId/matching-carriers`
+
+Finds carriers with:
+1. Lane rates (LaneCarrier records) for the shipment's lane
+2. Historical usage (previously assigned to shipments on the same lane)
+3. Tender acceptance stats (total bids, accepted bids, acceptance rate %)
+
+**Endpoint:** `POST /api/v1/loadboard/:shipmentId/assign`
+
+Quick-assigns a carrier with a cost rate. In a single transaction:
+1. Sets `carrierId` on the shipment
+2. Creates an approved cost charge (linehaul) for the agreed rate
+3. Updates `ShipmentFinancialSummary` with the new cost
+
+### ShipmentReadModel Financial Columns
+
+The `ShipmentProjection` subscribes to `charge.*` events in addition to `shipment.*` and `tracking.*`. On charge events, it denormalizes the `ShipmentFinancialSummary` fields (expectedRevenueCents, expectedCostCents, expectedMarginCents, actualRevenueCents, actualCostCents, actualMarginCents) into the `ShipmentReadModel` for fast list queries.
+
+### Key Files
+- `backend/prisma/schema.prisma` - Organization brokerage fields, ShipmentReadModel financial columns
+- `backend/src/routes/loadboard.ts` - Load board API (list, matching carriers, quick assign)
+- `backend/src/routes/organization.ts` - Organization settings (includes brokerage fields)
+- `backend/src/events/handlers/MarginAlertHandler.ts` - Margin alert event handler
+- `backend/src/events/projections/ShipmentProjection.ts` - Financial column denormalization
+- `backend/src/events/eventTypes.ts` - margin.alert event type
+- `frontend/src/vnext-design/VNextLoadBoard.tsx` - Load board page
+- `frontend/src/vnext-design/VNextShipments.tsx` - Margin columns on shipment list
+- `frontend/src/vnext-design/VNextSettings.tsx` - Brokerage settings tab
+- `frontend/src/hooks/useOrgContext.ts` - Organization context hook
+- `backend/src/__tests__/handlers/MarginAlertHandler.test.ts` - 8 margin alert tests
+- `backend/src/__tests__/projections/ShipmentProjectionFinancial.test.ts` - 5 projection tests

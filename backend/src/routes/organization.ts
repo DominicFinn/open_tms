@@ -15,6 +15,14 @@ const updateSettingsSchema = z.object({
   autoTenderEnabled: z.boolean().optional(),
   defaultGeofenceRadiusMeters: z.number().positive().optional(),
   autoDeliverShipmentDocs: z.boolean().optional(),
+  // Brokerage fields
+  organizationType: z.enum(['shipper', 'broker', 'carrier', '3pl']).optional(),
+  mcNumber: z.string().nullable().optional(),
+  bondAmountCents: z.number().int().nullable().optional(),
+  bondExpirationDate: z.string().nullable().optional(),
+  operatingAuthorityStatus: z.enum(['active', 'pending', 'revoked']).nullable().optional(),
+  minMarginPercent: z.number().min(0).max(100).nullable().optional(),
+  marginAlertEnabled: z.boolean().optional(),
 });
 
 export async function organizationRoutes(server: FastifyInstance) {
@@ -39,7 +47,13 @@ export async function organizationRoutes(server: FastifyInstance) {
       };
     }
 
-    const updated = await orgRepo.updateSettings(body);
+    // Convert date string to Date object if provided
+    const settingsData: any = { ...body };
+    if (body.bondExpirationDate !== undefined) {
+      settingsData.bondExpirationDate = body.bondExpirationDate ? new Date(body.bondExpirationDate) : null;
+    }
+
+    const updated = await orgRepo.updateSettings(settingsData);
     return { data: updated, error: null };
   });
 

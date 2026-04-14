@@ -118,30 +118,33 @@ The following tracks are ordered by impact on TMS credibility. Items within each
 
 The system models the world as "shipper has carriers" but never accounts for the broker role - arguably the single most common TMS user persona. No broker margin tracking, no customer-as-shipper vs carrier-as-capacity pairing, no broker-specific workflows.
 
-- **Broker Entity Model** 🔲
+- **Broker Entity Model** ✅
   - Organization type flag: shipper, carrier, broker, 3PL (determines available features and terminology)
   - Broker-specific fields: MC number, bond info, operating authority status
+  - Admin settings UI for brokerage configuration
   - Customer-as-shipper relationship: customers are the shippers in a brokerage, the broker is the intermediary
   - Carrier-as-capacity: carrier assignment represents capacity procurement, not just a transport provider
-  - Broker user roles and permissions distinct from shipper roles
-- **Broker Margin Tracking** 🔲
-  - Buy rate (carrier cost) vs sell rate (customer price) per shipment - distinct from the shipper model where "revenue" and "cost" are less clearly opposed
-  - Real-time margin visibility on shipment list and detail pages
-  - Margin alerts: flag shipments where margin drops below configurable threshold
-  - Margin reporting by customer, carrier, lane, and time period
-  - Target margin by lane/customer with variance tracking
+  - Broker user roles and permissions distinct from shipper roles 🔲
+- **Broker Margin Tracking** ✅
+  - Buy rate (carrier cost) vs sell rate (customer price) per shipment - leverages existing Charge + ShipmentFinancialSummary models
+  - Real-time margin visibility on shipment list (togglable Revenue/Cost/Margin columns) and detail pages
+  - Margin alerts: auto-create issues when margin drops below configurable threshold (MarginAlertHandler)
+  - Financial columns denormalized to ShipmentReadModel for fast list queries
+  - Margin reporting by customer, carrier, lane, and time period 🔲
+  - Target margin by lane/customer with variance tracking 🔲
 - **Broker Quoting Workflow** 🔲
   - Customer rate request intake (phone, email, portal, API)
   - Quick quote from rate history and lane-carrier pricing
   - Quote-to-book conversion: accepted quote creates shipment with pre-set buy/sell rates
   - Rate confirmation document generation (PDF) - broker version of the BOL
   - Customer credit check integration with existing billing infrastructure
-- **Broker Load Board** 🔲
+- **Broker Load Board** ✅
   - Internal load board: unmatched shipments needing carrier assignment
-  - Carrier capacity search: find carriers with availability on a lane
-  - Quick carrier assignment with rate negotiation tracking
+  - Carrier capacity search: find carriers with lane rates and historical usage on matching lanes
+  - Quick carrier assignment with cost rate capture and real-time margin preview
   - Integration with carrier tendering (existing broadcast/waterfall) for larger operations
-  - Load matching suggestions based on carrier lane history and equipment type
+  - Tender acceptance rate stats per carrier
+  - Load matching suggestions based on carrier lane history and equipment type 🔲
 - **Broker-Specific Financials** 🔲
   - Carrier quick pay / factoring support (pay carrier in N days for a fee)
   - Customer invoice with broker markup (not showing carrier cost)

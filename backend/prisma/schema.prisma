@@ -615,6 +615,19 @@ model Organization {
   id                  String   @id @default(uuid())
   name                String   @default("Default Organization")
 
+  // Organization Type
+  organizationType    String   @default("shipper") // "shipper" | "broker" | "carrier" | "3pl"
+
+  // Broker-Specific Fields
+  mcNumber            String?                      // Motor Carrier number
+  bondAmountCents     Int?                         // Bond amount in cents
+  bondExpirationDate  DateTime?                    // Bond expiration date
+  operatingAuthorityStatus String? @default("active") // "active" | "pending" | "revoked"
+
+  // Broker Margin Configuration
+  minMarginPercent    Decimal? @db.Decimal(5,2)    // Minimum acceptable margin % (e.g., 10.00)
+  marginAlertEnabled  Boolean  @default(false)     // Enable margin alert issues
+
   // Lowest Trackable Unit Configuration
   trackingMode        String   @default("item") // "group" or "item"
   trackableUnitType   String   @default("box") // "pallet", "tote", "box", "stillage", "custom"
@@ -1351,6 +1364,15 @@ model ShipmentReadModel {
   currentLat        Float?
   currentLng        Float?
   lastLocationAt    DateTime?
+
+  // Financial summary (denormalized from ShipmentFinancialSummary)
+  expectedRevenueCents Int?
+  expectedCostCents    Int?
+  expectedMarginCents  Int?
+  actualRevenueCents   Int?
+  actualCostCents      Int?
+  actualMarginCents    Int?
+
   createdAt         DateTime
   updatedAt         DateTime
 

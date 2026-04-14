@@ -44,6 +44,7 @@ import { BillingTriggerHandler } from './handlers/BillingTriggerHandler.js';
 import { InvoiceProjection } from './projections/InvoiceProjection.js';
 import { FinancialImpactHandler } from './handlers/FinancialImpactHandler.js';
 import { CarrierTrackingHandler } from './handlers/CarrierTrackingHandler.js';
+import { MarginAlertHandler } from './handlers/MarginAlertHandler.js';
 
 /** Read concurrency from env with a default */
 function envInt(key: string, fallback: number): number {
@@ -146,6 +147,9 @@ export async function registerEventHandlers(
 
   // Carrier tracking: handle delivered, exception, integration error, and status bridging
   handlers.push(new CarrierTrackingHandler(prisma, eventBus));
+
+  // Brokerage: margin alert - creates issues when margin drops below threshold
+  handlers.push(new MarginAlertHandler(prisma));
 
   // Add automation rule handler (runs before triage agent — deterministic rules take priority)
   if (skillRegistry) {

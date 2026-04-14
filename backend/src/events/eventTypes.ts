@@ -208,6 +208,9 @@ export const EVENT_TYPES = {
   // Financial: Billing Triggers
   SHIPMENT_READY_TO_INVOICE: 'shipment.ready_to_invoice',
 
+  // Brokerage: Margin Alerts
+  MARGIN_ALERT: 'margin.alert',
+
   // Quality Centre: CAPA Follow-ups
   CAPA_FOLLOW_UP_CREATED: 'capa.follow_up_created',
   CAPA_FOLLOW_UP_COMPLETED: 'capa.follow_up_completed',
@@ -339,6 +342,7 @@ export const EVENT_SCHEMA_VERSIONS: Record<string, number> = {
   [EVENT_TYPES.CREDIT_NOTE_CREATED]: 1,
   [EVENT_TYPES.CREDIT_NOTE_APPLIED]: 1,
   [EVENT_TYPES.SHIPMENT_READY_TO_INVOICE]: 1,
+  [EVENT_TYPES.MARGIN_ALERT]: 1,
   // Carrier Tracking
   [EVENT_TYPES.CARRIER_TRACKING_INTEGRATION_CREATED]: 1,
   [EVENT_TYPES.CARRIER_TRACKING_INTEGRATION_UPDATED]: 1,
@@ -682,4 +686,14 @@ export interface ShipmentReadyToInvoicePayload {
   shipmentId: string;
   shipmentReference: string;
   customerId: string;
+}
+
+export interface MarginAlertPayload {
+  shipmentId: string;
+  shipmentReference: string;
+  revenueCents: number;
+  costCents: number;
+  marginCents: number;
+  marginPercent: number;
+  thresholdPercent: number;
 }

@@ -12,6 +12,14 @@ export interface UpdateOrganizationSettingsDTO {
   autoTenderEnabled?: boolean;
   defaultGeofenceRadiusMeters?: number;
   autoDeliverShipmentDocs?: boolean;
+  // Brokerage fields
+  organizationType?: 'shipper' | 'broker' | 'carrier' | '3pl';
+  mcNumber?: string | null;
+  bondAmountCents?: number | null;
+  bondExpirationDate?: Date | null;
+  operatingAuthorityStatus?: 'active' | 'pending' | 'revoked' | null;
+  minMarginPercent?: number | null;
+  marginAlertEnabled?: boolean;
 }
 
 export interface IOrganizationRepository {
