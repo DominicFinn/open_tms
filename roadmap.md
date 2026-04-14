@@ -1,972 +1,519 @@
-# 🚚 Open TMS Roadmap
+# Open TMS Roadmap
 
-## **Phase 1: Core Setup (Foundation)** ✅
-- **Lane Management** ✅
-  - Create/manage lanes (point-to-point, multi-stop).
-  - Associate lanes with locations and carriers.
-- **Carrier Management** ✅
-  - Add carriers, store negotiated rates, service levels.
-  - Link carriers to lanes.
-- **Customer Management** ✅
-  - Manage customers with contact/billing info.
-  - Apply customer-specific preferences or rules.
-- **Shipment Creation (Basic)** ✅
-  - Create shipments with references, customer, origin, destination, status.
-  - Support templates for recurring shipment types.
-- **Item/Line Items** ✅
-  - Model SKUs, quantities, weights, dimensions.
-  - CSV/Excel import for bulk item ingestion.
+> **Reoriented April 2026.** Restructured around core TMS completeness - the features that make or break a credible demo. Brokerage elevated to first-class, reporting overhauled, customer portal prioritised. Speculative/advanced items (carrier risk/FMCSA, driver mobile app, digital BOL, sustainability/carbon, multi-modal ocean/air/rail, hub-and-spoke) removed or deferred to considerations.
 
-## **Phase 2: Orders & Ingestion** ✅
-- **Order Management** ✅
-  - ✅ CSV import with trackable units (pallets, totes, etc.)
-  - ✅ Manual order creation via UI with trackable units
-  - ✅ Automatic order-to-shipment assignment based on lane matching
-  - ✅ Pending lane request system for unmatched orders
-  - ✅ Special requirements (FTL/LTL, temperature control, hazmat)
-  - ✅ **Customer API for Order Creation**
-    - ✅ REST API endpoint for customers to programmatically create orders
-    - ✅ API key authentication and authorization system (customer-scoped API keys)
-    - ✅ Rate limiting and security controls
-    - ✅ API documentation via Swagger/OpenAPI at /docs
-  - ✅ **Order Status Lifecycle & Multi-Leg Tracking**
-    - ✅ Status flow: unassigned → assigned → in_transit → delivered/exception
-    - ✅ Auto-set delivery status on order assignment/conversion
-    - ✅ Order-to-stop linking for multi-leg shipments
-    - ✅ Multiple status update mechanisms:
-      - ✅ Manual updates by drivers/logistics users
-      - ✅ Geofencing-based automatic updates
-      - ✅ IoT sensor triggers (geofence + light sensor = truck opened)
-    - ✅ Order-level delivery confirmation tracking
-    - ✅ Audit trail for all delivery status transitions
-    - ✅ Status timeline API and UI
-    - ✅ Shipment stop management (arrive, in progress, complete)
-    - ✅ Bulk order updates at stop level
-  - **EDI Import Support** ✅
-    - ✅ Parse X12 850 Purchase Orders → create orders in TMS
-    - ✅ EDI partner configuration and credentials management
-    - ✅ EDI file storage with deduplication (database adapter, pluggable interface)
-    - ✅ EDI preview endpoint (parse without creating orders)
-    - ✅ EDI file history, stats, and reprocessing
-    - ✅ Error handling and EDI transaction logging
-    - ✅ FTP/SFTP drop folder monitoring (edi-collector service)
-    - ✅ Scheduled EDI polling and processing
-    - ✅ Frontend: EDI partner config UI
-    - ✅ Frontend: Drag-and-drop EDI upload with field mapping preview
-    - ✅ Frontend: EDI file history page
-- **Order to Shipment Workflow** ✅
-  - ✅ Queue of pending orders waiting for conversion
-  - ✅ Auto-match orders to lanes/carriers
-  - ✅ Combine or split orders into shipments
-- **Queue-Based Integration System** ✅
-  - ✅ pg-boss queue engine (PostgreSQL-backed, zero infrastructure)
-  - ✅ Platform-agnostic IQueueAdapter interface for cloud alternatives (SQS, Pub/Sub, Service Bus)
-  - ✅ Outbound carrier worker — EDI 856 and JSON adapters, carrier match patterns
-  - ✅ Outbound tracking worker — register shipments with tracking platforms
-  - ✅ Inbound webhook worker — async processing with 202 Accepted
-  - ✅ Automatic retry with exponential backoff (3 attempts)
-  - ✅ Integration type support: carrier vs tracking
-  - ✅ Payload format support: EDI 856 vs JSON
-  - ✅ Shared authentication helpers (basic, bearer, api_key)
+> **WMS added April 2026.** WMS now an active track (Track 7). v1 and v2 are on the roadmap following the gap-analysis review in `docs/gap-analysis/12-WMS-GAP-ANALYSIS.md`. v3+ (slotting, LMS, yard, WCS, etc.) remains in considerations.
 
-## **Phase 3: Platform Foundations, Documentation & Compliance** ✅
-- **User Management & Authentication** ✅
-  - ✅ User accounts with login, password management
-  - ✅ SSO/OAuth support (Google, Microsoft)
-  - ✅ Roles & permissions (admin, dispatcher, warehouse, read-only)
-  - ✅ Session management (JWT-based)
-  - ✅ User attribution on audit trail events
-- **Document Templates** ✅
-  - ✅ Auto-generate Bills of Lading, shipping labels, customs forms
-  - ✅ PDF generation with prefilled shipment details (pdf-lib)
-  - ✅ Document template management UI (create/edit Handlebars templates)
-  - ✅ Daily operations report (Excel export with 5 sheets: summary, shipments, orders, stop schedule, exceptions)
-- **Document Management** ✅
-  - ✅ Store and archive generated docs (GeneratedDocument model)
-  - ✅ Document download and listing with filters
-  - ✅ S3-compatible file storage provider (AWS S3, MinIO, Azure Blob S3 compat)
-  - ✅ IBinaryStorageProvider interface with S3 and database fallback implementations
-  - ✅ File attachments on any entity (shipments, orders, carriers, customers, locations)
-  - ✅ Multipart file upload with drag-and-drop UI
-  - ✅ MinIO integration for local development (docker-compose)
-  - ✅ Generated documents now stored via external storage provider (not inline in DB)
-  - ✅ Opaque storage keys (UUID-based, no customer/entity info in storage paths) for security
-    - ⚠️ Open decision: opaque UUIDs won't suit SharePoint/network drive providers where users expect browsable folder structures. Key format may need to be per-provider if file-system-based storage is added later.
-  - ✅ Default 10-year retention period on all files and generated documents
-  - Begin audit trail for shipment events → moved to **Phase 9a** (Audit Review & Compliance Trail)
-- **Theming & White-labeling** ✅
-  - ✅ CSS custom properties stored as JSON in Organization.themeConfig
-  - ✅ Theme API (GET/PUT/DELETE) with CSS variable key allowlist and color validation
-  - ✅ ThemeProvider context — loads theme on mount, caches in sessionStorage, invalidates via themeUpdatedAt
-  - ✅ Theme Settings UI page with color pickers, live preview, and reset-to-defaults
-  - ✅ Logo upload (PNG/JPEG/SVG/WebP, max 2MB) via IBinaryStorageProvider
-  - ✅ Logo displayed in AppBar navigation across all apps
-  - ✅ Admin app created with dedicated layout, sidebar, and AppSwitcher entry
-  - ✅ Settings, document templates, and custom fields moved to Admin app
-  - ✅ Hardcoded colors replaced with CSS variables across all frontend components
-  - ✅ CLAUDE.md created with frontend theming conventions
-  - ✅ Email header/footer branding configuration
-  - ✅ Document templates inherit branding (logo, colors, org name)
-- **Custom Fields** ✅
-  - ✅ Configurable fields for shipments, orders, carriers, customers, and locations
-  - ✅ Field types: text, decimal, integer, date, boolean, single-select list, multi-select list
-  - ✅ Field configuration: required, format mask, default value, min/max, regex validation, decimal places
-  - ✅ Versioned field definitions — entity records save data against a specific version so old records aren't broken by schema changes
-  - ✅ Audit trail on custom field definition changes (CustomFieldAudit model)
-  - ✅ Server-side validation of custom field values
-  - ✅ Management UI at /settings/custom-fields with version history
-  - ✅ Reusable CustomFieldRenderer component for entity forms (edit + read-only modes)
-- **Units of Measure** ✅
-  - ✅ System-level defaults (admin-set): temperature (°F/°C), distance (miles/km), weight (lbs/kg), dimensions (in/cm)
-  - ✅ User-level overrides: each user selects preferred units (null = use org default)
-  - ✅ Conversion utilities (backend stores canonical metric, converts on display)
-  - ✅ Settings UI updated with temperature and distance unit selectors
-## **Phase 3b: Location Arrival Criteria & Carrier Tendering**
-- **Location Auto-Creation & Arrival Criteria** ✅
-  - ✅ Locations auto-created when shipments provide raw address data (name+city match or create)
-  - ✅ LocationResolutionService: resolve by name+city (case-insensitive), create if no match
-  - ✅ Default geofence arrival criteria auto-created for every new location
-  - ✅ Three arrival criteria types: Geofence, WiFi Network, BLE Anchor
-  - ✅ Arrival criteria management API (CRUD per location)
-  - ✅ Configurable default geofence radius at organization level (Admin > Settings)
-  - ✅ CreateShipmentCommand accepts originData/destinationData for auto-resolution
-  - Audit events for location creation via resolution ✅
-- **Shipment Completion Criteria** ✅
-  - ✅ ShipmentCompletionHandler: auto-delivers when destination arrival criteria met
-  - ✅ Listens to shipment.stop_arrived and tracking.geofence_entered events
-  - ✅ Checks if final stop (destination) has arrived status → transitions to delivered
-  - ✅ Publishes shipment.delivered and shipment.status_changed events
-  - ✅ Also supports manual completion and external API calls (existing status update endpoints)
-- **Auto-Tender for Laneless Shipments** ✅
-  - ✅ AutoTenderHandler: event-driven, fires on shipment.created
-  - ✅ Checks org.autoTenderEnabled setting before creating tender
-  - ✅ Creates broadcast tender to all active carriers with 2-hour duration
-  - ✅ Skips if shipment already has carrier/lane or existing tender
-  - ✅ Full tender lifecycle (draft→open→evaluating→awarded) already built in Phase 8
-- **Admin Settings** ✅
-  - ✅ Auto-tender feature toggle in Admin > Settings > General
-  - ✅ Default geofence radius configuration (meters)
-  - ✅ Settings saved via organization settings API
+---
 
-## **Phase 4: Notifications, Tracking & Exception Management**
-- **Emails & Notifications** ✅
-  - ✅ Email service (pluggable: SMTP, SendGrid, SES) via DI container
-  - ✅ Email templates with Handlebars (uses branding from Phase 3)
-  - ✅ Notification preferences (per-user, per-organization)
-  - ✅ Event-triggered notifications (shipment status changes, exceptions, deliveries)
-  - ✅ Notification worker (pg-boss queue with fan-out)
-  - ✅ In-app notification centre
-- **CQRS & Event-Driven Architecture** ✅
-  - ✅ Domain command handlers for all entities (20+ handlers)
-  - ✅ Immutable DomainEventLog event store
-  - ✅ Event bus with pg-boss fan-out, wildcard subscriptions, configurable concurrency
-  - ✅ Read model projections (Order, Shipment, Carrier, Customer, Lane, Issue)
-  - ✅ Event export API with wildcard filters, cursor pagination, and stats
-  - ✅ `/metrics` endpoint with read model lag detection
-  - ✅ Configurable handler concurrency via env vars
-  - ✅ Backfill script for populating read models from existing data
-  - ✅ 59 tests across 11 suites (commands, projections, integration)
-  - ✅ [Domain Behaviours documentation](./docs/DOMAIN_BEHAVIOURS.md)
-- **Triage Centre / Issue Management** ✅
-  - ✅ Issue model with status lifecycle (open -> in_progress -> resolved -> closed)
-  - ✅ Priority levels (low, medium, high, critical)
-  - ✅ Category classification (exception, delay, damage, compliance, other)
-  - ✅ Source entity linking (which shipment/order/carrier triggered it)
-  - ✅ Assignment and escalation with CQRS commands
-  - ✅ IssueReadModel projection for fast queries
-  - ✅ Trello-like kanban board UI (drag-and-drop with @dnd-kit, columns by status)
-  - ✅ Comments system on orders, shipments, and issues (polymorphic comments with activity timeline)
-  - ✅ Drag-and-drop kanban board with @dnd-kit
-  - ✅ Issue detail page with activity timeline, comments, SLA sidebar
-  - ✅ Generic comments system (issues, shipments, orders)
-  - ✅ Issue labels and saved kanban views
-  - ✅ Snooze, close/reopen, needs-CAPA workflows
-  - ✅ PDF closure reports auto-generated on issue close
-  - ✅ Agent driver contact flow with context enrichment
-  - ✅ In-app notifications for all issue events
-  - ✅ Entity search dropdown in create issue modal
-  - ✅ Create issue modal from kanban board
-  - **SLA Tracking & Breach Alerts** (in progress)
-    - ✅ SLA policy model with two-tier hierarchy (org default + customer override)
-    - ✅ SLA rule types: ETA delivery, issue response, issue resolution, dwell time, light/seal security events, temperature excursion, cumulative out-of-range
-    - ✅ SLA evaluation engine: hybrid event-driven + cron-based breach detection
-    - ✅ SlaEvaluation tracking per (rule + entity) with status lifecycle (active → warning → breached / met)
-    - ✅ Auto-create triage issues on SLA breach with configurable priority
-    - ✅ pg-boss cron worker (2-min cycle) for time-based breach detection
-    - ✅ Event-driven evaluation on shipment/issue/tracking/cold-chain events
-    - ✅ CQRS command handlers (create/update/deactivate SLA policies)
-    - ✅ REST API for policy CRUD, evaluation dashboard, entity-level SLA status
-    - ✅ Frontend: SLA policy config page in Admin (org default + customer overrides, clone, rule editor)
-    - ✅ Frontend: SLA status tab on shipment detail (evaluations table with status/time remaining)
-    - ✅ Frontend: SLA indicators on issue kanban cards (worst SLA status badge with countdown)
-    - ✅ Frontend: SLA Health widget on operations dashboard (active/warning/breached/met counts)
-  - ✅ Auto-triage handler (AI agent: exception events → Claude reasoning → auto-create/escalate issues)
-- **Live Tracking & Status** (partial)
-  - ✅ Inbound webhook endpoint for IoT GPS devices
-  - ✅ ShipmentEvent model with location tracking
-  - ✅ Geofencing with automatic delivery status updates
-  - ✅ ShipmentReadModel tracks currentLat/Lng/lastLocationAt
-  - ✅ **ETA Monitoring Service** — cron-driven shipment delay detection
-    - ✅ Provider-agnostic routing interface (IRoutingProvider) with three implementations:
-      - TomTom ($0.50/1K, full truck routing with vehicle dimensions/hazmat)
-      - HERE ($2.50/1K, industry standard for logistics)
-      - Valhalla (self-hosted, free, truck costing model, no traffic)
-    - ✅ Adaptive polling: frequency scales with proximity to delivery, skips parked/stale trucks
-    - ✅ Three delay severity levels: minor (15m), warning (30m), critical (60m)
-    - ✅ Updates ShipmentStop.estimatedArrival with traffic-aware routing ETAs
-    - ✅ Publishes tracking.eta_updated and shipment.exception events
-    - ✅ In-app notifications for all delay severities
-    - ✅ pg-boss cron schedule (default: every 10 minutes, configurable)
-    - ✅ API endpoints: monitor status, manual trigger, single-shipment check
-    - ✅ Configurable via env vars (provider, thresholds, cron schedule)
-  - ✅ **Carrier Tracking API Integrations** - direct tracking from carrier APIs
-    - ✅ ICarrierTrackingProvider interface (same pattern as IRoutingProvider)
-    - ✅ FedEx Track API (OAuth 2.0, webhooks + polling, batch up to 30)
-    - ✅ UPS Tracking API (OAuth 2.0, Track Alert webhooks)
-    - ✅ DHL Shipment Tracking (API key, webhooks + polling)
-    - ✅ CarrierTrackingIntegration model (per-carrier config with credentials, polling, rate limits)
-    - ✅ CarrierTrackingEvent model (normalized status: 7 standard codes across all providers)
-    - ✅ Polling worker (pg-boss cron, adaptive intervals, rate limit aware)
-    - ✅ Webhook receiver with per-provider signature verification
-    - ✅ Admin setup wizard with per-provider instructions and "create issue" links
-    - ✅ Integration detail page with rate limit monitoring and manual poll
-    - ✅ Provider registration in DI registry (FedEx, UPS, DHL wired at startup)
-    - ✅ Shipment status bridging: carrier delivery -> shipment delivered, carrier exception -> shipment exception
-    - ✅ In-transit milestone bridging: auto-advances shipment status on tracking updates
-    - ✅ Carrier tracking events timeline on shipment detail page
-    - ✅ PATCH endpoint for frontend integration detail page
-    - ✅ Integration events and manual poll endpoints
-    - ✅ 18 unit tests passing (command handlers + event handler bridging)
-    - Planned: EasyPost aggregator, EDI 214 adapter, USPS, project44
-    - Planned: EDI/API standard integration with carrier TMS systems
-    - ✅ [ETA Monitoring Guide](./docs/ETA_MONITORING_GUIDE.md)
-  - ✅ Carrier API integration (FedEx, UPS, DHL) - providers registered, full status bridging
-  - ✅ Update shipments automatically from carrier feeds - delivery, exception, in-transit milestones
-- **Exceptions** (partial)
-  - ✅ Exception status on orders with type classification
-  - ✅ Exception resolution workflow
-  - ✅ Event-driven notifications on exceptions
-  - ✅ ETA-based exception auto-detection (critical delays auto-create shipment.exception events)
-  - ✅ Route deviation alerts (planned route per lane via Google Maps, corridor-based deviation detection, real-time alerts on shipment detail)
-- **Driver Mobile App** 🔲
-  - Mobile app for drivers to update order/shipment status in the field
-  - Delivery confirmation with signature capture
-  - Photo proof of delivery
-  - Real-time GPS location tracking
-  - Offline support with sync when reconnected
-  - Push notifications for new assignments
-- **Electronic Signature Capture** 🔲
-  - Requires a legally binding signature system — simple canvas signatures are not sufficient
-  - Adapter pattern with pluggable providers (DocuSign, Adobe Sign, or similar)
-  - Both e-signature and wet signature workflows
-  - Integrated with driver mobile app for delivery confirmation
-## **Phase 5: IoT Integration (System Loco)**
-- **Device–Shipment Linking** 🔲
-  - Associate IoT devices with shipments (1:1, 1:many).
-- **Real-Time Data Ingestion** 🔲
-  - Pull telemetry from System Loco's IoT platform (temperature, humidity, shock, light, GPS).
-- **Visualization** 🔲
-  - Show sensor streams on shipment detail pages.
-  - Interactive maps with live device location.
-- **IoT-Based Alerts & Automation** 🔲
-  - Rule engine for excursion alerts (e.g., temperature breach).
-  - Integration with LocoEvents for webhooks and notifications.
-  - **Geofencing + IoT Triggers**
-    - Automatic order completion when shipment enters destination geofence
-    - Enhanced triggers: geofence + light sensor = truck door opened at destination
-    - Automatic status updates based on sensor data
-- **Multi-Language Support** 🔲
-  - Language files (JSON) for UI translations
-  - User-selectable language preference
-  - Backend error messages and labels in language files
-  - RTL layout support for applicable languages
-- **Data Export** 🔲
-  - Bulk export of documents/attachments per entity
-  - CSV/PDF export of shipment, order, and customer data
+## Completed Work
 
-## **Phase 6: Cold Chain & Advanced Compliance**
-- **Cold Chain Profiles** ✅
-  - ✅ Cold chain profile CRUD (name, temp range, alert range, humidity)
-  - ✅ Assign profiles to shipments based on product/customer requirements
-- **Excursion Management** ✅
-  - ✅ Excursion detection wired into IoT sensor pipeline
-  - ✅ Shipment cold chain disposition lifecycle (monitoring → pending_review → released/quarantined)
-  - ✅ Auto-triage issue creation for critical excursions
-- **Regulatory Audit Trail** (partial)
-  - ✅ Immutable temperature logging with SHA-256 integrity hashes (CFR 21 Part 11)
-  - 🔲 Full regulatory audit trail UI
-- **Digital BOL Sharing & Secure Repository** 🔲
-  - Integrate with an external eBOL / digital document provider for tamper-proof sharing
-  - Shareable BOL links with access control (time-limited, PIN-protected)
-  - Digital signature capture (shipper, carrier, consignee) on online BOL view
-  - Publish immutable BOL documents to a secure external repository
-  - Audit log of all BOL views, prints, and downloads
-- **Customer Reporting** (partial)
-  - ✅ Cold chain compliance report PDF auto-generated on shipment complete
-  - 🔲 Broader customer-facing reporting and CSV export
-- **Device Calibration** ✅
-  - ✅ Device calibration tracking (certificate, expiry, accuracy)
-- **CAPA Reports** ✅
-  - ✅ CAPA report model and management UI
-- **Quality Centre** ✅
-  - ✅ Quality Centre dashboard with issue analytics and trends
-  - ✅ QualityIssueSummary aggregated read model (by carrier, lane, location, customer)
-  - ✅ CAPA follow-up notes system (30/60/90 day reviews with outcomes)
-  - ✅ SOP checklists and GDP audit management (create, schedule, complete)
-  - ✅ Carrier quality scorecard and lane quality analysis reports
-  - ✅ CAPA effectiveness report with follow-up completion rates
-  - ✅ Quality Centre as dedicated app in app switcher
-  - ✅ Create CAPA from Triage Centre issue detail
-  - ✅ SOP audit scoring with critical item failure detection
-- **Admin & Frontend** ✅
-  - ✅ Admin setting: auto-deliver shipment docs to customers
-  - ✅ Frontend: Cold chain profiles page (VNext)
-  - ✅ Frontend: CAPA reports page (VNext)
+### **Phase 1: Core Setup (Foundation)** DONE
+- **Lane Management** - Create/manage lanes (point-to-point, multi-stop), associate with locations and carriers
+- **Carrier Management** - Add carriers, store negotiated rates, service levels, link to lanes
+- **Customer Management** - Manage customers with contact/billing info, customer-specific preferences
+- **Shipment Creation (Basic)** - Create shipments with references, customer, origin, destination, status, templates
+- **Item/Line Items** - Model SKUs, quantities, weights, dimensions, CSV/Excel bulk import
 
-## **Phase 7: Financial & Commercial**
-- **Phase 7A: Financial Foundation (Charges + Rating)** ✅
-  - ✅ Customer billing fields (billing address, payment terms, credit limit, invoice consolidation, auto-invoice)
-  - ✅ Carrier payment terms (payment terms, remit-to address)
-  - ✅ OrderLineItem pricing fields (unitPriceCents, totalPriceCents, freightClass, nmfcCode)
-  - ✅ LaneCarrier priceCents field (integer cents alongside deprecated Float price)
-  - ✅ Charge model (revenue/cost line items on orders and shipments, full lifecycle)
-  - ✅ ShipmentFinancialSummary (expected vs actual revenue/cost/margin, billing status)
-  - ✅ CreateCharge + ApproveCharge CQRS commands with events
-  - ✅ TenderAwardFinancialHandler (auto-creates cost charge on tender award)
-  - ✅ RatingService (lane-carrier rate lookup, fuel surcharge calculation)
-  - ✅ ChargeService (charge CRUD, shipment financial summary recalculation)
-  - ✅ Charges REST API with Swagger schemas
-  - ✅ Financial event types (charge.created, charge.approved, invoice.*, carrier_invoice.*, financial_query.*, credit_note.*)
-  - ✅ 9 unit tests for charge command handlers
-  - ✅ Full data models for Invoice, InvoiceLineItem, Payment, CarrierInvoice, CarrierInvoiceLineItem, FinancialQuery, CreditNote, InvoiceReadModel
-  - ✅ Frontend: Financial tab on VNext Shipment Detail (charges table, revenue/cost/margin summary, billing/payment status)
-- **Phase 7B: Quotes** ✅
-  - ✅ Quote + QuoteLineItem Prisma models with revision tracking
-  - ✅ QuoteRepository (interface + DTO + implementation)
-  - ✅ CreateQuote, AcceptQuote, DeclineQuote CQRS commands with events
-  - ✅ Quote acceptance creates Order with pre-populated approved revenue charges
-  - ✅ Configurable markup percentage and validity period
-  - ✅ Quote REST API (5 endpoints) + LTL rate calc endpoints
-  - ✅ 8 unit tests for quote command handlers
-  - ✅ Quote expiration cron (pg-boss, every 30 min)
-  - ✅ Quote revision workflow (supersede + create new version with parentQuoteId linking)
-- **Phase 7C: Customer Invoicing (AR)** ✅
-  - ✅ InvoiceRepository + PaymentRepository (interface + DTO + implementation)
-  - ✅ InvoicingService (generate from shipments, find ready-to-invoice)
-  - ✅ CreateInvoice, ApproveInvoice, SendInvoice, RecordPayment, VoidInvoice CQRS commands
-  - ✅ BillingTriggerHandler (shipment.delivered -> ready_to_invoice, auto-draft if customer.autoInvoice)
-  - ✅ InvoiceProjection (InvoiceReadModel maintenance)
-  - ✅ Invoice REST API (8 endpoints with Swagger schemas)
-  - ✅ Void invoice reverts charges to approved and billing status to ready_to_invoice
-  - ✅ Full/partial payment with auto-status transitions (partial_paid / paid)
-  - ✅ 13 unit tests for all invoice command handlers
-  - ✅ Invoice overdue detection cron (pg-boss, hourly, 7-day reminder cadence)
-  - ✅ Invoice consolidation (weekly Monday / monthly 1st batching via pg-boss cron, manual trigger endpoint)
-  - ✅ Frontend: VNext Finance app with 15 pages (dashboard, invoices list/detail/create, carrier invoices list/detail, quotes list/detail/create, queries/disputes, credit notes, AR aging report, record payments, CSV exports)
-- **Phase 7D: Carrier Invoices (AP) + Freight Audit** ✅
-  - ✅ CarrierInvoiceRepository (interface + DTO + implementation)
-  - ✅ FreightAuditService (three-way match: tender rate vs expected charges vs carrier invoice)
-  - ✅ ReceiveCarrierInvoice command with automatic three-way match and auto-approve (2% tolerance)
-  - ✅ ApproveCarrierInvoice + RecordCarrierPayment commands
-  - ✅ Carrier invoice REST API (5 endpoints with Swagger schemas)
-  - ✅ Per-line match results (matched/variance/unmatched) with expected vs actual amounts
-  - ✅ Auto-emits CARRIER_INVOICE_DISCREPANCY event for mismatches
-  - ✅ 8 unit tests for carrier invoice commands
-  - ✅ EDI 210 Freight Invoice inbound parsing (B3/N1/LX/L5/L0/L1/L3 segments, auto three-way match)
-  - ✅ Carrier payment scheduling/batching (CarrierPaymentBatchService, batch by carrier/due date, schedule future payments, auto-execute via daily pg-boss cron, manual trigger endpoint, batch summary API)
-- **Phase 7E: Queries, Disputes & Credit Notes** ✅
-  - ✅ FinancialQueryRepository + CreditNoteRepository
-  - ✅ RaiseQuery + ResolveQuery CQRS commands with events
-  - ✅ ResolveQuery with optional auto-generated credit note
-  - ✅ FinancialImpactHandler: auto-creates queries from cargo.missing_at_stop, cargo.misdrop_detected, cold_chain.disposition_changed (quarantined)
-  - ✅ Financial queries REST API (5 endpoints) + Credit notes API (2 endpoints)
-  - ✅ 4 unit tests for query command handlers
-- **Phase 7F: LTL Enhancements + EDI 810** ✅
-  - ✅ LtlRatingService: class-based rating, weight break matrix, deficit weight optimization
-  - ✅ FAK (Freight All Kinds) override support
-  - ✅ Minimum charge threshold
-  - ✅ LTL accessorial codes (liftgate, residential, inside delivery, notification, limited access)
-  - ✅ Density-based freight class calculator
-  - ✅ LTL rate + freight class REST API endpoints
-  - ✅ 9 unit tests (deficit weight, FAK, minimum charge, accessorials, density calc)
-  - ✅ Re-weigh / re-class adjustment workflow (creates cost + revenue adjustment charges)
-  - ✅ Multi-order LTL consolidation billing (ConsolidationBillingService, pro-rate by weight)
-  - ✅ EDI 810 outbound Invoice generation (ISA/GS/ST envelope, BIG/N1/ITD/IT1/TDS/CTT segments)
-- **Basic Reporting & Analytics** (partial)
-  - ✅ AR aging report (JSON API + CSV export, aging buckets by customer, date picker)
-  - ✅ Carrier spend summary (total invoiced/approved/paid per carrier)
-  - ✅ Margin analysis by customer (revenue/cost/margin from shipment summaries)
-  - ✅ Frontend: AR Aging Report page with distribution bar chart and customer breakdown
-  - ✅ CSV exports for accounting: invoice register, carrier invoice register, payment ledger, charge detail (with date range + status filters)
-  - ✅ Frontend: Export to CSV page with date range presets and per-export filters
-  - Operational dashboards and KPIs (on-time %, cost per shipment, carrier scorecard) 🔲
-  - Scheduled reports via email 🔲
+### **Phase 2: Orders & Ingestion** DONE
+- **Order Management** - CSV import, manual creation, auto-assignment to lanes, pending lane requests, special requirements (FTL/LTL, temp control, hazmat)
+- **Customer API** - REST API for programmatic order creation, API key auth, rate limiting, Swagger docs
+- **Order Status Lifecycle** - Status flow (unassigned to delivered/exception), geofencing, IoT triggers, audit trail, timeline API/UI
+- **EDI Import (850)** - X12 850 parser, EDI partner config, file storage/dedup, preview, history, SFTP polling (edi-collector)
+- **Order to Shipment Workflow** - Pending queue, auto-match to lanes/carriers, combine/split orders
+- **Queue-Based Integration** - pg-boss queue engine, outbound carrier/tracking workers, inbound webhook worker, retry with backoff
 
-## **Phase 8: Portals, Tendering & Integration**
-- **Carrier Tendering System** ✅
-  - ✅ Tender model with broadcast and waterfall strategies
-  - ✅ TenderOffer (per-carrier) and TenderBid (carrier's rate submission) models
-  - ✅ Configurable tender duration (how long carriers have to respond)
-  - ✅ Full tender lifecycle: draft → open → evaluating → awarded → confirmed
-  - ✅ Waterfall logic: auto-progress to next carrier on timeout or decline
-  - ✅ Broadcast logic: all carriers notified simultaneously, bids compared
-  - ✅ Award flow: accept winning bid, reject others, assign carrier to shipment
-  - ✅ Tender expiration checks for automatic timeout handling
-  - ✅ Admin tender management UI: list with status/carrier filters, detail with bid comparison, award modal
-  - ✅ Create tender wizard: 5-step flow (shipment, strategy, carrier selection with waterfall reordering, parameters, review)
-  - ✅ Tender history and carrier filter on tenders list
-- **Carrier Portal** ✅
-  - ✅ CarrierUser model with email/password authentication (separate from internal users)
-  - ✅ JWT-based carrier auth with dedicated issuer (`open-tms-carrier`)
-  - ✅ Carrier portal login page at `/carrier-portal/login`
-  - ✅ Carrier dashboard: active tenders, pending bids, loads won summary
-  - ✅ Tender view with bid submission form (rate, transit days, equipment, notes)
-  - ✅ Tender decline with automatic waterfall progression
-  - ✅ Bid history page showing all bids with status (submitted/accepted/rejected)
-  - ✅ Full tender history page with outcome tracking (won/lost/pending/expired) and win rate
-  - ✅ Carrier portal profile page with password change
-  - ✅ Carrier portal layout with separate navigation header
-- **Carrier User Management (Admin)** ✅
-  - ✅ Admin UI for creating/managing carrier portal users on carrier edit page
-  - ✅ Create user modal (email, password, name, role)
-  - ✅ Activate/deactivate carrier users
-  - ✅ Admin password reset for carrier users
-  - ✅ Password strength validation (uppercase, lowercase, number, 8+ chars)
-  - ✅ Account lockout after 5 failed login attempts (15 min cooldown)
-  - ✅ Progressive lockout warnings
-- **Carrier Enhancements** ✅
-  - ✅ SCAC code field on carrier model and forms (required for EDI 204)
-  - ✅ Contract rate fields on LaneCarrier (rateType, contractStartDate/EndDate, fuelSurchargePercent, accessorialRates)
-- **EDI 204/990 Support** ✅
-  - ✅ EDI 204 (Motor Carrier Load Tender) generation service — full X12 004010 segment mapping
-  - ✅ EDI 990 (Response to Load Tender) parse service — accept/decline processing
-  - ✅ EDI 204 preview endpoint
-  - ✅ Inbound EDI 990 endpoint with automatic bid creation and waterfall progression
-  - 🔲 Automated EDI 204 delivery via SFTP/HTTP (currently manual — see Phase 8b)
-  - 🔲 Automated EDI 990 polling from SFTP (currently manual — see Phase 8b)
-- **Customer Portal** 🔲
-  - Customer-facing UI for order tracking, document access, order submission
-  - Self-service shipment visibility
-- **TMS-to-TMS Integration** 🔲
-  - JSON APIs modeled after EDI structure
-  - Share shipments, status, documents across TMS partners
-  - Support both EDI and JSON APIs for interoperability
-  - Partner portal for 3PLs or carriers to directly access or sync data
-- **N8N Workflow Integration** 🔲
-  - Standardized event emission via webhooks (extending existing outbound integration infrastructure)
-  - N8N custom node package for Open TMS
-  - OAuth/API key authentication for N8N callbacks into Open TMS
-  - Pre-built workflow templates (e.g., auto-notify on exception, escalate delayed shipments)
+### **Phase 3: Platform Foundations** DONE
+- **User Management & Auth** - Accounts, SSO/OAuth (Google, Microsoft), roles & permissions, JWT sessions, user attribution
+- **Document Templates** - Auto-generate BOLs, shipping labels, customs forms (pdf-lib), Handlebars templates, daily ops report (Excel)
+- **Document Management** - S3-compatible storage (AWS S3, MinIO, Azure), IBinaryStorageProvider interface with DB fallback, file attachments on any entity, drag-and-drop upload, opaque UUID storage keys, 10-year retention
+- **Theming & White-labeling** - CSS custom properties, theme API, ThemeProvider context, logo upload, Admin app with AppSwitcher, email/document branding
+- **Custom Fields** - Configurable per-entity fields (7 types), versioned definitions, server-side validation, management UI
+- **Units of Measure** - System defaults + user overrides (temperature, distance, weight, dimensions), canonical metric storage with display conversion
 
-## **Phase 8b: EDI Communication Hub** ✅
-Unified EDI infrastructure with 9 X12 transaction types, shared X12 envelope utilities, universal inbound endpoint, event-driven outbound, and EDI Portal UI.
+### **Phase 3b: Location & Auto-Tender** DONE
+- **Location Auto-Creation** - LocationResolutionService (name+city match or create), arrival criteria (geofence, WiFi, BLE), configurable default geofence radius
+- **Shipment Completion Criteria** - Auto-deliver on destination arrival, geofence-triggered
+- **Auto-Tender for Laneless Shipments** - Event-driven on shipment.created, broadcast tender to all active carriers
+- **Admin Settings** - Auto-tender toggle, default geofence radius
 
-- **Unified Trading Partner Model** ✅
-  - ✅ TradingPartner replaces separate EdiPartner and OutboundIntegration models
-  - ✅ Entity types: customer, carrier, 3PL, warehouse, ERP, other
-  - ✅ Transport config: SFTP + HTTP/API with auth (basic, bearer, api_key)
-  - ✅ TradingPartnerTransaction registry per partner per type per direction
-  - ✅ EdiTransactionLog unified audit log (nullable partnerId for manual imports)
-- **Transaction Type Registry** ✅ (9 types active)
-  - ✅ EDI 850 (Purchase Order): inbound parser + order creation
-  - ✅ EDI 856 (Advance Ship Notice): outbound generator + auto-send on delivery
-  - ✅ EDI 204 (Motor Carrier Load Tender): outbound generator
-  - ✅ EDI 990 (Response to Load Tender): inbound parser + bid/decline processing
-  - ✅ EDI 214 (Shipment Status): both directions, auto-forward to customers
-  - ✅ EDI 210 (Freight Invoice): inbound parser + three-way match
-  - ✅ EDI 997 (Functional Acknowledgment): both directions, auto-ack for all inbound
-  - ✅ EDI 810 (Invoice): outbound generator + auto-send on invoice sent
-  - ✅ EDI 820 (Payment/Remittance): inbound parser + auto-record payments
-  - 🔲 EDI 855 (PO Acknowledgment): planned
-- **Shared X12 Infrastructure** ✅
-  - ✅ X12EnvelopeBuilder: ISA/GS/ST/SE/GE/IEA with fixed-width ISA, GS functional IDs
-  - ✅ X12EnvelopeParser: separator detection, envelope validation, body extraction
-  - ✅ All parsers use X12EnvelopeParser, all generators use X12EnvelopeBuilder
-  - ✅ validateAndGenerate() on all generators with EdiOperationResult<T>
-  - ✅ TRANSACTION_TO_GS / GS_TO_TRANSACTION bidirectional maps
-- **Universal Inbound Endpoint** ✅
-  - ✅ POST /api/v1/edi/inbound: auto-detect type, validate partner, route, log, 997 ack
-  - ✅ EdiRouterService: type detection from ST + GS fallback, route map
-  - ✅ edi-collector simplified to send all files to universal endpoint
-  - ✅ Failed files retried on next poll (not marked as seen)
-- **Outbound EDI Delivery Engine** ✅
-  - ✅ OutboundEdiDeliveryService: SFTP writer + HTTP sender with auth
-  - ✅ File naming: date, sequence, reference strategies
-  - ✅ Delivery logging with status tracking
-  - ✅ Event-driven auto-send: Edi856AutoSendHandler (on delivered), Edi810AutoSendHandler (on invoice sent), Edi214ForwardHandler (on 214 received)
-  - 🔲 AS2 transport (enterprise)
-  - 🔲 Queue-based retry with exponential backoff
-- **EDI Portal UI** ✅
-  - ✅ EDI Dashboard: stats, recent activity, partner health
-  - ✅ Trading Partners: full CRUD, transaction type management, connection test
-  - ✅ Transaction Log: unified viewer with filters, pagination, detail modal, retry
-  - ✅ EDI Import: universal import page with file upload, paste, auto-type detection
-- **Test Coverage** ✅
-  - ✅ 167 EDI tests across 15 test suites
-  - ✅ X12EnvelopeBuilder (19 tests), X12EnvelopeParser (21 tests)
-  - ✅ Tests for 204, 210, 214, 810, 820, 990, 997, Router, OutboundDelivery
-- **SAP / ERP Integration Patterns** 🔲
-  - SAP iDoc ↔ X12 EDI mapping templates
-  - Configurable field mapping UI for non-standard ERP formats
-  - Flat file (CSV/fixed-width) adapter for legacy ERP systems
-  - REST/SOAP API adapter for modern ERP integration (SAP S/4HANA, Oracle, NetSuite)
+### **Phase 4: Notifications, Tracking & Exceptions** DONE (partial)
+- **Emails & Notifications** - Pluggable email service (SMTP, SendGrid, SES), Handlebars templates, per-user/org preferences, event-triggered, pg-boss worker, in-app notification centre
+- **CQRS & Event-Driven Architecture** - 20+ command handlers, immutable DomainEventLog, pg-boss event bus with wildcards, read model projections (6 entities), event export API, /metrics endpoint, 59 tests, domain behaviours docs
+- **Triage Centre / Issue Management** - Full issue lifecycle (open to closed), kanban board (drag-and-drop), comments system, issue labels, snooze/close/reopen, CAPA workflows, PDF closure reports, agent driver contact, in-app notifications, entity search
+- **SLA Tracking & Breach Alerts** - Two-tier SLA policies (org + customer), 7 rule types, hybrid event+cron breach detection, auto-create issues on breach, SLA policy config UI, shipment detail SLA tab, kanban SLA badges, dashboard SLA health widget
+- **AI Auto-Triage** - Claude-powered triage agent, exception events to auto-create/escalate issues
+- **Live Tracking** - Inbound GPS webhook, ShipmentEvent tracking, geofencing with auto-delivery, ShipmentReadModel with lat/lng
+- **ETA Monitoring** - Provider-agnostic routing (TomTom/HERE/Valhalla), adaptive polling, three delay severity levels, traffic-aware ETAs, pg-boss cron, API endpoints
+- **Carrier Tracking API Integrations** - ICarrierTrackingProvider interface, FedEx/UPS/DHL implementations, polling worker, webhook receiver, admin setup wizard
+- **Route Deviation Alerts** - Planned route per lane via Google Maps, corridor-based deviation detection, real-time alerts
+- **Exceptions** - Exception status with type classification, resolution workflow, event-driven notifications, ETA-based auto-detection
 
-## **Phase 8c: Carrier Intelligence & Risk**
-- **Carrier Performance Monitoring** 🔲
-  - On-time pickup/delivery percentage tracking
-  - Tender acceptance rate per carrier
-  - Average transit time vs quoted time
-  - Damage/claim rate tracking
-  - Performance scorecards with trend analysis
-  - Automatic performance-based carrier ranking for waterfall tenders
-- **Carrier Risk Scoring** 🔲
-  - FMCSA SAFER system API integration for MC/DOT validation
-  - Automatic carrier authority verification on creation
-  - Insurance certificate expiry monitoring and alerts
-  - Safety rating tracking (Satisfactory, Conditional, Unsatisfactory)
-  - Fictitious carrier detection (cross-reference MC databases, flag suspicious patterns)
-  - Risk score algorithm combining safety, insurance, performance, and financial factors
-- **Carrier Onboarding Workflow** 🔲
-  - Self-registration flow for carriers with approval pipeline
-  - Document collection: insurance certificates, W-9, carrier authority, operating permits
-  - Automated validation checks before activation
-  - Onboarding status tracking tied to validation tiers
-- **Carrier Reporting** 🔲
-  - Carrier spend analysis per lane and time period
-  - Capacity utilization reports
-  - Rate benchmarking vs market data (feeds from Phase 9c)
-  - Exportable carrier scorecards for procurement reviews
+### **Phase 6: Cold Chain** DONE (partial)
+- **Cold Chain Profiles** - CRUD (name, temp range, alert range, humidity), assign to shipments
+- **Excursion Management** - IoT sensor pipeline, disposition lifecycle (monitoring to released/quarantined), auto-triage
+- **Regulatory Audit Trail** - Immutable temperature logging with SHA-256 integrity hashes (CFR 21 Part 11)
+- **Cold Chain Compliance Report** - Auto-generated PDF on shipment complete
+- **Device Calibration** - Certificate, expiry, accuracy tracking
+- **CAPA Reports** - Model and management UI
+- **Admin & Frontend** - VNext profiles page, CAPA reports page, auto-deliver shipment docs setting
 
-## **Phase 9: Routes & Maps Insights**
-- **Shipment Map View** ✅
-  - ✅ Full-page map at `/map` with OpenStreetMap tiles (Google Maps if API key configured)
-  - ✅ Supercluster (KD-tree) client-side clustering for performance at scale
-  - ✅ Entity type switching: Shipments | Orders | Trackable Units
-  - ✅ Backend bbox-filtered GeoJSON API (`/api/v1/map/shipments`, `/orders`, `/units`)
-  - ✅ Status-coloured markers (in_transit, delivered, exception, draft)
-  - ✅ Status filter chips for shipment filtering
-  - ✅ Location markers overlay (warehouse icons with popups)
-  - ✅ Issue/SLA overlay with pulsing breach/warning markers
-  - ✅ Composite index on ShipmentReadModel (currentLat, currentLng)
-  - ✅ Fullscreen mode for control centre wall monitors (Browser Fullscreen API)
-  - ✅ Auto-refresh (30s polling) with pause/play toggle
-  - ✅ Click-to-zoom on clusters, popups with entity details and navigation links
-  - Route lines between origin and destination 🔲
-- **SLA Dashboard** ✅
-  - ✅ Control centre dashboard at `/sla` with large-format numbers
-  - ✅ Compliance rate, active/warning/breached/met stats
-  - ✅ At-risk evaluations table (sorted by time to breach)
-  - ✅ Breach history table with overdue duration
-  - ✅ Auto-refresh (30s) with pause/play toggle
-  - ✅ Customer-facing SLA compliance reports (CSV export with date range and customer filters)
-  - ✅ SLA summary stats API for compliance rate, breach rate by rule type, avg breach duration
-  - ✅ Export section on SLA dashboard with date pickers and download button
-  - ✅ SLA Compliance link in Reports nav section
-  - Scheduled SLA report delivery via email 🔲
-- **Spatial Indexing & Security Event Geofencing** 🔲
-  - PostGIS extension for inverse geofence queries (`ST_DWithin` with spatial index)
-  - Geography column on Location model for fast spatial lookups
-  - `ISpatialIndexProvider` interface (PostGIS default, Tile38 for scale)
-  - Security event evaluation in SLA cron worker (cron-based, not real-time — see [ADR](./docs/SECURITY_EVENT_GEOFENCING_ADR.md))
-  - Optional Tile38 Docker container for large-scale real-time geofencing
-  - Provider-agnostic: external IoT platforms (System Loco, Shippeo, project44) can push geofence events directly, bypassing built-in spatial evaluation
-- **Map Provider Integration** (partial)
-  - ✅ OpenStreetMap default with Google Maps auto-fallback (existing MapProvider)
-  - ✅ Admin settings page for Google Maps API key (Admin > Settings > Maps)
-  - Pluggable map provider interface for additional providers 🔲
-- **Location Operations View** (partial)
-  - ✅ Per-location operations dashboard at `/locations/:id/ops`
-  - ✅ Backend API: `/api/v1/locations/:id/operations` with incoming/at-location/outgoing data
-  - ✅ Stats: incoming/at-location/outgoing counts, units here, today's arrivals, avg dwell time
-  - ✅ Incoming tab: shipment stops with ETAs + direct inbound shipments
-  - ✅ At-location tab: shipments at dock with dwell time badges, trackable units present
-  - ✅ Outgoing tab: shipments departing from this location
-  - ✅ Facility info bar: dock count, cross-dock capability, cold storage, hazmat, appointment required
-  - ✅ Map integration: location marker popups link to operations view
-  - Per-location operations dashboard: what's incoming, inside, and outgoing at a specific hub/spoke
-  - Distribution centre focus: dock utilization, dwell time, cross-dock throughput
-  - Cross-dock operations: inbound → sort → outbound pipeline visibility
-  - Appointment scheduling view: dock calendars with slot availability
-  - Map view integration: click a location marker to open its operations view
-  - ✅ Location-type-specific SLA rules:
-    - ✅ `dock_turnaround` — max time from arrival to departure at docks (filterable by location type)
-    - ✅ `sort_to_dispatch` — max sort-to-dispatch time at cross-docks
-    - ✅ `facility_dwell` — max dwell time at specific facility types (DC, warehouse, terminal, port)
-    - ✅ `locationType` filter on all dwell/stop rules — only triggers at matching facility types
-    - ✅ Stop-level SLA evaluations created on `shipment.stop_arrived`, met on `shipment.stop_completed`
-    - ✅ Frontend: facility type filter dropdown in SLA policy rule editor
-  - Works with hub-and-spoke routing: visualise spoke → hub → spoke flows
-  - Aggregate metrics: daily throughput (units in/out), average dwell, on-time departure rate
-- **Route Overhaul** 🔲
-  - Redesign route model: routes as first-class entities separate from lanes
-  - Route builder UI: drag-and-drop waypoints, reordering, named route variants per lane
-  - Multi-modal route support: road, rail, ocean, air legs within a single route
-  - Route versioning — keep history of route changes for audit and comparison
-  - Route templates: save and reuse common route patterns
-  - Associate routes with lanes, carriers, and service level agreements
-- **Traffic & Conditions Analysis** 🔲
-  - Google Maps Directions API / Routes API integration for real-time traffic-aware routing
-  - Background route analysis: cron job evaluates active lanes for congestion, incidents, construction
-  - Historical traffic pattern learning — recommend best departure windows per lane
-  - Alternative route suggestions when primary route is degraded
-  - Cost-of-delay calculations: fuel, driver hours, detention risk
-- **Live Route Monitoring & ETA** 🔲
-  - Active shipment route monitoring via scheduled cron (configurable interval, e.g. every 5 min)
-  - Event-driven interrupts: real-time location ingestion from IoT/GPS triggers immediate recalculation
-  - ETA engine: combines current position + traffic + historical data + weather for arrival predictions
-  - ETA confidence scoring (high/medium/low) based on data quality and variability
-  - Progressive ETA refinement — accuracy improves as shipment approaches destination
-  - ETA breach detection: alert when projected ETA exceeds delivery window
-  - Customer-facing ETA updates: push updated ETAs to customer portal and via notifications
-- **Route Intelligence & Triage** 🔲
-  - Automatic alert generation when route deviates from plan (geofence corridor breach)
-  - Feed alerts into Triage Centre / Control Tower (Phase 4) for human or AI agent review
-  - AI agent integration (Phase 9b): agent evaluates route alerts, suggests reroutes or customer comms
-  - Carrier performance impact: route adherence feeds into carrier scoring
-  - Post-delivery route analysis: compare planned vs actual, identify systemic issues
-- **Route Optimization** 🔲
-  - Suggest optimal routes based on cost, transit time, traffic, and historical performance
-  - Multi-stop optimization (TSP solver) for shipments with many waypoints
-  - Fuel cost estimation per route variant
-  - Carbon footprint calculation per route for sustainability reporting
+### **Phase 7: Financial & Commercial** DONE
+- **7A: Charges + Rating** - Charge model (revenue/cost), ShipmentFinancialSummary, CQRS commands, RatingService, ChargeService, financial tab on shipment detail
+- **7B: Quotes** - Quote model with revision tracking, create/accept/decline/revise commands, markup config, expiration cron, LTL rate endpoints
+- **7C: Customer Invoicing (AR)** - Invoice generation, approve/send/payment/void lifecycle, billing trigger on delivery, invoice projection, consolidation (per-shipment/weekly/monthly), overdue detection, VNext Finance app (15 pages)
+- **7D: Carrier Invoices (AP) + Freight Audit** - Three-way match (tender vs expected vs carrier invoice), auto-approve (2% tolerance), EDI 210 inbound, carrier payment batch scheduling
+- **7E: Queries, Disputes & Credit Notes** - Financial queries, auto-raise from cargo events, credit notes on resolution
+- **7F: LTL Enhancements + EDI 810** - Class-based LTL rating, weight breaks, deficit weight, FAK, density calc, re-weigh/re-class, consolidation billing, EDI 810 outbound
+- **Basic Reporting** - AR aging report (JSON + CSV), carrier spend summary, margin analysis by customer, CSV exports (invoice register, carrier invoice register, payment ledger, charge detail)
 
-## **Phase 9a: Audit Review & Compliance Trail**
-- **Audit Trail Review UI** 🔲
-  - Searchable, filterable audit log viewer (Admin > Audit Log)
-  - Filter by entity type, action, user, date range
-  - Timeline view per entity (shipment, order, carrier, customer)
-  - Export audit records (CSV/PDF) for compliance reviews
-- **Shipment Event Audit Trail** 🔲
-  - Complete event history on shipment detail page (status changes, assignments, document generation, stop updates)
-  - Order-level audit trail on order detail page
-  - Visual timeline with user attribution and timestamps
-- **Audit Data Integrity** 🔲
-  - Immutable audit records — no update or delete API for audit entries
-  - Checksums or hash chains on DomainEventLog for tamper evidence
-  - Retention policy enforcement (configurable per org, default 7 years)
-- **Compliance Reporting** 🔲
-  - Scheduled audit summary reports (daily/weekly digest of changes)
-  - User activity reports (actions per user over time period)
-  - Data access logging for sensitive fields (PII, financial data)
-  - Pre-built report templates for SOC 2, ISO 27001 evidence gathering
+### **Phase 8: Portals & Tendering** DONE (partial)
+- **Carrier Tendering** - Broadcast and waterfall strategies, TenderOffer/TenderBid models, configurable duration, full lifecycle (draft to confirmed), admin UI with bid comparison, 5-step creation wizard
+- **Carrier Portal** - CarrierUser auth (JWT), login, dashboard, tender view with bid form, bid/tender history with win rate, profile with password change
+- **Carrier User Management** - Admin UI for create/activate/deactivate/reset, password strength validation, account lockout
+- **Carrier Enhancements** - SCAC codes, contract rate fields on LaneCarrier
+- **EDI 204/990** - EDI 204 generation, EDI 990 parsing with auto bid creation
 
-## **Phase 9b: Intelligence & AI**
-- **Agent Decision Logging** ✅
-  - ✅ Agent Decision Logging infrastructure complete - compliance/audit layer for AI agent decisions
-  - ✅ CQRS commands: CreateAgentDecision, RecordDecisionOutcome, PromoteDecision
-  - ✅ Domain events: agent_decision.created, outcome_recorded, promoted
-  - ✅ AgentDecisionReadModel projection with full audit trail
-- **AI Triage Agent** ✅
-  - ✅ ILlmProvider interface - provider-agnostic LLM abstraction
-  - ✅ AnthropicLlmProvider - Claude integration via Anthropic SDK
-  - ✅ TriageAgentHandler - event-driven AI triage (shipment.exception, sla.breached, cargo issues, cold chain)
-  - ✅ Context gathering: shipment details, open issues, SLA evaluations
-  - ✅ Structured LLM prompting with JSON response parsing + unified condition extraction
-  - ✅ Action execution: create_issue, escalate_issue, no_action
-  - ✅ Decision logging via AgentDecision with full conversation log and matchedConditions
-  - ✅ 30-min configurable deduplication window
-  - ✅ Worker-local CommandBus for agent action dispatch
-- **Configurable Agent Prompts** ✅
-  - ✅ AgentConfig model with per-org settings (subscribed events, temperature, maxTokens, confidence threshold)
-  - ✅ AgentConfigVersion - immutable prompt versioning with change notes and rollback
-  - ✅ Template variables: {{event}}, {{shipment}}, {{issues}}, {{sla_status}}
-  - ✅ Admin UI at /settings/agents with prompt editor, variable insertion, preview, version history
-  - ✅ Auto-seed default config on first worker startup
-- **LLM Key Management** ✅
-  - ✅ Organization model: llmProvider, llmApiKey, llmModel, llmEnabled
-  - ✅ Admin UI at /settings/llm with masked key display, env var detection, cost warning
-  - ✅ Token tracking: inputTokens, outputTokens, durationMs per decision
-  - ✅ Usage telemetry: daily usage chart, total token stats, invocations per day
-  - ✅ Worker reads org config with env var fallback
-- **Automation Rule Engine** ✅
-  - ✅ ConditionEvaluator with 10 operators and nested field path resolution
-  - ✅ AutomationRuleHandler - higher priority than triage agent, first-match execution
-  - ✅ Unified condition format shared between agent decisions and rules
-  - ✅ Rules suppress agent via deduplication markers (no handler coupling)
-  - ✅ Promote flow: decision matchedConditions auto-fill rule creation
-  - ✅ API: CRUD, toggle, test/dry-run, from-decision promote, execution log
-  - ✅ Frontend at /automation-rules with When/Given/Then form builder
-- **Skills System** ✅
-  - ✅ ISkill interface with definition (fields, configSchema), validateConfig, execute
-  - ✅ SkillRegistry singleton for dynamic skill catalog
-  - ✅ 4 built-in skills: CreateIssue, EscalateIssue, SendEmail, CallWebhook
-  - ✅ TemplateResolver for {{field.path}} syntax in skill fields
-  - ✅ SkillChainExecutor with question branching (conditions -> Yes/No -> nested steps)
-  - ✅ SkillConfig model for org-level skill configuration (API keys, webhook URLs)
-  - ✅ SkillChain model for reusable action sequences
-  - ✅ Admin UI at /settings/skills with skill catalog and config forms
-  - Visual node builder for skill chains (drag-and-drop flowchart UI) 🔲
-  - Self-improving prompts: track agent suggestions vs human overrides, auto-refine prompts 🔲
-- **Carrier & Lane Performance Scoring** 🔲
-  - On-time %, damage %, excursion rate
-  - Route adherence scoring from Phase 9 data
-  - Trend analysis and carrier ranking
-- **Advanced Analytics** 🔲
-  - Predictive dashboards, trend analysis
-  - Visual reports for operations and finance
+### **Phase 8b: EDI Communication Hub** DONE (partial)
+- **EDI 214 (Shipment Status)** - Inbound parser (carrier status updates), outbound generator (customer status), status code mapping, auto-forward to customer trading partners, stop-level updates, 997 auto-generation, SFTP polling
+- **EDI 210 (Freight Invoice)** - Inbound parsing with auto three-way match
+- **EDI 810 (Invoice)** - Outbound customer invoice generation
+- **EDI 820 (Payment/Remittance)** - Inbound parser, auto-apply to invoices
+- **EDI 997 (Functional Acknowledgment)** - Auto-generation for inbound transactions
+- **Unified Trading Partner Model** - TradingPartner replacing separate EdiPartner/OutboundIntegration, TradingPartnerTransaction registry, EdiTransactionLog audit, SFTP+HTTP delivery engine, EdiRouterService, management UI
 
-## **Phase 9c: Data Providers & External Feeds**
-- **Data Provider Framework** 🔲
-  - Pluggable data provider interface in Integrations app (Admin > Integrations > Data Providers)
-  - Provider configuration: API keys, polling intervals, geographic scope, data retention
-  - Polling engine: scheduled fetch with configurable intervals per provider (cron-based via pg-boss)
-  - Data normalization layer: each provider's raw format mapped to canonical internal models
-  - Provider health monitoring: track uptime, latency, error rates per feed
-  - Cost tracking per provider (many charge per API call)
-- **Weather Data** 🔲
-  - Weather feed integration (OpenWeatherMap, Tomorrow.io, NOAA, Visual Crossing)
-  - Current conditions + forecasts along active routes
-  - Severe weather alerts: storms, flooding, ice, extreme heat linked to affected shipments
-  - Weather impact scoring on ETAs — feed into ETA engine (Phase 9)
-  - Historical weather correlation with delivery performance
-- **Maritime / Ocean Data** 🔲
-  - AIS vessel tracking feeds (MarineTraffic, VesselFinder, Spire Maritime)
-  - Port congestion and berth availability data
-  - Container tracking for intermodal shipments
-  - Ocean transit ETA based on vessel speed and route
-  - Port delay alerts fed into Triage Centre
-- **Aviation / Air Cargo Data** 🔲
-  - Flight tracking feeds (FlightAware, Flightradar24, OAG)
-  - Air cargo milestone tracking (booked, tendered, departed, arrived, delivered)
-  - Airport congestion and customs delay data
-  - Air cargo capacity and rate indices
-- **Rail Data** 🔲
-  - Rail carrier tracking feeds (where available — varies by region)
-  - Intermodal terminal status and dwell times
-  - Rail network disruption alerts
-- **Traffic & Road Conditions** 🔲
-  - Real-time traffic feeds beyond Google Maps (TomTom, HERE, Waze data where available)
-  - Road closure and construction databases
-  - Border crossing wait times (for cross-border lanes)
-  - Truck-specific restrictions (bridge heights, weight limits, hazmat routes)
-- **Market & Rate Data** 🔲
-  - Spot rate indices (DAT, Truckstop/ITS, Freightos for ocean/air)
-  - Fuel price feeds by region
-  - Capacity indicators and demand forecasting data
-  - Feed into quoting engine (Phase 7) for competitive rate benchmarking
+### **Phase 9: Maps & Spatial** DONE (partial)
+- **Shipment Map View** - Full-page map at /map, OpenStreetMap/Google Maps, supercluster client-side clustering, entity type switching (shipments/orders/units), bbox-filtered GeoJSON API, status-coloured markers, location markers overlay, issue/SLA overlay, fullscreen mode, auto-refresh
+- **SLA Dashboard** - Control centre at /sla, compliance rate, at-risk/breach tables, auto-refresh, CSV export, SLA compliance reports
+- **Location Operations View** - Per-location dashboard (/locations/:id/ops), incoming/at-location/outgoing stats, dwell time, facility info, map integration, location-type SLA rules (dock_turnaround, sort_to_dispatch, facility_dwell)
+- **Map Provider** - OpenStreetMap default with Google Maps auto-fallback, admin settings for API key
 
-## **Phase 10: SRE, Observability & Operations**
-- **Queue Monitoring & Alerting** (partial)
-  - ✅ Dashboard API for queue sizes and job counts (`GET /api/v1/queues/stats`)
-  - ✅ Per-queue stats, job peeking, DLQ management endpoints
-  - ✅ DLQ purge and retry via API
-  - Configurable alerting thresholds 🔲
-  - Auto-scaling recommendations 🔲
-- **Metrics & Observability** (partial)
-  - ✅ `/metrics` endpoint with read model lag detection, event throughput, queue depths
-  - ✅ Event stats endpoint (`GET /api/v1/events/stats`) — counts by type
-  - ✅ Configurable handler concurrency via env vars (PROJECTION_CONCURRENCY, AUDIT_CONCURRENCY, EMAIL_CONCURRENCY)
-  - ✅ ProjectionCheckpoint table for tracking projection processing state
-  - Prometheus-compatible format 🔲
-  - Grafana dashboard templates 🔲
-  - OpenTelemetry traces 🔲
-  - Structured JSON logging with correlation IDs 🔲
-- **Health Checks & Liveness** 🔲
-  - API: existing `/health` endpoint enhanced with dependency checks (database, pg-boss, S3)
-  - Worker: lightweight HTTP health endpoint (port 3002) for Docker/k8s liveness probes
-  - Readiness checks: worker reports "ready" only after connecting to pg-boss and registering handlers
-  - Docker Compose healthcheck configuration for automatic restart on failure
-- **Connection Pool Management** 🔲
-  - PgBouncer service in docker-compose for production deployments (connection multiplexing)
-  - Pool utilization metrics exposed via Prometheus
-  - Alerting when pool utilization exceeds 80%
-  - Documented pool sizing guide per deployment size (small/medium/large)
-- **Error Tracking & Dead Letter Queues** 🔲
-  - DLQ dashboard: view failed jobs with full payload, error stack, retry history
-  - One-click retry or bulk retry from DLQ (already partially exists in queue monitoring API)
-  - DLQ alerting: immediate notification when a job fails all retries
-  - Error classification: transient (retry) vs permanent (alert and park)
-  - Integration with error tracking services (Sentry, Rollbar) as pluggable providers
-- **Deployment & Rollback** 🔲
-  - Blue/green deployment guide for zero-downtime API + worker updates
-  - Database migration safety: backward-compatible migration patterns documented
-  - Worker drain: graceful shutdown waits for in-flight jobs before container stop
-  - Rollback playbook: step-by-step recovery procedures for common failure modes
-- **Capacity Planning** 🔲
-  - Documented sizing guide: small (1 API + 1 worker), medium (1 API + 3 workers), large (2 API + 5 workers + PgBouncer)
-  - Connection budget calculator based on deployment profile
-  - Resource limit recommendations per container (CPU, memory) based on workload patterns
-  - Load testing scripts and baseline benchmarks
+### **Phase 9b: Intelligence & AI** DONE
+- **Agent Decision Logging** - CQRS commands, domain events, AgentDecisionReadModel
+- **AI Triage Agent** - ILlmProvider interface, AnthropicLlmProvider, TriageAgentHandler (event-driven), context gathering, structured prompting, action execution, decision logging, deduplication
+- **Configurable Agent Prompts** - AgentConfig per-org, AgentConfigVersion (immutable prompt versioning), template variables, admin UI, auto-seed
+- **LLM Key Management** - Org-level config, masked key display, env var detection, token tracking, usage telemetry
+- **Automation Rule Engine** - ConditionEvaluator (10 operators), AutomationRuleHandler, unified condition format, promote from decisions, API with dry-run, frontend rule builder
+- **Skills System** - ISkill interface, SkillRegistry, 6 built-in skills (create_issue, escalate_issue, add_comment, contact_driver, send_email, call_webhook), TemplateResolver, SkillChainExecutor with branching, SkillConfig/SkillChain models, admin UI
 
-## **Phase 11: Warehouse Shipment App** ✅ (Partial)
-- **Warehouse Login & Auth** ✅
-  - ✅ Password login for warehouse users
-  - ✅ Magic link / QR code login (printable, reusable, wall-mountable)
-  - ✅ Login audit log (method tracking: password, magic_link, oauth)
-  - ✅ Admin toggle for magic links (security configurable)
-  - ✅ Account lockout (5 failed attempts → 15 min lockout)
-- **Location Selection** ✅
-  - ✅ Location selector on first login
-  - ✅ Preferred location saved to user profile (auto-selects on next login)
-  - ✅ Admin can pre-set preferred location for users
-- **Shipment List (Today's Work)** ✅
-  - ✅ List draft/ready shipments filtered by origin warehouse
-  - ✅ Filter chips: All, To Do, Launched, Flagged
-  - ✅ Search by reference, ID, or PRO number
-  - ✅ Scan-to-filter via barcode scanner (HID keyboard emulation)
-  - ✅ Auto-refresh every 30 seconds
-  - ✅ Launched shipments visually de-emphasized
-- **Shipment Detail (Read-Only)** ✅
-  - ✅ Full shipment details: route, customer, dates, carrier, driver, vehicle
-  - ✅ Orders and trackable units displayed at detail level
-  - ✅ Flag button for reporting issues (free-text reason)
-  - ✅ Flag resolution workflow
-- **Launch Wizard** ✅
-  - ✅ Step 1: Assign IoT trackers (scan device barcode, assign to shipment)
-  - ✅ Step 2: Add accessories (temp sensors, door sensors, BLE trackers, non-IoT door seals)
-  - ✅ Step 3: Pair trackable units with IoT devices (scan unit → scan device workflow)
-  - ✅ Step 4: Review checklist and launch
-  - ✅ Prevents launch if unresolved flags exist
-- **IoT Device Integration** ✅
-  - ✅ Device lookup by barcode (externalId, displayId, name)
-  - ✅ Warning if device already assigned to another shipment
-  - ✅ Device assignment at shipment level and trackable unit level
-  - ✅ Accessory types: temp sensor (front/middle/back), door sensor, door seal, BLE tracker
-- **Archive** ✅
-  - ✅ Stale shipments (>2 days in draft/loading) shown on archive screen
-  - ✅ Keeps main list clean for active warehouse operations
-- **Admin Shipment Creation** ✅
-  - ✅ Admin users can create basic shipments from warehouse app
-  - ✅ Pre-fills origin from selected warehouse location
-- **Barcode Scanning** ✅
-  - ✅ HID scanner support (Zebra/Honeywell built-in scanners)
-  - ✅ Rapid keystroke pattern detection (distinguishes scanner from typing)
-  - ✅ Manual keyboard fallback button
-- **WiFi Connectivity Monitoring** ✅
-  - ✅ Logs offline/online events to backend
-  - ✅ Duration tracking for outage analysis
-- **Admin Settings** ✅
-  - ✅ Magic link toggle in Settings → Warehouse tab
-  - ✅ Scanner mode preference (HID vs camera)
-  - ✅ QR code generation with print support
-  - ✅ Login audit log viewer
-- **Mobile-First Design** ✅
-  - ✅ Bottom navigation bar for key sections
-  - ✅ Touch-optimized cards, buttons, and forms
-  - ✅ Keyboard-aware input positioning
-  - ✅ CSS custom properties from theme.css (no hardcoded colors)
-  - ✅ Designed for small Zebra/Android screens
-- **Future / Roadmap Items** 🔲
-  - ✅ Camera-based barcode scanning fallback (native BarcodeDetector API, Chrome 83+)
-  - 🔲 Order creation from warehouse app
-  - 🔲 Offline mode / queue operations for WiFi dead zones
-  - 🔲 False start detection (IoT devices sent on wrong shipment)
-  - 🔲 Full shipment management for admin users (mini TMS)
-  - 🔲 Flutter native app (for app store distribution and native scanner APIs)
-  - 🔲 Geofence-based auto-transition from "ready" to "in_transit"
+### **Phase 11: Warehouse Shipment App** DONE
+- **Warehouse Login & Auth** - Password + magic link/QR code login, audit log, account lockout
+- **Location Selection** - Location selector on first login, preferred location saved to profile
+- **Shipment List** - Today's work filtered by origin warehouse, filter chips, search, scan-to-filter, auto-refresh
+- **Shipment Detail** - Full details (route, customer, dates, carrier, driver, vehicle), orders/units, flag button with resolution workflow
+- **Launch Wizard** - 4-step flow: assign IoT trackers, add accessories, pair trackable units, review/launch
+- **IoT Device Integration** - Device lookup by barcode, assignment warnings, shipment/unit level assignment
+- **Archive** - Stale shipments (>2 days) on separate screen
+- **Barcode Scanning** - HID scanner support (Zebra/Honeywell), rapid keystroke detection, manual fallback, camera-based fallback (BarcodeDetector API)
+- **WiFi Monitoring** - Offline/online event logging, duration tracking
+- **Mobile-First Design** - Bottom nav, touch-optimized, keyboard-aware, CSS custom properties
 
-## **Phase 12: Advanced Operations**
-- **Load Planning & Consolidation** 🔲
-  - Multi-order load building and optimization
-  - Load board for available capacity
+---
+
+## Active Development - Core TMS Completeness
+
+The following tracks are ordered by impact on TMS credibility. Items within each track are sequenced by dependency.
+
+### **Track 1: Brokerage Operations** (NEW - Critical Gap)
+
+The system models the world as "shipper has carriers" but never accounts for the broker role - arguably the single most common TMS user persona. No broker margin tracking, no customer-as-shipper vs carrier-as-capacity pairing, no broker-specific workflows.
+
+- **Broker Entity Model** 🔲
+  - Organization type flag: shipper, carrier, broker, 3PL (determines available features and terminology)
+  - Broker-specific fields: MC number, bond info, operating authority status
+  - Customer-as-shipper relationship: customers are the shippers in a brokerage, the broker is the intermediary
+  - Carrier-as-capacity: carrier assignment represents capacity procurement, not just a transport provider
+  - Broker user roles and permissions distinct from shipper roles
+- **Broker Margin Tracking** 🔲
+  - Buy rate (carrier cost) vs sell rate (customer price) per shipment - distinct from the shipper model where "revenue" and "cost" are less clearly opposed
+  - Real-time margin visibility on shipment list and detail pages
+  - Margin alerts: flag shipments where margin drops below configurable threshold
+  - Margin reporting by customer, carrier, lane, and time period
+  - Target margin by lane/customer with variance tracking
+- **Broker Quoting Workflow** 🔲
+  - Customer rate request intake (phone, email, portal, API)
+  - Quick quote from rate history and lane-carrier pricing
+  - Quote-to-book conversion: accepted quote creates shipment with pre-set buy/sell rates
+  - Rate confirmation document generation (PDF) - broker version of the BOL
+  - Customer credit check integration with existing billing infrastructure
+- **Broker Load Board** 🔲
+  - Internal load board: unmatched shipments needing carrier assignment
+  - Carrier capacity search: find carriers with availability on a lane
+  - Quick carrier assignment with rate negotiation tracking
+  - Integration with carrier tendering (existing broadcast/waterfall) for larger operations
+  - Load matching suggestions based on carrier lane history and equipment type
+- **Broker-Specific Financials** 🔲
+  - Carrier quick pay / factoring support (pay carrier in N days for a fee)
+  - Customer invoice with broker markup (not showing carrier cost)
+  - Carrier settlement: batch payments to carriers grouped by payment terms
+  - Receivables aging from broker perspective (customer owes broker, broker owes carrier)
+  - Commission tracking for broker agents/sales reps (if multi-user brokerage)
+
+### **Track 2: Reporting & Analytics** (Biggest Credibility Gap - ~40% Coverage)
+
+The current reporting is financial-only (AR aging, carrier spend, margin analysis). Missing the operational KPIs that every TMS demo gets judged on.
+
+- **Executive Dashboard** 🔲
+  - Shipment volume: daily/weekly/monthly trends with YoY comparison
+  - On-time delivery percentage (OTD%) - the single most important TMS metric
+  - On-time pickup percentage
+  - Cost per shipment / cost per unit / cost per mile trends
+  - Revenue and margin summary with period comparison
+  - Exception rate and resolution time
+  - Active shipments, tenders, and issues at a glance
+  - Configurable date range and customer/carrier/lane filters on all widgets
+- **Carrier Scorecards** 🔲
+  - On-time pickup and delivery rates per carrier
+  - Tender acceptance rate and response time
+  - Damage/claim rate
+  - Average transit time vs quoted
+  - Invoice accuracy (freight audit match rate)
+  - Overall composite score with configurable weighting
+  - Trend charts (rolling 30/60/90 day)
+  - Exportable scorecard PDF for procurement reviews
+- **Operational Reports** 🔲
+  - Shipment status summary (count by status, mode, customer, carrier)
+  - Lane utilization: volume and cost by lane over time
+  - Dwell time analysis by location
+  - Exception breakdown by type, root cause, and resolution
+  - SLA compliance trends (already have SLA data, need the report view)
+  - Stop performance: average load/unload times by location
+- **Scheduled Reports** 🔲
+  - Report scheduling engine (pg-boss cron) - daily, weekly, monthly
+  - Report template selection with parameter presets
+  - Email delivery with PDF/CSV attachments
+  - Recipient lists (internal users + external email addresses)
+  - Report history and re-download
+- **Ad-Hoc Report Builder** 🔲
+  - Drag-and-drop field selection from available data sources
+  - Filter/group/sort configuration
+  - Chart type selection (bar, line, pie, table)
+  - Save and share report definitions
+  - CSV/PDF export from any report
+
+### **Track 3: Customer Portal** (Table Stakes - Currently 22%)
+
+Every TMS needs customer self-service. The carrier portal exists but there's nothing for the shipper's customer.
+
+- **Customer User Management** 🔲
+  - CustomerUser model (separate from internal User, same pattern as CarrierUser)
+  - Email/password auth with dedicated JWT issuer (`open-tms-customer`)
+  - Admin UI for managing customer portal users (on customer edit page)
+  - Password strength validation, account lockout (reuse carrier auth patterns)
+  - Customer admin can manage their own users (invite, deactivate)
+- **Customer Portal App** 🔲
+  - Separate app at `/customer-portal/` with its own layout
+  - Branded with customer's or org's theme (existing ThemeProvider)
+  - Dashboard: active shipments, recent deliveries, open issues summary
+  - Navigation: Orders, Shipments, Documents, Invoices, Issues
+- **Order Entry** 🔲
+  - Customer self-service order creation (simplified form, pre-filled customer info)
+  - Order templates for recurring shipments
+  - Bulk order upload (CSV) through portal
+  - Order status tracking with timeline view
+  - Order history with search and filters
+- **Shipment Tracking** 🔲
+  - Real-time shipment visibility (current location, ETA, status)
+  - Map view of active shipments (reuse existing map components, scoped to customer)
+  - Push notifications for status changes (email + in-portal)
+  - POD (proof of delivery) access when available
+  - Historical shipment search with date range and status filters
+- **Document Access** 🔲
+  - Download BOLs, invoices, compliance reports, and attachments
+  - Document history per shipment/order
+  - Cold chain compliance reports for regulated customers
+- **Invoice & Payment View** 🔲
+  - View invoices and payment status
+  - Invoice PDF download
+  - Payment history
+  - Dispute/query submission (feeds into existing FinancialQuery system)
+- **Shareable Tracking Links** 🔲
+  - Public tracking page with shipment status (no login required)
+  - Time-limited or PIN-protected access
+  - Embeddable tracking widget for customer websites
+  - Branded with org theme
+
+### **Track 4: Route Optimization & Load Planning** (Core TMS Value / ROI Pitch)
+
+This is where TMS software earns its keep - the optimization that justifies the subscription.
+
+- **Multi-Stop Route Optimization** 🔲
+  - VROOM or Google OR-Tools integration for TSP/VRP solving
+  - Optimize stop sequence for minimum distance/time/cost
+  - Constraint support: time windows, vehicle capacity, driver hours
+  - Compare optimized vs manual route with savings estimate
+  - Re-optimize on the fly when stops are added/removed
+- **Consolidation Optimizer** 🔲
+  - Identify orders on similar lanes that can share a vehicle
+  - Consolidation suggestions with fill rate and cost savings estimate
+  - Auto-consolidation rules (same customer, same day, same lane)
+  - LTL to FTL upgrade suggestions when volume warrants
+- **Mode Selection** 🔲
+  - Compare FTL vs LTL vs parcel for a given shipment
+  - Rate comparison across modes with transit time trade-offs
+  - Auto-suggest optimal mode based on weight, dimensions, and urgency
+  - Mode-specific carrier ranking (best LTL carrier vs best FTL carrier for a lane)
+- **Load Planning Board** 🔲
+  - Visual load board: unassigned shipments ready for carrier assignment
+  - Drag-and-drop shipment-to-load assignment
+  - Load capacity visualization (weight, volume, pallet positions)
+  - Multi-order load building with weight/cube optimization
 - **Appointment Scheduling** 🔲
   - Dock scheduling and delivery window management
-- **Yard Management** 🔲
-  - Yard check-in/out, trailer tracking
-- **Returns / Reverse Logistics** 🔲
-  - RMA workflow, return shipment creation
-- **Claims Management** 🔲
-  - File and track claims for damaged or lost goods
-  - Resolution workflow and reporting
+  - Appointment slots by location with capacity limits
+  - Integration with shipment stop ETAs
 
-## **Phase 12: Hub-and-Spoke & Multi-Modal Transport** 🔲
+### **Track 5: Cold Chain Completion** (Complete What's Started)
 
-Extends the shipment and routing model to support distribution networks and multi-modal freight.
+The cold chain infrastructure is strong (profiles, excursion detection, disposition, compliance reports, CAPA). What's missing is the regulatory UI and reporting layer.
 
-- **Hub-and-Spoke Network Modeling** 🔲
-  - Add `locationType` classification to Location model: `hub | spoke | cross_dock | port | rail_terminal | airport | warehouse | customer`
-  - Hub configuration: throughput capacity, operating hours, supported transfer types
-  - Spoke-to-hub assignment: which spokes feed into which hubs
-  - Network graph model: directed edges between locations with transit time and cost
-  - Cross-dock transfer logic: cargo arrives on inbound vehicle, sorted, leaves on outbound vehicle
-  - Transfer events at hubs: `cargo.arrived_at_hub`, `cargo.sorted`, `cargo.departed_hub`
-  - Network visualization: map view showing hubs, spokes, and flow volumes
-  - Lane auto-generation from network topology (hub-to-spoke lanes derived from network config)
-- **Multi-Modal Transport** 🔲
-  - Add `transportMode` enum to shipment legs: `road | air | ocean | rail | intermodal`
-  - Mode-specific fields per leg:
-    - Ocean: vessel name, IMO number, voyage number, container number, port of loading/discharge
-    - Air: flight number, MAWB/HAWB, airline, airport codes
-    - Rail: rail car number, train ID, intermodal terminal, rail carrier
-    - Road: (existing fields — vehicle, driver, carrier)
-  - Multi-leg shipments: a single shipment can have legs across different modes (truck → ocean → truck)
-  - Leg-level status tracking: each leg has its own status lifecycle
-  - Mode-specific tracking integration points (feeds from Phase 9c data providers):
-    - Ocean: AIS vessel tracking, port milestone events
-    - Air: flight tracking, cargo milestone events (booked, tendered, departed, arrived)
-    - Rail: terminal events, estimated arrival
-  - Handoff events between modes: `leg.completed` → `leg.started` with transfer location
-  - Intermodal container tracking: track a container across truck→rail→truck or truck→ocean→truck
-  - UI: shipment detail shows leg-by-leg timeline with mode icons and per-leg status
+- **Regulatory Audit Trail UI** 🔲
+  - Full audit trail viewer for temperature records (CFR 21 Part 11 compliance)
+  - Tamper-evident display of SHA-256 integrity hashes
+  - Chain-of-custody timeline: who handled what, when, with what readings
+  - Export audit trail to PDF for regulatory submissions
+- **Cold Chain Compliance Reporting** 🔲
+  - Customer-facing temperature compliance reports with excursion summaries
+  - Regulatory export formats (FDA, USDA requirements)
+  - Batch compliance reports across multiple shipments
+  - Excursion trend analysis: frequency, severity, root cause by lane/carrier/product
+- **Cold Chain Dashboard** 🔲
+  - Real-time temperature monitoring overview (active shipments with readings)
+  - Excursion alert feed
+  - Compliance rate by customer/product/lane
+  - Device health and calibration status overview
 
-## **Phase 13: Warehouse Management System (WMS)** 🔲
+### **Track 6: Routes & Maps** (Enhance Existing Foundation)
 
-Foundation for Open WMS — warehouse operations integrated with the transport management layer.
+Building on the existing map view, ETA monitoring, and route deviation system.
 
-- **Inventory Management** 🔲
-  - Inventory model: SKU, lot number, serial number, quantity, location within warehouse
-  - Inventory by owner/client: track which inventory belongs to which customer
-  - Inventory zones: bulk storage, pick face, staging, dock, quarantine, returns
-  - Stock levels: on-hand, allocated, available, in-transit, on-hold
-  - Inventory adjustments with reason codes and audit trail
-  - Cycle counting and physical inventory workflows
-  - Lot tracking and FIFO/FEFO/LIFO pick strategies
-  - Expiry date tracking for perishable goods
-- **Warehouse Layout & Locations** 🔲
-  - Warehouse zone/aisle/rack/shelf/bin hierarchy
-  - Bin capacity and dimension constraints
-  - Location types: receiving dock, storage, pick face, packing station, shipping dock
-  - Warehouse map visualization (2D layout)
-  - Slotting optimization: suggest optimal bin placement based on velocity and pick frequency
-- **Inbound Operations (Receiving)** 🔲
-  - Advance Ship Notice (EDI 856) integration: know what's coming before it arrives
-  - Receiving workflow: dock assignment → unload → inspect → put-away
-  - Quality inspection checkpoints with pass/fail/quarantine outcomes
-  - Discrepancy handling: over/short/damage on receipt vs ASN
-  - Put-away rules: directed put-away based on product attributes, zone rules, and available space
-  - Receiving dock scheduling (ties into Phase 11 appointment scheduling)
-- **Outbound Operations (Fulfillment)** 🔲
-  - Order allocation: reserve inventory against outbound orders
-  - Wave planning: group orders into waves by carrier, destination zone, priority, or cutoff time
-  - Pick strategies: discrete (one order at a time), batch (multiple orders), zone (by warehouse area)
-  - Pick list generation with optimized walk path
-  - Pack station workflow: scan items, verify quantities, select packaging, generate labels
-  - Shipping station: carrier selection, rate shopping, label printing, manifest creation
-  - Short pick handling: backorder, substitute, or cancel line items
-- **Warehouse Tasks & Labor** 🔲
-  - Task model: receiving, put-away, replenishment, picking, packing, shipping, cycle count
-  - Task assignment to warehouse workers (manual or auto-assign based on zone/skill)
-  - Task prioritization based on order SLAs and cutoff times
-  - Worker productivity tracking: units per hour, tasks completed, idle time
-  - Mobile-friendly task execution UI (scan-driven workflows)
-- **Integration with Transport Layer** 🔲
-  - Outbound shipment creation from fulfilled orders: packed orders → create shipment automatically
-  - Inbound shipment to receiving: arriving shipment triggers receiving workflow
-  - Dock-to-stock time tracking: measure time from truck arrival to inventory availability
-  - Cross-dock support: inbound goods routed directly to outbound staging without put-away
-  - Inventory visibility in order management: show available stock when creating orders
-- **Returns Processing** 🔲
-  - Return authorization (RMA) workflow
-  - Returns receiving: inspect, grade condition, determine disposition
-  - Disposition rules: restock, refurbish, scrap, return-to-vendor
-  - Inventory adjustment on return receipt
-  - Return reason tracking and analytics
+- **Route Lines on Map** 🔲
+  - Draw route polylines between origin and destination on map view
+  - Colour-code by status (on-time, delayed, deviated)
+  - Animate in-transit shipments along route
+- **Spatial Indexing** 🔲
+  - PostGIS extension for inverse geofence queries (ST_DWithin with spatial index)
+  - Geography column on Location model for fast spatial lookups
+  - ISpatialIndexProvider interface (PostGIS default, Tile38 for scale)
+  - Security event evaluation in SLA cron worker
+- **Traffic & Conditions Integration** 🔲
+  - Real-time traffic overlay on map view
+  - Road closure and construction alerts on active routes
+  - Alternative route suggestions when primary route is degraded
+  - Historical traffic pattern analysis for departure time recommendations
+
+### **Track 7: Warehouse Management System (WMS)**
+
+Bolt-on WMS extending the TMS's TrackableUnit/CargoScan/Location models. Full specification in `docs/WMS_SPECIFICATION.md`. Gap analysis against tier-1 WMS (Manhattan, Blue Yonder, Körber, SAP EWM, Oracle WMS) in `docs/gap-analysis/12-WMS-GAP-ANALYSIS.md`. Separate app in VNext app switcher at `/wms`.
+
+#### **v1 - Foundation** (must-ship to be credible)
+
+- **Location Hierarchy** 🔲
+  - WarehouseZone, WarehouseAisle, WarehouseBin models with capacity denormalization
+  - Bulk bin generation (grid pattern), walk sequence, temperature/hazmat attributes
+  - Bin types: pallet, shelf, floor, dock door, staging, pack station
+- **Indoor Positioning (RTLS)** 🔲
+  - IndoorZoneAnchor (BLE/WiFi/UWB) extending ArrivalCriteria
+  - IndoorPositionHandler maps anchor hits to zones/bins on TrackableUnits
+  - IndoorZonePosition read model for current-state queries
+- **Inventory Foundation (digital twin)** 🔲
+  - TrackableUnit nesting (parentUnitId), lot/expiry/receivedAt
+  - `ownerCustomerId` for 3PL multi-client segregation (load-bearing for v2 billing)
+  - `qualityStatus` + QualityHold model (blocks allocation)
+  - InventoryRecord (read model) + InventoryTransaction (immutable ledger)
+  - ProductUom master data (EA/INNER/CASE/PALLET conversions, GTIN per UOM)
+  - Cycle counting (full/zone/ABC/random sample)
+  - Replenishment rules (min/max pick-face threshold)
+- **Receiving** 🔲
+  - ReceivingAppointment (scheduled dock time), ReceivingTask, ReceivingLine
+  - ASN-based and blind receiving, inspection workflow, nesting on scan
+  - Extends CargoScan (new scanTypes), CargoDiscrepancy (over/short/damaged)
+- **Putaway** 🔲
+  - PutawayRule (SKU pattern, temperature, hazmat, velocity, customer, unit type)
+  - PutawayTask (directed, manual, replenishment, cross-dock)
+  - `next_available_in_zone` resolver using walk sequence + capacity
+- **Allocation Engine** 🔲
+  - Allocation model (soft/hard states)
+  - Strategies: FIFO/FEFO/LIFO, closest-to-pickface, same-lot, avoid-partial-pallet, customer-dedicated
+  - ATP (Available-to-Promise) query endpoint
+- **Pick & Pack** 🔲
+  - Wave, WaveTemplate (cut-off, capacity, priority, auto-release schedule)
+  - PickTask + PickLine with walk-sequence ordering
+  - Four strategies: discrete, batch, zone, wave
+  - Short-pick handling: backorder / substitute / cancel
+  - PackTask + PackLine with verification
+  - CartonCatalogue + Cartonization service (3D First-Fit-Decreasing)
+  - PackAudit for weight/dim-weight variance
+  - `shipment.cutoff_at_risk` events for miss-risk waves
+- **Loading & BOL** 🔲
+  - StagingAssignment by carrier/route grouping
+  - LoadPlan with reverse load-sequence
+  - BOL generation on `load_plan.completed` (not at wave release)
+  - Seal capture, dock door assignment
+- **Cross-dock** 🔲
+  - Workflow variant on ReceivingTask with sort-by destination/carrier
+- **Returns / RMA** 🔲
+  - Rma + RmaLine models with disposition (restock/refurb/scrap/RTV/customer_keeps)
+  - Customer portal returns request + label generation
+  - Return receiving as ReceivingTask variant
+  - Auto CreditNote on disposition
+- **WMS EDI** 🔲
+  - EDI 940 (Warehouse Shipping Order, inbound) - auto-creates Order
+  - EDI 945 (Warehouse Shipping Advice, outbound) - emitted on `load_plan.completed`
+- **Warehouse Operations Dashboard** 🔲
+  - Dock-to-stock, order cycle time, pick accuracy, perfect order rate
+  - Inventory record accuracy, capacity utilization, open exceptions
+  - Cut-off risk panel
+- **Indoor RTLS Heatmap UI** 🔲
+  - 2D floor-plan SVG upload per Location
+  - Live markers for TrackableUnits and users via WebSocket/SSE
+  - Dwell heatmap, density heatmap, 24h scrub playback
+- **Unified WarehouseTask Supertype** 🔲
+  - Foundation for v2 task interleaving and LMS-aware dispatch
+  - `expectedDurationSeconds` field placed now (wired in v2)
+- **Warehouse Mobile App Extensions** 🔲
+  - Receiving, Putaway, Picking, Packing, Loading flows
+  - PWA offline task queue with IndexedDB
+  - Barcode wedge keyboard support (Zebra/Honeywell RF guns)
+
+#### **v2 - Differentiation** (after v1 ships)
+
+- **3PL Billing Suite** 🔲
+  - BillingContract per customer (storage/handling/VAS rate cards)
+  - Daily storage accrual cron (per pallet-day, per cbm-day)
+  - Handling charges on receipt / pick / pack / ship events
+  - Integrates with existing Charge + Invoice pipeline
+- **Value-Added Services & Kitting** 🔲
+  - VasTask (ticketing, re-labelling, gift-wrap, FBA prep)
+  - BillOfMaterials + KittingTask (assemble/disassemble kits)
+  - Billing hooks for per-VAS-unit charges
+- **Parcel & Compliance Labels** 🔲
+  - Multi-carrier rate-shop at pack (ShipEngine or direct APIs)
+  - End-of-day manifest (SCAN form, EDI 215)
+  - SSCC-18 pallet labels, UCC-128 carton labels (GS1-128 barcodes)
+  - Retailer-specific ComplianceLabelTemplate (Walmart, Target, Amazon routing guides)
+- **Serial Number Tracking** 🔲
+  - SerialNumber model, optional capture on receive and pick
+  - Foundation for DSCSA / UDI / 21 CFR Part 820 compliance
+- **Batch Genealogy & Recall Management** 🔲
+  - LotGenealogy projection (upstream/downstream trace)
+  - Recall entity with affected-lots query and customer notification workflow
+- **Extended WMS EDI** 🔲
+  - 846 (Inventory Inquiry/Advice, outbound) - critical for 3PL client dashboards
+  - 943 / 944 (Stock transfer shipment / receipt advice)
+  - 947 (Inventory Adjustment Advice)
+- **Dock Appointment Portal (self-service)** 🔲
+  - Carrier-facing appointment request/confirm UI (extends carrier portal)
+  - Availability calendar per dock, auto-approval rules
+  - ICS feed, live-board URL for drivers
+- **Task Dispatcher (interleaving)** 🔲
+  - Cross-task-type queue using WarehouseTask supertype
+  - Geographic proximity routing (do putaway then pick nearby on return)
+- **Quality Hold + Supplier Scorecard** 🔲
+  - Release-from-hold workflow with sign-off
+  - SupplierScorecard read model (ASN accuracy, on-time, quality)
+- **Cold Chain Zone Integration** 🔲
+  - Zone-level SensorReading, per-zone excursion events
+  - Auto-hold inventory in excursion zones
+
+#### **v3+ - Advanced (deferred to considerations)**
+
+See `docs/gap-analysis/12-WMS-GAP-ANALYSIS.md` for full detail:
+- Slotting optimization (ABC velocity, affinity, SlottingRecommendation)
+- Labour Management System (engineered standards, productivity, incentive pay)
+- Yard Management (YardLocation, YardMove, gate / guard shack, ANPR)
+- WCS / Automation Integration (AS/RS, AMR, conveyor, voice, pick-to-light)
+- Hazmat Segregation Engine (UN class matrix, SDS, DG shipping papers)
+- Bonded / FTZ Warehouse
+- 21 CFR Part 11 Electronic Signatures
+- Wearable / Voice Picking UI
+- Simulation / What-If Planning
+- Catch-Weight Items
+- Warehouse Carbon per Order
 
 ---
 
-🔥 **Priorities:**
-- **Immediate:** Complete **Phase 4** Triage Centre UI + auto-triage handler. CQRS backbone is done. Continue **Phase 8b** (EDI Communication Hub, unified trading partners).
-- **Short term:** Deliver **Phase 5** (IoT device-shipment linking, sensor visualization) — event pipeline ready for high-throughput IoT. Continue **Phase 8c** (carrier intelligence, FMCSA).
-- **Medium term:** Deliver **Phase 6** (cold chain compliance). Events + issue system provide audit trail and exception workflow for regulatory compliance.
-- **Long term:** **Phase 7–8** remaining items (financials, customer portal, N8N integration). Event export API is warehouse-ready for financial analytics.
-- **Strategic:** **Phase 9–9c** (routes & maps, AI agents, data providers) — DomainEventLog + ML pipeline readiness means AI agents can consume the full event stream.
-- **Operational:** **Phase 10** (SRE & observability) — `/metrics` endpoint and projection checkpointing in place. Next: Prometheus format, Grafana dashboards, OpenTelemetry tracing.
-- **Platform expansion:** **Phase 11** (advanced operations) for enterprise depth. **Phase 12** (hub-and-spoke & multi-modal) for 3PL and global logistics support. **Phase 13** (WMS) as the foundation for Open WMS — warehouse operations integrated with the transport layer.
+## Remaining In-Progress Work
+
+### **EDI Communication Hub** (Continue)
+Items from the unified trading partner model that are not yet complete:
+- EDI 855 (PO Acknowledgment) - outbound 🔲
+- Automated EDI 204 delivery via SFTP/HTTP (currently manual) 🔲
+- Automated EDI 990 polling from SFTP (currently manual) 🔲
+- AS2 transport for enterprise trading partners 🔲
+- SAP/ERP integration patterns (iDoc mapping, CSV/fixed-width adapters, REST/SOAP) 🔲
+- Outbound file naming conventions (configurable per partner) 🔲
+
+### **Audit Review & Compliance Trail**
+- Searchable, filterable audit log viewer (Admin > Audit Log) 🔲
+- Timeline view per entity (shipment, order, carrier, customer) 🔲
+- Immutable audit records with checksums/hash chains on DomainEventLog 🔲
+- Compliance reporting: user activity reports, data access logging, SOC 2/ISO 27001 templates 🔲
+
+### **SRE, Observability & Operations**
+- **Queue Monitoring** (partial) - Dashboard API done, alerting thresholds and auto-scaling 🔲
+- **Metrics** (partial) - /metrics endpoint done, Prometheus format, Grafana dashboards, OpenTelemetry 🔲
+- **Health Checks** - Enhanced /health with dependency checks, worker liveness endpoint 🔲
+- **Connection Pool Management** - PgBouncer, pool utilization metrics 🔲
+- **Error Tracking** - DLQ dashboard enhancements, Sentry/Rollbar integration 🔲
+- **Deployment** - Blue/green guide, migration safety, worker drain, rollback playbook 🔲
+- **Capacity Planning** - Sizing guide, resource recommendations, load testing scripts 🔲
+
+### **Intelligence & AI** (Continue)
+- Visual node builder for skill chains (drag-and-drop flowchart UI) 🔲
+- Self-improving prompts: track agent suggestions vs human overrides, auto-refine 🔲
+- Carrier & lane performance scoring (on-time %, damage %, excursion rate, route adherence) 🔲
+- Advanced analytics: predictive dashboards, trend analysis, visual reports 🔲
+
+### **Warehouse App** (Continue)
+- Order creation from warehouse app 🔲
+- Offline mode / queue operations for WiFi dead zones 🔲
+- False start detection (IoT devices sent on wrong shipment) 🔲
+- Full shipment management for admin users (mini TMS) 🔲
+- Flutter native app (for app store distribution) 🔲
+- Geofence-based auto-transition from "ready" to "in_transit" 🔲
+
+### **IoT Integration (System Loco)**
+- Device-shipment linking (associate IoT devices with shipments) 🔲
+- Real-time data ingestion from System Loco IoT platform (temperature, humidity, shock, light, GPS) 🔲
+- Sensor stream visualization on shipment detail pages 🔲
+- IoT-based alerts and automation (excursion alerts, geofence+sensor triggers) 🔲
+
+### **Miscellaneous**
+- Multi-language support (JSON language files, user-selectable, RTL support) 🔲
+- Data export (bulk document/attachment export, CSV/PDF export) 🔲
+- N8N workflow integration (webhook emission, custom node package, pre-built templates) 🔲
+- TMS-to-TMS integration (JSON APIs modeled after EDI, partner portal) 🔲
+- Pluggable map provider interface 🔲
 
 ---
 
-## Considerations (Outside Roadmap)
+## Priorities
 
-- **Multi-Tenancy Support** — Extend existing Organization model for true multi-tenant isolation. Significant architectural decision: row-level security vs schema-per-tenant vs database-per-tenant. Impacts every query, every route, every permission check. Should be evaluated when there is a concrete need (multiple paying customers on a single deployment) rather than built speculatively. Current single-org model works for self-hosted and single-tenant SaaS deployments. An alternative for 3PL deployments is one instance per client, which avoids the architectural complexity but limits the cross-client "control tower" view.
-- **Control Tower Dashboard** — A real-time command center with live maps, alert streams, SLA gauges, and drill-down. Required for 3PL control tower, enterprise shipper visibility, and security monitoring use cases. Depends on WebSocket/SSE for real-time push. Should be evaluated alongside Phase 4 (triage centre) and Phase 9 (route monitoring).
-- **SLA Management Framework** — SLA definitions (target metrics, thresholds per lane/carrier/customer), monitoring engine with breach detection, SLA dashboard. Cross-cutting concern that benefits all target profiles.
+1. **Immediate:** **Track 1 (Brokerage)** - Broker entity model, margin tracking, quoting workflow. This unlocks the largest market segment currently unserved.
+2. **Immediate:** **Track 2 (Reporting)** - Executive dashboard, carrier scorecards, on-time %. The single biggest credibility gap in a demo.
+3. **Short term:** **Track 3 (Customer Portal)** - Customer user management, order entry, shipment tracking. Table stakes for any TMS.
+4. **Short term:** **Track 4 (Route Optimization)** - Multi-stop optimization, consolidation, mode selection. This is the ROI pitch.
+5. **Medium term:** **Track 5 (Cold Chain Completion)** - Regulatory audit trail UI, compliance reporting, cold chain dashboard. Finish what's started.
+6. **Medium term:** **Track 6 (Routes & Maps)** - Route lines on map, spatial indexing. Visual polish on existing infrastructure.
+7. **Medium-to-long term:** **Track 7 (WMS v1)** - Foundation WMS bolt-on. Unlocks true end-to-end coverage (order → warehouse → shipment → delivery) and is the single largest domain expansion on the roadmap. v1 sequence in `docs/WMS_SPECIFICATION.md`.
+8. **Long term:** **Track 7 (WMS v2)** - 3PL billing, VAS/kitting, parcel/rate-shop, serial tracking, appointment portal. Differentiation vs commercial tier-1.
+9. **Ongoing:** EDI hub completion, audit trail, SRE/observability, AI enhancements, warehouse app improvements.
+
+---
+
+## Considerations (Outside Active Roadmap)
+
+These items are acknowledged but deliberately deferred. They may be re-evaluated based on user demand or strategic shifts.
+
+- **Multi-Tenancy** - Row-level security vs schema-per-tenant vs database-per-tenant. Current single-org model works for self-hosted. Evaluate when there is a concrete need for multiple paying customers on a single deployment.
+- **Control Tower Dashboard** - Real-time command centre with live maps, alert streams, SLA gauges. Depends on WebSocket/SSE. Evaluate alongside brokerage operations (brokers need this).
+- **Carrier Risk Scoring / FMCSA** - MC/DOT validation, insurance monitoring, safety ratings, fictitious carrier detection. Important for compliance but not core TMS table-stakes.
+- **Carrier Onboarding Workflow** - Self-registration, document collection, automated validation. Nice-to-have, evaluate with brokerage (brokers onboard carriers constantly).
+- **Driver Mobile App** - Mobile status updates, signature capture, photo POD, GPS tracking, offline support. Large standalone project, consider Flutter approach from warehouse app.
+- **Digital BOL / e-Signature** - External eBOL provider integration, tamper-proof sharing, digital signatures. Requires choosing a legally binding signature provider.
+- **Hub-and-Spoke & Multi-Modal Transport** - Location type classification, multi-modal legs (ocean/air/rail), intermodal container tracking. Significant complexity for a niche use case at this stage.
+- **WMS v3+ (advanced / tier-1 parity)** - Labour management, slotting optimization, yard management, WCS/automation integration, hazmat segregation engine, serial/genealogy, voice picking, 3PL billing advanced features. See `docs/gap-analysis/12-WMS-GAP-ANALYSIS.md` for full catalogue. Core WMS v1 and v2 are now on the active roadmap below.
+- **Sustainability / Carbon** - Carbon footprint calculation, emissions reporting. Regulatory pressure increasing but not yet a TMS deal-breaker.
+- **Data Providers & External Feeds** - Weather, maritime, aviation, rail, traffic, market/rate data. Valuable for intelligence layer but premature before core reporting is solid.
+- **Advanced Operations** - Yard management, returns/reverse logistics, claims management. Enterprise depth features for later.
