@@ -124,7 +124,7 @@ The system models the world as "shipper has carriers" but never accounts for the
   - Admin settings UI for brokerage configuration
   - Customer-as-shipper relationship: customers are the shippers in a brokerage, the broker is the intermediary
   - Carrier-as-capacity: carrier assignment represents capacity procurement, not just a transport provider
-  - Broker user roles and permissions distinct from shipper roles 🔲
+  - Broker user roles and permissions: broker_admin, broker_agent, finance, readonly system roles with hierarchical permission system (resource:action format with wildcards)
 - **Broker Margin Tracking** ✅
   - Buy rate (carrier cost) vs sell rate (customer price) per shipment - leverages existing Charge + ShipmentFinancialSummary models
   - Real-time margin visibility on shipment list (togglable Revenue/Cost/Margin columns) and detail pages

@@ -1447,7 +1447,34 @@ The frontend "Accept & Book" button (visible for broker orgs) triggers this flow
 
 Generates a carrier-facing PDF showing the agreed carrier rate (cost charges only). Does NOT show customer sell rate or broker margin. Uses the same `DocumentGenerationService` + Handlebars template pattern as BOL/customs forms. Stored via `IBinaryStorageProvider` as a `GeneratedDocument` (documentType: `rate_confirmation`).
 
+### Roles & Permissions (RBAC)
+
+**System:** Full RBAC with Role model containing JSON permission arrays. Permissions follow `resource:action` format with wildcard support (`*` for all, `resource:*` for all actions on a resource).
+
+**System Roles:**
+| Role | Description | Key Permissions |
+|------|-------------|----------------|
+| `admin` | Full system access | `*` |
+| `broker_admin` | Brokerage administrator | All ops + settings + users |
+| `broker_agent` | Sales rep / agent | Loadboard, quotes, margins - no settings/users |
+| `dispatcher` | Operational user | Shipments, orders, tendering, loadboard |
+| `finance` | Financial operations | Quotes, invoices, charges, reports |
+| `warehouse` | Warehouse operator | Shipment read/write, devices |
+| `readonly` | Read-only access | All `:read` and `:view` permissions |
+
+**Broker-Specific Permissions:** `loadboard:read`, `loadboard:assign`, `margin:view`, `credit:check`, `rate_confirmation:generate`
+
+**Seeding:** `POST /api/v1/roles/seed` creates or updates system roles (idempotent). Custom roles can be created via the Roles CRUD API.
+
+**Middleware:** `requirePermission(...perms)` in `jwtAuth.ts` checks JWT permissions. `optionalAuth` sets `req.user` when token present without blocking unauthenticated requests.
+
 ### Key Files
+- `backend/src/auth/permissions.ts` - Permission constants and system role definitions
+- `backend/src/auth/seedRoles.ts` - Role seeding service
+- `backend/src/routes/roles.ts` - Roles CRUD API (list, create, update, delete, assign/remove user)
+- `backend/src/middleware/jwtAuth.ts` - JWT auth + requirePermission middleware
+- `frontend/src/hooks/useCurrentUser.ts` - Frontend role/permission hook
+- `frontend/src/vnext-design/VNextRoles.tsx` - Roles management admin page
 - `backend/prisma/schema.prisma` - Organization brokerage fields, ShipmentReadModel financial columns
 - `backend/src/routes/loadboard.ts` - Load board API (list, matching carriers, quick assign)
 - `backend/src/routes/quotes.ts` - Quick quote + credit check endpoints

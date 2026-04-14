@@ -69,6 +69,7 @@ import VNextAutomationRuleDetail from './vnext-design/VNextAutomationRuleDetail'
 import VNextSkillsConfig from './vnext-design/VNextSkillsConfig';
 import VNextSkillChains from './vnext-design/VNextSkillChains';
 import VNextLoadBoard from './vnext-design/VNextLoadBoard';
+import VNextRoles from './vnext-design/VNextRoles';
 
 // VNext Finance Pages
 import VNextFinanceDashboard from './vnext-design/VNextFinanceDashboard';
@@ -252,6 +253,7 @@ root.render(
           <Route path="settings/agents" element={<VNextAgentConfig />} />
           <Route path="settings/skills" element={<VNextSkillsConfig />} />
           <Route path="settings/skill-chains" element={<VNextSkillChains />} />
+          <Route path="settings/roles" element={<VNextRoles />} />
 
           {/* Finance */}
           <Route path="finance" element={<VNextFinanceDashboard />} />

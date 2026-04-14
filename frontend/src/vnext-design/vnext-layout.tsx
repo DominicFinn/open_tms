@@ -154,6 +154,7 @@ const APPS: AppDef[] = [
         { to: '/settings/agents', icon: 'psychology', label: 'Agent Config' },
         { to: '/settings/skills', icon: 'build', label: 'Skills' },
         { to: '/settings/skill-chains', icon: 'account_tree', label: 'Skill Chains' },
+        { to: '/settings/roles', icon: 'admin_panel_settings', label: 'Roles & Permissions' },
       ]},
       { title: 'Apps', items: [
         { to: '/warehouse', icon: 'warehouse', label: 'Warehouse App' },

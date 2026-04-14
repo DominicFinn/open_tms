@@ -1,6 +1,13 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { seedSystemRoles } from '../auth/seedRoles.js';
 
 export async function seedRoutes(server: FastifyInstance) {
+  // Seed system roles (idempotent - safe to call on every startup)
+  server.post('/api/v1/seed/roles', async (_req: FastifyRequest, _reply: FastifyReply) => {
+    const result = await seedSystemRoles(server.prisma);
+    return { data: result, error: null };
+  });
+
   // Seed data endpoint
   server.post('/api/v1/seed', async (_req: FastifyRequest, reply: FastifyReply) => {
     try {

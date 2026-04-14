@@ -1,6 +1,10 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { optionalAuth } from '../middleware/jwtAuth.js';
 
 export async function loadboardRoutes(server: FastifyInstance) {
+  // Apply optional auth to all loadboard routes (permissions checked when token present)
+  server.addHook('preHandler', optionalAuth);
+
   const getOrgId = async () => {
     const org = await server.prisma.organization.findFirst({ select: { id: true } });
     return org?.id || 'default';
