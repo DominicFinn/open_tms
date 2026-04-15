@@ -18,6 +18,7 @@ import { ICommandBus } from '../../commands/CommandBus.js';
 import { CREATE_AGENT_DECISION } from '../../commands/agentDecisions/CreateAgentDecisionCommand.js';
 import { CREATE_ISSUE } from '../../commands/issues/CreateIssueCommand.js';
 import { ESCALATE_ISSUE } from '../../commands/issues/EscalateIssueCommand.js';
+import { AutomationRuleHandler } from './AutomationRuleHandler.js';
 import { randomUUID } from 'crypto';
 
 /** Unified condition format shared between agent decisions and automation rules */
@@ -118,12 +119,16 @@ export class TriageAgentHandler implements IEventHandler {
   };
 
   private configCache: LoadedConfig | null = null;
+  private automationRules: AutomationRuleHandler | null;
 
   constructor(
     private prisma: PrismaClient,
     private llm: ILlmProvider,
     private commandBus: ICommandBus,
-  ) {}
+    automationRules?: AutomationRuleHandler | null,
+  ) {
+    this.automationRules = automationRules ?? null;
+  }
 
   async handle(event: DomainEvent): Promise<void> {
     // 0. Load config (cached, 60s TTL)
@@ -139,10 +144,19 @@ export class TriageAgentHandler implements IEventHandler {
     const correlationId = randomUUID();
 
     try {
-      // 1. Gather context
+      // 1. Try automation rules first (cheap, deterministic)
+      if (this.automationRules) {
+        const handled = await this.automationRules.tryHandle(event);
+        if (handled) {
+          console.log(`[TriageAgent] Event ${event.type} on ${event.entityId} handled by automation rule — skipping LLM`);
+          return;
+        }
+      }
+
+      // 2. Gather context
       const context = await this.gatherContext(event);
 
-      // 2. Check for recent duplicate decisions (debounce)
+      // 3. Check for recent duplicate decisions (debounce)
       const deduplicationWindow = config.deduplicationWindowMinutes;
       const recentDecision = await this.findRecentDecision(event, deduplicationWindow);
       if (recentDecision) {
@@ -150,7 +164,7 @@ export class TriageAgentHandler implements IEventHandler {
         return;
       }
 
-      // 3. Build prompt (with template variable replacement) and call LLM
+      // 4. Build prompt (with template variable replacement) and call LLM
       const messages = this.buildPrompt(config.systemPrompt, event, context);
       const llmStart = Date.now();
       const llmResponse = await this.llm.complete({
@@ -160,10 +174,10 @@ export class TriageAgentHandler implements IEventHandler {
       });
       const durationMs = Date.now() - llmStart;
 
-      // 4. Parse the structured response
+      // 5. Parse the structured response
       let decision = this.parseDecision(llmResponse.content);
 
-      // 5. Apply confidence threshold
+      // 6. Apply confidence threshold
       if (config.confidenceThreshold > 0 && decision.confidence < config.confidenceThreshold && decision.actionType !== 'no_action') {
         console.log(`[TriageAgent] Confidence ${decision.confidence} below threshold ${config.confidenceThreshold}, overriding to no_action`);
         decision = {
@@ -173,10 +187,10 @@ export class TriageAgentHandler implements IEventHandler {
         };
       }
 
-      // 6. Execute the action
+      // 7. Execute the action
       const actionResult = await this.executeAction(event, decision, correlationId);
 
-      // 7. Log the decision (with config traceability)
+      // 8. Log the decision (with config traceability)
       await this.logDecision(event, context, decision, messages, llmResponse, actionResult, correlationId, durationMs, config);
 
       console.log(`[TriageAgent] ${event.type} on ${event.entityType}/${event.entityId} — ${decision.actionType} (confidence: ${decision.confidence})`);

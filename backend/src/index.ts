@@ -68,6 +68,8 @@ import { slaReportRoutes } from './routes/slaReports.js';
 import { mapRoutes } from './routes/map.js';
 import { locationOpsRoutes } from './routes/locationOps.js';
 import { warehouseRoutes } from './routes/warehouse.js';
+import { warehouseZoneRoutes } from './routes/warehouseZones.js';
+import { receivingRoutes } from './routes/receiving.js';
 import { agentDecisionRoutes } from './routes/agentDecisions.js';
 import { llmSettingsRoutes } from './routes/llmSettings.js';
 import { agentConfigRoutes } from './routes/agentConfig.js';
@@ -174,6 +176,8 @@ async function start() {
   await server.register(mapRoutes);
   await server.register(locationOpsRoutes);
   await server.register(warehouseRoutes);
+  await server.register(warehouseZoneRoutes);
+  await server.register(receivingRoutes);
   await server.register(agentDecisionRoutes);
   await server.register(llmSettingsRoutes);
   await server.register(agentConfigRoutes);

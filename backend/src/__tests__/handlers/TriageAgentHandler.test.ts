@@ -1,4 +1,5 @@
 import { TriageAgentHandler, DEFAULT_TRIAGE_EVENTS } from '../../events/handlers/TriageAgentHandler';
+import { AutomationRuleHandler } from '../../events/handlers/AutomationRuleHandler';
 import { EVENT_TYPES } from '../../events/eventTypes';
 import { createTestEvent } from '../helpers/testUtils';
 import { ILlmProvider, LlmCompletionRequest, LlmCompletionResponse } from '../../services/llm/ILlmProvider';
@@ -496,5 +497,102 @@ describe('TriageAgentHandler', () => {
     const decisionPayload = dispatched[0].payload as any;
     expect(decisionPayload.agentConfigId).toBe('config-42');
     expect(decisionPayload.promptVersionId).toBe('version-7');
+  });
+
+  // ── Pipeline: automation rules suppress LLM ───────────────────
+
+  it('skips LLM when automation rule handles the event', async () => {
+    const mockLlm = createMockLlm('{}');
+    const { bus } = createMockCommandBus();
+
+    // Create a mock AutomationRuleHandler that always matches
+    const mockAutomationRules = {
+      tryHandle: jest.fn().mockResolvedValue(true),
+    } as unknown as AutomationRuleHandler;
+
+    const handler = new TriageAgentHandler(
+      createMockPrisma(),
+      mockLlm,
+      bus as any,
+      mockAutomationRules,
+    );
+
+    const event = createTestEvent(
+      EVENT_TYPES.SHIPMENT_EXCEPTION,
+      'shipment', 'ship-1',
+      { exceptionType: 'eta_critical_delay' },
+    );
+
+    await handler.handle(event);
+
+    // Automation rules should have been called
+    expect(mockAutomationRules.tryHandle).toHaveBeenCalledWith(event);
+    // LLM should NOT have been called
+    expect(mockLlm.complete).not.toHaveBeenCalled();
+  });
+
+  it('calls LLM when automation rule does not match', async () => {
+    const llmResponse = JSON.stringify({
+      summary: 'No rule matched, LLM decided',
+      reasoning: 'Fallback to LLM triage.',
+      actionType: 'no_action',
+      confidence: 0.85,
+    });
+    const mockLlm = createMockLlm(llmResponse);
+    const { bus } = createMockCommandBus();
+
+    // Create a mock AutomationRuleHandler that never matches
+    const mockAutomationRules = {
+      tryHandle: jest.fn().mockResolvedValue(false),
+    } as unknown as AutomationRuleHandler;
+
+    const handler = new TriageAgentHandler(
+      createMockPrisma(),
+      mockLlm,
+      bus as any,
+      mockAutomationRules,
+    );
+
+    const event = createTestEvent(
+      EVENT_TYPES.SHIPMENT_EXCEPTION,
+      'shipment', 'ship-1',
+      { exceptionType: 'temperature_excursion' },
+    );
+
+    await handler.handle(event);
+
+    // Both should have been called
+    expect(mockAutomationRules.tryHandle).toHaveBeenCalledWith(event);
+    expect(mockLlm.complete).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls LLM when no automation rule handler is configured', async () => {
+    const llmResponse = JSON.stringify({
+      summary: 'No rules configured',
+      reasoning: 'Direct LLM triage.',
+      actionType: 'no_action',
+      confidence: 0.9,
+    });
+    const mockLlm = createMockLlm(llmResponse);
+    const { bus } = createMockCommandBus();
+
+    // No automation rules passed (null)
+    const handler = new TriageAgentHandler(
+      createMockPrisma(),
+      mockLlm,
+      bus as any,
+      null,
+    );
+
+    const event = createTestEvent(
+      EVENT_TYPES.SHIPMENT_EXCEPTION,
+      'shipment', 'ship-1',
+      { exceptionType: 'eta_critical_delay' },
+    );
+
+    await handler.handle(event);
+
+    // LLM should be called directly
+    expect(mockLlm.complete).toHaveBeenCalledTimes(1);
   });
 });

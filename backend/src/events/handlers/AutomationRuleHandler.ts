@@ -1,9 +1,10 @@
 /**
  * AutomationRuleHandler — evaluates deterministic automation rules against events.
  *
- * Runs with higher priority than the triage agent. When a rule matches and
- * executes an action, it writes a deduplication marker so the triage agent
- * skips the event (rules suppress agent).
+ * Called by TriageAgentHandler as the first step in the triage pipeline.
+ * When a rule matches it executes the action, logs the result, and returns
+ * true so the caller knows to skip the LLM. This keeps the pipeline
+ * sequential: cheap deterministic rules first, expensive LLM only as fallback.
  *
  * Supports both simple skills (single action) and skill chains (multi-step
  * with question branching). Uses the SkillRegistry for extensible actions.
@@ -11,7 +12,6 @@
 
 import { PrismaClient, AutomationRule } from '@prisma/client';
 import { DomainEvent } from '../DomainEvent.js';
-import { IEventHandler } from '../IEventHandler.js';
 import { evaluateConditions, RuleCondition, EvaluationContext } from '../../services/automation/ConditionEvaluator.js';
 import { SkillRegistry } from '../../services/skills/SkillRegistry.js';
 import { SkillChainExecutor } from '../../services/skills/SkillChainExecutor.js';
@@ -20,21 +20,7 @@ import { resolveFields } from '../../services/skills/TemplateResolver.js';
 
 const RULES_CACHE_TTL_MS = 30_000;
 
-export class AutomationRuleHandler implements IEventHandler {
-  readonly name = 'automation.rules';
-  readonly eventPatterns = [
-    'shipment.*',
-    'sla.*',
-    'cargo.*',
-    'cold_chain.*',
-  ];
-  readonly options = {
-    concurrency: 4,
-    retryLimit: 2,
-    expireInSeconds: 60,
-    priority: 5,
-  };
-
+export class AutomationRuleHandler {
   private rulesCache: { rules: AutomationRule[]; loadedAt: number } | null = null;
   private chainExecutor: SkillChainExecutor;
 
@@ -45,12 +31,17 @@ export class AutomationRuleHandler implements IEventHandler {
     this.chainExecutor = new SkillChainExecutor(skillRegistry, prisma);
   }
 
-  async handle(event: DomainEvent): Promise<void> {
+  /**
+   * Try to match automation rules against the event.
+   * Returns true if a rule matched and handled the event (caller should skip LLM).
+   * Returns false if no rule matched (caller should proceed to LLM).
+   */
+  async tryHandle(event: DomainEvent): Promise<boolean> {
     const rules = await this.loadRules(event.orgId);
-    if (rules.length === 0) return;
+    if (rules.length === 0) return false;
 
     const matchingPatternRules = rules.filter((r) => this.matchesEventPattern(event.type, r.eventPattern));
-    if (matchingPatternRules.length === 0) return;
+    if (matchingPatternRules.length === 0) return false;
 
     const evalContext: EvaluationContext = {
       event: {
@@ -66,7 +57,7 @@ export class AutomationRuleHandler implements IEventHandler {
 
     for (const rule of sorted) {
       const startMs = Date.now();
-      const conditions = rule.conditions as RuleCondition[];
+      const conditions = rule.conditions as unknown as RuleCondition[];
       const result = evaluateConditions(conditions, evalContext);
       const evaluationMs = Date.now() - startMs;
 
@@ -80,12 +71,14 @@ export class AutomationRuleHandler implements IEventHandler {
           data: { executionCount: { increment: 1 }, lastExecutedAt: new Date() },
         });
 
-        await this.writeAgentSuppression(event, rule);
+        await this.logDecision(event, rule);
 
         console.log(`[AutomationRule] Rule "${rule.name}" matched ${event.type} on ${event.entityType}/${event.entityId} — ${rule.actionType}`);
-        return;
+        return true;
       }
     }
+
+    return false;
   }
 
   // ── Rule loading (cached) ──────────────────────────────────────
@@ -191,16 +184,16 @@ export class AutomationRuleHandler implements IEventHandler {
         entityType: event.entityType,
         entityId: event.entityId,
         actionType: rule.actionType,
-        actionResult,
+        actionResult: actionResult as any,
         conditionsMatched,
         evaluationMs,
       },
     });
   }
 
-  // ── Agent suppression ──────────────────────────────────────────
+  // ── Decision logging (audit trail for deterministic rules) ─────
 
-  private async writeAgentSuppression(event: DomainEvent, rule: AutomationRule): Promise<void> {
+  private async logDecision(event: DomainEvent, rule: AutomationRule): Promise<void> {
     await this.prisma.agentDecision.create({
       data: {
         orgId: event.orgId,
@@ -215,7 +208,7 @@ export class AutomationRuleHandler implements IEventHandler {
         context: {},
         actionType: rule.actionType,
         confidence: 1.0,
-        matchedConditions: rule.conditions,
+        matchedConditions: rule.conditions as any,
       },
     });
   }

@@ -53,6 +53,10 @@ model Customer {
   // Custom fields
   customFieldVersionId String?              // Version of custom field definitions used
   customFieldValues    Json?                // { "fieldKey": value, ... }
+
+  // WMS relations
+  ownedTrackableUnits  TrackableUnit[]  @relation("OwnedUnits")
+  ownedInventory       InventoryRecord[] @relation("InventoryOwner")
 }
 
 model Location {
@@ -103,6 +107,21 @@ model Location {
 
   // Warehouse app preferences
   preferredLocationId  String?            // Favourite origin location for warehouse app
+
+  // WMS relations
+  warehouseZones       WarehouseZone[]
+  warehouseAisles      WarehouseAisle[]
+  warehouseBins        WarehouseBin[]
+  inventoryRecords     InventoryRecord[]
+  receivingAppointments ReceivingAppointment[]
+  receivingTasks       ReceivingTask[]
+  putawayRules         PutawayRule[]
+  putawayTasks         PutawayTask[]
+  waveTemplates        WaveTemplate[]
+  waves                Wave[]
+  pickTasks            PickTask[]
+  packTasks            PackTask[]
+  stagingAssignments   StagingAssignment[]
 }
 
 model Shipment {
@@ -605,6 +624,9 @@ model OrderLineItem {
   freightClass    String?               // 50, 55, 60, 65, 70, 77.5, 85, 92.5, 100, 110, 125, 150, 175, 200, 250, 300, 400, 500
   nmfcCode        String?               // National Motor Freight Classification code
 
+  // WMS relations
+  allocations     Allocation[]
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
@@ -751,12 +773,41 @@ model TrackableUnit {
   cargoScans      CargoScan[]
   discrepancies   CargoDiscrepancy[]
 
+  // WMS fields
+  currentBinId    String?
+  currentBin      WarehouseBin?    @relation("UnitCurrentBin", fields: [currentBinId], references: [id])
+  parentUnitId    String?
+  parentUnit      TrackableUnit?   @relation("UnitNesting", fields: [parentUnitId], references: [id])
+  childUnits      TrackableUnit[]  @relation("UnitNesting")
+  currentZoneId   String?
+  currentZone     WarehouseZone?   @relation("UnitCurrentZone", fields: [currentZoneId], references: [id])
+  lotNumber       String?
+  expiryDate      DateTime?
+  receivedAt      DateTime?
+  ownerCustomerId String?
+  ownerCustomer   Customer?        @relation("OwnedUnits", fields: [ownerCustomerId], references: [id])
+  qualityStatus   String           @default("available") // available, hold, quarantine, damaged
+
+  // WMS task relations
+  putawayTasks    PutawayTask[]
+  receivingLines  ReceivingLine[]
+  pickLines       PickLine[]
+  packLines       PackLine[]
+  allocations     Allocation[]
+  inventoryTransactions InventoryTransaction[]
+  stagingAssignments    StagingAssignment[]
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
   @@unique([orderId, sequenceNumber])
   @@index([orderId])
   @@index([currentStopId])
+  @@index([currentBinId])
+  @@index([currentZoneId])
+  @@index([parentUnitId])
+  @@index([ownerCustomerId])
+  @@index([lotNumber])
 }
 
 model AuditLog {
@@ -3697,4 +3748,608 @@ model SOPAuditResponse {
 
   @@index([auditId])
   @@index([checklistItemId])
+}
+
+// ═══════════════════════════════════════════════════════════════
+// WMS (Warehouse Management System) Models
+// ═══════════════════════════════════════════════════════════════
+
+model WarehouseZone {
+  id              String   @id @default(uuid())
+  locationId      String
+  location        Location @relation(fields: [locationId], references: [id])
+  name            String                       // e.g. "Bulk A", "Dock 3", "Cold Store"
+  zoneType        String                       // receiving, bulk_storage, pick_face, staging, packing, shipping_dock, quarantine, returns, cross_dock
+  temperatureZone String?                      // ambient, refrigerated, frozen
+  hazmatCertified Boolean  @default(false)
+  maxWeightKg     Float?
+  maxVolumeCbm    Float?
+  sortOrder       Int      @default(0)         // display/walk order
+  active          Boolean  @default(true)
+
+  orgId           String
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  aisles          WarehouseAisle[]
+  bins            WarehouseBin[]
+  indoorAnchors   IndoorZoneAnchor[]
+  unitsInZone     TrackableUnit[]  @relation("UnitCurrentZone")
+  pickTasks       PickTask[]
+
+  @@index([locationId])
+  @@index([orgId])
+  @@index([zoneType])
+}
+
+model WarehouseAisle {
+  id          String   @id @default(uuid())
+  zoneId      String
+  zone        WarehouseZone @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  locationId  String
+  location    Location @relation(fields: [locationId], references: [id])
+  name        String                           // e.g. "A", "B"
+  sortOrder   Int      @default(0)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  bins        WarehouseBin[]
+
+  @@index([zoneId])
+  @@index([locationId])
+}
+
+model WarehouseBin {
+  id                  String   @id @default(uuid())
+  zoneId              String
+  zone                WarehouseZone @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  aisleId             String?
+  aisle               WarehouseAisle? @relation(fields: [aisleId], references: [id])
+  locationId          String
+  location            Location @relation(fields: [locationId], references: [id])
+  label               String                   // unique within location, e.g. "BULK-A-01-03-B"
+  binType             String                   // pallet, shelf, floor, dock_door, staging, pack_station
+  maxWeightKg         Float?
+  maxVolumeCbm        Float?
+  maxPalletPositions  Int?
+  temperatureZone     String?                  // inherits from zone if null
+  hazmatCertified     Boolean  @default(false) // inherits from zone if not set
+  level               Int?                     // vertical position (lower = easier to reach)
+  walkSequence        Int      @default(0)     // monotonically increasing along natural walk path
+  active              Boolean  @default(true)
+
+  // Denormalized running totals
+  currentWeightKg     Float    @default(0)
+  currentVolumeCbm    Float    @default(0)
+  currentPalletCount  Int      @default(0)
+
+  orgId               String
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  // Relations
+  unitsInBin          TrackableUnit[]  @relation("UnitCurrentBin")
+  inventoryRecords    InventoryRecord[]
+  putawayTasksAsSource  PutawayTask[]  @relation("PutawaySource")
+  putawayTasksAsTarget  PutawayTask[]  @relation("PutawayTarget")
+  pickLines           PickLine[]
+  packTasksAtStation  PackTask[]       @relation("PackStation")
+  stagingAssignments  StagingAssignment[]
+  receivingAppointmentsDock ReceivingAppointment[] @relation("AppointmentDock")
+  receivingTasksDock  ReceivingTask[]  @relation("ReceivingDock")
+
+  @@unique([locationId, label])
+  @@index([zoneId])
+  @@index([locationId])
+  @@index([orgId])
+  @@index([binType])
+  @@index([walkSequence])
+}
+
+model IndoorZoneAnchor {
+  id              String   @id @default(uuid())
+  zoneId          String
+  zone            WarehouseZone @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  anchorType      String                       // ble, wifi, uwb
+  bleUuid         String?
+  bleMajor        Int?
+  bleMinor        Int?
+  bleRssiThreshold Int?                        // proximity threshold (e.g. -70 dBm)
+  wifiSsid        String?
+  wifiBssid       String?
+  uwbAnchorId     String?
+  name            String?                      // friendly name, e.g. "Dock 3 Reader"
+  lat             Float?                       // indoor coordinate (optional, for map rendering)
+  lng             Float?
+  active          Boolean  @default(true)
+
+  orgId           String
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([zoneId])
+  @@index([orgId])
+}
+
+model ProductUom {
+  id              String   @id @default(uuid())
+  sku             String
+  uomCode         String                       // EA, INNER, CASE, PALLET, or custom
+  parentUomCode   String?                      // which UOM this rolls up into
+  conversionFactor Int     @default(1)          // how many children fit in one of this
+  lengthMm        Int?
+  widthMm         Int?
+  heightMm        Int?
+  weightGrams     Int?
+  barcodeGtin     String?                      // GTIN/UPC/EAN for scanning at this UOM
+  isDefault       Boolean  @default(false)
+
+  orgId           String
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([orgId, sku, uomCode])
+  @@index([orgId])
+  @@index([sku])
+  @@index([barcodeGtin])
+}
+
+model InventoryRecord {
+  id                  String   @id @default(uuid())
+  locationId          String
+  location            Location @relation(fields: [locationId], references: [id])
+  binId               String
+  bin                 WarehouseBin @relation(fields: [binId], references: [id])
+  sku                 String
+  uomCode             String   @default("EA")
+  quantityOnHand      Int      @default(0)
+  quantityAllocated   Int      @default(0)
+  quantityAvailable   Int      @default(0)     // onHand - allocated
+  quantityOnHold      Int      @default(0)
+  ownerCustomerId     String?
+  ownerCustomer       Customer? @relation("InventoryOwner", fields: [ownerCustomerId], references: [id])
+  lotNumber           String?
+  expiryDate          DateTime?
+  lastCountedAt       DateTime?
+
+  orgId               String
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  // Relations
+  transactions        InventoryTransaction[]
+  allocations         Allocation[]
+  pickLines           PickLine[]
+
+  @@unique([binId, sku, uomCode, lotNumber, ownerCustomerId])
+  @@index([locationId])
+  @@index([orgId])
+  @@index([sku])
+  @@index([ownerCustomerId])
+}
+
+model InventoryTransaction {
+  id                  String   @id @default(uuid())
+  inventoryRecordId   String
+  inventoryRecord     InventoryRecord @relation(fields: [inventoryRecordId], references: [id])
+  transactionType     String                   // receive, putaway, pick, adjust, transfer, cycle_count, replenish, uom_converted
+  quantityChange      Int                      // positive for in, negative for out
+  previousQuantity    Int
+  newQuantity         Int
+  referenceType       String?                  // receiving_task, pick_task, adjustment, cycle_count
+  referenceId         String?
+  reasonCode          String?                  // damage, expired, recount, return, scrap, found
+  performedBy         String?
+  trackableUnitId     String?
+  trackableUnit       TrackableUnit? @relation(fields: [trackableUnitId], references: [id])
+
+  orgId               String
+
+  createdAt           DateTime @default(now())
+
+  @@index([inventoryRecordId])
+  @@index([orgId])
+  @@index([transactionType])
+  @@index([createdAt])
+}
+
+model Allocation {
+  id                  String   @id @default(uuid())
+  orderLineItemId     String
+  orderLineItem       OrderLineItem @relation(fields: [orderLineItemId], references: [id])
+  inventoryRecordId   String
+  inventoryRecord     InventoryRecord @relation(fields: [inventoryRecordId], references: [id])
+  trackableUnitId     String?
+  trackableUnit       TrackableUnit? @relation(fields: [trackableUnitId], references: [id])
+  quantity            Int
+  uomCode             String   @default("EA")
+  state               String   @default("soft")  // soft, hard, picked, released
+  lotNumber           String?
+  allocatedAt         DateTime @default(now())
+  expiresAt           DateTime?                    // soft allocations auto-expire
+
+  orgId               String
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([orderLineItemId])
+  @@index([inventoryRecordId])
+  @@index([orgId])
+  @@index([state])
+}
+
+// ── Receiving ────────────────────────────────────────────────
+
+model ReceivingAppointment {
+  id                  String   @id @default(uuid())
+  locationId          String
+  location            Location @relation(fields: [locationId], references: [id])
+  inboundShipmentId   String?
+  dockBinId           String?
+  dockBin             WarehouseBin? @relation("AppointmentDock", fields: [dockBinId], references: [id])
+  scheduledAt         DateTime
+  scheduledEndAt      DateTime
+  status              String   @default("scheduled") // scheduled, checked_in, receiving, completed, no_show, cancelled
+  carrierName         String?
+  trailerNumber       String?
+  sealNumber          String?
+  asnReference        String?
+
+  orgId               String
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  // Relations
+  receivingTasks      ReceivingTask[]
+
+  @@index([locationId])
+  @@index([orgId])
+  @@index([scheduledAt])
+  @@index([status])
+}
+
+model ReceivingTask {
+  id                  String   @id @default(uuid())
+  locationId          String
+  location            Location @relation(fields: [locationId], references: [id])
+  appointmentId       String?
+  appointment         ReceivingAppointment? @relation(fields: [appointmentId], references: [id])
+  inboundShipmentId   String?
+  dockBinId           String?
+  dockBin             WarehouseBin? @relation("ReceivingDock", fields: [dockBinId], references: [id])
+  status              String   @default("pending") // pending, in_progress, inspection, completed, cancelled
+  receivingType       String                       // asn, blind
+  crossDock           Boolean  @default(false)
+  assignedToUserId    String?
+
+  orgId               String
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  // Relations
+  lines               ReceivingLine[]
+  putawayTasks        PutawayTask[]
+
+  @@index([locationId])
+  @@index([orgId])
+  @@index([status])
+}
+
+model ReceivingLine {
+  id                  String   @id @default(uuid())
+  receivingTaskId     String
+  receivingTask       ReceivingTask @relation(fields: [receivingTaskId], references: [id], onDelete: Cascade)
+  orderLineItemId     String?
+  trackableUnitId     String?
+  trackableUnit       TrackableUnit? @relation(fields: [trackableUnitId], references: [id])
+  sku                 String
+  uomCode             String   @default("EA")
+  expectedQuantity    Int?
+  receivedQuantity    Int      @default(0)
+  damagedQuantity     Int      @default(0)
+  inspectionStatus    String   @default("pending") // pending, pass, fail, quarantine
+  lotNumber           String?
+  expiryDate          DateTime?
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([receivingTaskId])
+}
+
+// ── Putaway ──────────────────────────────────────────────────
+
+model PutawayRule {
+  id                    String   @id @default(uuid())
+  locationId            String
+  location              Location @relation(fields: [locationId], references: [id])
+  name                  String
+  priority              Int      @default(50)        // lower = higher priority
+  active                Boolean  @default(true)
+
+  // Criteria (all nullable = match any)
+  skuPattern            String?                      // glob pattern, e.g. "PHARMA-*"
+  temperatureRequirement String?                     // refrigerated, frozen
+  hazmat                Boolean?
+  customerId            String?
+  velocityClass         String?                      // A, B, C
+  unitType              String?                      // pallet, tote, box
+  crossDockSortBy       String?                      // destination, carrier, route
+
+  // Action
+  targetType            String                       // zone, specific_bin, next_available_in_zone
+  targetZoneId          String?
+  targetBinId           String?
+  preferLevel           String?                      // low, medium, high
+
+  orgId                 String
+
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([locationId])
+  @@index([orgId])
+  @@index([priority])
+}
+
+model PutawayTask {
+  id                  String   @id @default(uuid())
+  locationId          String
+  location            Location @relation(fields: [locationId], references: [id])
+  receivingTaskId     String?
+  receivingTask       ReceivingTask? @relation(fields: [receivingTaskId], references: [id])
+  trackableUnitId     String
+  trackableUnit       TrackableUnit @relation(fields: [trackableUnitId], references: [id])
+  sourceBinId         String?
+  sourceBin           WarehouseBin? @relation("PutawaySource", fields: [sourceBinId], references: [id])
+  targetBinId         String
+  targetBin           WarehouseBin  @relation("PutawayTarget", fields: [targetBinId], references: [id])
+  status              String   @default("pending") // pending, assigned, in_progress, completed, cancelled
+  putawayType         String                       // directed, manual, replenishment
+  assignedToUserId    String?
+
+  orgId               String
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([locationId])
+  @@index([orgId])
+  @@index([status])
+  @@index([trackableUnitId])
+}
+
+// ── Waves & Picking ──────────────────────────────────────────
+
+model WaveTemplate {
+  id              String   @id @default(uuid())
+  locationId      String
+  location        Location @relation(fields: [locationId], references: [id])
+  name            String
+  groupingRules   Json?                          // { customer, carrier, serviceLevel, shipFrom, shipCompleteOnly }
+  cutoffTime      String?                        // HH:MM local
+  pickStrategy    String   @default("discrete")  // discrete, batch, zone, wave
+  minOrders       Int?
+  maxOrders       Int?
+  maxLabourHours  Float?
+  priority        Int      @default(50)
+  releaseSchedule String?                        // cron expression for auto-release
+  autoRelease     Boolean  @default(false)
+  active          Boolean  @default(true)
+
+  orgId           String
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  waves           Wave[]
+
+  @@index([locationId])
+  @@index([orgId])
+}
+
+model Wave {
+  id              String   @id @default(uuid())
+  locationId      String
+  location        Location @relation(fields: [locationId], references: [id])
+  templateId      String?
+  template        WaveTemplate? @relation(fields: [templateId], references: [id])
+  waveNumber      String                         // auto-generated, e.g. "W-2026-04-14-001"
+  status          String   @default("planning")  // planning, released, in_progress, completed, cancelled
+  pickStrategy    String   @default("discrete")
+  groupingCriteria Json?
+  orderCount      Int      @default(0)
+  lineCount       Int      @default(0)
+  projectedCompletionAt DateTime?
+  cutoffAt        DateTime?
+
+  orgId           String
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  waveOrders      WaveOrder[]
+  pickTasks       PickTask[]
+
+  @@unique([orgId, waveNumber])
+  @@index([locationId])
+  @@index([orgId])
+  @@index([status])
+}
+
+model WaveOrder {
+  id        String @id @default(uuid())
+  waveId    String
+  wave      Wave   @relation(fields: [waveId], references: [id], onDelete: Cascade)
+  orderId   String
+  priority  Int    @default(0)
+
+  @@unique([waveId, orderId])
+  @@index([waveId])
+  @@index([orderId])
+}
+
+model PickTask {
+  id              String   @id @default(uuid())
+  locationId      String
+  location        Location @relation(fields: [locationId], references: [id])
+  waveId          String?
+  wave            Wave?    @relation(fields: [waveId], references: [id])
+  orderId         String?
+  assignedToUserId String?
+  status          String   @default("pending") // pending, assigned, in_progress, completed, short_pick, cancelled
+  pickType        String                       // discrete, batch, zone
+  zoneId          String?
+  zone            WarehouseZone? @relation(fields: [zoneId], references: [id])
+  totalLines      Int      @default(0)
+  completedLines  Int      @default(0)
+
+  orgId           String
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  pickLines       PickLine[]
+  packTasks       PackTask[]
+
+  @@index([locationId])
+  @@index([orgId])
+  @@index([waveId])
+  @@index([status])
+}
+
+model PickLine {
+  id                  String   @id @default(uuid())
+  pickTaskId          String
+  pickTask            PickTask @relation(fields: [pickTaskId], references: [id], onDelete: Cascade)
+  orderId             String
+  orderLineItemId     String
+  inventoryRecordId   String
+  inventoryRecord     InventoryRecord @relation(fields: [inventoryRecordId], references: [id])
+  binId               String
+  bin                 WarehouseBin @relation(fields: [binId], references: [id])
+  trackableUnitId     String?
+  trackableUnit       TrackableUnit? @relation(fields: [trackableUnitId], references: [id])
+  sku                 String
+  uomCode             String   @default("EA")
+  requestedQuantity   Int
+  pickedQuantity      Int      @default(0)
+  status              String   @default("pending") // pending, picked, short, skipped
+  walkSequence        Int      @default(0)
+  lotNumber           String?
+  shortPickAction     String?                      // backorder, substitute, cancel_line
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([pickTaskId])
+  @@index([binId])
+  @@index([walkSequence])
+}
+
+// ── Packing ──────────────────────────────────────────────────
+
+model PackTask {
+  id              String   @id @default(uuid())
+  locationId      String
+  location        Location @relation(fields: [locationId], references: [id])
+  orderId         String
+  pickTaskId      String?
+  pickTask        PickTask? @relation(fields: [pickTaskId], references: [id])
+  assignedToUserId String?
+  packStationBinId String?
+  packStationBin  WarehouseBin? @relation("PackStation", fields: [packStationBinId], references: [id])
+  status          String   @default("pending") // pending, in_progress, completed, cancelled
+
+  orgId           String
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  packLines       PackLine[]
+
+  @@index([locationId])
+  @@index([orgId])
+  @@index([orderId])
+  @@index([status])
+}
+
+model PackLine {
+  id                  String   @id @default(uuid())
+  packTaskId          String
+  packTask            PackTask @relation(fields: [packTaskId], references: [id], onDelete: Cascade)
+  orderLineItemId     String
+  trackableUnitId     String
+  trackableUnit       TrackableUnit @relation(fields: [trackableUnitId], references: [id])
+  sku                 String
+  expectedQuantity    Int
+  packedQuantity      Int      @default(0)
+  status              String   @default("pending") // pending, verified, packed
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([packTaskId])
+}
+
+model CartonCatalogue {
+  id              String   @id @default(uuid())
+  locationId      String
+  name            String                         // e.g. "Small Mailer", "Medium Box"
+  lengthMm        Int
+  widthMm         Int
+  heightMm        Int
+  maxWeightGrams  Int
+  unitCostCents   Int?
+  active          Boolean  @default(true)
+
+  orgId           String
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([locationId])
+  @@index([orgId])
+}
+
+// ── Loading & Staging ────────────────────────────────────────
+
+model StagingAssignment {
+  id              String   @id @default(uuid())
+  locationId      String
+  location        Location @relation(fields: [locationId], references: [id])
+  orderId         String
+  shipmentId      String?
+  trackableUnitId String
+  trackableUnit   TrackableUnit @relation(fields: [trackableUnitId], references: [id])
+  stagingBinId    String
+  stagingBin      WarehouseBin @relation(fields: [stagingBinId], references: [id])
+  loadSequence    Int?
+  status          String   @default("staged") // staged, loading, loaded, dispatched
+
+  orgId           String
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([locationId])
+  @@index([orgId])
+  @@index([orderId])
+  @@index([shipmentId])
+  @@index([status])
 }

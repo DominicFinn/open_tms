@@ -151,15 +151,18 @@ export async function registerEventHandlers(
   // Brokerage: margin alert - creates issues when margin drops below threshold
   handlers.push(new MarginAlertHandler(prisma));
 
-  // Add automation rule handler (runs before triage agent — deterministic rules take priority)
-  if (skillRegistry) {
-    handlers.push(new AutomationRuleHandler(prisma, skillRegistry));
-    console.log('[EventBus] Automation rule handler enabled');
+  // Build automation rule handler (used inline by triage agent, not as a separate queue)
+  const automationRuleHandler = skillRegistry
+    ? new AutomationRuleHandler(prisma, skillRegistry)
+    : null;
+  if (automationRuleHandler) {
+    console.log('[EventBus] Automation rules enabled (evaluated before LLM)');
   }
 
-  // Add triage agent handler if LLM provider and command bus are available
+  // Add triage agent handler — automation rules run first in its pipeline,
+  // LLM is only called when no deterministic rule matched
   if (llmProvider && commandBus) {
-    handlers.push(new TriageAgentHandler(prisma, llmProvider, commandBus));
+    handlers.push(new TriageAgentHandler(prisma, llmProvider, commandBus, automationRuleHandler));
     console.log('[EventBus] Triage agent enabled (LLM provider configured)');
   }
 

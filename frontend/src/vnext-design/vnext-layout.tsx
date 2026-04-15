@@ -138,6 +138,26 @@ const APPS: AppDef[] = [
     ],
   },
   {
+    key: 'warehouse', icon: 'warehouse', label: 'Warehouse', basePath: '/wms',
+    sections: [
+      { title: 'Warehouse', items: [
+        { to: '/wms', icon: 'space_dashboard', label: 'Dashboard', end: true },
+        { to: '/wms/zones', icon: 'grid_view', label: 'Zones & Bins' },
+        { to: '/wms/inventory', icon: 'inventory_2', label: 'Inventory' },
+      ]},
+      { title: 'Inbound', items: [
+        { to: '/wms/receiving', icon: 'move_to_inbox', label: 'Receiving' },
+        { to: '/wms/putaway', icon: 'system_update_alt', label: 'Putaway' },
+      ]},
+      { title: 'Outbound', items: [
+        { to: '/wms/waves', icon: 'waves', label: 'Waves' },
+        { to: '/wms/picking', icon: 'shopping_cart', label: 'Picking' },
+        { to: '/wms/packing', icon: 'package_2', label: 'Packing' },
+        { to: '/wms/loading', icon: 'local_shipping', label: 'Loading' },
+      ]},
+    ],
+  },
+  {
     key: 'integrations', icon: 'hub', label: 'Integrations', basePath: '/integrations',
     sections: [
       { title: 'Integrations', items: [
@@ -181,6 +201,7 @@ const APPS: AppDef[] = [
 ];
 
 function detectApp(pathname: string): string {
+  if (pathname.startsWith('/wms')) return 'warehouse';
   if (pathname.startsWith('/quality')) return 'quality';
   if (pathname.startsWith('/finance')) return 'finance';
   if (pathname.startsWith('/integrations')) return 'integrations';

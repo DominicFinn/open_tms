@@ -222,6 +222,28 @@ export const EVENT_TYPES = {
   SOP_AUDIT_STARTED: 'sop_audit.started',
   SOP_AUDIT_COMPLETED: 'sop_audit.completed',
   SOP_AUDIT_FAILED: 'sop_audit.failed',
+
+  // WMS: Warehouse Zones & Bins
+  WAREHOUSE_ZONE_CREATED: 'warehouse_zone.created',
+  WAREHOUSE_ZONE_UPDATED: 'warehouse_zone.updated',
+  WAREHOUSE_ZONE_ARCHIVED: 'warehouse_zone.archived',
+  WAREHOUSE_BIN_CREATED: 'warehouse_bin.created',
+  WAREHOUSE_BIN_UPDATED: 'warehouse_bin.updated',
+  WAREHOUSE_BIN_ARCHIVED: 'warehouse_bin.archived',
+  WAREHOUSE_BIN_BULK_CREATED: 'warehouse_bin.bulk_created',
+
+  // WMS: Receiving
+  RECEIVING_APPOINTMENT_CREATED: 'receiving_appointment.created',
+  RECEIVING_APPOINTMENT_CHECKED_IN: 'receiving_appointment.checked_in',
+  RECEIVING_TASK_CREATED: 'receiving_task.created',
+  RECEIVING_TASK_STARTED: 'receiving_task.started',
+  RECEIVING_LINE_RECORDED: 'receiving_line.recorded',
+  RECEIVING_LINE_INSPECTED: 'receiving_line.inspected',
+  RECEIVING_TASK_COMPLETED: 'receiving_task.completed',
+
+  // WMS: Putaway
+  PUTAWAY_TASK_CREATED: 'putaway_task.created',
+  PUTAWAY_TASK_COMPLETED: 'putaway_task.completed',
 } as const;
 
 export type EventType = typeof EVENT_TYPES[keyof typeof EVENT_TYPES];
@@ -360,6 +382,24 @@ export const EVENT_SCHEMA_VERSIONS: Record<string, number> = {
   [EVENT_TYPES.SOP_AUDIT_STARTED]: 1,
   [EVENT_TYPES.SOP_AUDIT_COMPLETED]: 1,
   [EVENT_TYPES.SOP_AUDIT_FAILED]: 1,
+
+  // WMS
+  [EVENT_TYPES.WAREHOUSE_ZONE_CREATED]: 1,
+  [EVENT_TYPES.WAREHOUSE_ZONE_UPDATED]: 1,
+  [EVENT_TYPES.WAREHOUSE_ZONE_ARCHIVED]: 1,
+  [EVENT_TYPES.WAREHOUSE_BIN_CREATED]: 1,
+  [EVENT_TYPES.WAREHOUSE_BIN_UPDATED]: 1,
+  [EVENT_TYPES.WAREHOUSE_BIN_ARCHIVED]: 1,
+  [EVENT_TYPES.WAREHOUSE_BIN_BULK_CREATED]: 1,
+  [EVENT_TYPES.RECEIVING_APPOINTMENT_CREATED]: 1,
+  [EVENT_TYPES.RECEIVING_APPOINTMENT_CHECKED_IN]: 1,
+  [EVENT_TYPES.RECEIVING_TASK_CREATED]: 1,
+  [EVENT_TYPES.RECEIVING_TASK_STARTED]: 1,
+  [EVENT_TYPES.RECEIVING_LINE_RECORDED]: 1,
+  [EVENT_TYPES.RECEIVING_LINE_INSPECTED]: 1,
+  [EVENT_TYPES.RECEIVING_TASK_COMPLETED]: 1,
+  [EVENT_TYPES.PUTAWAY_TASK_CREATED]: 1,
+  [EVENT_TYPES.PUTAWAY_TASK_COMPLETED]: 1,
 };
 
 /**

@@ -108,6 +108,10 @@ export const TOKENS = {
   IQuoteRepository: Symbol.for('IQuoteRepository'),
   ILtlRatingService: Symbol.for('ILtlRatingService'),
 
+  // WMS tokens
+  IWarehouseZoneRepository: Symbol.for('IWarehouseZoneRepository'),
+  IReceivingRepository: Symbol.for('IReceivingRepository'),
+
   // Infrastructure tokens
   PrismaClient: Symbol.for('PrismaClient'),
   IFileStorageProvider: Symbol.for('IFileStorageProvider'),

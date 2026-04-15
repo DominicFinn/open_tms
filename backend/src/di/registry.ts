@@ -16,6 +16,8 @@ import { OrganizationRepository } from '../repositories/OrganizationRepository.j
 import { PendingLaneRequestsRepository } from '../repositories/PendingLaneRequestsRepository.js';
 import { ArrivalCriteriaRepository } from '../repositories/ArrivalCriteriaRepository.js';
 import { CargoTrackingRepository } from '../repositories/CargoTrackingRepository.js';
+import { WarehouseZoneRepository } from '../repositories/WarehouseZoneRepository.js';
+import { ReceivingRepository } from '../repositories/ReceivingRepository.js';
 import { LocationResolutionService } from '../services/LocationResolutionService.js';
 import { ArrivalCriteriaEvaluationService } from '../services/ArrivalCriteriaEvaluationService.js';
 import { ShipmentAssignmentService } from '../services/ShipmentAssignmentService.js';
@@ -164,6 +166,16 @@ import { CreateSOPChecklistCommandHandler } from '../commands/sopChecklists/Crea
 import { StartSOPAuditCommandHandler } from '../commands/sopChecklists/StartSOPAuditCommand.js';
 import { CompleteSOPAuditCommandHandler } from '../commands/sopChecklists/CompleteSOPAuditCommand.js';
 
+// WMS command handlers
+import { CreateWarehouseZoneCommandHandler } from '../commands/warehouse/CreateWarehouseZoneCommand.js';
+import { UpdateWarehouseZoneCommandHandler } from '../commands/warehouse/UpdateWarehouseZoneCommand.js';
+import { CreateWarehouseBinCommandHandler } from '../commands/warehouse/CreateWarehouseBinCommand.js';
+import { UpdateWarehouseBinCommandHandler } from '../commands/warehouse/UpdateWarehouseBinCommand.js';
+import { BulkCreateBinsCommandHandler } from '../commands/warehouse/BulkCreateBinsCommand.js';
+import { CreateReceivingTaskCommandHandler } from '../commands/warehouse/CreateReceivingTaskCommand.js';
+import { RecordReceivingLineCommandHandler } from '../commands/warehouse/RecordReceivingLineCommand.js';
+import { CompleteReceivingCommandHandler } from '../commands/warehouse/CompleteReceivingCommand.js';
+
 /**
  * Register all application dependencies
  */
@@ -210,6 +222,14 @@ export function registerDependencies(prisma: PrismaClient): void {
 
   container.singleton(TOKENS.ICargoTrackingRepository).toFactory(() => {
     return new CargoTrackingRepository(container.resolve(TOKENS.PrismaClient));
+  });
+
+  // WMS repositories
+  container.singleton(TOKENS.IWarehouseZoneRepository).toFactory(() => {
+    return new WarehouseZoneRepository(container.resolve(TOKENS.PrismaClient));
+  });
+  container.singleton(TOKENS.IReceivingRepository).toFactory(() => {
+    return new ReceivingRepository(container.resolve(TOKENS.PrismaClient));
   });
 
   // Register services as singletons
@@ -749,6 +769,18 @@ export function registerDependencies(prisma: PrismaClient): void {
     bus.register(new CreateSOPChecklistCommandHandler(prisma, eventBus));
     bus.register(new StartSOPAuditCommandHandler(prisma, eventBus));
     bus.register(new CompleteSOPAuditCommandHandler(prisma, eventBus));
+
+    // WMS commands
+    bus.register(new CreateWarehouseZoneCommandHandler(prisma, eventBus));
+    bus.register(new UpdateWarehouseZoneCommandHandler(prisma, eventBus));
+    bus.register(new CreateWarehouseBinCommandHandler(prisma, eventBus));
+    bus.register(new UpdateWarehouseBinCommandHandler(prisma, eventBus));
+    bus.register(new BulkCreateBinsCommandHandler(prisma, eventBus));
+
+    // WMS Receiving commands
+    bus.register(new CreateReceivingTaskCommandHandler(prisma, eventBus));
+    bus.register(new RecordReceivingLineCommandHandler(prisma, eventBus));
+    bus.register(new CompleteReceivingCommandHandler(prisma, eventBus));
 
     return bus;
   });

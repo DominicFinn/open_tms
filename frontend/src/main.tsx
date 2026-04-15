@@ -115,6 +115,22 @@ import VNextQualityCarrierScorecard from './vnext-design/VNextQualityCarrierScor
 import VNextQualityLaneAnalysis from './vnext-design/VNextQualityLaneAnalysis';
 import VNextQualityCapaEffectiveness from './vnext-design/VNextQualityCapaEffectiveness';
 
+// WMS Pages (VNext)
+import VNextWmsDashboard from './vnext-design/VNextWmsDashboard';
+import VNextWmsZones from './vnext-design/VNextWmsZones';
+import VNextWmsInventory from './vnext-design/VNextWmsInventory';
+import VNextWmsReceiving from './vnext-design/VNextWmsReceiving';
+import VNextWmsPutaway from './vnext-design/VNextWmsPutaway';
+import VNextWmsWaves from './vnext-design/VNextWmsWaves';
+import VNextWmsPicking from './vnext-design/VNextWmsPicking';
+import VNextWmsPacking from './vnext-design/VNextWmsPacking';
+import VNextWmsLoading from './vnext-design/VNextWmsLoading';
+import VNextWmsCreateZone from './vnext-design/VNextWmsCreateZone';
+import VNextWmsZoneDetail from './vnext-design/VNextWmsZoneDetail';
+import VNextWmsBulkBins from './vnext-design/VNextWmsBulkBins';
+import VNextWmsCreateReceiving from './vnext-design/VNextWmsCreateReceiving';
+import VNextWmsReceivingDetail from './vnext-design/VNextWmsReceivingDetail';
+
 // Warehouse App
 import { WarehouseLayout } from './warehouse/warehouse-layout';
 import WarehouseLogin from './warehouse/WarehouseLogin';
@@ -277,6 +293,23 @@ root.render(
           <Route path="finance/exports" element={<VNextFinanceExports />} />
           <Route path="finance/margin-reports" element={<VNextMarginReports />} />
           <Route path="finance/commissions" element={<VNextCommissions />} />
+
+          {/* WMS */}
+          <Route path="wms" element={<VNextWmsDashboard />} />
+          <Route path="wms/zones" element={<VNextWmsZones />} />
+          <Route path="wms/zones/create" element={<VNextWmsCreateZone />} />
+          <Route path="wms/zones/:id" element={<VNextWmsZoneDetail />} />
+          <Route path="wms/zones/:id/edit" element={<VNextWmsCreateZone />} />
+          <Route path="wms/zones/:zoneId/bins/bulk" element={<VNextWmsBulkBins />} />
+          <Route path="wms/inventory" element={<VNextWmsInventory />} />
+          <Route path="wms/receiving" element={<VNextWmsReceiving />} />
+          <Route path="wms/receiving/create" element={<VNextWmsCreateReceiving />} />
+          <Route path="wms/receiving/:id" element={<VNextWmsReceivingDetail />} />
+          <Route path="wms/putaway" element={<VNextWmsPutaway />} />
+          <Route path="wms/waves" element={<VNextWmsWaves />} />
+          <Route path="wms/picking" element={<VNextWmsPicking />} />
+          <Route path="wms/packing" element={<VNextWmsPacking />} />
+          <Route path="wms/loading" element={<VNextWmsLoading />} />
 
           {/* Integrations (sub-layout with tabs) */}
           <Route path="integrations" element={<VNextIntegrationsLayout />}>
