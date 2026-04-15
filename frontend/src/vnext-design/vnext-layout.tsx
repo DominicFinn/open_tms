@@ -76,13 +76,23 @@ const APPS: AppDef[] = [
     ],
   },
   {
-    key: 'reports', icon: 'assessment', label: 'Reports', basePath: '/documents',
+    key: 'reports', icon: 'assessment', label: 'Reports', basePath: '/reports',
     sections: [
-      { title: 'Reports', items: [
-        { to: '/documents', icon: 'description', label: 'Documents' },
-        { to: '/reports/daily', icon: 'assessment', label: 'Daily Report' },
+      { title: 'Overview', items: [
+        { to: '/reports', icon: 'space_dashboard', label: 'Dashboard', end: true },
+      ]},
+      { title: 'Operational', items: [
+        { to: '/reports/daily', icon: 'today', label: 'Daily Report' },
         { to: '/reports/locations', icon: 'location_on', label: 'Location Activity' },
         { to: '/sla', icon: 'timer', label: 'SLA Compliance' },
+      ]},
+      { title: 'Financial', items: [
+        { to: '/finance/margin-reports', icon: 'trending_up', label: 'Margin Reports' },
+        { to: '/finance/aging', icon: 'hourglass_top', label: 'AR Aging' },
+        { to: '/finance/exports', icon: 'download', label: 'Export to CSV' },
+      ]},
+      { title: 'Documents', items: [
+        { to: '/documents', icon: 'description', label: 'Documents' },
       ]},
     ],
   },

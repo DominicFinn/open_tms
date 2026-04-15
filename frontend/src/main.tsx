@@ -72,6 +72,7 @@ import VNextLoadBoard from './vnext-design/VNextLoadBoard';
 import VNextRoles from './vnext-design/VNextRoles';
 import VNextMarginReports from './vnext-design/VNextMarginReports';
 import VNextCommissions from './vnext-design/VNextCommissions';
+import VNextReportsDashboard from './vnext-design/VNextReportsDashboard';
 
 // VNext Finance Pages
 import VNextFinanceDashboard from './vnext-design/VNextFinanceDashboard';
@@ -239,6 +240,7 @@ root.render(
           {/* Documents & Reports */}
           <Route path="documents" element={<VNextDocuments />} />
           <Route path="documents/:id/view" element={<VNextBolView />} />
+          <Route path="reports" element={<VNextReportsDashboard />} />
           <Route path="reports/daily" element={<VNextDailyReport />} />
           <Route path="reports/locations" element={<VNextLocationReport />} />
 

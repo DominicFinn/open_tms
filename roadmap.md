@@ -137,14 +137,14 @@ The system models the world as "shipper has carriers" but never accounts for the
   - Quote-to-book conversion: "Accept & Book" creates shipment with pre-set sell rate, flows directly to load board
   - Rate confirmation PDF generation (carrier-facing, hides customer sell rate and broker margin)
   - Customer credit check service: validates outstanding balance against creditLimitCents before quoting
-  - Customer rate request intake (phone, email, portal, API) 🔲
+  - Customer rate request intake - moved to Track 3 (Customer Portal)
 - **Broker Load Board** ✅
   - Internal load board: unmatched shipments needing carrier assignment
   - Carrier capacity search: find carriers with lane rates and historical usage on matching lanes
   - Quick carrier assignment with cost rate capture and real-time margin preview
   - Integration with carrier tendering (existing broadcast/waterfall) for larger operations
   - Tender acceptance rate stats per carrier
-  - Load matching suggestions based on carrier lane history and equipment type 🔲
+  - Load matching suggestions - moved to Track 4 (Route Optimization)
 - **Broker-Specific Financials** ✅
   - Carrier quick pay / factoring: request accelerated payment with configurable discount % and payment days
   - Customer invoice with broker markup (not showing carrier cost) - already worked via existing Invoice system
@@ -156,15 +156,19 @@ The system models the world as "shipper has carriers" but never accounts for the
 
 The current reporting is financial-only (AR aging, carrier spend, margin analysis). Missing the operational KPIs that every TMS demo gets judged on.
 
-- **Executive Dashboard** 🔲
-  - Shipment volume: daily/weekly/monthly trends with YoY comparison
-  - On-time delivery percentage (OTD%) - the single most important TMS metric
-  - On-time pickup percentage
-  - Cost per shipment / cost per unit / cost per mile trends
-  - Revenue and margin summary with period comparison
-  - Exception rate and resolution time
-  - Active shipments, tenders, and issues at a glance
-  - Configurable date range and customer/carrier/lane filters on all widgets
+- **Executive Dashboard** ✅
+  - Reports app with own app switcher entry and dashboard landing page
+  - Single performant API call (`GET /api/v1/reports/dashboard`) - all queries hit read models only
+  - Shipment stats: total, in transit, at locations (pickup + delivery), delivered, full status breakdown with bars
+  - Order stats: total with delivery status breakdown (unassigned/assigned/in transit/delivered/exception)
+  - Financial summary: revenue, cost spent, margin ($ and %), with period-over-period trend arrows
+  - Invoice health: outstanding count/value, overdue count/value
+  - Issue overview: active issues, critical issues
+  - Billing pipeline: not invoiced / invoiced / paid counts
+  - Period selector: 7 days, 30 days, MTD, QTD, YTD
+  - Trend comparison vs prior period (% change with up/down arrows)
+  - On-time delivery percentage (OTD%) 🔲
+  - Cost per shipment / cost per unit / cost per mile trends 🔲
 - **Carrier Scorecards** 🔲
   - On-time pickup and delivery rates per carrier
   - Tender acceptance rate and response time
