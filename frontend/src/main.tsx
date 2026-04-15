@@ -74,6 +74,17 @@ import VNextMarginReports from './vnext-design/VNextMarginReports';
 import VNextCommissions from './vnext-design/VNextCommissions';
 import VNextReportsDashboard from './vnext-design/VNextReportsDashboard';
 
+// Customer Portal
+import { CustomerPortalLayout } from './customer-portal-layout';
+import CustomerLogin from './pages/customer-portal/CustomerLogin';
+import CustomerDashboard from './pages/customer-portal/CustomerDashboard';
+import CustomerOrders from './pages/customer-portal/CustomerOrders';
+import CustomerShipments from './pages/customer-portal/CustomerShipments';
+import CustomerShipmentDetail from './pages/customer-portal/CustomerShipmentDetail';
+import CustomerDocuments from './pages/customer-portal/CustomerDocuments';
+import CustomerInvoices from './pages/customer-portal/CustomerInvoices';
+import CustomerProfile from './pages/customer-portal/CustomerProfile';
+
 // VNext Finance Pages
 import VNextFinanceDashboard from './vnext-design/VNextFinanceDashboard';
 import VNextFinanceInvoices from './vnext-design/VNextFinanceInvoices';
@@ -156,6 +167,18 @@ root.render(
           <Route path="history" element={<CarrierTenderHistory />} />
           <Route path="bids" element={<CarrierBidHistory />} />
           <Route path="profile" element={<CarrierProfile />} />
+        </Route>
+
+        {/* Customer Portal (standalone — outside main layout) */}
+        <Route path="/customer-portal/login" element={<CustomerLogin />} />
+        <Route path="/customer-portal" element={<CustomerPortalLayout />}>
+          <Route index element={<CustomerDashboard />} />
+          <Route path="orders" element={<CustomerOrders />} />
+          <Route path="shipments" element={<CustomerShipments />} />
+          <Route path="shipments/:id" element={<CustomerShipmentDetail />} />
+          <Route path="documents" element={<CustomerDocuments />} />
+          <Route path="invoices" element={<CustomerInvoices />} />
+          <Route path="profile" element={<CustomerProfile />} />
         </Route>
 
         {/* Warehouse App (standalone — outside main layout) */}

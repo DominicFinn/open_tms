@@ -29,10 +29,22 @@ export interface CarrierJWTPayload {
   iss?: string;
 }
 
+export interface CustomerJWTPayload {
+  sub: string;
+  email: string;
+  customerId: string;
+  customerName: string;
+  role: string;
+  iat?: number;
+  exp?: number;
+  iss?: string;
+}
+
 declare module 'fastify' {
   interface FastifyRequest {
     user?: JWTPayload;
     carrierUser?: CarrierJWTPayload;
+    customerUser?: CustomerJWTPayload;
   }
 }
 
@@ -139,6 +151,42 @@ export async function authenticateCarrierJWT(req: FastifyRequest, reply: Fastify
       return;
     }
     req.carrierUser = payload as unknown as CarrierJWTPayload;
+  } catch {
+    reply.code(401).send({ data: null, error: 'Invalid or expired token' });
+  }
+}
+
+/**
+ * Fastify preHandler hook: extracts and validates customer JWT from Authorization header.
+ * Sets req.customerUser if valid. Sends 401 if missing or invalid.
+ */
+export async function authenticateCustomerJWT(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) {
+    reply.code(401).send({ data: null, error: 'Authorization header required' });
+    return;
+  }
+
+  const token = authHeader.slice(7);
+
+  try {
+    // Verify signature and expiry manually (shared verifyJWT checks for 'open-tms-auth' issuer)
+    const parts = token.split('.');
+    if (parts.length !== 3) throw new Error('Invalid token format');
+
+    const [headerB64, payloadB64, signatureB64] = parts;
+    const { createHmac } = await import('crypto');
+    const expectedSig = createHmac('sha256', JWT_SECRET)
+      .update(`${headerB64}.${payloadB64}`)
+      .digest('base64url');
+
+    if (signatureB64 !== expectedSig) throw new Error('Invalid signature');
+
+    const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString()) as CustomerJWTPayload;
+    if (payload.exp && payload.exp * 1000 < Date.now()) throw new Error('Token expired');
+    if (payload.iss !== 'open-tms-customer' || !payload.customerId) throw new Error('Invalid customer token');
+
+    req.customerUser = payload;
   } catch {
     reply.code(401).send({ data: null, error: 'Invalid or expired token' });
   }

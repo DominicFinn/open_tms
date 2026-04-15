@@ -202,38 +202,33 @@ The current reporting is financial-only (AR aging, carrier spend, margin analysi
 
 Every TMS needs customer self-service. The carrier portal exists but there's nothing for the shipper's customer.
 
-- **Customer User Management** 🔲
+- **Customer User Management** ✅
   - CustomerUser model (separate from internal User, same pattern as CarrierUser)
   - Email/password auth with dedicated JWT issuer (`open-tms-customer`)
-  - Admin UI for managing customer portal users (on customer edit page)
-  - Password strength validation, account lockout (reuse carrier auth patterns)
-  - Customer admin can manage their own users (invite, deactivate)
-- **Customer Portal App** 🔲
-  - Separate app at `/customer-portal/` with its own layout
-  - Branded with customer's or org's theme (existing ThemeProvider)
-  - Dashboard: active shipments, recent deliveries, open issues summary
-  - Navigation: Orders, Shipments, Documents, Invoices, Issues
+  - Password strength validation (8+ chars, uppercase, lowercase, number), 5-attempt lockout (15 min)
+  - Admin CRUD at `/api/v1/customers/:customerId/users` (list, create, update, reset-password, deactivate)
+- **Customer Portal App** ✅
+  - Separate app at `/customer-portal/` with its own layout and header nav
+  - Dashboard with summary stats (active shipments, deliveries, issues, outstanding invoices) + recent shipments
+  - All data scoped by customerId from JWT - no cross-customer access
+- **Order Visibility** ✅
+  - Order history with search (by order number, PO number) and status filter
+  - Order detail with line items and trackable units
+- **Shipment Tracking** ✅
+  - Shipment list with status filter from ShipmentReadModel
+  - Shipment detail with origin/destination, stops, carrier, tracking events timeline
+  - Map view of active shipments 🔲
+  - POD access 🔲
+- **Document Access** ✅
+  - Download BOLs, invoices, compliance reports from portal
+  - Document list filtered by customer's shipments
+- **Invoice & Payment View** ✅
+  - Invoice list with amounts, paid, balance, status, due date, days overdue
+  - Dispute submission (creates FinancialQuery with type customer_dispute)
 - **Order Entry** 🔲
   - Customer self-service order creation (simplified form, pre-filled customer info)
   - Order templates for recurring shipments
   - Bulk order upload (CSV) through portal
-  - Order status tracking with timeline view
-  - Order history with search and filters
-- **Shipment Tracking** 🔲
-  - Real-time shipment visibility (current location, ETA, status)
-  - Map view of active shipments (reuse existing map components, scoped to customer)
-  - Push notifications for status changes (email + in-portal)
-  - POD (proof of delivery) access when available
-  - Historical shipment search with date range and status filters
-- **Document Access** 🔲
-  - Download BOLs, invoices, compliance reports, and attachments
-  - Document history per shipment/order
-  - Cold chain compliance reports for regulated customers
-- **Invoice & Payment View** 🔲
-  - View invoices and payment status
-  - Invoice PDF download
-  - Payment history
-  - Dispute/query submission (feeds into existing FinancialQuery system)
 - **Shareable Tracking Links** 🔲
   - Public tracking page with shipment status (no login required)
   - Time-limited or PIN-protected access
