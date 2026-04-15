@@ -77,6 +77,11 @@ export const EVENT_TYPES = {
   CARRIER_USER_UPDATED: 'carrier_user.updated',
   CARRIER_USER_DEACTIVATED: 'carrier_user.deactivated',
 
+  // Customer Users (portal)
+  CUSTOMER_USER_CREATED: 'customer_user.created',
+  CUSTOMER_USER_UPDATED: 'customer_user.updated',
+  CUSTOMER_USER_DEACTIVATED: 'customer_user.deactivated',
+
   // Tracking
   TRACKING_LOCATION_RECEIVED: 'tracking.location_received',
   TRACKING_GEOFENCE_ENTERED: 'tracking.geofence_entered',

@@ -53,6 +53,26 @@ model Customer {
   // Custom fields
   customFieldVersionId String?              // Version of custom field definitions used
   customFieldValues    Json?                // { "fieldKey": value, ... }
+
+  // Customer Portal
+  customerUsers        CustomerUser[]
+}
+
+model CustomerUser {
+  id           String   @id @default(uuid())
+  customer     Customer @relation(fields: [customerId], references: [id])
+  customerId   String
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         String   @default("viewer") // "viewer" | "admin"
+  active       Boolean  @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([customerId])
+  @@index([email])
 }
 
 model Location {
