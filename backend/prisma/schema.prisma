@@ -4159,7 +4159,8 @@ model WaveTemplate {
   name            String
   groupingRules   Json?                          // { customer, carrier, serviceLevel, shipFrom, shipCompleteOnly }
   cutoffTime      String?                        // HH:MM local
-  pickStrategy    String   @default("discrete")  // discrete, batch, zone, wave
+  pickStrategy    String   @default("discrete")  // discrete, batch, zone
+  zonePickMode    String?                        // sequential (pick-and-pass) or parallel (pick-and-merge). Only used when pickStrategy=zone.
   minOrders       Int?
   maxOrders       Int?
   maxLabourHours  Float?
@@ -4189,6 +4190,7 @@ model Wave {
   waveNumber      String                         // auto-generated, e.g. "W-2026-04-14-001"
   status          String   @default("planning")  // planning, released, in_progress, completed, cancelled
   pickStrategy    String   @default("discrete")
+  zonePickMode    String?                        // sequential or parallel
   groupingCriteria Json?
   orderCount      Int      @default(0)
   lineCount       Int      @default(0)
@@ -4234,8 +4236,11 @@ model PickTask {
   pickType        String                       // discrete, batch, zone
   zoneId          String?
   zone            WarehouseZone? @relation(fields: [zoneId], references: [id])
+  zoneSequence    Int?                         // for sequential zone picking: 0, 1, 2... determines pass order
   totalLines      Int      @default(0)
   completedLines  Int      @default(0)
+  startedAt       DateTime?
+  completedAt     DateTime?                    // for SLA and performance analysis
 
   orgId           String
 
@@ -4446,4 +4451,54 @@ model ReplenishmentRule {
   @@index([locationId])
   @@index([orgId])
   @@index([sku])
+}
+
+// ── Manifest Ingestion ───────────────────────────────────────
+
+model ManifestTemplate {
+  id              String   @id @default(uuid())
+  name            String                       // e.g. "Supplier X format", "FedEx ASN"
+  headerChecksum  String                       // SHA-256 of sorted column headers for auto-detection
+  columnMapping   Json                         // { sku: "Product Code", quantity: "Qty", ... }
+  fileType        String   @default("csv")     // csv, xlsx
+  delimiter       String?                      // for CSV: comma, tab, pipe
+  hasHeaderRow    Boolean  @default(true)
+  usageCount      Int      @default(0)         // how many times this template has been used
+
+  orgId           String
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  uploads         ManifestUpload[]
+
+  @@unique([orgId, headerChecksum])
+  @@index([orgId])
+}
+
+model ManifestUpload {
+  id              String   @id @default(uuid())
+  locationId      String                       // destination warehouse
+  fileName        String
+  fileStorageKey  String?                      // S3/DB storage key for the raw file
+  status          String   @default("uploaded") // uploaded, mapped, processing, completed, failed
+  templateId      String?
+  template        ManifestTemplate? @relation(fields: [templateId], references: [id])
+  receivingTaskId String?                      // created on processing
+  totalRows       Int      @default(0)
+  processedRows   Int      @default(0)
+  errorRows       Int      @default(0)
+  errors          Json?                        // [{ row: 5, field: "sku", message: "..." }]
+  detectedHeaders Json?                        // column headers found in the file
+  supplierName    String?
+  reference       String?                      // BOL, PO number, etc.
+
+  orgId           String
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([orgId])
+  @@index([locationId])
+  @@index([status])
 }

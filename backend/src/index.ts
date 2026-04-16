@@ -78,6 +78,7 @@ import { wmsDashboardRoutes } from './routes/wmsDashboard.js';
 import { cycleCountRoutes } from './routes/cycleCounts.js';
 import { replenishmentRoutes } from './routes/replenishment.js';
 import { waveTemplateRoutes } from './routes/waveTemplates.js';
+import { manifestIngestionRoutes } from './routes/manifestIngestion.js';
 import { agentDecisionRoutes } from './routes/agentDecisions.js';
 import { llmSettingsRoutes } from './routes/llmSettings.js';
 import { agentConfigRoutes } from './routes/agentConfig.js';
@@ -197,6 +198,7 @@ async function start() {
   await server.register(cycleCountRoutes);
   await server.register(replenishmentRoutes);
   await server.register(waveTemplateRoutes);
+  await server.register(manifestIngestionRoutes);
   await server.register(agentDecisionRoutes);
   await server.register(llmSettingsRoutes);
   await server.register(agentConfigRoutes);

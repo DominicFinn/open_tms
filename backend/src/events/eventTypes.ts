@@ -288,6 +288,12 @@ export const EVENT_TYPES = {
   REPLENISHMENT_RULE_UPDATED: 'replenishment_rule.updated',
   INVENTORY_BELOW_MINIMUM: 'inventory.below_minimum',
   REPLENISHMENT_TRIGGERED: 'replenishment.triggered',
+
+  // WMS: Manifest Ingestion
+  MANIFEST_UPLOADED: 'manifest.uploaded',
+  MANIFEST_MAPPED: 'manifest.mapped',
+  MANIFEST_PROCESSED: 'manifest.processed',
+  MANIFEST_FAILED: 'manifest.failed',
 } as const;
 
 export type EventType = typeof EVENT_TYPES[keyof typeof EVENT_TYPES];
@@ -473,6 +479,10 @@ export const EVENT_SCHEMA_VERSIONS: Record<string, number> = {
   [EVENT_TYPES.REPLENISHMENT_RULE_UPDATED]: 1,
   [EVENT_TYPES.INVENTORY_BELOW_MINIMUM]: 1,
   [EVENT_TYPES.REPLENISHMENT_TRIGGERED]: 1,
+  [EVENT_TYPES.MANIFEST_UPLOADED]: 1,
+  [EVENT_TYPES.MANIFEST_MAPPED]: 1,
+  [EVENT_TYPES.MANIFEST_PROCESSED]: 1,
+  [EVENT_TYPES.MANIFEST_FAILED]: 1,
 };
 
 /**

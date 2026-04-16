@@ -125,6 +125,15 @@ export default function VNextWmsCreateWave() {
               <option value="zone">Zone (split by zone)</option>
             </select>
           </div>
+          {form.pickStrategy === 'zone' && (
+            <div className="vn-field" style={{ marginBottom: '1rem' }}>
+              <label className="vn-field-label">Zone Pick Mode *</label>
+              <select className="vn-input" value={(form as any).zonePickMode || 'parallel'} onChange={e => setForm({ ...form, zonePickMode: e.target.value } as any)}>
+                <option value="parallel">Parallel (all zones simultaneously)</option>
+                <option value="sequential">Sequential (pick-and-pass)</option>
+              </select>
+            </div>
+          )}
           <div className="vn-field" style={{ marginBottom: '1.5rem' }}>
             <label className="vn-field-label">Cutoff Time</label>
             <input className="vn-input" type="datetime-local" value={form.cutoffAt} onChange={e => setForm({ ...form, cutoffAt: e.target.value })} />

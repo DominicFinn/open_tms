@@ -150,6 +150,7 @@ const APPS: AppDef[] = [
       ]},
       { title: 'Inbound', items: [
         { to: '/wms/receiving', icon: 'move_to_inbox', label: 'Receiving' },
+        { to: '/wms/manifest', icon: 'upload_file', label: 'Manifest Upload' },
         { to: '/wms/putaway', icon: 'system_update_alt', label: 'Putaway' },
       ]},
       { title: 'Outbound', items: [

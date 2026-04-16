@@ -155,6 +155,7 @@ import VNextWmsCycleCounts from './vnext-design/VNextWmsCycleCounts';
 import VNextWmsCycleCountDetail from './vnext-design/VNextWmsCycleCountDetail';
 import VNextWmsReplenishment from './vnext-design/VNextWmsReplenishment';
 import VNextWmsWaveTemplates from './vnext-design/VNextWmsWaveTemplates';
+import VNextWmsManifestUpload from './vnext-design/VNextWmsManifestUpload';
 
 // Warehouse App
 import { WarehouseLayout } from './warehouse/warehouse-layout';
@@ -165,6 +166,9 @@ import WarehouseShipmentDetail from './warehouse/WarehouseShipmentDetail';
 import WarehouseArchive from './warehouse/WarehouseArchive';
 import WarehouseCreateShipment from './warehouse/WarehouseCreateShipment';
 import WarehouseSettings from './warehouse/WarehouseSettings';
+import WarehouseTasks from './warehouse/WarehouseTasks';
+import WarehousePickTask from './warehouse/WarehousePickTask';
+import WarehousePutawayTask from './warehouse/WarehousePutawayTask';
 import './theme.css';
 
 const root = createRoot(document.getElementById('root')!);
@@ -207,6 +211,9 @@ root.render(
           <Route path="shipments/:id" element={<WarehouseShipmentDetail />} />
           <Route path="archive" element={<WarehouseArchive />} />
           <Route path="create" element={<WarehouseCreateShipment />} />
+          <Route path="tasks" element={<WarehouseTasks />} />
+          <Route path="tasks/pick/:id" element={<WarehousePickTask />} />
+          <Route path="tasks/putaway/:id" element={<WarehousePutawayTask />} />
           <Route path="settings" element={<WarehouseSettings />} />
         </Route>
 
@@ -347,6 +354,7 @@ root.render(
           <Route path="wms/inventory" element={<VNextWmsInventory />} />
           <Route path="wms/receiving" element={<VNextWmsReceiving />} />
           <Route path="wms/receiving/create" element={<VNextWmsCreateReceiving />} />
+          <Route path="wms/manifest" element={<VNextWmsManifestUpload />} />
           <Route path="wms/receiving/:id" element={<VNextWmsReceivingDetail />} />
           <Route path="wms/putaway" element={<VNextWmsPutaway />} />
           <Route path="wms/putaway/:id" element={<VNextWmsPutawayDetail />} />

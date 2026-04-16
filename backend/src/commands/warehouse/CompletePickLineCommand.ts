@@ -48,7 +48,7 @@ export class CompletePickLineCommandHandler extends BaseCommandHandler<
     if (task.status === 'pending') {
       await tx.pickTask.update({
         where: { id: task.id },
-        data: { status: 'in_progress' },
+        data: { status: 'in_progress', startedAt: new Date() },
       });
     }
 
@@ -142,7 +142,10 @@ export class CompletePickLineCommandHandler extends BaseCommandHandler<
       });
       await tx.pickTask.update({
         where: { id: task.id },
-        data: { status: hasShorts > 0 ? 'short_pick' : 'completed' },
+        data: {
+          status: hasShorts > 0 ? 'short_pick' : 'completed',
+          completedAt: new Date(),
+        },
       });
 
       emit(this.createEvent(command, {

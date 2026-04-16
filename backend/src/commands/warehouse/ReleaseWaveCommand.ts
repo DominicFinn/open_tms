@@ -168,6 +168,86 @@ export class ReleaseWaveCommandHandler extends BaseCommandHandler<
 
         pickTasksCreated++;
       }
+    } else if (wave.pickStrategy === 'zone') {
+      // Zone: one pick task per zone, with lines only from bins in that zone
+      // Group allocated lines by zone
+      const binZoneMap = new Map<string, string>(); // binId -> zoneId
+      for (const al of allocatedLines) {
+        if (!binZoneMap.has(al.binId)) {
+          const bin = await tx.warehouseBin.findUnique({ where: { id: al.binId }, select: { zoneId: true } });
+          if (bin) binZoneMap.set(al.binId, bin.zoneId);
+        }
+      }
+
+      const byZone = new Map<string, typeof allocatedLines>();
+      for (const al of allocatedLines) {
+        const zoneId = binZoneMap.get(al.binId) || 'unknown';
+        if (!byZone.has(zoneId)) byZone.set(zoneId, []);
+        byZone.get(zoneId)!.push(al);
+      }
+
+      // Get zone sort orders for sequencing
+      const zoneIds = [...byZone.keys()];
+      const zones = await tx.warehouseZone.findMany({
+        where: { id: { in: zoneIds } },
+        select: { id: true, sortOrder: true, name: true },
+        orderBy: { sortOrder: 'asc' },
+      });
+      const zoneSortOrder = new Map(zones.map((z, i) => [z.id, i]));
+
+      const isSequential = (wave as any).zonePickMode === 'sequential';
+
+      for (const [zoneId, lines] of byZone) {
+        const sorted = lines.sort((a, b) => a.walkSequence - b.walkSequence);
+        const seq = zoneSortOrder.get(zoneId) ?? 0;
+
+        // Sequential: only first zone starts as 'pending', rest are 'blocked' (we use 'pending' status
+        // but the warehouse app will check zoneSequence to determine if previous zone tasks are done)
+        // For simplicity, sequential zones after the first start as 'pending' but the UI filters by zone
+        // A more strict approach would use a 'blocked' status, but 'pending' with zoneSequence ordering works
+
+        const pickTask = await tx.pickTask.create({
+          data: {
+            locationId: wave.locationId,
+            waveId: wave.id,
+            orderId: null, // zone tasks span multiple orders
+            status: isSequential && seq > 0 ? 'pending' : 'pending',
+            pickType: 'zone',
+            zoneId,
+            zoneSequence: seq,
+            totalLines: sorted.length,
+            completedLines: 0,
+            orgId: command.orgId,
+          },
+        });
+
+        await tx.pickLine.createMany({
+          data: sorted.map(al => ({
+            pickTaskId: pickTask.id,
+            orderId: al.orderLineItem.order.id,
+            orderLineItemId: al.orderLineItem.id,
+            inventoryRecordId: al.inventoryRecordId,
+            binId: al.binId,
+            sku: al.sku,
+            uomCode: 'EA',
+            requestedQuantity: al.quantity,
+            pickedQuantity: 0,
+            status: 'pending',
+            walkSequence: al.walkSequence,
+            lotNumber: al.lotNumber,
+          })),
+        });
+
+        const zoneName = zones.find(z => z.id === zoneId)?.name ?? zoneId;
+        emit(this.createEvent(command, {
+          type: EVENT_TYPES.PICK_TASK_CREATED,
+          entityType: 'pick_task',
+          entityId: pickTask.id,
+          payload: { waveId: wave.id, pickType: 'zone', zoneId, zoneName, zoneSequence: seq, lineCount: sorted.length },
+        }));
+
+        pickTasksCreated++;
+      }
     } else {
       // Batch: one pick task for all lines, sorted by walk sequence
       const sorted = allocatedLines.sort((a, b) => a.walkSequence - b.walkSequence);
