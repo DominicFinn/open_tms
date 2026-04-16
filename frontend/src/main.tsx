@@ -74,6 +74,9 @@ import VNextMarginReports from './vnext-design/VNextMarginReports';
 import VNextCommissions from './vnext-design/VNextCommissions';
 import VNextReportsDashboard from './vnext-design/VNextReportsDashboard';
 
+// Public Pages
+import PublicTracking from './pages/PublicTracking';
+
 // Customer Portal
 import { CustomerPortalLayout } from './customer-portal-layout';
 import CustomerLogin from './pages/customer-portal/CustomerLogin';
@@ -84,6 +87,7 @@ import CustomerShipmentDetail from './pages/customer-portal/CustomerShipmentDeta
 import CustomerDocuments from './pages/customer-portal/CustomerDocuments';
 import CustomerInvoices from './pages/customer-portal/CustomerInvoices';
 import CustomerProfile from './pages/customer-portal/CustomerProfile';
+import CustomerCreateOrder from './pages/customer-portal/CustomerCreateOrder';
 
 // VNext Finance Pages
 import VNextFinanceDashboard from './vnext-design/VNextFinanceDashboard';
@@ -169,11 +173,15 @@ root.render(
           <Route path="profile" element={<CarrierProfile />} />
         </Route>
 
+        {/* Public tracking page (no auth required) */}
+        <Route path="/track/:token" element={<PublicTracking />} />
+
         {/* Customer Portal (standalone — outside main layout) */}
         <Route path="/customer-portal/login" element={<CustomerLogin />} />
         <Route path="/customer-portal" element={<CustomerPortalLayout />}>
           <Route index element={<CustomerDashboard />} />
           <Route path="orders" element={<CustomerOrders />} />
+          <Route path="orders/create" element={<CustomerCreateOrder />} />
           <Route path="shipments" element={<CustomerShipments />} />
           <Route path="shipments/:id" element={<CustomerShipmentDetail />} />
           <Route path="documents" element={<CustomerDocuments />} />

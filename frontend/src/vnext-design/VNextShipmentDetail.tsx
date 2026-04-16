@@ -1253,7 +1253,17 @@ export default function VNextShipmentDetail() {
             <span className="material-icons">description</span>
             Documents
           </button>
-          <button className="vn-btn vn-btn-outline vn-btn-sm">
+          <button className="vn-btn vn-btn-outline vn-btn-sm" onClick={async () => {
+            if (!id) return;
+            try {
+              const res = await fetch(`${API_URL}/api/v1/shipments/${id}/tracking-link`, { method: 'POST' });
+              const json = await res.json();
+              if (json.data?.url) {
+                await navigator.clipboard.writeText(json.data.url);
+                alert('Tracking link copied to clipboard');
+              }
+            } catch { alert('Failed to generate tracking link'); }
+          }}>
             <span className="material-icons">share</span>
             Share
           </button>

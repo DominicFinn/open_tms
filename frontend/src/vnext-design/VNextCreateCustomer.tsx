@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { API_URL } from '../api';
+import CustomerUserManagement from '../components/CustomerUserManagement';
 
 export default function VNextCreateCustomer() {
   const { id } = useParams();
@@ -233,6 +234,13 @@ export default function VNextCreateCustomer() {
           {submitting ? 'Saving...' : isEdit ? 'Update Customer' : 'Create Customer'}
         </button>
       </div>
+
+      {/* Customer Portal User Management (edit mode only) */}
+      {isEdit && id && (
+        <div className="vn-card" style={{ marginTop: 24, padding: 20 }}>
+          <CustomerUserManagement customerId={id} customerName={companyName} />
+        </div>
+      )}
     </>
   );
 }

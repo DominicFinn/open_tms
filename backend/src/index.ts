@@ -96,6 +96,7 @@ import { commissionRoutes } from './routes/commissions.js';
 import { reportsDashboardRoutes } from './routes/reportsDashboard.js';
 import { customerPortalRoutes } from './routes/customerPortal.js';
 import { customerUserRoutes } from './routes/customerUsers.js';
+import { publicTrackingRoutes } from './routes/publicTracking.js';
 import {
   createCarrierTrackingPollWorker, registerCarrierTrackingPollSchedule, CARRIER_TRACKING_POLL_QUEUE,
 } from './workers/carrierTrackingPollWorker.js';
@@ -206,6 +207,7 @@ async function start() {
   await server.register(reportsDashboardRoutes);
   await server.register(customerPortalRoutes);
   await server.register(customerUserRoutes);
+  await server.register(publicTrackingRoutes);
 
   // Start queue adapter (needed for publishing events, even if workers run elsewhere)
   try {
