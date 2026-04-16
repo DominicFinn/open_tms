@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { API_URL } from '../../api';
 import { customerFetch } from './CustomerDashboard';
 
@@ -35,7 +36,12 @@ export default function CustomerOrders() {
 
   return (
     <div>
-      <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 16 }}>Orders</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>Orders</h1>
+        <Link to="/customer-portal/orders/create" className="vn-btn vn-btn-primary vn-btn-sm">
+          <span className="material-icons">add</span> New Order
+        </Link>
+      </div>
       <div className="vn-card">
         <div className="vn-filters" style={{ padding: '8px 16px' }}>
           <div className="vn-filter-group" style={{ flex: 1 }}>

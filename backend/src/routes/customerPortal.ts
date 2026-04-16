@@ -206,6 +206,110 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     return { data: order, error: null };
   });
 
+  // Create order (customer self-service)
+  server.post('/api/v1/customer-portal/orders', {
+    preHandler: [authenticateCustomerJWT],
+    schema: {
+      tags: ['Customer Portal'],
+      summary: 'Create an order (customer self-service)',
+      body: {
+        type: 'object',
+        required: ['poNumber'],
+        properties: {
+          poNumber: { type: 'string' },
+          serviceLevel: { type: 'string', enum: ['FTL', 'LTL'] },
+          originName: { type: 'string' },
+          originCity: { type: 'string' },
+          originState: { type: 'string' },
+          destinationName: { type: 'string' },
+          destinationCity: { type: 'string' },
+          destinationState: { type: 'string' },
+          requestedPickupDate: { type: 'string', format: 'date' },
+          requestedDeliveryDate: { type: 'string', format: 'date' },
+          specialInstructions: { type: 'string' },
+          lineItems: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                description: { type: 'string' },
+                quantity: { type: 'integer', minimum: 1 },
+                weightKg: { type: 'number' },
+                sku: { type: 'string' },
+              },
+            },
+          },
+        },
+      },
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const customerId = req.customerUser!.customerId;
+    const body = (req as any).body;
+
+    const orgId = (await server.prisma.organization.findFirst({ select: { id: true } }))?.id || '';
+
+    // Generate order number
+    const orderCount = await server.prisma.order.count();
+    const orderNumber = `ORD-CP-${String(orderCount + 1).padStart(4, '0')}`;
+
+    // Resolve origin location
+    let originId: string | undefined;
+    if (body.originCity) {
+      const existing = await server.prisma.location.findFirst({
+        where: { city: { equals: body.originCity, mode: 'insensitive' }, state: { equals: body.originState, mode: 'insensitive' } },
+      });
+      if (existing) originId = existing.id;
+      else {
+        const created = await server.prisma.location.create({
+          data: { name: body.originName || `${body.originCity}, ${body.originState}`, address1: '', city: body.originCity, state: body.originState, country: 'US' },
+        });
+        originId = created.id;
+      }
+    }
+
+    // Resolve destination location
+    let destinationId: string | undefined;
+    if (body.destinationCity) {
+      const existing = await server.prisma.location.findFirst({
+        where: { city: { equals: body.destinationCity, mode: 'insensitive' }, state: { equals: body.destinationState, mode: 'insensitive' } },
+      });
+      if (existing) destinationId = existing.id;
+      else {
+        const created = await server.prisma.location.create({
+          data: { name: body.destinationName || `${body.destinationCity}, ${body.destinationState}`, address1: '', city: body.destinationCity, state: body.destinationState, country: 'US' },
+        });
+        destinationId = created.id;
+      }
+    }
+
+    const order = await server.prisma.order.create({
+      data: {
+        orderNumber,
+        poNumber: body.poNumber,
+        customerId,
+        status: 'pending',
+        deliveryStatus: 'unassigned',
+        serviceLevel: body.serviceLevel || 'FTL',
+        originId,
+        destinationId,
+        specialInstructions: body.specialInstructions,
+        requestedDeliveryDate: body.requestedDeliveryDate ? new Date(body.requestedDeliveryDate) : undefined,
+        lineItems: body.lineItems ? {
+          create: body.lineItems.map((item: any, i: number) => ({
+            sku: item.sku || `ITEM-${i + 1}`,
+            description: item.description || '',
+            quantity: item.quantity || 1,
+            weight: item.weightKg,
+          })),
+        } : undefined,
+      },
+      include: { lineItems: true, origin: true, destination: true },
+    });
+
+    reply.code(201);
+    return { data: order, error: null };
+  });
+
   // Shipments
   server.get('/api/v1/customer-portal/shipments', {
     preHandler: [authenticateCustomerJWT],

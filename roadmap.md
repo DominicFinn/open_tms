@@ -225,15 +225,17 @@ Every TMS needs customer self-service. The carrier portal exists but there's not
 - **Invoice & Payment View** ✅
   - Invoice list with amounts, paid, balance, status, due date, days overdue
   - Dispute submission (creates FinancialQuery with type customer_dispute)
-- **Order Entry** 🔲
-  - Customer self-service order creation (simplified form, pre-filled customer info)
-  - Order templates for recurring shipments
-  - Bulk order upload (CSV) through portal
-- **Shareable Tracking Links** 🔲
-  - Public tracking page with shipment status (no login required)
-  - Time-limited or PIN-protected access
-  - Embeddable tracking widget for customer websites
-  - Branded with org theme
+- **Order Entry** ✅
+  - Customer self-service order creation from portal with PO number, origin/destination, line items, service level
+  - Location auto-resolution from city/state
+  - Order templates for recurring shipments 🔲
+  - Bulk order upload (CSV) through portal 🔲
+- **Shareable Tracking Links** ✅
+  - HMAC-signed tracking tokens (no login required)
+  - Public tracking page at /track/:token with status, route, stops timeline, tracking events
+  - "Share" button on shipment detail copies tracking URL to clipboard
+  - Limited info only - no customer name, carrier details, or financial data exposed
+  - Embeddable tracking widget 🔲
 
 ### **Track 4: Route Optimization & Load Planning** (Core TMS Value / ROI Pitch)
 
