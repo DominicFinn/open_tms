@@ -330,10 +330,10 @@ Bolt-on WMS extending the TMS's TrackableUnit/CargoScan/Location models. Full sp
   - Per-bin detail view and per-SKU summary aggregation
   - ProductUom model in schema
   - 11 command handler tests
+  - Cycle counting: full, zone, and random sample types, auto-adjust inventory on completion, variance detection events (5 tests)
+  - Replenishment rules: min/max thresholds per SKU per pick-face bin, manual check trigger, auto-creates putaway tasks, deduplication (6 tests)
   - 🔲 QualityHold model (blocks allocation)
   - 🔲 ProductUom conversions UI and break-case operations
-  - 🔲 Cycle counting (full/zone/ABC/random sample)
-  - 🔲 Replenishment rules (min/max pick-face threshold)
 - **Receiving** DONE (partial)
   - ReceivingAppointment (scheduled dock time), ReceivingTask, ReceivingLine
   - ASN-based and blind receiving, inspection workflow
@@ -361,7 +361,7 @@ Bolt-on WMS extending the TMS's TrackableUnit/CargoScan/Location models. Full sp
   - PackTask + PackLine with verification, auto-complete
   - Auto-complete cascade: line -> task -> wave
   - 9 wave/pick tests + 9 packing/loading tests
-  - 🔲 WaveTemplate (cut-off, capacity, priority, auto-release schedule)
+  - WaveTemplate: create templates with grouping rules, cutoff time, min/max orders, cron schedule, auto-release. Apply template to auto-create waves from eligible orders (6 tests)
   - 🔲 Zone pick strategy
   - 🔲 CartonCatalogue + Cartonization service
   - 🔲 PackAudit for weight/dim-weight variance

@@ -746,11 +746,14 @@ container.singleton(TOKENS.ICustomersRepository)
 - **Directed putaway** - Priority-based rules (SKU pattern, temperature, hazmat, customer, velocity), scan-to-confirm with deviation tracking, bin constraint validation, product consolidation
 - **Inventory tracking** - Real-time stock levels per bin with immutable transaction ledger, stock adjustments with reason codes, bin-to-bin transfers, per-SKU summary aggregation
 - **Wave planning** - Group orders into pick waves (discrete or batch strategy), inventory allocation on release
+- **Wave templates** - Automate wave creation with reusable templates (grouping rules, carrier cutoff times, min/max orders, cron schedules, auto-release)
 - **Picking** - Walk-sequence-optimized pick lists, line-by-line execution, short-pick handling (backorder/cancel)
 - **Packing** - Pack station verification, line-by-line item confirmation
 - **Loading** - Staging assignments at dock bins, batch loading completion
+- **Cycle counting** - Full warehouse, zone, and random sample counts with variance detection and auto-adjustment of inventory
+- **Replenishment** - Auto-replenish pick faces from bulk storage when stock drops below configured minimums
 - **Operations dashboard** - Real-time warehouse stats (zones, bins, SKUs, task counts by status)
-- **62 command handler tests** covering the full goods flow
+- **79 command handler tests** across 9 test suites covering the full goods flow
 
 ### Shipment Tracking
 - **Full lifecycle management** from draft to delivery

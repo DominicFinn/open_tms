@@ -1672,8 +1672,65 @@ Verifies picked items at pack stations, stages for outbound, and loads onto vehi
 
 ---
 
+### Domain: Cycle Counting
+
+Verifies inventory accuracy by comparing physical bin counts against system records.
+
+### Commands
+- `cycle_count.create` - Creates a cycle count from current inventory records. Three types: `full` (all bins), `zone` (specific zone), `random_sample` (~20% random selection). Auto-generates count lines with expected quantities.
+- `cycle_count.record_line` - Record a counted quantity for a bin/SKU. Auto-starts count on first recording. Detects variances. On final line: auto-completes count, auto-adjusts inventory for all variances (creates InventoryTransaction with `cycle_count` type), updates `lastCountedAt`.
+
+### Events
+- `cycle_count.created`, `cycle_count.started`, `cycle_count.completed`
+- `cycle_count.line_recorded`
+- `cycle_count.variance_detected` - Emitted for each line where counted != expected
+
+### Side Effects
+- On completion: all variance lines auto-adjust InventoryRecord.quantityOnHand to match counted quantity
+- InventoryTransaction created for each adjustment (transactionType: `cycle_count`, reasonCode: `recount`)
+- All counted InventoryRecords get `lastCountedAt` updated
+
+---
+
+### Domain: Replenishment
+
+Auto-replenishes pick face bins from bulk storage when stock drops below configured minimum levels.
+
+### Commands
+- `replenishment_rule.create` - Define a rule: SKU + pick face bin + bulk zone + min/max quantities. Validates min < max, bin and zone exist.
+- `replenishment.check` - Evaluates all active rules for a location. For each rule where pick face qty < minQuantity: finds bulk inventory, creates PutawayTask (type: `replenishment`). Skips if already being replenished or no bulk stock available.
+
+### Events
+- `replenishment_rule.created`, `replenishment_rule.updated`
+- `inventory.below_minimum` - Emitted when a pick face drops below its rule's minQuantity
+- `replenishment.triggered` - Emitted when a replenishment putaway task is created
+
+### Side Effects
+- CheckReplenishment creates PutawayTask records (putawayType: `replenishment`) that appear in the putaway task queue
+- Deduplication: skips if a pending/assigned/in-progress replenishment task already exists for the same target bin
+
+---
+
+### Domain: Wave Templates
+
+Automates wave creation from reusable template definitions with grouping rules, cutoff times, and order constraints.
+
+### Commands
+- `wave_template.create` - Define a template: name, pick strategy, grouping rules (JSON), cutoff time (HH:MM), min/max orders, priority, cron schedule, auto-release toggle.
+- `wave_template.apply` - Run a template: finds eligible orders (excludes already-waved), applies grouping rules, enforces min/max, generates wave number, creates wave with linked orders. Skips gracefully with reason if below minimum or no eligible orders.
+
+### Events
+- `wave.created` (with templateId and templateName in payload when template-driven)
+
+### Side Effects
+- ApplyWaveTemplate creates Wave + WaveOrder records
+- Eligible orders are those not currently in any active (non-completed, non-cancelled) wave
+- Cutoff time resolved from template HH:MM to today's datetime
+
+---
+
 ### WMS Key Files
-- `backend/src/commands/warehouse/` - All WMS command handlers (15 handlers)
+- `backend/src/commands/warehouse/` - All WMS command handlers (23 handlers)
 - `backend/src/repositories/WarehouseZoneRepository.ts` - Zone/aisle/bin CRUD
 - `backend/src/repositories/ReceivingRepository.ts` - Appointment/task/line CRUD
 - `backend/src/services/PutawayRuleEvaluator.ts` - Rule evaluation with consolidation
@@ -1683,6 +1740,9 @@ Verifies picked items at pack stations, stages for outbound, and loads onto vehi
 - `backend/src/routes/inventory.ts` - Inventory API (6 endpoints)
 - `backend/src/routes/waves.ts` - Wave & pick API (8 endpoints)
 - `backend/src/routes/packing.ts` - Packing & loading API (7 endpoints)
+- `backend/src/routes/cycleCounts.ts` - Cycle counting API (4 endpoints)
+- `backend/src/routes/replenishment.ts` - Replenishment API (5 endpoints)
+- `backend/src/routes/waveTemplates.ts` - Wave template API (6 endpoints)
 - `backend/src/routes/wmsDashboard.ts` - Dashboard stats API
 - `backend/src/__tests__/commands/WarehouseZoneCommands.test.ts` - 14 tests
 - `backend/src/__tests__/commands/ReceivingCommands.test.ts` - 10 tests
@@ -1690,4 +1750,7 @@ Verifies picked items at pack stations, stages for outbound, and loads onto vehi
 - `backend/src/__tests__/commands/InventoryCommands.test.ts` - 11 tests
 - `backend/src/__tests__/commands/WavePickCommands.test.ts` - 9 tests
 - `backend/src/__tests__/commands/PackingLoadingCommands.test.ts` - 9 tests
-- `frontend/src/vnext-design/VNextWms*.tsx` - 18 WMS pages
+- `backend/src/__tests__/commands/CycleCountCommands.test.ts` - 5 tests
+- `backend/src/__tests__/commands/ReplenishmentCommands.test.ts` - 6 tests
+- `backend/src/__tests__/commands/WaveTemplateCommands.test.ts` - 6 tests
+- `frontend/src/vnext-design/VNextWms*.tsx` - 24 WMS pages

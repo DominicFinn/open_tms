@@ -193,6 +193,8 @@ import { CreateCycleCountCommandHandler } from '../commands/warehouse/CreateCycl
 import { RecordCycleCountLineCommandHandler } from '../commands/warehouse/RecordCycleCountLineCommand.js';
 import { CreateReplenishmentRuleCommandHandler } from '../commands/warehouse/CreateReplenishmentRuleCommand.js';
 import { CheckReplenishmentCommandHandler } from '../commands/warehouse/CheckReplenishmentCommand.js';
+import { CreateWaveTemplateCommandHandler } from '../commands/warehouse/CreateWaveTemplateCommand.js';
+import { ApplyWaveTemplateCommandHandler } from '../commands/warehouse/ApplyWaveTemplateCommand.js';
 
 /**
  * Register all application dependencies
@@ -838,6 +840,10 @@ export function registerDependencies(prisma: PrismaClient): void {
     // WMS Replenishment commands
     bus.register(new CreateReplenishmentRuleCommandHandler(prisma, eventBus));
     bus.register(new CheckReplenishmentCommandHandler(prisma, eventBus));
+
+    // WMS Wave Template commands
+    bus.register(new CreateWaveTemplateCommandHandler(prisma, eventBus));
+    bus.register(new ApplyWaveTemplateCommandHandler(prisma, eventBus));
 
     return bus;
   });

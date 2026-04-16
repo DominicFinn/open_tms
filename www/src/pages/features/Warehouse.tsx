@@ -312,6 +312,57 @@ export default function Warehouse() {
         </AnimateIn>
       </section>
 
+      {/* WMS Operations */}
+      <section className="py-24">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <AnimateIn animation="fade-up">
+            <div className="text-center mb-16">
+              <div className="inline-flex items-center gap-2 rounded-full border border-indigo-500/20 bg-indigo-500/10 px-4 py-1.5 mb-6">
+                <span className="text-sm font-medium text-indigo-400">Warehouse Management System</span>
+              </div>
+              <h2 style={{ fontSize: 'clamp(2rem, 4vw, 3rem)', fontWeight: 800, lineHeight: 1.1 }}>
+                <span className="text-white">Full warehouse operations.</span>{' '}
+                <span className="gradient-text">Receive to dispatch.</span>
+              </h2>
+              <p className="mt-4 text-lg text-surface-400 max-w-2xl mx-auto">
+                Beyond shipment launch, Open TMS includes a complete WMS covering the full goods flow inside the warehouse. Zone and bin management, directed putaway, wave-based picking, and inventory control.
+              </p>
+            </div>
+          </AnimateIn>
+
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[
+              { title: 'Receiving', desc: 'Dock appointments, ASN-based and blind receiving with line-by-line inspection. Scan items at the dock, verify quantities, and record damage.', icon: 'M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3' },
+              { title: 'Directed Putaway', desc: 'Priority-based routing rules match items to the right storage location. Scan-to-confirm with deviation tracking and temperature/hazmat constraint validation.', icon: 'M9 8.25H7.5a2.25 2.25 0 00-2.25 2.25v9a2.25 2.25 0 002.25 2.25h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25H15M9 12l3 3m0 0l3-3m-3 3V2.25' },
+              { title: 'Wave Planning', desc: 'Group orders into pick waves with templates. Set carrier cutoff times, grouping rules, and auto-release schedules. Apply templates on demand or via cron.', icon: 'M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 010 3.75H5.625a1.875 1.875 0 010-3.75z' },
+              { title: 'Optimized Picking', desc: 'Walk-sequence-optimized pick lists guide workers through the warehouse in the most efficient path. Discrete (per order) or batch (multi-order) strategies.', icon: 'M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z' },
+              { title: 'Cycle Counting', desc: 'Full warehouse, zone, and random sample inventory counts. Automatic variance detection and inventory adjustment with immutable audit trail.', icon: 'M10.125 2.25h-4.5c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125v-9M10.125 2.25h.375a9 9 0 019 9v.375M10.125 2.25A3.375 3.375 0 0113.5 5.625v1.5c0 .621.504 1.125 1.125 1.125h1.5a3.375 3.375 0 013.375 3.375M9 15l2.25 2.25L15 12' },
+              { title: 'Auto-Replenishment', desc: 'Configure min/max thresholds per SKU per pick face. When stock drops below minimum, the system auto-creates putaway tasks to pull from bulk storage.', icon: 'M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182' },
+            ].map((item, i) => (
+              <AnimateIn key={item.title} animation="fade-up" delay={i * 100}>
+                <div className="glass-card p-6 h-full">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'linear-gradient(135deg, rgba(99,102,241,0.3), rgba(99,102,241,0.1))', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <svg className="h-5 w-5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
+                      </svg>
+                    </div>
+                    <h3 className="text-white font-semibold">{item.title}</h3>
+                  </div>
+                  <p className="text-surface-400 text-sm leading-relaxed">{item.desc}</p>
+                </div>
+              </AnimateIn>
+            ))}
+          </div>
+
+          <AnimateIn animation="fade-up" delay={600}>
+            <div className="mt-8 text-center">
+              <p className="text-surface-500 text-sm">79 command handler tests across 9 test suites covering the full warehouse goods flow</p>
+            </div>
+          </AnimateIn>
+        </div>
+      </section>
+
       {/* MissingFeature */}
       <section className="pb-12">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">

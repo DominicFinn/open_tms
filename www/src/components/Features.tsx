@@ -183,6 +183,16 @@ const features = [
     highlight: false,
   },
   {
+    title: 'Warehouse Management (WMS)',
+    description: 'Full warehouse operations: zone and bin management, receiving (ASN and blind), directed putaway with scan-to-confirm, wave planning with templates, walk-sequence-optimized picking, packing verification, cycle counting, and auto-replenishment.',
+    icon: (
+      <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
+      </svg>
+    ),
+    highlight: true,
+  },
+  {
     title: 'Auto Telemetry Reports',
     description: 'Automatic compliance breadcrumb reports generated on shipment completion. Temperature logs, GPS trails, and event timelines  - ready for regulatory audit.',
     icon: (

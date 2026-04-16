@@ -154,6 +154,7 @@ import VNextWmsCreateBin from './vnext-design/VNextWmsCreateBin';
 import VNextWmsCycleCounts from './vnext-design/VNextWmsCycleCounts';
 import VNextWmsCycleCountDetail from './vnext-design/VNextWmsCycleCountDetail';
 import VNextWmsReplenishment from './vnext-design/VNextWmsReplenishment';
+import VNextWmsWaveTemplates from './vnext-design/VNextWmsWaveTemplates';
 
 // Warehouse App
 import { WarehouseLayout } from './warehouse/warehouse-layout';
@@ -351,6 +352,7 @@ root.render(
           <Route path="wms/putaway/:id" element={<VNextWmsPutawayDetail />} />
           <Route path="wms/waves" element={<VNextWmsWaves />} />
           <Route path="wms/waves/create" element={<VNextWmsCreateWave />} />
+          <Route path="wms/waves/templates" element={<VNextWmsWaveTemplates />} />
           <Route path="wms/waves/:id" element={<VNextWmsWaveDetail />} />
           <Route path="wms/picking" element={<VNextWmsPicking />} />
           <Route path="wms/picking/:id" element={<VNextWmsPickTaskDetail />} />
