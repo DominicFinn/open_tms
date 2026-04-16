@@ -74,7 +74,7 @@ export default function CustomerDashboard() {
           </div>
         </div>
         <div className="vn-stat">
-          <div className="vn-stat-icon" style={{ background: 'var(--success-container, #e8f5e9)', color: 'var(--color-success)' }}>
+          <div className="vn-stat-icon" style={{ background: 'var(--success-container)', color: 'var(--color-success)' }}>
             <span className="material-icons">check_circle</span>
           </div>
           <div>
@@ -83,7 +83,7 @@ export default function CustomerDashboard() {
           </div>
         </div>
         <div className="vn-stat">
-          <div className="vn-stat-icon" style={{ background: 'var(--warning-container, #fff3e0)', color: 'var(--color-warning)' }}>
+          <div className="vn-stat-icon" style={{ background: 'var(--warning-container)', color: 'var(--color-warning)' }}>
             <span className="material-icons">bug_report</span>
           </div>
           <div>
@@ -92,7 +92,7 @@ export default function CustomerDashboard() {
           </div>
         </div>
         <div className="vn-stat">
-          <div className="vn-stat-icon" style={{ background: 'var(--info-container, #e3f2fd)', color: 'var(--color-info)' }}>
+          <div className="vn-stat-icon" style={{ background: 'var(--info-container)', color: 'var(--color-info)' }}>
             <span className="material-icons">receipt</span>
           </div>
           <div>

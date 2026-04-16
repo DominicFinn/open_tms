@@ -178,7 +178,7 @@ export default function VNextReportsDashboard() {
           </div>
         </div>
         <div className="vn-stat">
-          <div className="vn-stat-icon" style={{ background: 'var(--info-container, #e3f2fd)', color: 'var(--color-info)' }}>
+          <div className="vn-stat-icon" style={{ background: 'var(--info-container)', color: 'var(--color-info)' }}>
             <span className="material-icons">flight_takeoff</span>
           </div>
           <div>
@@ -187,7 +187,7 @@ export default function VNextReportsDashboard() {
           </div>
         </div>
         <div className="vn-stat">
-          <div className="vn-stat-icon" style={{ background: 'var(--warning-container, #fff3e0)', color: 'var(--color-warning)' }}>
+          <div className="vn-stat-icon" style={{ background: 'var(--warning-container)', color: 'var(--color-warning)' }}>
             <span className="material-icons">warehouse</span>
           </div>
           <div>
@@ -196,7 +196,7 @@ export default function VNextReportsDashboard() {
           </div>
         </div>
         <div className="vn-stat">
-          <div className="vn-stat-icon" style={{ background: 'var(--success-container, #e8f5e9)', color: 'var(--color-success)' }}>
+          <div className="vn-stat-icon" style={{ background: 'var(--success-container)', color: 'var(--color-success)' }}>
             <span className="material-icons">check_circle</span>
           </div>
           <div>
@@ -219,7 +219,7 @@ export default function VNextReportsDashboard() {
           </div>
         </div>
         <div className="vn-stat">
-          <div className="vn-stat-icon" style={{ background: 'var(--success-container, #e8f5e9)', color: 'var(--color-success)' }}>
+          <div className="vn-stat-icon" style={{ background: 'var(--success-container)', color: 'var(--color-success)' }}>
             <span className="material-icons">trending_up</span>
           </div>
           <div>
@@ -229,7 +229,7 @@ export default function VNextReportsDashboard() {
           </div>
         </div>
         <div className="vn-stat">
-          <div className="vn-stat-icon" style={{ background: 'var(--error-container, #fde0dc)', color: 'var(--color-error)' }}>
+          <div className="vn-stat-icon" style={{ background: 'var(--error-container)', color: 'var(--color-error)' }}>
             <span className="material-icons">payments</span>
           </div>
           <div>
@@ -238,7 +238,7 @@ export default function VNextReportsDashboard() {
           </div>
         </div>
         <div className="vn-stat">
-          <div className="vn-stat-icon" style={{ background: financial.marginPercent >= 10 ? 'var(--success-container, #e8f5e9)' : 'var(--warning-container, #fff3e0)', color: financial.marginPercent >= 10 ? 'var(--color-success)' : 'var(--color-warning)' }}>
+          <div className="vn-stat-icon" style={{ background: financial.marginPercent >= 10 ? 'var(--success-container)' : 'var(--warning-container)', color: financial.marginPercent >= 10 ? 'var(--color-success)' : 'var(--color-warning)' }}>
             <span className="material-icons">show_chart</span>
           </div>
           <div>
@@ -252,7 +252,7 @@ export default function VNextReportsDashboard() {
       {/* Row 3: Invoices & Issues */}
       <div className="vn-stats" style={{ marginBottom: 24 }}>
         <div className="vn-stat">
-          <div className="vn-stat-icon" style={{ background: 'var(--info-container, #e3f2fd)', color: 'var(--color-info)' }}>
+          <div className="vn-stat-icon" style={{ background: 'var(--info-container)', color: 'var(--color-info)' }}>
             <span className="material-icons">receipt</span>
           </div>
           <div>
@@ -262,7 +262,7 @@ export default function VNextReportsDashboard() {
           </div>
         </div>
         <div className="vn-stat">
-          <div className="vn-stat-icon" style={{ background: 'var(--error-container, #fde0dc)', color: 'var(--color-error)' }}>
+          <div className="vn-stat-icon" style={{ background: 'var(--error-container)', color: 'var(--color-error)' }}>
             <span className="material-icons">schedule</span>
           </div>
           <div>
@@ -272,7 +272,7 @@ export default function VNextReportsDashboard() {
           </div>
         </div>
         <div className="vn-stat">
-          <div className="vn-stat-icon" style={{ background: 'var(--warning-container, #fff3e0)', color: 'var(--color-warning)' }}>
+          <div className="vn-stat-icon" style={{ background: 'var(--warning-container)', color: 'var(--color-warning)' }}>
             <span className="material-icons">bug_report</span>
           </div>
           <div>
@@ -282,7 +282,7 @@ export default function VNextReportsDashboard() {
           </div>
         </div>
         <div className="vn-stat">
-          <div className="vn-stat-icon" style={{ background: issues.critical > 0 ? 'var(--error-container, #fde0dc)' : 'var(--success-container, #e8f5e9)', color: issues.critical > 0 ? 'var(--color-error)' : 'var(--color-success)' }}>
+          <div className="vn-stat-icon" style={{ background: issues.critical > 0 ? 'var(--error-container)' : 'var(--success-container)', color: issues.critical > 0 ? 'var(--color-error)' : 'var(--color-success)' }}>
             <span className="material-icons">{issues.critical > 0 ? 'error' : 'verified'}</span>
           </div>
           <div>
