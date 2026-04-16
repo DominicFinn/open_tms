@@ -739,6 +739,19 @@ container.singleton(TOKENS.ICustomersRepository)
 - **Warehouse and retail location** management
 - **Address validation** and formatting
 
+### Warehouse Management System (WMS)
+- **Location hierarchy** - Zones, aisles, and bins with capacity tracking, temperature zones, hazmat certification
+- **Bulk bin generation** - Pattern-based bin creation ({aisle}-{row}-{level}) with live preview
+- **Receiving** - Dock appointments, ASN-based and blind receiving, line-by-line inspection
+- **Directed putaway** - Priority-based rules (SKU pattern, temperature, hazmat, customer, velocity), scan-to-confirm with deviation tracking, bin constraint validation, product consolidation
+- **Inventory tracking** - Real-time stock levels per bin with immutable transaction ledger, stock adjustments with reason codes, bin-to-bin transfers, per-SKU summary aggregation
+- **Wave planning** - Group orders into pick waves (discrete or batch strategy), inventory allocation on release
+- **Picking** - Walk-sequence-optimized pick lists, line-by-line execution, short-pick handling (backorder/cancel)
+- **Packing** - Pack station verification, line-by-line item confirmation
+- **Loading** - Staging assignments at dock bins, batch loading completion
+- **Operations dashboard** - Real-time warehouse stats (zones, bins, SKUs, task counts by status)
+- **62 command handler tests** covering the full goods flow
+
 ### Shipment Tracking
 - **Full lifecycle management** from draft to delivery
 - **Status tracking** with visual indicators

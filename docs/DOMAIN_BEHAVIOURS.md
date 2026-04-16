@@ -1535,3 +1535,159 @@ Requests accelerated payment on a carrier invoice with a discount. Sets `quickPa
 - `backend/src/routes/carrierInvoices.ts` - Quick pay endpoint
 - `frontend/src/vnext-design/VNextMarginReports.tsx` - Margin reports page
 - `frontend/src/vnext-design/VNextCommissions.tsx` - Commission management page
+
+---
+
+## Warehouse Management System (WMS)
+
+### Domain: Warehouse Zones & Bins
+
+Manages the physical location hierarchy within warehouses: zones (logical areas), aisles, and bins (individual storage locations).
+
+### Commands
+- `warehouse_zone.create` - Create a zone within a location (type, temperature, hazmat, capacity)
+- `warehouse_zone.update` - Update zone properties
+- `warehouse_bin.create` - Create a single bin within a zone
+- `warehouse_bin.update` - Update bin properties (label uniqueness enforced on rename)
+- `warehouse_bin.bulk_create` - Generate bins from a label pattern ({aisle}-{row}-{level}) with ranges; max 10,000 per batch
+
+### Events
+- `warehouse_zone.created`, `warehouse_zone.updated`, `warehouse_zone.archived`
+- `warehouse_bin.created`, `warehouse_bin.updated`, `warehouse_bin.archived`, `warehouse_bin.bulk_created`
+
+### Side Effects
+- None (pure CRUD, no projections or downstream handlers yet)
+
+---
+
+### Domain: Receiving
+
+Manages inbound goods - dock appointments, receiving tasks, and line-by-line item verification.
+
+### Commands
+- `receiving_task.create` - Create a receiving task (ASN-based with expected lines, or blind). Auto-updates linked appointment status.
+- `receiving_line.record` - Record a received item against an existing line (ASN) or create a new line (blind). Auto-starts task on first line recorded.
+- `receiving_task.complete` - Complete receiving, tally totals, auto-generate putaway tasks for units with trackableUnitIds. Evaluates putaway rules for directed routing, falls back to first available bulk bin.
+
+### Events
+- `receiving_appointment.created`, `receiving_appointment.checked_in`
+- `receiving_task.created`, `receiving_task.started`, `receiving_task.completed`
+- `receiving_line.recorded`, `receiving_line.inspected`
+- `putaway_task.created` (emitted by CompleteReceiving for each generated putaway task)
+
+### Side Effects
+- CompleteReceiving generates PutawayTasks using PutawayRule evaluation
+- Appointment status auto-updated on task creation and completion
+
+---
+
+### Domain: Putaway
+
+Directs received goods to their storage location with scan-to-confirm and constraint validation.
+
+### Commands
+- `putaway_task.assign` - Assign a putaway task to a worker
+- `putaway_task.complete` - Scan-to-confirm completion:
+  1. Resolves scanned bin label to actual bin
+  2. Detects deviation (scanned != directed) and records it
+  3. Validates bin constraints (temperature compatibility, hazmat certification) - warnings returned but don't block
+  4. Updates TrackableUnit.currentBinId and currentZoneId (cascades to child units)
+  5. Increments bin capacity counters (currentPalletCount, currentWeightKg)
+  6. Creates/updates InventoryRecord + immutable InventoryTransaction
+
+### Events
+- `putaway_task.assigned`, `putaway_task.started`, `putaway_task.completed`
+- `putaway_task.deviation` - Emitted when scanned bin differs from directed target
+- `inventory.received` - Emitted when putaway writes to inventory
+
+### Side Effects
+- Putaway completion creates the first InventoryRecord for received goods
+- Bin capacity denormalization updated on completion
+
+### Putaway Rule Evaluation
+- Rules evaluated in priority order (lower = higher priority), first match wins
+- Criteria (all nullable = match any): skuPattern (glob), temperatureRequirement, hazmat, customerId, velocityClass, unitType
+- Target types: specific_bin, zone (first available), next_available_in_zone (capacity + level preference)
+- Consolidation: when enabled, prefers bins where the same SKU already has inventory
+- Fallback: first available bin in any bulk_storage zone
+
+---
+
+### Domain: Inventory
+
+Tracks stock levels across warehouse bins with an immutable transaction ledger.
+
+### Commands
+- `inventory.adjust` - Manual stock correction with reason code (damage, expired, recount, scrap, found, return). Validates non-negative result.
+- `inventory.transfer` - Move stock between bins. Creates/updates InventoryRecord at target, cleans up empty source records. Two-sided transaction ledger entries.
+
+### Events
+- `inventory.adjusted` - Includes sku, quantityChange, reasonCode, previousQuantity, newQuantity
+- `inventory.transferred` - Includes sku, quantity, sourceBinId, targetBinId
+
+### Side Effects
+- Empty InventoryRecords (zero on-hand, zero allocated, zero hold) are deleted on transfer
+
+---
+
+### Domain: Waves & Picking
+
+Groups orders into pick waves and generates walk-sequence-optimized pick tasks.
+
+### Commands
+- `wave.create` - Create a wave from selected order IDs. Auto-generates wave number (W-YYYY-MM-DD-NNN). Counts total line items across orders.
+- `wave.release` - Release wave: hard-allocates inventory (FIFO) for each order line, creates PickTasks with walk-sequence-sorted PickLines. Discrete strategy = one task per order, batch = one task for all.
+- `pick_line.complete` - Complete a pick line: deducts from InventoryRecord (quantityOnHand + quantityAllocated), creates InventoryTransaction (type: pick). Short pick handling: backorder (keep allocated) or cancel_line (release back to available). Auto-completes task and wave when all lines done.
+
+### Events
+- `wave.created`, `wave.released`, `wave.completed`, `wave.cancelled`
+- `pick_task.created`, `pick_task.assigned`, `pick_task.completed`
+- `pick_line.completed`, `pick_line.short`
+
+### Side Effects
+- Wave release hard-allocates inventory (increments quantityAllocated, decrements quantityAvailable)
+- Pick line completion decrements quantityOnHand and creates pick transaction
+- Short pick with cancel_line releases allocation back to available
+- Task auto-completes when all lines done; wave auto-completes when all tasks done
+
+---
+
+### Domain: Packing & Loading
+
+Verifies picked items at pack stations, stages for outbound, and loads onto vehicles.
+
+### Commands
+- `pack_task.create` - Create a pack task with lines (typically from completed pick). Links to order and pick task.
+- `pack_line.complete` - Verify and pack a line item. Auto-starts task, auto-completes when all lines done.
+- `staging_assignment.create` - Stage a packed unit at a dock bin. Moves TrackableUnit to staging bin.
+- `loading.complete` - Mark staged assignments as loaded onto vehicle. Clears unit bin/zone (on vehicle now).
+
+### Events
+- `pack_task.created`, `pack_line.verified`, `pack_task.completed`
+- `staging_assignment.created`, `loading.completed`
+
+### Side Effects
+- Staging moves TrackableUnit.currentBinId to the staging bin
+- Loading clears TrackableUnit.currentBinId and currentZoneId (unit is on vehicle)
+
+---
+
+### WMS Key Files
+- `backend/src/commands/warehouse/` - All WMS command handlers (15 handlers)
+- `backend/src/repositories/WarehouseZoneRepository.ts` - Zone/aisle/bin CRUD
+- `backend/src/repositories/ReceivingRepository.ts` - Appointment/task/line CRUD
+- `backend/src/services/PutawayRuleEvaluator.ts` - Rule evaluation with consolidation
+- `backend/src/routes/warehouseZones.ts` - Zone & bin API (10 endpoints)
+- `backend/src/routes/receiving.ts` - Receiving API (8 endpoints)
+- `backend/src/routes/putaway.ts` - Putaway API (6 endpoints)
+- `backend/src/routes/inventory.ts` - Inventory API (6 endpoints)
+- `backend/src/routes/waves.ts` - Wave & pick API (8 endpoints)
+- `backend/src/routes/packing.ts` - Packing & loading API (7 endpoints)
+- `backend/src/routes/wmsDashboard.ts` - Dashboard stats API
+- `backend/src/__tests__/commands/WarehouseZoneCommands.test.ts` - 14 tests
+- `backend/src/__tests__/commands/ReceivingCommands.test.ts` - 10 tests
+- `backend/src/__tests__/commands/PutawayCommands.test.ts` - 9 tests
+- `backend/src/__tests__/commands/InventoryCommands.test.ts` - 11 tests
+- `backend/src/__tests__/commands/WavePickCommands.test.ts` - 9 tests
+- `backend/src/__tests__/commands/PackingLoadingCommands.test.ts` - 9 tests
+- `frontend/src/vnext-design/VNextWms*.tsx` - 18 WMS pages

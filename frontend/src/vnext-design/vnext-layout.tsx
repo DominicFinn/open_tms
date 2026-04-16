@@ -144,6 +144,8 @@ const APPS: AppDef[] = [
         { to: '/wms', icon: 'space_dashboard', label: 'Dashboard', end: true },
         { to: '/wms/zones', icon: 'grid_view', label: 'Zones & Bins' },
         { to: '/wms/inventory', icon: 'inventory_2', label: 'Inventory' },
+        { to: '/wms/cycle-counts', icon: 'fact_check', label: 'Cycle Counts' },
+        { to: '/wms/replenishment', icon: 'sync', label: 'Replenishment' },
       ]},
       { title: 'Inbound', items: [
         { to: '/wms/receiving', icon: 'move_to_inbox', label: 'Receiving' },

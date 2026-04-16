@@ -248,7 +248,46 @@ export const EVENT_TYPES = {
 
   // WMS: Putaway
   PUTAWAY_TASK_CREATED: 'putaway_task.created',
+  PUTAWAY_TASK_ASSIGNED: 'putaway_task.assigned',
+  PUTAWAY_TASK_STARTED: 'putaway_task.started',
   PUTAWAY_TASK_COMPLETED: 'putaway_task.completed',
+  PUTAWAY_TASK_DEVIATION: 'putaway_task.deviation',
+
+  // WMS: Inventory
+  INVENTORY_RECEIVED: 'inventory.received',
+  INVENTORY_ADJUSTED: 'inventory.adjusted',
+  INVENTORY_TRANSFERRED: 'inventory.transferred',
+
+  // WMS: Waves & Picking
+  WAVE_CREATED: 'wave.created',
+  WAVE_RELEASED: 'wave.released',
+  WAVE_COMPLETED: 'wave.completed',
+  WAVE_CANCELLED: 'wave.cancelled',
+  PICK_TASK_CREATED: 'pick_task.created',
+  PICK_TASK_ASSIGNED: 'pick_task.assigned',
+  PICK_LINE_COMPLETED: 'pick_line.completed',
+  PICK_LINE_SHORT: 'pick_line.short',
+  PICK_TASK_COMPLETED: 'pick_task.completed',
+
+  // WMS: Packing & Loading
+  PACK_TASK_CREATED: 'pack_task.created',
+  PACK_LINE_VERIFIED: 'pack_line.verified',
+  PACK_TASK_COMPLETED: 'pack_task.completed',
+  STAGING_ASSIGNMENT_CREATED: 'staging_assignment.created',
+  LOADING_COMPLETED: 'loading.completed',
+
+  // WMS: Cycle Counting
+  CYCLE_COUNT_CREATED: 'cycle_count.created',
+  CYCLE_COUNT_STARTED: 'cycle_count.started',
+  CYCLE_COUNT_LINE_RECORDED: 'cycle_count.line_recorded',
+  CYCLE_COUNT_COMPLETED: 'cycle_count.completed',
+  CYCLE_COUNT_VARIANCE_DETECTED: 'cycle_count.variance_detected',
+
+  // WMS: Replenishment
+  REPLENISHMENT_RULE_CREATED: 'replenishment_rule.created',
+  REPLENISHMENT_RULE_UPDATED: 'replenishment_rule.updated',
+  INVENTORY_BELOW_MINIMUM: 'inventory.below_minimum',
+  REPLENISHMENT_TRIGGERED: 'replenishment.triggered',
 } as const;
 
 export type EventType = typeof EVENT_TYPES[keyof typeof EVENT_TYPES];
@@ -404,7 +443,36 @@ export const EVENT_SCHEMA_VERSIONS: Record<string, number> = {
   [EVENT_TYPES.RECEIVING_LINE_INSPECTED]: 1,
   [EVENT_TYPES.RECEIVING_TASK_COMPLETED]: 1,
   [EVENT_TYPES.PUTAWAY_TASK_CREATED]: 1,
+  [EVENT_TYPES.PUTAWAY_TASK_ASSIGNED]: 1,
+  [EVENT_TYPES.PUTAWAY_TASK_STARTED]: 1,
   [EVENT_TYPES.PUTAWAY_TASK_COMPLETED]: 1,
+  [EVENT_TYPES.PUTAWAY_TASK_DEVIATION]: 1,
+  [EVENT_TYPES.INVENTORY_RECEIVED]: 1,
+  [EVENT_TYPES.INVENTORY_ADJUSTED]: 1,
+  [EVENT_TYPES.INVENTORY_TRANSFERRED]: 1,
+  [EVENT_TYPES.WAVE_CREATED]: 1,
+  [EVENT_TYPES.WAVE_RELEASED]: 1,
+  [EVENT_TYPES.WAVE_COMPLETED]: 1,
+  [EVENT_TYPES.WAVE_CANCELLED]: 1,
+  [EVENT_TYPES.PICK_TASK_CREATED]: 1,
+  [EVENT_TYPES.PICK_TASK_ASSIGNED]: 1,
+  [EVENT_TYPES.PICK_LINE_COMPLETED]: 1,
+  [EVENT_TYPES.PICK_LINE_SHORT]: 1,
+  [EVENT_TYPES.PICK_TASK_COMPLETED]: 1,
+  [EVENT_TYPES.PACK_TASK_CREATED]: 1,
+  [EVENT_TYPES.PACK_LINE_VERIFIED]: 1,
+  [EVENT_TYPES.PACK_TASK_COMPLETED]: 1,
+  [EVENT_TYPES.STAGING_ASSIGNMENT_CREATED]: 1,
+  [EVENT_TYPES.LOADING_COMPLETED]: 1,
+  [EVENT_TYPES.CYCLE_COUNT_CREATED]: 1,
+  [EVENT_TYPES.CYCLE_COUNT_STARTED]: 1,
+  [EVENT_TYPES.CYCLE_COUNT_LINE_RECORDED]: 1,
+  [EVENT_TYPES.CYCLE_COUNT_COMPLETED]: 1,
+  [EVENT_TYPES.CYCLE_COUNT_VARIANCE_DETECTED]: 1,
+  [EVENT_TYPES.REPLENISHMENT_RULE_CREATED]: 1,
+  [EVENT_TYPES.REPLENISHMENT_RULE_UPDATED]: 1,
+  [EVENT_TYPES.INVENTORY_BELOW_MINIMUM]: 1,
+  [EVENT_TYPES.REPLENISHMENT_TRIGGERED]: 1,
 };
 
 /**

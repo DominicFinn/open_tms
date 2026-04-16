@@ -145,6 +145,15 @@ import VNextWmsZoneDetail from './vnext-design/VNextWmsZoneDetail';
 import VNextWmsBulkBins from './vnext-design/VNextWmsBulkBins';
 import VNextWmsCreateReceiving from './vnext-design/VNextWmsCreateReceiving';
 import VNextWmsReceivingDetail from './vnext-design/VNextWmsReceivingDetail';
+import VNextWmsPutawayDetail from './vnext-design/VNextWmsPutawayDetail';
+import VNextWmsCreateWave from './vnext-design/VNextWmsCreateWave';
+import VNextWmsWaveDetail from './vnext-design/VNextWmsWaveDetail';
+import VNextWmsPickTaskDetail from './vnext-design/VNextWmsPickTaskDetail';
+import VNextWmsPackTaskDetail from './vnext-design/VNextWmsPackTaskDetail';
+import VNextWmsCreateBin from './vnext-design/VNextWmsCreateBin';
+import VNextWmsCycleCounts from './vnext-design/VNextWmsCycleCounts';
+import VNextWmsCycleCountDetail from './vnext-design/VNextWmsCycleCountDetail';
+import VNextWmsReplenishment from './vnext-design/VNextWmsReplenishment';
 
 // Warehouse App
 import { WarehouseLayout } from './warehouse/warehouse-layout';
@@ -332,15 +341,25 @@ root.render(
           <Route path="wms/zones/:id" element={<VNextWmsZoneDetail />} />
           <Route path="wms/zones/:id/edit" element={<VNextWmsCreateZone />} />
           <Route path="wms/zones/:zoneId/bins/bulk" element={<VNextWmsBulkBins />} />
+          <Route path="wms/zones/:zoneId/bins/create" element={<VNextWmsCreateBin />} />
+          <Route path="wms/bins/create" element={<VNextWmsCreateBin />} />
           <Route path="wms/inventory" element={<VNextWmsInventory />} />
           <Route path="wms/receiving" element={<VNextWmsReceiving />} />
           <Route path="wms/receiving/create" element={<VNextWmsCreateReceiving />} />
           <Route path="wms/receiving/:id" element={<VNextWmsReceivingDetail />} />
           <Route path="wms/putaway" element={<VNextWmsPutaway />} />
+          <Route path="wms/putaway/:id" element={<VNextWmsPutawayDetail />} />
           <Route path="wms/waves" element={<VNextWmsWaves />} />
+          <Route path="wms/waves/create" element={<VNextWmsCreateWave />} />
+          <Route path="wms/waves/:id" element={<VNextWmsWaveDetail />} />
           <Route path="wms/picking" element={<VNextWmsPicking />} />
+          <Route path="wms/picking/:id" element={<VNextWmsPickTaskDetail />} />
           <Route path="wms/packing" element={<VNextWmsPacking />} />
+          <Route path="wms/packing/:id" element={<VNextWmsPackTaskDetail />} />
           <Route path="wms/loading" element={<VNextWmsLoading />} />
+          <Route path="wms/cycle-counts" element={<VNextWmsCycleCounts />} />
+          <Route path="wms/cycle-counts/:id" element={<VNextWmsCycleCountDetail />} />
+          <Route path="wms/replenishment" element={<VNextWmsReplenishment />} />
 
           {/* Integrations (sub-layout with tabs) */}
           <Route path="integrations" element={<VNextIntegrationsLayout />}>

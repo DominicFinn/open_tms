@@ -312,48 +312,66 @@ Bolt-on WMS extending the TMS's TrackableUnit/CargoScan/Location models. Full sp
 
 #### **v1 - Foundation** (must-ship to be credible)
 
-- **Location Hierarchy** 🔲
+- **Location Hierarchy** DONE
   - WarehouseZone, WarehouseAisle, WarehouseBin models with capacity denormalization
   - Bulk bin generation (grid pattern), walk sequence, temperature/hazmat attributes
   - Bin types: pallet, shelf, floor, dock door, staging, pack station
+  - 14 command handler tests
 - **Indoor Positioning (RTLS)** 🔲
   - IndoorZoneAnchor (BLE/WiFi/UWB) extending ArrivalCriteria
   - IndoorPositionHandler maps anchor hits to zones/bins on TrackableUnits
   - IndoorZonePosition read model for current-state queries
-- **Inventory Foundation (digital twin)** 🔲
-  - TrackableUnit nesting (parentUnitId), lot/expiry/receivedAt
-  - `ownerCustomerId` for 3PL multi-client segregation (load-bearing for v2 billing)
-  - `qualityStatus` + QualityHold model (blocks allocation)
+- **Inventory Foundation (digital twin)** DONE (partial)
+  - TrackableUnit nesting (parentUnitId), lot/expiry/receivedAt, currentBinId, currentZoneId
+  - `ownerCustomerId` for 3PL multi-client segregation
+  - `qualityStatus` (available/hold/quarantine/damaged)
   - InventoryRecord (read model) + InventoryTransaction (immutable ledger)
-  - ProductUom master data (EA/INNER/CASE/PALLET conversions, GTIN per UOM)
-  - Cycle counting (full/zone/ABC/random sample)
-  - Replenishment rules (min/max pick-face threshold)
-- **Receiving** 🔲
+  - Stock adjust (with reason codes) and bin-to-bin transfer commands
+  - Per-bin detail view and per-SKU summary aggregation
+  - ProductUom model in schema
+  - 11 command handler tests
+  - 🔲 QualityHold model (blocks allocation)
+  - 🔲 ProductUom conversions UI and break-case operations
+  - 🔲 Cycle counting (full/zone/ABC/random sample)
+  - 🔲 Replenishment rules (min/max pick-face threshold)
+- **Receiving** DONE (partial)
   - ReceivingAppointment (scheduled dock time), ReceivingTask, ReceivingLine
-  - ASN-based and blind receiving, inspection workflow, nesting on scan
-  - Extends CargoScan (new scanTypes), CargoDiscrepancy (over/short/damaged)
-- **Putaway** 🔲
+  - ASN-based and blind receiving, inspection workflow
+  - 10 command handler tests
+  - 🔲 Manifest ingestion engine: CSV/XLSX upload, column mapping templates with header-checksum auto-detection, saved mappings per supplier/format
+  - 🔲 Extends CargoScan (new scanTypes), CargoDiscrepancy (over/short/damaged)
+- **Putaway** DONE
   - PutawayRule (SKU pattern, temperature, hazmat, velocity, customer, unit type)
-  - PutawayTask (directed, manual, replenishment, cross-dock)
-  - `next_available_in_zone` resolver using walk sequence + capacity
-- **Allocation Engine** 🔲
+  - PutawayTask (directed, manual, replenishment)
+  - `next_available_in_zone` resolver with walk sequence + capacity + consolidation preference
+  - Scan-to-confirm with deviation tracking, bin constraint validation (temperature, hazmat)
+  - Auto-generates InventoryRecord + InventoryTransaction on completion
+  - 9 command handler tests
+- **Allocation Engine** DONE (partial)
   - Allocation model (soft/hard states)
-  - Strategies: FIFO/FEFO/LIFO, closest-to-pickface, same-lot, avoid-partial-pallet, customer-dedicated
-  - ATP (Available-to-Promise) query endpoint
-- **Pick & Pack** 🔲
-  - Wave, WaveTemplate (cut-off, capacity, priority, auto-release schedule)
+  - Hard allocation on wave release (FIFO), multi-bin split allocation
+  - 🔲 Soft allocation, FEFO/LIFO strategies, closest-to-pickface, same-lot, avoid-partial-pallet
+  - 🔲 ATP (Available-to-Promise) query endpoint
+- **Pick & Pack** DONE (partial)
+  - Wave creation with auto-generated wave numbers, WaveOrder join
+  - Wave release: hard-allocates inventory, generates PickTasks with walk-sequence-sorted PickLines
   - PickTask + PickLine with walk-sequence ordering
-  - Four strategies: discrete, batch, zone, wave
-  - Short-pick handling: backorder / substitute / cancel
-  - PackTask + PackLine with verification
-  - CartonCatalogue + Cartonization service (3D First-Fit-Decreasing)
-  - PackAudit for weight/dim-weight variance
-  - `shipment.cutoff_at_risk` events for miss-risk waves
-- **Loading & BOL** 🔲
-  - StagingAssignment by carrier/route grouping
-  - LoadPlan with reverse load-sequence
-  - BOL generation on `load_plan.completed` (not at wave release)
-  - Seal capture, dock door assignment
+  - Two strategies: discrete (one task per order), batch (one task for wave)
+  - Short-pick handling: backorder / cancel_line with allocation release
+  - PackTask + PackLine with verification, auto-complete
+  - Auto-complete cascade: line -> task -> wave
+  - 9 wave/pick tests + 9 packing/loading tests
+  - 🔲 WaveTemplate (cut-off, capacity, priority, auto-release schedule)
+  - 🔲 Zone pick strategy
+  - 🔲 CartonCatalogue + Cartonization service
+  - 🔲 PackAudit for weight/dim-weight variance
+  - 🔲 `shipment.cutoff_at_risk` events
+- **Loading & BOL** DONE (partial)
+  - StagingAssignment creation with unit location tracking
+  - Batch loading completion (clears unit location - on vehicle)
+  - 🔲 LoadPlan with reverse load-sequence
+  - 🔲 BOL generation on `load_plan.completed`
+  - 🔲 Seal capture, dock door assignment
 - **Cross-dock** 🔲
   - Workflow variant on ReceivingTask with sort-by destination/carrier
 - **Returns / RMA** 🔲

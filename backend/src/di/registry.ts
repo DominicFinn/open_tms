@@ -18,6 +18,7 @@ import { ArrivalCriteriaRepository } from '../repositories/ArrivalCriteriaReposi
 import { CargoTrackingRepository } from '../repositories/CargoTrackingRepository.js';
 import { WarehouseZoneRepository } from '../repositories/WarehouseZoneRepository.js';
 import { ReceivingRepository } from '../repositories/ReceivingRepository.js';
+import { PutawayRuleEvaluator } from '../services/PutawayRuleEvaluator.js';
 import { LocationResolutionService } from '../services/LocationResolutionService.js';
 import { ArrivalCriteriaEvaluationService } from '../services/ArrivalCriteriaEvaluationService.js';
 import { ShipmentAssignmentService } from '../services/ShipmentAssignmentService.js';
@@ -177,6 +178,21 @@ import { BulkCreateBinsCommandHandler } from '../commands/warehouse/BulkCreateBi
 import { CreateReceivingTaskCommandHandler } from '../commands/warehouse/CreateReceivingTaskCommand.js';
 import { RecordReceivingLineCommandHandler } from '../commands/warehouse/RecordReceivingLineCommand.js';
 import { CompleteReceivingCommandHandler } from '../commands/warehouse/CompleteReceivingCommand.js';
+import { AssignPutawayTaskCommandHandler } from '../commands/warehouse/AssignPutawayTaskCommand.js';
+import { CompletePutawayCommandHandler } from '../commands/warehouse/CompletePutawayCommand.js';
+import { AdjustInventoryCommandHandler } from '../commands/warehouse/AdjustInventoryCommand.js';
+import { TransferInventoryCommandHandler } from '../commands/warehouse/TransferInventoryCommand.js';
+import { CreateWaveCommandHandler } from '../commands/warehouse/CreateWaveCommand.js';
+import { ReleaseWaveCommandHandler } from '../commands/warehouse/ReleaseWaveCommand.js';
+import { CompletePickLineCommandHandler } from '../commands/warehouse/CompletePickLineCommand.js';
+import { CreatePackTaskCommandHandler } from '../commands/warehouse/CreatePackTaskCommand.js';
+import { CompletePackLineCommandHandler } from '../commands/warehouse/CompletePackLineCommand.js';
+import { CreateStagingAssignmentCommandHandler } from '../commands/warehouse/CreateStagingAssignmentCommand.js';
+import { CompleteLoadingCommandHandler } from '../commands/warehouse/CompleteLoadingCommand.js';
+import { CreateCycleCountCommandHandler } from '../commands/warehouse/CreateCycleCountCommand.js';
+import { RecordCycleCountLineCommandHandler } from '../commands/warehouse/RecordCycleCountLineCommand.js';
+import { CreateReplenishmentRuleCommandHandler } from '../commands/warehouse/CreateReplenishmentRuleCommand.js';
+import { CheckReplenishmentCommandHandler } from '../commands/warehouse/CheckReplenishmentCommand.js';
 
 /**
  * Register all application dependencies
@@ -233,6 +249,9 @@ export function registerDependencies(prisma: PrismaClient): void {
   container.singleton(TOKENS.IReceivingRepository).toFactory(() => {
     return new ReceivingRepository(container.resolve(TOKENS.PrismaClient));
   });
+  container.singleton(TOKENS.IPutawayRuleEvaluator).toFactory(() => {
+    return new PutawayRuleEvaluator(container.resolve(TOKENS.PrismaClient));
+  });
 
   // Register services as singletons
   container.singleton(TOKENS.IShipmentAssignmentService).toFactory(() => {
@@ -267,13 +286,6 @@ export function registerDependencies(prisma: PrismaClient): void {
       container.resolve(TOKENS.IOrderDeliveryService)
     );
   });
-
-  // Wire up cargo reconciliation into the delivery service (post-construction to avoid circular deps)
-  {
-    const deliveryService = container.resolve<OrderDeliveryService>(TOKENS.IOrderDeliveryService);
-    const cargoService = container.resolve<CargoReconciliationService>(TOKENS.ICargoReconciliationService);
-    deliveryService.setCargoReconciliationService(cargoService);
-  }
 
   container.singleton(TOKENS.IOrderConversionService).toFactory(() => {
     return new OrderConversionService(container.resolve(TOKENS.PrismaClient));
@@ -654,6 +666,13 @@ export function registerDependencies(prisma: PrismaClient): void {
   // Skills that need dependencies (CommandBus, EmailService) are registered after the CommandBus
   container.singleton(TOKENS.ISkillRegistry).toFactory(() => new SkillRegistry());
 
+  // Wire up cargo reconciliation into the delivery service (post-construction, after IEventBus is registered)
+  {
+    const deliveryService = container.resolve<OrderDeliveryService>(TOKENS.IOrderDeliveryService);
+    const cargoService = container.resolve<CargoReconciliationService>(TOKENS.ICargoReconciliationService);
+    deliveryService.setCargoReconciliationService(cargoService);
+  }
+
   // Command bus — register all command handlers
   container.singleton(TOKENS.ICommandBus).toFactory(() => {
     const bus = new CommandBus();
@@ -792,6 +811,33 @@ export function registerDependencies(prisma: PrismaClient): void {
     bus.register(new CreateReceivingTaskCommandHandler(prisma, eventBus));
     bus.register(new RecordReceivingLineCommandHandler(prisma, eventBus));
     bus.register(new CompleteReceivingCommandHandler(prisma, eventBus));
+
+    // WMS Putaway commands
+    bus.register(new AssignPutawayTaskCommandHandler(prisma, eventBus));
+    bus.register(new CompletePutawayCommandHandler(prisma, eventBus));
+
+    // WMS Inventory commands
+    bus.register(new AdjustInventoryCommandHandler(prisma, eventBus));
+    bus.register(new TransferInventoryCommandHandler(prisma, eventBus));
+
+    // WMS Wave & Pick commands
+    bus.register(new CreateWaveCommandHandler(prisma, eventBus));
+    bus.register(new ReleaseWaveCommandHandler(prisma, eventBus));
+    bus.register(new CompletePickLineCommandHandler(prisma, eventBus));
+
+    // WMS Packing & Loading commands
+    bus.register(new CreatePackTaskCommandHandler(prisma, eventBus));
+    bus.register(new CompletePackLineCommandHandler(prisma, eventBus));
+    bus.register(new CreateStagingAssignmentCommandHandler(prisma, eventBus));
+    bus.register(new CompleteLoadingCommandHandler(prisma, eventBus));
+
+    // WMS Cycle Counting commands
+    bus.register(new CreateCycleCountCommandHandler(prisma, eventBus));
+    bus.register(new RecordCycleCountLineCommandHandler(prisma, eventBus));
+
+    // WMS Replenishment commands
+    bus.register(new CreateReplenishmentRuleCommandHandler(prisma, eventBus));
+    bus.register(new CheckReplenishmentCommandHandler(prisma, eventBus));
 
     return bus;
   });

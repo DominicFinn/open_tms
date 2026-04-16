@@ -37,10 +37,38 @@ export default function VNextWmsLoading() {
   const [assignments, setAssignments] = useState<StagingAssignment[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const [selectedLocation, setSelectedLocation] = useState('');
+  const [locations, setLocations] = useState<Array<{ id: string; name: string }>>([]);
+
   useEffect(() => {
-    // TODO: Fetch from API
-    setLoading(false);
+    fetch(`${API_URL}/api/v1/locations`)
+      .then(r => r.json())
+      .then(res => {
+        const locs = (res.data || []).filter(
+          (l: any) => !l.locationType || ['warehouse', 'distribution_centre', 'cross_dock'].includes(l.locationType)
+        );
+        setLocations(locs);
+        if (locs.length > 0) setSelectedLocation(locs[0].id);
+        else setLoading(false);
+      })
+      .catch(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (!selectedLocation) return;
+    setLoading(true);
+    fetch(`${API_URL}/api/v1/staging?locationId=${selectedLocation}`)
+      .then(r => r.json())
+      .then(res => setAssignments((res.data || []).map((a: any) => ({
+        ...a,
+        orderRef: a.orderId?.slice(0, 8) ?? '',
+        shipmentRef: a.shipmentId?.slice(0, 8) ?? null,
+        stagingBinLabel: a.stagingBin?.label ?? '',
+        packedAt: a.createdAt,
+      }))))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [selectedLocation]);
 
   return (
     <div>

@@ -116,6 +116,7 @@ export const TOKENS = {
   // WMS tokens
   IWarehouseZoneRepository: Symbol.for('IWarehouseZoneRepository'),
   IReceivingRepository: Symbol.for('IReceivingRepository'),
+  IPutawayRuleEvaluator: Symbol.for('IPutawayRuleEvaluator'),
 
   // Infrastructure tokens
   PrismaClient: Symbol.for('PrismaClient'),

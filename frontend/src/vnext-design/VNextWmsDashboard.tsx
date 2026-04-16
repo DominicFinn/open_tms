@@ -23,20 +23,32 @@ export default function VNextWmsDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  const [selectedLocation, setSelectedLocation] = useState('');
+  const [locations, setLocations] = useState<Array<{ id: string; name: string }>>([]);
+
   useEffect(() => {
-    // TODO: Wire up to real API once backend routes exist
-    setStats({
-      zones: 0,
-      bins: 0,
-      activeBins: 0,
-      totalSkus: 0,
-      receivingTasks: 0,
-      pickTasks: 0,
-      packTasks: 0,
-      putawayTasks: 0,
-    });
-    setLoading(false);
+    fetch(`${API_URL}/api/v1/locations`)
+      .then(r => r.json())
+      .then(res => {
+        const locs = (res.data || []).filter(
+          (l: any) => !l.locationType || ['warehouse', 'distribution_centre', 'cross_dock'].includes(l.locationType)
+        );
+        setLocations(locs);
+        if (locs.length > 0) setSelectedLocation(locs[0].id);
+        else setLoading(false);
+      })
+      .catch(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (!selectedLocation) return;
+    setLoading(true);
+    fetch(`${API_URL}/api/v1/wms/dashboard?locationId=${selectedLocation}`)
+      .then(r => r.json())
+      .then(res => { if (res.data) setStats(res.data); })
+      .catch(() => setError('Failed to load dashboard'))
+      .finally(() => setLoading(false));
+  }, [selectedLocation]);
 
   if (loading) {
     return (
@@ -54,6 +66,9 @@ export default function VNextWmsDashboard() {
           <h1>Warehouse Operations</h1>
           <p className="vn-page-subtitle">Overview of warehouse activity and performance</p>
         </div>
+        <select className="vn-filter-select" value={selectedLocation} onChange={e => setSelectedLocation(e.target.value)} style={{ width: 'auto' }}>
+          {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+        </select>
       </div>
 
       {error && <div className="vn-alert vn-alert-error">{error}</div>}

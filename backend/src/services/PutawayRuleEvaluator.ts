@@ -20,6 +20,8 @@ export interface UnitAttributes {
   customerId?: string | null;
   unitType?: string;
   crossDock?: boolean;
+  /** Enable consolidation: prefer bins where this SKU already has inventory */
+  consolidate?: boolean;
 }
 
 export interface IPutawayRuleEvaluator {
@@ -38,7 +40,7 @@ export class PutawayRuleEvaluator implements IPutawayRuleEvaluator {
 
     for (const rule of rules) {
       if (this.matches(rule, unit)) {
-        const bin = await this.resolveTarget(rule);
+        const bin = await this.resolveTarget(rule, unit);
         if (bin) {
           return {
             targetBinId: bin.id,
@@ -90,7 +92,7 @@ export class PutawayRuleEvaluator implements IPutawayRuleEvaluator {
     return regex.test(value);
   }
 
-  private async resolveTarget(rule: PutawayRule): Promise<WarehouseBin | null> {
+  private async resolveTarget(rule: PutawayRule, unit?: UnitAttributes): Promise<WarehouseBin | null> {
     if (rule.targetType === 'specific_bin' && rule.targetBinId) {
       return this.prisma.warehouseBin.findFirst({
         where: { id: rule.targetBinId, active: true },
@@ -98,6 +100,11 @@ export class PutawayRuleEvaluator implements IPutawayRuleEvaluator {
     }
 
     if (rule.targetType === 'zone' && rule.targetZoneId) {
+      // Consolidation: prefer a bin where this SKU already has inventory
+      if (unit?.consolidate && unit.sku) {
+        const consolidatedBin = await this.findConsolidationBin(rule.targetZoneId, unit.sku);
+        if (consolidatedBin) return consolidatedBin;
+      }
       // First available bin in zone
       return this.prisma.warehouseBin.findFirst({
         where: { zoneId: rule.targetZoneId, active: true },
@@ -106,6 +113,12 @@ export class PutawayRuleEvaluator implements IPutawayRuleEvaluator {
     }
 
     if (rule.targetType === 'next_available_in_zone' && rule.targetZoneId) {
+      // Consolidation: prefer a bin where this SKU already has inventory
+      if (unit?.consolidate && unit.sku) {
+        const consolidatedBin = await this.findConsolidationBin(rule.targetZoneId, unit.sku);
+        if (consolidatedBin) return consolidatedBin;
+      }
+
       // Find bin with available capacity, respecting level preference
       const orderBy: any[] = [];
       if (rule.preferLevel === 'low') orderBy.push({ level: 'asc' });
@@ -122,6 +135,34 @@ export class PutawayRuleEvaluator implements IPutawayRuleEvaluator {
       return candidates.find(b =>
         b.maxPalletPositions === null || b.currentPalletCount < b.maxPalletPositions
       ) ?? null;
+    }
+
+    return null;
+  }
+
+  /**
+   * Find a bin in the zone that already has inventory of the same SKU,
+   * with available capacity. This keeps the same products together physically,
+   * making picking faster and cycle counting easier.
+   */
+  private async findConsolidationBin(zoneId: string, sku: string): Promise<WarehouseBin | null> {
+    // Find inventory records for this SKU in this zone's bins
+    const existingInventory = await this.prisma.inventoryRecord.findMany({
+      where: {
+        sku,
+        bin: { zoneId, active: true },
+        quantityOnHand: { gt: 0 },
+      },
+      include: { bin: true },
+      orderBy: { quantityOnHand: 'desc' },
+      take: 10,
+    });
+
+    // Pick the first bin that has capacity
+    for (const inv of existingInventory) {
+      if (inv.bin.maxPalletPositions === null || inv.bin.currentPalletCount < inv.bin.maxPalletPositions) {
+        return inv.bin;
+      }
     }
 
     return null;

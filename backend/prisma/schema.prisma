@@ -4373,3 +4373,77 @@ model StagingAssignment {
   @@index([shipmentId])
   @@index([status])
 }
+
+// ── Cycle Counting ───────────────────────────────────────────
+
+model CycleCount {
+  id              String   @id @default(uuid())
+  locationId      String
+  countType       String                       // full, zone, random_sample
+  zoneId          String?                      // for zone counts
+  status          String   @default("planned") // planned, in_progress, completed, cancelled
+  assignedToUserId String?
+  plannedAt       DateTime?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  totalBins       Int      @default(0)
+  countedBins     Int      @default(0)
+  varianceCount   Int      @default(0)         // bins with variances
+
+  orgId           String
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  lines           CycleCountLine[]
+
+  @@index([locationId])
+  @@index([orgId])
+  @@index([status])
+}
+
+model CycleCountLine {
+  id                  String   @id @default(uuid())
+  cycleCountId        String
+  cycleCount          CycleCount @relation(fields: [cycleCountId], references: [id], onDelete: Cascade)
+  binId               String
+  sku                 String
+  uomCode             String   @default("EA")
+  expectedQuantity    Int                      // from InventoryRecord.quantityOnHand
+  countedQuantity     Int?                     // null = not yet counted
+  variance            Int?                     // counted - expected
+  inventoryRecordId   String?                  // link to the InventoryRecord
+  status              String   @default("pending") // pending, counted, variance_confirmed, adjusted
+  countedByUserId     String?
+  countedAt           DateTime?
+  notes               String?
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([cycleCountId])
+  @@index([binId])
+  @@index([status])
+}
+
+// ── Replenishment ────────────────────────────────────────────
+
+model ReplenishmentRule {
+  id              String   @id @default(uuid())
+  locationId      String
+  sku             String
+  pickFaceBinId   String                       // bin to replenish
+  bulkZoneId      String                       // zone to pull from
+  minQuantity     Int                          // trigger when qty drops below this
+  maxQuantity     Int                          // replenish up to this amount
+  active          Boolean  @default(true)
+
+  orgId           String
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([locationId])
+  @@index([orgId])
+  @@index([sku])
+}
