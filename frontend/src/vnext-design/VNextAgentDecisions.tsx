@@ -143,9 +143,9 @@ export default function VNextAgentDecisions() {
       )
     : decisions;
 
-  const correctCount = stats?.byOutcomeStatus.find(s => s.outcomeStatus === 'correct')?.count || 0;
-  const incorrectCount = stats?.byOutcomeStatus.find(s => s.outcomeStatus === 'incorrect')?.count || 0;
-  const reviewedCount = correctCount + incorrectCount + (stats?.byOutcomeStatus.find(s => s.outcomeStatus === 'partially_correct')?.count || 0);
+  const correctCount = stats?.byOutcomeStatus?.find(s => s.outcomeStatus === 'correct')?.count || 0;
+  const incorrectCount = stats?.byOutcomeStatus?.find(s => s.outcomeStatus === 'incorrect')?.count || 0;
+  const reviewedCount = correctCount + incorrectCount + (stats?.byOutcomeStatus?.find(s => s.outcomeStatus === 'partially_correct')?.count || 0);
   const accuracyPct = reviewedCount > 0 ? Math.round((correctCount / reviewedCount) * 100) : null;
 
   if (loading) {

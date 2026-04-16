@@ -1,5 +1,6 @@
 import React from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 
 const TABS = [
   { to: '/integrations', label: 'Dashboard', icon: 'space_dashboard', end: true },
@@ -28,7 +29,9 @@ export default function VNextIntegrationsLayout() {
           </NavLink>
         ))}
       </div>
-      <Outlet />
+      <ErrorBoundary>
+        <Outlet />
+      </ErrorBoundary>
     </>
   );
 }
