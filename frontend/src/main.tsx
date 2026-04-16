@@ -1,6 +1,6 @@
 
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider } from './ThemeProvider';
 import { MapProvider } from './MapProvider';
 
@@ -325,6 +325,10 @@ root.render(
 
           {/* Style Guide */}
           <Route path="style-guide" element={<VNextStyleGuide />} />
+
+          {/* Redirect legacy /admin paths to /settings */}
+          <Route path="admin" element={<Navigate to="/settings" replace />} />
+          <Route path="admin/*" element={<Navigate to="/settings" replace />} />
         </Route>
       </Routes>
       </MapProvider>

@@ -79,7 +79,7 @@ export default function VNextCarrierTracking() {
       const res = await fetch(`${API_URL}/api/v1/carrier-tracking/integrations`);
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed to load integrations');
-      setIntegrations(json.data || []);
+      setIntegrations(Array.isArray(json.data) ? json.data : []);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -118,7 +118,7 @@ export default function VNextCarrierTracking() {
     }
   };
 
-  const filtered = integrations.filter(i => {
+  const filtered = (integrations || []).filter(i => {
     if (providerFilter && i.providerType !== providerFilter) return false;
     if (statusFilter && i.status !== statusFilter) return false;
     return true;

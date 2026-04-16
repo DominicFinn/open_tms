@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 import './vnext.css';
 
 /* ── Theme Mode Hook ─────────────────────────────────────── */
@@ -305,7 +306,9 @@ export default function VNextLayout() {
         </header>
 
         <div className="vn-content">
-          <Outlet />
+          <ErrorBoundary>
+            <Outlet />
+          </ErrorBoundary>
         </div>
       </div>
     </div>

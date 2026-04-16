@@ -95,7 +95,7 @@ export default function VNextWebhookLogs() {
             <span className="material-icons">list_alt</span>
           </div>
           <div>
-            <div className="vn-stat-value">{stats.total.toLocaleString()}</div>
+            <div className="vn-stat-value">{(stats.total ?? 0).toLocaleString()}</div>
             <div className="vn-stat-label">Total</div>
           </div>
         </div>
@@ -104,7 +104,7 @@ export default function VNextWebhookLogs() {
             <span className="material-icons">check_circle</span>
           </div>
           <div>
-            <div className="vn-stat-value">{stats.successful.toLocaleString()}</div>
+            <div className="vn-stat-value">{(stats.successful ?? 0).toLocaleString()}</div>
             <div className="vn-stat-label">Successful</div>
           </div>
         </div>
@@ -113,7 +113,7 @@ export default function VNextWebhookLogs() {
             <span className="material-icons">error</span>
           </div>
           <div>
-            <div className="vn-stat-value">{stats.errors.toLocaleString()}</div>
+            <div className="vn-stat-value">{(stats.errors ?? 0).toLocaleString()}</div>
             <div className="vn-stat-label">Errors</div>
           </div>
         </div>
@@ -122,7 +122,7 @@ export default function VNextWebhookLogs() {
             <span className="material-icons">update</span>
           </div>
           <div>
-            <div className="vn-stat-value">{stats.updates.toLocaleString()}</div>
+            <div className="vn-stat-value">{(stats.updates ?? 0).toLocaleString()}</div>
             <div className="vn-stat-label">Updates</div>
           </div>
         </div>
