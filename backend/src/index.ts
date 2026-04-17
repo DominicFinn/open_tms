@@ -144,7 +144,10 @@ async function start() {
       }
     }
   });
-  await server.register(swaggerUI, { routePrefix: '/docs' });
+  // Only expose Swagger UI in non-production environments
+  if (process.env.NODE_ENV !== 'production') {
+    await server.register(swaggerUI, { routePrefix: '/docs' });
+  }
   await server.register(prismaPlugin);
 
   // Initialize Dependency Injection Container
