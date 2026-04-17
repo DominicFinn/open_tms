@@ -4379,6 +4379,52 @@ model StagingAssignment {
   @@index([status])
 }
 
+// ── Load Planning ────────────────────────────────────────────
+
+model LoadPlan {
+  id              String   @id @default(uuid())
+  locationId      String
+  shipmentId      String?                      // target shipment (may be created during load plan)
+  dockBinId       String?                      // assigned dock door
+  status          String   @default("planning") // planning, loading, completed, cancelled
+  sealNumber      String?                      // recorded on completion
+  trailerNumber   String?
+  carrierId       String?
+  totalUnits      Int      @default(0)
+  loadedUnits     Int      @default(0)
+  completedAt     DateTime?
+  bolDocumentId   String?                      // generated BOL document ID
+
+  orgId           String
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  lines           LoadPlanLine[]
+
+  @@index([locationId])
+  @@index([orgId])
+  @@index([shipmentId])
+  @@index([status])
+}
+
+model LoadPlanLine {
+  id              String   @id @default(uuid())
+  loadPlanId      String
+  loadPlan        LoadPlan @relation(fields: [loadPlanId], references: [id], onDelete: Cascade)
+  stagingAssignmentId String?                  // link to staged unit
+  trackableUnitId String?
+  orderId         String
+  loadSequence    Int      @default(0)         // reverse stop order: last delivery loaded first (low number = load first = back of truck)
+  status          String   @default("pending") // pending, loaded, skipped
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([loadPlanId])
+  @@index([loadSequence])
+}
+
 // ── Cycle Counting ───────────────────────────────────────────
 
 model CycleCount {

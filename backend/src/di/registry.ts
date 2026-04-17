@@ -19,6 +19,7 @@ import { CargoTrackingRepository } from '../repositories/CargoTrackingRepository
 import { WarehouseZoneRepository } from '../repositories/WarehouseZoneRepository.js';
 import { ReceivingRepository } from '../repositories/ReceivingRepository.js';
 import { PutawayRuleEvaluator } from '../services/PutawayRuleEvaluator.js';
+import { CartonizationService } from '../services/CartonizationService.js';
 import { LocationResolutionService } from '../services/LocationResolutionService.js';
 import { ArrivalCriteriaEvaluationService } from '../services/ArrivalCriteriaEvaluationService.js';
 import { ShipmentAssignmentService } from '../services/ShipmentAssignmentService.js';
@@ -195,6 +196,8 @@ import { CreateReplenishmentRuleCommandHandler } from '../commands/warehouse/Cre
 import { CheckReplenishmentCommandHandler } from '../commands/warehouse/CheckReplenishmentCommand.js';
 import { CreateWaveTemplateCommandHandler } from '../commands/warehouse/CreateWaveTemplateCommand.js';
 import { ApplyWaveTemplateCommandHandler } from '../commands/warehouse/ApplyWaveTemplateCommand.js';
+import { CreateLoadPlanCommandHandler } from '../commands/warehouse/CreateLoadPlanCommand.js';
+import { CompleteLoadPlanCommandHandler } from '../commands/warehouse/CompleteLoadPlanCommand.js';
 
 /**
  * Register all application dependencies
@@ -253,6 +256,9 @@ export function registerDependencies(prisma: PrismaClient): void {
   });
   container.singleton(TOKENS.IPutawayRuleEvaluator).toFactory(() => {
     return new PutawayRuleEvaluator(container.resolve(TOKENS.PrismaClient));
+  });
+  container.singleton(TOKENS.ICartonizationService).toFactory(() => {
+    return new CartonizationService(container.resolve(TOKENS.PrismaClient));
   });
 
   // Register services as singletons
@@ -844,6 +850,10 @@ export function registerDependencies(prisma: PrismaClient): void {
     // WMS Wave Template commands
     bus.register(new CreateWaveTemplateCommandHandler(prisma, eventBus));
     bus.register(new ApplyWaveTemplateCommandHandler(prisma, eventBus));
+
+    // WMS Load Plan commands
+    bus.register(new CreateLoadPlanCommandHandler(prisma, eventBus));
+    bus.register(new CompleteLoadPlanCommandHandler(prisma, eventBus));
 
     return bus;
   });

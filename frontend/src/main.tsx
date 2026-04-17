@@ -156,6 +156,9 @@ import VNextWmsCycleCountDetail from './vnext-design/VNextWmsCycleCountDetail';
 import VNextWmsReplenishment from './vnext-design/VNextWmsReplenishment';
 import VNextWmsWaveTemplates from './vnext-design/VNextWmsWaveTemplates';
 import VNextWmsManifestUpload from './vnext-design/VNextWmsManifestUpload';
+import VNextWmsProductUom from './vnext-design/VNextWmsProductUom';
+import VNextWmsCartonCatalogue from './vnext-design/VNextWmsCartonCatalogue';
+import VNextWmsLoadPlan from './vnext-design/VNextWmsLoadPlan';
 
 // Warehouse App
 import { WarehouseLayout } from './warehouse/warehouse-layout';
@@ -370,6 +373,9 @@ root.render(
           <Route path="wms/cycle-counts" element={<VNextWmsCycleCounts />} />
           <Route path="wms/cycle-counts/:id" element={<VNextWmsCycleCountDetail />} />
           <Route path="wms/replenishment" element={<VNextWmsReplenishment />} />
+          <Route path="wms/product-dimensions" element={<VNextWmsProductUom />} />
+          <Route path="wms/carton-catalogue" element={<VNextWmsCartonCatalogue />} />
+          <Route path="wms/load-plans" element={<VNextWmsLoadPlan />} />
 
           {/* Integrations (sub-layout with tabs) */}
           <Route path="integrations" element={<VNextIntegrationsLayout />}>

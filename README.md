@@ -749,11 +749,16 @@ container.singleton(TOKENS.ICustomersRepository)
 - **Wave templates** - Automate wave creation with reusable templates (grouping rules, carrier cutoff times, min/max orders, cron schedules, auto-release)
 - **Picking** - Walk-sequence-optimized pick lists, line-by-line execution, short-pick handling (backorder/cancel)
 - **Packing** - Pack station verification, line-by-line item confirmation
+- **Cartonization** - Recommends smallest viable shipping carton at pack time. ProductUom master data for SKU dimensions, CartonCatalogue per location, First-Fit-Decreasing algorithm with volume and weight scoring
 - **Loading** - Staging assignments at dock bins, batch loading completion
 - **Cycle counting** - Full warehouse, zone, and random sample counts with variance detection and auto-adjustment of inventory
 - **Replenishment** - Auto-replenish pick faces from bulk storage when stock drops below configured minimums
+- **Manifest ingestion** - CSV upload with column mapping templates and header-checksum auto-detection for reusable supplier formats
+- **Zone picking** - Sequential (pick-and-pass) and parallel (pick-and-merge) zone strategies with per-zone task tracking
+- **Product dimensions** - SKU-level dimension and weight master data (ProductUom) for cartonization and future palletization
 - **Operations dashboard** - Real-time warehouse stats (zones, bins, SKUs, task counts by status)
-- **79 command handler tests** across 9 test suites covering the full goods flow
+- **Warehouse mobile app** - Pick task execution and putaway scan-to-confirm on the warehouse floor PWA
+- **147 tests** across 13 test suites covering the full goods flow
 
 ### Shipment Tracking
 - **Full lifecycle management** from draft to delivery

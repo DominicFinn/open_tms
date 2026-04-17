@@ -294,6 +294,11 @@ export const EVENT_TYPES = {
   MANIFEST_MAPPED: 'manifest.mapped',
   MANIFEST_PROCESSED: 'manifest.processed',
   MANIFEST_FAILED: 'manifest.failed',
+
+  // WMS: Load Planning
+  LOAD_PLAN_CREATED: 'load_plan.created',
+  LOAD_PLAN_COMPLETED: 'load_plan.completed',
+  LOAD_PLAN_BOL_GENERATED: 'load_plan.bol_generated',
 } as const;
 
 export type EventType = typeof EVENT_TYPES[keyof typeof EVENT_TYPES];
@@ -483,6 +488,9 @@ export const EVENT_SCHEMA_VERSIONS: Record<string, number> = {
   [EVENT_TYPES.MANIFEST_MAPPED]: 1,
   [EVENT_TYPES.MANIFEST_PROCESSED]: 1,
   [EVENT_TYPES.MANIFEST_FAILED]: 1,
+  [EVENT_TYPES.LOAD_PLAN_CREATED]: 1,
+  [EVENT_TYPES.LOAD_PLAN_COMPLETED]: 1,
+  [EVENT_TYPES.LOAD_PLAN_BOL_GENERATED]: 1,
 };
 
 /**

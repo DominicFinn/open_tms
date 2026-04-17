@@ -333,7 +333,11 @@ Bolt-on WMS extending the TMS's TrackableUnit/CargoScan/Location models. Full sp
   - Cycle counting: full, zone, and random sample types, auto-adjust inventory on completion, variance detection events (5 tests)
   - Replenishment rules: min/max thresholds per SKU per pick-face bin, manual check trigger, auto-creates putaway tasks, deduplication (6 tests)
   - 🔲 QualityHold model (blocks allocation)
-  - 🔲 ProductUom conversions UI and break-case operations
+  - ProductUom CRUD: SKU dimensions/weights management UI, barcode/GTIN tracking, dimension lookup API for cartonization
+  - CartonCatalogue CRUD: per-location carton sizes with cost tracking
+  - CartonizationService: First-Fit-Decreasing recommendation (ProductUom dims -> OrderLineItem fallback), volume + weight utilization scoring, alternative carton suggestions (7 tests)
+  - 🔲 ProductUom conversions (break-case operations, EA/INNER/CASE/PALLET)
+  - 🔲 Auto-measure: automated dimension capture for products without UOM data (scale/dimensioner integration)
 - **Receiving** DONE (partial)
   - ReceivingAppointment (scheduled dock time), ReceivingTask, ReceivingLine
   - ASN-based and blind receiving, inspection workflow
@@ -362,8 +366,8 @@ Bolt-on WMS extending the TMS's TrackableUnit/CargoScan/Location models. Full sp
   - Auto-complete cascade: line -> task -> wave
   - 9 wave/pick tests + 9 packing/loading tests
   - WaveTemplate: create templates with grouping rules, cutoff time, min/max orders, cron schedule, auto-release. Apply template to auto-create waves from eligible orders (6 tests)
-  - 🔲 Zone pick strategy
-  - 🔲 CartonCatalogue + Cartonization service
+  - Zone pick strategy: sequential (pick-and-pass) and parallel (pick-and-merge) modes, zonePickMode on Wave/WaveTemplate, zoneSequence on PickTask, startedAt/completedAt timestamps for SLA (2 tests)
+  - CartonizationService: First-Fit-Decreasing recommendation with ProductUom + OrderLineItem fallback, volume + weight utilization, alternatives. Carton catalogue CRUD. Product dimensions CRUD. Recommendation wired into pack task detail page (7 tests)
   - 🔲 PackAudit for weight/dim-weight variance
   - 🔲 `shipment.cutoff_at_risk` events
 - **Loading & BOL** DONE (partial)
@@ -390,13 +394,31 @@ Bolt-on WMS extending the TMS's TrackableUnit/CargoScan/Location models. Full sp
   - 2D floor-plan SVG upload per Location
   - Live markers for TrackableUnits and users via WebSocket/SSE
   - Dwell heatmap, density heatmap, 24h scrub playback
+- **Pallet Types & Palletization** 🔲
+  - PalletCatalogue model: pallet type master data (EUR 800x1200, UK 1000x1200, half-pallet 800x600, quarter-pallet 600x400, roll cage)
+  - Per-pallet: maxWeightKg, maxStackHeightMm, stackable flag, dimensions, cost
+  - Palletization service: layer-building algorithm to stack cases onto pallets after packing
+  - Auto-split orders across multiple pallets when volume/weight exceeds capacity
+  - Route-based pallet building: group orders by delivery route/stop onto shared pallets
+  - Reverse load-sequence: last delivery stop loaded first (bottom of stack / back of truck)
+  - Half/quarter-pallet support for convenience store and pharmacy fulfillment
+- **Container Intelligence at Pack Time** 🔲
+  - Temperature-aware container selection: add `temperatureZone` to CartonCatalogue so insulated totes, cool boxes, and ambient cartons are all in the catalogue
+  - Cartonization recommender filters by temperature requirement of the order items
+  - Smart tote integration: assign a specific IoT-enabled tote at pack time (auto-pick from pool of available smart totes with required capabilities)
+  - Smart tote as TrackableUnit (type: tote) with IoT device pairing for temperature, door open/close, GPS
+  - Pharmacy and cold chain use case: pick the container that has a working temperature sensor and meets the required temperature range
 - **Unified WarehouseTask Supertype** 🔲
   - Foundation for v2 task interleaving and LMS-aware dispatch
   - `expectedDurationSeconds` field placed now (wired in v2)
-- **Warehouse Mobile App Extensions** 🔲
-  - Receiving, Putaway, Picking, Packing, Loading flows
-  - PWA offline task queue with IndexedDB
-  - Barcode wedge keyboard support (Zebra/Honeywell RF guns)
+- **Warehouse Mobile App Extensions** DONE (partial)
+  - Pick task execution (line-by-line with quantity confirmation)
+  - Putaway task execution (scan-to-confirm destination bin)
+  - Unified task list with pick/putaway tabs
+  - 🔲 Receiving flow in warehouse app
+  - 🔲 Packing flow in warehouse app
+  - 🔲 PWA offline task queue with IndexedDB
+  - 🔲 Barcode wedge keyboard support (Zebra/Honeywell RF guns)
 
 #### **v2 - Differentiation** (after v1 ships)
 
@@ -409,6 +431,18 @@ Bolt-on WMS extending the TMS's TrackableUnit/CargoScan/Location models. Full sp
   - VasTask (ticketing, re-labelling, gift-wrap, FBA prep)
   - BillOfMaterials + KittingTask (assemble/disassemble kits)
   - Billing hooks for per-VAS-unit charges
+- **Advanced Palletization** 🔲
+  - Pallet weight distribution optimization (heavy items on bottom)
+  - Stacking constraint rules (fragile, orientation, max stack pressure)
+  - Mixed-SKU pallet building with layer optimization
+  - Display-ready pallet builds for retail (quarter-pallet with shelf-ready packaging)
+  - Pallet label generation (SSCC-18, GS1-128)
+- **Smart Container Fleet Management** 🔲
+  - Container pool management: track smart tote fleet (available, in-use, charging, maintenance)
+  - Auto-assignment based on IoT capability requirements (temperature range, sensor type)
+  - Container health monitoring: battery level, sensor calibration status, last-seen
+  - Container return tracking: expected return date, overdue alerts
+  - Integration with existing cold chain compliance system for continuous temperature monitoring through the container
 - **Parcel & Compliance Labels** 🔲
   - Multi-carrier rate-shop at pack (ShipEngine or direct APIs)
   - End-of-day manifest (SCAN form, EDI 215)

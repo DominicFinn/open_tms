@@ -1729,6 +1729,40 @@ Automates wave creation from reusable template definitions with grouping rules, 
 
 ---
 
+### Domain: Cartonization
+
+Recommends the smallest viable shipping carton for items being packed, reducing dim-weight charges.
+
+### Where it fits in the workflow
+Cartonization fires at **pack time** - when a PackTask is opened, the system looks up item dimensions, calculates total volume and weight, and recommends the smallest carton from the catalogue that fits. The worker sees the recommendation on the pack task detail page and can accept or override.
+
+### Dimension lookup chain
+1. **ProductUom** - Per-SKU master data (lengthMm, widthMm, heightMm, weightGrams). Most reliable - set once, used forever.
+2. **OrderLineItem** - Per-order dimensions (length, width, height in cm; weight in kg). Converted to mm/grams. Used when ProductUom is missing.
+3. **Neither available** - Recommendation skipped, missing SKUs flagged.
+
+### Algorithm
+First-Fit-Decreasing by volume:
+1. Sum item volumes (L x W x H x quantity) and weights across all pack lines
+2. Score each carton in the catalogue: volumeUtilization = totalItemVolume / cartonVolume, weightUtilization = totalWeight / maxWeight
+3. Pick the smallest carton where both volume and weight utilization <= 100% (highest utilization that still fits)
+4. Return recommended carton plus up to 3 alternatives
+
+### Scope
+- **Applies to**: Parcel/case-level outbound (B2C e-commerce, small shipments)
+- **Does not apply to**: Pallet building (FTL/LTL where cases are loaded onto pallets). Palletization is a separate algorithm (layer-building, weight distribution, stacking constraints) for v2+.
+
+### Key files
+- `backend/src/services/CartonizationService.ts` - Recommendation engine with dimension lookup
+- `backend/src/routes/cartonization.ts` - `POST /api/v1/cartonization/recommend`
+- `backend/src/routes/productUom.ts` - ProductUom CRUD (6 endpoints)
+- `backend/src/routes/cartonCatalogue.ts` - CartonCatalogue CRUD (4 endpoints)
+- `frontend/src/vnext-design/VNextWmsProductUom.tsx` - Product dimensions management
+- `frontend/src/vnext-design/VNextWmsCartonCatalogue.tsx` - Carton catalogue management
+- `backend/src/__tests__/services/CartonizationService.test.ts` - 7 tests
+
+---
+
 ### WMS Key Files
 - `backend/src/commands/warehouse/` - All WMS command handlers (23 handlers)
 - `backend/src/repositories/WarehouseZoneRepository.ts` - Zone/aisle/bin CRUD

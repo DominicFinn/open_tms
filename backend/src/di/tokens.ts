@@ -117,6 +117,7 @@ export const TOKENS = {
   IWarehouseZoneRepository: Symbol.for('IWarehouseZoneRepository'),
   IReceivingRepository: Symbol.for('IReceivingRepository'),
   IPutawayRuleEvaluator: Symbol.for('IPutawayRuleEvaluator'),
+  ICartonizationService: Symbol.for('ICartonizationService'),
 
   // Infrastructure tokens
   PrismaClient: Symbol.for('PrismaClient'),
