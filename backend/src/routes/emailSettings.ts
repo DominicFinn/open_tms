@@ -52,6 +52,9 @@ export async function emailSettingsRoutes(server: FastifyInstance) {
       data: {
         ...org,
         smtpPassword: org.smtpPassword ? '••••••••' : null,
+        smtpUser: org.smtpUser
+          ? org.smtpUser.slice(0, 2) + '****' + (org.smtpUser.includes('@') ? '@' + org.smtpUser.split('@')[1] : '')
+          : null,
       },
       error: null,
     };
