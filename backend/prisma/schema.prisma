@@ -216,6 +216,21 @@ model Shipment {
 
   // Brokerage
   commissions             Commission[]
+
+  @@index([customerId])
+  @@index([status])
+  @@index([originId])
+  @@index([destinationId])
+  @@index([carrierId])
+  @@index([laneId])
+  @@index([archived])
+  @@index([createdAt])
+  @@index([reference])
+  @@index([trackingNumber])
+  @@index([status, archived])
+  @@index([customerId, status])
+  @@index([originId, archived, status])
+  @@index([destinationId, archived, status])
 }
 
 model ShipmentStop {
@@ -413,6 +428,8 @@ model Vehicle {
   loads      Load[]
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+
+  @@index([carrierId])
 }
 
 model Driver {
@@ -425,6 +442,8 @@ model Driver {
   loads     Load[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([carrierId])
 }
 
 model Load {
@@ -438,6 +457,10 @@ model Load {
   assignedAt DateTime?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+
+  @@index([shipmentId])
+  @@index([vehicleId])
+  @@index([driverId])
 }
 
 model Lane {
@@ -482,6 +505,8 @@ model CustomerLane {
   updatedAt  DateTime @updatedAt
 
   @@unique([customerId, laneId])
+  @@index([customerId])
+  @@index([laneId])
 }
 
 model LaneCarrier {
@@ -511,6 +536,8 @@ model LaneCarrier {
   targetMarginPercent   Decimal?  @db.Decimal(5,2)
 
   @@unique([laneId, carrierId])
+  @@index([laneId])
+  @@index([carrierId])
 }
 
 model LaneStop {
@@ -526,6 +553,8 @@ model LaneStop {
 
   @@unique([laneId, order])
   @@unique([laneId, locationId])
+  @@index([laneId])
+  @@index([locationId])
 }
 
 model Order {
@@ -610,6 +639,16 @@ model Order {
   // Custom fields
   customFieldVersionId String?
   customFieldValues    Json?
+
+  @@index([customerId])
+  @@index([status])
+  @@index([archived])
+  @@index([createdAt])
+  @@index([deliveryStatus])
+  @@index([originId])
+  @@index([destinationId])
+  @@index([status, archived])
+  @@index([customerId, archived])
 }
 
 model OrderLineItem {
@@ -649,6 +688,9 @@ model OrderLineItem {
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([sku])
 }
 
 model OrderShipment {
@@ -660,6 +702,8 @@ model OrderShipment {
   createdAt   DateTime @default(now())
 
   @@unique([orderId, shipmentId])
+  @@index([orderId])
+  @@index([shipmentId])
 }
 
 model Organization {
@@ -2988,6 +3032,7 @@ model Charge {
   @@index([shipmentId])
   @@index([chargeCategory])
   @@index([status])
+  @@index([shipmentId, chargeCategory])
 }
 
 // ─── Financial: Shipment Financial Summary ──────────────────────────────────
@@ -3075,6 +3120,7 @@ model Invoice {
   @@index([customerId])
   @@index([status])
   @@index([dueDate])
+  @@index([orgId, status, dueDate])
 }
 
 model InvoiceLineItem {
@@ -3193,6 +3239,7 @@ model CarrierInvoice {
   @@index([status])
   @@index([dueDate])
   @@index([matchStatus])
+  @@index([orgId, status])
 }
 
 model CarrierInvoiceLineItem {
