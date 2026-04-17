@@ -16,28 +16,17 @@ export async function shipmentRoutes(server: FastifyInstance) {
     return org?.id || 'default';
   };
 
-  // Get all shipments
-  server.get('/api/v1/shipments', async (_req: FastifyRequest, _reply: FastifyReply) => {
-    const shipments = await server.prisma.shipment.findMany({
-      where: { archived: false },
-      include: {
-        customer: true,
-        origin: true,
-        destination: true,
-        lane: {
-          include: {
-            origin: true,
-            destination: true,
-            laneCarriers: {
-              where: { assigned: true },
-              include: { carrier: true }
-            }
-          }
-        },
-        carrier: true,
-        shipmentFinancialSummary: true,
-      },
-      orderBy: { createdAt: 'desc' }
+  // Get all shipments (uses denormalized read model for performance)
+  server.get('/api/v1/shipments', async (req: FastifyRequest, _reply: FastifyReply) => {
+    const { status, customerId, carrierId } = (req.query as any) || {};
+    const where: any = {};
+    if (status) where.status = status;
+    if (customerId) where.customerId = customerId;
+    if (carrierId) where.carrierId = carrierId;
+
+    const shipments = await server.prisma.shipmentReadModel.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
     });
     return { data: shipments, error: null };
   });

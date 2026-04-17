@@ -49,24 +49,12 @@ export async function financialReportRoutes(server: FastifyInstance) {
     const query = req.query as Record<string, string>;
     const asOf = query.asOfDate ? new Date(query.asOfDate + 'T23:59:59Z') : new Date();
 
-    // Fetch all unpaid invoices
-    const invoices = await prisma.invoice.findMany({
+    // Fetch all unpaid invoices from read model (no joins needed)
+    const invoices = await prisma.invoiceReadModel.findMany({
       where: {
         status: { in: ['sent', 'partial_paid', 'overdue'] },
         balanceCents: { gt: 0 },
         ...(query.customerId && { customerId: query.customerId }),
-      },
-      select: {
-        id: true,
-        invoiceNumber: true,
-        customerId: true,
-        totalCents: true,
-        paidCents: true,
-        balanceCents: true,
-        issueDate: true,
-        dueDate: true,
-        status: true,
-        customer: { select: { name: true } },
       },
       orderBy: { dueDate: 'asc' },
     });
@@ -82,7 +70,7 @@ export async function financialReportRoutes(server: FastifyInstance) {
       if (!customerMap.has(inv.customerId)) {
         customerMap.set(inv.customerId, {
           customerId: inv.customerId,
-          customerName: inv.customer.name,
+          customerName: inv.customerName,
           invoiceCount: 0,
           buckets: { current: 0, days1to30: 0, days31to60: 0, days61to90: 0, days90plus: 0, total: 0 },
         });
@@ -141,24 +129,13 @@ export async function financialReportRoutes(server: FastifyInstance) {
     const query = req.query as Record<string, string>;
     const asOf = query.asOfDate ? new Date(query.asOfDate + 'T23:59:59Z') : new Date();
 
-    const invoices = await prisma.invoice.findMany({
+    const invoices = await prisma.invoiceReadModel.findMany({
       where: {
         status: { in: ['sent', 'partial_paid', 'overdue'] },
         balanceCents: { gt: 0 },
         ...(query.customerId && { customerId: query.customerId }),
       },
-      select: {
-        invoiceNumber: true,
-        customerId: true,
-        totalCents: true,
-        paidCents: true,
-        balanceCents: true,
-        issueDate: true,
-        dueDate: true,
-        status: true,
-        customer: { select: { name: true } },
-      },
-      orderBy: [{ customer: { name: 'asc' } }, { dueDate: 'asc' }],
+      orderBy: [{ customerName: 'asc' }, { dueDate: 'asc' }],
     });
 
     const fmt = (cents: number) => (cents / 100).toFixed(2);
@@ -177,7 +154,7 @@ export async function financialReportRoutes(server: FastifyInstance) {
       else if (daysPast > 0) bucket = '1-30 Days';
 
       rows.push([
-        `"${inv.customer.name}"`,
+        `"${inv.customerName}"`,
         inv.invoiceNumber,
         fmtDate(inv.issueDate),
         fmtDate(inv.dueDate),
@@ -287,27 +264,11 @@ export async function financialReportRoutes(server: FastifyInstance) {
   }, async (req: FastifyRequest) => {
     const query = req.query as Record<string, string>;
 
-    const shipmentWhere: any = {};
-    if (query.customerId) shipmentWhere.customerId = query.customerId;
+    const where: any = {};
+    if (query.customerId) where.customerId = query.customerId;
 
-    const shipments = await prisma.shipment.findMany({
-      where: shipmentWhere,
-      select: {
-        id: true,
-        customerId: true,
-        customer: { select: { name: true } },
-        shipmentFinancialSummary: {
-          select: {
-            expectedRevenueCents: true,
-            expectedCostCents: true,
-            expectedMarginCents: true,
-            actualRevenueCents: true,
-            actualCostCents: true,
-            actualMarginCents: true,
-          },
-        },
-      },
-    });
+    // Use read model - financial fields are already denormalized
+    const shipments = await prisma.shipmentReadModel.findMany({ where });
 
     const customerMap = new Map<string, {
       customerId: string;
@@ -320,13 +281,12 @@ export async function financialReportRoutes(server: FastifyInstance) {
     }>();
 
     for (const s of shipments) {
-      const fin = s.shipmentFinancialSummary;
-      if (!fin) continue;
+      if (!s.expectedRevenueCents && !s.expectedCostCents) continue;
 
       if (!customerMap.has(s.customerId)) {
         customerMap.set(s.customerId, {
           customerId: s.customerId,
-          customerName: s.customer.name,
+          customerName: s.customerName,
           shipmentCount: 0,
           totalRevenueCents: 0,
           totalCostCents: 0,
@@ -336,9 +296,9 @@ export async function financialReportRoutes(server: FastifyInstance) {
       }
       const entry = customerMap.get(s.customerId)!;
       entry.shipmentCount++;
-      entry.totalRevenueCents += fin.expectedRevenueCents;
-      entry.totalCostCents += fin.expectedCostCents;
-      entry.totalMarginCents += fin.expectedMarginCents;
+      entry.totalRevenueCents += s.expectedRevenueCents ?? 0;
+      entry.totalCostCents += s.expectedCostCents ?? 0;
+      entry.totalMarginCents += s.expectedMarginCents ?? 0;
     }
 
     const customers = [...customerMap.values()].map(c => ({

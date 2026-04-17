@@ -14,25 +14,16 @@ export async function laneRoutes(server: FastifyInstance) {
     const org = await server.prisma.organization.findFirst({ select: { id: true } });
     return org?.id || 'default';
   };
-  // Get all lanes
-  server.get('/api/v1/lanes', async (_req: FastifyRequest, _reply: FastifyReply) => {
-    const lanes = await server.prisma.lane.findMany({
-      where: { archived: false },
-      include: {
-        origin: true,
-        destination: true,
-        stops: {
-          include: { location: true },
-          orderBy: { order: 'asc' }
-        },
-        customerLanes: {
-          include: { customer: true }
-        },
-        laneCarriers: {
-          include: { carrier: true }
-        }
-      },
-      orderBy: { name: 'asc' }
+  // Get all lanes (uses denormalized read model for performance)
+  server.get('/api/v1/lanes', async (req: FastifyRequest, _reply: FastifyReply) => {
+    const { status } = (req.query as any) || {};
+    const where: any = {};
+    if (status) where.status = status;
+    else where.status = 'active';
+
+    const lanes = await server.prisma.laneReadModel.findMany({
+      where,
+      orderBy: { name: 'asc' },
     });
     return { data: lanes, error: null };
   });
