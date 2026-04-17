@@ -144,13 +144,22 @@ export async function authenticateCarrierJWT(req: FastifyRequest, reply: Fastify
   const token = authHeader.slice(7);
 
   try {
-    const payload = verifyJWT(token);
-    // Carrier tokens have iss: "open-tms-carrier" and carrierId
-    if (payload.iss !== 'open-tms-carrier' || !(payload as any).carrierId) {
-      reply.code(401).send({ data: null, error: 'Invalid carrier token' });
-      return;
-    }
-    req.carrierUser = payload as unknown as CarrierJWTPayload;
+    // Verify signature and expiry directly (verifyJWT rejects non-'open-tms-auth' issuers)
+    const parts = token.split('.');
+    if (parts.length !== 3) throw new Error('Invalid token format');
+
+    const [headerB64, payloadB64, signatureB64] = parts;
+    const expectedSig = createHmac('sha256', JWT_SECRET)
+      .update(`${headerB64}.${payloadB64}`)
+      .digest('base64url');
+
+    if (signatureB64 !== expectedSig) throw new Error('Invalid signature');
+
+    const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString()) as CarrierJWTPayload;
+    if (payload.exp && payload.exp * 1000 < Date.now()) throw new Error('Token expired');
+    if (payload.iss !== 'open-tms-carrier' || !payload.carrierId) throw new Error('Invalid carrier token');
+
+    req.carrierUser = payload;
   } catch {
     reply.code(401).send({ data: null, error: 'Invalid or expired token' });
   }

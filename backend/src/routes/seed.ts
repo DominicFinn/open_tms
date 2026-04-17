@@ -2,6 +2,19 @@ import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { seedSystemRoles } from '../auth/seedRoles.js';
 
 export async function seedRoutes(server: FastifyInstance) {
+  // Block seed routes in production to prevent accidental data loss
+  if (process.env.NODE_ENV === 'production') {
+    server.post('/api/v1/seed/roles', async (_req: FastifyRequest, reply: FastifyReply) => {
+      reply.code(403);
+      return { data: null, error: 'Seed routes are disabled in production' };
+    });
+    server.post('/api/v1/seed', async (_req: FastifyRequest, reply: FastifyReply) => {
+      reply.code(403);
+      return { data: null, error: 'Seed routes are disabled in production' };
+    });
+    return;
+  }
+
   // Seed system roles (idempotent - safe to call on every startup)
   server.post('/api/v1/seed/roles', async (_req: FastifyRequest, _reply: FastifyReply) => {
     const result = await seedSystemRoles(server.prisma);

@@ -115,6 +115,7 @@ import {
 } from './workers/carrierTrackingPollWorker.js';
 import { CarrierTrackingService } from './services/carrierTracking/CarrierTrackingService.js';
 import { ICarrierTrackingIntegrationRepository } from './repositories/CarrierTrackingIntegrationRepository.js';
+import { authenticateJWT } from './middleware/jwtAuth.js';
 
 const server = Fastify({ logger: true });
 
@@ -145,95 +146,111 @@ async function start() {
   // Health check
   server.get('/health', async () => ({ status: 'ok' }));
 
-  // Register route modules
-  await server.register(customerRoutes);
-  await server.register(carrierRoutes);
-  await server.register(locationRoutes);
-  await server.register(shipmentRoutes);
-  await server.register(laneRoutes);
-  await server.register(laneRouteRoutes);
-  await server.register(orderRoutes);
-  await server.register(organizationRoutes);
-  await server.register(pendingLaneRequestRoutes);
-  await server.register(seedRoutes);
-  await server.register(distanceRoutes);
-  await server.register(apiKeyRoutes);
-  await server.register(webhookRoutes);
-  await server.register(webhookLogRoutes);
-  await server.register(customerApiRoutes);
-  await server.register(ediImportRoutes);
-  await server.register(queueMonitoringRoutes);
-  await server.register(documentRoutes);
-  await server.register(dailyReportRoutes);
-  await server.register(locationReportRoutes);
-  await server.register(attachmentRoutes);
-  await server.register(customFieldRoutes);
-  await server.register(themeRoutes);
-  await server.register(notificationRoutes);
-  await server.register(eventRoutes);
-  await server.register(emailSettingsRoutes);
-  await server.register(emailTemplateRoutes);
-  await server.register(mapsSettingsRoutes);
-  await server.register(metricsRoutes);
-  await server.register(arrivalCriteriaRoutes);
-  await server.register(tenderRoutes);
-  await server.register(carrierPortalRoutes);
-  await server.register(carrierUserRoutes);
+  // ── Public & self-authenticating routes ──────────────────────────────
+  // These routes either need no auth or manage their own auth internally.
+  // Each is registered at the root level so the global JWT hook does NOT apply.
+
+  await server.register(publicTrackingRoutes);      // Public shipment tracking (HMAC token)
+  await server.register(themeRoutes);                // GET endpoints intentionally public (loaded before login)
+  await server.register(carrierPortalRoutes);        // Own carrier JWT auth internally
+  await server.register(customerPortalRoutes);       // Own customer JWT auth internally
+  await server.register(customerApiRoutes);          // Own API key auth internally
+  await server.register(loadboardRoutes);            // Optional auth (public carrier-facing)
+  await server.register(webhookRoutes);              // Own API key auth internally
+  await server.register(warehouseRoutes);            // Own magic link auth internally
+  await server.register(seedRoutes);                 // Dev/demo only (guarded by NODE_ENV)
+  // EDI inbound - currently rely on trading partner ID validation.
+  // TODO: add proper API key / HMAC auth for EDI endpoints
+  await server.register(ediInboundRoutes);
   await server.register(ediTenderRoutes);
   await server.register(edi214Routes);
-  await server.register(tradingPartnerRoutes);
-  await server.register(deviceRoutes);
-  await server.register(telemetryRoutes);
-  await server.register(cargoTrackingRoutes);
-  await server.register(coldChainRoutes);
-  await server.register(etaMonitorRoutes);
-  await server.register(slaRoutes);
-  await server.register(slaReportRoutes);
-  await server.register(mapRoutes);
-  await server.register(locationOpsRoutes);
-  await server.register(warehouseRoutes);
-  await server.register(warehouseZoneRoutes);
-  await server.register(receivingRoutes);
-  await server.register(putawayRoutes);
-  await server.register(inventoryRoutes);
-  await server.register(waveRoutes);
-  await server.register(packingRoutes);
-  await server.register(wmsDashboardRoutes);
-  await server.register(cycleCountRoutes);
-  await server.register(replenishmentRoutes);
-  await server.register(waveTemplateRoutes);
-  await server.register(manifestIngestionRoutes);
-  await server.register(productUomRoutes);
-  await server.register(cartonCatalogueRoutes);
-  await server.register(cartonizationRoutes);
-  await server.register(loadPlanRoutes);
-  await server.register(agentDecisionRoutes);
-  await server.register(llmSettingsRoutes);
-  await server.register(agentConfigRoutes);
-  await server.register(automationRuleRoutes);
-  await server.register(skillRoutes);
-  await server.register(chargeRoutes);
-  await server.register(invoiceRoutes);
-  await server.register(carrierInvoiceRoutes);
-  await server.register(financialQueryRoutes);
-  await server.register(quoteRoutes);
   await server.register(edi210Routes);
   await server.register(edi820Routes);
-  await server.register(ediInboundRoutes);
   await server.register(edi997Routes);
-  await server.register(financialReportRoutes);
-  await server.register(issueRoutes);
-  await server.register(commentRoutes);
+  await server.register(ediImportRoutes);
+  // Carrier tracking has a webhook endpoint that must be publicly reachable.
+  // TODO: split webhook into its own route file and add JWT auth to admin endpoints
   await server.register(carrierTrackingRoutes);
-  await server.register(qualityCentreRoutes);
-  await server.register(loadboardRoutes);
-  await server.register(roleRoutes);
-  await server.register(brokerReportRoutes);
-  await server.register(commissionRoutes);
-  await server.register(reportsDashboardRoutes);
-  await server.register(customerPortalRoutes);
-  await server.register(customerUserRoutes);
-  await server.register(publicTrackingRoutes);
+
+  // ── Authenticated routes (require JWT) ───────────────────────────────
+  // All routes below require a valid internal user JWT token.
+  // The onRequest hook rejects unauthenticated requests with 401 before
+  // the route handler runs.
+  await server.register(async function authenticatedRoutes(app) {
+    app.addHook('onRequest', authenticateJWT);
+
+    await app.register(customerRoutes);
+    await app.register(carrierRoutes);
+    await app.register(locationRoutes);
+    await app.register(shipmentRoutes);
+    await app.register(laneRoutes);
+    await app.register(laneRouteRoutes);
+    await app.register(orderRoutes);
+    await app.register(organizationRoutes);
+    await app.register(pendingLaneRequestRoutes);
+    await app.register(distanceRoutes);
+    await app.register(apiKeyRoutes);
+    await app.register(webhookLogRoutes);
+    await app.register(queueMonitoringRoutes);
+    await app.register(documentRoutes);
+    await app.register(dailyReportRoutes);
+    await app.register(locationReportRoutes);
+    await app.register(attachmentRoutes);
+    await app.register(customFieldRoutes);
+    await app.register(notificationRoutes);
+    await app.register(eventRoutes);
+    await app.register(emailSettingsRoutes);
+    await app.register(emailTemplateRoutes);
+    await app.register(mapsSettingsRoutes);
+    await app.register(metricsRoutes);
+    await app.register(arrivalCriteriaRoutes);
+    await app.register(tenderRoutes);
+    await app.register(carrierUserRoutes);
+    await app.register(tradingPartnerRoutes);
+    await app.register(deviceRoutes);
+    await app.register(telemetryRoutes);
+    await app.register(cargoTrackingRoutes);
+    await app.register(coldChainRoutes);
+    await app.register(etaMonitorRoutes);
+    await app.register(slaRoutes);
+    await app.register(slaReportRoutes);
+    await app.register(mapRoutes);
+    await app.register(locationOpsRoutes);
+    await app.register(warehouseZoneRoutes);
+    await app.register(receivingRoutes);
+    await app.register(putawayRoutes);
+    await app.register(inventoryRoutes);
+    await app.register(waveRoutes);
+    await app.register(packingRoutes);
+    await app.register(wmsDashboardRoutes);
+    await app.register(cycleCountRoutes);
+    await app.register(replenishmentRoutes);
+    await app.register(waveTemplateRoutes);
+    await app.register(manifestIngestionRoutes);
+    await app.register(productUomRoutes);
+    await app.register(cartonCatalogueRoutes);
+    await app.register(cartonizationRoutes);
+    await app.register(loadPlanRoutes);
+    await app.register(agentDecisionRoutes);
+    await app.register(llmSettingsRoutes);
+    await app.register(agentConfigRoutes);
+    await app.register(automationRuleRoutes);
+    await app.register(skillRoutes);
+    await app.register(chargeRoutes);
+    await app.register(invoiceRoutes);
+    await app.register(carrierInvoiceRoutes);
+    await app.register(financialQueryRoutes);
+    await app.register(quoteRoutes);
+    await app.register(financialReportRoutes);
+    await app.register(issueRoutes);
+    await app.register(commentRoutes);
+    await app.register(qualityCentreRoutes);
+    await app.register(roleRoutes);
+    await app.register(brokerReportRoutes);
+    await app.register(commissionRoutes);
+    await app.register(reportsDashboardRoutes);
+    await app.register(customerUserRoutes);
+  });
 
   // Start queue adapter (needed for publishing events, even if workers run elsewhere)
   try {
