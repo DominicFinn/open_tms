@@ -120,7 +120,14 @@ import { authenticateJWT } from './middleware/jwtAuth.js';
 const server = Fastify({ logger: true });
 
 async function start() {
-  await server.register(cors, { origin: true });
+  // CORS: restrict origins in production, allow all in dev
+  const allowedOrigins = process.env.CORS_ORIGINS
+    ? process.env.CORS_ORIGINS.split(',').map(o => o.trim())
+    : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:3000'];
+  await server.register(cors, {
+    origin: process.env.NODE_ENV === 'production' ? allowedOrigins : true,
+    credentials: true,
+  });
   await server.register(multipart, { limits: { fileSize: 50 * 1024 * 1024 } });
   await server.register(swagger, {
     openapi: {
