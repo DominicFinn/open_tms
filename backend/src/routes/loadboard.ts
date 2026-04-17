@@ -80,7 +80,12 @@ export async function loadboardRoutes(server: FastifyInstance) {
       orderBy: [{ pickupDate: 'asc' }, { createdAt: 'desc' }],
     });
 
-    return { data: shipments, error: null };
+    // Strip financial data for unauthenticated users
+    const results = req.user
+      ? shipments
+      : shipments.map(({ shipmentFinancialSummary, ...rest }) => rest);
+
+    return { data: results, error: null };
   });
 
   // Get matching carriers for a load board shipment
