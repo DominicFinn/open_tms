@@ -46,6 +46,8 @@ export class OrderProjection implements IEventHandler {
         return this.onOrderException(event);
       case EVENT_TYPES.ORDER_EXCEPTION_RESOLVED:
         return this.onExceptionResolved(event);
+      case EVENT_TYPES.ORDER_ARCHIVED:
+        return this.onOrderArchived(event);
       default:
         // Unknown order event — skip
         break;
@@ -225,6 +227,15 @@ export class OrderProjection implements IEventHandler {
       },
     }).catch((err: Error) => {
       console.error(`[OrderProjection] Failed to update read model for ${event.entityId}: ${err.message}`);
+    });
+  }
+
+  private async onOrderArchived(event: DomainEvent): Promise<void> {
+    // Remove archived orders from the read model so they don't appear in list views
+    await this.prisma.orderReadModel.delete({
+      where: { id: event.entityId },
+    }).catch((err: Error) => {
+      console.error(`[OrderProjection] Failed to delete archived order ${event.entityId}: ${err.message}`);
     });
   }
 

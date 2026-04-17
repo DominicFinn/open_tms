@@ -35,6 +35,10 @@ export class ShipmentProjection implements IEventHandler {
         return this.onCarrierAssigned(event);
       case EVENT_TYPES.SHIPMENT_DELIVERED:
         return this.onShipmentDelivered(event);
+      case EVENT_TYPES.SHIPMENT_ARCHIVED:
+        return this.onShipmentArchived(event);
+      case EVENT_TYPES.SHIPMENT_EXCEPTION:
+        return this.onShipmentException(event);
       case EVENT_TYPES.SHIPMENT_STOP_ARRIVED:
       case EVENT_TYPES.SHIPMENT_STOP_COMPLETED:
         return this.onStopUpdate(event);
@@ -188,6 +192,24 @@ export class ShipmentProjection implements IEventHandler {
       data: { status: 'delivered', updatedAt: new Date() },
     }).catch((err: Error) => {
       console.error(`[ShipmentProjection] Failed to update read model for ${event.entityId}: ${err.message}`);
+    });
+  }
+
+  private async onShipmentArchived(event: DomainEvent): Promise<void> {
+    // Remove archived shipments from the read model so they don't appear in list views
+    await this.prisma.shipmentReadModel.delete({
+      where: { id: event.entityId },
+    }).catch((err: Error) => {
+      console.error(`[ShipmentProjection] Failed to delete archived shipment ${event.entityId}: ${err.message}`);
+    });
+  }
+
+  private async onShipmentException(event: DomainEvent): Promise<void> {
+    await this.prisma.shipmentReadModel.update({
+      where: { id: event.entityId },
+      data: { status: 'exception', updatedAt: new Date() },
+    }).catch((err: Error) => {
+      console.error(`[ShipmentProjection] Failed to update exception status for ${event.entityId}: ${err.message}`);
     });
   }
 

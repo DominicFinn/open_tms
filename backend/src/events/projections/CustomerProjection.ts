@@ -12,7 +12,7 @@ import { EVENT_TYPES } from '../eventTypes.js';
 
 export class CustomerProjection implements IEventHandler {
   readonly name = 'projection.customer';
-  readonly eventPatterns = ['customer.*', 'order.created'];
+  readonly eventPatterns = ['customer.*', 'order.created', 'order.delivered', 'order.archived', 'order.status_changed'];
   readonly options: SubscribeOptions = {
     concurrency: 3,
     priority: 5,
@@ -32,6 +32,11 @@ export class CustomerProjection implements IEventHandler {
         return this.onCustomerArchived(event);
       case EVENT_TYPES.ORDER_CREATED:
         return this.onOrderCreated(event);
+      case EVENT_TYPES.ORDER_DELIVERED:
+      case EVENT_TYPES.ORDER_ARCHIVED:
+        return this.onOrderNoLongerActive(event);
+      case EVENT_TYPES.ORDER_STATUS_CHANGED:
+        return this.onOrderStatusChanged(event);
       default:
         break;
     }
@@ -114,5 +119,52 @@ export class CustomerProjection implements IEventHandler {
     }).catch((err: Error) => {
       console.error(`[CustomerProjection] Failed to increment order count for ${payload.customerId}: ${err.message}`);
     });
+  }
+
+  private async onOrderNoLongerActive(event: DomainEvent): Promise<void> {
+    // Decrement activeOrderCount when an order is delivered or archived
+    const payload = event.payload as { customerId?: string };
+    const customerId = payload.customerId || await this.getCustomerIdForOrder(event.entityId);
+    if (!customerId) return;
+
+    await this.prisma.customerReadModel.update({
+      where: { id: customerId },
+      data: {
+        activeOrderCount: { decrement: 1 },
+        updatedAt: new Date(),
+      },
+    }).catch((err: Error) => {
+      console.error(`[CustomerProjection] Failed to decrement order count for ${customerId}: ${err.message}`);
+    });
+  }
+
+  private async onOrderStatusChanged(event: DomainEvent): Promise<void> {
+    // Handle status transitions that affect active order count
+    const payload = event.payload as { oldStatus?: string; newStatus: string; customerId?: string };
+    const wasActive = !['cancelled', 'archived', 'delivered'].includes(payload.oldStatus ?? '');
+    const isActive = !['cancelled', 'archived', 'delivered'].includes(payload.newStatus);
+
+    if (wasActive === isActive) return; // No change in active-ness
+
+    const customerId = payload.customerId || await this.getCustomerIdForOrder(event.entityId);
+    if (!customerId) return;
+
+    await this.prisma.customerReadModel.update({
+      where: { id: customerId },
+      data: {
+        activeOrderCount: isActive ? { increment: 1 } : { decrement: 1 },
+        updatedAt: new Date(),
+      },
+    }).catch((err: Error) => {
+      console.error(`[CustomerProjection] Failed to update order count for ${customerId}: ${err.message}`);
+    });
+  }
+
+  private async getCustomerIdForOrder(orderId: string): Promise<string | null> {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      select: { customerId: true },
+    });
+    return order?.customerId ?? null;
   }
 }
