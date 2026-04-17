@@ -8,6 +8,9 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { createHmac } from 'crypto';
 
+if (process.env.NODE_ENV === 'production' && !process.env.TRACKING_LINK_SECRET) {
+  throw new Error('TRACKING_LINK_SECRET environment variable is required in production');
+}
 const TRACKING_SECRET = process.env.TRACKING_LINK_SECRET || 'open-tms-tracking-secret';
 
 /** Generate a HMAC-based tracking token for a shipment ID */

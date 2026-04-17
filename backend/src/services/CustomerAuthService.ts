@@ -1,6 +1,9 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
 import { ICustomerUserRepository } from '../repositories/CustomerUserRepository.js';
 
+if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
+  throw new Error('JWT_SECRET environment variable is required in production');
+}
 const JWT_SECRET = process.env.JWT_SECRET || 'open-tms-dev-secret-change-in-production';
 const CUSTOMER_JWT_ISSUER = 'open-tms-customer';
 const TOKEN_EXPIRY_HOURS = 24;
