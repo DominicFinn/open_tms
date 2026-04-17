@@ -19,6 +19,22 @@ const dataErrorResponse = {
   },
 };
 
+/** Mask sensitive credential values, showing only the last 4 chars */
+function maskCredentials(creds: Record<string, any> | null): Record<string, any> {
+  if (!creds || typeof creds !== 'object') return {};
+  const masked: Record<string, any> = {};
+  for (const [key, value] of Object.entries(creds)) {
+    if (typeof value === 'string' && value.length > 4) {
+      masked[key] = '****' + value.slice(-4);
+    } else if (typeof value === 'string') {
+      masked[key] = '****';
+    } else {
+      masked[key] = value;
+    }
+  }
+  return masked;
+}
+
 /** Map raw DB integration to the shape the frontend expects */
 function mapIntegration(i: any) {
   return {
@@ -35,7 +51,7 @@ function mapIntegration(i: any) {
     errorCount: i.lastErrorMessage ? 1 : 0,
     callsToday: i.rateLimitCallsToday ?? 0,
     dailyMax: i.rateLimitDailyMax ?? null,
-    credentials: i.credentials ?? {},
+    credentials: maskCredentials(i.credentials as Record<string, any>),
     notes: i.notes ?? null,
     createdAt: i.createdAt,
     updatedAt: i.updatedAt,
