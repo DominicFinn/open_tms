@@ -1,4 +1,5 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { z } from 'zod';
 import { optionalAuth } from '../middleware/jwtAuth.js';
 
 export async function loadboardRoutes(server: FastifyInstance) {
@@ -270,11 +271,11 @@ export async function loadboardRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { shipmentId } = req.params as { shipmentId: string };
-    const { carrierId, costRateCents, notes } = (req as any).body as {
-      carrierId: string;
-      costRateCents: number;
-      notes?: string;
-    };
+    const { carrierId, costRateCents, notes } = z.object({
+      carrierId: z.string().uuid(),
+      costRateCents: z.number().int().min(0),
+      notes: z.string().optional(),
+    }).parse(req.body);
 
     const shipment = await server.prisma.shipment.findUnique({
       where: { id: shipmentId },

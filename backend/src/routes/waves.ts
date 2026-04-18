@@ -203,7 +203,9 @@ export async function waveRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const { assignedToUserId } = (req as any).body;
+    const { assignedToUserId } = z.object({
+      assignedToUserId: z.string().min(1),
+    }).parse(req.body);
 
     const task = await prisma.pickTask.findUnique({ where: { id } });
     if (!task) { reply.code(404); return { data: null, error: 'Pick task not found' }; }

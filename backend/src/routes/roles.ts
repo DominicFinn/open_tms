@@ -110,16 +110,15 @@ export async function roleRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const body = (req as any).body || {};
+    const body = z.object({
+      description: z.string().optional(),
+      permissions: z.array(z.string()).optional(),
+    }).parse(req.body);
 
     const role = await server.prisma.role.findUnique({ where: { id } });
     if (!role) { reply.code(404); return { data: null, error: 'Role not found' }; }
 
-    const data: any = {};
-    if (body.description !== undefined) data.description = body.description;
-    if (body.permissions !== undefined) data.permissions = body.permissions;
-
-    const updated = await server.prisma.role.update({ where: { id }, data });
+    const updated = await server.prisma.role.update({ where: { id }, data: body });
     return { data: updated, error: null };
   });
 

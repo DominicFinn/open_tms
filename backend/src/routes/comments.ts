@@ -3,6 +3,7 @@
  */
 
 import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
+import { z } from 'zod';
 import { PrismaClient } from '@prisma/client';
 import { container, TOKENS } from '../di/index.js';
 import type { IEventBus } from '../events/index.js';
@@ -96,16 +97,11 @@ export const commentRoutes: FastifyPluginAsync = async (server) => {
       },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const { entityType, entityId, body } = (req as any).body as {
-      entityType: string;
-      entityId: string;
-      body: string;
-    };
-
-    if (!entityType || !entityId || !body) {
-      reply.code(400);
-      return { data: null, error: 'entityType, entityId, and body are required' };
-    }
+    const { entityType, entityId, body } = z.object({
+      entityType: z.string().min(1),
+      entityId: z.string().min(1),
+      body: z.string().min(1),
+    }).parse(req.body);
 
     const authorId = (req as any).userId || 'system';
     const authorName = (req as any).userName || 'System';
@@ -191,12 +187,9 @@ export const commentRoutes: FastifyPluginAsync = async (server) => {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const { body } = (req as any).body as { body: string };
-
-    if (!body) {
-      reply.code(400);
-      return { data: null, error: 'body is required' };
-    }
+    const { body } = z.object({
+      body: z.string().min(1),
+    }).parse(req.body);
 
     const existing = await prisma.comment.findUnique({ where: { id } });
     if (!existing) {
