@@ -63,6 +63,14 @@ const requestCounts = new Map<string, { count: number; resetTime: number }>();
 const RATE_LIMIT = 100; // requests per minute
 const WINDOW_MS = 60 * 1000; // 1 minute
 
+// Prune expired entries every 5 minutes to prevent unbounded growth
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, value] of requestCounts) {
+    if (now > value.resetTime) requestCounts.delete(key);
+  }
+}, 5 * 60 * 1000).unref();
+
 export function checkRateLimit(ip: string): boolean {
   const now = Date.now();
   const userLimit = requestCounts.get(ip);

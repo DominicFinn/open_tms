@@ -49,6 +49,14 @@ export interface ICustomerAuthService {
 
 const failedAttempts = new Map<string, { count: number; lockedUntil: Date | null }>();
 
+// Prune expired lockout entries every 15 minutes to prevent unbounded growth
+setInterval(() => {
+  const now = new Date();
+  for (const [key, value] of failedAttempts) {
+    if (value.lockedUntil && value.lockedUntil < now) failedAttempts.delete(key);
+  }
+}, 15 * 60 * 1000).unref();
+
 export class CustomerAuthService implements ICustomerAuthService {
   constructor(private customerUserRepo: ICustomerUserRepository) {}
 
