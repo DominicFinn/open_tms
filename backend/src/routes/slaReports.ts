@@ -65,6 +65,7 @@ export const slaReportRoutes: FastifyPluginAsync = async (server) => {
       ? await server.prisma.customer.findMany({
           where: { id: { in: customerIds } },
           select: { id: true, name: true },
+          take: 10000,
         })
       : [];
     const customerMap = new Map(customers.map((c) => [c.id, c.name]));
@@ -193,6 +194,7 @@ export const slaReportRoutes: FastifyPluginAsync = async (server) => {
     const breached = await server.prisma.slaEvaluation.findMany({
       where: { ...where, status: 'breached', breachDurationMinutes: { not: null } },
       select: { breachDurationMinutes: true },
+      take: 10000,
     });
     const avgBreachMinutes = breached.length > 0
       ? Math.round(breached.reduce((sum, b) => sum + (b.breachDurationMinutes || 0), 0) / breached.length)

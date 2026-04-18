@@ -281,6 +281,7 @@ export async function warehouseRoutes(server: FastifyInstance) {
         { pickupDate: 'asc' },
         { createdAt: 'desc' },
       ],
+      take: 500,
     });
 
     return { data: shipments, error: null };
@@ -676,6 +677,7 @@ export async function warehouseRoutes(server: FastifyInstance) {
       where: { archived: false },
       select: { id: true, name: true, city: true, state: true, country: true },
       orderBy: { name: 'asc' },
+      take: 500,
     });
 
     return { data: locations, error: null };
@@ -857,6 +859,7 @@ export async function warehouseRoutes(server: FastifyInstance) {
         flags: { where: { resolved: false } },
       },
       orderBy: { createdAt: 'asc' },
+      take: 500,
     });
 
     return { data: shipments, error: null };

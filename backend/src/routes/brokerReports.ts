@@ -42,6 +42,7 @@ export async function brokerReportRoutes(server: FastifyInstance) {
           },
         },
       },
+      take: 10000,
     });
 
     // Group by customer
@@ -118,6 +119,7 @@ export async function brokerReportRoutes(server: FastifyInstance) {
           },
         },
       },
+      take: 10000,
     });
 
     const byCarrier = new Map<string, {
@@ -188,6 +190,7 @@ export async function brokerReportRoutes(server: FastifyInstance) {
           },
         },
       },
+      take: 10000,
     });
 
     const byLane = new Map<string, {
@@ -259,6 +262,7 @@ export async function brokerReportRoutes(server: FastifyInstance) {
         createdAt: true,
       },
       orderBy: { createdAt: 'asc' },
+      take: 10000,
     });
 
     // Group by period

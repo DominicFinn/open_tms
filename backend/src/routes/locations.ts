@@ -43,6 +43,7 @@ export async function locationRoutes(server: FastifyInstance) {
         arrivalCriteria: { where: { active: true }, select: { id: true, criteriaType: true } },
       },
       orderBy: { name: 'asc' },
+      take: 500,
     });
     return { data: locations, error: null };
   });

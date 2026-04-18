@@ -79,6 +79,7 @@ export async function loadboardRoutes(server: FastifyInstance) {
         },
       },
       orderBy: [{ pickupDate: 'asc' }, { createdAt: 'desc' }],
+      take: 500,
     });
 
     // Strip financial data for unauthenticated users
@@ -139,6 +140,7 @@ export async function loadboardRoutes(server: FastifyInstance) {
             },
           },
         },
+        take: 500,
       });
     }
 
@@ -182,6 +184,7 @@ export async function loadboardRoutes(server: FastifyInstance) {
         carrierId: true,
         status: true,
       },
+      take: 500,
     });
 
     const bidStatsByCarrier: Record<string, { total: number; accepted: number }> = {};

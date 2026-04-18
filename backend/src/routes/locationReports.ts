@@ -53,6 +53,7 @@ export async function locationReportRoutes(server: FastifyInstance) {
         appointmentRequired: true,
       },
       orderBy: { name: 'asc' },
+      take: 10000,
     });
 
     const locationIds = locations.map(l => l.id);

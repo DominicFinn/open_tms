@@ -26,6 +26,7 @@ export async function replenishmentRoutes(server: FastifyInstance) {
     const rules = await prisma.replenishmentRule.findMany({
       where: { locationId },
       orderBy: { sku: 'asc' },
+      take: 500,
     });
     return { data: rules, error: null };
   });

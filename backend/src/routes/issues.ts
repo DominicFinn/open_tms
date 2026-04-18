@@ -85,6 +85,7 @@ export const issueRoutes: FastifyPluginAsync = async (server) => {
     const slaEvals = await prisma.slaEvaluation.findMany({
       where: { entityType: 'issue', entityId: req.params.id },
       orderBy: { createdAt: 'desc' },
+      take: 500,
     });
     // Fetch comment count
     const commentCount = await prisma.comment.count({
@@ -471,6 +472,7 @@ export const issueRoutes: FastifyPluginAsync = async (server) => {
     const comments = await prisma.comment.findMany({
       where: { entityType: 'issue', entityId: issueId },
       orderBy: { createdAt: 'asc' },
+      take: 500,
     });
     // Merge and sort
     const activity = [
@@ -540,6 +542,7 @@ export const issueRoutes: FastifyPluginAsync = async (server) => {
     const labels = await prisma.issueLabel.findMany({
       where: { orgId },
       orderBy: { name: 'asc' },
+      take: 500,
     });
     return { data: labels, error: null };
   });
@@ -626,6 +629,7 @@ export const issueRoutes: FastifyPluginAsync = async (server) => {
     const views = await prisma.kanbanView.findMany({
       where: { orgId },
       orderBy: [{ isDefault: 'desc' }, { name: 'asc' }],
+      take: 500,
     });
     return { data: views, error: null };
   });

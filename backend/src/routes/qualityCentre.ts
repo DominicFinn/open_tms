@@ -162,6 +162,7 @@ export async function qualityCentreRoutes(server: FastifyInstance) {
       where,
       select: { createdAt: true, category: true, priority: true },
       orderBy: { createdAt: 'asc' },
+      take: 500,
     });
 
     // Group by date
@@ -275,6 +276,7 @@ export async function qualityCentreRoutes(server: FastifyInstance) {
         capaReport: { select: { reportNumber: true, title: true, status: true } },
       },
       orderBy: { dueDate: 'asc' },
+      take: 500,
     });
 
     return { data: followUps, error: null };
@@ -467,6 +469,7 @@ export async function qualityCentreRoutes(server: FastifyInstance) {
         _count: { select: { audits: true } },
       },
       orderBy: { createdAt: 'desc' },
+      take: 500,
     });
 
     return { data: checklists, error: null };
@@ -626,6 +629,7 @@ export async function qualityCentreRoutes(server: FastifyInstance) {
         checklist: { select: { title: true, category: true, sopReference: true } },
       },
       orderBy: { auditDate: 'desc' },
+      take: 500,
     });
 
     return { data: audits, error: null };
@@ -754,6 +758,7 @@ export async function qualityCentreRoutes(server: FastifyInstance) {
     const summaries = await server.prisma.qualityIssueSummary.findMany({
       where: { orgId, dimensionType: 'carrier' },
       orderBy: { totalIssues: 'desc' },
+      take: 500,
     });
 
     return { data: summaries, error: null };
@@ -771,6 +776,7 @@ export async function qualityCentreRoutes(server: FastifyInstance) {
     const summaries = await server.prisma.qualityIssueSummary.findMany({
       where: { orgId, dimensionType: 'lane' },
       orderBy: { totalIssues: 'desc' },
+      take: 500,
     });
 
     return { data: summaries, error: null };
@@ -796,6 +802,7 @@ export async function qualityCentreRoutes(server: FastifyInstance) {
         },
       },
       orderBy: { createdAt: 'desc' },
+      take: 500,
     });
 
     const report = capas.map(capa => {

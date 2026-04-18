@@ -39,6 +39,7 @@ export async function waveRoutes(server: FastifyInstance) {
       where,
       include: { _count: { select: { pickTasks: true, waveOrders: true } } },
       orderBy: { createdAt: 'desc' },
+      take: 500,
     });
 
     return { data: waves, error: null };
@@ -165,6 +166,7 @@ export async function waveRoutes(server: FastifyInstance) {
         wave: { select: { waveNumber: true } },
       },
       orderBy: { createdAt: 'desc' },
+      take: 500,
     });
 
     return { data: tasks, error: null };

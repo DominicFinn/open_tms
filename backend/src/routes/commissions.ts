@@ -39,6 +39,7 @@ export async function commissionRoutes(server: FastifyInstance) {
         shipment: { select: { id: true, reference: true, status: true } },
       },
       orderBy: { createdAt: 'desc' },
+      take: 500,
     });
 
     return { data: commissions, error: null };
@@ -198,6 +199,7 @@ export async function commissionRoutes(server: FastifyInstance) {
       include: {
         user: { select: { id: true, email: true, firstName: true, lastName: true } },
       },
+      take: 500,
     });
 
     const byAgent = new Map<string, {

@@ -177,7 +177,8 @@ export async function shipmentRoutes(server: FastifyInstance) {
     }
     const events = await server.prisma.shipmentEvent.findMany({
       where: { shipmentId: id },
-      orderBy: { eventTime: 'desc' }
+      orderBy: { eventTime: 'desc' },
+      take: 500,
     });
     return { data: events, error: null };
   });

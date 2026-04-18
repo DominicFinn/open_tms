@@ -79,6 +79,7 @@ export const locationOpsRoutes: FastifyPluginAsync = async (server) => {
         { estimatedArrival: 'asc' },
         { sequenceNumber: 'asc' },
       ],
+      take: 500,
     });
 
     // Shipments with this location as origin

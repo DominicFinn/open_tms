@@ -553,6 +553,7 @@ export async function carrierTrackingRoutes(server: FastifyInstance) {
       const events = await server.prisma.carrierTrackingEvent.findMany({
         where: { shipmentId },
         orderBy: { occurredAt: 'desc' },
+        take: 1000,
       });
       return { data: events, error: null };
     } catch (err: any) {

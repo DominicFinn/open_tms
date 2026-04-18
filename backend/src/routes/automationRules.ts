@@ -22,6 +22,7 @@ export const automationRuleRoutes: FastifyPluginAsync = async (server) => {
     const rules = await server.prisma.automationRule.findMany({
       where: { orgId: org.id },
       orderBy: [{ priority: 'asc' }, { createdAt: 'desc' }],
+      take: 500,
     });
 
     return { data: rules, error: null };

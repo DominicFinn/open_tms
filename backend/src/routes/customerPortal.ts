@@ -417,6 +417,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     const invoices = await server.prisma.invoiceReadModel.findMany({
       where: { customerId },
       orderBy: { createdAt: 'desc' },
+      take: 500,
     });
 
     return { data: invoices, error: null };

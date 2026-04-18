@@ -33,6 +33,7 @@ export async function cycleCountRoutes(server: FastifyInstance) {
       where,
       include: { _count: { select: { lines: true } } },
       orderBy: { createdAt: 'desc' },
+      take: 500,
     });
 
     return { data: counts, error: null };

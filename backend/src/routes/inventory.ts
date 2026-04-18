@@ -47,6 +47,7 @@ export async function inventoryRoutes(server: FastifyInstance) {
         ownerCustomer: { select: { id: true, name: true } },
       },
       orderBy: [{ sku: 'asc' }, { bin: { walkSequence: 'asc' } }],
+      take: 500,
     });
 
     return { data: records, error: null };

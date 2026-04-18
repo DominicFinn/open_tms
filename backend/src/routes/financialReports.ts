@@ -57,6 +57,7 @@ export async function financialReportRoutes(server: FastifyInstance) {
         ...(query.customerId && { customerId: query.customerId }),
       },
       orderBy: { dueDate: 'asc' },
+      take: 10000,
     });
 
     // Group by customer and bucket by days past due
@@ -136,6 +137,7 @@ export async function financialReportRoutes(server: FastifyInstance) {
         ...(query.customerId && { customerId: query.customerId }),
       },
       orderBy: [{ customerName: 'asc' }, { dueDate: 'asc' }],
+      take: 10000,
     });
 
     const fmt = (cents: number) => (cents / 100).toFixed(2);
@@ -202,6 +204,7 @@ export async function financialReportRoutes(server: FastifyInstance) {
         status: true,
         carrier: { select: { name: true, scacCode: true } },
       },
+      take: 10000,
     });
 
     const carrierMap = new Map<string, {
@@ -268,7 +271,7 @@ export async function financialReportRoutes(server: FastifyInstance) {
     if (query.customerId) where.customerId = query.customerId;
 
     // Use read model - financial fields are already denormalized
-    const shipments = await prisma.shipmentReadModel.findMany({ where });
+    const shipments = await prisma.shipmentReadModel.findMany({ where, take: 10000 });
 
     const customerMap = new Map<string, {
       customerId: string;
