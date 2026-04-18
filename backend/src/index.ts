@@ -4,6 +4,7 @@ import multipart from '@fastify/multipart';
 import swagger from '@fastify/swagger';
 import swaggerUI from '@fastify/swagger-ui';
 import prismaPlugin from './plugins/prisma.js';
+import errorHandlerPlugin from './plugins/errorHandler.js';
 import { registerDependencies } from './di/index.js';
 import { container } from './di/container.js';
 import { TOKENS } from './di/tokens.js';
@@ -149,6 +150,7 @@ async function start() {
     await server.register(swaggerUI, { routePrefix: '/docs' });
   }
   await server.register(prismaPlugin);
+  await server.register(errorHandlerPlugin);
 
   // Initialize Dependency Injection Container
   registerDependencies(server.prisma);
