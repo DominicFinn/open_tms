@@ -1,0 +1,1379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Inside the Warehouse - Open TMS WMS</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --p50:#eff6ff; --p100:#dbeafe; --p200:#bfdbfe; --p300:#93c5fd;
+    --p400:#60a5fa; --p500:#3b82f6; --p600:#2563eb; --p700:#1d4ed8;
+    --p800:#1e40af; --p900:#1e3a8a; --p950:#172554;
+    --a400:#a78bfa; --a500:#8b5cf6; --a600:#7c3aed;
+    --s50:#f8fafc; --s100:#f1f5f9; --s200:#e2e8f0; --s300:#cbd5e1;
+    --s400:#94a3b8; --s500:#64748b; --s600:#475569; --s700:#334155;
+    --s800:#1e293b; --s900:#0f172a; --s950:#020617;
+    --green:#22c55e; --yellow:#eab308; --red:#ef4444; --cyan:#06b6d4;
+    --amber:#f59e0b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%; overflow: hidden;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    color: #fff; background: var(--s950);
+  }
+  body::before {
+    content: ''; position: fixed; inset: 0;
+    background: linear-gradient(135deg, var(--s950) 0%, var(--p950) 50%, var(--s900) 100%);
+    z-index: -2;
+  }
+  body::after {
+    content: ''; position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    opacity: 0.03; z-index: -1; pointer-events: none;
+  }
+
+  .deck { position: relative; width: 100vw; height: 100vh; overflow: hidden; }
+  .slide {
+    position: absolute; inset: 0; padding: 56px 72px;
+    display: none; flex-direction: column; opacity: 0;
+    transition: opacity .4s ease; overflow: hidden;
+  }
+  .slide.active { display: flex; opacity: 1; }
+
+  .glow-orb { position: absolute; width: 700px; height: 700px; border-radius: 50%; pointer-events: none; z-index: 0; filter: blur(120px); }
+  .glow-orb.p { background: rgba(37, 99, 235, 0.15); }
+  .glow-orb.a { background: rgba(139, 92, 246, 0.12); }
+  .glow-orb.m { background: rgba(245, 158, 11, 0.08); }
+
+  .content { position: relative; z-index: 1; display: flex; flex-direction: column; height: 100%; }
+
+  .pill {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 16px; border-radius: 999px;
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    background: rgba(59, 130, 246, 0.1);
+    font-size: 13px; font-weight: 500; color: var(--p300);
+    letter-spacing: 0.02em; width: fit-content;
+  }
+  .pill.accent { border-color: rgba(139, 92, 246, 0.22); background: rgba(139, 92, 246, 0.1); color: var(--a400); }
+  .pill.amber { border-color: rgba(245, 158, 11, 0.22); background: rgba(245, 158, 11, 0.10); color: var(--amber); }
+  .pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.4} }
+
+  h1.title { font-size: 72px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.02; margin: 20px 0 14px; }
+  h1.title.small { font-size: 52px; }
+  h2.section { font-size: 48px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.08; margin: 16px 0 10px; }
+  .subtitle { font-size: 20px; color: var(--s300); line-height: 1.55; max-width: 1020px; font-weight: 400; }
+  .subtitle.lg { font-size: 24px; max-width: 1080px; }
+  .gradient-text {
+    background: linear-gradient(135deg, var(--p500), var(--a500));
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent; color: transparent;
+  }
+  .gradient-text.amber {
+    background: linear-gradient(135deg, var(--amber), #ec4899);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent; color: transparent;
+  }
+  .eyebrow { text-transform: uppercase; letter-spacing: 0.15em; font-size: 11px; font-weight: 600; color: var(--p400); }
+  .eyebrow.a { color: var(--a400); }
+  .eyebrow.m { color: var(--amber); }
+
+  .glass {
+    background: rgba(255,255,255,0.03);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 18px; padding: 24px;
+  }
+  .glass.hl {
+    background: linear-gradient(135deg, rgba(37,99,235,0.10), rgba(139,92,246,0.10));
+    border-color: rgba(59,130,246,0.22);
+  }
+  .glass.hl-m {
+    background: linear-gradient(135deg, rgba(245,158,11,0.10), rgba(236,72,153,0.10));
+    border-color: rgba(245,158,11,0.22);
+  }
+  .glass.sm { padding: 18px; border-radius: 14px; }
+
+  .row { display: flex; gap: 20px; }
+  .grid { display: grid; gap: 18px; }
+  .g2 { grid-template-columns: repeat(2, 1fr); }
+  .g3 { grid-template-columns: repeat(3, 1fr); }
+  .g4 { grid-template-columns: repeat(4, 1fr); }
+
+  .card-title { font-size: 16px; font-weight: 700; color: #fff; margin-bottom: 8px; display: flex; align-items: center; gap: 10px; }
+  .card-body { font-size: 13px; color: var(--s300); line-height: 1.55; }
+  .card-icon {
+    width: 40px; height: 40px; border-radius: 10px;
+    background: rgba(37,99,235,0.18); color: var(--p400);
+    display: inline-flex; align-items: center; justify-content: center;
+    margin-bottom: 12px;
+  }
+  .card-icon.a { background: rgba(139,92,246,0.18); color: var(--a400); }
+  .card-icon.g { background: rgba(34,197,94,0.18); color: var(--green); }
+  .card-icon.y { background: rgba(234,179,8,0.18); color: var(--yellow); }
+  .card-icon.r { background: rgba(239,68,68,0.18); color: var(--red); }
+  .card-icon.c { background: rgba(6,182,212,0.18); color: var(--cyan); }
+  .card-icon.m { background: rgba(245,158,11,0.18); color: var(--amber); }
+  .card-icon svg { width: 22px; height: 22px; }
+
+  .stat-num { font-size: 40px; font-weight: 800; letter-spacing: -0.02em; line-height: 1; }
+  .stat-label { font-size: 12px; color: var(--s400); margin-top: 6px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 500; }
+
+  /* Flow steps */
+  .flow { display: flex; gap: 8px; align-items: stretch; }
+  .flow-step {
+    flex: 1; padding: 18px 14px; border-radius: 12px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    display: flex; flex-direction: column; gap: 6px;
+    position: relative;
+  }
+  .flow-step .step-num { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--p400); font-weight: 600; letter-spacing: 0.1em; }
+  .flow-step .step-title { font-size: 13px; font-weight: 600; color: #fff; line-height: 1.3; }
+  .flow-step .step-desc { font-size: 11px; color: var(--s400); line-height: 1.4; }
+  .flow-step::after {
+    content: ''; position: absolute; right: -6px; top: 50%;
+    width: 12px; height: 12px;
+    border-right: 2px solid rgba(255,255,255,0.14);
+    border-top: 2px solid rgba(255,255,255,0.14);
+    transform: translateY(-50%) rotate(45deg); z-index: 2;
+  }
+  .flow-step:last-child::after { display: none; }
+
+  /* Terminal */
+  .terminal {
+    border-radius: 12px; background: var(--s900);
+    border: 1px solid rgba(255,255,255,0.06);
+    overflow: hidden;
+    font-family: 'JetBrains Mono', monospace; font-size: 12px;
+  }
+  .terminal-bar {
+    display: flex; align-items: center; gap: 6px;
+    padding: 10px 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    background: var(--s900);
+  }
+  .tb-dot { width: 10px; height: 10px; border-radius: 50%; }
+  .tb-dot.r { background: rgba(239,68,68,0.6); }
+  .tb-dot.y { background: rgba(234,179,8,0.6); }
+  .tb-dot.g { background: rgba(34,197,94,0.6); }
+  .terminal-title { margin-left: 10px; font-size: 11px; color: var(--s500); }
+  .terminal-body { padding: 18px; color: var(--s300); line-height: 1.65; }
+  .c-key { color: var(--p400); }
+  .c-str { color: #6ee7b7; }
+  .c-num { color: var(--a400); }
+  .c-com { color: var(--s500); }
+
+  /* Chips */
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 3px 9px; border-radius: 6px;
+    font-size: 11px; font-weight: 500;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.02em;
+  }
+  .chip.p { background: rgba(37,99,235,0.15); color: var(--p300); border: 1px solid rgba(37,99,235,0.25); }
+  .chip.a { background: rgba(139,92,246,0.15); color: var(--a400); border: 1px solid rgba(139,92,246,0.25); }
+  .chip.g { background: rgba(34,197,94,0.15); color: #86efac; border: 1px solid rgba(34,197,94,0.25); }
+  .chip.y { background: rgba(234,179,8,0.15); color: #fde047; border: 1px solid rgba(234,179,8,0.25); }
+  .chip.r { background: rgba(239,68,68,0.15); color: #fca5a5; border: 1px solid rgba(239,68,68,0.25); }
+  .chip.m { background: rgba(245,158,11,0.15); color: #fcd34d; border: 1px solid rgba(245,158,11,0.25); }
+
+  .nav {
+    position: fixed; bottom: 20px; left: 0; right: 0;
+    display: flex; align-items: center; justify-content: center;
+    gap: 12px; z-index: 100;
+  }
+  .nav-btn {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: #fff; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background .15s;
+  }
+  .nav-btn:hover { background: rgba(255,255,255,0.12); }
+  .nav-count {
+    font-size: 12.5px; font-family: 'JetBrains Mono', monospace;
+    color: var(--s400); min-width: 60px; text-align: center; font-weight: 500;
+  }
+  .progress {
+    position: fixed; top: 0; left: 0; right: 0; height: 3px;
+    background: rgba(255,255,255,0.05); z-index: 100;
+  }
+  .progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--amber), var(--a500), var(--p500));
+    transition: width .4s ease;
+  }
+
+  .logo-badge {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 8px 16px; border-radius: 12px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    font-size: 14px; font-weight: 600; letter-spacing: -0.01em;
+  }
+  .logo-badge .truck { color: var(--amber); }
+
+  .footnote {
+    position: absolute; bottom: 20px; left: 72px;
+    font-size: 11.5px; color: var(--s500); font-weight: 500;
+  }
+
+  .node {
+    padding: 12px 16px; border-radius: 10px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    font-size: 12.5px; font-weight: 600; text-align: center;
+  }
+  .node.p { background: rgba(37,99,235,0.14); border-color: rgba(37,99,235,0.3); color: var(--p300); }
+  .node.a { background: rgba(139,92,246,0.14); border-color: rgba(139,92,246,0.3); color: var(--a400); }
+  .node.g { background: rgba(34,197,94,0.14); border-color: rgba(34,197,94,0.3); color: #86efac; }
+  .node.m { background: rgba(245,158,11,0.14); border-color: rgba(245,158,11,0.3); color: #fcd34d; }
+
+  ul.clean { list-style: none; padding: 0; }
+  ul.clean li { padding: 6px 0; padding-left: 22px; position: relative; color: var(--s300); font-size: 14px; line-height: 1.45; }
+  ul.clean li::before {
+    content: ''; position: absolute; left: 0; top: 14px;
+    width: 6px; height: 6px; border-radius: 50%; background: var(--amber);
+  }
+
+  .kbd {
+    display: inline-block; padding: 2px 8px;
+    border-radius: 6px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.14);
+    border-bottom-width: 2px;
+    font-family: 'JetBrains Mono', monospace; font-size: 12px;
+    color: var(--s200);
+  }
+
+  /* Bin grid visualisation */
+  .bin-grid { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; }
+  .bin {
+    aspect-ratio: 1;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--s500);
+    position: relative;
+  }
+  .bin.empty { background: rgba(255,255,255,0.02); }
+  .bin.low { background: rgba(34,197,94,0.15); border-color: rgba(34,197,94,0.35); color: #86efac; }
+  .bin.med { background: rgba(234,179,8,0.15); border-color: rgba(234,179,8,0.35); color: #fde047; }
+  .bin.high { background: rgba(245,158,11,0.25); border-color: rgba(245,158,11,0.5); color: #fcd34d; }
+  .bin.full { background: rgba(239,68,68,0.25); border-color: rgba(239,68,68,0.5); color: #fca5a5; }
+</style>
+</head>
+<body>
+<div class="progress"><div class="progress-bar" id="progressBar"></div></div>
+<div class="deck" id="deck"></div>
+<div class="nav">
+  <button class="nav-btn" onclick="prev()" aria-label="Previous">
+    <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+  </button>
+  <div class="nav-count" id="navCount">01 / 17</div>
+  <button class="nav-btn" onclick="next()" aria-label="Next">
+    <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+  </button>
+</div>
+
+<script>
+  let current = 0;
+  const slides = [];
+  function render() {
+    const deck = document.getElementById('deck');
+    deck.innerHTML = slides.map((s, i) => `<section class="slide ${i===current?'active':''}" data-i="${i}">${s}</section>`).join('');
+    document.getElementById('navCount').textContent = String(current+1).padStart(2,'0') + ' / ' + String(slides.length).padStart(2,'0');
+    document.getElementById('progressBar').style.width = ((current+1)/slides.length*100) + '%';
+  }
+  function go(i) { if (i < 0 || i >= slides.length) return; current = i; render(); }
+  function next() { go(current+1); }
+  function prev() { go(current-1); }
+  document.addEventListener('keydown', e => {
+    if (['ArrowRight','PageDown',' '].includes(e.key)) { e.preventDefault(); next(); }
+    else if (['ArrowLeft','PageUp'].includes(e.key)) { e.preventDefault(); prev(); }
+    else if (e.key === 'Home') go(0);
+    else if (e.key === 'End') go(slides.length-1);
+  });
+</script>
+<script id="slides-content">
+// SLIDE 1 - TITLE
+slides.push(`
+  <div class="glow-orb m" style="top:-200px;left:-200px;"></div>
+  <div class="glow-orb a" style="bottom:-250px;right:-150px;"></div>
+  <div class="content">
+    <div class="logo-badge">
+      <svg class="truck" width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z"/></svg>
+      <span>Open TMS &middot; WMS</span>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; justify-content:center; max-width:1100px;">
+      <div class="pill amber" style="margin-bottom:28px;">
+        <span class="dot"></span>
+        <span>A field guide to the modern warehouse</span>
+      </div>
+      <h1 class="title">
+        Inside the <br/>
+        <span class="gradient-text amber">warehouse.</span>
+      </h1>
+      <p class="subtitle lg" style="margin-top:24px;">
+        From a truck backing onto a dock to a package leaving on a van -
+        how a Warehouse Management System orchestrates every pallet,
+        every pick and every scan in between.
+      </p>
+      <div style="display:flex; gap:18px; margin-top:40px; align-items:center;">
+        <div class="stat-num gradient-text amber">17</div>
+        <div style="font-size:14px; color:var(--s400); line-height:1.45;">
+          slides &middot; <span class="kbd">&rarr;</span> <span class="kbd">&larr;</span> to navigate,<br/>
+          <span class="kbd">Space</span> for next, <span class="kbd">Home</span>/<span class="kbd">End</span> to jump
+        </div>
+      </div>
+    </div>
+  </div>
+`);
+
+// SLIDE 2 - WHAT IS A WMS
+slides.push(`
+  <div class="glow-orb m" style="top:10%;right:-200px;"></div>
+  <div class="content">
+    <div class="pill amber" style="margin-bottom:16px;">Definition</div>
+    <h2 class="section">What is a <span class="gradient-text amber">WMS</span>?</h2>
+    <p class="subtitle" style="margin-top:14px;">
+      If the TMS knows a shipment "arrived at the warehouse" and "left the warehouse",
+      the WMS knows everything that happened in between - down to the bin,
+      the pallet, the box and the barcode.
+    </p>
+
+    <div class="grid g4" style="margin-top:36px;">
+      <div class="glass">
+        <div class="card-icon m">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"/></svg>
+        </div>
+        <div class="card-title">Receive</div>
+        <div class="card-body">Trucks arrive. Goods come off. Pallets get scanned against an ASN. Discrepancies get logged.</div>
+      </div>
+      <div class="glass">
+        <div class="card-icon">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"/></svg>
+        </div>
+        <div class="card-title">Store</div>
+        <div class="card-body">Every pallet has a home. Putaway rules decide where. FIFO, FEFO and LIFO decide who picks from it next.</div>
+      </div>
+      <div class="glass">
+        <div class="card-icon a">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        </div>
+        <div class="card-title">Fulfil</div>
+        <div class="card-body">Orders become waves, waves become picks, picks become packs. Cutoffs get hit or missed.</div>
+      </div>
+      <div class="glass">
+        <div class="card-icon g">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0"/></svg>
+        </div>
+        <div class="card-title">Ship</div>
+        <div class="card-body">Cartons stage by carrier. Trailers load last-drop-first. BOL prints. The TMS takes over.</div>
+      </div>
+    </div>
+
+    <div class="glass hl-m" style="margin-top:28px; display:flex; gap:24px; align-items:center;">
+      <div class="card-icon m" style="margin:0; width:52px; height:52px; flex-shrink:0;">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6" style="width:26px;height:26px;"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72"/></svg>
+      </div>
+      <div>
+        <div class="card-title" style="margin-bottom:4px;">A WMS is not a standalone silo</div>
+        <div class="card-body" style="font-size:14.5px;">
+          Open TMS's WMS extends the TMS. Same TrackableUnit digital twins. Same CargoScan events.
+          Same event bus. A shipment doesn't hand off between systems - it is the same shipment,
+          just with zone, bin and wave detail added on.
+        </div>
+      </div>
+    </div>
+  </div>
+`);
+
+// SLIDE 3 - ANATOMY OF A WAREHOUSE
+slides.push(`
+  <div class="glow-orb p" style="top:-150px;right:10%;"></div>
+  <div class="content">
+    <div class="pill" style="margin-bottom:16px;">The structure</div>
+    <h2 class="section">The anatomy of a <span class="gradient-text">warehouse</span>.</h2>
+    <p class="subtitle" style="margin-top:14px;">
+      Every warehouse is a hierarchy. Locations contain zones. Zones contain aisles.
+      Aisles contain bins. Bins contain digital twins. Each level has rules.
+    </p>
+
+    <div class="grid g2" style="margin-top:32px; gap:24px;">
+      <div>
+        <div class="eyebrow" style="margin-bottom:14px;">The hierarchy</div>
+        <div style="display:flex; flex-direction:column; gap:10px;">
+          <div class="glass sm" style="border-left:3px solid var(--amber);">
+            <div style="display:flex; align-items:center; gap:10px;"><span class="chip m">Location</span><span style="color:var(--s200); font-weight:600; font-size:14px;">Dallas DC</span></div>
+            <div class="card-body" style="margin-top:6px;">The facility itself - warehouse, DC, cross-dock or terminal.</div>
+          </div>
+          <div class="glass sm" style="border-left:3px solid var(--p500); margin-left:24px;">
+            <div style="display:flex; align-items:center; gap:10px;"><span class="chip p">Zone</span><span style="color:var(--s200); font-weight:600; font-size:14px;">Cold Storage &middot; Bulk A &middot; Pick Face</span></div>
+            <div class="card-body" style="margin-top:6px;">Temperature, hazmat, capacity and walk order live at this level.</div>
+          </div>
+          <div class="glass sm" style="border-left:3px solid var(--a500); margin-left:48px;">
+            <div style="display:flex; align-items:center; gap:10px;"><span class="chip a">Aisle</span><span style="color:var(--s200); font-weight:600; font-size:14px;">Aisle A &middot; Aisle B</span></div>
+            <div class="card-body" style="margin-top:6px;">Optional corridor - small warehouses skip it, huge DCs can't.</div>
+          </div>
+          <div class="glass sm" style="border-left:3px solid var(--green); margin-left:72px;">
+            <div style="display:flex; align-items:center; gap:10px;"><span class="chip g">Bin</span><span style="color:var(--s200); font-weight:600; font-size:14px;">BULK-A-01-03-B</span></div>
+            <div class="card-body" style="margin-top:6px;">The atom. Walk sequence, capacity, temperature, current weight - all tracked per bin.</div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="eyebrow" style="margin-bottom:14px;">A live zone, visualised</div>
+        <div class="glass" style="padding:20px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <div style="font-weight:600; font-size:13px;">Zone: Bulk A &middot; Aisle 1</div>
+            <div style="display:flex; gap:6px; font-size:10px; font-family:JetBrains Mono;">
+              <span style="color:#86efac;">&bull; Low</span>
+              <span style="color:#fde047;">&bull; Med</span>
+              <span style="color:#fcd34d;">&bull; High</span>
+              <span style="color:#fca5a5;">&bull; Full</span>
+            </div>
+          </div>
+          <div class="bin-grid">
+            <div class="bin low">A01</div><div class="bin med">A02</div><div class="bin high">A03</div><div class="bin full">A04</div><div class="bin low">A05</div><div class="bin empty"></div><div class="bin med">A07</div><div class="bin low">A08</div><div class="bin high">A09</div><div class="bin med">A10</div>
+            <div class="bin med">B01</div><div class="bin full">B02</div><div class="bin low">B03</div><div class="bin med">B04</div><div class="bin empty"></div><div class="bin low">B06</div><div class="bin high">B07</div><div class="bin empty"></div><div class="bin med">B09</div><div class="bin low">B10</div>
+            <div class="bin low">C01</div><div class="bin med">C02</div><div class="bin empty"></div><div class="bin high">C04</div><div class="bin low">C05</div><div class="bin med">C06</div><div class="bin low">C07</div><div class="bin full">C08</div><div class="bin low">C09</div><div class="bin med">C10</div>
+          </div>
+          <div style="margin-top:14px; display:grid; grid-template-columns:repeat(3,1fr); gap:10px;">
+            <div style="text-align:center;"><div style="font-size:18px; font-weight:700; color:var(--amber);">78%</div><div style="font-size:10px; color:var(--s500);">Utilisation</div></div>
+            <div style="text-align:center;"><div style="font-size:18px; font-weight:700;">24</div><div style="font-size:10px; color:var(--s500);">Pallet positions</div></div>
+            <div style="text-align:center;"><div style="font-size:18px; font-weight:700; color:var(--green);">6</div><div style="font-size:10px; color:var(--s500);">Available</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+`);
+
+// SLIDE 4 - DIGITAL TWIN
+slides.push(`
+  <div class="glow-orb a" style="bottom:-150px;left:-150px;"></div>
+  <div class="content">
+    <div class="pill accent" style="margin-bottom:16px;">How inventory is modelled</div>
+    <h2 class="section">The <span class="gradient-text">digital twin</span>.</h2>
+    <p class="subtitle" style="margin-top:14px; max-width:1060px;">
+      Every physical container in the warehouse has a software twin. A pallet contains totes,
+      a tote contains boxes, a box contains items. Scan the pallet and the system moves everything on it.
+    </p>
+
+    <div class="grid g2" style="margin-top:32px; gap:28px;">
+      <div>
+        <div class="eyebrow a" style="margin-bottom:14px;">Nested TrackableUnits</div>
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <div class="glass sm" style="background:linear-gradient(135deg, rgba(245,158,11,0.12), rgba(245,158,11,0.04)); border-color:rgba(245,158,11,0.25);">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <div style="width:32px; height:32px; border-radius:8px; background:rgba(245,158,11,0.2); display:flex; align-items:center; justify-content:center; font-family:JetBrains Mono; font-size:10px; color:#fcd34d; font-weight:700;">PL</div>
+              <div><div style="font-weight:600; font-size:13px;">Pallet PLT-00472</div><div style="font-size:11px; color:var(--s500);">24 positions &middot; 1.2t &middot; Bin BULK-A-01-03</div></div>
+            </div>
+          </div>
+          <div class="glass sm" style="margin-left:28px; background:rgba(37,99,235,0.1); border-color:rgba(37,99,235,0.25);">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <div style="width:30px; height:30px; border-radius:8px; background:rgba(37,99,235,0.2); display:flex; align-items:center; justify-content:center; font-family:JetBrains Mono; font-size:10px; color:var(--p300); font-weight:700;">TO</div>
+              <div><div style="font-weight:600; font-size:13px;">Tote TOT-2840-A</div><div style="font-size:11px; color:var(--s500);">SKU-VX-2000 &middot; Lot 2024-11 &middot; Exp 2027-05</div></div>
+            </div>
+          </div>
+          <div class="glass sm" style="margin-left:56px; background:rgba(139,92,246,0.1); border-color:rgba(139,92,246,0.25);">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <div style="width:28px; height:28px; border-radius:8px; background:rgba(139,92,246,0.2); display:flex; align-items:center; justify-content:center; font-family:JetBrains Mono; font-size:10px; color:var(--a400); font-weight:700;">BX</div>
+              <div><div style="font-weight:600; font-size:12.5px;">Box BOX-57182</div><div style="font-size:11px; color:var(--s500);">24 &times; SKU-VX-2000</div></div>
+            </div>
+          </div>
+          <div class="glass sm" style="margin-left:84px; background:rgba(34,197,94,0.08); border-color:rgba(34,197,94,0.22);">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <div style="width:26px; height:26px; border-radius:8px; background:rgba(34,197,94,0.2); display:flex; align-items:center; justify-content:center; font-family:JetBrains Mono; font-size:9px; color:#86efac; font-weight:700;">EA</div>
+              <div><div style="font-weight:600; font-size:12px;">SKU-VX-2000 &middot; each</div><div style="font-size:11px; color:var(--s500);">Vaccine vial 10ml &middot; 2-8&deg;C</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="footnote" style="position:static; margin-top:16px; font-size:12px;">
+          Scanning PLT-00472 updates <span class="chip p" style="display:inline-flex;">currentBinId</span> on the pallet - and cascades to every nested unit.
+        </div>
+      </div>
+
+      <div>
+        <div class="eyebrow a" style="margin-bottom:14px;">Unit of Measure (UOM)</div>
+        <div class="glass" style="padding:20px;">
+          <div class="card-body" style="margin-bottom:16px;">
+            Real warehouses receive, store, pick and ship in different UOMs. Without explicit conversions,
+            short-picks and count variances are inevitable.
+          </div>
+          <div class="flow" style="gap:6px;">
+            <div class="flow-step"><div class="step-num">EACH</div><div class="step-title">EA</div><div class="step-desc">1 vial</div></div>
+            <div class="flow-step"><div class="step-num">PACK</div><div class="step-title">INNER</div><div class="step-desc">6 EA</div></div>
+            <div class="flow-step"><div class="step-num">CASE</div><div class="step-title">CASE</div><div class="step-desc">12 INNER</div></div>
+            <div class="flow-step"><div class="step-num">PALLET</div><div class="step-title">PALLET</div><div class="step-desc">48 CASE</div></div>
+          </div>
+          <div style="font-size:12px; color:var(--s400); margin-top:14px; line-height:1.5;">
+            "Break case" operations emit an <span class="chip a" style="display:inline-flex;">inventory.uom_converted</span>
+            transaction. GTIN barcodes can be scanned at any UOM. Quantity fields everywhere carry a
+            <span class="chip p" style="display:inline-flex;">uomCode</span>.
+          </div>
+        </div>
+
+        <div class="glass hl-m" style="margin-top:16px;">
+          <div class="card-title" style="font-size:14.5px;">Every unit carries metadata</div>
+          <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:10px;">
+            <span class="chip m">lotNumber</span>
+            <span class="chip m">expiryDate</span>
+            <span class="chip m">receivedAt</span>
+            <span class="chip p">currentBinId</span>
+            <span class="chip p">currentZoneId</span>
+            <span class="chip a">ownerCustomerId</span>
+            <span class="chip g">qualityStatus</span>
+            <span class="chip a">parentUnitId</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+`);
+
+// SLIDE 5 - WHO USES A WMS
+slides.push(`
+  <div class="glow-orb p" style="top:-200px;right:-150px;"></div>
+  <div class="content">
+    <div class="pill" style="margin-bottom:16px;">The people on the floor</div>
+    <h2 class="section">Who actually <span class="gradient-text">uses</span> a WMS?</h2>
+    <p class="subtitle" style="margin-top:14px;">
+      A WMS is not an office app. Its primary users wear hi-vis, carry scanners,
+      and need the UI to work with one hand. A great WMS is shaped by where it is used.
+    </p>
+
+    <div class="grid g3" style="margin-top:32px;">
+      <div class="glass">
+        <div style="display:flex; gap:14px; align-items:flex-start;">
+          <div style="width:50px; height:50px; border-radius:12px; background:rgba(245,158,11,0.2); color:#fcd34d; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:15px; flex-shrink:0;">RC</div>
+          <div>
+            <div class="card-title">Receiver</div>
+            <div class="card-body">At the inbound dock. Checks in trailers, verifies seals, scans pallets off the truck, raises discrepancies against the ASN.</div>
+          </div>
+        </div>
+      </div>
+      <div class="glass">
+        <div style="display:flex; gap:14px; align-items:flex-start;">
+          <div style="width:50px; height:50px; border-radius:12px; background:rgba(37,99,235,0.2); color:var(--p300); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:15px; flex-shrink:0;">PA</div>
+          <div>
+            <div class="card-title">Putaway &middot; Forklift</div>
+            <div class="card-body">Drives pallets from dock to storage. Scans the bin label to confirm. The system decides where; the driver just executes.</div>
+          </div>
+        </div>
+      </div>
+      <div class="glass">
+        <div style="display:flex; gap:14px; align-items:flex-start;">
+          <div style="width:50px; height:50px; border-radius:12px; background:rgba(139,92,246,0.2); color:var(--a400); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:15px; flex-shrink:0;">PK</div>
+          <div>
+            <div class="card-title">Picker</div>
+            <div class="card-body">Walks the aisles with a scanner or voice headset. Follows the sequenced pick path. One hand for the cart, one for the scanner.</div>
+          </div>
+        </div>
+      </div>
+      <div class="glass">
+        <div style="display:flex; gap:14px; align-items:flex-start;">
+          <div style="width:50px; height:50px; border-radius:12px; background:rgba(34,197,94,0.2); color:#86efac; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:15px; flex-shrink:0;">PC</div>
+          <div>
+            <div class="card-title">Packer</div>
+            <div class="card-body">At the pack station. Verifies picks, selects a carton, weighs it, prints the label. The last line of defence against mis-shipments.</div>
+          </div>
+        </div>
+      </div>
+      <div class="glass">
+        <div style="display:flex; gap:14px; align-items:flex-start;">
+          <div style="width:50px; height:50px; border-radius:12px; background:rgba(234,179,8,0.2); color:#fde047; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:15px; flex-shrink:0;">DP</div>
+          <div>
+            <div class="card-title">Dispatcher &middot; Loader</div>
+            <div class="card-body">Manages staging and dock doors. Scans cartons onto trailers in reverse-stop order. Applies the seal. Hands off to the driver.</div>
+          </div>
+        </div>
+      </div>
+      <div class="glass">
+        <div style="display:flex; gap:14px; align-items:flex-start;">
+          <div style="width:50px; height:50px; border-radius:12px; background:rgba(6,182,212,0.2); color:var(--cyan); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:15px; flex-shrink:0;">SV</div>
+          <div>
+            <div class="card-title">Supervisor</div>
+            <div class="card-body">Lives in the operations dashboard. Balances labour, watches cutoff risk, releases waves, chases short picks, hits KPIs.</div>
+          </div>
+        </div>
+      </div>
+      <div class="glass">
+        <div style="display:flex; gap:14px; align-items:flex-start;">
+          <div style="width:50px; height:50px; border-radius:12px; background:rgba(239,68,68,0.2); color:#fca5a5; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:15px; flex-shrink:0;">QA</div>
+          <div>
+            <div class="card-title">QA &middot; Cycle Counter</div>
+            <div class="card-body">Runs cycle counts, inspects damaged stock, quarantines lots, closes CAPA reports. Owns inventory accuracy.</div>
+          </div>
+        </div>
+      </div>
+      <div class="glass">
+        <div style="display:flex; gap:14px; align-items:flex-start;">
+          <div style="width:50px; height:50px; border-radius:12px; background:rgba(148,163,184,0.2); color:var(--s200); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:15px; flex-shrink:0;">AD</div>
+          <div>
+            <div class="card-title">Admin &middot; IT</div>
+            <div class="card-body">Configures zones, bins, putaway rules, wave templates, carton catalogue, EDI partners. Sets the rules everyone else follows.</div>
+          </div>
+        </div>
+      </div>
+      <div class="glass">
+        <div style="display:flex; gap:14px; align-items:flex-start;">
+          <div style="width:50px; height:50px; border-radius:12px; background:rgba(236,72,153,0.2); color:#f9a8d4; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:15px; flex-shrink:0;">CL</div>
+          <div>
+            <div class="card-title">3PL Client</div>
+            <div class="card-body">Not physically on-site but in the system daily. Checks inventory per SKU, raises orders, downloads proof-of-delivery. Sees only their stock.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+`);
+
+// SLIDE 6 - GOODS IN (RECEIVING)
+slides.push(`
+  <div class="glow-orb m" style="top:10%;left:-200px;"></div>
+  <div class="content">
+    <div class="pill amber" style="margin-bottom:16px;">Stage 01 &middot; Goods In</div>
+    <h2 class="section">Receiving at the <span class="gradient-text amber">inbound dock</span>.</h2>
+    <p class="subtitle" style="margin-top:14px; max-width:1060px;">
+      A truck backs in. A trailer seal is broken. Pallets come off. Everything that happens next
+      has to be captured, verified and routed - or the stock downstream is already wrong.
+    </p>
+
+    <div class="flow" style="margin-top:32px;">
+      <div class="flow-step"><div class="step-num">01</div><div class="step-title">Appointment</div><div class="step-desc">Booked against an ASN (EDI 856) or a shipment ID. Or blind - no notice, just a truck.</div></div>
+      <div class="flow-step"><div class="step-num">02</div><div class="step-title">Check-in</div><div class="step-desc">Trailer number, seal number, carrier, driver. Compared to ShipmentAccessory for tamper detection.</div></div>
+      <div class="flow-step"><div class="step-num">03</div><div class="step-title">Dock assign</div><div class="step-desc">Assign to a dock-door bin. The system sets the receiving work context.</div></div>
+      <div class="flow-step"><div class="step-num">04</div><div class="step-title">Unload &amp; scan</div><div class="step-desc">Every TrackableUnit off the truck gets a CargoScan with scanType = receive.</div></div>
+      <div class="flow-step"><div class="step-num">05</div><div class="step-title">Verify qty</div><div class="step-desc">Expected vs received. Over, short and damaged raise CargoDiscrepancy events.</div></div>
+      <div class="flow-step"><div class="step-num">06</div><div class="step-title">QA inspection</div><div class="step-desc">Pass, fail or quarantine. Failed stock routes to the quarantine zone.</div></div>
+      <div class="flow-step"><div class="step-num">07</div><div class="step-title">Putaway gen</div><div class="step-desc">On completion, PutawayTask created per received unit. Forklifts take over.</div></div>
+    </div>
+
+    <div class="grid g3" style="margin-top:24px;">
+      <div class="glass hl-m">
+        <div class="card-title" style="font-size:15px;">ASN receiving</div>
+        <div class="card-body">EDI 856 pre-creates the appointment and populates ReceivingLines. Scanning becomes a simple verify-and-confirm against expected counts.</div>
+      </div>
+      <div class="glass hl-m">
+        <div class="card-title" style="font-size:15px;">Blind receiving</div>
+        <div class="card-body">No ASN. Scanner tells the system what arrived as it's scanned. TrackableUnits are created on the fly. Slower but often the real world.</div>
+      </div>
+      <div class="glass hl-m">
+        <div class="card-title" style="font-size:15px;">Cross-dock receiving</div>
+        <div class="card-body">Skip the storage step entirely. Putaway rule sends the unit straight to an outbound staging lane keyed by destination or carrier.</div>
+      </div>
+    </div>
+  </div>
+`);
+
+// SLIDE 7 - PUTAWAY & ROUTING RULES
+slides.push(`
+  <div class="glow-orb p" style="top:-100px;right:10%;"></div>
+  <div class="content">
+    <div class="pill" style="margin-bottom:16px;">Stage 02 &middot; Putaway</div>
+    <h2 class="section">Directed <span class="gradient-text">putaway</span>.</h2>
+    <p class="subtitle" style="margin-top:14px;">
+      Every pallet has a home. The WMS decides where using configurable rules -
+      matched by product attribute, customer, temperature, velocity class and more.
+    </p>
+
+    <div class="grid g2" style="margin-top:30px; gap:24px;">
+      <div>
+        <div class="eyebrow" style="margin-bottom:14px;">Rule evaluation</div>
+        <div style="display:flex; flex-direction:column; gap:10px;">
+          <div class="glass sm"><div style="display:flex; justify-content:space-between; align-items:center;"><div><span class="chip m">priority 10</span> <span style="font-size:13px; color:var(--s200); font-weight:500; margin-left:8px;">Pharma cold chain</span></div><span class="chip g">&rarr; Cold Store</span></div><div class="card-body" style="margin-top:6px;">SKU matches <span style="font-family:JetBrains Mono; font-size:11px;">PHARMA-*</span> and temperature = refrigerated</div></div>
+          <div class="glass sm"><div style="display:flex; justify-content:space-between; align-items:center;"><div><span class="chip m">priority 20</span> <span style="font-size:13px; color:var(--s200); font-weight:500; margin-left:8px;">Fast movers</span></div><span class="chip p">&rarr; Pick Face A</span></div><div class="card-body" style="margin-top:6px;">velocityClass = A, prefer low level for ergonomics</div></div>
+          <div class="glass sm"><div style="display:flex; justify-content:space-between; align-items:center;"><div><span class="chip m">priority 30</span> <span style="font-size:13px; color:var(--s200); font-weight:500; margin-left:8px;">Hazmat segregation</span></div><span class="chip r">&rarr; Hazmat Cage</span></div><div class="card-body" style="margin-top:6px;">hazmat = true, requires certified bin</div></div>
+          <div class="glass sm"><div style="display:flex; justify-content:space-between; align-items:center;"><div><span class="chip m">priority 40</span> <span style="font-size:13px; color:var(--s200); font-weight:500; margin-left:8px;">3PL dedicated</span></div><span class="chip a">&rarr; Client X Zone</span></div><div class="card-body" style="margin-top:6px;">ownerCustomerId = acme-pharma, dedicated slot</div></div>
+          <div class="glass sm"><div style="display:flex; justify-content:space-between; align-items:center;"><div><span class="chip m">priority 99</span> <span style="font-size:13px; color:var(--s200); font-weight:500; margin-left:8px;">Default bulk</span></div><span class="chip" style="background:rgba(148,163,184,0.15); color:var(--s300); border:1px solid rgba(148,163,184,0.25);">&rarr; Bulk A</span></div><div class="card-body" style="margin-top:6px;">catch-all, next-available-in-zone by walk sequence</div></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="eyebrow" style="margin-bottom:14px;">Putaway target resolution</div>
+        <div class="glass" style="padding:20px;">
+          <div class="card-body" style="margin-bottom:14px;">A rule's action can resolve three ways:</div>
+          <div style="display:flex; flex-direction:column; gap:10px;">
+            <div class="glass sm" style="padding:14px;">
+              <div style="display:flex; align-items:center; gap:10px;"><span class="chip p" style="display:inline-flex;">specific_bin</span></div>
+              <div class="card-body" style="margin-top:6px; font-size:12px;">Send this to <span style="font-family:JetBrains Mono; color:#86efac;">COLD-01-04-A</span>. No ambiguity, no choice.</div>
+            </div>
+            <div class="glass sm" style="padding:14px;">
+              <div style="display:flex; align-items:center; gap:10px;"><span class="chip a" style="display:inline-flex;">next_available_in_zone</span></div>
+              <div class="card-body" style="margin-top:6px; font-size:12px;">Find the first bin in <span style="font-family:JetBrains Mono; color:var(--a400);">Cold Store</span> with capacity, ordered by walkSequence.</div>
+            </div>
+            <div class="glass sm" style="padding:14px;">
+              <div style="display:flex; align-items:center; gap:10px;"><span class="chip g" style="display:inline-flex;">zone</span></div>
+              <div class="card-body" style="margin-top:6px; font-size:12px;">Drop it anywhere in <span style="font-family:JetBrains Mono; color:#86efac;">Bulk A</span>. Forklift driver decides.</div>
+            </div>
+          </div>
+          <div style="font-size:12px; color:var(--s400); margin-top:16px; line-height:1.5;">
+            The driver scans the bin label to confirm. Bin deviation is allowed but raises a warning -
+            because honest exceptions are routine, but silent drift is how inventory accuracy dies.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+`);
+
+// SLIDE 8 - STORAGE STRATEGIES
+slides.push(`
+  <div class="glow-orb a" style="bottom:-150px;left:10%;"></div>
+  <div class="content">
+    <div class="pill accent" style="margin-bottom:16px;">Stage 03 &middot; Storage</div>
+    <h2 class="section">Storage <span class="gradient-text">strategies</span>.</h2>
+    <p class="subtitle" style="margin-top:14px; max-width:1060px;">
+      Two pallets of the same SKU. Which one gets picked next? The answer is a storage strategy,
+      and the right choice depends on the product, the customer and the regulation.
+    </p>
+
+    <div class="grid g3" style="margin-top:32px;">
+      <div class="glass hl">
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+          <div style="width:44px; height:44px; border-radius:10px; background:rgba(37,99,235,0.22); color:var(--p300); display:flex; align-items:center; justify-content:center; font-family:JetBrains Mono; font-weight:700; font-size:13px;">FIFO</div>
+          <div class="card-title" style="margin:0;">First In, First Out</div>
+        </div>
+        <div class="card-body">
+          Pick the oldest pallet first. Sorted by <span class="chip p" style="display:inline-flex;">receivedAt ASC</span>.
+        </div>
+        <div style="margin-top:14px; padding-top:14px; border-top:1px solid rgba(255,255,255,0.06);">
+          <div class="eyebrow" style="margin-bottom:8px;">Best for</div>
+          <div class="card-body">General merchandise, ambient goods, anything without expiry pressure. The sensible default.</div>
+        </div>
+      </div>
+      <div class="glass hl">
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+          <div style="width:44px; height:44px; border-radius:10px; background:rgba(139,92,246,0.22); color:var(--a400); display:flex; align-items:center; justify-content:center; font-family:JetBrains Mono; font-weight:700; font-size:13px;">FEFO</div>
+          <div class="card-title" style="margin:0;">First Expired, First Out</div>
+        </div>
+        <div class="card-body">
+          Pick the closest-to-expiry pallet first. Sorted by <span class="chip a" style="display:inline-flex;">expiryDate ASC</span>.
+        </div>
+        <div style="margin-top:14px; padding-top:14px; border-top:1px solid rgba(255,255,255,0.06);">
+          <div class="eyebrow" style="margin-bottom:8px;">Best for</div>
+          <div class="card-body">Pharma, food, cosmetics, anything with a shelf life. Minimises write-offs and protects the customer.</div>
+        </div>
+      </div>
+      <div class="glass hl">
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+          <div style="width:44px; height:44px; border-radius:10px; background:rgba(34,197,94,0.22); color:#86efac; display:flex; align-items:center; justify-content:center; font-family:JetBrains Mono; font-weight:700; font-size:13px;">LIFO</div>
+          <div class="card-title" style="margin:0;">Last In, First Out</div>
+        </div>
+        <div class="card-body">
+          Pick the newest pallet first. Sorted by <span class="chip g" style="display:inline-flex;">receivedAt DESC</span>.
+        </div>
+        <div style="margin-top:14px; padding-top:14px; border-top:1px solid rgba(255,255,255,0.06);">
+          <div class="eyebrow" style="margin-bottom:8px;">Best for</div>
+          <div class="card-body">Bulk commodities where newest is most accessible (stacks, silos, aggregate). Rare in modern warehouses.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid g4" style="margin-top:24px;">
+      <div class="glass sm">
+        <div class="eyebrow" style="margin-bottom:6px;">And beyond</div>
+        <div class="card-title" style="font-size:14px;">closest_to_pickface</div>
+        <div class="card-body">Prefer bins with the lowest walkSequence - cut the walk, cut the minutes.</div>
+      </div>
+      <div class="glass sm">
+        <div class="eyebrow" style="margin-bottom:6px;">Smart packing</div>
+        <div class="card-title" style="font-size:14px;">avoid_partial_pallet</div>
+        <div class="card-body">Prefer to break fewer pallets. Less clean-up, fewer tote-level picks.</div>
+      </div>
+      <div class="glass sm">
+        <div class="eyebrow" style="margin-bottom:6px;">Traceability</div>
+        <div class="card-title" style="font-size:14px;">same_lot</div>
+        <div class="card-body">Keep an order on one lot. Essential for recall scope and GDP audits.</div>
+      </div>
+      <div class="glass sm">
+        <div class="eyebrow" style="margin-bottom:6px;">3PL</div>
+        <div class="card-title" style="font-size:14px;">customer_dedicated</div>
+        <div class="card-body">Only allocate from inventory with matching <span class="chip a" style="display:inline-flex;">ownerCustomerId</span>.</div>
+      </div>
+    </div>
+  </div>
+`);
+
+// SLIDE 9 - INVENTORY LEDGER + ALLOCATION
+slides.push(`
+  <div class="glow-orb p" style="top:-150px;right:-150px;"></div>
+  <div class="content">
+    <div class="pill" style="margin-bottom:16px;">Stage 04 &middot; Inventory</div>
+    <h2 class="section">The inventory <span class="gradient-text">ledger</span>.</h2>
+    <p class="subtitle" style="margin-top:14px;">
+      Inventory is an event-sourced ledger, not a number in a row. Every receive, pick, transfer
+      or count is an immutable transaction. The read-model is rebuilt from events.
+    </p>
+
+    <div class="grid g2" style="margin-top:30px; gap:24px;">
+      <div>
+        <div class="eyebrow" style="margin-bottom:12px;">InventoryRecord &middot; per SKU per bin</div>
+        <div class="glass" style="padding:20px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; font-size:12px; font-family:JetBrains Mono; color:var(--s400); margin-bottom:12px;">
+            <span>SKU-VX-2000 @ COLD-01-04-A</span>
+            <span class="chip g">available</span>
+          </div>
+          <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:8px;">
+            <div style="background:rgba(255,255,255,0.04); padding:12px; border-radius:8px; text-align:center;">
+              <div style="font-size:22px; font-weight:700;">480</div>
+              <div style="font-size:10px; color:var(--s500); margin-top:2px;">ON HAND</div>
+            </div>
+            <div style="background:rgba(139,92,246,0.08); padding:12px; border-radius:8px; text-align:center;">
+              <div style="font-size:22px; font-weight:700; color:var(--a400);">96</div>
+              <div style="font-size:10px; color:var(--s500); margin-top:2px;">ALLOCATED</div>
+            </div>
+            <div style="background:rgba(34,197,94,0.08); padding:12px; border-radius:8px; text-align:center;">
+              <div style="font-size:22px; font-weight:700; color:#86efac;">384</div>
+              <div style="font-size:10px; color:var(--s500); margin-top:2px;">AVAILABLE</div>
+            </div>
+            <div style="background:rgba(234,179,8,0.08); padding:12px; border-radius:8px; text-align:center;">
+              <div style="font-size:22px; font-weight:700; color:#fde047;">0</div>
+              <div style="font-size:10px; color:var(--s500); margin-top:2px;">ON HOLD</div>
+            </div>
+          </div>
+          <div style="margin-top:14px; font-size:11.5px; color:var(--s400); line-height:1.5;">
+            Lot 2024-11 &middot; Expires 2027-05 &middot; Last counted 4 days ago &middot; Owner: Acme Pharma
+          </div>
+        </div>
+
+        <div class="eyebrow" style="margin:18px 0 10px;">ATP &middot; Available-to-Promise</div>
+        <div class="glass sm" style="padding:16px; font-family:JetBrains Mono; font-size:11.5px;">
+          <span class="c-com">// Can I promise 400 units by 2026-04-25?</span><br/>
+          <span class="c-key">GET</span> <span class="c-str">/api/v1/inventory/atp?sku=VX-2000&amp;locationId=dc-dallas&amp;date=2026-04-25</span><br/>
+          <span class="c-com">// =&gt; { promiseable: 612, onHand: 480, inbound: 228, byDate: [...] }</span>
+        </div>
+      </div>
+
+      <div>
+        <div class="eyebrow" style="margin-bottom:12px;">Allocation lifecycle</div>
+        <div style="display:flex; flex-direction:column; gap:10px;">
+          <div class="glass sm" style="border-left:3px solid var(--p500);">
+            <div style="display:flex; align-items:center; gap:10px;"><span class="chip p">soft</span><span style="font-size:13px; font-weight:600;">Reserved, not blocked</span></div>
+            <div class="card-body" style="margin-top:6px;">Created at order acceptance / ATP check. Visible on the record but other orders can still use it. Auto-expires.</div>
+          </div>
+          <div class="glass sm" style="border-left:3px solid var(--a500);">
+            <div style="display:flex; align-items:center; gap:10px;"><span class="chip a">hard</span><span style="font-size:13px; font-weight:600;">Locked to the order</span></div>
+            <div class="card-body" style="margin-top:6px;">Created at wave release. Stock is committed to this specific order and cannot be stolen.</div>
+          </div>
+          <div class="glass sm" style="border-left:3px solid var(--green);">
+            <div style="display:flex; align-items:center; gap:10px;"><span class="chip g">picked</span><span style="font-size:13px; font-weight:600;">Physically taken</span></div>
+            <div class="card-body" style="margin-top:6px;">Picker confirmed quantity. Allocation transitions. On-hand decrements. Transaction written to the ledger.</div>
+          </div>
+          <div class="glass sm" style="border-left:3px solid var(--red);">
+            <div style="display:flex; align-items:center; gap:10px;"><span class="chip r">released</span><span style="font-size:13px; font-weight:600;">Given back</span></div>
+            <div class="card-body" style="margin-top:6px;">Order cancelled, short pick, wave cancelled. Allocation reversed - stock returns to available.</div>
+          </div>
+        </div>
+
+        <div class="footnote" style="position:static; margin-top:16px; font-size:11.5px;">
+          Every transition emits a domain event. The read-model is the projection, not the source of truth.
+        </div>
+      </div>
+    </div>
+  </div>
+`);
+
+// SLIDE 10 - WAVES
+slides.push(`
+  <div class="glow-orb m" style="top:-150px;right:10%;"></div>
+  <div class="content">
+    <div class="pill amber" style="margin-bottom:16px;">Stage 05 &middot; Wave planning</div>
+    <h2 class="section">Waves: batching the <span class="gradient-text amber">day's work</span>.</h2>
+    <p class="subtitle" style="margin-top:14px; max-width:1060px;">
+      A wave is a batch of orders released to the floor together. It's how a warehouse turns
+      a stream of orders into an efficient walk pattern that hits carrier cutoffs and balances labour.
+    </p>
+
+    <div class="grid g2" style="margin-top:30px; gap:24px;">
+      <div>
+        <div class="eyebrow m" style="margin-bottom:12px;">Wave templates</div>
+        <div class="glass">
+          <div class="card-body" style="margin-bottom:14px;">
+            Templates are the planner's recipe. Define once - run many times. A template captures the grouping
+            rules, the cutoff, the strategy and the size limits.
+          </div>
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            <div class="glass sm" style="padding:12px;"><div style="display:flex; justify-content:space-between; align-items:center;"><div style="font-weight:600; font-size:13px;">Daily FedEx 14:00 cutoff</div><span class="chip m">auto-release</span></div><div class="card-body" style="margin-top:6px; font-size:11.5px;">Carrier = FedEx &middot; strategy = batch &middot; min 20 orders &middot; max 4h labour</div></div>
+            <div class="glass sm" style="padding:12px;"><div style="display:flex; justify-content:space-between; align-items:center;"><div style="font-weight:600; font-size:13px;">UPS next-day 16:30</div><span class="chip p">manual release</span></div><div class="card-body" style="margin-top:6px; font-size:11.5px;">Carrier = UPS &middot; service = NDA &middot; strategy = zone &middot; priority 1</div></div>
+            <div class="glass sm" style="padding:12px;"><div style="display:flex; justify-content:space-between; align-items:center;"><div style="font-weight:600; font-size:13px;">Cold chain AM dispatch</div><span class="chip g">04:00 cron</span></div><div class="card-body" style="margin-top:6px; font-size:11.5px;">Temperature = refrigerated &middot; ship-complete only &middot; discrete picks</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="eyebrow m" style="margin-bottom:12px;">Wave release preview</div>
+        <div class="glass" style="padding:20px;">
+          <div style="font-size:13px; color:var(--s400); margin-bottom:12px;">
+            <span style="color:#fff; font-weight:600; font-family:JetBrains Mono;">W-2026-04-18-003</span> &middot; FedEx 14:00
+          </div>
+          <div style="display:grid; grid-template-columns:repeat(2,1fr); gap:10px;">
+            <div class="glass sm" style="padding:14px;"><div style="font-size:22px; font-weight:700;">84</div><div style="font-size:10px; color:var(--s500); text-transform:uppercase;">Orders</div></div>
+            <div class="glass sm" style="padding:14px;"><div style="font-size:22px; font-weight:700;">312</div><div style="font-size:10px; color:var(--s500); text-transform:uppercase;">Lines</div></div>
+            <div class="glass sm" style="padding:14px;"><div style="font-size:22px; font-weight:700; color:var(--amber);">3h 42m</div><div style="font-size:10px; color:var(--s500); text-transform:uppercase;">Expected labour</div></div>
+            <div class="glass sm" style="padding:14px;"><div style="font-size:22px; font-weight:700; color:var(--green);">97%</div><div style="font-size:10px; color:var(--s500); text-transform:uppercase;">Projected OTD</div></div>
+          </div>
+
+          <div style="margin-top:16px; padding:14px; border-radius:10px; background:rgba(234,179,8,0.08); border:1px solid rgba(234,179,8,0.22);">
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+              <div style="width:8px; height:8px; border-radius:50%; background:var(--yellow);"></div>
+              <div style="font-weight:600; font-size:13px; color:#fde047;">Cutoff risk</div>
+            </div>
+            <div style="font-size:11.5px; color:var(--s300); line-height:1.5;">
+              Projected completion 13:47. Carrier cutoff 14:00. Releasing the next wave in under 12 minutes triggers a
+              <span class="chip y" style="display:inline-flex;">shipment.cutoff_at_risk</span> event.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+`);
+
+// SLIDE 11 - PICK STRATEGIES
+slides.push(`
+  <div class="glow-orb p" style="bottom:-150px;right:-150px;"></div>
+  <div class="content">
+    <div class="pill" style="margin-bottom:16px;">Stage 06 &middot; Pick</div>
+    <h2 class="section">Four ways to <span class="gradient-text">pick</span>.</h2>
+    <p class="subtitle" style="margin-top:14px;">
+      There is no universal best picking strategy. It depends on order volume, order shape,
+      warehouse layout and labour. A mature WMS supports all four and lets templates mix them.
+    </p>
+
+    <div class="grid g4" style="margin-top:32px;">
+      <div class="glass hl">
+        <div class="card-icon">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 5.25h16.5m-16.5 4.5h16.5m-16.5 4.5h16.5m-16.5 4.5h16.5"/></svg>
+        </div>
+        <div class="card-title">Discrete</div>
+        <div class="card-body">One picker, one order, full walk. Simple, low error rate, high walk time per line.</div>
+        <div style="margin-top:14px; padding-top:14px; border-top:1px solid rgba(255,255,255,0.06);">
+          <div class="eyebrow" style="margin-bottom:6px;">Best for</div>
+          <div class="card-body">Small warehouses, low volume, high-value items, strict traceability.</div>
+        </div>
+      </div>
+      <div class="glass hl">
+        <div class="card-icon a">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 14.25v2.25m3-4.5v4.5m3-6.75v6.75m3-9v9M6 20.25h12A2.25 2.25 0 0020.25 18V6A2.25 2.25 0 0018 3.75H6A2.25 2.25 0 003.75 6v12A2.25 2.25 0 006 20.25z"/></svg>
+        </div>
+        <div class="card-title">Batch</div>
+        <div class="card-body">Multiple orders, one walk. Same SKU at same bin picked once, sorted back to individual orders at a station.</div>
+        <div style="margin-top:14px; padding-top:14px; border-top:1px solid rgba(255,255,255,0.06);">
+          <div class="eyebrow" style="margin-bottom:6px;">Best for</div>
+          <div class="card-body">E-commerce, high-overlap SKUs, small-cart orders, parcel fulfilment.</div>
+        </div>
+      </div>
+      <div class="glass hl">
+        <div class="card-icon g">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z"/></svg>
+        </div>
+        <div class="card-title">Zone</div>
+        <div class="card-body">Each picker owns a zone. Units hop between zones via a conveyor or tote. Nobody walks the whole warehouse.</div>
+        <div style="margin-top:14px; padding-top:14px; border-top:1px solid rgba(255,255,255,0.06);">
+          <div class="eyebrow" style="margin-bottom:6px;">Best for</div>
+          <div class="card-body">Large warehouses, steady labour, clear zone boundaries, automation-friendly.</div>
+        </div>
+      </div>
+      <div class="glass hl">
+        <div class="card-icon m">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        </div>
+        <div class="card-title">Wave</div>
+        <div class="card-body">The meta-strategy. Group orders by carrier or cutoff, then pick using any of the three above inside the group.</div>
+        <div style="margin-top:14px; padding-top:14px; border-top:1px solid rgba(255,255,255,0.06);">
+          <div class="eyebrow" style="margin-bottom:6px;">Best for</div>
+          <div class="card-body">Any operation with scheduled cutoffs. The default for modern fulfilment.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+`);
+
+// SLIDE 12 - PICK EXECUTION
+slides.push(`
+  <div class="glow-orb a" style="top:-100px;left:-200px;"></div>
+  <div class="content">
+    <div class="pill accent" style="margin-bottom:16px;">Stage 06 &middot; Pick execution</div>
+    <h2 class="section">The <span class="gradient-text">walk path</span>.</h2>
+    <p class="subtitle" style="margin-top:14px; max-width:1060px;">
+      Once a wave is released, pick lines are sorted by <span class="chip p" style="display:inline-flex;">bin.walkSequence</span>.
+      That single integer produces a serpentine walk path - no graph solver needed for a TMS-grade WMS.
+    </p>
+
+    <div class="grid g2" style="margin-top:30px; gap:24px;">
+      <div class="terminal">
+        <div class="terminal-bar">
+          <div class="tb-dot r"></div><div class="tb-dot y"></div><div class="tb-dot g"></div>
+          <span class="terminal-title">Pick Task PT-4821 &middot; Picker P03</span>
+        </div>
+        <div class="terminal-body">
+          <div style="display:flex; justify-content:space-between; margin-bottom:14px;">
+            <span style="color:var(--s200);">Wave W-2026-04-18-003</span>
+            <span class="chip p">in_progress 12/42</span>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:6px; font-size:12px;">
+            <div style="display:flex; justify-content:space-between; padding:8px 10px; background:rgba(34,197,94,0.08); border-radius:6px; border-left:2px solid var(--green);">
+              <span style="color:#86efac;">&#10003; PICK-FACE-A01-03</span><span style="color:var(--s400); font-family:JetBrains Mono;">SKU-VX-2000 &middot; 24 EA</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; padding:8px 10px; background:rgba(34,197,94,0.08); border-radius:6px; border-left:2px solid var(--green);">
+              <span style="color:#86efac;">&#10003; PICK-FACE-A02-01</span><span style="color:var(--s400); font-family:JetBrains Mono;">SKU-FL-0112 &middot; 12 EA</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; padding:8px 10px; background:rgba(37,99,235,0.12); border-radius:6px; border-left:2px solid var(--p500);">
+              <span style="color:var(--p300);">&#8594; PICK-FACE-A02-08</span><span style="color:var(--s400); font-family:JetBrains Mono;">SKU-VX-2000 &middot; 6 EA</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; padding:8px 10px; background:rgba(255,255,255,0.03); border-radius:6px;">
+              <span style="color:var(--s400);">PICK-FACE-A03-04</span><span style="color:var(--s400); font-family:JetBrains Mono;">SKU-WL-9920 &middot; 18 EA</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; padding:8px 10px; background:rgba(255,255,255,0.03); border-radius:6px;">
+              <span style="color:var(--s400);">PICK-FACE-B01-02</span><span style="color:var(--s400); font-family:JetBrains Mono;">SKU-GL-4410 &middot; 3 EA</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; padding:8px 10px; background:rgba(255,255,255,0.03); border-radius:6px;">
+              <span style="color:var(--s400);">PICK-FACE-B03-01</span><span style="color:var(--s400); font-family:JetBrains Mono;">SKU-HT-7781 &middot; 8 EA</span>
+            </div>
+          </div>
+          <div style="margin-top:14px; padding-top:14px; border-top:1px solid rgba(255,255,255,0.06); font-size:11px; color:var(--s500);">
+            Sorted ascending by walkSequence &middot; estimated 18m 42s remaining
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="eyebrow a" style="margin-bottom:12px;">Short picks are routine</div>
+        <div class="glass" style="padding:20px;">
+          <div class="card-body" style="margin-bottom:14px;">
+            Stock doesn't always match the record. The picker finds fewer than expected.
+            Three actions, picker chooses on the scanner:
+          </div>
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            <div class="glass sm" style="padding:14px;">
+              <div style="display:flex; align-items:center; gap:10px;"><span class="chip y" style="display:inline-flex;">backorder</span><span style="font-size:13px; font-weight:600;">Keep the line open</span></div>
+              <div class="card-body" style="margin-top:6px; font-size:12px;">Remaining qty stays allocated, reappears in the next wave once replenished.</div>
+            </div>
+            <div class="glass sm" style="padding:14px;">
+              <div style="display:flex; align-items:center; gap:10px;"><span class="chip p" style="display:inline-flex;">substitute</span><span style="font-size:13px; font-weight:600;">Swap the SKU</span></div>
+              <div class="card-body" style="margin-top:6px; font-size:12px;">Scan an alternate SKU approved by the customer's substitution rules.</div>
+            </div>
+            <div class="glass sm" style="padding:14px;">
+              <div style="display:flex; align-items:center; gap:10px;"><span class="chip r" style="display:inline-flex;">cancel_line</span><span style="font-size:13px; font-weight:600;">Give up on it</span></div>
+              <div class="card-body" style="margin-top:6px; font-size:12px;">Allocation released, order line updated. Customer notified.</div>
+            </div>
+          </div>
+          <div style="font-size:11.5px; color:var(--s400); margin-top:14px; line-height:1.5;">
+            Every short pick emits <span class="chip a" style="display:inline-flex;">pick_task.short_pick</span> which
+            triggers a replenishment check from bulk storage.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+`);
+
+// SLIDE 13 - PACK & CARTONIZATION
+slides.push(`
+  <div class="glow-orb m" style="bottom:-150px;right:-150px;"></div>
+  <div class="content">
+    <div class="pill amber" style="margin-bottom:16px;">Stage 07 &middot; Pack</div>
+    <h2 class="section">Pack, verify, <span class="gradient-text amber">cartonize</span>.</h2>
+    <p class="subtitle" style="margin-top:14px;">
+      The pack station is the last line of defence before a carton leaves the building.
+      Verify the pick, recommend the smallest viable carton, capture the weight,
+      print the label.
+    </p>
+
+    <div class="grid g2" style="margin-top:30px; gap:24px;">
+      <div>
+        <div class="eyebrow m" style="margin-bottom:12px;">Pack workflow</div>
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <div class="glass sm" style="display:flex; gap:12px; align-items:flex-start;">
+            <div style="width:28px; height:28px; border-radius:8px; background:rgba(245,158,11,0.2); color:#fcd34d; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:12px; flex-shrink:0; font-family:JetBrains Mono;">1</div>
+            <div><div class="card-title" style="font-size:14px;">Scan order barcode</div><div class="card-body" style="font-size:12px;">Pack station resolves the expected PackLines from the completed PickTask.</div></div>
+          </div>
+          <div class="glass sm" style="display:flex; gap:12px; align-items:flex-start;">
+            <div style="width:28px; height:28px; border-radius:8px; background:rgba(245,158,11,0.2); color:#fcd34d; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:12px; flex-shrink:0; font-family:JetBrains Mono;">2</div>
+            <div><div class="card-title" style="font-size:14px;">Verify each item</div><div class="card-body" style="font-size:12px;">Scan every box/item. System checks against expected. Mismatch stops the line.</div></div>
+          </div>
+          <div class="glass sm" style="display:flex; gap:12px; align-items:flex-start;">
+            <div style="width:28px; height:28px; border-radius:8px; background:rgba(245,158,11,0.2); color:#fcd34d; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:12px; flex-shrink:0; font-family:JetBrains Mono;">3</div>
+            <div><div class="card-title" style="font-size:14px;">Cartonization recommendation</div><div class="card-body" style="font-size:12px;">3D bin-packing over item dims. Recommend primary carton with fallbacks. Override allowed.</div></div>
+          </div>
+          <div class="glass sm" style="display:flex; gap:12px; align-items:flex-start;">
+            <div style="width:28px; height:28px; border-radius:8px; background:rgba(245,158,11,0.2); color:#fcd34d; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:12px; flex-shrink:0; font-family:JetBrains Mono;">4</div>
+            <div><div class="card-title" style="font-size:14px;">Weigh the carton</div><div class="card-body" style="font-size:12px;">Scale integration or manual entry. Deviation over threshold raises a PackAudit issue.</div></div>
+          </div>
+          <div class="glass sm" style="display:flex; gap:12px; align-items:flex-start;">
+            <div style="width:28px; height:28px; border-radius:8px; background:rgba(245,158,11,0.2); color:#fcd34d; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:12px; flex-shrink:0; font-family:JetBrains Mono;">5</div>
+            <div><div class="card-title" style="font-size:14px;">Print &amp; stage</div><div class="card-body" style="font-size:12px;">Shipping label via Document Generation. Carton moves to the staging zone for its carrier.</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="eyebrow m" style="margin-bottom:12px;">Cartonization &middot; First-Fit Decreasing 3D bin packing</div>
+        <div class="glass">
+          <div class="card-body" style="margin-bottom:14px;">
+            Given the picked items (with dims from ProductUom), find the smallest carton
+            from the catalogue that fits them. Reduces dim-weight charges and void fill.
+          </div>
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            <div class="glass sm" style="padding:12px; border-left:3px solid var(--green);">
+              <div style="display:flex; justify-content:space-between; align-items:center;"><span style="font-weight:600; font-size:13px;">Small Mailer &middot; 250 &times; 180 &times; 60mm</span><span class="chip g">RECOMMENDED &middot; 87%</span></div>
+              <div class="card-body" style="margin-top:4px; font-size:11.5px;">Fits 3 items &middot; 1.2kg &middot; $0.42 per unit</div>
+            </div>
+            <div class="glass sm" style="padding:12px; border-left:3px solid var(--s500);">
+              <div style="display:flex; justify-content:space-between; align-items:center;"><span style="font-weight:600; font-size:13px;">Medium Box &middot; 300 &times; 240 &times; 120mm</span><span class="chip" style="background:rgba(148,163,184,0.15); color:var(--s300); border:1px solid rgba(148,163,184,0.25);">fallback &middot; 48%</span></div>
+              <div class="card-body" style="margin-top:4px; font-size:11.5px;">Fits 3 items &middot; $0.68 per unit</div>
+            </div>
+            <div class="glass sm" style="padding:12px; border-left:3px solid var(--s500);">
+              <div style="display:flex; justify-content:space-between; align-items:center;"><span style="font-weight:600; font-size:13px;">Large Box &middot; 400 &times; 300 &times; 200mm</span><span class="chip" style="background:rgba(148,163,184,0.15); color:var(--s300); border:1px solid rgba(148,163,184,0.25);">fallback &middot; 22%</span></div>
+              <div class="card-body" style="margin-top:4px; font-size:11.5px;">Fits 3 items &middot; $1.10 per unit</div>
+            </div>
+          </div>
+          <div style="font-size:12px; color:var(--s400); margin-top:14px; line-height:1.5;">
+            Selecting a carton creates or assigns a <span class="chip a" style="display:inline-flex;">TrackableUnit</span>
+            representing the outbound package. Overrides emit
+            <span class="chip m" style="display:inline-flex;">pack.cartonization_overridden</span>.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+`);
+
+// SLIDE 14 - LOAD & SHIP
+slides.push(`
+  <div class="glow-orb p" style="top:-150px;right:-100px;"></div>
+  <div class="content">
+    <div class="pill" style="margin-bottom:16px;">Stage 08 &middot; Load &amp; dispatch</div>
+    <h2 class="section">Staging, loading, <span class="gradient-text">BOL</span>.</h2>
+    <p class="subtitle" style="margin-top:14px; max-width:1060px;">
+      Packed cartons accumulate in staging bins, grouped by carrier. When the truck arrives,
+      units are loaded in reverse-stop order - last delivery first, deepest in the trailer.
+    </p>
+
+    <div class="flow" style="margin-top:32px;">
+      <div class="flow-step"><div class="step-num">01</div><div class="step-title">Staging</div><div class="step-desc">PackTask completion moves units to staging bins, grouped by carrier and route.</div></div>
+      <div class="flow-step"><div class="step-num">02</div><div class="step-title">Shipment build-up</div><div class="step-desc">Orders for the same shipment accumulate. TMS's order-to-shipment conversion is reused.</div></div>
+      <div class="flow-step"><div class="step-num">03</div><div class="step-title">Load sequence</div><div class="step-desc">Calculated from ShipmentStop in reverse. Last drop loaded first = deepest in trailer.</div></div>
+      <div class="flow-step"><div class="step-num">04</div><div class="step-title">Load execution</div><div class="step-desc">Dock worker scans each unit onto the vehicle. Out-of-sequence scans raise a warning.</div></div>
+      <div class="flow-step"><div class="step-num">05</div><div class="step-title">Seal</div><div class="step-desc">Worker enters the trailer seal number once all units are loaded.</div></div>
+      <div class="flow-step"><div class="step-num">06</div><div class="step-title">BOL generation</div><div class="step-desc">Triggered by load_plan.completed - reflects actual freight after short-picks and subs.</div></div>
+      <div class="flow-step"><div class="step-num">07</div><div class="step-title">Dispatch</div><div class="step-desc">Shipment status flips to ready_for_dispatch. TMS takes over for in-transit tracking.</div></div>
+    </div>
+
+    <div class="glass hl" style="margin-top:28px; display:flex; gap:24px; align-items:center;">
+      <div class="card-icon" style="margin:0; width:52px; height:52px; flex-shrink:0;">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6" style="width:26px;height:26px;"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586"/></svg>
+      </div>
+      <div>
+        <div class="card-title" style="margin-bottom:4px;">Why BOL at load completion, not at launch</div>
+        <div class="card-body" style="font-size:14px;">
+          The Bill of Lading must reflect what is actually on the truck - after short-picks, substitutions
+          and damage. The carrier signs it at pickup. Generating it after the last scan captures reality,
+          not the plan. If the shipment changes again, the BOL can be regenerated.
+        </div>
+      </div>
+    </div>
+  </div>
+`);
+
+// SLIDE 15 - INTEGRATIONS
+slides.push(`
+  <div class="glow-orb a" style="top:-150px;left:-150px;"></div>
+  <div class="glow-orb m" style="bottom:-150px;right:-150px;"></div>
+  <div class="content">
+    <div class="pill accent" style="margin-bottom:16px;">The integration surface</div>
+    <h2 class="section">What a WMS <span class="gradient-text">talks to</span>.</h2>
+    <p class="subtitle" style="margin-top:14px; max-width:1100px;">
+      A WMS is never alone. It receives orders from somewhere, it hands off shipments to somewhere,
+      and it exchanges inventory advice with clients. The quality of the integrations defines the quality of the WMS.
+    </p>
+
+    <div class="grid g2" style="margin-top:28px; gap:22px;">
+      <div class="glass hl">
+        <div class="card-icon">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5"/></svg>
+        </div>
+        <div class="card-title">WMS EDI &middot; 940, 945, 943, 944, 947, 846</div>
+        <div class="card-body" style="margin-bottom:10px;">The warehouse's own EDI dialect. The client tells the 3PL what to ship - the 3PL tells the client what shipped.</div>
+        <div style="display:flex; flex-wrap:wrap; gap:6px;">
+          <span class="chip p">940 Warehouse Shipping Order</span>
+          <span class="chip p">945 Warehouse Shipping Advice</span>
+          <span class="chip" style="background:rgba(148,163,184,0.12); color:var(--s400); border:1px solid rgba(148,163,184,0.2);">943 Transfer Advice</span>
+          <span class="chip" style="background:rgba(148,163,184,0.12); color:var(--s400); border:1px solid rgba(148,163,184,0.2);">944 Transfer Receipt</span>
+          <span class="chip" style="background:rgba(148,163,184,0.12); color:var(--s400); border:1px solid rgba(148,163,184,0.2);">846 Inventory Inquiry</span>
+        </div>
+      </div>
+      <div class="glass hl">
+        <div class="card-icon a">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z"/></svg>
+        </div>
+        <div class="card-title">ERP &middot; OMS</div>
+        <div class="card-body">SAP, NetSuite, Dynamics. Orders flow in, inventory balances flow out. Master data (SKUs, UOMs, customers) stays in sync through scheduled jobs or change-data-capture.</div>
+      </div>
+      <div class="glass hl">
+        <div class="card-icon g">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125"/></svg>
+        </div>
+        <div class="card-title">TMS handoff</div>
+        <div class="card-body">Seamless because it IS the TMS. The same TrackableUnit, CargoScan and Shipment models power both. Load plans flow into the TMS's in-transit tracking with zero copying.</div>
+      </div>
+      <div class="glass hl">
+        <div class="card-icon c">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z"/></svg>
+        </div>
+        <div class="card-title">IoT &middot; Indoor RTLS</div>
+        <div class="card-body">BLE beacons, WiFi APs and UWB anchors report proximity. IndoorZoneAnchor records map anchors to zones. Pallets know which zone they're in - and the dashboard renders a live heatmap.</div>
+      </div>
+      <div class="glass hl">
+        <div class="card-icon m">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3"/></svg>
+        </div>
+        <div class="card-title">Mobile scanners &amp; voice</div>
+        <div class="card-body">Rugged Android scanners, voice-directed picking headsets, tablet-based receiving stations. Magic-link QR auth means no passwords to type with gloved hands on the floor.</div>
+      </div>
+      <div class="glass hl">
+        <div class="card-icon y">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"/></svg>
+        </div>
+        <div class="card-title">Finance, BI &amp; 3PL billing</div>
+        <div class="card-body">Every transaction is an event. A data warehouse pulls the event stream for dashboards, KPIs and 3PL billing. Dock-to-stock, order cycle time, pick accuracy and labour productivity all flow out.</div>
+      </div>
+    </div>
+  </div>
+`);
+
+// SLIDE 16 - ECOSYSTEM
+slides.push(`
+  <div class="glow-orb m" style="top:-200px;left:50%; transform:translateX(-50%);"></div>
+  <div class="content">
+    <div class="pill amber" style="margin-bottom:14px;">The whole picture</div>
+    <h2 class="section" style="font-size:44px;">The warehouse <span class="gradient-text amber">ecosystem</span>.</h2>
+    <p class="subtitle" style="margin-top:10px;">
+      A WMS sits between the order source and the vehicle. Every arrow is a conversation.
+    </p>
+
+    <div style="flex:1; display:flex; align-items:center; justify-content:center; margin-top:20px;">
+      <div style="position:relative; width:100%; max-width:1100px; height:460px;">
+
+        <!-- Central WMS hub -->
+        <div style="position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); z-index:5;">
+          <div class="glass hl-m" style="padding:22px 34px; border-radius:22px; border-width:2px;">
+            <div style="display:flex; align-items:center; gap:12px;">
+              <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" style="color:var(--amber);"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z"/></svg>
+              <div>
+                <div class="eyebrow m">Open TMS</div>
+                <div style="font-size:22px; font-weight:800; letter-spacing:-0.02em;">Warehouse OS</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <svg style="position:absolute; inset:0; width:100%; height:100%; z-index:1;" viewBox="0 0 1100 460" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="lgw" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#f59e0b" stop-opacity="0.6"/>
+              <stop offset="1" stop-color="#8b5cf6" stop-opacity="0.2"/>
+            </linearGradient>
+          </defs>
+          <g stroke="url(#lgw)" stroke-width="1.5" fill="none" stroke-dasharray="4 4">
+            <path d="M140 60 L550 230"/>
+            <path d="M400 50 L550 230"/>
+            <path d="M700 50 L550 230"/>
+            <path d="M960 60 L550 230"/>
+            <path d="M140 390 L550 230"/>
+            <path d="M400 400 L550 230"/>
+            <path d="M700 400 L550 230"/>
+            <path d="M960 390 L550 230"/>
+          </g>
+        </svg>
+
+        <div style="position:absolute; left:4%; top:6%;"><div class="node m">ERP / OMS<br/><span style="font-size:10px; opacity:0.7;">Orders in</span></div></div>
+        <div style="position:absolute; left:30%; top:3%;"><div class="node p">3PL Client<br/><span style="font-size:10px; opacity:0.7;">EDI 940</span></div></div>
+        <div style="position:absolute; right:30%; top:3%;"><div class="node p">Inbound ASN<br/><span style="font-size:10px; opacity:0.7;">EDI 856</span></div></div>
+        <div style="position:absolute; right:4%; top:6%;"><div class="node a">Customer Portal<br/><span style="font-size:10px; opacity:0.7;">REST + webhooks</span></div></div>
+
+        <div style="position:absolute; left:4%; bottom:6%;"><div class="node g">TMS Dispatch<br/><span style="font-size:10px; opacity:0.7;">Load plans out</span></div></div>
+        <div style="position:absolute; left:30%; bottom:3%;"><div class="node g">Carrier Labels<br/><span style="font-size:10px; opacity:0.7;">FedEx &middot; UPS &middot; DHL</span></div></div>
+        <div style="position:absolute; right:30%; bottom:3%;"><div class="node m">IoT / RTLS<br/><span style="font-size:10px; opacity:0.7;">BLE &middot; WiFi &middot; UWB</span></div></div>
+        <div style="position:absolute; right:4%; bottom:6%;"><div class="node a">Scanners / Voice<br/><span style="font-size:10px; opacity:0.7;">Floor UI</span></div></div>
+      </div>
+    </div>
+
+    <div style="display:flex; justify-content:center; gap:18px; margin-top:16px; flex-wrap:wrap;">
+      <span class="chip m" style="display:inline-flex;">EDI 940/945</span>
+      <span class="chip p" style="display:inline-flex;">REST + webhooks</span>
+      <span class="chip a" style="display:inline-flex;">IoT telemetry</span>
+      <span class="chip g" style="display:inline-flex;">Shared TMS models</span>
+      <span class="chip y" style="display:inline-flex;">Carrier label APIs</span>
+    </div>
+  </div>
+`);
+
+// SLIDE 17 - CLOSING
+slides.push(`
+  <div class="glow-orb m" style="top:-200px;left:50%; transform:translateX(-50%);"></div>
+  <div class="glow-orb a" style="bottom:-200px;left:50%; transform:translateX(-50%);"></div>
+  <div class="content" style="align-items:center; justify-content:center; text-align:center;">
+    <div class="pill amber" style="margin-bottom:24px;">
+      <span class="dot"></span>
+      <span>Open Source &middot; MIT Licensed &middot; Free Forever</span>
+    </div>
+    <h1 class="title small" style="max-width:1100px;">
+      A warehouse is a <span class="gradient-text amber">ballet</span>.<br/>
+      The WMS is the <span class="gradient-text amber">choreography</span>.
+    </h1>
+    <p class="subtitle lg" style="margin-top:22px; max-width:980px;">
+      Goods in, putaway, storage rules, waves, picks, packs and loads - every step is
+      a dance between people, machines and digital twins. Open TMS's WMS runs the whole
+      sequence on one event-sourced foundation that already powers the shipments on the trucks outside.
+    </p>
+
+    <div class="grid g4" style="margin-top:44px; width:100%; max-width:1000px;">
+      <div class="glass sm" style="text-align:center;">
+        <div class="stat-num gradient-text amber">31</div>
+        <div class="stat-label">New WMS models</div>
+      </div>
+      <div class="glass sm" style="text-align:center;">
+        <div class="stat-num gradient-text amber">4</div>
+        <div class="stat-label">Pick strategies</div>
+      </div>
+      <div class="glass sm" style="text-align:center;">
+        <div class="stat-num gradient-text amber">3</div>
+        <div class="stat-label">Storage rules</div>
+      </div>
+      <div class="glass sm" style="text-align:center;">
+        <div class="stat-num gradient-text amber">8</div>
+        <div class="stat-label">Warehouse roles</div>
+      </div>
+    </div>
+
+    <div style="margin-top:44px; display:flex; gap:16px; align-items:center;">
+      <div class="logo-badge" style="padding:12px 20px;">
+        <svg class="truck" width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z"/></svg>
+        <span>github.com/dominicfinn/open_tms</span>
+      </div>
+    </div>
+
+    <div style="margin-top:24px; font-size:12.5px; color:var(--s500);">
+      <span class="kbd">&larr;</span> previous &middot; <span class="kbd">Home</span> back to start
+    </div>
+  </div>
+`);
+</script>
+<script>
+  document.addEventListener('DOMContentLoaded', render);
+</script>
+</body>
+</html>

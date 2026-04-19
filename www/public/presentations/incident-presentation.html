@@ -1,0 +1,1398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>The Incident Manager - Open TMS</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --p50:#eff6ff; --p100:#dbeafe; --p200:#bfdbfe; --p300:#93c5fd;
+    --p400:#60a5fa; --p500:#3b82f6; --p600:#2563eb; --p700:#1d4ed8;
+    --p800:#1e40af; --p900:#1e3a8a; --p950:#172554;
+    --a400:#a78bfa; --a500:#8b5cf6; --a600:#7c3aed;
+    --s50:#f8fafc; --s100:#f1f5f9; --s200:#e2e8f0; --s300:#cbd5e1;
+    --s400:#94a3b8; --s500:#64748b; --s600:#475569; --s700:#334155;
+    --s800:#1e293b; --s900:#0f172a; --s950:#020617;
+    --green:#22c55e; --yellow:#eab308; --red:#ef4444; --cyan:#06b6d4;
+    --amber:#f59e0b; --emerald:#10b981; --pink:#ec4899; --rose:#f43f5e;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%; overflow: hidden;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    color: #fff; background: var(--s950);
+  }
+  body::before {
+    content: ''; position: fixed; inset: 0;
+    background: linear-gradient(135deg, var(--s950) 0%, #1a0a1a 50%, var(--s900) 100%);
+    z-index: -2;
+  }
+  body::after {
+    content: ''; position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    opacity: 0.03; z-index: -1; pointer-events: none;
+  }
+
+  .deck { position: relative; width: 100vw; height: 100vh; overflow: hidden; }
+  .slide {
+    position: absolute; inset: 0; padding: 56px 72px;
+    display: none; flex-direction: column; opacity: 0;
+    transition: opacity .4s ease; overflow: hidden;
+  }
+  .slide.active { display: flex; opacity: 1; }
+
+  .glow-orb { position: absolute; width: 700px; height: 700px; border-radius: 50%; pointer-events: none; z-index: 0; filter: blur(120px); }
+  .glow-orb.r { background: rgba(244, 63, 94, 0.14); }
+  .glow-orb.k { background: rgba(236, 72, 153, 0.12); }
+  .glow-orb.e { background: rgba(16, 185, 129, 0.10); }
+
+  .content { position: relative; z-index: 1; display: flex; flex-direction: column; height: 100%; }
+
+  .pill {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 16px; border-radius: 999px;
+    border: 1px solid rgba(244, 63, 94, 0.24);
+    background: rgba(244, 63, 94, 0.12);
+    font-size: 13px; font-weight: 500; color: #fda4af;
+    letter-spacing: 0.02em; width: fit-content;
+  }
+  .pill.pink { border-color: rgba(236, 72, 153, 0.25); background: rgba(236, 72, 153, 0.12); color: #f9a8d4; }
+  .pill.emerald { border-color: rgba(16, 185, 129, 0.25); background: rgba(16, 185, 129, 0.12); color: #6ee7b7; }
+  .pill.cyan { border-color: rgba(6, 182, 212, 0.25); background: rgba(6, 182, 212, 0.12); color: #67e8f9; }
+  .pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red); animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1; transform:scale(1)}50%{opacity:.3; transform:scale(.8)} }
+
+  h1.title { font-size: 72px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.02; margin: 20px 0 14px; }
+  h1.title.small { font-size: 52px; }
+  h2.section { font-size: 48px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.08; margin: 16px 0 10px; }
+  .subtitle { font-size: 20px; color: var(--s300); line-height: 1.55; max-width: 1020px; font-weight: 400; }
+  .subtitle.lg { font-size: 24px; max-width: 1080px; }
+  .gradient-text {
+    background: linear-gradient(135deg, var(--rose), var(--pink));
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent; color: transparent;
+  }
+  .gradient-text.e {
+    background: linear-gradient(135deg, var(--emerald), var(--cyan));
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent; color: transparent;
+  }
+  .eyebrow { text-transform: uppercase; letter-spacing: 0.15em; font-size: 11px; font-weight: 600; color: #fda4af; }
+  .eyebrow.k { color: #f9a8d4; }
+  .eyebrow.e { color: #6ee7b7; }
+  .eyebrow.c { color: #67e8f9; }
+
+  .glass {
+    background: rgba(255,255,255,0.03);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 18px; padding: 22px;
+  }
+  .glass.hl {
+    background: linear-gradient(135deg, rgba(244,63,94,0.10), rgba(236,72,153,0.10));
+    border-color: rgba(244,63,94,0.22);
+  }
+  .glass.hl-e {
+    background: linear-gradient(135deg, rgba(16,185,129,0.10), rgba(6,182,212,0.10));
+    border-color: rgba(16,185,129,0.22);
+  }
+  .glass.sm { padding: 16px; border-radius: 14px; }
+
+  .row { display: flex; gap: 20px; }
+  .grid { display: grid; gap: 16px; }
+  .g2 { grid-template-columns: repeat(2, 1fr); }
+  .g3 { grid-template-columns: repeat(3, 1fr); }
+  .g4 { grid-template-columns: repeat(4, 1fr); }
+  .g5 { grid-template-columns: repeat(5, 1fr); }
+
+  .card-title { font-size: 15px; font-weight: 700; color: #fff; margin-bottom: 8px; display: flex; align-items: center; gap: 10px; }
+  .card-body { font-size: 13px; color: var(--s300); line-height: 1.55; }
+  .card-icon {
+    width: 40px; height: 40px; border-radius: 10px;
+    background: rgba(244,63,94,0.18); color: #fda4af;
+    display: inline-flex; align-items: center; justify-content: center;
+    margin-bottom: 10px;
+  }
+  .card-icon.k { background: rgba(236,72,153,0.18); color: #f9a8d4; }
+  .card-icon.e { background: rgba(16,185,129,0.18); color: #6ee7b7; }
+  .card-icon.c { background: rgba(6,182,212,0.18); color: #67e8f9; }
+  .card-icon.y { background: rgba(234,179,8,0.18); color: #fde047; }
+  .card-icon.p { background: rgba(37,99,235,0.18); color: var(--p400); }
+  .card-icon.a { background: rgba(139,92,246,0.18); color: var(--a400); }
+  .card-icon svg { width: 22px; height: 22px; }
+
+  .stat-num { font-size: 38px; font-weight: 800; letter-spacing: -0.02em; line-height: 1; }
+  .stat-label { font-size: 11.5px; color: var(--s400); margin-top: 6px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 500; }
+
+  .flow { display: flex; gap: 8px; align-items: stretch; }
+  .flow-step {
+    flex: 1; padding: 16px 12px; border-radius: 12px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    display: flex; flex-direction: column; gap: 6px;
+    position: relative;
+  }
+  .flow-step .step-num { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #fda4af; font-weight: 600; letter-spacing: 0.1em; }
+  .flow-step .step-num.e { color: #6ee7b7; }
+  .flow-step .step-title { font-size: 13px; font-weight: 600; color: #fff; line-height: 1.3; }
+  .flow-step .step-desc { font-size: 10.5px; color: var(--s400); line-height: 1.4; }
+  .flow-step::after {
+    content: ''; position: absolute; right: -6px; top: 50%;
+    width: 12px; height: 12px;
+    border-right: 2px solid rgba(255,255,255,0.14);
+    border-top: 2px solid rgba(255,255,255,0.14);
+    transform: translateY(-50%) rotate(45deg); z-index: 2;
+  }
+  .flow-step:last-child::after { display: none; }
+
+  .terminal {
+    border-radius: 12px; background: var(--s900);
+    border: 1px solid rgba(255,255,255,0.06);
+    overflow: hidden;
+    font-family: 'JetBrains Mono', monospace; font-size: 12px;
+  }
+  .terminal-bar {
+    display: flex; align-items: center; gap: 6px;
+    padding: 10px 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    background: var(--s900);
+  }
+  .tb-dot { width: 10px; height: 10px; border-radius: 50%; }
+  .tb-dot.r { background: rgba(239,68,68,0.6); }
+  .tb-dot.y { background: rgba(234,179,8,0.6); }
+  .tb-dot.g { background: rgba(34,197,94,0.6); }
+  .terminal-title { margin-left: 10px; font-size: 11px; color: var(--s500); }
+  .terminal-body { padding: 16px; color: var(--s300); line-height: 1.65; }
+  .c-key { color: #fda4af; }
+  .c-str { color: #6ee7b7; }
+  .c-num { color: #f9a8d4; }
+  .c-com { color: var(--s500); }
+
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 3px 9px; border-radius: 6px;
+    font-size: 11px; font-weight: 500;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.02em;
+  }
+  .chip.p { background: rgba(37,99,235,0.15); color: var(--p300); border: 1px solid rgba(37,99,235,0.25); }
+  .chip.r { background: rgba(239,68,68,0.15); color: #fca5a5; border: 1px solid rgba(239,68,68,0.25); }
+  .chip.k { background: rgba(236,72,153,0.15); color: #f9a8d4; border: 1px solid rgba(236,72,153,0.25); }
+  .chip.e { background: rgba(16,185,129,0.15); color: #6ee7b7; border: 1px solid rgba(16,185,129,0.25); }
+  .chip.c { background: rgba(6,182,212,0.15); color: #67e8f9; border: 1px solid rgba(6,182,212,0.25); }
+  .chip.y { background: rgba(234,179,8,0.15); color: #fde047; border: 1px solid rgba(234,179,8,0.25); }
+  .chip.a { background: rgba(139,92,246,0.15); color: var(--a400); border: 1px solid rgba(139,92,246,0.25); }
+  .chip.g { background: rgba(148,163,184,0.12); color: var(--s300); border: 1px solid rgba(148,163,184,0.2); }
+
+  .nav {
+    position: fixed; bottom: 20px; left: 0; right: 0;
+    display: flex; align-items: center; justify-content: center;
+    gap: 12px; z-index: 100;
+  }
+  .nav-btn {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: #fff; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background .15s;
+  }
+  .nav-btn:hover { background: rgba(255,255,255,0.12); }
+  .nav-count {
+    font-size: 12.5px; font-family: 'JetBrains Mono', monospace;
+    color: var(--s400); min-width: 60px; text-align: center; font-weight: 500;
+  }
+  .progress {
+    position: fixed; top: 0; left: 0; right: 0; height: 3px;
+    background: rgba(255,255,255,0.05); z-index: 100;
+  }
+  .progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--rose), var(--pink), var(--emerald));
+    transition: width .4s ease;
+  }
+
+  .logo-badge {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 8px 16px; border-radius: 12px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    font-size: 14px; font-weight: 600; letter-spacing: -0.01em;
+  }
+  .logo-badge .icon { color: var(--rose); }
+
+  .footnote {
+    position: absolute; bottom: 20px; left: 72px;
+    font-size: 11.5px; color: var(--s500); font-weight: 500;
+  }
+
+  ul.clean { list-style: none; padding: 0; }
+  ul.clean li { padding: 6px 0; padding-left: 22px; position: relative; color: var(--s300); font-size: 13.5px; line-height: 1.45; }
+  ul.clean li::before {
+    content: ''; position: absolute; left: 0; top: 14px;
+    width: 6px; height: 6px; border-radius: 50%; background: var(--rose);
+  }
+  ul.clean.e li::before { background: var(--emerald); }
+
+  .kbd {
+    display: inline-block; padding: 2px 8px;
+    border-radius: 6px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.14);
+    border-bottom-width: 2px;
+    font-family: 'JetBrains Mono', monospace; font-size: 12px;
+    color: var(--s200);
+  }
+
+  /* Kanban mockup */
+  .kanban { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .kanban-col { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 10px; padding: 12px; min-height: 220px; }
+  .kanban-col-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+  .kanban-card { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 10px; margin-bottom: 8px; font-size: 11px; }
+  .kanban-card .k-title { font-weight: 600; color: #fff; margin-bottom: 6px; font-size: 11.5px; line-height: 1.3; }
+  .kanban-card .k-meta { color: var(--s500); font-family: 'JetBrains Mono', monospace; font-size: 10px; display: flex; justify-content: space-between; margin-top: 6px; }
+</style>
+</head>
+<body>
+<div class="progress"><div class="progress-bar" id="progressBar"></div></div>
+<div class="deck" id="deck"></div>
+<div class="nav">
+  <button class="nav-btn" onclick="prev()" aria-label="Previous">
+    <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+  </button>
+  <div class="nav-count" id="navCount">01 / 17</div>
+  <button class="nav-btn" onclick="next()" aria-label="Next">
+    <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+  </button>
+</div>
+
+<script>
+  let current = 0;
+  const slides = [];
+  function render() {
+    const deck = document.getElementById('deck');
+    deck.innerHTML = slides.map((s, i) => `<section class="slide ${i===current?'active':''}" data-i="${i}">${s}</section>`).join('');
+    document.getElementById('navCount').textContent = String(current+1).padStart(2,'0') + ' / ' + String(slides.length).padStart(2,'0');
+    document.getElementById('progressBar').style.width = ((current+1)/slides.length*100) + '%';
+  }
+  function go(i) { if (i < 0 || i >= slides.length) return; current = i; render(); }
+  function next() { go(current+1); }
+  function prev() { go(current-1); }
+  document.addEventListener('keydown', e => {
+    if (['ArrowRight','PageDown',' '].includes(e.key)) { e.preventDefault(); next(); }
+    else if (['ArrowLeft','PageUp'].includes(e.key)) { e.preventDefault(); prev(); }
+    else if (e.key === 'Home') go(0);
+    else if (e.key === 'End') go(slides.length-1);
+  });
+</script>
+<script id="slides-content">
+// SLIDE 1 - TITLE
+slides.push(`
+  <div class="glow-orb r" style="top:-200px;left:-200px;"></div>
+  <div class="glow-orb k" style="bottom:-250px;right:-150px;"></div>
+  <div class="content">
+    <div class="logo-badge">
+      <svg class="icon" width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/></svg>
+      <span>Open TMS &middot; Incident Manager</span>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; justify-content:center; max-width:1100px;">
+      <div class="pill" style="margin-bottom:26px;">
+        <span class="dot"></span>
+        <span>From sensor alert to root cause, every time</span>
+      </div>
+      <h1 class="title">
+        When things <br/>
+        <span class="gradient-text">go wrong.</span>
+      </h1>
+      <p class="subtitle lg" style="margin-top:22px;">
+        A pickup window slips. A trailer mis-delivers to the wrong dock. Demurrage clocks up while a
+        driver waits. A retailer threatens an OTIF penalty. Modern logistics doesn't prevent every
+        exception - it turns every exception into a traceable, resolvable, improvable event.
+      </p>
+      <div style="display:flex; gap:18px; margin-top:40px; align-items:center;">
+        <div class="stat-num gradient-text">17</div>
+        <div style="font-size:14px; color:var(--s400); line-height:1.45;">
+          slides &middot; <span class="kbd">&rarr;</span> <span class="kbd">&larr;</span> to navigate,<br/>
+          <span class="kbd">Space</span> for next, <span class="kbd">Home</span>/<span class="kbd">End</span> to jump
+        </div>
+      </div>
+    </div>
+  </div>
+`);
+
+// SLIDE 2 - WHAT IS AN INCIDENT
+slides.push(`
+  <div class="glow-orb r" style="top:10%;right:-200px;"></div>
+  <div class="content">
+    <div class="pill" style="margin-bottom:16px;">Definition</div>
+    <h2 class="section">What is an <span class="gradient-text">incident</span>?</h2>
+    <p class="subtitle" style="margin-top:14px;">
+      An incident is anything that deviates from the plan - and the plan is bigger than sensors.
+      A missed pickup window. A mis-delivery to the wrong dock. Demurrage clocking up while a driver waits.
+      An OTIF breach that triggers a retailer penalty. If it costs money, breaks trust or breaks compliance,
+      the Incident Manager is where it lives.
+    </p>
+
+    <div class="grid g3" style="margin-top:32px;">
+      <div class="glass">
+        <div class="card-icon">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        </div>
+        <div class="card-title">Service &amp; commercial</div>
+        <div class="card-body">OTIF misses, retailer penalties, demurrage and detention fees, missed pickup windows, chain-of-custody handoff gaps, mis-deliveries to the wrong dock or wrong store.</div>
+      </div>
+      <div class="glass">
+        <div class="card-icon k">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3"/></svg>
+        </div>
+        <div class="card-title">Product &amp; quality</div>
+        <div class="card-body">Hot product loaded onto a reefer still warming up. Damage from shock or tilt. Seal broken mid-route. Light exposure on photosensitive pharma. Excursions that cross FDA thresholds.</div>
+      </div>
+      <div class="glass">
+        <div class="card-icon y">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5"/></svg>
+        </div>
+        <div class="card-title">Process &amp; integration</div>
+        <div class="card-body">Documentation errors, POD signature missing, dwell time over spec at receiver dock, integration sync failure with the client ERP, painful reverse logistics with no inventory visibility.</div>
+      </div>
+    </div>
+
+    <div class="glass hl" style="margin-top:24px; display:flex; gap:22px; align-items:center;">
+      <div class="card-icon" style="margin:0; width:52px; height:52px; flex-shrink:0;">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6" style="width:26px;height:26px;"><path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+      </div>
+      <div>
+        <div class="card-title" style="margin-bottom:4px;">Sensors are the smallest part of the job</div>
+        <div class="card-body" style="font-size:14.5px;">
+          Temperature excursions get the headlines, but most incidents are schedule slips,
+          handoff gaps and integration mismatches - the stuff no single sensor catches.
+          The Triage Centre treats an OTIF risk, a detention fee and a broken seal with
+          the same discipline: detect, classify, assign, resolve, learn.
+        </div>
+      </div>
+    </div>
+  </div>
+`);
+
+// SLIDE 3 - THE PROBLEM
+slides.push(`
+  <div class="glow-orb k" style="bottom:-150px;left:-150px;"></div>
+  <div class="content">
+    <div class="pill pink" style="margin-bottom:16px;">Why this matters</div>
+    <h2 class="section">The <span class="gradient-text">signal-to-noise</span> problem.</h2>
+    <p class="subtitle" style="margin-top:14px;">
+      A busy operation generates thousands of telemetry events per shipment.
+      Most are normal. A handful are catastrophic. Telling them apart is the job.
+    </p>
+
+    <div class="grid g2" style="margin-top:32px; gap:22px;">
+      <div class="glass hl">
+        <div class="card-icon">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0"/></svg>
+        </div>
+        <div class="card-title">Alert fatigue is real</div>
+        <div class="card-body">Raw telemetry - every temperature read, every GPS ping, every door open - is meaningless without thresholds, dedup, and severity. Dispatchers stop looking.</div>
+      </div>
+      <div class="glass hl">
+        <div class="card-icon k">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.76c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.184-4.183a1.14 1.14 0 01.778-.332 48.294 48.294 0 005.83-.498c1.585-.233 2.708-1.626 2.708-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z"/></svg>
+        </div>
+        <div class="card-title">Exceptions discovered by customers</div>
+        <div class="card-body">Without triage, a late arrival or broken cold chain surfaces only when the customer calls. By then it is a claim, not an incident.</div>
+      </div>
+      <div class="glass hl">
+        <div class="card-icon e">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0V12a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 12V5.25"/></svg>
+        </div>
+        <div class="card-title">Root causes never found</div>
+        <div class="card-body">Close the ticket, move on. Next week the same thing happens. Same carrier, same lane, same customer. Repeat failures compound.</div>
+      </div>
+      <div class="glass hl">
+        <div class="card-icon a">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/></svg>
+        </div>
+        <div class="card-title">Audits become fire drills</div>
+        <div class="card-body">When the regulator arrives, nobody can reconstruct what happened six months ago. Email chains, spreadsheet screenshots, memory.</div>
+      </div>
+    </div>
+  </div>
+`);
+
+// SLIDE 4 - THE TRIAGE CENTRE
+slides.push(`
+  <div class="glow-orb r" style="top:-150px;right:-100px;"></div>
+  <div class="content">
+    <div class="pill" style="margin-bottom:16px;">The command centre</div>
+    <h2 class="section">The <span class="gradient-text">Triage Centre</span>.</h2>
+    <p class="subtitle" style="margin-top:14px;">
+      A kanban board for operational exceptions. Four columns. Drag-and-drop.
+      Filters by priority, assignee, label. Saved views per team.
+    </p>
+
+    <div class="kanban" style="margin-top:28px;">
+      <div class="kanban-col">
+        <div class="kanban-col-title" style="color:#fda4af;"><span>Open</span><span class="chip r" style="font-size:10px;">12</span></div>
+        <div class="kanban-card" style="border-left:3px solid var(--red);">
+          <div class="k-title">OTIF risk &middot; retailer penalty $3.4k</div>
+          <div class="k-meta"><span>SHP-4821 &middot; Walmart</span><span style="color:#fca5a5;">CRIT</span></div>
+        </div>
+        <div class="kanban-card" style="border-left:3px solid var(--red);">
+          <div class="k-title">Wrong dock &middot; Store 284 vs 287</div>
+          <div class="k-meta"><span>Multi-stop 4/6</span><span style="color:#fca5a5;">CRIT</span></div>
+        </div>
+        <div class="kanban-card" style="border-left:3px solid var(--yellow);">
+          <div class="k-title">Demurrage accruing at Dallas DC</div>
+          <div class="k-meta"><span>$125/hr since 11:02</span><span style="color:#fde047;">HIGH</span></div>
+        </div>
+        <div class="kanban-card" style="border-left:3px solid var(--yellow);">
+          <div class="k-title">Reefer not pre-cooled at load</div>
+          <div class="k-meta"><span>Goods Out &middot; Dock 3</span><span style="color:#fde047;">HIGH</span></div>
+        </div>
+      </div>
+      <div class="kanban-col">
+        <div class="kanban-col-title" style="color:#fde047;"><span>In Progress</span><span class="chip y" style="font-size:10px;">7</span></div>
+        <div class="kanban-card" style="border-left:3px solid var(--red);">
+          <div class="k-title">Unauth stop &middot; driver off-route 14 min</div>
+          <div class="k-meta"><span>Security &middot; Jane M.</span><span style="color:#fca5a5;">CRIT</span></div>
+        </div>
+        <div class="kanban-card" style="border-left:3px solid var(--yellow);">
+          <div class="k-title">Missed pickup window &middot; driver ETA slipping</div>
+          <div class="k-meta"><span>Origin &middot; Dave R.</span><span style="color:#fde047;">HIGH</span></div>
+        </div>
+        <div class="kanban-card" style="border-left:3px solid #60a5fa;">
+          <div class="k-title">Handoff unsigned at Memphis terminal</div>
+          <div class="k-meta"><span>Chain of custody &middot; Priya</span><span style="color:#93c5fd;">MED</span></div>
+        </div>
+      </div>
+      <div class="kanban-col">
+        <div class="kanban-col-title" style="color:#67e8f9;"><span>Resolved</span><span class="chip c" style="font-size:10px;">5</span></div>
+        <div class="kanban-card" style="border-left:3px solid var(--cyan);">
+          <div class="k-title">Detention fee waived post-dispute</div>
+          <div class="k-meta"><span>Finance &middot; needs CAPA</span><span style="color:#67e8f9;">LOW</span></div>
+        </div>
+        <div class="kanban-card" style="border-left:3px solid var(--cyan);">
+          <div class="k-title">Return routed to wrong origin DC</div>
+          <div class="k-meta"><span>Reverse logistics</span><span style="color:#67e8f9;">LOW</span></div>
+        </div>
+      </div>
+      <div class="kanban-col">
+        <div class="kanban-col-title" style="color:#6ee7b7;"><span>Closed</span><span class="chip e" style="font-size:10px;">34</span></div>
+        <div class="kanban-card" style="opacity:0.6; border-left:3px solid var(--emerald);">
+          <div class="k-title">Hot product loaded &middot; reefer comp.</div>
+          <div class="k-meta"><span>&#10003; CAPA linked</span><span>2d ago</span></div>
+        </div>
+        <div class="kanban-card" style="opacity:0.6; border-left:3px solid var(--emerald);">
+          <div class="k-title">ERP sync failure &middot; 840 orders stuck</div>
+          <div class="k-meta"><span>&#10003; Closure report</span><span>3d ago</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid g4" style="margin-top:20px; gap:12px;">
+      <div class="glass sm"><div class="card-title" style="font-size:13px;">Priority</div><div class="card-body" style="font-size:12px;">low &middot; medium &middot; high &middot; critical</div></div>
+      <div class="glass sm"><div class="card-title" style="font-size:13px;">Labels</div><div class="card-body" style="font-size:12px;">Org-scoped tags with colour coding</div></div>
+      <div class="glass sm"><div class="card-title" style="font-size:13px;">Snooze</div><div class="card-body" style="font-size:12px;">Defer until later. Auto-wakes at due time.</div></div>
+      <div class="glass sm"><div class="card-title" style="font-size:13px;">Saved views</div><div class="card-body" style="font-size:12px;">Per-user or shared kanban filters</div></div>
+    </div>
+  </div>
+`);
+
+// SLIDE 5 - ISSUE LIFECYCLE
+slides.push(`
+  <div class="glow-orb e" style="bottom:-150px;right:-100px;"></div>
+  <div class="content">
+    <div class="pill emerald" style="margin-bottom:16px;">The state machine</div>
+    <h2 class="section">An issue's <span class="gradient-text e">lifecycle</span>.</h2>
+    <p class="subtitle" style="margin-top:14px; max-width:1060px;">
+      Every issue transitions through four core states - with branches for snooze, escalation
+      and reopen. Each transition is a domain event with the actor, timestamp and reason captured.
+    </p>
+
+    <div class="flow" style="margin-top:32px;">
+      <div class="flow-step"><div class="step-num">STATE 01</div><div class="step-title">Open</div><div class="step-desc">Created manually, by event handler or by the AI triage agent. Unassigned by default.</div></div>
+      <div class="flow-step"><div class="step-num">STATE 02</div><div class="step-title">In Progress</div><div class="step-desc">Assigned to a user. Work is happening. Comments and investigation accumulate.</div></div>
+      <div class="flow-step"><div class="step-num">STATE 03</div><div class="step-title">Resolved</div><div class="step-desc">Fix applied. Awaiting verification or closure review. May need CAPA.</div></div>
+      <div class="flow-step"><div class="step-num">STATE 04</div><div class="step-title">Closed</div><div class="step-desc">Signed off. PDF closure report generated. 10-year retention in storage.</div></div>
+    </div>
+
+    <div class="grid g3" style="margin-top:28px;">
+      <div class="glass">
+        <div class="card-icon y">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        </div>
+        <div class="card-title">Snooze &amp; wake</div>
+        <div class="card-body">Low-priority or waiting on a third party. Set <span class="chip y" style="display:inline-flex;">snoozedUntil</span> and the issue vanishes from the active board - then auto-wakes when the time expires.</div>
+      </div>
+      <div class="glass">
+        <div class="card-icon">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0z"/></svg>
+        </div>
+        <div class="card-title">Escalate</div>
+        <div class="card-body">Critical severity auto-assigns to the ops manager, sets priority to <span class="chip r" style="display:inline-flex;">critical</span>, and fires <span class="chip k" style="display:inline-flex;">issue.escalated</span>. On-call team pages.</div>
+      </div>
+      <div class="glass">
+        <div class="card-icon e">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/></svg>
+        </div>
+        <div class="card-title">Reopen</div>
+        <div class="card-body">Closed too early. Customer complains again, same lot shows up damaged, sensor alerts repeat. Reopen restores the board card and preserves the history.</div>
+      </div>
+    </div>
+
+    <div class="footnote">Every transition is a CQRS command &rarr; domain event &rarr; read-model projection. Nothing is ever deleted.</div>
+  </div>
+`);
+
+// SLIDE 6 - THREE PATHWAYS
+slides.push(`
+  <div class="glow-orb r" style="top:10%;left:-200px;"></div>
+  <div class="content">
+    <div class="pill" style="margin-bottom:16px;">Where issues come from</div>
+    <h2 class="section">Three <span class="gradient-text">pathways</span> to an issue.</h2>
+    <p class="subtitle" style="margin-top:14px; max-width:1060px;">
+      Some issues are raised by a human who saw something. Most are raised by the system
+      itself - either by a deterministic event handler or by the AI triage agent.
+    </p>
+
+    <div class="grid g3" style="margin-top:32px;">
+      <div class="glass hl">
+        <div class="card-icon">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"/></svg>
+        </div>
+        <div class="card-title">Manual</div>
+        <div class="card-body">A dispatcher spots trouble and raises the issue from the shipment page. Attach the source entity, set priority, assign the owner. Source:
+          <span class="chip p" style="display:inline-flex;">CreateIssueCommand</span>.
+        </div>
+      </div>
+      <div class="glass hl">
+        <div class="card-icon k">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+        </div>
+        <div class="card-title">Automated detection</div>
+        <div class="card-body">Sensor events, schedule slips, integration mismatches, SLA breaches, POD timeouts, chain-of-custody gaps. Every detectable deviation - whether from an IoT device, a scheduled cron or an inbound EDI file - auto-creates a structured issue within seconds.</div>
+      </div>
+      <div class="glass hl">
+        <div class="card-icon e">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"/></svg>
+        </div>
+        <div class="card-title">AI Triage Agent</div>
+        <div class="card-body">Claude evaluates the event, the shipment context, the SLA status and existing open issues - then decides whether to create, escalate, contact driver, or do nothing.</div>
+      </div>
+    </div>
+
+    <div class="glass hl-e" style="margin-top:28px;">
+      <div class="eyebrow e" style="margin-bottom:10px;">What issue creation captures</div>
+      <div style="display:flex; flex-wrap:wrap; gap:8px;">
+        <span class="chip e">title</span>
+        <span class="chip e">description</span>
+        <span class="chip r">priority</span>
+        <span class="chip c">category</span>
+        <span class="chip p">sourceEntityType</span>
+        <span class="chip p">sourceEntityId</span>
+        <span class="chip a">sourceEventId</span>
+        <span class="chip y">assigneeId</span>
+        <span class="chip k">labels[]</span>
+        <span class="chip r">needsCapa</span>
+      </div>
+      <div class="card-body" style="margin-top:12px;">
+        The <span class="chip p" style="display:inline-flex;">sourceEventId</span> stitches the issue back to the original domain
+        event. When the incident is closed, the closure report can reconstruct the full chain from first symptom to final action.
+      </div>
+    </div>
+  </div>
+`);
+
+// SLIDE 7 - THE INCIDENT LANDSCAPE (supply chain journey)
+slides.push(`
+  <div class="glow-orb r" style="top:-150px;left:-100px;"></div>
+  <div class="glow-orb e" style="bottom:-150px;right:-100px;"></div>
+  <div class="content">
+    <div class="pill" style="margin-bottom:12px;">The full taxonomy</div>
+    <h2 class="section" style="font-size:42px;">The incident <span class="gradient-text">landscape</span>.</h2>
+    <p class="subtitle" style="margin-top:10px; max-width:1100px; font-size:18px;">
+      Every stage of the journey has its own flavour of things that go wrong.
+      A good triage centre catches them all - not just the sensor events.
+    </p>
+
+    <!-- Journey bar -->
+    <div style="margin-top:22px; padding:18px 24px; border-radius:14px; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06); display:flex; align-items:center; gap:16px;">
+      <div style="display:flex; align-items:center; gap:8px; flex:1;">
+        <div style="width:28px; height:28px; border-radius:7px; background:rgba(244,63,94,0.2); color:#fda4af; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:11px; font-family:JetBrains Mono;">01</div>
+        <div style="font-size:13px; font-weight:600; color:#fda4af;">Origin / Load-out</div>
+      </div>
+      <div style="flex:1; height:1px; background:linear-gradient(90deg, rgba(244,63,94,0.4), rgba(236,72,153,0.4));"></div>
+      <div style="display:flex; align-items:center; gap:8px; flex:1; justify-content:center;">
+        <div style="width:28px; height:28px; border-radius:7px; background:rgba(236,72,153,0.2); color:#f9a8d4; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:11px; font-family:JetBrains Mono;">02</div>
+        <div style="font-size:13px; font-weight:600; color:#f9a8d4;">In-Transit</div>
+      </div>
+      <div style="flex:1; height:1px; background:linear-gradient(90deg, rgba(236,72,153,0.4), rgba(6,182,212,0.4));"></div>
+      <div style="display:flex; align-items:center; gap:8px; flex:1; justify-content:center;">
+        <div style="width:28px; height:28px; border-radius:7px; background:rgba(6,182,212,0.2); color:#67e8f9; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:11px; font-family:JetBrains Mono;">03</div>
+        <div style="font-size:13px; font-weight:600; color:#67e8f9;">Destination</div>
+      </div>
+      <div style="flex:1; height:1px; background:linear-gradient(90deg, rgba(6,182,212,0.4), rgba(16,185,129,0.4));"></div>
+      <div style="display:flex; align-items:center; gap:8px; flex:1; justify-content:flex-end;">
+        <div style="width:28px; height:28px; border-radius:7px; background:rgba(16,185,129,0.2); color:#6ee7b7; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:11px; font-family:JetBrains Mono;">04</div>
+        <div style="font-size:13px; font-weight:600; color:#6ee7b7;">Reverse logistics</div>
+      </div>
+    </div>
+
+    <!-- Four columns of issues -->
+    <div class="grid g4" style="margin-top:16px; gap:14px; flex:1;">
+      <div class="glass" style="padding:16px; border-left:3px solid var(--rose);">
+        <div class="eyebrow" style="margin-bottom:10px;">Origin &middot; Load-out</div>
+        <div style="display:flex; flex-direction:column; gap:6px; font-size:12px; color:var(--s300);">
+          <div style="padding:8px 10px; background:rgba(244,63,94,0.06); border-radius:6px;"><strong style="color:#fff;">Missed pickup window</strong><br/><span style="font-size:11px; color:var(--s500);">Driver ETA slips past shipper cutoff</span></div>
+          <div style="padding:8px 10px; background:rgba(244,63,94,0.06); border-radius:6px;"><strong style="color:#fff;">Reefer not pre-cooled</strong><br/><span style="font-size:11px; color:var(--s500);">Pickup blocked until temp reached</span></div>
+          <div style="padding:8px 10px; background:rgba(244,63,94,0.06); border-radius:6px;"><strong style="color:#fff;">Hot product loaded</strong><br/><span style="font-size:11px; color:var(--s500);">Reefer compensates &rarr; freezing risk</span></div>
+          <div style="padding:8px 10px; background:rgba(244,63,94,0.06); border-radius:6px;"><strong style="color:#fff;">Detention at shipper dock</strong><br/><span style="font-size:11px; color:var(--s500);">Driver waits beyond free time</span></div>
+          <div style="padding:8px 10px; background:rgba(244,63,94,0.06); border-radius:6px;"><strong style="color:#fff;">Wrong-dock load</strong><br/><span style="font-size:11px; color:var(--s500);">Carrier arrived, pallets not staged</span></div>
+          <div style="padding:8px 10px; background:rgba(244,63,94,0.06); border-radius:6px;"><strong style="color:#fff;">Pre-flight check failure</strong><br/><span style="font-size:11px; color:var(--s500);">Seal / sensor / docs missing</span></div>
+        </div>
+      </div>
+
+      <div class="glass" style="padding:16px; border-left:3px solid var(--pink);">
+        <div class="eyebrow k" style="margin-bottom:10px;">In-Transit</div>
+        <div style="display:flex; flex-direction:column; gap:6px; font-size:12px; color:var(--s300);">
+          <div style="padding:8px 10px; background:rgba(236,72,153,0.06); border-radius:6px;"><strong style="color:#fff;">OTIF at risk</strong><br/><span style="font-size:11px; color:var(--s500);">Retailer penalty projected</span></div>
+          <div style="padding:8px 10px; background:rgba(236,72,153,0.06); border-radius:6px;"><strong style="color:#fff;">Route deviation</strong><br/><span style="font-size:11px; color:var(--s500);">Off planned corridor beyond threshold</span></div>
+          <div style="padding:8px 10px; background:rgba(236,72,153,0.06); border-radius:6px;"><strong style="color:#fff;">Unauthorised stop</strong><br/><span style="font-size:11px; color:var(--s500);">Security policy violation</span></div>
+          <div style="padding:8px 10px; background:rgba(236,72,153,0.06); border-radius:6px;"><strong style="color:#fff;">Seal broken / light event</strong><br/><span style="font-size:11px; color:var(--s500);">Chain of custody compromised</span></div>
+          <div style="padding:8px 10px; background:rgba(236,72,153,0.06); border-radius:6px;"><strong style="color:#fff;">Temperature excursion</strong><br/><span style="font-size:11px; color:var(--s500);">Outside spec &gt; 30 min</span></div>
+          <div style="padding:8px 10px; background:rgba(236,72,153,0.06); border-radius:6px;"><strong style="color:#fff;">Shipment separation</strong><br/><span style="font-size:11px; color:var(--s500);">Packages split at hub, visibility lost</span></div>
+          <div style="padding:8px 10px; background:rgba(236,72,153,0.06); border-radius:6px;"><strong style="color:#fff;">Demurrage accruing</strong><br/><span style="font-size:11px; color:var(--s500);">Driver held at port / terminal</span></div>
+        </div>
+      </div>
+
+      <div class="glass" style="padding:16px; border-left:3px solid var(--cyan);">
+        <div class="eyebrow c" style="margin-bottom:10px;">Destination</div>
+        <div style="display:flex; flex-direction:column; gap:6px; font-size:12px; color:var(--s300);">
+          <div style="padding:8px 10px; background:rgba(6,182,212,0.06); border-radius:6px;"><strong style="color:#fff;">Multi-stop mis-drop</strong><br/><span style="font-size:11px; color:var(--s500);">Wrong goods to wrong store</span></div>
+          <div style="padding:8px 10px; background:rgba(6,182,212,0.06); border-radius:6px;"><strong style="color:#fff;">Wrong dock / wrong door</strong><br/><span style="font-size:11px; color:var(--s500);">Fines &amp; brand damage at retailer</span></div>
+          <div style="padding:8px 10px; background:rgba(6,182,212,0.06); border-radius:6px;"><strong style="color:#fff;">Excess dock dwell</strong><br/><span style="font-size:11px; color:var(--s500);">Operational inefficiency, detention</span></div>
+          <div style="padding:8px 10px; background:rgba(6,182,212,0.06); border-radius:6px;"><strong style="color:#fff;">POD signature missing</strong><br/><span style="font-size:11px; color:var(--s500);">Cannot invoice without proof</span></div>
+          <div style="padding:8px 10px; background:rgba(6,182,212,0.06); border-radius:6px;"><strong style="color:#fff;">Short or damaged delivery</strong><br/><span style="font-size:11px; color:var(--s500);">Claim raised at receiver sign-off</span></div>
+          <div style="padding:8px 10px; background:rgba(6,182,212,0.06); border-radius:6px;"><strong style="color:#fff;">Unsigned handoff</strong><br/><span style="font-size:11px; color:var(--s500);">Chain of custody gap between legs</span></div>
+        </div>
+      </div>
+
+      <div class="glass" style="padding:16px; border-left:3px solid var(--emerald);">
+        <div class="eyebrow e" style="margin-bottom:10px;">Reverse logistics</div>
+        <div style="display:flex; flex-direction:column; gap:6px; font-size:12px; color:var(--s300);">
+          <div style="padding:8px 10px; background:rgba(16,185,129,0.06); border-radius:6px;"><strong style="color:#fff;">No inventory visibility</strong><br/><span style="font-size:11px; color:var(--s500);">Painful RL - can't plan returns</span></div>
+          <div style="padding:8px 10px; background:rgba(16,185,129,0.06); border-radius:6px;"><strong style="color:#fff;">RMA condition mismatch</strong><br/><span style="font-size:11px; color:var(--s500);">Return arrived damaged, wrong SKU</span></div>
+          <div style="padding:8px 10px; background:rgba(16,185,129,0.06); border-radius:6px;"><strong style="color:#fff;">Return to wrong origin</strong><br/><span style="font-size:11px; color:var(--s500);">Extra leg, lost value</span></div>
+          <div style="padding:8px 10px; background:rgba(16,185,129,0.06); border-radius:6px;"><strong style="color:#fff;">Traceability gap</strong><br/><span style="font-size:11px; color:var(--s500);">FIFO / lot integrity lost on return</span></div>
+          <div style="padding:8px 10px; background:rgba(16,185,129,0.06); border-radius:6px;"><strong style="color:#fff;">Disposition dispute</strong><br/><span style="font-size:11px; color:var(--s500);">Restock vs scrap vs refurb</span></div>
+          <div style="padding:8px 10px; background:rgba(16,185,129,0.06); border-radius:6px;"><strong style="color:#fff;">Integration sync failure</strong><br/><span style="font-size:11px; color:var(--s500);">Client ERP / SOP out of step</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footnote" style="font-size:11px;">Every problem above maps to a domain event - <span class="chip r" style="display:inline-flex;">cold_chain.excursion_detected</span> <span class="chip k" style="display:inline-flex;">sla.otif_at_risk</span> <span class="chip c" style="display:inline-flex;">cargo.misdrop_detected</span> <span class="chip e" style="display:inline-flex;">return.condition_mismatch</span> - and lands on the Triage Centre kanban.</div>
+  </div>
+`);
+
+// SLIDE 8 - AI TRIAGE AGENT
+slides.push(`
+  <div class="glow-orb k" style="top:-150px;right:-150px;"></div>
+  <div class="content">
+    <div class="pill pink" style="margin-bottom:16px;">The intelligent layer</div>
+    <h2 class="section">The AI <span class="gradient-text">Triage Agent</span>.</h2>
+    <p class="subtitle" style="margin-top:14px; max-width:1060px;">
+      Claude subscribes to exception events, reads the shipment and SLA context, and decides
+      what to do. Every decision is logged for compliance - not magic, auditable judgement.
+    </p>
+
+    <div class="grid g2" style="margin-top:28px; gap:22px;">
+      <div>
+        <div class="eyebrow k" style="margin-bottom:12px;">Agent subscriptions (default)</div>
+        <div class="glass" style="padding:18px;">
+          <div style="display:flex; flex-wrap:wrap; gap:6px;">
+            <span class="chip r">shipment.exception</span>
+            <span class="chip r">sla.breached</span>
+            <span class="chip r">cold_chain.excursion_detected</span>
+            <span class="chip y">cargo.misdrop_detected</span>
+            <span class="chip y">cargo.missing_at_stop</span>
+            <span class="chip y">cargo.left_on_vehicle</span>
+          </div>
+          <div class="card-body" style="margin-top:12px;">
+            Event subscriptions are configurable per-org via checkboxes. The handler subscribes
+            broadly to wildcard patterns and filters against config at runtime - no worker restart.
+          </div>
+        </div>
+
+        <div class="eyebrow k" style="margin:20px 0 12px;">Four possible actions</div>
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <div class="glass sm"><div style="display:flex; justify-content:space-between;"><span style="font-weight:600; font-size:13px;"><span class="chip e" style="display:inline-flex;">create_issue</span></span><span style="font-size:11px; color:var(--s500);">Primary action</span></div><div class="card-body" style="margin-top:4px; font-size:12px;">Open a new issue with structured metadata and links.</div></div>
+          <div class="glass sm"><div style="display:flex; justify-content:space-between;"><span style="font-weight:600; font-size:13px;"><span class="chip k" style="display:inline-flex;">escalate_issue</span></span><span style="font-size:11px; color:var(--s500);">Critical severity</span></div><div class="card-body" style="margin-top:4px; font-size:12px;">Bump an existing open issue to critical, notify on-call.</div></div>
+          <div class="glass sm"><div style="display:flex; justify-content:space-between;"><span style="font-weight:600; font-size:13px;"><span class="chip c" style="display:inline-flex;">contact_driver</span></span><span style="font-size:11px; color:var(--s500);">Live recovery</span></div><div class="card-body" style="margin-top:4px; font-size:12px;">Look up driver comms from Shipment &rarr; Load &rarr; Driver and post contact info on the issue.</div></div>
+          <div class="glass sm"><div style="display:flex; justify-content:space-between;"><span style="font-weight:600; font-size:13px;"><span class="chip g" style="display:inline-flex;">no_action</span></span><span style="font-size:11px; color:var(--s500);">Dedupe / noise</span></div><div class="card-body" style="margin-top:4px; font-size:12px;">Below confidence threshold, duplicate of an open issue, or outside working hours.</div></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="eyebrow k" style="margin-bottom:12px;">Every decision logged for compliance</div>
+        <div class="terminal">
+          <div class="terminal-bar">
+            <div class="tb-dot r"></div><div class="tb-dot y"></div><div class="tb-dot g"></div>
+            <span class="terminal-title">agent_decision_2026_04_17_58132</span>
+          </div>
+          <div class="terminal-body" style="font-size:11.5px;">
+            <div>{</div>
+            <div style="padding-left:12px;"><span class="c-key">"eventType"</span>: <span class="c-str">"cold_chain.excursion_detected"</span>,</div>
+            <div style="padding-left:12px;"><span class="c-key">"promptVersionId"</span>: <span class="c-str">"v12-2026-03"</span>,</div>
+            <div style="padding-left:12px;"><span class="c-key">"reasoning"</span>: <span class="c-str">"Excursion of 3.2C sustained"</span></div>
+            <div style="padding-left:48px;"><span class="c-str">"over 42 min. Lot affects 480 vials.</span></div>
+            <div style="padding-left:48px;"><span class="c-str">Auto-quarantine advised."</span>,</div>
+            <div style="padding-left:12px;"><span class="c-key">"confidence"</span>: <span class="c-num">0.94</span>,</div>
+            <div style="padding-left:12px;"><span class="c-key">"action"</span>: <span class="c-str">"create_issue"</span>,</div>
+            <div style="padding-left:12px;"><span class="c-key">"matchedConditions"</span>: [</div>
+            <div style="padding-left:28px;">{ <span class="c-key">"field"</span>: <span class="c-str">"payload.durationMin"</span>,</div>
+            <div style="padding-left:36px;"><span class="c-key">"operator"</span>: <span class="c-str">"greaterThan"</span>,</div>
+            <div style="padding-left:36px;"><span class="c-key">"value"</span>: <span class="c-num">30</span> }</div>
+            <div style="padding-left:12px;">],</div>
+            <div style="padding-left:12px;"><span class="c-key">"outcome"</span>: <span class="c-str">"pending_review"</span></div>
+            <div>}</div>
+          </div>
+        </div>
+
+        <div class="glass hl" style="margin-top:16px;">
+          <div class="card-title" style="font-size:14.5px;">Promotion to deterministic rule</div>
+          <div class="card-body" style="font-size:12.5px;">A proven pattern - confidence &gt; 0.9 across N cases, always correct outcome - can be promoted from an AI decision into a zero-cost automation rule. Same conditions, no LLM call.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+`);
+
+// SLIDE 9 - WHO CARES
+slides.push(`
+  <div class="glow-orb r" style="top:10%;left:-200px;"></div>
+  <div class="content">
+    <div class="pill" style="margin-bottom:16px;">The stakeholders</div>
+    <h2 class="section">Who <span class="gradient-text">cares</span> about incidents?</h2>
+    <p class="subtitle" style="margin-top:14px;">
+      Incidents affect a wider audience than any other part of the TMS. Different people need
+      different things from the same record - and the Triage Centre serves them all.
+    </p>
+
+    <div class="grid g3" style="margin-top:32px;">
+      <div class="glass">
+        <div style="display:flex; gap:14px; align-items:flex-start;">
+          <div style="width:48px; height:48px; border-radius:12px; background:rgba(244,63,94,0.18); color:#fda4af; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px; flex-shrink:0;">OP</div>
+          <div>
+            <div class="card-title">Operations</div>
+            <div class="card-body">Owns the real-time response. Is this truck lost? Can we save the delivery? Who do I call?</div>
+          </div>
+        </div>
+      </div>
+      <div class="glass">
+        <div style="display:flex; gap:14px; align-items:flex-start;">
+          <div style="width:48px; height:48px; border-radius:12px; background:rgba(236,72,153,0.18); color:#f9a8d4; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px; flex-shrink:0;">QA</div>
+          <div>
+            <div class="card-title">Quality</div>
+            <div class="card-body">Owns CAPA. Why did this happen? Will it happen again? What systemic change stops it?</div>
+          </div>
+        </div>
+      </div>
+      <div class="glass">
+        <div style="display:flex; gap:14px; align-items:flex-start;">
+          <div style="width:48px; height:48px; border-radius:12px; background:rgba(6,182,212,0.18); color:#67e8f9; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px; flex-shrink:0;">CS</div>
+          <div>
+            <div class="card-title">Customer Service</div>
+            <div class="card-body">Fields the inbound call. Needs the same view the customer is demanding, and the fix, right now.</div>
+          </div>
+        </div>
+      </div>
+      <div class="glass">
+        <div style="display:flex; gap:14px; align-items:flex-start;">
+          <div style="width:48px; height:48px; border-radius:12px; background:rgba(16,185,129,0.18); color:#6ee7b7; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px; flex-shrink:0;">FI</div>
+          <div>
+            <div class="card-title">Finance</div>
+            <div class="card-body">Raises financial queries. Claims, write-offs, credit notes, chargeback to the carrier - all traced to a root incident.</div>
+          </div>
+        </div>
+      </div>
+      <div class="glass">
+        <div style="display:flex; gap:14px; align-items:flex-start;">
+          <div style="width:48px; height:48px; border-radius:12px; background:rgba(234,179,8,0.18); color:#fde047; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px; flex-shrink:0;">CO</div>
+          <div>
+            <div class="card-title">Compliance</div>
+            <div class="card-body">Produces regulator-ready evidence. Immutable event log, signed reports, full custody timeline on demand.</div>
+          </div>
+        </div>
+      </div>
+      <div class="glass">
+        <div style="display:flex; gap:14px; align-items:flex-start;">
+          <div style="width:48px; height:48px; border-radius:12px; background:rgba(139,92,246,0.18); color:var(--a400); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px; flex-shrink:0;">EX</div>
+          <div>
+            <div class="card-title">Executive</div>
+            <div class="card-body">Watches trends. Incident rate by lane, by carrier, by customer. Quarterly business reviews live here.</div>
+          </div>
+        </div>
+      </div>
+      <div class="glass">
+        <div style="display:flex; gap:14px; align-items:flex-start;">
+          <div style="width:48px; height:48px; border-radius:12px; background:rgba(96,165,250,0.18); color:var(--p300); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px; flex-shrink:0;">CL</div>
+          <div>
+            <div class="card-title">Customer</div>
+            <div class="card-body">Shared portal or webhook. Sees the issue, the cause and the closure report - transparently.</div>
+          </div>
+        </div>
+      </div>
+      <div class="glass">
+        <div style="display:flex; gap:14px; align-items:flex-start;">
+          <div style="width:48px; height:48px; border-radius:12px; background:rgba(148,163,184,0.18); color:var(--s200); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px; flex-shrink:0;">CR</div>
+          <div>
+            <div class="card-title">Carrier partner</div>
+            <div class="card-body">Sees its own carrier scorecard. Recurring issues feed rate negotiations and QBR agendas.</div>
+          </div>
+        </div>
+      </div>
+      <div class="glass">
+        <div style="display:flex; gap:14px; align-items:flex-start;">
+          <div style="width:48px; height:48px; border-radius:12px; background:rgba(244,63,94,0.18); color:#fda4af; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px; flex-shrink:0;">RG</div>
+          <div>
+            <div class="card-title">Regulator</div>
+            <div class="card-body">MHRA, FDA, EMA, USDA. Arrives unannounced. Needs a clean audit trail in minutes, not weeks.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+`);
+
+// SLIDE 10 - FROM INCIDENT TO CAPA
+slides.push(`
+  <div class="glow-orb e" style="top:-150px;right:10%;"></div>
+  <div class="content">
+    <div class="pill emerald" style="margin-bottom:16px;">The elevation</div>
+    <h2 class="section">When an incident becomes a <span class="gradient-text e">CAPA</span>.</h2>
+    <p class="subtitle" style="margin-top:14px; max-width:1060px;">
+      Not every issue needs a full investigation. But some patterns demand one - and the
+      <span class="chip r" style="display:inline-flex;">needsCapa</span> flag is how they get there.
+    </p>
+
+    <div class="grid g2" style="margin-top:28px; gap:24px;">
+      <div>
+        <div class="eyebrow e" style="margin-bottom:12px;">What triggers a CAPA</div>
+        <ul class="clean e">
+          <li>A critical-severity incident affecting a regulated product</li>
+          <li>A repeat failure - same root cause, same SKU, same lane, within 90 days</li>
+          <li>A cold chain excursion that caused product quarantine or write-off</li>
+          <li>A customer complaint escalated by the quality manager</li>
+          <li>A regulatory observation during audit or inspection</li>
+          <li>A supplier or carrier non-conformance across multiple shipments</li>
+          <li>Any deviation meeting the org's CAPA escalation matrix threshold</li>
+        </ul>
+      </div>
+
+      <div>
+        <div class="eyebrow e" style="margin-bottom:12px;">Corrective vs Preventive</div>
+        <div class="glass hl-e" style="padding:20px;">
+          <div style="display:flex; gap:16px; align-items:flex-start; margin-bottom:16px;">
+            <div style="width:36px; height:36px; border-radius:9px; background:rgba(244,63,94,0.2); color:#fda4af; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:13px; font-family:JetBrains Mono; flex-shrink:0;">CA</div>
+            <div>
+              <div class="card-title" style="margin-bottom:4px;">Corrective Action</div>
+              <div class="card-body">Fix what broke. Retrain the driver. Replace the failing sensor. Quarantine the lot. Stop the immediate bleeding - this incident.</div>
+            </div>
+          </div>
+          <div style="display:flex; gap:16px; align-items:flex-start;">
+            <div style="width:36px; height:36px; border-radius:9px; background:rgba(16,185,129,0.2); color:#6ee7b7; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:13px; font-family:JetBrains Mono; flex-shrink:0;">PA</div>
+            <div>
+              <div class="card-title" style="margin-bottom:4px;">Preventive Action</div>
+              <div class="card-body">Change the system. Update the SOP. Revise the packaging spec. Re-certify the lane. Stop the whole category of failure - future incidents.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="footnote" style="position:static; margin-top:14px; font-size:12px;">
+          A CAPA without a preventive action is just a fix. A real CAPA closes the class of problem - not the instance.
+        </div>
+      </div>
+    </div>
+  </div>
+`);
+
+// SLIDE 11 - WHY CAPA MATTERS
+slides.push(`
+  <div class="glow-orb r" style="bottom:-150px;left:-100px;"></div>
+  <div class="content">
+    <div class="pill" style="margin-bottom:16px;">Why bother</div>
+    <h2 class="section">Why <span class="gradient-text">CAPA</span> matters.</h2>
+    <p class="subtitle" style="margin-top:14px;">
+      CAPA is not paperwork. It is the mechanism by which a logistics operation
+      learns, hardens and survives regulatory contact.
+    </p>
+
+    <div class="grid g2" style="margin-top:30px; gap:22px;">
+      <div class="glass hl">
+        <div class="card-icon">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/></svg>
+        </div>
+        <div class="card-title">Regulatory compliance</div>
+        <div class="card-body"><strong style="color:var(--s200);">21 CFR Part 11</strong> (FDA electronic records), <strong style="color:var(--s200);">EU GDP</strong> (Good Distribution Practice), <strong style="color:var(--s200);">ISO 9001</strong> (quality management). All require documented CAPA processes and effectiveness verification.</div>
+      </div>
+      <div class="glass hl">
+        <div class="card-icon k">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75"/></svg>
+        </div>
+        <div class="card-title">Financial protection</div>
+        <div class="card-body">A documented CAPA demonstrates due diligence. That protects against product liability claims, voided insurance, void contracts, and punitive damages when something goes badly wrong.</div>
+      </div>
+      <div class="glass hl">
+        <div class="card-icon e">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0V12a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 12V5.25"/></svg>
+        </div>
+        <div class="card-title">Operational learning</div>
+        <div class="card-body">Without CAPA, the same failure happens on the same lane next quarter. With CAPA, the system itself improves - lessons learned become SOPs, SOPs become audits, audits become scorecards.</div>
+      </div>
+      <div class="glass hl">
+        <div class="card-icon c">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"/></svg>
+        </div>
+        <div class="card-title">Customer trust</div>
+        <div class="card-body">Pharma and food customers demand proof of quality system maturity. A CAPA register is often a supplier qualification prerequisite - no CAPA, no contract.</div>
+      </div>
+    </div>
+
+    <div class="glass hl-e" style="margin-top:24px;">
+      <div class="card-body" style="font-size:15px; text-align:center;">
+        When the auditor arrives, you <strong style="color:#6ee7b7;">pull the report</strong> - you do not
+        <strong style="color:#fca5a5;">scramble to reconstruct</strong> what happened.
+      </div>
+    </div>
+  </div>
+`);
+
+// SLIDE 12 - CAPA WORKFLOW
+slides.push(`
+  <div class="glow-orb e" style="top:-100px;right:-150px;"></div>
+  <div class="content">
+    <div class="pill emerald" style="margin-bottom:16px;">The CAPA lifecycle</div>
+    <h2 class="section">From draft to <span class="gradient-text e">closed-effective</span>.</h2>
+    <p class="subtitle" style="margin-top:14px; max-width:1060px;">
+      A CAPA report moves through seven deliberate states. Each transition is a signed event
+      with an owner, a timestamp and evidence. Nothing jumps steps.
+    </p>
+
+    <div class="flow" style="margin-top:32px;">
+      <div class="flow-step"><div class="step-num">01</div><div class="step-title">Draft</div><div class="step-desc">Quality opens the CAPA, linked to source issue. Report number auto-assigned.</div></div>
+      <div class="flow-step"><div class="step-num">02</div><div class="step-title">Investigation</div><div class="step-desc">Investigator assigned. Evidence collected - telemetry, comments, witness statements.</div></div>
+      <div class="flow-step"><div class="step-num">03</div><div class="step-title">Root cause</div><div class="step-desc">Categorised: equipment, process, personnel, environment, material, other.</div></div>
+      <div class="flow-step"><div class="step-num">04</div><div class="step-title">Action plan</div><div class="step-desc">Corrective + preventive actions defined with owners and due dates.</div></div>
+    </div>
+    <div class="flow" style="margin-top:10px;">
+      <div class="flow-step"><div class="step-num e">05</div><div class="step-title">Implementation</div><div class="step-desc">Actions executed. Owner records completion with evidence attached.</div></div>
+      <div class="flow-step"><div class="step-num e">06</div><div class="step-title">Verification</div><div class="step-desc">Independent reviewer confirms the actions actually happened. Method documented.</div></div>
+      <div class="flow-step"><div class="step-num e">07</div><div class="step-title">Effectiveness</div><div class="step-desc">30/60/90-day follow-up checks whether the problem actually stopped recurring.</div></div>
+      <div class="flow-step"><div class="step-num e">08</div><div class="step-title">Closed</div><div class="step-desc">Approver signs off. Report frozen. 10-year retention begins.</div></div>
+    </div>
+
+    <div class="grid g3" style="margin-top:24px;">
+      <div class="glass sm">
+        <div class="eyebrow" style="margin-bottom:6px;">Report number</div>
+        <div class="card-title" style="font-size:15px;"><span class="chip e" style="display:inline-flex;">CAPA-20260418-003</span></div>
+        <div class="card-body" style="font-size:12px;">Auto-generated, sequential within day. Unique, human-readable, audit-friendly.</div>
+      </div>
+      <div class="glass sm">
+        <div class="eyebrow" style="margin-bottom:6px;">Traceability</div>
+        <div class="card-title" style="font-size:15px;">Issue &harr; CAPA &harr; Shipment</div>
+        <div class="card-body" style="font-size:12px;">Foreign keys on both sides. Open a CAPA, pivot back to the source issue, pivot back to the shipment and its telemetry.</div>
+      </div>
+      <div class="glass sm">
+        <div class="eyebrow" style="margin-bottom:6px;">Status gates</div>
+        <div class="card-title" style="font-size:15px;">No skipping forward</div>
+        <div class="card-body" style="font-size:12px;">Cannot verify without implementation. Cannot close without verification. The workflow enforces discipline.</div>
+      </div>
+    </div>
+  </div>
+`);
+
+// SLIDE 13 - ROOT CAUSE CATEGORIES
+slides.push(`
+  <div class="glow-orb k" style="top:10%;left:-150px;"></div>
+  <div class="content">
+    <div class="pill pink" style="margin-bottom:16px;">The diagnosis</div>
+    <h2 class="section">Six root cause <span class="gradient-text">categories</span>.</h2>
+    <p class="subtitle" style="margin-top:14px;">
+      A good CAPA starts with an honest categorisation of what failed. Six buckets cover
+      every logistics failure - and the distribution of categories is itself a leading indicator.
+    </p>
+
+    <div class="grid g3" style="margin-top:30px;">
+      <div class="glass">
+        <div class="card-icon">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M10.343 3.94c.09-.542.56-.94 1.11-.94h1.093c.55 0 1.02.398 1.11.94l.149.894c.07.424.384.764.78.93.398.164.855.142 1.205-.108l.737-.527a1.125 1.125 0 011.45.12l.773.774c.39.389.44 1.002.12 1.45l-.527.737c-.25.35-.272.806-.107 1.204.165.397.505.71.93.78l.893.15c.543.09.94.56.94 1.109v1.094c0 .55-.397 1.02-.94 1.11l-.893.149c-.425.07-.765.383-.93.78-.165.398-.143.854.107 1.204l.527.738c.32.447.269 1.06-.12 1.45l-.774.773a1.125 1.125 0 01-1.449.12l-.738-.527c-.35-.25-.806-.272-1.203-.107-.397.165-.71.505-.781.929l-.149.894c-.09.542-.56.94-1.11.94h-1.094c-.55 0-1.019-.398-1.11-.94l-.148-.894c-.071-.424-.384-.764-.781-.93-.398-.164-.854-.142-1.204.108l-.738.527c-.447.32-1.06.269-1.45-.12l-.773-.774a1.125 1.125 0 01-.12-1.45l.527-.737c.25-.35.273-.806.108-1.204-.165-.397-.506-.71-.93-.78l-.894-.15c-.542-.09-.94-.56-.94-1.109v-1.094c0-.55.398-1.02.94-1.11l.894-.149c.424-.07.765-.383.93-.78.165-.398.142-.854-.108-1.204l-.526-.738a1.125 1.125 0 01.12-1.45l.773-.773a1.125 1.125 0 011.45-.12l.737.527c.35.25.807.272 1.204.107.397-.165.71-.505.78-.929l.15-.894z"/></svg>
+        </div>
+        <div class="card-title">Equipment</div>
+        <div class="card-body">Failing reefer unit. Dead BLE beacon. Broken scanner. Tag with low battery missed the excursion. The physical stuff gave up.</div>
+      </div>
+      <div class="glass">
+        <div class="card-icon k">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 01-1.043 3.296 3.745 3.745 0 01-3.296 1.043A3.745 3.745 0 0112 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 01-3.296-1.043 3.745 3.745 0 01-1.043-3.296A3.745 3.745 0 013 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 011.043-3.296 3.746 3.746 0 013.296-1.043A3.746 3.746 0 0112 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 013.296 1.043 3.746 3.746 0 011.043 3.296A3.745 3.745 0 0121 12z"/></svg>
+        </div>
+        <div class="card-title">Process</div>
+        <div class="card-body">SOP gap. Ambiguous handoff step. Missing pre-flight check. The rules weren't clear or weren't sufficient.</div>
+      </div>
+      <div class="glass">
+        <div class="card-icon c">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"/></svg>
+        </div>
+        <div class="card-title">Personnel</div>
+        <div class="card-body">Missed training. Shortcut taken. Fatigue. The human followed the wrong script or didn't know the right one.</div>
+      </div>
+      <div class="glass">
+        <div class="card-icon y">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15a4.5 4.5 0 004.5 4.5H18a3.75 3.75 0 001.332-7.257 3 3 0 00-3.758-3.848 5.25 5.25 0 00-10.233 2.33A4.502 4.502 0 002.25 15z"/></svg>
+        </div>
+        <div class="card-title">Environmental</div>
+        <div class="card-body">Heatwave exceeded reefer capacity. Snowstorm closed the lane. Dock flooded. External conditions beyond the current plan.</div>
+      </div>
+      <div class="glass">
+        <div class="card-icon e">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z"/></svg>
+        </div>
+        <div class="card-title">Material</div>
+        <div class="card-body">Packaging failed. Pallet collapsed. Ice-pack performance below spec. The thing being shipped or shipped in was the problem.</div>
+      </div>
+      <div class="glass">
+        <div class="card-icon a">
+          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z"/></svg>
+        </div>
+        <div class="card-title">Other</div>
+        <div class="card-body">Doesn't fit the five above. Used sparingly. If this category dominates, the category system itself needs revision.</div>
+      </div>
+    </div>
+
+    <div class="footnote">The trend chart of root cause categories over time is often the most actionable view in the Quality dashboard.</div>
+  </div>
+`);
+
+// SLIDE 14 - 30/60/90 FOLLOW-UP
+slides.push(`
+  <div class="glow-orb e" style="bottom:-150px;left:-100px;"></div>
+  <div class="content">
+    <div class="pill emerald" style="margin-bottom:16px;">The long tail</div>
+    <h2 class="section">30 &middot; 60 &middot; 90 day <span class="gradient-text e">follow-up</span>.</h2>
+    <p class="subtitle" style="margin-top:14px; max-width:1060px;">
+      Closing a CAPA is not the end - it is the midpoint. The real question is whether
+      the action worked. Scheduled follow-ups force that question to be answered.
+    </p>
+
+    <div class="grid g3" style="margin-top:32px;">
+      <div class="glass hl-e">
+        <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
+          <div style="width:46px; height:46px; border-radius:11px; background:rgba(245,158,11,0.2); color:#fcd34d; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px; font-family:JetBrains Mono;">+30d</div>
+          <div class="card-title" style="margin:0;">Early signal</div>
+        </div>
+        <div class="card-body">Has the same incident happened again on the same lane, same SKU, same carrier? If yes - the action didn't land. Reopen.</div>
+      </div>
+      <div class="glass hl-e">
+        <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
+          <div style="width:46px; height:46px; border-radius:11px; background:rgba(236,72,153,0.2); color:#f9a8d4; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px; font-family:JetBrains Mono;">+60d</div>
+          <div class="card-title" style="margin:0;">Middle check</div>
+        </div>
+        <div class="card-body">Is the SOP change actually in use? Are operators following it? Review audit logs. Review training records. Spot-check the line.</div>
+      </div>
+      <div class="glass hl-e">
+        <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
+          <div style="width:46px; height:46px; border-radius:11px; background:rgba(16,185,129,0.2); color:#6ee7b7; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px; font-family:JetBrains Mono;">+90d</div>
+          <div class="card-title" style="margin:0;">Effectiveness</div>
+        </div>
+        <div class="card-body">Final verdict. Is the root cause actually eliminated? Outcome flag set: closed_effective, closed_ineffective, or escalated for revision.</div>
+      </div>
+    </div>
+
+    <div class="grid g2" style="margin-top:28px; gap:22px;">
+      <div class="glass">
+        <div class="eyebrow e" style="margin-bottom:12px;">How follow-ups are scheduled</div>
+        <div class="card-body" style="margin-bottom:12px;">
+          When a CAPA is closed, the system creates three <span class="chip e" style="display:inline-flex;">CAPAFollowUp</span> records
+          with dueDate = close + 30/60/90 days. Each is assigned to a reviewer.
+        </div>
+        <div style="display:flex; flex-direction:column; gap:6px; font-family:JetBrains Mono; font-size:11px;">
+          <div style="padding:8px 12px; background:rgba(16,185,129,0.08); border-radius:6px; border-left:2px solid var(--emerald);">
+            <span style="color:#6ee7b7;">CAPAFollowUp.create</span> &middot; type=<span style="color:var(--s200);">30_day</span> &middot; <span class="chip g" style="font-family:Inter;">pending</span>
+          </div>
+          <div style="padding:8px 12px; background:rgba(16,185,129,0.08); border-radius:6px; border-left:2px solid var(--emerald);">
+            <span style="color:#6ee7b7;">CAPAFollowUp.create</span> &middot; type=<span style="color:var(--s200);">60_day</span> &middot; <span class="chip g" style="font-family:Inter;">pending</span>
+          </div>
+          <div style="padding:8px 12px; background:rgba(16,185,129,0.08); border-radius:6px; border-left:2px solid var(--emerald);">
+            <span style="color:#6ee7b7;">CAPAFollowUp.create</span> &middot; type=<span style="color:var(--s200);">90_day</span> &middot; <span class="chip g" style="font-family:Inter;">pending</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="glass">
+        <div class="eyebrow e" style="margin-bottom:12px;">Outcome flags</div>
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 12px; background:rgba(16,185,129,0.08); border-radius:8px;">
+            <span class="chip e" style="display:inline-flex;">on_track</span>
+            <span style="font-size:12px; color:var(--s400);">No recurrence observed, carry on</span>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 12px; background:rgba(234,179,8,0.08); border-radius:8px;">
+            <span class="chip y" style="display:inline-flex;">needs_attention</span>
+            <span style="font-size:12px; color:var(--s400);">Warning signs - review required</span>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 12px; background:rgba(244,63,94,0.08); border-radius:8px;">
+            <span class="chip r" style="display:inline-flex;">escalated</span>
+            <span style="font-size:12px; color:var(--s400);">CAPA reopened - action did not work</span>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 12px; background:rgba(16,185,129,0.12); border-radius:8px;">
+            <span class="chip e" style="display:inline-flex;">closed_effective</span>
+            <span style="font-size:12px; color:var(--s400);">Proven - root cause eliminated</span>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 12px; background:rgba(148,163,184,0.08); border-radius:8px;">
+            <span class="chip g" style="display:inline-flex;">closed_ineffective</span>
+            <span style="font-size:12px; color:var(--s400);">Didn't work - new CAPA raised</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footnote">Overdue follow-ups raise their own issues. The Quality dashboard surfaces completion rate, overdue count and effective-close percentage.</div>
+  </div>
+`);
+
+// SLIDE 15 - RACI
+slides.push(`
+  <div class="glow-orb r" style="top:-150px;right:-100px;"></div>
+  <div class="content">
+    <div class="pill" style="margin-bottom:16px;">Who owns what</div>
+    <h2 class="section">The <span class="gradient-text">responsibility</span> map.</h2>
+    <p class="subtitle" style="margin-top:14px;">
+      A CAPA without clear ownership is a CAPA that dies in a spreadsheet.
+      Open TMS assigns roles to every step - with RBAC enforcement.
+    </p>
+
+    <div style="margin-top:24px; overflow:hidden; border-radius:14px; border:1px solid rgba(255,255,255,0.08);">
+      <table style="width:100%; border-collapse:collapse; font-size:13px;">
+        <thead>
+          <tr style="background:rgba(255,255,255,0.04);">
+            <th style="padding:14px; text-align:left; font-weight:600; color:var(--s300); border-bottom:1px solid rgba(255,255,255,0.06);">Step</th>
+            <th style="padding:14px; text-align:center; font-weight:600; color:var(--s300); border-bottom:1px solid rgba(255,255,255,0.06);">Ops / Dispatch</th>
+            <th style="padding:14px; text-align:center; font-weight:600; color:#f9a8d4; border-bottom:1px solid rgba(255,255,255,0.06);">Quality Mgr</th>
+            <th style="padding:14px; text-align:center; font-weight:600; color:var(--s300); border-bottom:1px solid rgba(255,255,255,0.06);">Investigator</th>
+            <th style="padding:14px; text-align:center; font-weight:600; color:var(--s300); border-bottom:1px solid rgba(255,255,255,0.06);">Approver</th>
+            <th style="padding:14px; text-align:center; font-weight:600; color:var(--s300); border-bottom:1px solid rgba(255,255,255,0.06);">Ops Manager</th>
+            <th style="padding:14px; text-align:center; font-weight:600; color:var(--s300); border-bottom:1px solid rgba(255,255,255,0.06);">Auditor</th>
+          </tr>
+        </thead>
+        <tbody style="font-family:'JetBrains Mono',monospace; font-size:11.5px;">
+          <tr style="border-bottom:1px solid rgba(255,255,255,0.04);">
+            <td style="padding:12px 14px; color:var(--s200); font-family:Inter; font-size:13px;">Detect &amp; triage</td>
+            <td style="padding:12px; text-align:center;"><span class="chip r" style="display:inline-flex;">R</span></td>
+            <td style="padding:12px; text-align:center;"><span class="chip k" style="display:inline-flex;">C</span></td>
+            <td style="padding:12px; text-align:center;">-</td>
+            <td style="padding:12px; text-align:center;">-</td>
+            <td style="padding:12px; text-align:center;"><span class="chip y" style="display:inline-flex;">I</span></td>
+            <td style="padding:12px; text-align:center;">-</td>
+          </tr>
+          <tr style="border-bottom:1px solid rgba(255,255,255,0.04); background:rgba(255,255,255,0.015);">
+            <td style="padding:12px 14px; color:var(--s200); font-family:Inter; font-size:13px;">Flag as CAPA candidate</td>
+            <td style="padding:12px; text-align:center;"><span class="chip y" style="display:inline-flex;">I</span></td>
+            <td style="padding:12px; text-align:center;"><span class="chip r" style="display:inline-flex;">R/A</span></td>
+            <td style="padding:12px; text-align:center;">-</td>
+            <td style="padding:12px; text-align:center;">-</td>
+            <td style="padding:12px; text-align:center;"><span class="chip y" style="display:inline-flex;">I</span></td>
+            <td style="padding:12px; text-align:center;">-</td>
+          </tr>
+          <tr style="border-bottom:1px solid rgba(255,255,255,0.04);">
+            <td style="padding:12px 14px; color:var(--s200); font-family:Inter; font-size:13px;">Investigation</td>
+            <td style="padding:12px; text-align:center;"><span class="chip k" style="display:inline-flex;">C</span></td>
+            <td style="padding:12px; text-align:center;"><span class="chip k" style="display:inline-flex;">A</span></td>
+            <td style="padding:12px; text-align:center;"><span class="chip r" style="display:inline-flex;">R</span></td>
+            <td style="padding:12px; text-align:center;">-</td>
+            <td style="padding:12px; text-align:center;"><span class="chip y" style="display:inline-flex;">I</span></td>
+            <td style="padding:12px; text-align:center;"><span class="chip y" style="display:inline-flex;">I</span></td>
+          </tr>
+          <tr style="border-bottom:1px solid rgba(255,255,255,0.04); background:rgba(255,255,255,0.015);">
+            <td style="padding:12px 14px; color:var(--s200); font-family:Inter; font-size:13px;">Corrective action</td>
+            <td style="padding:12px; text-align:center;"><span class="chip r" style="display:inline-flex;">R</span></td>
+            <td style="padding:12px; text-align:center;"><span class="chip k" style="display:inline-flex;">A</span></td>
+            <td style="padding:12px; text-align:center;"><span class="chip k" style="display:inline-flex;">C</span></td>
+            <td style="padding:12px; text-align:center;">-</td>
+            <td style="padding:12px; text-align:center;"><span class="chip k" style="display:inline-flex;">C</span></td>
+            <td style="padding:12px; text-align:center;">-</td>
+          </tr>
+          <tr style="border-bottom:1px solid rgba(255,255,255,0.04);">
+            <td style="padding:12px 14px; color:var(--s200); font-family:Inter; font-size:13px;">Preventive action</td>
+            <td style="padding:12px; text-align:center;"><span class="chip y" style="display:inline-flex;">I</span></td>
+            <td style="padding:12px; text-align:center;"><span class="chip r" style="display:inline-flex;">R</span></td>
+            <td style="padding:12px; text-align:center;"><span class="chip k" style="display:inline-flex;">C</span></td>
+            <td style="padding:12px; text-align:center;"><span class="chip k" style="display:inline-flex;">A</span></td>
+            <td style="padding:12px; text-align:center;"><span class="chip k" style="display:inline-flex;">C</span></td>
+            <td style="padding:12px; text-align:center;">-</td>
+          </tr>
+          <tr style="border-bottom:1px solid rgba(255,255,255,0.04); background:rgba(255,255,255,0.015);">
+            <td style="padding:12px 14px; color:var(--s200); font-family:Inter; font-size:13px;">Verification</td>
+            <td style="padding:12px; text-align:center;">-</td>
+            <td style="padding:12px; text-align:center;"><span class="chip k" style="display:inline-flex;">C</span></td>
+            <td style="padding:12px; text-align:center;"><span class="chip y" style="display:inline-flex;">I</span></td>
+            <td style="padding:12px; text-align:center;"><span class="chip r" style="display:inline-flex;">R/A</span></td>
+            <td style="padding:12px; text-align:center;">-</td>
+            <td style="padding:12px; text-align:center;"><span class="chip k" style="display:inline-flex;">C</span></td>
+          </tr>
+          <tr style="border-bottom:1px solid rgba(255,255,255,0.04);">
+            <td style="padding:12px 14px; color:var(--s200); font-family:Inter; font-size:13px;">30/60/90 follow-up</td>
+            <td style="padding:12px; text-align:center;">-</td>
+            <td style="padding:12px; text-align:center;"><span class="chip r" style="display:inline-flex;">R/A</span></td>
+            <td style="padding:12px; text-align:center;"><span class="chip k" style="display:inline-flex;">C</span></td>
+            <td style="padding:12px; text-align:center;">-</td>
+            <td style="padding:12px; text-align:center;"><span class="chip y" style="display:inline-flex;">I</span></td>
+            <td style="padding:12px; text-align:center;"><span class="chip y" style="display:inline-flex;">I</span></td>
+          </tr>
+          <tr style="background:rgba(255,255,255,0.015);">
+            <td style="padding:12px 14px; color:var(--s200); font-family:Inter; font-size:13px;">Audit defence</td>
+            <td style="padding:12px; text-align:center;">-</td>
+            <td style="padding:12px; text-align:center;"><span class="chip k" style="display:inline-flex;">C</span></td>
+            <td style="padding:12px; text-align:center;"><span class="chip k" style="display:inline-flex;">C</span></td>
+            <td style="padding:12px; text-align:center;">-</td>
+            <td style="padding:12px; text-align:center;"><span class="chip k" style="display:inline-flex;">A</span></td>
+            <td style="padding:12px; text-align:center;"><span class="chip r" style="display:inline-flex;">R</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div style="display:flex; justify-content:center; gap:16px; margin-top:18px; font-size:12px; color:var(--s400);">
+      <span><span class="chip r" style="display:inline-flex;">R</span> Responsible</span>
+      <span><span class="chip k" style="display:inline-flex;">A</span> Accountable</span>
+      <span><span class="chip k" style="display:inline-flex;">C</span> Consulted</span>
+      <span><span class="chip y" style="display:inline-flex;">I</span> Informed</span>
+    </div>
+  </div>
+`);
+
+// SLIDE 16 - CLOSURE REPORTS
+slides.push(`
+  <div class="glow-orb k" style="bottom:-150px;right:-150px;"></div>
+  <div class="content">
+    <div class="pill pink" style="margin-bottom:16px;">The output</div>
+    <h2 class="section">Closure reports, auto <span class="gradient-text">generated</span>.</h2>
+    <p class="subtitle" style="margin-top:14px; max-width:1060px;">
+      When an issue closes, a signed PDF is generated and stored for ten years.
+      It is the artefact the regulator, the customer and the auditor will ask for.
+    </p>
+
+    <div class="grid g2" style="margin-top:28px; gap:24px;">
+      <div>
+        <div class="eyebrow k" style="margin-bottom:12px;">What goes into the PDF</div>
+        <ul class="clean">
+          <li>Issue summary - title, category, priority, assignee, timeline</li>
+          <li>Triggering event - original domain event payload, linked to <span class="chip p" style="display:inline-flex;">sourceEventId</span></li>
+          <li>Shipment context - customer, origin, destination, carrier, driver, retailer</li>
+          <li>Commercial impact - OTIF penalty, demurrage, detention, claim value</li>
+          <li>Chain of custody - handoff events, POD signatures, seal history</li>
+          <li>Temperature &amp; telemetry - excursions, GPS trail, route deviations, dwell hotspots</li>
+          <li>SLA evaluations - breaches and near-misses during the issue's lifespan</li>
+          <li>Activity timeline - every state change, every comment, every escalation</li>
+          <li>CAPA report (if linked) - investigation, root cause, actions, verification</li>
+          <li>Signatures - closer, approver, verifier with timestamps</li>
+        </ul>
+      </div>
+
+      <div class="terminal">
+        <div class="terminal-bar">
+          <div class="tb-dot r"></div><div class="tb-dot y"></div><div class="tb-dot g"></div>
+          <span class="terminal-title">closure_report_ISS-4821.pdf</span>
+        </div>
+        <div class="terminal-body" style="font-family:Inter; font-size:12px;">
+          <div style="border-bottom:1px solid rgba(255,255,255,0.06); padding-bottom:10px; margin-bottom:10px;">
+            <div style="font-size:11px; color:var(--s500); text-transform:uppercase; letter-spacing:0.08em; margin-bottom:4px;">Acme Logistics &middot; Quality System</div>
+            <div style="font-size:15px; font-weight:700; color:#fff;">Issue Closure Report</div>
+            <div style="font-size:11px; color:var(--s400); margin-top:2px;">ISS-4821 &middot; Closed 2026-04-17 14:02 UTC</div>
+          </div>
+          <div style="font-size:11.5px; line-height:1.7; color:var(--s300);">
+            <div><span style="color:var(--s500);">Title</span> &middot; OTIF miss &middot; Walmart SHP-2024-0847</div>
+            <div><span style="color:var(--s500);">Category</span> &middot; service_commercial &middot; <span class="chip r" style="display:inline-flex;">critical</span></div>
+            <div><span style="color:var(--s500);">Chain</span> &middot; pickup slipped 95m &rarr; demurrage at Dallas &rarr; late POD</div>
+            <div><span style="color:var(--s500);">Commercial impact</span> &middot; $3,420 penalty + $280 detention</div>
+            <div><span style="color:var(--s500);">Root cause</span> &middot; process &middot; pre-flight checklist incomplete</div>
+            <div><span style="color:var(--s500);">CAPA</span> &middot; <span class="chip e" style="display:inline-flex;">CAPA-20260417-004</span> &middot; closed_effective</div>
+          </div>
+          <div style="margin-top:12px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.06); display:grid; grid-template-columns:repeat(3,1fr); gap:8px; font-size:10px; color:var(--s500);">
+            <div><div style="color:#fff; font-weight:700; font-size:14px;">SHA-256</div><div>Integrity hash</div></div>
+            <div><div style="color:#fff; font-weight:700; font-size:14px;">21 CFR 11</div><div>Compliant signature</div></div>
+            <div><div style="color:#fff; font-weight:700; font-size:14px;">10 yrs</div><div>Retention period</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="glass hl" style="margin-top:20px; display:flex; gap:20px; align-items:center;">
+      <div class="card-icon" style="margin:0; width:48px; height:48px; flex-shrink:0;">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6" style="width:24px;height:24px;"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"/></svg>
+      </div>
+      <div>
+        <div class="card-title" style="margin-bottom:4px;">Immutable once closed</div>
+        <div class="card-body" style="font-size:13.5px;">
+          The PDF is stored via <span class="chip p" style="display:inline-flex;">IBinaryStorageProvider</span> (S3 or DB fallback)
+          with a SHA-256 integrity hash. A regulator can re-verify the file a decade later
+          and prove it has not been altered.
+        </div>
+      </div>
+    </div>
+  </div>
+`);
+
+// SLIDE 17 - CLOSING
+slides.push(`
+  <div class="glow-orb r" style="top:-200px;left:50%; transform:translateX(-50%);"></div>
+  <div class="glow-orb e" style="bottom:-200px;left:50%; transform:translateX(-50%);"></div>
+  <div class="content" style="align-items:center; justify-content:center; text-align:center;">
+    <div class="pill" style="margin-bottom:24px;">
+      <span class="dot"></span>
+      <span>Open Source &middot; MIT Licensed &middot; Free Forever</span>
+    </div>
+    <h1 class="title small" style="max-width:1100px;">
+      Every <span class="gradient-text">incident</span> is a lesson.<br/>
+      Every <span class="gradient-text e">CAPA</span> turns that lesson into a system.
+    </h1>
+    <p class="subtitle lg" style="margin-top:22px; max-width:980px;">
+      A sensor trips. The triage centre catches it. The AI agent triages it. A human investigates it.
+      A corrective action stops the bleeding. A preventive action stops the class of problem.
+      Three follow-ups prove it worked. A signed PDF sits in storage for a decade - ready when it's needed.
+    </p>
+
+    <div class="grid g4" style="margin-top:40px; width:100%; max-width:1000px;">
+      <div class="glass sm" style="text-align:center;">
+        <div class="stat-num gradient-text">4</div>
+        <div class="stat-label">Issue states</div>
+      </div>
+      <div class="glass sm" style="text-align:center;">
+        <div class="stat-num gradient-text">6</div>
+        <div class="stat-label">Root-cause buckets</div>
+      </div>
+      <div class="glass sm" style="text-align:center;">
+        <div class="stat-num gradient-text e">7</div>
+        <div class="stat-label">CAPA workflow states</div>
+      </div>
+      <div class="glass sm" style="text-align:center;">
+        <div class="stat-num gradient-text e">10 yr</div>
+        <div class="stat-label">Retention, signed + hashed</div>
+      </div>
+    </div>
+
+    <div style="margin-top:44px; display:flex; gap:16px; align-items:center;">
+      <div class="logo-badge" style="padding:12px 20px;">
+        <svg class="icon" width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/></svg>
+        <span>github.com/dominicfinn/open_tms</span>
+      </div>
+    </div>
+
+    <div style="margin-top:24px; font-size:12.5px; color:var(--s500);">
+      <span class="kbd">&larr;</span> previous &middot; <span class="kbd">Home</span> back to start
+    </div>
+  </div>
+`);
+</script>
+<script>
+  document.addEventListener('DOMContentLoaded', render);
+</script>
+</body>
+</html>
