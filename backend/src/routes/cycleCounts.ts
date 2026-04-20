@@ -41,7 +41,15 @@ export async function cycleCountRoutes(server: FastifyInstance) {
 
   // GET /api/v1/cycle-counts/:id
   server.get('/api/v1/cycle-counts/:id', {
-    schema: { tags: ['WMS - Cycle Counting'], summary: 'Get cycle count detail with lines' },
+    schema: {
+      tags: ['WMS - Cycle Counting'],
+      summary: 'Get cycle count detail with lines',
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: { id: { type: 'string', format: 'uuid' } },
+      },
+    },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
     const count = await prisma.cycleCount.findUnique({

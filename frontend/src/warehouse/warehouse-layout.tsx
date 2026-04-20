@@ -68,6 +68,10 @@ export function WarehouseLayout() {
           <span className="material-icons">assignment</span>
           Tasks
         </NavLink>
+        <NavLink to="/warehouse/appointments" className={({ isActive }) => isActive ? 'active' : ''}>
+          <span className="material-icons">event</span>
+          Arrivals
+        </NavLink>
         <NavLink to="/warehouse/archive" className={({ isActive }) => isActive ? 'active' : ''}>
           <span className="material-icons">inventory_2</span>
           Archive

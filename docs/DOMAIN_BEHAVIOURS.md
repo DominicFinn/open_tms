@@ -1579,6 +1579,457 @@ Manages inbound goods - dock appointments, receiving tasks, and line-by-line ite
 - CompleteReceiving generates PutawayTasks using PutawayRule evaluation
 - Appointment status auto-updated on task creation and completion
 
+### Mobile flow (warehouse app)
+- `/warehouse/tasks/receive/:id` opens the task. Summary card shows receiving type (ASN vs blind) + cross-dock flag + dock bin
+- Barcode scanner wedge hook (`useBarcodeScanner`) matches the scanned value against expected line SKUs and auto-opens that line with remaining qty pre-filled
+- Blind receipts: an unknown scan opens a "New SKU" panel where the worker enters a quantity, and the backend creates the line
+- Per-line inputs for received quantity and damaged quantity
+- Inspection chips (pass / fail / quarantine) appear next to completed lines
+- "Complete Receipt" button fires `receiving_task.complete` which cascades into auto-putaway generation
+
+---
+
+### Domain: Cross-dock
+
+A workflow variant of receiving where goods skip storage entirely and sort directly to staging bins for outbound loading. Used for high-velocity flow-through operations.
+
+### How it works
+When a `ReceivingTask` is created with `crossDock: true`, the `CompleteReceiving` command diverges from the normal flow:
+- **Normal receiving**: Complete -> generate PutawayTask(s) -> worker puts goods into storage bins
+- **Cross-dock receiving**: Complete -> skip putaway entirely -> create StagingAssignment for each received unit -> move units directly to a staging/shipping_dock/cross_dock zone bin
+
+### Behaviour
+- Finds a staging bin at the location (zones with zoneType in `staging`, `shipping_dock`, or `cross_dock`)
+- For each received unit with a `trackableUnitId`:
+  1. Looks up the order via the receiving line's `orderLineItemId`
+  2. Creates a `StagingAssignment` (status: `staged`) linking unit to staging bin and order
+  3. Updates `TrackableUnit.currentBinId` and `currentZoneId` to the staging location
+- Emits `cross_dock.sorted` event with unit count and staging bin
+
+### Events
+- `cross_dock.sorted` - Emitted when a cross-dock receiving task sorts units to staging
+- `receiving_task.completed` - Includes `crossDock: true` and `crossDockSorted` count in payload
+
+### Side Effects
+- Units arrive at staging bins ready for inclusion in LoadPlans
+- Inventory is NOT created (goods are transient, never entering storage)
+- PutawayTasks are NOT generated
+
+### Key Files
+- `backend/src/commands/warehouse/CompleteReceivingCommand.ts` - Cross-dock branch in receiving completion
+- `backend/src/__tests__/commands/CrossDockCommands.test.ts` - 2 tests (cross-dock sort + non-crossdock control)
+
+---
+
+### Domain: EDI 940 / 945 (Warehouse Shipping Order + Advice)
+
+The 940/945 pair is the 3PL-to-depositor interchange: a depositor (brand, shipper) sends a 940 telling the warehouse what to ship, and the warehouse sends back a 945 confirming what actually shipped. Together they replace manual order entry and packing-slip emails for customers running on a 3PL WMS.
+
+### GS functional identifiers
+- 940: `OW` (Warehouse Shipping Order)
+- 945: `SW` (Warehouse Shipping Advice)
+
+Both are registered in `TRANSACTION_TO_GS` / `GS_TO_TRANSACTION` and route through the universal EDI inbound endpoint.
+
+### Inbound 940 flow
+1. Depositor posts the 940 to `/api/v1/edi/940/inbound` (or it arrives via the edi-collector SFTP poll and gets routed here by `EdiRouterService`)
+2. `EDI940ParseService.parseEDI940()` walks the body: W05 header (purpose code, depositor order number, PO, shipper reference), G62 dates (10 = requested ship, 11 = cancel-by), N1 party loops (ST = ship-to, SF = ship-from = depositor, WH = warehouse), N3/N4 address lines, W66 carrier + SCAC, NTE freeform notes, LX line groups, W01 line detail (qty / UOM / item ID), G69 descriptions, N9 lot / customer line refs
+3. Route resolves the depositor customer by `partnerId` (preferred) or SF address match
+4. Ship-to location is matched against existing `Location` rows or recorded as raw address data
+5. Dispatch `CREATE_ORDER` with `importSource: 'edi_940'` and full parsed ediData
+
+### Outbound 945 flow
+1. `Edi945AutoSendHandler` subscribes to `shipment.delivered`
+2. Loads the shipment with origin / destination / carrier / customer / orders + line items
+3. For every trading partner on that customer with `outbound 945 enabled`, calls `EDI945Service.validateAndGenerate`
+4. Envelopes the result and delivers via `OutboundEdiDeliveryService` (SFTP or HTTP per partner config)
+5. Also available via `POST /api/v1/edi/945/generate` for manual / preview generation
+
+### 945 line-level status codes
+`W12-01` reports what happened to each line:
+- `CC` - Complete (shipped qty == ordered qty)
+- `PC` - Partial (0 < shipped < ordered; backorder qty reported in W12-04)
+- `CN` - Cancelled (shipped qty == 0)
+
+### Key segments emitted in the 945
+- W06 - header (reporting code, depositor order number, ship date, shipper ID, PO)
+- N1 loop - ST / WH / SF addresses with N3 / N4 detail
+- G62 - actual ship date (qualifier 11)
+- W27 - carrier detail (method code, SCAC, routing, BOL, tracking number)
+- LX + W12 + G69 + N9 - per line (tracking via `N9*CN`, lot via `N9*LT`, customer ref via `N9*PD`)
+- W03 - shipment totals (quantity, weight in kg, pallet count)
+
+### Key Files
+- `backend/src/services/edi/types.ts` - `TRANSACTION_TO_GS` extended with 940 / 945
+- `backend/src/services/EdiRouterService.ts` - 940 added to TRANSACTION_ROUTES
+- `backend/src/services/EDI940ParseService.ts`
+- `backend/src/services/EDI945Service.ts`
+- `backend/src/routes/edi940.ts` - inbound + preview + 945 generate endpoints (+ exported `buildEDI945DataFromShipment` helper reused by the handler)
+- `backend/src/events/handlers/Edi945AutoSendHandler.ts`
+- `backend/src/__tests__/services/EDI940_945.test.ts` - 21 tests (parse, generate, all three status codes, roundtrip, wrong-transaction, missing fields, overship warnings, replacement reporting)
+
+---
+
+### Domain: Container Intelligence
+
+Given a list of items to pack and the active carton catalogue, the service groups items by constraint profile (temperature zone + value class + hazmat compatibility), picks the smallest carton that qualifies for each group, and returns a multi-package plan with required ancillaries and handling flags. This prevents the warehouse from putting oxidizers next to flammables, high-value watches in a plain mailer, or frozen pharma in an uninsulated box.
+
+### Catalogue fields
+`CartonCatalogue` gains eight intelligence fields alongside its physical dimensions:
+- `temperatureZone` - `any` | `ambient` | `refrigerated` | `frozen` | `dry_ice`
+- `insulated` + `insulationHours` - whether and for how long the carton maintains temp without active cooling
+- `tamperEvident` - pre-sealed high-value packaging
+- `valueClass` - `any` | `standard` | `high_value`
+- `hazmatRated` + `hazmatClasses[]` - UN class codes the carton is approved to transport
+- `materialType` - `corrugated` | `plastic` | `metal` | `foam` | `composite`
+
+### Constraint rules
+| Cargo attribute | Carton must satisfy |
+|-|-|
+| `temperatureZone = 'ambient'` | `temperatureZone in ('any', 'ambient')` |
+| `temperatureZone in ('refrigerated', 'frozen', 'dry_ice')` | exact match - no "any" fallback |
+| `hazmat = true` with class X | `hazmatRated = true` AND class X is in the carton's `hazmatClasses[]` |
+| `hazmat = false` | carton's `hazmatClasses[]` is empty (hazmat cartons stay reserved for hazmat) |
+| `valueClass = 'high_value'` | carton's `valueClass = 'high_value'` |
+| Physical fit | cartonVolume >= sum(item volume × qty); maxWeightGrams >= total weight; longest item edge fits along one carton axis |
+
+### Hazmat segregation
+Incompatible UN classes cannot share a package even if both appear in the carton's approved list. The service keeps a simplified 49 CFR §177.848 / UN Model Regulations segregation matrix for classes 1, 2.1, 2.3, 3, 4.1, 4.2, 4.3, 5.1, 5.2, 6.1, and 8. Compatible pairs (e.g., class 3 + class 6.1) can share; incompatible pairs (e.g., class 3 + class 5.1) get split into separate packages automatically.
+
+### Grouping
+1. Non-hazmat items with the same `(temperatureZone, valueClass)` cluster into one group.
+2. Hazmat items cluster only when all existing classes in the group are compatible with the incoming class AND temperature / value match.
+3. Hazmat and non-hazmat items always split.
+
+### Ancillaries
+Automatically attached to the package suggestion based on cargo + carton:
+- `gel_pack` - refrigerated packages (always)
+- `dry_ice` - frozen or dry_ice packages; also added to refrigerated packages when `transitHours > 24`
+- `desiccant` - when any item is `humiditySensitive`
+- `fragile_padding` - when any item is `fragile`
+- `tamper_seal` - high-value group using a carton that isn't already tamper-evident
+
+### API
+`POST /api/v1/containers/recommend` with body `{ locationId?, transitHours?, items: PackItem[] }` returns:
+```
+{
+  packages: PackageSuggestion[],        // one per constraint group
+  warnings: string[],                   // e.g., "Refrigerated package ... 36h transit - adding dry_ice"
+  errors: string[],                     // e.g., "No carton qualifies for group (temperature=frozen, ...)"
+  totalContainerCostCents: number,
+  totalWeightGrams: number,
+}
+```
+
+Each `PackageSuggestion` carries the selected `cartonId` + name, items, ancillaries, specialHandling, hazmatClasses, volume and weight utilization %, and a human-readable reason string.
+
+### Key Files
+- `backend/prisma/migrations/20260420_add_container_intelligence/migration.sql`
+- `backend/src/services/containers/ContainerIntelligenceService.ts` - service + segregation matrix
+- `backend/src/routes/containerIntelligence.ts` - recommend endpoint
+- `frontend/src/vnext-design/VNextWmsCartonCatalogue.tsx` - extended admin form + chips in table
+- `backend/src/__tests__/services/ContainerIntelligenceService.test.ts` - 37 tests (input validation, best-fit, temperature splits, hazmat segregation including the real-world class 3 vs class 5.1 case, value/fragile/humidity ancillaries, multi-constraint splits, cost + weight totals)
+
+---
+
+### Domain: Pallet Types & Palletization
+
+Standard pallet specs are first-class master data. Every org curates a `PalletType` catalog with EUR, US GMA, CHEP, Australian, half/quarter, and plastic variants. Pallet-level `TrackableUnit`s reference a `PalletType` so load plans, BOL generation, and palletization estimates use accurate dimensions and weight limits instead of guessing.
+
+### Schema
+`PalletType` fields: `code` (unique per org), `name`, `description`, external dimensions in mm (`lengthMm`, `widthMm`, deck `heightMm`), `tareWeightGrams`, `maxLoadGrams`, optional `maxStackHeightMm`, `material` (wood / plastic / metal / cardboard / composite), `reusable`, `isoCertified` (ISPM-15 heat treatment for international export), `stackable`, `active`.
+
+`TrackableUnit.palletTypeId` is nullable so legacy pallets remain valid. When set, it anchors the unit to a real spec.
+
+### Standard seed
+13 standard types covering the common real-world pallets: EUR1 (1200×800), EUR2 (1200×1000), EUR3, EUR6 (half), US GMA (48×40), US 42×42, CHEP 1210, CHEP 48×40, AU 1165, plastic Euro + plastic GMA, one-way export, and quarter display. `POST /api/v1/pallet-types/seed-standards` bulk-adds missing rows (by code uniqueness).
+
+### Palletization planner
+`PalletizationPlanner.planHomogeneousPallet(palletType, carton)` returns:
+- `cartonsPerLayer` - max of two orientations on the deck (`floor(pL / cL) × floor(pW / cW)` vs the rotated version)
+- `layers` - `min(heightBoundLayers, weightBoundLayers)` where heightBound = `floor((maxStackHeight - deckHeight) / cartonHeight)` and weightBound = `floor(maxLoad / (weightPerLayer))`
+- `totalCartons`, `stackedHeightMm`, `totalWeightGrams`
+- `weightUtilizationPercent` vs `maxLoadGrams`, `heightUtilizationPercent` vs `maxStackHeightMm` (null if unlimited)
+- `fits` flag and human-readable warnings (`Weight limit reached before height limit`, etc.)
+
+`recommendPalletType(palletTypes, carton)` ranks active types by cartons-carried (desc) then weight utilization (desc), returning `{ best, all }`.
+
+### API
+| Method | Endpoint | Purpose |
+|--|--|--|
+| GET | `/api/v1/pallet-types` | List (optionally active-only) |
+| GET | `/api/v1/pallet-types/standards` | Preview the standard seed |
+| GET | `/api/v1/pallet-types/:id` | Detail |
+| POST | `/api/v1/pallet-types` | Create |
+| PUT | `/api/v1/pallet-types/:id` | Update |
+| DELETE | `/api/v1/pallet-types/:id` | Delete (soft-deactivates if referenced by any TrackableUnit) |
+| POST | `/api/v1/pallet-types/seed-standards` | Bulk-add missing standards |
+| POST | `/api/v1/pallet-types/:id/plan` | Layer/weight estimate for one pallet type and a carton |
+| POST | `/api/v1/pallet-types/recommend` | Rank all active types for a carton |
+
+### UI
+- `/wms/pallet-types` - table with code, name, dimensions (cm), tare and max load (kg), badges for reusable / ISPM-15 / stackable. Create/edit modal with the full spec form. One-click "Load standard types" button seeds the 13 common types.
+- Sidebar entry under the Warehouse app.
+
+### Key Files
+- `backend/prisma/migrations/20260420_add_pallet_types/migration.sql`
+- `backend/src/services/palletization/standardPalletTypes.ts` - canonical seed data
+- `backend/src/services/palletization/PalletizationPlanner.ts` - homogeneous planner + recommender
+- `backend/src/routes/palletTypes.ts` - CRUD + seed + plan + recommend
+- `frontend/src/vnext-design/VNextPalletTypes.tsx` - admin UI
+- `backend/src/__tests__/services/PalletizationPlanner.test.ts` - 11 tests (orientation, height/weight bounds, utilization, recommendation ranking, ties, inactive filtering)
+
+---
+
+### Domain: Warehouse Operations Dashboard
+
+One aggregate endpoint (`GET /api/v1/wms/operations-dashboard`) returns a snapshot of warehouse health across six dimensions, built from parallel Prisma queries. Auto-refreshes every 60 seconds on the admin UI.
+
+### KPI sections
+1. **Throughput** - completed receipts, putaways, picks, packs, and dispatched shipments for today (UTC midnight boundary) vs last 7 days.
+2. **Cycle times** (30-day avg):
+   - Pick cycle = completed PickTask `completedAt - startedAt`
+   - Dock-to-stock = completed PutawayTask `updatedAt - receivingTask.createdAt` (only for putaways linked to a receiving task)
+   - Order-to-ship = dispatched Shipment `updatedAt - order.createdAt` via OrderShipment join
+   - Each metric ships with a `samples` count so operators can gauge confidence
+3. **Quality & accuracy** (30-day):
+   - Pick accuracy = `completed / (completed + short_pick)` × 100
+   - Pack audit pass rate = `pass / total` × 100 (from `PackAudit.verdict`)
+   - Inventory record accuracy = `(1 - Σ|counted - expected| / Σ expected) × 100` across recent `CycleCountLine` rows with `countedQuantity != null`
+4. **Live work queue** - pending counts for pick tasks, putaway tasks, pack tasks, active waves (`released` / `in_progress`), and receiving tasks in progress.
+5. **Exceptions** - open + critical issues, cutoff-at-risk critical + warning counts (driven by `Shipment.lastCutoffRiskSeverity`), pending RMAs in the warehouse lifecycle, open pack-audit-fail issue count.
+6. **Capacity** - total bins, bins with inventory, utilization percent. Utilization returns null when no bins exist.
+
+### UI behavior
+- Tone coloring on quality metrics: ≥98% success, 95-97% warning, <95% error. Same logic on capacity utilization (inverted for warning at >85%, error at >95%).
+- Every KPI card is clickable when there's a relevant drill target (picks → `/wms/picking`, pack audits → `/wms/pack-audits`, cutoff → `/wms/cutoff-monitor`, issues → `/issues`, returns → `/wms/returns`).
+
+### Why a single endpoint
+The queries are read-only and run concurrently through `Promise.all` - a single round-trip keeps the admin UI simple and eliminates N+1 fetch patterns. Since most KPIs refresh together, interleaved queries aren't a concern.
+
+### Key Files
+- `backend/src/services/warehouse/WarehouseOperationsDashboardService.ts` - Snapshot aggregator
+- `backend/src/routes/warehouseOperationsDashboard.ts` - Single endpoint
+- `frontend/src/vnext-design/VNextWmsOperationsDashboard.tsx` - Dashboard UI
+- `backend/src/__tests__/services/WarehouseOperationsDashboardService.test.ts` - 13 tests (throughput windowing, cycle time math, pick accuracy, pack audit pass rate, inventory accuracy from cycle counts, capacity, exception rollup)
+
+---
+
+### Domain: Cutoff-at-Risk Monitoring
+
+Carriers publish daily handoff cutoff times (e.g. 16:30 for same-day FedEx Ground pickup). Missing one slips the shipment a day. The cutoff-at-risk monitor watches open shipments, projects how long the remaining warehouse work will take, and fires `shipment.cutoff_at_risk` (plus auto-raises an Issue) when the projected ready time will miss the cutoff.
+
+### CarrierCutoff schema
+Per-day-of-week rows per carrier: `dayOfWeek (0-6)`, `cutoffLocalTime (HH:mm)`, `timezone (IANA)`, optional `serviceLevel` and `locationId` override, `active` flag. Multiple rows per carrier are supported; the earliest matching row for today wins.
+
+### Projected ready time
+Simple additive model (v1, configurable per-instance):
+- Each pending pick task: +45 min
+- Each pending pack task: +15 min
+- No load plan yet: +30 min
+
+Work is resolved by walking `Shipment → OrderShipment[] → Order.id → PickTask/PackTask` (non-completed, non-cancelled rows) and `Shipment → LoadPlan`.
+
+### Severity bands
+| Buffer (cutoff - projectedReady) | Severity | Action |
+|--|--|--|
+| ≥ 30 min | `minor` | Dashboard only, no event, no issue |
+| 10 - 29 min | `warning` | Fires event, creates medium-priority issue |
+| < 10 min or past cutoff | `critical` | Fires event, creates high-priority issue |
+
+### Dedup
+Re-evaluation runs every 5 min. To avoid spam:
+- Same-severity alert won't refire within the dedup window (default 30 min)
+- Escalating severity (warning → critical) fires immediately regardless of window
+- Existing issue is reused across escalations via `Shipment.lastCutoffRiskIssueId`
+
+### Events
+- `shipment.cutoff_at_risk` - payload: `{ shipmentId, shipmentReference, carrierId, cutoffAt, projectedReadyAt, bufferMinutes, severity, blockingStage, pendingPickTasks, pendingPackTasks, pendingLoadPlan, issueId }`
+- `shipment.cutoff_cleared` - reserved for future use when a shipment that was previously at risk returns to a safe buffer
+
+### API
+- CRUD: `GET/POST /api/v1/carriers/:carrierId/cutoffs`, `PUT/DELETE /api/v1/carrier-cutoffs/:id`
+- `GET /api/v1/cutoff-monitor/at-risk?severity=warning|critical` - current at-risk list
+- `GET /api/v1/cutoff-monitor/evaluate/:shipmentId` - evaluate a single shipment without firing
+- `POST /api/v1/cutoff-monitor/run` - manual full scan (useful for testing + on-demand review)
+
+### Worker
+`cutoffMonitorWorker` registers a pg-boss cron on the `cutoff-monitor` queue. Default `*/5 * * * *`, override with `CUTOFF_MONITOR_CRON`.
+
+### Key Files
+- `backend/prisma/migrations/20260420_add_cutoff_monitoring/migration.sql`
+- `backend/src/services/cutoff/ShipmentCutoffMonitorService.ts`
+- `backend/src/workers/cutoffMonitorWorker.ts`
+- `backend/src/routes/cutoffMonitor.ts`
+- `frontend/src/vnext-design/VNextCutoffDashboard.tsx` - at-risk list with stats
+- `frontend/src/vnext-design/VNextCarrierCutoffs.tsx` - per-carrier cutoff configuration
+- `backend/src/__tests__/services/ShipmentCutoffMonitorService.test.ts` - 24 tests
+
+---
+
+### Domain: Pack Audit (weight / dim-weight variance)
+
+Pack audits run at the pack station after a pick is packed into a carton. A scale captures the actual weight in grams, and optionally a cubiscan (or tape measure) captures LxWxH in mm. The service compares actual against the expected total (sum of `ProductUom.weightGrams × line.expectedQuantity` across the pack task) and assigns a verdict.
+
+### Verdict logic
+| `|variance|` vs tolerance | Verdict |
+|--|--|
+| `≤ tolerance` | `pass` |
+| `≤ 2 × tolerance` | `warning` - medium-priority quality issue auto-raised |
+| `> 2 × tolerance` | `fail` - high-priority quality issue auto-raised |
+
+Default tolerance is 10%, overridable per-audit via `weightTolerancePercent` on the command payload. The tolerance actually applied is persisted on the `PackAudit` row so historical rows stay self-describing even if defaults change.
+
+### Dim-weight
+Dim-weight is calculated only when an audit links to a `CartonCatalogue` (expected dims) AND the caller supplies all three actual dims. Formula is the industry standard `(L × W × H cm) / 5000 = kg`. The result is stored as a separate `dimWeightVariancePercent` column; verdict today is driven only by the scale weight, but the dim-weight delta is surfaced in UI so ops can investigate.
+
+### Issue auto-creation
+When verdict is `warning` or `fail`, an `Issue` is created inline within the same transaction (not via `CREATE_ISSUE` dispatch, to keep the audit + issue atomic). The issue uses `category: 'quality'`, `sourceEntityType: 'pack_task'`, `sourceEntityId: packTask.id` so the triage kanban and the pack task detail page both see it.
+
+### Events
+- `pack.audit_recorded` - every audit, payload includes verdict, variances, expected/actual weight, tolerance, issueId (nullable)
+- `pack.audit_variance_detected` - only warning/fail, payload includes verdict, weight variance, issueId
+
+### Commands
+- `RECORD_PACK_AUDIT` - single atomic operation: compute expected (unless override supplied), compute variance, assign verdict, create issue if non-pass, persist audit row, emit events
+
+### API
+| Method | Endpoint | Purpose |
+|-|-|-|
+| POST | `/api/v1/pack-audits` | Record a new audit (weight required, dims optional) |
+| GET | `/api/v1/pack-audits` | List with filters `verdict`, `packTaskId` |
+| GET | `/api/v1/pack-audits/:id` | Detail including full pack task + lines |
+| GET | `/api/v1/pack-audits/stats` | 30-day totals + pass rate |
+| GET | `/api/v1/warehouse/pack-tasks/:id/audit-context` | Pre-computed expected totals + SKU catalog data for the mobile app, plus the task's existing audit history |
+
+### UI
+- Admin: `/wms/pack-audits` - stats tiles (total, pass rate, warnings, failures over 30 days), verdict filter, table with sign-colored variance, one-click jump to the auto-raised issue
+- Warehouse mobile: `/warehouse/tasks/pack-audit/:packTaskId` - shows expected weight prominently, scale input with numeric keyboard, optional LxWxH inputs, notes, previous-audit history. Submit returns an immediate verdict tile with the variance, plus an "issue raised" banner when applicable
+
+### Key Files
+- `backend/prisma/migrations/20260419_add_pack_audit/migration.sql` - creates `PackAudit` table
+- `backend/src/commands/packAudit/RecordPackAuditCommand.ts` - command handler with verdict logic and auto-issue creation
+- `backend/src/routes/packAudit.ts` - five admin + warehouse endpoints
+- `frontend/src/warehouse/WarehousePackAudit.tsx` - mobile capture page
+- `frontend/src/vnext-design/VNextWmsPackAudits.tsx` - admin list + stats
+- `backend/src/__tests__/commands/PackAuditCommands.test.ts` - 10 tests covering verdict boundaries, overrides, dim-weight math, validation
+
+---
+
+### Domain: Returns / RMA
+
+Full returns lifecycle from customer request through physical receipt, inspection, disposition, and refund. See `docs/RETURNS_SPECIFICATION.md` for the complete specification.
+
+### Commands
+- `rma.create` - Create a new RMA for a customer return. Validates that requested quantities don't exceed order line quantities. Auto-calculates suggested refund from order line prices. Optionally auto-authorizes for CSR-initiated RMAs.
+- `rma.authorize` - CSR approves a requested RMA. Moves status from `requested` to `authorized`.
+- `rma.reject` - CSR rejects an RMA with reason notes.
+- `rma_line.receive` - Record physical receipt of a returned item at the dock. Moves the unit to quarantine zone with `qualityStatus: quarantine`. Advances RMA status to `received` when all lines are fully received.
+- `rma_line.inspect` - Inspector sets final disposition per line. Routes unit to next physical destination (putaway for restock, refurb zone for refurb, etc.). Updates `qualityStatus` based on disposition (available for restock, hold for refurb, damaged for scrap, quarantine for others).
+- `rma.complete` - Finalizes RMA. Generates inventory movements for `restock` lines (new `InventoryRecord` + `InventoryTransaction` with reasonCode `return`). Finance can override the suggested refund with `actualRefundCents` and adjustment notes.
+
+### Seven Dispositions
+`restock`, `refurb`, `scrap`, `recycle`, `donate`, `rtv`, `customer_keeps`. See specification doc for full behaviour of each.
+
+### Lifecycle
+```
+requested -> authorized -> in_transit -> received -> inspecting -> dispositioning -> completed
+                       ↘
+                         rejected
+```
+
+### Events
+- `rma.requested` - Customer portal submission or CSR creation
+- `rma.authorized` - CSR approved or auto-authorized on creation
+- `rma.rejected` - CSR declined the return
+- `rma.goods_received` - All lines physically received at dock
+- `rma.line_inspected` - Inspector set disposition on a line
+- `rma.disposition_set` - All lines on an RMA have dispositions (moves to `dispositioning` status)
+- `rma.completed` - RMA closed, inventory updated, ready for credit note issuance
+- `rma.refund_adjusted` - Finance overrode the suggested refund amount
+
+### Side Effects
+- **Quarantine-first flow**: returned units always go to quarantine zone before any other action. No direct restock.
+- **Restock inventory movement**: on RMA completion, restock lines create `InventoryRecord` or increment existing record at the route-to-bin with `InventoryTransaction` type `receive`, reason `return`, referenceType `rma`.
+- **Trackable unit quality status** changes based on disposition: available/hold/damaged/quarantine.
+- **Finance review queue**: RMAs in `dispositioning` status appear in the refund review queue for finance team approval before completion.
+
+### Key Files
+- `backend/src/commands/rma/` - All RMA command handlers (6 handlers)
+- `backend/src/routes/rma.ts` - RMA API endpoints (9 endpoints)
+- `backend/src/__tests__/commands/RmaCommands.test.ts` - 15 tests
+- `frontend/src/vnext-design/VNextWmsReturns.tsx` - Returns list
+- `frontend/src/vnext-design/VNextWmsCreateReturn.tsx` - Multi-step RMA creation form
+- `frontend/src/vnext-design/VNextWmsReturnDetail.tsx` - RMA detail with inline inspection and completion
+- `frontend/src/vnext-design/VNextWmsRefundReview.tsx` - Finance refund approval queue
+- `backend/src/routes/customerRmaApi.ts` - Public customer-facing RMA API (ApiKey-authenticated)
+- `backend/src/routes/customerPortal.ts` - Customer portal RMA endpoints (JWT-authenticated, list/detail/create/label-download/eligible-orders)
+- `frontend/src/pages/customer-portal/CustomerReturns.tsx` - Portal: list my returns
+- `frontend/src/pages/customer-portal/CustomerRequestReturn.tsx` - Portal: request a return (multi-step form)
+- `frontend/src/pages/customer-portal/CustomerReturnDetail.tsx` - Portal: return detail with status explanation + label download
+- `backend/src/routes/rma.ts` - `GET /api/v1/warehouse/rmas` - enriched list for warehouse mobile (linesToReceive / linesToInspect counts, supports rmaNumber exact lookup for scanned labels)
+- `frontend/src/warehouse/WarehouseReturnReceive.tsx` - Mobile: scan RMA and receive lines with per-line qty input
+- `frontend/src/warehouse/WarehouseReturnInspect.tsx` - Mobile: set condition + disposition per received line (7 disposition choices with hints)
+- `backend/src/services/EDI180ParseService.ts` - EDI 180 inbound parser with X12 reason code mapping
+- `backend/src/services/EDI180Service.ts` - EDI 180 outbound generator (authorization response)
+- `backend/src/routes/edi180.ts` - EDI 180 inbound (auto-creates RMA) + outbound generation endpoints
+- `backend/src/__tests__/services/EDI180Service.test.ts` - 8 tests (parse, generate, roundtrip)
+- `backend/src/services/returnLabel/IReturnLabelProvider.ts` - Return label provider interface (generate, schedulePickup, cancelPickup)
+- `backend/src/services/returnLabel/ReturnLabelProviderRegistry.ts` - Provider registry (manual + fedex/ups/dhl stubs)
+- `backend/src/services/returnLabel/providers/ManualReturnLabelProvider.ts` - Default provider for v1 (admin-captured tracking + placeholder label buffer)
+- `backend/src/commands/rma/GenerateReturnLabelCommand.ts` - Generate + store return label
+- `backend/src/commands/rma/SchedulePickupCommand.ts` - Schedule carrier pickup
+- `backend/src/commands/rma/CancelPickupCommand.ts` - Cancel a scheduled pickup
+- `backend/src/__tests__/commands/RmaReturnLabelCommands.test.ts` - 12 tests (generate/schedule/cancel + manual provider)
+- `docs/RETURNS_SPECIFICATION.md` - Full specification
+
+### Return Label & Pickup Flow
+
+Return shipping is provider-agnostic via `IReturnLabelProvider`. A single registry holds Manual, FedEx, UPS, and DHL implementations; the FedEx/UPS/DHL providers currently throw "not yet implemented" and fall back to the Manual provider for v1. Carriers self-select a provider via `Carrier.returnLabelProvider`; admins can override per-RMA.
+
+**Generate label** (`POST /api/v1/rmas/:id/return-label`):
+1. Resolve provider from explicit override, assigned carrier's `returnLabelProvider`, or fall back to `manual`
+2. Provider returns `{ trackingNumber, labelContent: Buffer, labelFormat }`
+3. Label is stored via `IBinaryStorageProvider` at `files/{uuid}`
+4. RMA is updated with `returnTrackingNumber`, `returnLabelStorageKey`, `returnLabelFormat`, `returnLabelProvider`, `returnCarrierId`, `returnServiceLevel`, `returnLabelGeneratedAt`
+5. Emits `rma.return_label_generated`
+
+**Schedule pickup** (`POST /api/v1/rmas/:id/pickup`): requires an existing tracking number; guarded against double-booking by the `returnPickupScheduledAt && !returnPickupCancelledAt` invariant. Emits `rma.pickup_scheduled`.
+
+**Cancel pickup** (`POST /api/v1/rmas/:id/pickup/cancel`): sets `returnPickupCancelledAt`; provider is called to release the carrier-side booking. Emits `rma.pickup_cancelled`. Rescheduling is allowed once cancelled.
+
+**Label download**: admin (`GET /api/v1/rmas/:id/return-label/download`) and customer (`GET /api/v1/customer-api/rmas/:id/return-label`) can stream the stored label. Customer download is scoped to the API key's customerId.
+
+### Integration Entry Points (how customers create RMAs)
+
+Returns can enter the system through five channels, all converging on the same `CREATE_RMA` command handler with different `initiatedVia` values:
+
+| Channel | How | `initiatedVia` |
+|---------|-----|----------------|
+| **Admin UI** | CSR creates RMA in the admin app | `admin` |
+| **Customer Portal** | Customer self-service via JWT-authenticated portal pages (list/new/detail) | `customer_portal` |
+| **Public REST API** | Customer integration via ApiKey auth: `POST /api/v1/customer-api/rmas` | `api` |
+| **EDI 180 Inbound** | Customer transmits X12 180 document via SFTP/HTTP to `/api/v1/edi/180/inbound` | `edi_180` |
+| **Marketplace Webhook** | Shopify/eBay/Amazon return events (v2, roadmap only) | `marketplace_webhook` |
+
+### EDI 180 Flow
+
+**Inbound** (customer requests RMA):
+1. Customer transmits X12 180 via SFTP (existing edi-collector) or direct HTTP POST
+2. Universal EDI inbound router detects ST*180 and routes to `/api/v1/edi/180/inbound`
+3. `EDI180ParseService` parses envelope, BGN, REF, N1, LX/LQ/SLN segments, maps X12 reason codes to internal reasons
+4. Route handler looks up customer (by partner link, customer ID, or name) and original order (by PO/order number)
+5. Lines matched to order line items by SKU
+6. `CREATE_RMA` command dispatched with `initiatedVia: edi_180`
+7. RMA created in `requested` state for CSR review
+
+**Outbound** (authorization response):
+1. CSR authorizes the RMA (status: authorized)
+2. Admin/automation calls `POST /api/v1/edi/180/generate` with RMA ID
+3. `EDI180Service` builds X12 180 with BGN*11 (response), N1 ST/SF with warehouse/customer addresses, LX+SLN per line
+4. Content returned for SFTP/HTTP delivery via existing `OutboundEdiDeliveryService`
+5. GS functional identifier `RZ` registered in `TRANSACTION_TO_GS` map
+
 ---
 
 ### Domain: Putaway
@@ -1670,6 +2121,13 @@ Verifies picked items at pack stations, stages for outbound, and loads onto vehi
 - Staging moves TrackableUnit.currentBinId to the staging bin
 - Loading clears TrackableUnit.currentBinId and currentZoneId (unit is on vehicle)
 
+### Mobile flow (warehouse app)
+- `/warehouse/tasks/pack/:id` opens the task with a summary card, carton selector (lists active `CartonCatalogue` entries with temperature zone and max weight), and one row per pack line
+- Barcode wedge matches the scanned value against expected line SKUs, auto-opens the line, pre-fills remaining qty
+- Rejects scans that aren't on the pick (surfaces `Scanned "X" does not match any item on this pack task`)
+- Rejects over-scans for already-completed lines
+- When all lines are packed, surfaces a "Run Pack Audit" button that navigates straight to `/warehouse/tasks/pack-audit/:id` so the scale + dim variance check runs before the parcel ships
+
 ---
 
 ### Domain: Cycle Counting
@@ -1708,6 +2166,9 @@ Auto-replenishes pick face bins from bulk storage when stock drops below configu
 ### Side Effects
 - CheckReplenishment creates PutawayTask records (putawayType: `replenishment`) that appear in the putaway task queue
 - Deduplication: skips if a pending/assigned/in-progress replenishment task already exists for the same target bin
+
+### Event-driven auto-trigger
+`AutoReplenishmentHandler` subscribes to `pick_line.completed` and `inventory.adjusted`. When fired, it resolves the affected location (PickTask → locationId or WarehouseBin → locationId) and dispatches `CHECK_REPLENISHMENT` scoped to `(locationId, sku)`. Replenishment tasks are created within seconds of a pick rather than waiting for an operational sweep. The command-level dedup guarantees no duplicate putaway tasks.
 
 ---
 
@@ -1788,3 +2249,50 @@ First-Fit-Decreasing by volume:
 - `backend/src/__tests__/commands/ReplenishmentCommands.test.ts` - 6 tests
 - `backend/src/__tests__/commands/WaveTemplateCommands.test.ts` - 6 tests
 - `frontend/src/vnext-design/VNextWms*.tsx` - 24 WMS pages
+
+## Customer Portal - Developer Area
+
+The customer portal is a multi-app workspace with an app switcher (Google-style grid) in the top-right. Apps: **Portal** (orders, shipments, returns, invoices, documents, profile) and **Developer**. The Developer app gives customers self-service control over every integration surface that connects their systems to Open TMS.
+
+### Capabilities
+- **API Keys** - create/disable/revoke. Plaintext is returned once on creation and never stored readable again. Keys are scoped to the customer, so a customer API key can only read and write that customer's own data via the public REST API.
+- **Webhooks** - register HTTP endpoints to receive domain events. Subscriptions use pattern syntax (`*`, `rma.*`, or exact event name). Each webhook has its own HMAC-SHA256 signing secret which customers can reveal or rotate. Deliveries are logged per-webhook with status code, response body, error message, and timing. A "Send test" button triggers a synthetic `webhook.test` delivery.
+- **Trading Partners (EDI)** - read-only view of the customer's `TradingPartner` records. Shows SFTP/HTTP connection details (credentials redacted to `***`), EDI envelope IDs, inbound/outbound directories, and supported transaction types. Admins own write access in the admin app.
+- **Integration Logs** - paginated list of `EdiTransactionLog` records scoped to the customer's trading partners, filterable by direction and transaction type.
+- **Dashboard** - overview tiles for each section plus a quick-start guide and signature-verification documentation.
+
+### Webhook Signature Format
+Every delivery includes:
+
+```
+X-OpenTms-Event: <event.type>
+X-OpenTms-Delivery: <delivery-uuid>
+X-OpenTms-Signature: t=<unix_seconds>,v1=<hex_hmac_sha256>
+```
+
+`v1` is `HMAC_SHA256(secret, `${timestamp}.${raw_body}`)` hex-encoded. Customers verify by computing the same HMAC and comparing using a constant-time equality check, rejecting requests outside a 5-minute window. `signPayload()` and `verifySignature()` helpers live in `CustomerWebhookDeliveryService` for reuse.
+
+### Event Fanout
+`CustomerWebhookHandler` subscribes to `rma.*`, `order.created|confirmed|delivered|cancelled|status_changed`, `shipment.dispatched|delivered|exception|status_changed`, `invoice.created|sent|paid`, and `pack.audit_recorded|pack.audit_variance_detected`. Pack audit events don't carry `customerId` directly, so the handler resolves it via PackTask → Order → customerId. All other events read `payload.customerId` directly. Finds enabled customer webhooks whose event pattern matches and dispatches each through `CustomerWebhookDeliveryService` concurrently. Failed deliveries are logged to `CustomerWebhookDelivery` and rolled up into per-webhook delivery/failure counters.
+
+### Delivery Retry (exponential backoff)
+Failed deliveries are retried by the `webhookRetryWorker` pg-boss cron (`*/1 * * * *`, override `WEBHOOK_RETRY_CRON`). Eligibility checks run via `CustomerWebhookDeliveryService.findEligibleForRetry`:
+
+| Attempt | Minimum wait before retry |
+|---|---|
+| 1 (original failure) | 2 min |
+| 2 | 4 min |
+| 3 | 8 min |
+| 4 | 16 min |
+| 5+ | 30 min (capped) |
+
+Capped at 5 total attempts. Retries reuse the original payload, generate a fresh HMAC signature for the new timestamp, and include `X-OpenTms-Retry: <attempt_count>` so the receiver can tell an original delivery apart from a retry. Idempotent: calling `retry` on an already-delivered record is a no-op.
+
+### Key Files
+- `backend/src/routes/customerDeveloper.ts` - Developer Area REST API (18 endpoints: summary, API keys CRUD, webhooks CRUD + test + rotate + deliveries, trading partners, EDI logs)
+- `backend/src/services/webhooks/CustomerWebhookDeliveryService.ts` - HTTP delivery, HMAC signing, event pattern matching, `signPayload` / `verifySignature`
+- `backend/src/events/handlers/CustomerWebhookHandler.ts` - Subscribes to domain events and dispatches to customer webhooks by matching `payload.customerId`
+- `backend/prisma/migrations/20260419_add_customer_webhooks/migration.sql` - New `CustomerWebhook` and `CustomerWebhookDelivery` tables
+- `frontend/src/customer-portal-layout.tsx` - Multi-app layout with sidebar + topbar + app switcher (Portal, Developer)
+- `frontend/src/pages/customer-portal/developer/` - Five pages: Dashboard, ApiKeys, Webhooks, EdiSetup, IntegrationLogs
+- `backend/src/__tests__/services/CustomerWebhookDeliveryService.test.ts` - 14 tests (signing, verification with tamper/skew/wrong-secret/malformed-header negatives, pattern matching, delivery success/failure/timeout)

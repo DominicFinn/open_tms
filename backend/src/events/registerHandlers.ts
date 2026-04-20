@@ -9,6 +9,7 @@ import { IEventHandler } from './IEventHandler.js';
 import { IEmailService } from '../services/IEmailService.js';
 import { AuditHandler } from './handlers/AuditHandler.js';
 import { InAppNotificationHandler } from './handlers/InAppNotificationHandler.js';
+import { CustomerWebhookHandler } from './handlers/CustomerWebhookHandler.js';
 import { EmailHandler } from './handlers/EmailHandler.js';
 import { OrderProjection } from './projections/OrderProjection.js';
 import { ShipmentProjection } from './projections/ShipmentProjection.js';
@@ -25,6 +26,8 @@ import { SlaEvaluationService } from '../services/SlaEvaluationService.js';
 import { SlaRepository } from '../repositories/SlaRepository.js';
 import { Edi214ForwardHandler } from './handlers/Edi214ForwardHandler.js';
 import { Edi856AutoSendHandler } from './handlers/Edi856AutoSendHandler.js';
+import { Edi945AutoSendHandler } from './handlers/Edi945AutoSendHandler.js';
+import { EDI945Service } from '../services/EDI945Service.js';
 import { Edi810AutoSendHandler } from './handlers/Edi810AutoSendHandler.js';
 import { EDI856Service } from '../services/EDI856Service.js';
 import { EDI810Service } from '../services/EDI810Service.js';
@@ -45,6 +48,7 @@ import { InvoiceProjection } from './projections/InvoiceProjection.js';
 import { FinancialImpactHandler } from './handlers/FinancialImpactHandler.js';
 import { CarrierTrackingHandler } from './handlers/CarrierTrackingHandler.js';
 import { MarginAlertHandler } from './handlers/MarginAlertHandler.js';
+import { AutoReplenishmentHandler } from './handlers/AutoReplenishmentHandler.js';
 
 /** Read concurrency from env with a default */
 function envInt(key: string, fallback: number): number {
@@ -84,6 +88,7 @@ export async function registerEventHandlers(
   const handlers: IEventHandler[] = [
     new AuditHandler(prisma),
     new InAppNotificationHandler(prisma),
+    new CustomerWebhookHandler(prisma),
     // CQRS read model projections
     new OrderProjection(prisma),
     new ShipmentProjection(prisma),
@@ -129,6 +134,9 @@ export async function registerEventHandlers(
   const edi856Service = new EDI856Service();
   handlers.push(new Edi856AutoSendHandler(prisma, edi856Service, outboundDeliveryService));
 
+  const edi945Service = new EDI945Service();
+  handlers.push(new Edi945AutoSendHandler(prisma, edi945Service, outboundDeliveryService));
+
   // EDI 810: auto-send invoice on invoice.sent
   const edi810Service = new EDI810Service();
   handlers.push(new Edi810AutoSendHandler(prisma, edi810Service, outboundDeliveryService));
@@ -150,6 +158,11 @@ export async function registerEventHandlers(
 
   // Brokerage: margin alert - creates issues when margin drops below threshold
   handlers.push(new MarginAlertHandler(prisma));
+
+  // WMS: auto-replenishment - reacts to pick line completion / inventory adjustments and fires CHECK_REPLENISHMENT
+  if (commandBus) {
+    handlers.push(new AutoReplenishmentHandler(prisma, commandBus));
+  }
 
   // Build automation rule handler (used inline by triage agent, not as a separate queue)
   const automationRuleHandler = skillRegistry

@@ -50,6 +50,16 @@ const TRANSACTION_ROUTES: Record<string, EdiRouteResult> = {
     endpoint: '/api/v1/edi/820/inbound',
     description: 'Payment Order/Remittance Advice → Record Payments',
   },
+  '180': {
+    transactionType: '180',
+    endpoint: '/api/v1/edi/180/inbound',
+    description: 'Return Merchandise Authorization → Create RMA',
+  },
+  '940': {
+    transactionType: '940',
+    endpoint: '/api/v1/edi/940/inbound',
+    description: 'Warehouse Shipping Order → Create Order',
+  },
 };
 
 export class EdiRouterService implements IEdiRouterService {

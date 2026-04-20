@@ -143,14 +143,17 @@ const APPS: AppDef[] = [
     sections: [
       { title: 'Warehouse', items: [
         { to: '/wms', icon: 'space_dashboard', label: 'Dashboard', end: true },
+        { to: '/wms/operations', icon: 'analytics', label: 'Operations KPIs' },
         { to: '/wms/zones', icon: 'grid_view', label: 'Zones & Bins' },
         { to: '/wms/inventory', icon: 'inventory_2', label: 'Inventory' },
         { to: '/wms/product-dimensions', icon: 'straighten', label: 'Product Dimensions' },
         { to: '/wms/carton-catalogue', icon: 'package_2', label: 'Carton Catalogue' },
+        { to: '/wms/pallet-types', icon: 'pallet', label: 'Pallet Types' },
         { to: '/wms/cycle-counts', icon: 'fact_check', label: 'Cycle Counts' },
         { to: '/wms/replenishment', icon: 'sync', label: 'Replenishment' },
       ]},
       { title: 'Inbound', items: [
+        { to: '/wms/receiving-appointments', icon: 'event', label: 'Appointments' },
         { to: '/wms/receiving', icon: 'move_to_inbox', label: 'Receiving' },
         { to: '/wms/manifest', icon: 'upload_file', label: 'Manifest Upload' },
         { to: '/wms/putaway', icon: 'system_update_alt', label: 'Putaway' },
@@ -159,8 +162,15 @@ const APPS: AppDef[] = [
         { to: '/wms/waves', icon: 'waves', label: 'Waves' },
         { to: '/wms/picking', icon: 'shopping_cart', label: 'Picking' },
         { to: '/wms/packing', icon: 'package_2', label: 'Packing' },
+        { to: '/wms/pack-audits', icon: 'scale', label: 'Pack Audits' },
         { to: '/wms/loading', icon: 'local_shipping', label: 'Staging' },
         { to: '/wms/load-plans', icon: 'assignment_turned_in', label: 'Load Plans' },
+        { to: '/wms/cutoff-monitor', icon: 'alarm', label: 'Cutoff At Risk' },
+        { to: '/wms/carrier-cutoffs', icon: 'schedule', label: 'Carrier Cutoffs' },
+      ]},
+      { title: 'Reverse Logistics', items: [
+        { to: '/wms/returns', icon: 'assignment_return', label: 'Returns / RMA' },
+        { to: '/wms/returns/refund-review', icon: 'account_balance', label: 'Refund Review' },
       ]},
     ],
   },

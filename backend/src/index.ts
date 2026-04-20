@@ -13,6 +13,12 @@ import { QUEUES } from './queue/events.js';
 import { createInboundWebhookWorker } from './workers/inboundWebhookWorker.js';
 import { createEtaMonitorWorker, registerEtaMonitorSchedule, ETA_MONITOR_QUEUE } from './workers/etaMonitorWorker.js';
 import { createSlaMonitorWorker, registerSlaMonitorSchedule, SLA_MONITOR_QUEUE } from './workers/slaMonitorWorker.js';
+import { createCutoffMonitorWorker, registerCutoffMonitorSchedule, CUTOFF_MONITOR_QUEUE } from './workers/cutoffMonitorWorker.js';
+import { ShipmentCutoffMonitorService } from './services/cutoff/ShipmentCutoffMonitorService.js';
+import { createWaveAutoReleaseWorker, registerWaveAutoReleaseSchedule, WAVE_AUTO_RELEASE_QUEUE } from './workers/waveAutoReleaseWorker.js';
+import { WaveAutoReleaseService } from './services/waves/WaveAutoReleaseService.js';
+import { createWebhookRetryWorker, registerWebhookRetrySchedule, WEBHOOK_RETRY_QUEUE } from './workers/webhookRetryWorker.js';
+import { CustomerWebhookDeliveryService } from './services/webhooks/CustomerWebhookDeliveryService.js';
 import {
   createQuoteExpirationWorker, registerQuoteExpirationSchedule, QUOTE_EXPIRATION_QUEUE,
   createInvoiceOverdueWorker, registerInvoiceOverdueSchedule, INVOICE_OVERDUE_QUEUE,
@@ -84,6 +90,15 @@ import { productUomRoutes } from './routes/productUom.js';
 import { cartonCatalogueRoutes } from './routes/cartonCatalogue.js';
 import { cartonizationRoutes } from './routes/cartonization.js';
 import { loadPlanRoutes } from './routes/loadPlans.js';
+import { rmaRoutes } from './routes/rma.js';
+import { packAuditRoutes } from './routes/packAudit.js';
+import { cutoffMonitorRoutes } from './routes/cutoffMonitor.js';
+import { warehouseOperationsDashboardRoutes } from './routes/warehouseOperationsDashboard.js';
+import { palletTypesRoutes } from './routes/palletTypes.js';
+import { containerIntelligenceRoutes } from './routes/containerIntelligence.js';
+import { edi940Routes } from './routes/edi940.js';
+import { customerRmaApiRoutes } from './routes/customerRmaApi.js';
+import { edi180Routes } from './routes/edi180.js';
 import { agentDecisionRoutes } from './routes/agentDecisions.js';
 import { llmSettingsRoutes } from './routes/llmSettings.js';
 import { agentConfigRoutes } from './routes/agentConfig.js';
@@ -109,6 +124,7 @@ import { brokerReportRoutes } from './routes/brokerReports.js';
 import { commissionRoutes } from './routes/commissions.js';
 import { reportsDashboardRoutes } from './routes/reportsDashboard.js';
 import { customerPortalRoutes } from './routes/customerPortal.js';
+import { customerDeveloperRoutes } from './routes/customerDeveloper.js';
 import { customerUserRoutes } from './routes/customerUsers.js';
 import { publicTrackingRoutes } from './routes/publicTracking.js';
 import {
@@ -166,6 +182,7 @@ async function start() {
   await server.register(themeRoutes);                // GET endpoints intentionally public (loaded before login)
   await server.register(carrierPortalRoutes);        // Own carrier JWT auth internally
   await server.register(customerPortalRoutes);       // Own customer JWT auth internally
+  await server.register(customerDeveloperRoutes);    // Own customer JWT auth internally (Developer Area)
   await server.register(customerApiRoutes);          // Own API key auth internally
   await server.register(loadboardRoutes);            // Optional auth (public carrier-facing)
   await server.register(webhookRoutes);              // Own API key auth internally
@@ -243,6 +260,15 @@ async function start() {
     await app.register(cartonCatalogueRoutes);
     await app.register(cartonizationRoutes);
     await app.register(loadPlanRoutes);
+    await app.register(rmaRoutes);
+    await app.register(packAuditRoutes);
+    await app.register(cutoffMonitorRoutes);
+    await app.register(warehouseOperationsDashboardRoutes);
+    await app.register(palletTypesRoutes);
+    await app.register(containerIntelligenceRoutes);
+    await app.register(edi940Routes);
+    await app.register(customerRmaApiRoutes);
+    await app.register(edi180Routes);
     await app.register(agentDecisionRoutes);
     await app.register(llmSettingsRoutes);
     await app.register(agentConfigRoutes);
@@ -291,6 +317,47 @@ async function start() {
         } catch (err) {
           server.log.warn('ETA monitor worker failed to register: ' + (err as Error).message);
         }
+      }
+
+      // Cutoff-at-risk monitor — register cron schedule and worker (always enabled)
+      try {
+        const cutoffBoss = (queue as any).boss;
+        if (cutoffBoss) {
+          const eventBus = container.resolve<any>(TOKENS.IEventBus);
+          const cutoffService = new ShipmentCutoffMonitorService(server.prisma, eventBus);
+          await registerCutoffMonitorSchedule(cutoffBoss);
+          await queue.subscribe(CUTOFF_MONITOR_QUEUE, createCutoffMonitorWorker(cutoffService));
+          server.log.info('Cutoff-at-risk monitor worker registered');
+        }
+      } catch (err) {
+        server.log.warn('Cutoff monitor worker failed to register: ' + (err as Error).message);
+      }
+
+      // Wave auto-release worker — applies templates at their scheduled HH:MM
+      try {
+        const waveBoss = (queue as any).boss;
+        if (waveBoss) {
+          const commandBus = container.resolve<any>(TOKENS.ICommandBus);
+          const waveService = new WaveAutoReleaseService(server.prisma, commandBus);
+          await registerWaveAutoReleaseSchedule(waveBoss);
+          await queue.subscribe(WAVE_AUTO_RELEASE_QUEUE, createWaveAutoReleaseWorker(waveService));
+          server.log.info('Wave auto-release worker registered');
+        }
+      } catch (err) {
+        server.log.warn('Wave auto-release worker failed to register: ' + (err as Error).message);
+      }
+
+      // Webhook retry worker — re-sends failed CustomerWebhookDelivery rows with exponential backoff
+      try {
+        const retryBoss = (queue as any).boss;
+        if (retryBoss) {
+          const deliveryService = new CustomerWebhookDeliveryService(server.prisma);
+          await registerWebhookRetrySchedule(retryBoss);
+          await queue.subscribe(WEBHOOK_RETRY_QUEUE, createWebhookRetryWorker(deliveryService));
+          server.log.info('Webhook retry worker registered');
+        }
+      } catch (err) {
+        server.log.warn('Webhook retry worker failed to register: ' + (err as Error).message);
       }
 
       // SLA Monitor — register cron schedule and worker (always enabled)

@@ -55,6 +55,63 @@ export class CompleteReceivingCommandHandler extends BaseCommandHandler<
     let putawayTasksCreated = 0;
     const linesWithUnits = task.lines.filter((l: any) => l.trackableUnitId && l.receivedQuantity > 0);
 
+    // Cross-dock: skip storage, sort directly to staging bins by destination
+    let crossDockSorted = 0;
+    if (linesWithUnits.length > 0 && task.crossDock) {
+      // Find staging bins (shipping_dock or staging zone)
+      const stagingBin = await tx.warehouseBin.findFirst({
+        where: {
+          locationId: task.locationId,
+          active: true,
+          zone: { zoneType: { in: ['staging', 'shipping_dock', 'cross_dock'] }, active: true },
+        },
+        orderBy: { walkSequence: 'asc' },
+      });
+
+      if (stagingBin) {
+        for (const line of linesWithUnits) {
+          // Look up the order to find destination for sorting
+          const orderLineItem = (line as any).orderLineItemId
+            ? await tx.orderLineItem.findUnique({
+                where: { id: (line as any).orderLineItemId },
+                select: { orderId: true },
+              })
+            : null;
+
+          await tx.stagingAssignment.create({
+            data: {
+              locationId: task.locationId,
+              orderId: orderLineItem?.orderId ?? 'unknown',
+              trackableUnitId: (line as any).trackableUnitId,
+              stagingBinId: stagingBin.id,
+              status: 'staged',
+              orgId: command.orgId,
+            },
+          });
+
+          // Move unit directly to staging
+          await tx.trackableUnit.update({
+            where: { id: (line as any).trackableUnitId },
+            data: { currentBinId: stagingBin.id, currentZoneId: stagingBin.zoneId },
+          });
+
+          crossDockSorted++;
+        }
+
+        emit(this.createEvent(command, {
+          type: EVENT_TYPES.CROSS_DOCK_SORTED,
+          entityType: 'receiving_task',
+          entityId: task.id,
+          payload: {
+            locationId: task.locationId,
+            unitsSorted: crossDockSorted,
+            stagingBinId: stagingBin.id,
+            stagingBinLabel: stagingBin.label,
+          },
+        }));
+      }
+    }
+
     if (linesWithUnits.length > 0 && !task.crossDock) {
       // Find a putaway target using rules, or fall back to first bulk bin
       const rules = await tx.putawayRule.findMany({
@@ -133,6 +190,7 @@ export class CompleteReceivingCommandHandler extends BaseCommandHandler<
         lineCount: task.lines.length,
         putawayTasksCreated,
         crossDock: task.crossDock,
+        crossDockSorted,
       },
     }));
 

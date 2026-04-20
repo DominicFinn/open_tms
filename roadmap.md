@@ -368,57 +368,193 @@ Bolt-on WMS extending the TMS's TrackableUnit/CargoScan/Location models. Full sp
   - WaveTemplate: create templates with grouping rules, cutoff time, min/max orders, cron schedule, auto-release. Apply template to auto-create waves from eligible orders (6 tests)
   - Zone pick strategy: sequential (pick-and-pass) and parallel (pick-and-merge) modes, zonePickMode on Wave/WaveTemplate, zoneSequence on PickTask, startedAt/completedAt timestamps for SLA (2 tests)
   - CartonizationService: First-Fit-Decreasing recommendation with ProductUom + OrderLineItem fallback, volume + weight utilization, alternatives. Carton catalogue CRUD. Product dimensions CRUD. Recommendation wired into pack task detail page (7 tests)
-  - 🔲 PackAudit for weight/dim-weight variance
-  - 🔲 `shipment.cutoff_at_risk` events
-- **Loading & BOL** DONE (partial)
+  - ✅ PackAudit for weight/dim-weight variance
+    - `PackAudit` model with expected/actual weight and LWH dims, computed weight and dim-weight variance percent, per-audit tolerance, verdict (pass/warning/fail), optional issueId link
+    - Verdict logic: `|variance| ≤ tolerance` = pass, `≤ 2x tolerance` = warning, otherwise fail. Default tolerance 10%, configurable per-audit
+    - Expected weight auto-computed from `ProductUom.weightGrams × expectedQuantity` across pack lines; caller can override
+    - Dim-weight uses industry standard `(L×W×H cm) / 5000 = kg` formula; only compared when a carton is linked and all actual dims are captured
+    - Warning auto-creates a medium-priority quality issue on the triage kanban; fail creates a high-priority issue - both link back to the `pack_task` via `sourceEntityType/sourceEntityId`
+    - Events: `pack.audit_recorded` (every audit), `pack.audit_variance_detected` (warning/fail only)
+    - Admin: `/wms/pack-audits` - sortable list with 30-day stats (total, pass rate, warnings, failures), filterable by verdict, one-click jump to the raised issue
+    - Warehouse mobile: `/warehouse/tasks/pack-audit/:packTaskId` - shows expected weight, scale input, optional LWH inputs, notes, and previous-audit history. Submit returns an immediate pass/warning/fail tile
+    - Routes: `POST/GET /api/v1/pack-audits`, `GET /api/v1/pack-audits/stats`, `GET /api/v1/warehouse/pack-tasks/:id/audit-context`
+    - 10 command tests (expected-weight auto-calculation, verdict boundaries, override behavior, dim-weight math, validation failures)
+  - ✅ `shipment.cutoff_at_risk` events
+    - New `CarrierCutoff` model - per-day-of-week cutoff times with IANA timezone and optional service level + per-location override
+    - `ShipmentCutoffMonitorService` evaluates open, carrier-assigned shipments against today's cutoff; projected ready time = now + (pendingPicks × 45min) + (pendingPacks × 15min) + (no load plan ? 30min : 0) - all buffers configurable
+    - Severity: minor (≥30 min buffer, dashboard-only), warning (<30 min), critical (<10 min or already past)
+    - Warning auto-creates a medium-priority triage issue; critical creates high-priority; both link to the shipment via `sourceEntityType: shipment`. Re-use the same issue across escalations - no spam
+    - Dedup: same-severity re-notification only after a 30-min window; escalation fires immediately and reuses the existing issue
+    - Events: `shipment.cutoff_at_risk` (with severity, cutoffAt, projectedReadyAt, bufferMinutes, blockingStage, pending work counts, issueId), `shipment.cutoff_cleared` (reserved)
+    - pg-boss cron worker (`cutoff-monitor`, default `*/5 * * * *`, configurable via `CUTOFF_MONITOR_CRON`)
+    - Admin: `/wms/cutoff-monitor` at-risk dashboard + `/wms/carrier-cutoffs` config page. Plus REST: carrier cutoff CRUD, at-risk list, single-shipment evaluate (no notify), manual full run
+    - 24 tests (timezone day-of-week, local-time construction, cutoff resolution, severity bands, projected-ready calc, evaluateShipment full flow, dedup window + escalation)
+- **Loading & BOL** DONE
   - StagingAssignment creation with unit location tracking
   - Batch loading completion (clears unit location - on vehicle)
-  - 🔲 LoadPlan with reverse load-sequence
-  - 🔲 BOL generation on `load_plan.completed`
-  - 🔲 Seal capture, dock door assignment
-- **Cross-dock** 🔲
-  - Workflow variant on ReceivingTask with sort-by destination/carrier
-- **Returns / RMA** 🔲
-  - Rma + RmaLine models with disposition (restock/refurb/scrap/RTV/customer_keeps)
-  - Customer portal returns request + label generation
-  - Return receiving as ReceivingTask variant
-  - Auto CreditNote on disposition
-- **WMS EDI** 🔲
-  - EDI 940 (Warehouse Shipping Order, inbound) - auto-creates Order
-  - EDI 945 (Warehouse Shipping Advice, outbound) - emitted on `load_plan.completed`
-- **Warehouse Operations Dashboard** 🔲
-  - Dock-to-stock, order cycle time, pick accuracy, perfect order rate
-  - Inventory record accuracy, capacity utilization, open exceptions
-  - Cut-off risk panel
+  - LoadPlan model with reverse load-sequence (lines ordered by stop sequence)
+  - BOL auto-generated on `load_plan.completed` via DocumentGenerationService
+  - Seal capture + dock door assignment on load plan create/complete
+  - 4 command handler tests
+- **Cross-dock** DONE
+  - When ReceivingTask has crossDock=true, CompleteReceiving skips putaway and sorts directly to staging bins
+  - Units moved to staging/shipping_dock/cross_dock zone bins
+  - StagingAssignments created with order linkage for outbound routing
+  - cross_dock.sorted event emitted with sort stats
+  - 2 tests (cross-dock sort + non-crossdock control)
+- **Returns / RMA** DONE (core)
+  - Rma + RmaLine models with 7 dispositions: restock, refurb, scrap, recycle, donate, rtv, customer_keeps
+  - Partial returns (subset of order line quantity)
+  - Quarantine/QA flow: returned items go to quarantine zone first, inspector sets final disposition, then routed (putaway for restock, refurb zone for refurb, outbound queue for scrap/recycle/donate/rtv)
+  - Auto-calculated refund with finance review queue (finance can override suggested amount)
+  - 6 command handlers: Create, Authorize, Reject, ReceiveLine, InspectLine, Complete
+  - 9 API endpoints for list/detail/create/authorize/reject/receive/inspect/complete/refund-queue
+  - Inventory movements on restock: new InventoryRecord + InventoryTransaction (type: receive, reason: return)
+  - Admin pages: RMA list, multi-step create form, detail with inline inspection/completion, refund review queue
+  - 15 command handler tests
+  - Full specification in `docs/RETURNS_SPECIFICATION.md`
+  - 🔲 Auto CreditNote link on completion (creditNoteId field exists, generation deferred)
+  - ✅ Customer portal pages: my returns, request return, return detail
+    - `/customer-portal/returns` - list your RMAs with status filters
+    - `/customer-portal/returns/new` - self-service multi-step request form (select order → select lines → reason → submit)
+    - `/customer-portal/returns/:id` - return detail with status explanation, refund summary, return shipping panel (label download + pickup info)
+    - 5 backend endpoints: list, detail, create (with order-scope check), label download, eligible-orders helper
+    - JWT-scoped to the authenticated customer; uses `CREATE_RMA` with `initiatedVia: customer_portal` and `autoAuthorize: false`
+  - ✅ Warehouse mobile: return receiving task + inspection/disposition task
+    - `/warehouse/tasks/return-receive/:id` - mobile-first receive flow: per-line received-qty input, progress tracking, auto-routes to inspection when all lines received
+    - `/warehouse/tasks/return-inspect/:id` - mobile-first inspect flow: per-line condition (pass/fail/partial_damage) + disposition (7 options, with hints), notes, one-tap submit
+    - `GET /api/v1/warehouse/rmas?stage=receive|inspect|any` - enriched list with `linesToReceive` / `linesToInspect` counts; supports `rmaNumber` exact lookup for scanned RMA labels
+    - Returns tab added to WarehouseTasks alongside Picking and Putaway
+  - ✅ Return label generation + pickup scheduling
+    - `IReturnLabelProvider` interface + Manual provider (v1 default) + FedEx/UPS/DHL stubs for future live integrations
+    - Commands: GenerateReturnLabel, SchedulePickup, CancelPickup (all transactional, emit domain events)
+    - Admin endpoints: `/api/v1/rmas/:id/return-label`, `/pickup`, `/pickup/cancel`, `/return-label/download`
+    - Customer API: `GET /api/v1/customer-api/rmas/:id/return-label` to download the label
+    - Labels stored via `IBinaryStorageProvider` with opaque `files/{uuid}` keys
+    - Rma fields: returnCarrierId, returnServiceLevel, returnTrackingNumber, returnLabelStorageKey, returnLabelFormat, returnPickupScheduledAt, returnPickupWindow, returnPickupConfirmationNumber
+    - Carrier fields: returnLabelProvider, returnLabelAccountNumber, returnLabelDefaultService
+    - VNextWmsReturnDetail has a Return Shipping panel with inline generate/schedule/cancel forms
+    - 12 additional tests (27 total RMA)
+- **Marketplace Return Webhooks** 🔲 (v2)
+  - Shopify Returns API webhook (`returns/create`, `returns/update`) - most common marketplace, highest priority
+  - eBay Post-Order API webhook for refund/return events (extends existing Stocs Artoo-style refund detection)
+  - Amazon MWS / SP-API return polling (MCF and FBA flows where Amazon inspects returns themselves)
+  - Magento, WooCommerce, BigCommerce webhook receivers
+  - Each maps to `Rma.initiatedVia: marketplace_webhook` with marketplace-specific source metadata
+  - Auto-creates and optionally auto-authorizes RMAs based on per-channel configuration
+- **Delivery Rejections (shipment refused)** 🔲 (v2)
+  - DeliveryRejection model for customer-refused deliveries (Walmart OTIF, cold chain break, temperature excursion, late delivery, damaged in transit, paperwork missing)
+  - Triggered by shipment status -> refused, driver records reason + photos + telemetry
+  - Auto-creates Rma for the physical goods handling
+  - Return trip planning (carrier hold, return to shipper, divert to secondary customer)
+  - Links to CAPA / quality system for root cause analysis
+  - Spans TMS (return trip), WMS (goods handling), Quality (CAPA trigger)
+- **OTIF / Chargeback Tracking** 🔲 (v2)
+  - Customer-specific compliance rules (Walmart OTIF, Amazon Vendor Central chargebacks, Target routing guides)
+  - Chargeback record with amount, reason code, dispute status
+  - Integration with customer invoice (deductions against AR)
+  - Performance dashboard per customer showing compliance rate and penalty trends
+- **Carrier Freight Claims** 🔲 (v2)
+  - Freight claim record with damage/loss/shortage amount, supporting evidence (photos, BOL, POD)
+  - Link to carrier via existing carrier system
+  - Claim lifecycle: filed, acknowledged, negotiated, paid, denied
+  - Integration with carrier invoice (offset claim amounts against payables)
+- **WMS EDI** ✅
+  - EDI 940 (Warehouse Shipping Order, inbound) - `EDI940ParseService` extracts W05 header, N1 address loops (ST/SF/WH), G62 requested ship dates, W66 carrier + SCAC, NTE free-form notes, W01 line detail with UOM, G69 descriptions, N9 lot / customer line refs. `/api/v1/edi/940/inbound` dispatches `CREATE_ORDER` with `importSource: 'edi_940'`; `/preview` parses without persisting
+  - EDI 945 (Warehouse Shipping Advice, outbound) - `EDI945Service` emits W06 header, N1 loops, G62 actual ship date, W27 carrier/tracking, W12 item detail with shipment status codes (CC = complete, PC = partial, CN = cancelled), line-level N9 for tracking/lot/customer refs, W03 totals. `Edi945AutoSendHandler` subscribes to `shipment.delivered` and delivers via SFTP/HTTP to any trading partner with outbound 945 enabled; `/api/v1/edi/945/generate` for manual generation
+  - EDI 180 (Return Merchandise Authorization and Notification) - inbound parser creates Rma, outbound generator emits return authorization. Routed via existing universal EDI inbound endpoint and TradingPartner infrastructure.
+  - GS functional identifiers: 940 → `OW` (Warehouse Shipping Order), 945 → `SW` (Warehouse Shipping Advice), 180 → `RZ`
+  - 21 tests (940 parse: headers / addresses / multi-line / lot+customer refs / SCAC / notes / wrong-transaction / missing depositor / no lines / no SKU; 945 generate: envelope / all status codes (CC/PC/CN) / line-level N9 / overship warning / validation errors / replacement reporting code; full 940→945 roundtrip)
+- **Returns Integration Layer** 🔲 (v1)
+  - Public REST API endpoint for RMA creation (uses existing ApiKey auth scoped to Customer)
+  - `Rma.initiatedVia` extended: `admin`, `customer_portal`, `api`, `edi_180`, `marketplace_webhook`
+  - EDI 180 inbound handler wires into existing TradingPartner EDI flow
+  - Customer API documentation in Swagger with RMA examples
+- **Customer Portal Developer Area** ✅ (v1)
+  - Customer portal restructured to multi-app layout with sidebar + topbar and an app switcher (Google-style grid) in the top-right, matching the main admin app. Two apps: Portal (orders, shipments, returns, invoices, documents, profile) and Developer (api keys, webhooks, EDI setup, integration logs)
+  - **API Keys** at `/customer-portal/developer/api-keys`: self-service create, enable/disable, and revoke. Plaintext key shown once on creation with copy button. Scoped to the authenticated customer
+  - **Webhooks** at `/customer-portal/developer/webhooks`: new `CustomerWebhook` + `CustomerWebhookDelivery` models. CRUD, test-delivery button, rotate-secret, expandable delivery log per webhook. Event pattern subscription with wildcards (`*`, `rma.*`, exact). HMAC-SHA256 signatures via `X-OpenTms-Signature: t=<unix>,v1=<hex>` header using signed payload `${timestamp}.${body}` - customer-side verify with 5-minute clock tolerance
+  - Event fanout via `CustomerWebhookHandler` subscribing to `rma.*`, `order.*`, `shipment.*`, `invoice.*` - resolves per-customer subscribers by matching `payload.customerId` and delivers through `CustomerWebhookDeliveryService`
+  - **EDI Setup** at `/customer-portal/developer/edi`: read-only view of their `TradingPartner` configuration with redacted credentials, supported transaction types, SFTP/HTTP connection details
+  - **Integration Logs** at `/customer-portal/developer/logs`: paginated `EdiTransactionLog` list filtered by the customer's trading partners, with direction and transaction-type filters
+  - **Developer Dashboard** at `/customer-portal/developer`: overview tiles for API keys, webhooks, trading partners, 7-day EDI activity, plus quick-start and signing/security guidance
+  - 14 tests (signing, pattern matching, delivery success/failure, timeout handling)
+- **Warehouse Operations Dashboard** ✅
+  - Single endpoint `GET /api/v1/wms/operations-dashboard` returns six KPI groups in parallel queries
+  - **Throughput** today vs last 7 days: receipts, putaways, picks, packs, shipments dispatched
+  - **Cycle times** (30-day): avg pick cycle (completedAt - startedAt), dock-to-stock (putaway.updatedAt - receivingTask.createdAt), order-to-ship (first dispatch - order.createdAt), plus sample counts
+  - **Quality & accuracy** (30-day): pick accuracy (completed / (completed + short_pick)), pack audit pass rate, inventory record accuracy (1 - Σ|variance| / Σ expected) computed from recent cycle count lines
+  - **Live work queue**: pending pick / putaway / pack tasks, active waves, receiving-in-progress counts
+  - **Exceptions**: open issues with critical breakdown, cutoff-at-risk shipments (critical + warning), returns-in-progress, open pack-audit-fail issues
+  - **Capacity**: total bins, bins with inventory, utilization percent
+  - Frontend page at `/wms/operations` with KPI cards grouped by section. Tone coloring (success/warning/error) on accuracy metrics and capacity utilization. Auto-refreshes every 60s. Clickable cards drill to the related operational page (picks → /wms/picking, cutoff → /wms/cutoff-monitor, etc.)
+  - Sidebar entry "Operations KPIs" alongside the WMS Dashboard
+  - 13 service tests (throughput windowing, cycle time math, pick accuracy, pack pass rate, inventory accuracy from cycle counts, null-sample handling, bin utilization, cutoff exception rollup)
 - **Indoor RTLS Heatmap UI** 🔲
   - 2D floor-plan SVG upload per Location
   - Live markers for TrackableUnits and users via WebSocket/SSE
   - Dwell heatmap, density heatmap, 24h scrub playback
-- **Pallet Types & Palletization** 🔲
-  - PalletCatalogue model: pallet type master data (EUR 800x1200, UK 1000x1200, half-pallet 800x600, quarter-pallet 600x400, roll cage)
-  - Per-pallet: maxWeightKg, maxStackHeightMm, stackable flag, dimensions, cost
-  - Palletization service: layer-building algorithm to stack cases onto pallets after packing
-  - Auto-split orders across multiple pallets when volume/weight exceeds capacity
-  - Route-based pallet building: group orders by delivery route/stop onto shared pallets
-  - Reverse load-sequence: last delivery stop loaded first (bottom of stack / back of truck)
-  - Half/quarter-pallet support for convenience store and pharmacy fulfillment
-- **Container Intelligence at Pack Time** 🔲
-  - Temperature-aware container selection: add `temperatureZone` to CartonCatalogue so insulated totes, cool boxes, and ambient cartons are all in the catalogue
-  - Cartonization recommender filters by temperature requirement of the order items
-  - Smart tote integration: assign a specific IoT-enabled tote at pack time (auto-pick from pool of available smart totes with required capabilities)
-  - Smart tote as TrackableUnit (type: tote) with IoT device pairing for temperature, door open/close, GPS
-  - Pharmacy and cold chain use case: pick the container that has a working temperature sensor and meets the required temperature range
+- **Pallet Types & Palletization** ✅ (foundation)
+  - `PalletType` catalog model: unique `(orgId, code)`, external dimensions (mm), tare + max-load (grams), optional max stack height, material (wood/plastic/metal/cardboard/composite), reusable/ISPM-15/stackable/active flags
+  - `TrackableUnit.palletTypeId` FK so pallet-level units reference their spec (nullable - legacy / ad-hoc pallets unaffected)
+  - Standard pallet seed covering EUR1 (EPAL 1200×800), EUR2/3/6, US GMA (48×40), US 42×42, CHEP 1210 + CHEP 48×40, AU 1165, plastic variants, one-way export, quarter display - 13 types total with real ISO specs
+  - `GET /api/v1/pallet-types/standards` exposes the seed; `POST /api/v1/pallet-types/seed-standards` bulk-adds missing rows to the org
+  - `PalletizationPlanner.planHomogeneousPallet` - given a pallet type and carton spec returns cartonsPerLayer (best of 2 orientations), layers (min of height-bound and weight-bound), stacked height, total weight, weight + height utilization %, warnings (weight-first vs height-first)
+  - `PalletizationPlanner.recommendPalletType` ranks active pallet types by cartons-carried, tie-breaks on weight utilization, returns `{ best, all }`
+  - Endpoints: `POST /api/v1/pallet-types/:id/plan`, `POST /api/v1/pallet-types/recommend`, plus full CRUD (create/update/delete with soft-deactivation when referenced by TrackableUnits)
+  - Admin page `/wms/pallet-types` - table with code, name, dimensions in cm, tare/max-load in kg, chip badges for reusable / ISPM-15 / stackable, "Load standard types" one-click seed, create/edit modal
+  - 11 planner tests (orientation optimization, height limit, weight limit, utilization math, null-height-cap path, recommendation ranking, inactive filtering, tie-break)
+  - 🔲 Auto-split orders across multiple pallets when volume/weight exceeds capacity (next iteration)
+  - 🔲 Route-based pallet building (group by delivery stop) + reverse load-sequence integration
+  - 🔲 Mobile pallet-build workflow at pack/staging (scan carton → propose pallet → confirm)
+- **Container Intelligence at Pack Time** ✅ (v1 engine)
+  - `CartonCatalogue` gains 8 container-intelligence fields: `temperatureZone` (any / ambient / refrigerated / frozen / dry_ice), `insulated` + `insulationHours`, `tamperEvident`, `valueClass` (any / standard / high_value), `hazmatRated` + `hazmatClasses[]` (UN class codes), `materialType` (corrugated / plastic / metal / foam / composite)
+  - `ContainerIntelligenceService.recommend(items, cartons, options)` groups items into constraint-compatible packages, picks the smallest qualifying carton per group, and returns required ancillaries (gel_pack / dry_ice / desiccant / fragile_padding / tamper_seal) + special handling flags (hazmat / high_value / fragile) + per-package reasons
+  - Constraint enforcement baked in: non-ambient cargo requires strict temperature match (no "any" fallback for refrigerated/frozen); hazmat cargo requires hazmat-rated carton approved for every class in the group; non-hazmat cargo is kept out of dedicated-hazmat cartons; high-value cargo requires explicit high-value carton
+  - Hazmat segregation matrix (UN classes 1 / 2.1 / 2.3 / 3 / 4.1 / 4.2 / 4.3 / 5.1 / 5.2 / 6.1 / 8) splits incompatible classes into separate packages (e.g., class 3 flammables away from class 5.1 oxidizers)
+  - Transit-hours upgrade: refrigerated packages heading past 24h transit automatically get dry_ice added with a warning
+  - `POST /api/v1/containers/recommend` endpoint returns full package plan with volume/weight utilization and total container cost
+  - Carton catalogue admin UI extended with all the new fields: temperature zone selector, insulation hours, tamper-evident toggle, value class, material, hazmat classes list, plus per-row chips in the table
+  - 37 tests covering input validation, best-fit sizing, temperature grouping, hazmat segregation (compatible and incompatible class pairs), value-class routing, fragile + humidity ancillaries, multi-split combinations, reason strings, cost/weight totals
+  - 🔲 Smart tote integration (IoT-paired totes assigned at pack time) - next iteration
+  - 🔲 Order-line-item-driven auto-fill from SKU catalog temperature + hazmat attributes at pack time
 - **Unified WarehouseTask Supertype** 🔲
   - Foundation for v2 task interleaving and LMS-aware dispatch
   - `expectedDurationSeconds` field placed now (wired in v2)
-- **Warehouse Mobile App Extensions** DONE (partial)
+- **Warehouse Mobile App Extensions** DONE (v1)
   - Pick task execution (line-by-line with quantity confirmation)
   - Putaway task execution (scan-to-confirm destination bin)
-  - Unified task list with pick/putaway tabs
-  - 🔲 Receiving flow in warehouse app
-  - 🔲 Packing flow in warehouse app
-  - 🔲 PWA offline task queue with IndexedDB
-  - 🔲 Barcode wedge keyboard support (Zebra/Honeywell RF guns)
+  - Return receiving flow (scan RMA, receive per-line with qty input, auto-routes to inspection)
+  - Return inspection / disposition flow (two-column disposition picker with hints, pass/fail/partial_damage, notes, customer-preferred disposition pre-selected)
+  - Pack audit flow (scale input with optional LWH dims, immediate pass/warning/fail verdict, raises quality issue on variance)
+  - Receiving flow (scan SKU → enter received qty + inspection status, unified across ASN and blind)
+  - Packing flow (line-by-line item verification with barcode scan, carton recommendation, complete task when all lines packed)
+  - Receiving appointment check-in flow (today's scheduled arrivals, one-tap check-in before receiving)
+  - Barcode wedge keyboard hook (`useBarcodeScanner`) supports Zebra / Honeywell RF guns that emit rapid keystrokes + Enter
+  - Unified task list with Picking / Putaway / Returns / Receive / Pack tabs; bottom nav surfaces Arrivals alongside Tasks
+  - 🔲 PWA offline task queue with IndexedDB (v1.5 - needs field validation first)
+
+- **WMS v1 Gap Close-Out** ✅
+  - Wave auto-release worker - `WaveAutoReleaseService` + pg-boss cron (`wave-auto-release`, default every 5 min). Templates with `autoRelease=true` and a `releaseSchedule` (HH:MM or simple cron) + `cutoffTime` fallback fire `APPLY_WAVE_TEMPLATE` when due. `lastAutoReleasedAt` dedup stamp prevents re-firing within a 12h window. Configurable via `WAVE_AUTO_RELEASE_CRON`
+  - Pack audit events (`pack.audit_recorded`, `pack.audit_variance_detected`) now subscribed by `CustomerWebhookHandler` via pack task → order → customer resolver so third-party integrations receive them as webhooks (inline issue creation in the command stays for atomicity)
+  - Receiving Appointments admin UI at `/wms/receiving-appointments` - date-filterable list with one-click check-in and cancel; new appointment form with carrier, trailer, seal, ASN reference, dock bin picker. Exposes `/api/v1/receiving/appointments/:id/check-in` and `/cancel` endpoints
+  - Receiving Appointments mobile flow at `/warehouse/appointments` - today's arrivals with status chips and single-tap check-in, accessible from the bottom nav
+  - Fixes from audit gaps 1-3: WaveTemplate `zonePickMode` wired end-to-end, `/cycle-counts/:id` `params` schema added, `ManifestUpload.location` relation + FK migration
+  - 16 new tests (WaveAutoReleaseService: HH:MM + cron parsing, schedule-due logic, dedup window, runOnce dispatch / skip / failure paths; CustomerWebhookHandler: subscription patterns, pack task → order → customer resolver, graceful skip for missing data)
+
+- **Event-driven auto-replenishment** ✅
+  - `AutoReplenishmentHandler` subscribes to `pick_line.completed` and `inventory.adjusted`
+  - Resolves location via PickTask → locationId (for pick events) or WarehouseBin → locationId (for adjust events)
+  - Dispatches `CHECK_REPLENISHMENT` scoped to the affected `(locationId, sku)` so only matching rules are evaluated
+  - Replenishment tasks fire the moment inventory drops - no waiting for a cron sweep - while the command-level dedup still prevents duplicate putaway tasks
+  - 7 tests covering subscription patterns, both location resolution paths, direct-payload path, missing sku / missing lookup graceful skip, dispatch-error resilience
+
+- **Customer webhook retry with exponential backoff** ✅
+  - `CustomerWebhookDeliveryService.retry(deliveryId)` re-sends a failed delivery with a fresh HMAC signature and `X-OpenTms-Retry` header; increments `attemptCount` atomically
+  - `findEligibleForRetry(maxAttempts, now)` selects `status='failed'` deliveries whose age has cleared the backoff window for their current attempt
+  - Backoff schedule: attempt 1 → 2 min wait, 2 → 4 min, 3 → 8 min, 4 → 16 min, 5+ → capped at 30 min. Max 5 attempts before giving up
+  - `webhookRetryWorker` runs every minute (`*/1 * * * *`, override `WEBHOOK_RETRY_CRON`), calls `findEligibleForRetry` then retries each one
+  - 12 tests covering backoff math per attempt, cap at 30 min for high attempt counts, maxAttempts query filter, retry success + failure paths, idempotent already-delivered handling, missing-delivery error, fetch-error recording, retry header format
 
 #### **v2 - Differentiation** (after v1 ships)
 

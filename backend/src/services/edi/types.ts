@@ -92,6 +92,9 @@ export const TRANSACTION_TO_GS: Record<string, string> = {
   '997': 'FA',  // Functional Acknowledgment
   '810': 'IN',  // Invoice
   '820': 'RA',  // Payment Order / Remittance Advice
+  '180': 'RZ',  // Return Merchandise Authorization and Notification
+  '940': 'OW',  // Warehouse Shipping Order (shipper -> 3PL warehouse)
+  '945': 'SW',  // Warehouse Shipping Advice (3PL warehouse -> shipper)
 };
 
 /** Reverse map: GS functional identifier to transaction type */

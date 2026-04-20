@@ -103,6 +103,10 @@ import { EDI210ParseService } from '../services/EDI210ParseService.js';
 import { EDI810Service } from '../services/EDI810Service.js';
 import { EDI820ParseService } from '../services/EDI820ParseService.js';
 import { EDI855Service } from '../services/EDI855Service.js';
+import { EDI180ParseService } from '../services/EDI180ParseService.js';
+import { EDI180Service } from '../services/EDI180Service.js';
+import { EDI940ParseService } from '../services/EDI940ParseService.js';
+import { EDI945Service } from '../services/EDI945Service.js';
 import { ProcessInbound214CommandHandler } from '../commands/shipments/ProcessInbound214Command.js';
 import { ChargeRepository } from '../repositories/ChargeRepository.js';
 import { ChargeService } from '../services/ChargeService.js';
@@ -198,6 +202,19 @@ import { CreateWaveTemplateCommandHandler } from '../commands/warehouse/CreateWa
 import { ApplyWaveTemplateCommandHandler } from '../commands/warehouse/ApplyWaveTemplateCommand.js';
 import { CreateLoadPlanCommandHandler } from '../commands/warehouse/CreateLoadPlanCommand.js';
 import { CompleteLoadPlanCommandHandler } from '../commands/warehouse/CompleteLoadPlanCommand.js';
+import { CreateRmaCommandHandler } from '../commands/rma/CreateRmaCommand.js';
+import { AuthorizeRmaCommandHandler } from '../commands/rma/AuthorizeRmaCommand.js';
+import { RejectRmaCommandHandler } from '../commands/rma/RejectRmaCommand.js';
+import { ReceiveRmaLineCommandHandler } from '../commands/rma/ReceiveRmaLineCommand.js';
+import { InspectRmaLineCommandHandler } from '../commands/rma/InspectRmaLineCommand.js';
+import { CompleteRmaCommandHandler } from '../commands/rma/CompleteRmaCommand.js';
+import { GenerateReturnLabelCommandHandler } from '../commands/rma/GenerateReturnLabelCommand.js';
+import { SchedulePickupCommandHandler } from '../commands/rma/SchedulePickupCommand.js';
+import { CancelPickupCommandHandler } from '../commands/rma/CancelPickupCommand.js';
+import { RecordPackAuditCommandHandler } from '../commands/packAudit/RecordPackAuditCommand.js';
+import { ReturnLabelProviderRegistry } from '../services/returnLabel/ReturnLabelProviderRegistry.js';
+import type { IReturnLabelProviderRegistry } from '../services/returnLabel/IReturnLabelProvider.js';
+import type { IBinaryStorageProvider } from '../storage/IBinaryStorageProvider.js';
 
 /**
  * Register all application dependencies
@@ -574,6 +591,27 @@ export function registerDependencies(prisma: PrismaClient): void {
     return new EDI855Service();
   });
 
+  container.singleton(TOKENS.IEDI180ParseService).toFactory(() => {
+    return new EDI180ParseService();
+  });
+
+  container.singleton(TOKENS.IEDI180Service).toFactory(() => {
+    return new EDI180Service();
+  });
+
+  container.singleton(TOKENS.IEDI940ParseService).toFactory(() => {
+    return new EDI940ParseService();
+  });
+
+  container.singleton(TOKENS.IEDI945Service).toFactory(() => {
+    return new EDI945Service();
+  });
+
+  // Return label provider registry (manual + fedex/ups/dhl stubs)
+  container.singleton(TOKENS.IReturnLabelProviderRegistry).toFactory(() => {
+    return new ReturnLabelProviderRegistry();
+  });
+
   // EDI services
   container.singleton(TOKENS.IEDI850ParseService).toFactory(() => {
     return new EDI850ParseService();
@@ -854,6 +892,22 @@ export function registerDependencies(prisma: PrismaClient): void {
     // WMS Load Plan commands
     bus.register(new CreateLoadPlanCommandHandler(prisma, eventBus));
     bus.register(new CompleteLoadPlanCommandHandler(prisma, eventBus));
+
+    // WMS Returns / RMA commands
+    bus.register(new CreateRmaCommandHandler(prisma, eventBus));
+    bus.register(new AuthorizeRmaCommandHandler(prisma, eventBus));
+    bus.register(new RejectRmaCommandHandler(prisma, eventBus));
+    bus.register(new ReceiveRmaLineCommandHandler(prisma, eventBus));
+    bus.register(new InspectRmaLineCommandHandler(prisma, eventBus));
+    bus.register(new CompleteRmaCommandHandler(prisma, eventBus));
+    const returnLabelRegistry = container.resolve<IReturnLabelProviderRegistry>(TOKENS.IReturnLabelProviderRegistry);
+    const binaryStorage = container.resolve<IBinaryStorageProvider>(TOKENS.IBinaryStorageProvider);
+    bus.register(new GenerateReturnLabelCommandHandler(prisma, eventBus, returnLabelRegistry, binaryStorage));
+    bus.register(new SchedulePickupCommandHandler(prisma, eventBus, returnLabelRegistry));
+    bus.register(new CancelPickupCommandHandler(prisma, eventBus, returnLabelRegistry));
+
+    // WMS Pack Audit
+    bus.register(new RecordPackAuditCommandHandler(prisma, eventBus));
 
     return bus;
   });

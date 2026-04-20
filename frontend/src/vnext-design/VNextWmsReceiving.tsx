@@ -149,7 +149,12 @@ export default function VNextWmsReceiving() {
               {filtered.map(task => (
                 <tr key={task.id} onClick={() => navigate(`/wms/receiving/${task.id}`)} style={{ cursor: 'pointer' }}>
                   <td><span className="vn-table-id">{task.id.slice(0, 8)}</span></td>
-                  <td><span className="vn-chip vn-chip-secondary">{task.receivingType === 'asn' ? 'ASN' : 'Blind'}</span></td>
+                  <td>
+                    <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
+                      <span className="vn-chip vn-chip-secondary">{task.receivingType === 'asn' ? 'ASN' : 'Blind'}</span>
+                      {task.crossDock && <span className="vn-chip vn-chip-warning">Cross-Dock</span>}
+                    </div>
+                  </td>
                   <td>{task.shipmentRef || '--'}</td>
                   <td>{task.dockDoor || '--'}</td>
                   <td>{task.receivedLines}/{task.lineCount} lines</td>

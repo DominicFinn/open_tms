@@ -17,6 +17,8 @@ export const EVENT_TYPES = {
   SHIPMENT_CARRIER_ASSIGNED: 'shipment.carrier_assigned',
   SHIPMENT_DELIVERED: 'shipment.delivered',
   SHIPMENT_EXCEPTION: 'shipment.exception',
+  SHIPMENT_CUTOFF_AT_RISK: 'shipment.cutoff_at_risk',
+  SHIPMENT_CUTOFF_CLEARED: 'shipment.cutoff_cleared',
   SHIPMENT_STOP_ARRIVED: 'shipment.stop_arrived',
   SHIPMENT_STOP_COMPLETED: 'shipment.stop_completed',
   SHIPMENT_ARCHIVED: 'shipment.archived',
@@ -273,6 +275,8 @@ export const EVENT_TYPES = {
   PACK_TASK_CREATED: 'pack_task.created',
   PACK_LINE_VERIFIED: 'pack_line.verified',
   PACK_TASK_COMPLETED: 'pack_task.completed',
+  PACK_AUDIT_RECORDED: 'pack.audit_recorded',
+  PACK_AUDIT_VARIANCE_DETECTED: 'pack.audit_variance_detected',
   STAGING_ASSIGNMENT_CREATED: 'staging_assignment.created',
   LOADING_COMPLETED: 'loading.completed',
 
@@ -299,6 +303,22 @@ export const EVENT_TYPES = {
   LOAD_PLAN_CREATED: 'load_plan.created',
   LOAD_PLAN_COMPLETED: 'load_plan.completed',
   LOAD_PLAN_BOL_GENERATED: 'load_plan.bol_generated',
+
+  // WMS: Cross-dock
+  CROSS_DOCK_SORTED: 'cross_dock.sorted',
+
+  // WMS: Returns / RMA
+  RMA_REQUESTED: 'rma.requested',
+  RMA_AUTHORIZED: 'rma.authorized',
+  RMA_REJECTED: 'rma.rejected',
+  RMA_GOODS_RECEIVED: 'rma.goods_received',
+  RMA_LINE_INSPECTED: 'rma.line_inspected',
+  RMA_DISPOSITION_SET: 'rma.disposition_set',
+  RMA_COMPLETED: 'rma.completed',
+  RMA_REFUND_ADJUSTED: 'rma.refund_adjusted',
+  RMA_RETURN_LABEL_GENERATED: 'rma.return_label_generated',
+  RMA_PICKUP_SCHEDULED: 'rma.pickup_scheduled',
+  RMA_PICKUP_CANCELLED: 'rma.pickup_cancelled',
 } as const;
 
 export type EventType = typeof EVENT_TYPES[keyof typeof EVENT_TYPES];
@@ -315,6 +335,8 @@ export const EVENT_SCHEMA_VERSIONS: Record<string, number> = {
   [EVENT_TYPES.SHIPMENT_CARRIER_ASSIGNED]: 1,
   [EVENT_TYPES.SHIPMENT_DELIVERED]: 1,
   [EVENT_TYPES.SHIPMENT_EXCEPTION]: 1,
+  [EVENT_TYPES.SHIPMENT_CUTOFF_AT_RISK]: 1,
+  [EVENT_TYPES.SHIPMENT_CUTOFF_CLEARED]: 1,
   [EVENT_TYPES.SHIPMENT_STOP_ARRIVED]: 1,
   [EVENT_TYPES.SHIPMENT_STOP_COMPLETED]: 1,
   [EVENT_TYPES.SHIPMENT_ARCHIVED]: 1,
@@ -472,6 +494,8 @@ export const EVENT_SCHEMA_VERSIONS: Record<string, number> = {
   [EVENT_TYPES.PICK_TASK_COMPLETED]: 1,
   [EVENT_TYPES.PACK_TASK_CREATED]: 1,
   [EVENT_TYPES.PACK_LINE_VERIFIED]: 1,
+  [EVENT_TYPES.PACK_AUDIT_RECORDED]: 1,
+  [EVENT_TYPES.PACK_AUDIT_VARIANCE_DETECTED]: 1,
   [EVENT_TYPES.PACK_TASK_COMPLETED]: 1,
   [EVENT_TYPES.STAGING_ASSIGNMENT_CREATED]: 1,
   [EVENT_TYPES.LOADING_COMPLETED]: 1,
@@ -491,6 +515,18 @@ export const EVENT_SCHEMA_VERSIONS: Record<string, number> = {
   [EVENT_TYPES.LOAD_PLAN_CREATED]: 1,
   [EVENT_TYPES.LOAD_PLAN_COMPLETED]: 1,
   [EVENT_TYPES.LOAD_PLAN_BOL_GENERATED]: 1,
+  [EVENT_TYPES.CROSS_DOCK_SORTED]: 1,
+  [EVENT_TYPES.RMA_REQUESTED]: 1,
+  [EVENT_TYPES.RMA_AUTHORIZED]: 1,
+  [EVENT_TYPES.RMA_REJECTED]: 1,
+  [EVENT_TYPES.RMA_GOODS_RECEIVED]: 1,
+  [EVENT_TYPES.RMA_LINE_INSPECTED]: 1,
+  [EVENT_TYPES.RMA_DISPOSITION_SET]: 1,
+  [EVENT_TYPES.RMA_COMPLETED]: 1,
+  [EVENT_TYPES.RMA_REFUND_ADJUSTED]: 1,
+  [EVENT_TYPES.RMA_RETURN_LABEL_GENERATED]: 1,
+  [EVENT_TYPES.RMA_PICKUP_SCHEDULED]: 1,
+  [EVENT_TYPES.RMA_PICKUP_CANCELLED]: 1,
 };
 
 /**

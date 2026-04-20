@@ -9,6 +9,7 @@ export interface CreateWaveTemplatePayload {
   groupingRules?: Record<string, unknown> | null;
   cutoffTime?: string | null;
   pickStrategy: string;
+  zonePickMode?: 'sequential' | 'parallel' | null;
   minOrders?: number | null;
   maxOrders?: number | null;
   maxLabourHours?: number | null;
@@ -43,6 +44,7 @@ export class CreateWaveTemplateCommandHandler extends BaseCommandHandler<
         groupingRules: p.groupingRules as Prisma.InputJsonValue ?? Prisma.JsonNull,
         cutoffTime: p.cutoffTime ?? null,
         pickStrategy: p.pickStrategy,
+        zonePickMode: p.zonePickMode ?? null,
         minOrders: p.minOrders ?? null,
         maxOrders: p.maxOrders ?? null,
         maxLabourHours: p.maxLabourHours ?? null,

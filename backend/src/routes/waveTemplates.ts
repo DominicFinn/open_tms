@@ -54,6 +54,7 @@ export async function waveTemplateRoutes(server: FastifyInstance) {
           groupingRules: { type: 'object', nullable: true, description: 'e.g. { customer: "id", status: "accepted" }' },
           cutoffTime: { type: 'string', nullable: true, description: 'HH:MM format' },
           pickStrategy: { type: 'string', enum: ['discrete', 'batch', 'zone'] },
+          zonePickMode: { type: 'string', enum: ['sequential', 'parallel'], nullable: true, description: 'Only used when pickStrategy=zone. sequential = pick-and-pass, parallel = pick-and-merge' },
           minOrders: { type: 'integer', nullable: true },
           maxOrders: { type: 'integer', nullable: true },
           maxLabourHours: { type: 'number', nullable: true },
@@ -70,6 +71,7 @@ export async function waveTemplateRoutes(server: FastifyInstance) {
       groupingRules: z.record(z.unknown()).nullable().optional(),
       cutoffTime: z.string().regex(/^\d{2}:\d{2}$/).nullable().optional(),
       pickStrategy: z.enum(['discrete', 'batch', 'zone']),
+      zonePickMode: z.enum(['sequential', 'parallel']).nullable().optional(),
       minOrders: z.number().int().min(1).nullable().optional(),
       maxOrders: z.number().int().min(1).nullable().optional(),
       maxLabourHours: z.number().positive().nullable().optional(),
@@ -103,6 +105,7 @@ export async function waveTemplateRoutes(server: FastifyInstance) {
           groupingRules: { type: 'object', nullable: true },
           cutoffTime: { type: 'string', nullable: true },
           pickStrategy: { type: 'string', enum: ['discrete', 'batch', 'zone'] },
+          zonePickMode: { type: 'string', enum: ['sequential', 'parallel'], nullable: true },
           minOrders: { type: 'integer', nullable: true },
           maxOrders: { type: 'integer', nullable: true },
           priority: { type: 'integer' },
@@ -119,6 +122,7 @@ export async function waveTemplateRoutes(server: FastifyInstance) {
       groupingRules: z.record(z.unknown()).nullable().optional(),
       cutoffTime: z.string().regex(/^\d{2}:\d{2}$/).nullable().optional(),
       pickStrategy: z.enum(['discrete', 'batch', 'zone']).optional(),
+      zonePickMode: z.enum(['sequential', 'parallel']).nullable().optional(),
       minOrders: z.number().int().min(1).nullable().optional(),
       maxOrders: z.number().int().min(1).nullable().optional(),
       priority: z.number().int().min(1).max(100).optional(),
@@ -130,7 +134,7 @@ export async function waveTemplateRoutes(server: FastifyInstance) {
     const template = await prisma.waveTemplate.findUnique({ where: { id } });
     if (!template) { reply.code(404); return { data: null, error: 'Template not found' }; }
 
-    const updated = await prisma.waveTemplate.update({ where: { id }, data: body });
+    const updated = await prisma.waveTemplate.update({ where: { id }, data: body as any });
     return { data: updated, error: null };
   });
 

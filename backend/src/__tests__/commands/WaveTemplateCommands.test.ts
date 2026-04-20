@@ -36,6 +36,61 @@ describe('CreateWaveTemplateCommandHandler', () => {
       })
     );
   });
+
+  it('persists zonePickMode when supplied (for zone pick strategy)', async () => {
+    const mockTemplate = { id: 'tpl-zone', name: 'Zone Sequential', orgId: 'test-org' };
+    const tx = {
+      waveTemplate: { create: jest.fn().mockResolvedValue(mockTemplate) },
+      domainEventLog: { create: jest.fn().mockResolvedValue({}) },
+    } as any;
+    const prisma = {
+      $transaction: jest.fn((fn: Function) => fn(tx)),
+      domainEventLog: { findFirst: jest.fn().mockResolvedValue(null) },
+    } as any;
+    const { bus } = mockEventBus();
+    const handler = new CreateWaveTemplateCommandHandler(prisma, bus);
+
+    const result = await handler.execute(
+      createTestCommand(CREATE_WAVE_TEMPLATE, {
+        locationId: 'loc-1', name: 'Zone Sequential',
+        pickStrategy: 'zone', zonePickMode: 'sequential',
+      })
+    );
+
+    expect(result.success).toBe(true);
+    expect(tx.waveTemplate.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          pickStrategy: 'zone',
+          zonePickMode: 'sequential',
+        }),
+      })
+    );
+  });
+
+  it('defaults zonePickMode to null when omitted', async () => {
+    const tx = {
+      waveTemplate: { create: jest.fn().mockResolvedValue({ id: 'tpl-null', name: 'No Zone Mode', orgId: 'test-org' }) },
+      domainEventLog: { create: jest.fn().mockResolvedValue({}) },
+    } as any;
+    const prisma = {
+      $transaction: jest.fn((fn: Function) => fn(tx)),
+      domainEventLog: { findFirst: jest.fn().mockResolvedValue(null) },
+    } as any;
+    const handler = new CreateWaveTemplateCommandHandler(prisma, mockEventBus().bus);
+
+    await handler.execute(
+      createTestCommand(CREATE_WAVE_TEMPLATE, {
+        locationId: 'loc-1', name: 'No Zone Mode', pickStrategy: 'discrete',
+      })
+    );
+
+    expect(tx.waveTemplate.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ zonePickMode: null }),
+      })
+    );
+  });
 });
 
 /* ── ApplyWaveTemplateCommandHandler ───────────────────────── */

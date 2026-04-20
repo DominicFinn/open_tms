@@ -22,6 +22,7 @@ model Customer {
   tradingPartners TradingPartner[] @relation("CustomerTradingPartners")
   slaPolicies  SlaPolicy[]
   users        User[]
+  customerWebhooks CustomerWebhook[] @relation("CustomerWebhooks")
 
   // Billing & Financial
   billingEmail          String?
@@ -137,6 +138,7 @@ model Location {
   receivingTasks       ReceivingTask[]
   putawayRules         PutawayRule[]
   putawayTasks         PutawayTask[]
+  manifestUploads      ManifestUpload[]
   waveTemplates        WaveTemplate[]
   waves                Wave[]
   pickTasks            PickTask[]
@@ -162,6 +164,11 @@ model Shipment {
   originId      String
   destination   Location @relation("Destination", fields: [destinationId], references: [id])
   destinationId String
+
+  // Cutoff-at-risk monitoring: dedupes notifications, only re-fires on severity escalation
+  lastCutoffRiskSeverity String?
+  lastCutoffRiskAt       DateTime?
+  lastCutoffRiskIssueId  String?
   lane          Lane?    @relation(fields: [laneId], references: [id])
   laneId        String?
   carrier       Carrier? @relation(fields: [carrierId], references: [id])
@@ -348,6 +355,28 @@ model ShipmentEvent {
   @@index([eventTime])
 }
 
+// Carrier cutoff times: latest handoff time for same-day pickup or a service-level guarantee.
+// The monitor compares projected warehouse-ready-time against these rows to fire shipment.cutoff_at_risk.
+model CarrierCutoff {
+  id               String   @id @default(uuid())
+  carrierId        String
+  carrier          Carrier  @relation(fields: [carrierId], references: [id], onDelete: Cascade)
+  locationId       String?                                 // optional per-location override
+  dayOfWeek        Int                                     // 0 = Sunday, 6 = Saturday
+  cutoffLocalTime  String                                  // "HH:mm" 24-hour
+  timezone         String   @default("UTC")                // IANA tz name, e.g. "America/New_York"
+  serviceLevel     String?                                 // e.g. "ground", "2day", null = all services
+  notes            String?
+  active           Boolean  @default(true)
+  orgId            String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([carrierId, dayOfWeek])
+  @@index([orgId])
+  @@index([active])
+}
+
 model Carrier {
   id           String   @id @default(uuid())
   name         String
@@ -370,6 +399,7 @@ model Carrier {
   drivers      Driver[]
   laneCarriers LaneCarrier[]
   shipments    Shipment[]
+  cutoffs      CarrierCutoff[]
 
   // Carrier Validation (SOP-CL-001)
   validationTier            String?    // "tier1" | "tier2" | "tier3" | null
@@ -384,6 +414,11 @@ model Carrier {
 
   // Standard Carrier Alpha Code (needed for EDI 204)
   scacCode     String?
+
+  // Return label generation (carrier API or manual)
+  returnLabelProvider       String?    // null = not configured; manual | fedex | ups | dhl
+  returnLabelAccountNumber  String?    // carrier-side account number for return labels
+  returnLabelDefaultService String?    // default service level (ground, 2day, etc.)
 
   // Payment & Remittance
   paymentTermsDays      Int       @default(30)
@@ -803,6 +838,49 @@ model Organization {
   skillChains             SkillChain[]
 }
 
+// Standard pallet types catalogue. Org-scoped so each tenant can curate their
+// own list (EUR, US GMA, CHEP, half-pallet, etc.) with real specs used for
+// palletization planning, load-plan calculations, and BOL weight totals.
+model PalletType {
+  id              String   @id @default(uuid())
+  code            String                  // e.g. "EUR1", "US_GMA_48x40", "CHEP_1210"
+  name            String                  // e.g. "Euro Pallet (EUR 1)"
+  description     String?
+
+  // External dimensions in mm
+  lengthMm        Int
+  widthMm         Int
+  heightMm        Int                     // Pallet deck height; cargo stacks on top of this
+
+  // Weights in grams
+  tareWeightGrams Int                     // Empty pallet weight
+  maxLoadGrams    Int                     // Safe Working Load (SWL)
+
+  // Max total stacked height (pallet + cargo) in mm. null = no limit.
+  maxStackHeightMm Int?
+
+  material        String                  // wood | plastic | metal | cardboard | composite
+  reusable        Boolean  @default(true)
+  isoCertified    Boolean  @default(false) // ISPM-15 (heat-treated wood, for international shipping)
+
+  // Operational flags
+  stackable       Boolean  @default(true) // Can another pallet be stacked on top when loaded
+  active          Boolean  @default(true)
+
+  // Optional image / reference
+  imageUrl        String?
+
+  orgId           String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  trackableUnits  TrackableUnit[]
+
+  @@unique([orgId, code])
+  @@index([orgId])
+  @@index([active])
+}
+
 model TrackableUnit {
   id              String   @id @default(uuid())
   order           Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
@@ -836,6 +914,10 @@ model TrackableUnit {
   // Cargo scan & discrepancy relations
   cargoScans      CargoScan[]
   discrepancies   CargoDiscrepancy[]
+
+  // Pallet specification (only meaningful when unitType = 'pallet'); null = ad-hoc / unspecified
+  palletTypeId    String?
+  palletType      PalletType?      @relation(fields: [palletTypeId], references: [id])
 
   // WMS fields
   currentBinId    String?
@@ -955,6 +1037,50 @@ model ApiKey {
   @@index([active])
   @@index([createdAt])
   @@index([customerId])
+}
+
+// Customer-owned outbound webhooks subscribed from the Developer Area
+model CustomerWebhook {
+  id              String   @id @default(uuid())
+  customerId      String
+  customer        Customer @relation("CustomerWebhooks", fields: [customerId], references: [id], onDelete: Cascade)
+  orgId           String
+  name            String
+  url             String
+  secret          String                              // HMAC-SHA256 signing secret (stored plaintext for the customer to reveal/rotate)
+  enabled         Boolean  @default(true)
+  events          String[]                            // Event patterns: ["rma.*", "shipment.delivered", "order.created"]
+  description     String?
+  lastDeliveryAt  DateTime?
+  lastStatusCode  Int?
+  deliveryCount   Int      @default(0)
+  failureCount    Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  deliveries      CustomerWebhookDelivery[]
+
+  @@index([customerId])
+  @@index([enabled])
+}
+
+model CustomerWebhookDelivery {
+  id            String   @id @default(uuid())
+  webhookId     String
+  webhook       CustomerWebhook @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+  eventType     String                                // e.g. rma.authorized
+  eventId       String?                               // DomainEventLog id if applicable
+  payload       Json
+  status        String                                // pending, delivered, failed
+  statusCode    Int?
+  responseBody  String?
+  errorMessage  String?
+  attemptCount  Int      @default(0)
+  deliveredAt   DateTime?
+  createdAt     DateTime @default(now())
+
+  @@index([webhookId, createdAt])
+  @@index([status])
+  @@index([eventType])
 }
 
 model WebhookLog {
@@ -4212,8 +4338,9 @@ model WaveTemplate {
   maxOrders       Int?
   maxLabourHours  Float?
   priority        Int      @default(50)
-  releaseSchedule String?                        // cron expression for auto-release
+  releaseSchedule String?                        // cron expression or "HH:MM" for auto-release
   autoRelease     Boolean  @default(false)
+  lastAutoReleasedAt DateTime?                   // last time the auto-release worker fired APPLY_WAVE_TEMPLATE for this template
   active          Boolean  @default(true)
 
   orgId           String
@@ -4354,6 +4481,7 @@ model PackTask {
 
   // Relations
   packLines       PackLine[]
+  audits          PackAudit[]
 
   @@index([locationId])
   @@index([orgId])
@@ -4379,6 +4507,50 @@ model PackLine {
   @@index([packTaskId])
 }
 
+// PackAudit: scale + dim capture at pack station, compared against expected
+// (SKU catalog totals + selected carton). Variance beyond tolerance raises an Issue.
+model PackAudit {
+  id                        String    @id @default(uuid())
+  packTaskId                String
+  packTask                  PackTask  @relation(fields: [packTaskId], references: [id], onDelete: Cascade)
+  cartonCatalogueId         String?   // optional link to the carton used
+
+  // Expected (totals across the pack - SKU weights + carton tare + carton outer dims if single carton)
+  expectedWeightGrams       Int
+  expectedLengthMm          Int?
+  expectedWidthMm           Int?
+  expectedHeightMm          Int?
+
+  // Actual (captured at pack station - scale + cubiscan or manual tape)
+  actualWeightGrams         Int
+  actualLengthMm            Int?
+  actualWidthMm             Int?
+  actualHeightMm            Int?
+
+  // Computed variance (signed - positive = heavier/larger than expected)
+  weightVariancePercent     Decimal?  @db.Decimal(6,2)
+  dimWeightVariancePercent  Decimal?  @db.Decimal(6,2)
+
+  // Threshold applied for this audit (copied from config at time of audit)
+  weightTolerancePercent    Decimal   @db.Decimal(5,2)
+
+  // Verdict: pass | warning | fail
+  verdict                   String
+  notes                     String?
+
+  // If verdict is warning/fail and an Issue was auto-created
+  issueId                   String?
+
+  auditorId                 String?
+  orgId                     String
+  createdAt                 DateTime  @default(now())
+
+  @@index([orgId])
+  @@index([packTaskId])
+  @@index([verdict])
+  @@index([createdAt])
+}
+
 model CartonCatalogue {
   id              String   @id @default(uuid())
   locationId      String
@@ -4390,6 +4562,16 @@ model CartonCatalogue {
   unitCostCents   Int?
   active          Boolean  @default(true)
 
+  // Container intelligence
+  temperatureZone String   @default("any")       // any | ambient | refrigerated | frozen | dry_ice
+  insulated       Boolean  @default(false)
+  insulationHours Int?                           // How many hours the carton holds temp without active cooling
+  tamperEvident   Boolean  @default(false)
+  valueClass      String   @default("any")       // any | standard | high_value
+  hazmatRated     Boolean  @default(false)
+  hazmatClasses   String[] @default([])          // UN classes this carton is approved for (e.g. ["3","5.1"])
+  materialType    String   @default("corrugated") // corrugated | plastic | metal | foam | composite
+
   orgId           String
 
   createdAt       DateTime @default(now())
@@ -4397,6 +4579,8 @@ model CartonCatalogue {
 
   @@index([locationId])
   @@index([orgId])
+  @@index([active])
+  @@index([temperatureZone])
 }
 
 // ── Loading & Staging ────────────────────────────────────────
@@ -4572,6 +4756,7 @@ model ManifestTemplate {
 model ManifestUpload {
   id              String   @id @default(uuid())
   locationId      String                       // destination warehouse
+  location        Location @relation(fields: [locationId], references: [id])
   fileName        String
   fileStorageKey  String?                      // S3/DB storage key for the raw file
   status          String   @default("uploaded") // uploaded, mapped, processing, completed, failed
@@ -4594,4 +4779,98 @@ model ManifestUpload {
   @@index([orgId])
   @@index([locationId])
   @@index([status])
+}
+
+// ── Returns / RMA ────────────────────────────────────────────
+
+model Rma {
+  id                    String   @id @default(uuid())
+  rmaNumber             String                       // auto-generated: RMA-2026-04-19-001
+  customerId            String
+  orderId               String
+  status                String   @default("requested") // requested, authorized, in_transit, received, inspecting, dispositioning, completed, rejected
+  returnReason          String                       // damaged, wrong_item, not_as_described, no_longer_needed, defective, ordered_extra, other
+  customerNotes         String?
+  rejectionNotes        String?                      // if CSR rejects the request
+
+  // Lifecycle timestamps
+  requestedAt           DateTime @default(now())
+  authorizedAt          DateTime?
+  receivedAt            DateTime?
+  completedAt           DateTime?
+
+  // Financial
+  suggestedRefundCents  Int      @default(0)          // auto-calculated from line prices
+  actualRefundCents     Int?                          // Finance override if different
+  refundAdjustmentNotes String?
+  creditNoteId          String?                       // link to issued credit note
+
+  // Return shipment / carrier collection
+  returnCarrierId             String?                 // FK to Carrier handling the return
+  returnServiceLevel          String?                 // e.g. ground, 2day, express_saver
+  returnTrackingNumber        String?                 // carrier tracking for return leg
+  returnLabelStorageKey       String?                 // binary storage key for label file
+  returnLabelFormat           String?                 // pdf, zpl, png
+  returnLabelGeneratedAt      DateTime?
+  returnLabelProvider         String?                 // manual, fedex, ups, dhl
+  returnPickupScheduledAt     DateTime?               // when the pickup is booked for
+  returnPickupWindow          String?                 // "09:00-12:00" freeform window
+  returnPickupConfirmationNumber String?              // carrier-issued confirmation
+  returnPickupAddressId       String?                 // optional override pickup location
+  returnPickupCancelledAt     DateTime?
+
+  // Initiator
+  createdByUserId       String?
+  initiatedVia          String   @default("admin")    // admin, customer_portal, marketplace_webhook
+
+  orgId                 String
+
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  lines                 RmaLine[]
+
+  @@unique([orgId, rmaNumber])
+  @@index([orgId])
+  @@index([customerId])
+  @@index([orderId])
+  @@index([status])
+}
+
+model RmaLine {
+  id                    String   @id @default(uuid())
+  rmaId                 String
+  rma                   Rma      @relation(fields: [rmaId], references: [id], onDelete: Cascade)
+  orderLineItemId       String
+  sku                   String                       // denormalized for reporting
+
+  // Quantities
+  requestedQuantity     Int                          // customer requested to return
+  receivedQuantity      Int      @default(0)         // actually arrived at dock
+
+  // Disposition
+  requestedDisposition  String?                      // what customer/CSR initially chose
+  disposition           String   @default("pending") // pending, restock, refurb, scrap, recycle, donate, rtv, customer_keeps
+
+  // Inspection
+  inspectionStatus      String   @default("pending") // pending, pass, fail, partial_damage
+  inspectionNotes       String?
+  conditionPhotos       Json?                        // array of storage keys
+  inspectedByUserId     String?
+  inspectedAt           DateTime?
+
+  // Financial
+  refundAmountCents     Int      @default(0)
+
+  // Physical tracking
+  trackableUnitId       String?                      // if physically tracked
+  currentBinId          String?                      // where item is right now (quarantine, refurb zone, etc.)
+
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([rmaId])
+  @@index([orderLineItemId])
+  @@index([disposition])
+  @@index([inspectionStatus])
 }

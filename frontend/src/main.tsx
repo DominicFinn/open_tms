@@ -88,6 +88,14 @@ import CustomerDocuments from './pages/customer-portal/CustomerDocuments';
 import CustomerInvoices from './pages/customer-portal/CustomerInvoices';
 import CustomerProfile from './pages/customer-portal/CustomerProfile';
 import CustomerCreateOrder from './pages/customer-portal/CustomerCreateOrder';
+import CustomerReturns from './pages/customer-portal/CustomerReturns';
+import CustomerRequestReturn from './pages/customer-portal/CustomerRequestReturn';
+import CustomerReturnDetail from './pages/customer-portal/CustomerReturnDetail';
+import CustomerDeveloperDashboard from './pages/customer-portal/developer/CustomerDeveloperDashboard';
+import CustomerApiKeys from './pages/customer-portal/developer/CustomerApiKeys';
+import CustomerWebhooks from './pages/customer-portal/developer/CustomerWebhooks';
+import CustomerEdiSetup from './pages/customer-portal/developer/CustomerEdiSetup';
+import CustomerIntegrationLogs from './pages/customer-portal/developer/CustomerIntegrationLogs';
 
 // VNext Finance Pages
 import VNextFinanceDashboard from './vnext-design/VNextFinanceDashboard';
@@ -132,6 +140,8 @@ import VNextQualityCapaEffectiveness from './vnext-design/VNextQualityCapaEffect
 
 // WMS Pages (VNext)
 import VNextWmsDashboard from './vnext-design/VNextWmsDashboard';
+import VNextWmsOperationsDashboard from './vnext-design/VNextWmsOperationsDashboard';
+import VNextPalletTypes from './vnext-design/VNextPalletTypes';
 import VNextWmsZones from './vnext-design/VNextWmsZones';
 import VNextWmsInventory from './vnext-design/VNextWmsInventory';
 import VNextWmsReceiving from './vnext-design/VNextWmsReceiving';
@@ -139,6 +149,10 @@ import VNextWmsPutaway from './vnext-design/VNextWmsPutaway';
 import VNextWmsWaves from './vnext-design/VNextWmsWaves';
 import VNextWmsPicking from './vnext-design/VNextWmsPicking';
 import VNextWmsPacking from './vnext-design/VNextWmsPacking';
+import VNextWmsPackAudits from './vnext-design/VNextWmsPackAudits';
+import VNextWmsReceivingAppointments from './vnext-design/VNextWmsReceivingAppointments';
+import VNextCutoffDashboard from './vnext-design/VNextCutoffDashboard';
+import VNextCarrierCutoffs from './vnext-design/VNextCarrierCutoffs';
 import VNextWmsLoading from './vnext-design/VNextWmsLoading';
 import VNextWmsCreateZone from './vnext-design/VNextWmsCreateZone';
 import VNextWmsZoneDetail from './vnext-design/VNextWmsZoneDetail';
@@ -159,6 +173,10 @@ import VNextWmsManifestUpload from './vnext-design/VNextWmsManifestUpload';
 import VNextWmsProductUom from './vnext-design/VNextWmsProductUom';
 import VNextWmsCartonCatalogue from './vnext-design/VNextWmsCartonCatalogue';
 import VNextWmsLoadPlan from './vnext-design/VNextWmsLoadPlan';
+import VNextWmsReturns from './vnext-design/VNextWmsReturns';
+import VNextWmsCreateReturn from './vnext-design/VNextWmsCreateReturn';
+import VNextWmsReturnDetail from './vnext-design/VNextWmsReturnDetail';
+import VNextWmsRefundReview from './vnext-design/VNextWmsRefundReview';
 
 // Warehouse App
 import { WarehouseLayout } from './warehouse/warehouse-layout';
@@ -172,6 +190,12 @@ import WarehouseSettings from './warehouse/WarehouseSettings';
 import WarehouseTasks from './warehouse/WarehouseTasks';
 import WarehousePickTask from './warehouse/WarehousePickTask';
 import WarehousePutawayTask from './warehouse/WarehousePutawayTask';
+import WarehouseReturnReceive from './warehouse/WarehouseReturnReceive';
+import WarehouseReturnInspect from './warehouse/WarehouseReturnInspect';
+import WarehousePackAudit from './warehouse/WarehousePackAudit';
+import WarehouseAppointments from './warehouse/WarehouseAppointments';
+import WarehouseReceive from './warehouse/WarehouseReceive';
+import WarehousePack from './warehouse/WarehousePack';
 import './theme.css';
 
 const root = createRoot(document.getElementById('root')!);
@@ -203,7 +227,15 @@ root.render(
           <Route path="shipments/:id" element={<CustomerShipmentDetail />} />
           <Route path="documents" element={<CustomerDocuments />} />
           <Route path="invoices" element={<CustomerInvoices />} />
+          <Route path="returns" element={<CustomerReturns />} />
+          <Route path="returns/new" element={<CustomerRequestReturn />} />
+          <Route path="returns/:id" element={<CustomerReturnDetail />} />
           <Route path="profile" element={<CustomerProfile />} />
+          <Route path="developer" element={<CustomerDeveloperDashboard />} />
+          <Route path="developer/api-keys" element={<CustomerApiKeys />} />
+          <Route path="developer/webhooks" element={<CustomerWebhooks />} />
+          <Route path="developer/edi" element={<CustomerEdiSetup />} />
+          <Route path="developer/logs" element={<CustomerIntegrationLogs />} />
         </Route>
 
         {/* Warehouse App (standalone — outside main layout) */}
@@ -217,6 +249,12 @@ root.render(
           <Route path="tasks" element={<WarehouseTasks />} />
           <Route path="tasks/pick/:id" element={<WarehousePickTask />} />
           <Route path="tasks/putaway/:id" element={<WarehousePutawayTask />} />
+          <Route path="tasks/return-receive/:id" element={<WarehouseReturnReceive />} />
+          <Route path="tasks/return-inspect/:id" element={<WarehouseReturnInspect />} />
+          <Route path="tasks/pack-audit/:id" element={<WarehousePackAudit />} />
+          <Route path="tasks/receive/:id" element={<WarehouseReceive />} />
+          <Route path="tasks/pack/:id" element={<WarehousePack />} />
+          <Route path="appointments" element={<WarehouseAppointments />} />
           <Route path="settings" element={<WarehouseSettings />} />
         </Route>
 
@@ -347,6 +385,8 @@ root.render(
 
           {/* WMS */}
           <Route path="wms" element={<VNextWmsDashboard />} />
+          <Route path="wms/operations" element={<VNextWmsOperationsDashboard />} />
+          <Route path="wms/pallet-types" element={<VNextPalletTypes />} />
           <Route path="wms/zones" element={<VNextWmsZones />} />
           <Route path="wms/zones/create" element={<VNextWmsCreateZone />} />
           <Route path="wms/zones/:id" element={<VNextWmsZoneDetail />} />
@@ -369,6 +409,10 @@ root.render(
           <Route path="wms/picking/:id" element={<VNextWmsPickTaskDetail />} />
           <Route path="wms/packing" element={<VNextWmsPacking />} />
           <Route path="wms/packing/:id" element={<VNextWmsPackTaskDetail />} />
+          <Route path="wms/pack-audits" element={<VNextWmsPackAudits />} />
+          <Route path="wms/receiving-appointments" element={<VNextWmsReceivingAppointments />} />
+          <Route path="wms/cutoff-monitor" element={<VNextCutoffDashboard />} />
+          <Route path="wms/carrier-cutoffs" element={<VNextCarrierCutoffs />} />
           <Route path="wms/loading" element={<VNextWmsLoading />} />
           <Route path="wms/cycle-counts" element={<VNextWmsCycleCounts />} />
           <Route path="wms/cycle-counts/:id" element={<VNextWmsCycleCountDetail />} />
@@ -376,6 +420,10 @@ root.render(
           <Route path="wms/product-dimensions" element={<VNextWmsProductUom />} />
           <Route path="wms/carton-catalogue" element={<VNextWmsCartonCatalogue />} />
           <Route path="wms/load-plans" element={<VNextWmsLoadPlan />} />
+          <Route path="wms/returns" element={<VNextWmsReturns />} />
+          <Route path="wms/returns/create" element={<VNextWmsCreateReturn />} />
+          <Route path="wms/returns/refund-review" element={<VNextWmsRefundReview />} />
+          <Route path="wms/returns/:id" element={<VNextWmsReturnDetail />} />
 
           {/* Integrations (sub-layout with tabs) */}
           <Route path="integrations" element={<VNextIntegrationsLayout />}>

@@ -54,6 +54,14 @@ export async function cartonCatalogueRoutes(server: FastifyInstance) {
       heightMm: z.number().int().min(1),
       maxWeightGrams: z.number().int().min(1),
       unitCostCents: z.number().int().nullable().optional(),
+      temperatureZone: z.enum(['any', 'ambient', 'refrigerated', 'frozen', 'dry_ice']).optional(),
+      insulated: z.boolean().optional(),
+      insulationHours: z.number().int().nullable().optional(),
+      tamperEvident: z.boolean().optional(),
+      valueClass: z.enum(['any', 'standard', 'high_value']).optional(),
+      hazmatRated: z.boolean().optional(),
+      hazmatClasses: z.array(z.string()).optional(),
+      materialType: z.enum(['corrugated', 'plastic', 'metal', 'foam', 'composite']).optional(),
     }).parse((req as any).body);
 
     const orgId = (req as any).orgId || 'default-org';

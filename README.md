@@ -48,8 +48,9 @@ Deploy your own Open TMS instance with one click:
 - **Shipment Tracking** - Complete shipment lifecycle management with status tracking
 - **Order-to-Shipment Conversion** - Combine multiple orders into one shipment, split large orders across multiple shipments, or convert individually with a conversion wizard
 - **CSV Import** - Bulk order creation from CSV files with automatic customer/location matching
-- **EDI Communication Hub** - 9 X12 transaction types (850, 856, 204, 990, 997, 214, 210, 810, 820) with unified Trading Partner model, universal inbound endpoint, event-driven outbound (856 on delivery, 810 on invoice), 997 auto-ack, SFTP/HTTP delivery, shared X12 envelope utilities, and EDI Portal UI
+- **EDI Communication Hub** - 12 X12 transaction types (850, 856, 204, 990, 997, 214, 210, 810, 820, 180, 940, 945) with unified Trading Partner model, universal inbound endpoint, event-driven outbound (856 on delivery, 810 on invoice, 180 for return authorization, 945 on shipment-delivered for 3PL warehouse shipping advice), 997 auto-ack, SFTP/HTTP delivery, shared X12 envelope utilities, and EDI Portal UI
 - **Customer API** - External REST API for customers to create and track orders programmatically
+- **Customer Portal - Developer Area** - Self-service integration management for customers: API key create/revoke (one-time plaintext display), webhook subscriptions with HMAC-SHA256 signatures (`X-OpenTms-Signature: t=<unix>,v1=<hex>`), rotate-secret + send-test + per-webhook delivery log, read-only EDI trading partner view (credentials redacted), and a paginated EDI transaction log. Customer portal runs as a multi-app workspace (Portal / Developer) with an app switcher in the top-right, matching the main admin app's look and feel
 - **Webhooks** - Receive GPS/location updates from IoT devices with automatic shipment matching
 - **Queue Processing** - pg-boss powered async processing with carrier/tracking workers, retry, and dead letter queues
 - **Integration Dashboard** - Real-time ops dashboard with activity charts, queue monitoring, and DLQ management
@@ -743,12 +744,16 @@ container.singleton(TOKENS.ICustomersRepository)
 - **Location hierarchy** - Zones, aisles, and bins with capacity tracking, temperature zones, hazmat certification
 - **Bulk bin generation** - Pattern-based bin creation ({aisle}-{row}-{level}) with live preview
 - **Receiving** - Dock appointments, ASN-based and blind receiving, line-by-line inspection
+- **Cross-dock** - Flow-through workflow: received goods skip storage and sort directly to staging bins for outbound loading
+- **Returns / RMA** - Full returns lifecycle with 7 dispositions (restock, refurb, scrap, recycle, donate, rtv, customer_keeps), quarantine-first flow, partial returns, auto-calculated refunds with finance review queue. Five initiation channels: admin UI, customer portal (self-service request flow with list/new/detail pages and JWT-scoped label download), public REST API (customer-keyed), EDI 180 Return Merchandise Authorization (inbound request + outbound authorization response), and marketplace webhooks (roadmap). Return label generation and carrier pickup scheduling via provider-agnostic `IReturnLabelProvider` (Manual provider active; FedEx/UPS/DHL stubs for live carrier integration)
 - **Directed putaway** - Priority-based rules (SKU pattern, temperature, hazmat, customer, velocity), scan-to-confirm with deviation tracking, bin constraint validation, product consolidation
 - **Inventory tracking** - Real-time stock levels per bin with immutable transaction ledger, stock adjustments with reason codes, bin-to-bin transfers, per-SKU summary aggregation
 - **Wave planning** - Group orders into pick waves (discrete or batch strategy), inventory allocation on release
 - **Wave templates** - Automate wave creation with reusable templates (grouping rules, carrier cutoff times, min/max orders, cron schedules, auto-release)
 - **Picking** - Walk-sequence-optimized pick lists, line-by-line execution, short-pick handling (backorder/cancel)
 - **Packing** - Pack station verification, line-by-line item confirmation
+- **Pack Audit** - Scale weight + cubiscan dim-weight variance checks at the pack station. Default ±10% tolerance (configurable per-audit), pass/warning/fail verdict auto-raises medium or high priority quality issues linked to the pack task. Expected weight auto-calculated from `ProductUom.weightGrams × quantity` across pack lines. Admin dashboard shows 30-day pass rate and variance trends
+- **Cutoff-at-Risk Monitor** - Per-carrier, per-day-of-week cutoff times with IANA timezone support. A pg-boss cron scans open shipments every 5 minutes, projects warehouse-ready time from remaining pick/pack/load work, and fires `shipment.cutoff_at_risk` with severity (minor/warning/critical). Warning and critical auto-raise triage issues linked to the shipment; dedup prevents spam while still escalating. Admin dashboard surfaces at-risk shipments and lets ops configure cutoffs per carrier
 - **Cartonization** - Recommends smallest viable shipping carton at pack time. ProductUom master data for SKU dimensions, CartonCatalogue per location, First-Fit-Decreasing algorithm with volume and weight scoring
 - **Loading** - Staging assignments at dock bins, batch loading completion
 - **Cycle counting** - Full warehouse, zone, and random sample counts with variance detection and auto-adjustment of inventory
@@ -757,7 +762,10 @@ container.singleton(TOKENS.ICustomersRepository)
 - **Zone picking** - Sequential (pick-and-pass) and parallel (pick-and-merge) zone strategies with per-zone task tracking
 - **Product dimensions** - SKU-level dimension and weight master data (ProductUom) for cartonization and future palletization
 - **Operations dashboard** - Real-time warehouse stats (zones, bins, SKUs, task counts by status)
-- **Warehouse mobile app** - Pick task execution and putaway scan-to-confirm on the warehouse floor PWA
+- **Operations KPI dashboard** - Dedicated `/wms/operations` view with six KPI groups (throughput today vs 7-day, 30-day avg cycle times for pick / dock-to-stock / order-to-ship, pick accuracy + pack audit pass rate + inventory record accuracy, live work queue, exceptions rollup including cutoff-at-risk, bin utilization). Tone-coloured accuracy thresholds, clickable drill-downs, 60-second auto-refresh
+- **Pallet Types & Palletization** - `PalletType` catalog with one-click seed of 13 standard types (EUR1 / EUR2 / EUR3 / EUR6 half / US GMA 48×40 / US 42×42 / CHEP 1210 + 48×40 / AU 1165 / plastic + one-way + quarter display) plus full CRUD. Planner service computes cartons-per-layer (best of two orientations), layers (min of height- and weight-bound), stacked height and weight utilization. Recommender ranks all active pallet types for a given carton spec
+- **Container Intelligence** - Carton catalogue extended with temperature zone, insulation hours, tamper-evident flag, value class, hazmat UN classes, and material type. Recommender groups pack items by constraint profile (temperature + value + hazmat compatibility with UN segregation matrix), picks the smallest qualifying carton per group, and attaches required ancillaries (gel pack, dry ice, desiccant, fragile padding, tamper seal). Transit-hours aware: refrigerated packages past 24h transit automatically promote to dry ice
+- **Warehouse mobile app** - Pick task execution, putaway scan-to-confirm, receiving (ASN + blind) with per-line inspection, packing with barcode verification and carton selection, pack audit (scale + dim variance), and return receiving + inspection/disposition tasks - all on one unified task list with Receive / Putaway / Pick / Pack / Returns tabs. Supports Zebra / Honeywell RF gun barcode wedges alongside camera scanning
 - **147 tests** across 13 test suites covering the full goods flow
 
 ### Shipment Tracking

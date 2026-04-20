@@ -6,12 +6,21 @@
 
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import crypto from 'crypto';
 import { container, TOKENS } from '../di/index.js';
 import { ICustomerAuthService } from '../services/CustomerAuthService.js';
 import { authenticateCustomerJWT } from '../middleware/jwtAuth.js';
+import { ICommandBus } from '../commands/CommandBus.js';
+import { CREATE_RMA } from '../commands/rma/CreateRmaCommand.js';
+import type { IBinaryStorageProvider } from '../storage/IBinaryStorageProvider.js';
+
+const RETURN_REASONS = ['damaged', 'wrong_item', 'not_as_described', 'no_longer_needed', 'defective', 'ordered_extra', 'other'] as const;
+const DISPOSITIONS_SUGGEST = ['restock', 'refurb', 'scrap', 'recycle', 'donate', 'rtv', 'customer_keeps'] as const;
 
 export async function customerPortalRoutes(server: FastifyInstance) {
   const authService = container.resolve<ICustomerAuthService>(TOKENS.ICustomerAuthService);
+  const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
+  const binaryStorage = container.resolve<IBinaryStorageProvider>(TOKENS.IBinaryStorageProvider);
 
   // ── Public: Login ────────────────────────────────────────────────────
 
@@ -483,5 +492,178 @@ export async function customerPortalRoutes(server: FastifyInstance) {
 
     reply.code(201);
     return { data: { queryId: query.id, queryNumber: (query as any).queryNumber }, error: null };
+  });
+
+  // ── Returns / RMA ────────────────────────────────────────────────────
+
+  // List returns
+  server.get('/api/v1/customer-portal/rmas', {
+    preHandler: [authenticateCustomerJWT],
+    schema: {
+      tags: ['Customer Portal'],
+      summary: 'List your return authorizations',
+      querystring: {
+        type: 'object',
+        properties: {
+          status: { type: 'string' },
+          limit: { type: 'integer', default: 50 },
+          offset: { type: 'integer', default: 0 },
+        },
+      },
+    },
+  }, async (req: FastifyRequest) => {
+    const customerId = req.customerUser!.customerId;
+    const q = req.query as { status?: string; limit?: number; offset?: number };
+    const where: any = { customerId };
+    if (q.status) where.status = q.status;
+
+    const [rmas, total] = await Promise.all([
+      server.prisma.rma.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        take: q.limit || 50,
+        skip: q.offset || 0,
+        include: { _count: { select: { lines: true } } },
+      }),
+      server.prisma.rma.count({ where }),
+    ]);
+    return { data: { rmas, total }, error: null };
+  });
+
+  // Return detail
+  server.get('/api/v1/customer-portal/rmas/:id', {
+    preHandler: [authenticateCustomerJWT],
+    schema: { tags: ['Customer Portal'], summary: 'Get your RMA detail' },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const customerId = req.customerUser!.customerId;
+    const rma = await server.prisma.rma.findFirst({
+      where: { id, customerId },
+      include: { lines: true },
+    });
+    if (!rma) { reply.code(404); return { data: null, error: 'RMA not found' }; }
+    return { data: rma, error: null };
+  });
+
+  // Create a return (self-service)
+  server.post('/api/v1/customer-portal/rmas', {
+    preHandler: [authenticateCustomerJWT],
+    schema: {
+      tags: ['Customer Portal'],
+      summary: 'Request a return (self-service)',
+      description: 'Creates an RMA in "requested" status for CSR review. Scoped to the authenticated customer.',
+      body: {
+        type: 'object',
+        required: ['orderId', 'returnReason', 'lines'],
+        properties: {
+          orderId: { type: 'string', format: 'uuid' },
+          returnReason: { type: 'string', enum: [...RETURN_REASONS] },
+          customerNotes: { type: 'string' },
+          lines: {
+            type: 'array', minItems: 1,
+            items: {
+              type: 'object',
+              required: ['orderLineItemId', 'sku', 'requestedQuantity'],
+              properties: {
+                orderLineItemId: { type: 'string' },
+                sku: { type: 'string' },
+                requestedQuantity: { type: 'integer', minimum: 1 },
+                requestedDisposition: { type: 'string', enum: [...DISPOSITIONS_SUGGEST] },
+              },
+            },
+          },
+        },
+      },
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const user = req.customerUser!;
+    const body = z.object({
+      orderId: z.string().uuid(),
+      returnReason: z.enum(RETURN_REASONS),
+      customerNotes: z.string().optional(),
+      lines: z.array(z.object({
+        orderLineItemId: z.string(),
+        sku: z.string(),
+        requestedQuantity: z.number().int().min(1),
+        requestedDisposition: z.enum(DISPOSITIONS_SUGGEST).optional(),
+      })).min(1),
+    }).parse((req as any).body);
+
+    // Verify the order belongs to this customer
+    const order = await server.prisma.order.findFirst({
+      where: { id: body.orderId, customerId: user.customerId },
+      select: { id: true },
+    });
+    if (!order) {
+      reply.code(404);
+      return { data: null, error: 'Order not found or does not belong to your account' };
+    }
+
+    const org = await server.prisma.organization.findFirst({ select: { id: true } });
+
+    const result = await commandBus.dispatch({
+      type: CREATE_RMA,
+      orgId: org?.id ?? 'default-org',
+      actorId: `customer-portal:${user.sub}`,
+      payload: {
+        customerId: user.customerId,
+        orderId: body.orderId,
+        returnReason: body.returnReason,
+        customerNotes: body.customerNotes,
+        initiatedVia: 'customer_portal',
+        lines: body.lines,
+        autoAuthorize: false,
+      },
+      metadata: { correlationId: crypto.randomUUID(), source: 'customer-portal' },
+    });
+
+    if (!result.success) { reply.code(400); return { data: null, error: result.error }; }
+    reply.code(201);
+    return { data: result.data, error: null };
+  });
+
+  // Download return label (if one has been generated)
+  server.get('/api/v1/customer-portal/rmas/:id/return-label', {
+    preHandler: [authenticateCustomerJWT],
+    schema: { tags: ['Customer Portal'], summary: 'Download the return shipping label for your RMA' },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const customerId = req.customerUser!.customerId;
+    const rma = await server.prisma.rma.findFirst({
+      where: { id, customerId },
+      select: { rmaNumber: true, returnLabelStorageKey: true, returnLabelFormat: true },
+    });
+    if (!rma) { reply.code(404); return { data: null, error: 'RMA not found' }; }
+    if (!rma.returnLabelStorageKey) { reply.code(404); return { data: null, error: 'No return label available yet' }; }
+
+    const content = await binaryStorage.retrieve(rma.returnLabelStorageKey);
+    const format = rma.returnLabelFormat ?? 'pdf';
+    const contentType = format === 'pdf' ? 'application/pdf' : format === 'png' ? 'image/png' : 'application/octet-stream';
+    reply.header('Content-Type', contentType);
+    reply.header('Content-Disposition', `attachment; filename="return-label-${rma.rmaNumber}.${format}"`);
+    return reply.send(content);
+  });
+
+  // List returnable order line items for the customer (helper for the request form)
+  server.get('/api/v1/customer-portal/rmas/eligible-orders', {
+    preHandler: [authenticateCustomerJWT],
+    schema: {
+      tags: ['Customer Portal'],
+      summary: 'List delivered orders eligible for return (with their line items)',
+      querystring: {
+        type: 'object',
+        properties: { limit: { type: 'integer', default: 25 } },
+      },
+    },
+  }, async (req: FastifyRequest) => {
+    const customerId = req.customerUser!.customerId;
+    const q = req.query as { limit?: number };
+    const orders = await server.prisma.order.findMany({
+      where: { customerId, status: { in: ['delivered', 'partially_delivered'] } },
+      orderBy: { createdAt: 'desc' },
+      take: q.limit || 25,
+      include: { lineItems: true },
+    });
+    return { data: orders, error: null };
   });
 }

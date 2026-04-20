@@ -31,7 +31,7 @@ const completed = [
 ]
 
 const upcoming = [
-  { title: 'Customer Portal', description: 'Self-service order tracking and document access for your customers' },
+  { title: 'Customer Portal + Developer Area', description: 'Multi-app self-service workspace for customers: orders, shipments, returns, and invoices alongside a Developer app for API keys, signed webhooks, and EDI setup' },
   { title: 'Driver Mobile App', description: 'Status updates, signature capture, photo POD, and offline GPS tracking' },
   { title: 'N8N Workflow Integration', description: 'Custom automation nodes for event-driven logistics workflows' },
   { title: 'Multi-Language Support', description: 'UI translations, RTL layouts, and localised content' },

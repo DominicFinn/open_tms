@@ -6,11 +6,13 @@ import { ICommandBus } from '../commands/CommandBus.js';
 import { CREATE_RECEIVING_TASK } from '../commands/warehouse/CreateReceivingTaskCommand.js';
 import { RECORD_RECEIVING_LINE } from '../commands/warehouse/RecordReceivingLineCommand.js';
 import { COMPLETE_RECEIVING } from '../commands/warehouse/CompleteReceivingCommand.js';
+import { PrismaClient } from '@prisma/client';
 import crypto from 'crypto';
 
 export async function receivingRoutes(server: FastifyInstance) {
   const repo = container.resolve<IReceivingRepository>(TOKENS.IReceivingRepository);
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
+  const prisma = container.resolve<PrismaClient>(TOKENS.PrismaClient);
 
   // ═══════════════════════════════════════════════════════════
   // RECEIVING TASKS
@@ -323,5 +325,68 @@ export async function receivingRoutes(server: FastifyInstance) {
 
     reply.code(201);
     return { data: appointment, error: null };
+  });
+
+  // POST /api/v1/receiving/appointments/:id/check-in — carrier arrived
+  server.post('/api/v1/receiving/appointments/:id/check-in', {
+    schema: {
+      tags: ['WMS - Receiving'],
+      summary: 'Mark an appointment as checked-in (carrier has arrived at the dock)',
+      params: { type: 'object', required: ['id'], properties: { id: { type: 'string', format: 'uuid' } } },
+      body: {
+        type: 'object',
+        properties: {
+          dockBinId: { type: 'string', format: 'uuid', nullable: true, description: 'Assign a dock bin on check-in if not already set' },
+          trailerNumber: { type: 'string', nullable: true },
+          sealNumber: { type: 'string', nullable: true },
+        },
+      },
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const body = z.object({
+      dockBinId: z.string().uuid().nullable().optional(),
+      trailerNumber: z.string().nullable().optional(),
+      sealNumber: z.string().nullable().optional(),
+    }).parse((req as any).body ?? {});
+
+    const existing = await prisma.receivingAppointment.findUnique({ where: { id } });
+    if (!existing) { reply.code(404); return { data: null, error: 'Appointment not found' }; }
+    if (existing.status === 'completed' || existing.status === 'cancelled') {
+      reply.code(400);
+      return { data: null, error: `Cannot check in an appointment in status "${existing.status}"` };
+    }
+
+    const updated = await prisma.receivingAppointment.update({
+      where: { id },
+      data: {
+        status: 'checked_in',
+        dockBinId: body.dockBinId ?? existing.dockBinId,
+        trailerNumber: body.trailerNumber ?? existing.trailerNumber,
+        sealNumber: body.sealNumber ?? existing.sealNumber,
+      },
+    });
+    return { data: updated, error: null };
+  });
+
+  // POST /api/v1/receiving/appointments/:id/cancel
+  server.post('/api/v1/receiving/appointments/:id/cancel', {
+    schema: {
+      tags: ['WMS - Receiving'],
+      summary: 'Cancel an appointment',
+      params: { type: 'object', required: ['id'], properties: { id: { type: 'string', format: 'uuid' } } },
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const existing = await prisma.receivingAppointment.findUnique({ where: { id } });
+    if (!existing) { reply.code(404); return { data: null, error: 'Appointment not found' }; }
+    if (existing.status === 'completed') {
+      reply.code(400);
+      return { data: null, error: 'Cannot cancel a completed appointment' };
+    }
+    const updated = await prisma.receivingAppointment.update({
+      where: { id }, data: { status: 'cancelled' },
+    });
+    return { data: updated, error: null };
   });
 }
