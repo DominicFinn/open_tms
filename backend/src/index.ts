@@ -39,6 +39,8 @@ import { orderRoutes } from './routes/orders.js';
 import { organizationRoutes } from './routes/organization.js';
 import { pendingLaneRequestRoutes } from './routes/pendingLaneRequests.js';
 import { seedRoutes } from './routes/seed.js';
+import { authRoutes } from './routes/auth.js';
+import { internalUserRoutes } from './routes/internalUsers.js';
 import { distanceRoutes } from './routes/distance.js';
 import { apiKeyRoutes } from './routes/apiKeys.js';
 import { webhookRoutes } from './routes/webhook.js';
@@ -180,6 +182,8 @@ async function start() {
 
   await server.register(publicTrackingRoutes);      // Public shipment tracking (HMAC token)
   await server.register(themeRoutes);                // GET endpoints intentionally public (loaded before login)
+  await server.register(authRoutes);                 // Internal user login / forgot-password / me (own JWT auth internally)
+  await server.register(internalUserRoutes);         // Internal user admin (own JWT auth + permission check internally)
   await server.register(carrierPortalRoutes);        // Own carrier JWT auth internally
   await server.register(customerPortalRoutes);       // Own customer JWT auth internally
   await server.register(customerDeveloperRoutes);    // Own customer JWT auth internally (Developer Area)

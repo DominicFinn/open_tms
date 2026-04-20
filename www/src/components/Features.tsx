@@ -184,13 +184,23 @@ const features = [
   },
   {
     title: 'Warehouse Management (WMS)',
-    description: 'Full warehouse operations: zone and bin management, receiving (ASN and blind), directed putaway with scan-to-confirm, wave planning with templates, walk-sequence-optimized picking, packing verification, cycle counting, and auto-replenishment.',
+    description: 'Full dock-to-dispatch WMS: dock appointments, ASN + blind receiving, directed putaway, cross-dock, zone picking, scan-verified packing, pack audit, load plans with BOL, event-driven replenishment, cycle counting, cartonization, container intelligence with UN hazmat segregation, pallet types, cutoff-at-risk monitoring, and full returns with 7 dispositions.',
     icon: (
       <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
       </svg>
     ),
     highlight: true,
+  },
+  {
+    title: 'Warehouse Mobile PWA',
+    description: 'Scan-first mobile app for every role on the floor: receive, putaway, pick, pack, pack audit, check in carriers, and process returns. Works with Zebra and Honeywell RF guns via the barcode wedge hook. No drivers, no native app.',
+    icon: (
+      <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" />
+      </svg>
+    ),
+    highlight: false,
   },
   {
     title: 'Auto Telemetry Reports',

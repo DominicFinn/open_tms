@@ -2283,3 +2283,200 @@
     gap: 16px;
   }
 }
+
+/* ─── Login / Auth screens ─────────────────────────────────────────────── */
+
+.vn-login-shell {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at 20% 20%, color-mix(in srgb, var(--primary) 14%, transparent) 0%, transparent 55%),
+    radial-gradient(circle at 85% 80%, color-mix(in srgb, var(--primary) 10%, transparent) 0%, transparent 60%),
+    var(--surface-container-lowest);
+}
+
+.vn-login-card {
+  background: var(--surface-container-lowest);
+  border: 1px solid var(--outline-variant);
+  border-radius: 20px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.18);
+  padding: 40px 32px 28px;
+  width: 100%;
+  max-width: 420px;
+  animation: vn-slide-up 0.25s ease-out;
+}
+
+.vn-login-brand {
+  text-align: center;
+  margin-bottom: 28px;
+}
+
+.vn-login-logo {
+  width: 88px;
+  height: 88px;
+  margin: 0 auto 16px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    conic-gradient(from 0deg,
+      var(--primary) 0%,
+      color-mix(in srgb, var(--primary) 45%, transparent) 35%,
+      color-mix(in srgb, var(--primary) 70%, white) 65%,
+      var(--primary) 100%);
+  box-shadow:
+    0 8px 24px color-mix(in srgb, var(--primary) 35%, transparent),
+    inset 0 0 0 4px var(--surface-container-lowest);
+  position: relative;
+  animation: vn-logo-float 3.5s ease-in-out infinite;
+}
+
+.vn-login-logo::after {
+  content: '';
+  position: absolute;
+  inset: 6px;
+  border-radius: 50%;
+  background: var(--surface-container-lowest);
+  z-index: 0;
+}
+
+.vn-login-logo .material-icons,
+.vn-login-logo img {
+  position: relative;
+  z-index: 1;
+  font-size: 40px;
+  color: var(--primary);
+  animation: vn-logo-spin 8s linear infinite;
+}
+
+.vn-login-logo img {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  border-radius: 50%;
+}
+
+.vn-login-logo.spinning .material-icons,
+.vn-login-logo.spinning img {
+  animation: vn-logo-spin 0.9s linear infinite;
+}
+
+@keyframes vn-logo-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes vn-logo-float {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-4px) scale(1.02); }
+}
+
+.vn-login-title {
+  font-size: 24px;
+  font-weight: 600;
+  margin: 0 0 6px;
+  color: var(--on-surface);
+  letter-spacing: -0.01em;
+}
+
+.vn-login-subtitle {
+  margin: 0;
+  font-size: 14px;
+  color: var(--on-surface-variant);
+  line-height: 1.5;
+}
+
+.vn-login-footer {
+  margin-top: 20px;
+  text-align: center;
+  font-size: 13px;
+}
+
+.vn-link {
+  color: var(--primary);
+  text-decoration: none;
+  font-weight: 500;
+}
+.vn-link:hover {
+  text-decoration: underline;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vn-login-logo,
+  .vn-login-logo .material-icons,
+  .vn-login-logo img {
+    animation: none;
+  }
+}
+
+/* ─── User menu (topbar avatar dropdown) ─────────────────────────────── */
+
+.vn-user-menu-wrapper {
+  position: relative;
+}
+
+.vn-topbar-avatar {
+  cursor: pointer;
+  border: none;
+  background: var(--primary);
+  color: var(--on-primary, white);
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+}
+
+.vn-user-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 240px;
+  background: var(--surface-container-lowest);
+  border: 1px solid var(--outline-variant);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+  padding: 8px 0;
+  z-index: 50;
+  animation: vn-slide-up 0.15s ease-out;
+}
+
+.vn-user-menu-header {
+  padding: 12px 16px 10px;
+  border-bottom: 1px solid var(--outline-variant);
+}
+
+.vn-user-menu-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--on-surface);
+}
+
+.vn-user-menu-email {
+  font-size: 12px;
+  color: var(--on-surface-variant);
+  margin-top: 2px;
+}
+
+.vn-user-menu-item {
+  width: 100%;
+  padding: 10px 16px;
+  background: none;
+  border: none;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--on-surface);
+  cursor: pointer;
+  font-size: 14px;
+}
+.vn-user-menu-item:hover {
+  background: var(--surface-container-low);
+}
+.vn-user-menu-item .material-icons {
+  font-size: 18px;
+  color: var(--on-surface-variant);
+}

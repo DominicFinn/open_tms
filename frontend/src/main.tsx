@@ -3,6 +3,12 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider } from './ThemeProvider';
 import { MapProvider } from './MapProvider';
+import { installAuthFetchInterceptor } from './authFetch';
+import Login from './pages/Login';
+import ForgotPassword from './pages/ForgotPassword';
+import RequireAuth from './components/RequireAuth';
+
+installAuthFetchInterceptor();
 
 // VNext Layout & Pages
 import VNextLayout from './vnext-design/vnext-layout';
@@ -70,6 +76,7 @@ import VNextSkillsConfig from './vnext-design/VNextSkillsConfig';
 import VNextSkillChains from './vnext-design/VNextSkillChains';
 import VNextLoadBoard from './vnext-design/VNextLoadBoard';
 import VNextRoles from './vnext-design/VNextRoles';
+import VNextUsers from './vnext-design/VNextUsers';
 import VNextMarginReports from './vnext-design/VNextMarginReports';
 import VNextCommissions from './vnext-design/VNextCommissions';
 import VNextReportsDashboard from './vnext-design/VNextReportsDashboard';
@@ -204,6 +211,10 @@ root.render(
     <ThemeProvider>
       <MapProvider>
       <Routes>
+        {/* Main TMS auth pages (standalone — outside main layout) */}
+        <Route path="/login" element={<Login />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+
         {/* Carrier Portal (standalone — outside main layout) */}
         <Route path="/carrier-portal/login" element={<CarrierLogin />} />
         <Route path="/carrier-portal" element={<CarrierPortalLayout />}>
@@ -258,8 +269,8 @@ root.render(
           <Route path="settings" element={<WarehouseSettings />} />
         </Route>
 
-        {/* Main app (VNext layout) */}
-        <Route path="/" element={<VNextLayout />}>
+        {/* Main app (VNext layout) — requires internal user auth */}
+        <Route path="/" element={<RequireAuth><VNextLayout /></RequireAuth>}>
           {/* Dashboard */}
           <Route index element={<VNextDashboard />} />
 
@@ -363,6 +374,7 @@ root.render(
           <Route path="settings/skills" element={<VNextSkillsConfig />} />
           <Route path="settings/skill-chains" element={<VNextSkillChains />} />
           <Route path="settings/roles" element={<VNextRoles />} />
+          <Route path="settings/users" element={<VNextUsers />} />
 
           {/* Finance */}
           <Route path="finance" element={<VNextFinanceDashboard />} />

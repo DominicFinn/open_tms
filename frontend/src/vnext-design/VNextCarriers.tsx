@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { API_URL } from '../api';
 
 interface Carrier {
@@ -26,6 +27,7 @@ function carrierStatus(c: Carrier): { label: string; color: string } {
 
 
 export default function VNextCarriers() {
+  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState<'table' | 'cards'>('cards');
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -88,7 +90,7 @@ export default function VNextCarriers() {
               <span className="material-icons" style={{ fontSize: 20 }}>view_list</span>
             </button>
           </div>
-          <button className="vn-btn vn-btn-primary">
+          <button className="vn-btn vn-btn-primary" onClick={() => navigate('/carriers/create')}>
             <span className="material-icons">add</span>
             Add Carrier
           </button>
@@ -196,10 +198,19 @@ export default function VNextCarriers() {
                       <div className="vn-info-item" style={{ gridColumn: '1 / -1' }}><label>Email</label><span style={{ color: 'var(--info)' }}>{c.contactEmail || '—'}</span></div>
                     </div>
                     {c.validationTier && (
-                      <div style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>
+                      <div style={{ fontSize: 13, color: 'var(--on-surface-variant)', marginBottom: 12 }}>
                         Validation Tier: <strong>{c.validationTier}</strong>
                       </div>
                     )}
+                    <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                      <button
+                        className="vn-btn vn-btn-primary vn-btn-sm"
+                        onClick={(e) => { e.stopPropagation(); navigate(`/carriers/${c.id}/edit`); }}
+                      >
+                        <span className="material-icons" style={{ fontSize: 16 }}>edit</span>
+                        Open details
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -226,7 +237,7 @@ export default function VNextCarriers() {
                 {filtered.map(c => {
                   const st = carrierStatus(c);
                   return (
-                  <tr key={c.id}>
+                  <tr key={c.id} onClick={() => navigate(`/carriers/${c.id}/edit`)} style={{ cursor: 'pointer' }}>
                     <td>
                       <span style={{ fontWeight: 600, color: 'var(--on-surface)' }}>{c.name}</span>
                       <div className="vn-table-secondary">{c.contactName || ''}{c.contactPhone ? ` · ${c.contactPhone}` : ''}</div>

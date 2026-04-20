@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { ErrorBoundary } from '../components/ErrorBoundary';
+import { useCurrentUser } from '../hooks/useCurrentUser';
+import { logout } from '../authFetch';
 import './vnext.css';
 
 /* ── Theme Mode Hook ─────────────────────────────────────── */
@@ -147,7 +149,7 @@ const APPS: AppDef[] = [
         { to: '/wms/zones', icon: 'grid_view', label: 'Zones & Bins' },
         { to: '/wms/inventory', icon: 'inventory_2', label: 'Inventory' },
         { to: '/wms/product-dimensions', icon: 'straighten', label: 'Product Dimensions' },
-        { to: '/wms/carton-catalogue', icon: 'package_2', label: 'Carton Catalogue' },
+        { to: '/wms/carton-catalogue', icon: 'inventory_2', label: 'Carton Catalogue' },
         { to: '/wms/pallet-types', icon: 'pallet', label: 'Pallet Types' },
         { to: '/wms/cycle-counts', icon: 'fact_check', label: 'Cycle Counts' },
         { to: '/wms/replenishment', icon: 'sync', label: 'Replenishment' },
@@ -206,6 +208,7 @@ const APPS: AppDef[] = [
         { to: '/settings/skills', icon: 'build', label: 'Skills' },
         { to: '/settings/skill-chains', icon: 'account_tree', label: 'Skill Chains' },
         { to: '/settings/roles', icon: 'admin_panel_settings', label: 'Roles & Permissions' },
+        { to: '/settings/users', icon: 'group', label: 'Users' },
       ]},
       { title: 'Apps', items: [
         { to: '/warehouse', icon: 'warehouse', label: 'Warehouse App' },
@@ -232,10 +235,17 @@ function detectApp(pathname: string): string {
 export default function VNextLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [appGridOpen, setAppGridOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
   const theme = useThemeMode();
   const location = useLocation();
   const navigate = useNavigate();
   const gridRef = useRef<HTMLDivElement>(null);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+  const { user } = useCurrentUser();
+
+  const initials = user
+    ? `${(user.firstName?.[0] || user.email[0] || '').toUpperCase()}${(user.lastName?.[0] || '').toUpperCase()}`
+    : '';
 
   const activeAppKey = detectApp(location.pathname);
   const activeApp = APPS.find(a => a.key === activeAppKey) || APPS[0];
@@ -338,7 +348,38 @@ export default function VNextLayout() {
             <button title={`Theme: ${theme.label}`} onClick={theme.cycle}>
               <span className="material-icons">{theme.icon}</span>
             </button>
-            <div className="vn-topbar-avatar">JD</div>
+
+            {/* User menu */}
+            <div className="vn-user-menu-wrapper" ref={userMenuRef}>
+              <button
+                className="vn-topbar-avatar"
+                onClick={() => setUserMenuOpen(!userMenuOpen)}
+                title={user ? `${user.firstName} ${user.lastName}` : 'Account'}
+              >
+                {initials || '?'}
+              </button>
+              {userMenuOpen && (
+                <>
+                  <div className="vn-app-grid-backdrop" onClick={() => setUserMenuOpen(false)} />
+                  <div className="vn-user-menu">
+                    {user && (
+                      <div className="vn-user-menu-header">
+                        <div className="vn-user-menu-name">{user.firstName} {user.lastName}</div>
+                        <div className="vn-user-menu-email">{user.email}</div>
+                      </div>
+                    )}
+                    <button className="vn-user-menu-item" onClick={() => { setUserMenuOpen(false); navigate('/settings/users'); }}>
+                      <span className="material-icons">group</span>
+                      Manage users
+                    </button>
+                    <button className="vn-user-menu-item" onClick={logout}>
+                      <span className="material-icons">logout</span>
+                      Sign out
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </header>
 

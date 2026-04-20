@@ -221,7 +221,7 @@ export default function VNextOrders() {
               {filtered.map(o => {
                 const sNorm = o.status?.toLowerCase().replace(/[_ ]/g, '');
                 return (
-                <tr key={o.id}>
+                <tr key={o.id} onClick={() => navigate(`/orders/${o.id}`)} style={{ cursor: 'pointer' }}>
                   <td>
                     <span className="vn-table-id">{o.orderNumber || o.id}</span>
                     {o.poNumber && <div className="vn-table-secondary">PO# {o.poNumber}</div>}
@@ -249,7 +249,7 @@ export default function VNextOrders() {
                   <td style={{ fontSize: 13, whiteSpace: 'nowrap' }}>{formatDate(o.requestedDeliveryDate)}</td>
                   <td>{o.deliveryStatus || '—'}</td>
                   <td><span className={`vn-chip vn-chip-${orderStatusColor(o.status)}`}>{o.status}</span></td>
-                  <td>
+                  <td onClick={(e) => e.stopPropagation()}>
                     <div style={{ display: 'flex', gap: 4 }}>
                       {sNorm === 'readytoship' && (
                         <button className="vn-btn vn-btn-primary vn-btn-sm" onClick={() => navigate('/carrier-bidding')}>

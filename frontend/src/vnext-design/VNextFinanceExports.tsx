@@ -101,25 +101,25 @@ export default function VNextFinanceExports() {
       {/* Global date range */}
       <div className="vn-card" style={{ padding: 20, marginBottom: 24 }}>
         <h3 style={{ margin: '0 0 12px' }}>Date Range</h3>
-        <div style={{ display: 'flex', gap: 16, alignItems: 'end', flexWrap: 'wrap' }}>
-          <div className="vn-field">
+        <div style={{ display: 'flex', gap: 16, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <div className="vn-field" style={{ marginBottom: 0 }}>
             <label className="vn-field-label">From</label>
             <input className="vn-input" type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
           </div>
-          <div className="vn-field">
+          <div className="vn-field" style={{ marginBottom: 0 }}>
             <label className="vn-field-label">To</label>
             <input className="vn-input" type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} />
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button className="vn-btn vn-btn-ghost vn-btn-sm" onClick={() => {
+          <div style={{ display: 'flex', gap: 8, paddingBottom: 2 }}>
+            <button className="vn-btn vn-btn-ghost" style={{ padding: '10px 14px' }} onClick={() => {
               const d = new Date(); d.setDate(d.getDate() - 30);
               setDateFrom(d.toISOString().slice(0, 10)); setDateTo(today);
             }}>Last 30 days</button>
-            <button className="vn-btn vn-btn-ghost vn-btn-sm" onClick={() => {
+            <button className="vn-btn vn-btn-ghost" style={{ padding: '10px 14px' }} onClick={() => {
               const d = new Date(); d.setDate(d.getDate() - 90);
               setDateFrom(d.toISOString().slice(0, 10)); setDateTo(today);
             }}>Last 90 days</button>
-            <button className="vn-btn vn-btn-ghost vn-btn-sm" onClick={() => {
+            <button className="vn-btn vn-btn-ghost" style={{ padding: '10px 14px' }} onClick={() => {
               setDateFrom(`${new Date().getFullYear()}-01-01`); setDateTo(today);
             }}>Year to date</button>
           </div>

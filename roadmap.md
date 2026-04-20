@@ -556,6 +556,11 @@ Bolt-on WMS extending the TMS's TrackableUnit/CargoScan/Location models. Full sp
   - `webhookRetryWorker` runs every minute (`*/1 * * * *`, override `WEBHOOK_RETRY_CRON`), calls `findEligibleForRetry` then retries each one
   - 12 tests covering backoff math per attempt, cap at 30 min for high attempt counts, maxAttempts query filter, retry success + failure paths, idempotent already-delivered handling, missing-delivery error, fetch-error recording, retry header format
 
+- **Navbar polish (v1.5)** 🔲
+  - Integrations app has no transaction-type-scoped EDI shortcut (e.g. "EDI 940 received today", "EDI 945 auto-sent this week"). The universal Transaction Log at `/integrations/edi/logs` covers them via filters, but the 940/945 3PL pair is heavily used and would benefit from dedicated quick-links
+  - Follow-up from WMS v1 navbar audit - LLM usage + agent prompt version history already live inline in `/settings/llm` and `/settings/agents` respectively (no gap)
+  - Standalone apps (customer portal, carrier portal, warehouse mobile PWA) are intentionally outside the app switcher - not in scope for this item
+
 #### **v2 - Differentiation** (after v1 ships)
 
 - **3PL Billing Suite** 🔲
@@ -677,6 +682,21 @@ Items from the unified trading partner model that are not yet complete:
 - N8N workflow integration (webhook emission, custom node package, pre-built templates) 🔲
 - TMS-to-TMS integration (JSON APIs modeled after EDI, partner portal) 🔲
 - Pluggable map provider interface 🔲
+
+### **Internal User Auth Improvements**
+Base login (email + password, JWT, admin password reset, RequireAuth guard, global 401 → /login interceptor) is shipped. Improvements to harden and productionise:
+
+- **Self-service password reset via email** 🔲 - `/api/v1/auth/forgot-password` is currently a stub that only logs. Implement: time-limited signed reset token, reset-password page (`/reset-password?token=...`), email delivery via the existing EmailService + EmailTemplate system, token invalidation on use, rate-limit per email.
+- **First-login forced password change** 🔲 - Flag users provisioned via admin reset so they must change password on first sign-in before accessing the app.
+- **MFA / TOTP** 🔲 - Optional TOTP second factor (QR code enrolment, recovery codes, enforce-per-role policy, trusted-device cookie).
+- **SSO expansion** 🔲 - Google / Microsoft OAuth providers already scaffolded in the `AuthProvider` model; finish the redirect flow, domain allowlist enforcement, auto-provisioning rule, and SAML support for enterprise IdPs.
+- **Session management** 🔲 - Token revocation list / server-side session records; "sign out all other devices" action; session audit in the user profile.
+- **DB-backed login lockout** 🔲 - Replace the in-memory `failedAttempts` map (per-process, lost on restart) with a DB column / Redis store so lockouts survive restarts and scale across worker replicas.
+- **Stronger password hashing** 🔲 - Migrate from HMAC-SHA256-with-salt to argon2id (gradual rehash-on-login, add `passwordHashAlgo` column).
+- **Audit log for auth events** 🔲 - Record login success/failure, password change, password reset (by admin), lockout, token issuance, and SSO provisioning in `LoginAuditLog` with IP, user agent, outcome.
+- **Password policy per organisation** 🔲 - Configurable min length, complexity, rotation days, history depth.
+- **Account invitation flow** 🔲 - Admin creates user → email invite with signed acceptance link → user sets their own initial password (replaces the current "admin types a temporary password and sends it manually" workflow).
+- **Login UI polish** 🔲 - "Remember me" / long-lived refresh tokens, per-tenant branded login if org has a logo, CAPTCHA after N failures.
 
 ---
 

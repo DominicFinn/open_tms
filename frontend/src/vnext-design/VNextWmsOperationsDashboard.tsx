@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { API_URL } from '../api';
 
 interface DashboardPayload {
@@ -43,28 +43,69 @@ interface DashboardPayload {
   };
 }
 
-const fmt = (n: number | null, suffix = '') => n == null ? '-' : `${n}${suffix}`;
+const fmt = (n: number | null, suffix = '') => n == null ? '—' : `${n}${suffix}`;
 
-function Kpi({ label, value, sub, tone, to }: { label: string; value: string | number; sub?: string; tone?: string; to?: string }) {
-  const body = (
-    <div className="vn-card" style={{ padding: 14, height: '100%' }}>
-      <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{label}</div>
-      <div style={{ fontSize: 26, fontWeight: 700, color: tone || 'var(--text-primary)', lineHeight: 1.2 }}>{value}</div>
-      {sub && <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{sub}</div>}
+type IconTone = 'primary' | 'success' | 'warning' | 'error' | 'info' | 'secondary';
+
+function StatTile({
+  icon,
+  tone,
+  label,
+  value,
+  sub,
+  to,
+}: {
+  icon: string;
+  tone: IconTone;
+  label: string;
+  value: string | number;
+  sub?: string;
+  to?: string;
+}) {
+  const navigate = useNavigate();
+  return (
+    <div
+      className="vn-stat"
+      style={to ? { cursor: 'pointer' } : undefined}
+      onClick={to ? () => navigate(to) : undefined}
+    >
+      <div className={`vn-stat-icon ${tone}`}>
+        <span className="material-icons">{icon}</span>
+      </div>
+      <div>
+        <div className="vn-stat-value">{value}</div>
+        <div className="vn-stat-label">{label}</div>
+        {sub && <div className="vn-stat-label" style={{ marginTop: 2, opacity: 0.8 }}>{sub}</div>}
+      </div>
     </div>
   );
-  return to ? <Link to={to} style={{ textDecoration: 'none' }}>{body}</Link> : body;
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div style={{ marginBottom: 20 }}>
-      <h3 style={{ margin: '0 0 8px', fontSize: 14, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: 0.5 }}>{title}</h3>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 10 }}>
+    <div className="vn-card" style={{ padding: 20, marginBottom: 20 }}>
+      <h2 style={{ margin: '0 0 14px', fontSize: 13, fontWeight: 600, color: 'var(--on-surface-variant)', textTransform: 'uppercase', letterSpacing: 0.6 }}>
+        {title}
+      </h2>
+      <div className="vn-stats" style={{ marginBottom: 0 }}>
         {children}
       </div>
     </div>
   );
+}
+
+function accuracyTone(n: number | null): IconTone {
+  if (n == null) return 'secondary';
+  if (n >= 98) return 'success';
+  if (n >= 95) return 'warning';
+  return 'error';
+}
+
+function utilizationTone(n: number | null): IconTone {
+  if (n == null) return 'secondary';
+  if (n > 95) return 'error';
+  if (n > 85) return 'warning';
+  return 'success';
 }
 
 export default function VNextWmsOperationsDashboard() {
@@ -86,71 +127,109 @@ export default function VNextWmsOperationsDashboard() {
     return () => clearInterval(id);
   }, []);
 
-  if (loading) return <div style={{ padding: 24, textAlign: 'center' }}><div className="vn-loading-spinner" /></div>;
-  if (!data) return <div className="vn-alert vn-alert-error">Could not load dashboard.</div>;
-
-  const accuracyTone = (n: number | null) => n == null ? undefined
-    : n >= 98 ? 'var(--color-success)' : n >= 95 ? 'var(--color-warning)' : 'var(--color-error)';
+  if (loading) {
+    return (
+      <div className="vn-empty">
+        <span className="material-icons" style={{ animation: 'spin 1s linear infinite' }}>refresh</span>
+        <h3>Loading operations dashboard...</h3>
+      </div>
+    );
+  }
+  if (!data) return <div className="vn-alert vn-alert-error"><span className="material-icons">error</span><div className="vn-alert-content">Could not load dashboard.</div></div>;
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+    <>
+      <div className="vn-page-header">
         <div>
-          <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>Warehouse Operations</h1>
-          <p style={{ color: 'var(--text-secondary)', margin: 0 }}>
-            Live at {new Date(data.generatedAt).toLocaleTimeString()} - refreshes every minute
-          </p>
+          <h1>Warehouse Operations</h1>
+          <p>Live at {new Date(data.generatedAt).toLocaleTimeString()} · auto-refreshes every minute</p>
         </div>
-        <button className="vn-btn vn-btn-outline" onClick={() => load(true)} disabled={refreshing}>
-          {refreshing ? 'Refreshing...' : 'Refresh'}
-        </button>
+        <div className="vn-page-actions">
+          <button className="vn-btn vn-btn-outline" onClick={() => load(true)} disabled={refreshing}>
+            <span className="material-icons" style={refreshing ? { animation: 'spin 1s linear infinite' } : undefined}>refresh</span>
+            {refreshing ? 'Refreshing...' : 'Refresh'}
+          </button>
+        </div>
       </div>
 
       <Section title="Throughput today">
-        <Kpi label="Receipts" value={data.throughput.today.receipts} sub={`${data.throughput.last7Days.receipts} last 7d`} />
-        <Kpi label="Putaways" value={data.throughput.today.putaways} sub={`${data.throughput.last7Days.putaways} last 7d`} />
-        <Kpi label="Picks" value={data.throughput.today.picks} sub={`${data.throughput.last7Days.picks} last 7d`} />
-        <Kpi label="Packs" value={data.throughput.today.packs} sub={`${data.throughput.last7Days.packs} last 7d`} />
-        <Kpi label="Shipments dispatched" value={data.throughput.today.shipmentsDispatched} sub={`${data.throughput.last7Days.shipmentsDispatched} last 7d`} />
+        <StatTile icon="move_to_inbox" tone="primary" label="Receipts" value={data.throughput.today.receipts} sub={`${data.throughput.last7Days.receipts} last 7d`} />
+        <StatTile icon="system_update_alt" tone="primary" label="Putaways" value={data.throughput.today.putaways} sub={`${data.throughput.last7Days.putaways} last 7d`} />
+        <StatTile icon="shopping_cart_checkout" tone="primary" label="Picks" value={data.throughput.today.picks} sub={`${data.throughput.last7Days.picks} last 7d`} />
+        <StatTile icon="inventory_2" tone="primary" label="Packs" value={data.throughput.today.packs} sub={`${data.throughput.last7Days.packs} last 7d`} />
+        <StatTile icon="local_shipping" tone="info" label="Shipments dispatched" value={data.throughput.today.shipmentsDispatched} sub={`${data.throughput.last7Days.shipmentsDispatched} last 7d`} />
       </Section>
 
       <Section title="Cycle times (30 days)">
-        <Kpi label="Pick cycle" value={data.cycleTimes.pickCycleMinutes != null ? `${data.cycleTimes.pickCycleMinutes}m` : '-'} sub={`${data.cycleTimes.samples.pickCycle} picks`} />
-        <Kpi label="Dock to stock" value={data.cycleTimes.dockToStockMinutes != null ? `${data.cycleTimes.dockToStockMinutes}m` : '-'} sub={`${data.cycleTimes.samples.dockToStock} putaways`} />
-        <Kpi label="Order to ship" value={data.cycleTimes.orderToShipHours != null ? `${data.cycleTimes.orderToShipHours}h` : '-'} sub={`${data.cycleTimes.samples.orderToShip} orders`} />
+        <StatTile icon="timer" tone="info" label="Pick cycle" value={data.cycleTimes.pickCycleMinutes != null ? `${data.cycleTimes.pickCycleMinutes}m` : '—'} sub={`${data.cycleTimes.samples.pickCycle} picks`} />
+        <StatTile icon="schedule" tone="info" label="Dock to stock" value={data.cycleTimes.dockToStockMinutes != null ? `${data.cycleTimes.dockToStockMinutes}m` : '—'} sub={`${data.cycleTimes.samples.dockToStock} putaways`} />
+        <StatTile icon="pending" tone="info" label="Order to ship" value={data.cycleTimes.orderToShipHours != null ? `${data.cycleTimes.orderToShipHours}h` : '—'} sub={`${data.cycleTimes.samples.orderToShip} orders`} />
       </Section>
 
       <Section title="Quality & accuracy (30 days)">
-        <Kpi label="Pick accuracy" value={fmt(data.quality.pickAccuracyPercent, '%')} sub={`${data.quality.pickAccuracySamples} picks`} tone={accuracyTone(data.quality.pickAccuracyPercent)} />
-        <Kpi label="Pack audit pass rate" value={fmt(data.quality.packAuditPassRatePercent, '%')} sub={`${data.quality.packAuditSamples} audits`} tone={accuracyTone(data.quality.packAuditPassRatePercent)} to="/wms/pack-audits" />
-        <Kpi label="Inventory accuracy" value={fmt(data.quality.inventoryAccuracyPercent, '%')} sub={`${data.quality.cycleCountSamples} count lines`} tone={accuracyTone(data.quality.inventoryAccuracyPercent)} />
+        <StatTile
+          icon="verified"
+          tone={accuracyTone(data.quality.pickAccuracyPercent)}
+          label="Pick accuracy"
+          value={fmt(data.quality.pickAccuracyPercent, '%')}
+          sub={`${data.quality.pickAccuracySamples} picks`}
+        />
+        <StatTile
+          icon="fact_check"
+          tone={accuracyTone(data.quality.packAuditPassRatePercent)}
+          label="Pack audit pass rate"
+          value={fmt(data.quality.packAuditPassRatePercent, '%')}
+          sub={`${data.quality.packAuditSamples} audits`}
+          to="/wms/pack-audits"
+        />
+        <StatTile
+          icon="inventory"
+          tone={accuracyTone(data.quality.inventoryAccuracyPercent)}
+          label="Inventory accuracy"
+          value={fmt(data.quality.inventoryAccuracyPercent, '%')}
+          sub={`${data.quality.cycleCountSamples} count lines`}
+        />
       </Section>
 
       <Section title="Live work queue">
-        <Kpi label="Pending picks" value={data.liveWork.pendingPickTasks} to="/wms/picking" />
-        <Kpi label="Pending putaways" value={data.liveWork.pendingPutawayTasks} to="/wms/putaway" />
-        <Kpi label="Pending packs" value={data.liveWork.pendingPackTasks} to="/wms/packing" />
-        <Kpi label="Active waves" value={data.liveWork.activeWaves} to="/wms/waves" />
-        <Kpi label="Receiving in progress" value={data.liveWork.receivingInProgress} to="/wms/receiving" />
+        <StatTile icon="shopping_cart" tone="warning" label="Pending picks" value={data.liveWork.pendingPickTasks} to="/wms/picking" />
+        <StatTile icon="system_update_alt" tone="warning" label="Pending putaways" value={data.liveWork.pendingPutawayTasks} to="/wms/putaway" />
+        <StatTile icon="inventory_2" tone="warning" label="Pending packs" value={data.liveWork.pendingPackTasks} to="/wms/packing" />
+        <StatTile icon="waves" tone="primary" label="Active waves" value={data.liveWork.activeWaves} to="/wms/waves" />
+        <StatTile icon="move_to_inbox" tone="primary" label="Receiving in progress" value={data.liveWork.receivingInProgress} to="/wms/receiving" />
       </Section>
 
       <Section title="Exceptions">
-        <Kpi label="Open issues" value={data.exceptions.openIssues} sub={`${data.exceptions.criticalIssues} critical`} tone={data.exceptions.criticalIssues > 0 ? 'var(--color-error)' : undefined} to="/issues" />
-        <Kpi label="Cutoff: critical" value={data.exceptions.cutoffAtRisk.critical} sub={`${data.exceptions.cutoffAtRisk.warning} warning`} tone={data.exceptions.cutoffAtRisk.critical > 0 ? 'var(--color-error)' : undefined} to="/wms/cutoff-monitor" />
-        <Kpi label="Returns in progress" value={data.exceptions.pendingReturns} to="/wms/returns" />
-        <Kpi label="Open pack audit fails" value={data.exceptions.packAuditFailuresOpen} to="/wms/pack-audits" />
+        <StatTile
+          icon="warning"
+          tone={data.exceptions.criticalIssues > 0 ? 'error' : 'warning'}
+          label="Open issues"
+          value={data.exceptions.openIssues}
+          sub={`${data.exceptions.criticalIssues} critical`}
+          to="/issues"
+        />
+        <StatTile
+          icon="schedule"
+          tone={data.exceptions.cutoffAtRisk.critical > 0 ? 'error' : 'warning'}
+          label="Cutoff risk"
+          value={data.exceptions.cutoffAtRisk.critical}
+          sub={`${data.exceptions.cutoffAtRisk.warning} warning`}
+          to="/wms/cutoff-monitor"
+        />
+        <StatTile icon="keyboard_return" tone="info" label="Returns in progress" value={data.exceptions.pendingReturns} to="/wms/returns" />
+        <StatTile icon="report" tone="error" label="Open pack audit fails" value={data.exceptions.packAuditFailuresOpen} to="/wms/pack-audits" />
       </Section>
 
       <Section title="Capacity">
-        <Kpi label="Total bins" value={data.capacity.totalBins} />
-        <Kpi label="Bins with inventory" value={data.capacity.binsWithInventory} />
-        <Kpi label="Utilization" value={fmt(data.capacity.utilizationPercent, '%')} tone={
-          data.capacity.utilizationPercent == null ? undefined
-            : data.capacity.utilizationPercent > 85 ? 'var(--color-warning)'
-            : data.capacity.utilizationPercent > 95 ? 'var(--color-error)'
-            : 'var(--color-success)'
-        } />
+        <StatTile icon="grid_view" tone="primary" label="Total bins" value={data.capacity.totalBins} />
+        <StatTile icon="inventory_2" tone="primary" label="Bins with inventory" value={data.capacity.binsWithInventory} />
+        <StatTile
+          icon="storage"
+          tone={utilizationTone(data.capacity.utilizationPercent)}
+          label="Utilization"
+          value={fmt(data.capacity.utilizationPercent, '%')}
+        />
       </Section>
-    </div>
+    </>
   );
 }

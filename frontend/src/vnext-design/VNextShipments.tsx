@@ -62,6 +62,57 @@ function marginPercent(marginCents?: number | null, revenueCents?: number | null
   return `${((marginCents / revenueCents) * 100).toFixed(1)}%`;
 }
 
+function csvEscape(value: unknown): string {
+  if (value == null) return '';
+  const s = String(value);
+  if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+function exportShipmentsCsv(rows: Shipment[], includeFinancials: boolean): void {
+  const headers = [
+    'Reference', 'Status', 'Customer', 'Origin', 'Destination', 'Carrier', 'Lane',
+    'Pickup Date', 'Delivery Date', 'PRO #',
+    ...(includeFinancials ? ['Revenue (USD)', 'Cost (USD)', 'Margin (USD)', 'Margin %'] : []),
+  ];
+  const lines = [headers.join(',')];
+  for (const s of rows) {
+    const fin = s.shipmentFinancialSummary;
+    const revenue = fin?.actualRevenueCents ?? fin?.expectedRevenueCents;
+    const cost = fin?.actualCostCents ?? fin?.expectedCostCents;
+    const margin = fin?.actualMarginCents ?? fin?.expectedMarginCents;
+    const row = [
+      s.reference || s.id,
+      s.status,
+      s.customer?.name || '',
+      s.origin ? `${s.origin.city}, ${s.origin.state}` : '',
+      s.destination ? `${s.destination.city}, ${s.destination.state}` : '',
+      s.carrier?.name || '',
+      s.lane?.name || '',
+      s.pickupDate || '',
+      s.deliveryDate || '',
+      s.proNumber || '',
+      ...(includeFinancials ? [
+        revenue != null ? (revenue / 100).toFixed(2) : '',
+        cost != null ? (cost / 100).toFixed(2) : '',
+        margin != null ? (margin / 100).toFixed(2) : '',
+        (margin != null && revenue != null && revenue !== 0) ? ((margin / revenue) * 100).toFixed(1) : '',
+      ] : []),
+    ].map(csvEscape);
+    lines.push(row.join(','));
+  }
+  const blob = new Blob(['\uFEFF' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const stamp = new Date().toISOString().slice(0, 10);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `shipments-${stamp}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 export default function VNextShipments() {
   const navigate = useNavigate();
   const { isBroker } = useOrgContext();
@@ -194,11 +245,11 @@ export default function VNextShipments() {
           <p>{shipments.length} total shipments</p>
         </div>
         <div className="vn-page-actions">
-          <button className="vn-btn vn-btn-outline">
+          <button className="vn-btn vn-btn-outline" onClick={() => exportShipmentsCsv(filtered, showFinancials)}>
             <span className="material-icons">download</span>
             Export
           </button>
-          <button className="vn-btn vn-btn-primary">
+          <button className="vn-btn vn-btn-primary" onClick={() => navigate('/shipments/create')}>
             <span className="material-icons">add</span>
             New Shipment
           </button>
@@ -270,10 +321,10 @@ export default function VNextShipments() {
             <option>Flatbed</option>
           </select>
           <button
-            className={`vn-btn vn-btn-sm ${showFinancials ? 'vn-btn-primary' : 'vn-btn-outline'}`}
+            className={`vn-btn ${showFinancials ? 'vn-btn-primary' : 'vn-btn-outline'}`}
             onClick={() => setShowFinancials(!showFinancials)}
             title="Toggle financial columns"
-            style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13 }}
+            style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, padding: '7px 12px' }}
           >
             <span className="material-icons" style={{ fontSize: 16 }}>attach_money</span>
             Margin

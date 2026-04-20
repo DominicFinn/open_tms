@@ -6,22 +6,30 @@ import { PrismaClient } from '@prisma/client';
 export async function cartonCatalogueRoutes(server: FastifyInstance) {
   const prisma = container.resolve<PrismaClient>(TOKENS.PrismaClient);
 
-  // GET /api/v1/carton-catalogue?locationId=xxx
+  // GET /api/v1/carton-catalogue?locationId=xxx&includeArchived=true
   server.get('/api/v1/carton-catalogue', {
     schema: {
       tags: ['WMS - Cartonization'],
-      summary: 'List available carton types for a location',
-      querystring: { type: 'object', properties: { locationId: { type: 'string', format: 'uuid' } } },
+      summary: 'List carton types for a location',
+      querystring: {
+        type: 'object',
+        properties: {
+          locationId: { type: 'string', format: 'uuid' },
+          includeArchived: { type: 'boolean' },
+        },
+      },
     },
   }, async (req: FastifyRequest) => {
     const q = req.query as any;
     const orgId = (req as any).orgId || 'default-org';
-    const where: any = { orgId, active: true };
+    const where: any = { orgId };
+    const includeArchived = q.includeArchived === true || q.includeArchived === 'true';
+    if (!includeArchived) where.active = true;
     if (q.locationId) where.locationId = q.locationId;
 
     const cartons = await prisma.cartonCatalogue.findMany({
       where,
-      orderBy: [{ lengthMm: 'asc' }, { widthMm: 'asc' }],
+      orderBy: [{ active: 'desc' }, { lengthMm: 'asc' }, { widthMm: 'asc' }],
     });
 
     return { data: cartons, error: null };
@@ -83,6 +91,14 @@ export async function cartonCatalogueRoutes(server: FastifyInstance) {
       heightMm: z.number().int().min(1).optional(),
       maxWeightGrams: z.number().int().min(1).optional(),
       unitCostCents: z.number().int().nullable().optional(),
+      temperatureZone: z.enum(['any', 'ambient', 'refrigerated', 'frozen', 'dry_ice']).optional(),
+      insulated: z.boolean().optional(),
+      insulationHours: z.number().int().nullable().optional(),
+      tamperEvident: z.boolean().optional(),
+      valueClass: z.enum(['any', 'standard', 'high_value']).optional(),
+      hazmatRated: z.boolean().optional(),
+      hazmatClasses: z.array(z.string()).optional(),
+      materialType: z.enum(['corrugated', 'plastic', 'metal', 'foam', 'composite']).optional(),
       active: z.boolean().optional(),
     }).parse((req as any).body);
 
@@ -92,10 +108,22 @@ export async function cartonCatalogueRoutes(server: FastifyInstance) {
   });
 
   // DELETE /api/v1/carton-catalogue/:id
+  // Falls back to archive (active=false) if the carton is referenced by pack audits —
+  // preserving history for quality compliance.
   server.delete('/api/v1/carton-catalogue/:id', {
-    schema: { tags: ['WMS - Cartonization'], summary: 'Remove a carton type' },
+    schema: { tags: ['WMS - Cartonization'], summary: 'Archive (soft-delete) or remove a carton type' },
   }, async (req: FastifyRequest) => {
     const { id } = req.params as { id: string };
+
+    const referencedCount = await prisma.packAudit.count({ where: { cartonCatalogueId: id } });
+    if (referencedCount > 0) {
+      const archived = await prisma.cartonCatalogue
+        .update({ where: { id }, data: { active: false } })
+        .catch(() => null);
+      if (!archived) return { data: null, error: 'Not found' };
+      return { data: { archived: true, referencedCount }, error: null };
+    }
+
     await prisma.cartonCatalogue.delete({ where: { id } }).catch(() => null);
     return { data: { deleted: true }, error: null };
   });

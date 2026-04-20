@@ -89,6 +89,7 @@ import { TenderRepository } from '../repositories/TenderRepository.js';
 import { CarrierUserRepository } from '../repositories/CarrierUserRepository.js';
 import { TenderService } from '../services/TenderService.js';
 import { CarrierAuthService } from '../services/CarrierAuthService.js';
+import { AuthService } from '../services/AuthService.js';
 import { CustomerUserRepository } from '../repositories/CustomerUserRepository.js';
 import { CustomerAuthService } from '../services/CustomerAuthService.js';
 import { TradingPartnerRepository } from '../repositories/TradingPartnerRepository.js';
@@ -472,6 +473,10 @@ export function registerDependencies(prisma: PrismaClient): void {
 
   container.singleton(TOKENS.ICarrierAuthService).toFactory(() => {
     return new CarrierAuthService(container.resolve(TOKENS.ICarrierUserRepository));
+  });
+
+  container.singleton(TOKENS.IAuthService).toFactory(() => {
+    return new AuthService(container.resolve(TOKENS.PrismaClient));
   });
 
   // Customer Portal

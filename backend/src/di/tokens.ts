@@ -51,6 +51,7 @@ export const TOKENS = {
   ICarrierUserRepository: Symbol.for('ICarrierUserRepository'),
   ITenderService: Symbol.for('ITenderService'),
   ICarrierAuthService: Symbol.for('ICarrierAuthService'),
+  IAuthService: Symbol.for('IAuthService'),
 
   // Customer Portal tokens
   ICustomerUserRepository: Symbol.for('ICustomerUserRepository'),

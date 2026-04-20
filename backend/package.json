@@ -11,7 +11,9 @@
     "test:watch": "jest --config jest.config.cjs --watch",
     "test:coverage": "jest --config jest.config.cjs --coverage",
     "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev --name init"
+    "prisma:migrate": "prisma migrate dev --name init",
+    "seed": "tsx --env-file=.env src/scripts/comprehensive-seed.ts",
+    "seed:keep": "tsx --env-file=.env src/scripts/comprehensive-seed.ts --no-wipe"
   },
   "dependencies": {
     "@fastify/cors": "^8.4.2",

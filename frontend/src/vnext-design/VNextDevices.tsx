@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { API_URL } from '../api';
 import { getDeviceImageUrl } from './deviceImages';
 
@@ -61,6 +61,7 @@ function assignedLabel(device: Device): string {
 }
 
 export default function VNextDevices() {
+  const navigate = useNavigate();
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -138,153 +139,143 @@ export default function VNextDevices() {
         </div>
       </div>
 
-      {/* Stats Row */}
-      <div className="vn-stats-row" style={{ marginBottom: 24 }}>
-        <div className="vn-stat-card">
-          <div className="vn-stat-icon" style={{ background: 'var(--primary-container)', color: 'var(--primary)' }}>
-            <span className="material-icons">sensors</span>
-          </div>
-          <div className="vn-stat-content">
-            <span className="vn-stat-value">{totalCount}</span>
-            <span className="vn-stat-label">Total Devices</span>
+      {/* Stats */}
+      <div className="vn-stats">
+        <div className="vn-stat">
+          <div className="vn-stat-icon primary"><span className="material-icons">sensors</span></div>
+          <div>
+            <div className="vn-stat-value">{totalCount}</div>
+            <div className="vn-stat-label">Total Devices</div>
           </div>
         </div>
-        <div className="vn-stat-card">
-          <div className="vn-stat-icon" style={{ background: 'var(--success-container, rgba(0,200,83,0.1))', color: 'var(--success)' }}>
-            <span className="material-icons">check_circle</span>
-          </div>
-          <div className="vn-stat-content">
-            <span className="vn-stat-value">{activeCount}</span>
-            <span className="vn-stat-label">Active</span>
+        <div className="vn-stat">
+          <div className="vn-stat-icon success"><span className="material-icons">check_circle</span></div>
+          <div>
+            <div className="vn-stat-value">{activeCount}</div>
+            <div className="vn-stat-label">Active</div>
           </div>
         </div>
-        <div className="vn-stat-card">
-          <div className="vn-stat-icon" style={{ background: 'var(--error-container, rgba(255,0,0,0.1))', color: 'var(--error)' }}>
-            <span className="material-icons">warning</span>
-          </div>
-          <div className="vn-stat-content">
-            <span className="vn-stat-value">{alertCount}</span>
-            <span className="vn-stat-label">Alerts</span>
+        <div className="vn-stat">
+          <div className="vn-stat-icon error"><span className="material-icons">warning</span></div>
+          <div>
+            <div className="vn-stat-value">{alertCount}</div>
+            <div className="vn-stat-label">Low Battery</div>
           </div>
         </div>
-        <div className="vn-stat-card">
-          <div className="vn-stat-icon" style={{ background: 'var(--info-container, rgba(0,150,255,0.1))', color: 'var(--info, var(--primary))' }}>
-            <span className="material-icons">link</span>
-          </div>
-          <div className="vn-stat-content">
-            <span className="vn-stat-value">{assignedCount}</span>
-            <span className="vn-stat-label">Assigned</span>
+        <div className="vn-stat">
+          <div className="vn-stat-icon info"><span className="material-icons">link</span></div>
+          <div>
+            <div className="vn-stat-value">{assignedCount}</div>
+            <div className="vn-stat-label">Assigned</div>
           </div>
         </div>
       </div>
 
-      {/* Filter Bar */}
-      <div className="vn-filter-bar" style={{ marginBottom: 16 }}>
-        <div className="vn-search">
-          <span className="material-icons">search</span>
-          <input
-            type="text"
-            placeholder="Search devices..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
+      <div className="vn-card">
+        <div className="vn-filters">
+          <div className="vn-filter-group" style={{ flex: 1 }}>
+            <span className="material-icons">search</span>
+            <input
+              className="vn-filter-input"
+              placeholder="Search devices by name, ID, or model..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              style={{ width: '100%' }}
+            />
+          </div>
+          <select
+            className="vn-filter-select"
+            value={statusFilter}
+            onChange={e => setStatusFilter(e.target.value)}
+          >
+            <option value="all">All Statuses</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+            <option value="retired">Retired</option>
+          </select>
         </div>
-        <select
-          className="vn-select"
-          value={statusFilter}
-          onChange={e => setStatusFilter(e.target.value)}
-        >
-          <option value="all">All Statuses</option>
-          <option value="active">Active</option>
-          <option value="inactive">Inactive</option>
-          <option value="retired">Retired</option>
-        </select>
-      </div>
 
-      {/* Table */}
-      {filtered.length === 0 ? (
-        <div className="vn-empty">
-          <span className="material-icons">sensors</span>
-          <h3>No devices found</h3>
-          <p>Register a device to get started with IoT tracking.</p>
-        </div>
-      ) : (
-        <div className="vn-card">
-          <div className="vn-card-body vn-card-flush">
-            <div className="vn-table-wrap">
-              <table className="vn-table">
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Model</th>
-                    <th>Status</th>
-                    <th>Battery</th>
-                    <th>Last Seen</th>
-                    <th>Assigned To</th>
-                    <th>Readings</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map(device => {
-                    const statusChip =
-                      device.status === 'active' ? 'success' :
-                      device.status === 'inactive' ? 'warning' : 'secondary';
-                    return (
-                      <tr key={device.id}>
-                        <td>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                            {(() => {
-                              const imgUrl = getDeviceImageUrl(device.model);
-                              return imgUrl ? (
-                                <img src={imgUrl} alt={device.model} style={{ width: 36, height: 36, objectFit: 'contain', flexShrink: 0 }} />
-                              ) : (
-                                <span className="material-icons" style={{ fontSize: 32, color: 'var(--on-surface-variant)', flexShrink: 0 }}>sensors</span>
-                              );
-                            })()}
-                            <div>
-                              <div style={{ fontWeight: 600, color: 'var(--on-surface)' }}>{device.name}</div>
-                              <div style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>{device.displayId || device.externalId}</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td style={{ fontSize: 13 }}>{device.model || '—'}</td>
-                        <td>
-                          <span className={`vn-chip vn-chip-${statusChip}`}>{device.status}</span>
-                        </td>
-                        <td>
-                          {device.batteryLevel != null ? (
-                            <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: batteryColor(device.batteryLevel) }}>
-                              <span className="material-icons" style={{ fontSize: 18 }}>{batteryIcon(device.batteryLevel)}</span>
-                              {device.batteryLevel}%
-                            </span>
+        <div className="vn-table-wrap">
+          <table className="vn-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Model</th>
+                <th>Status</th>
+                <th>Battery</th>
+                <th>Last Seen</th>
+                <th>Assigned To</th>
+                <th>Readings</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map(device => {
+                const statusChip =
+                  device.status === 'active' ? 'success' :
+                  device.status === 'inactive' ? 'warning' : 'secondary';
+                return (
+                  <tr
+                    key={device.id}
+                    onClick={() => navigate(`/devices/${device.id}`)}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        {(() => {
+                          const imgUrl = getDeviceImageUrl(device.model);
+                          return imgUrl ? (
+                            <img src={imgUrl} alt={device.model} style={{ width: 36, height: 36, objectFit: 'contain', flexShrink: 0 }} />
                           ) : (
-                            <span style={{ color: 'var(--on-surface-variant)' }}>—</span>
-                          )}
-                        </td>
-                        <td style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>
-                          {relativeTime(device.lastSeenAt)}
-                        </td>
-                        <td style={{ fontSize: 13 }}>
-                          {assignedLabel(device)}
-                        </td>
-                        <td style={{ fontSize: 13 }}>
-                          {device._count?.sensorReadings ?? 0}
-                        </td>
-                        <td>
-                          <Link to={`/devices/${device.id}`} className="vn-btn-icon" title="View device">
-                            <span className="material-icons" style={{ fontSize: 18 }}>visibility</span>
-                          </Link>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                            <span className="material-icons" style={{ fontSize: 32, color: 'var(--on-surface-variant)', flexShrink: 0 }}>sensors</span>
+                          );
+                        })()}
+                        <div>
+                          <div style={{ fontWeight: 600, color: 'var(--on-surface)' }}>{device.name}</div>
+                          <div style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>{device.displayId || device.externalId}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td style={{ fontSize: 13 }}>{device.model || '—'}</td>
+                    <td>
+                      <span className={`vn-chip vn-chip-${statusChip}`}>{device.status}</span>
+                    </td>
+                    <td>
+                      {device.batteryLevel != null ? (
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: batteryColor(device.batteryLevel) }}>
+                          <span className="material-icons" style={{ fontSize: 18 }}>{batteryIcon(device.batteryLevel)}</span>
+                          {device.batteryLevel}%
+                        </span>
+                      ) : (
+                        <span style={{ color: 'var(--on-surface-variant)' }}>—</span>
+                      )}
+                    </td>
+                    <td style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>
+                      {relativeTime(device.lastSeenAt)}
+                    </td>
+                    <td style={{ fontSize: 13 }}>
+                      {assignedLabel(device)}
+                    </td>
+                    <td style={{ fontSize: 13 }}>
+                      {device._count?.sensorReadings ?? 0}
+                    </td>
+                  </tr>
+                );
+              })}
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={7}>
+                    <div className="vn-empty">
+                      <span className="material-icons">sensors</span>
+                      <h3>No devices found</h3>
+                      <p>Register a device to get started with IoT tracking.</p>
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
-      )}
+      </div>
     </>
   );
 }
