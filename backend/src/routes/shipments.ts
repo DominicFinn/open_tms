@@ -8,6 +8,18 @@ import { CREATE_SHIPMENT } from '../commands/shipments/CreateShipmentCommand.js'
 import { UPDATE_SHIPMENT } from '../commands/shipments/UpdateShipmentCommand.js';
 import { ARCHIVE_SHIPMENT } from '../commands/shipments/ArchiveShipmentCommand.js';
 
+// Accepts YYYY-MM-DD (HTML date input), YYYY-MM-DDTHH:mm[:ss[.sss]][Z] (datetime-local), or full ISO.
+// Normalizes to a full ISO string.
+const flexibleDate = z.string().trim().min(1).transform((v, ctx) => {
+  const candidate = /^\d{4}-\d{2}-\d{2}$/.test(v) ? `${v}T00:00:00Z` : v;
+  const parsed = new Date(candidate);
+  if (isNaN(parsed.getTime())) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Invalid date or datetime' });
+    return z.NEVER;
+  }
+  return parsed.toISOString();
+});
+
 export async function shipmentRoutes(server: FastifyInstance) {
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
 
@@ -16,7 +28,9 @@ export async function shipmentRoutes(server: FastifyInstance) {
     return org?.id || 'default';
   };
 
-  // Get all shipments (uses denormalized read model for performance)
+  // Get all shipments (uses denormalized read model for performance).
+  // We enrich with shipmentTypeId from the live Shipment table so the list
+  // can render the type icon without a projection change.
   server.get('/api/v1/shipments', async (req: FastifyRequest, _reply: FastifyReply) => {
     const { status, customerId, carrierId } = (req.query as any) || {};
     const where: any = {};
@@ -28,7 +42,16 @@ export async function shipmentRoutes(server: FastifyInstance) {
       where,
       orderBy: { createdAt: 'desc' },
     });
-    return { data: shipments, error: null };
+    if (shipments.length === 0) return { data: shipments, error: null };
+
+    const ids = shipments.map(s => s.id);
+    const typeLinks = await server.prisma.shipment.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, shipmentTypeId: true },
+    });
+    const typeById = new Map(typeLinks.map(t => [t.id, t.shipmentTypeId]));
+    const enriched = shipments.map(s => ({ ...s, shipmentTypeId: typeById.get(s.id) ?? null }));
+    return { data: enriched, error: null };
   });
 
   // Create shipment
@@ -45,8 +68,11 @@ export async function shipmentRoutes(server: FastifyInstance) {
       lng: z.number().optional(),
     });
 
+    // Create always produces a draft. Customer, origin, and destination are the
+    // minimum structural requirements; everything else (dates, windows, PRO, items,
+    // reference) is optional and soft-warned client-side based on ShipmentType config.
     const schema = z.object({
-      reference: z.string().min(1),
+      reference: z.string().optional(),
       customerId: z.string().uuid(),
       laneId: z.string().uuid().optional(),
       carrierId: z.string().uuid().optional(),
@@ -54,8 +80,13 @@ export async function shipmentRoutes(server: FastifyInstance) {
       destinationId: z.string().uuid().optional(),
       originData: addressSchema.optional(),
       destinationData: addressSchema.optional(),
-      pickupDate: z.string().datetime().optional(),
-      deliveryDate: z.string().datetime().optional(),
+      pickupDate: flexibleDate.optional(),
+      deliveryDate: flexibleDate.optional(),
+      pickupWindowStart: flexibleDate.optional(),
+      pickupWindowEnd: flexibleDate.optional(),
+      deliveryWindowStart: flexibleDate.optional(),
+      deliveryWindowEnd: flexibleDate.optional(),
+      shipmentTypeId: z.string().uuid().optional(),
       proNumber: z.string().optional(),
       items: z.array(z.object({
         sku: z.string(),
@@ -65,7 +96,6 @@ export async function shipmentRoutes(server: FastifyInstance) {
         volumeM3: z.number().nonnegative().optional()
       })).default([])
     }).refine((data) => {
-      // Accept lane, explicit IDs, or raw address data
       return (data.laneId) ||
         (data.originId && data.destinationId) ||
         (data.originData && data.destinationData);
@@ -189,8 +219,13 @@ export async function shipmentRoutes(server: FastifyInstance) {
     const body = z.object({
       reference: z.string().min(1).optional(),
       status: z.string().optional(),
-      pickupDate: z.string().datetime().optional(),
-      deliveryDate: z.string().datetime().optional(),
+      pickupDate: flexibleDate.optional(),
+      deliveryDate: flexibleDate.optional(),
+      pickupWindowStart: flexibleDate.optional(),
+      pickupWindowEnd: flexibleDate.optional(),
+      deliveryWindowStart: flexibleDate.optional(),
+      deliveryWindowEnd: flexibleDate.optional(),
+      shipmentTypeId: z.string().uuid().nullable().optional(),
       customerId: z.string().uuid().optional(),
       laneId: z.string().uuid().optional(),
       carrierId: z.string().uuid().nullable().optional(),

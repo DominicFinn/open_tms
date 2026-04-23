@@ -1062,6 +1062,7 @@ export default function VNextShipmentDetail() {
   const mapRef = useRef<HTMLDivElement>(null);
   const [activeTab, setActiveTab] = useState('events');
   const [shipment, setShipment] = useState<any>(null);
+  const [shipmentType, setShipmentType] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [documents, setDocuments] = useState<any[]>([]);
@@ -1079,6 +1080,12 @@ export default function VNextShipmentDetail() {
       .then(json => {
         if (json.error) throw new Error(json.error);
         setShipment(json.data);
+        if (json.data?.shipmentTypeId) {
+          fetch(`${API_URL}/api/v1/shipment-types/${json.data.shipmentTypeId}`)
+            .then(r => r.json())
+            .then(j => { if (!j.error) setShipmentType(j.data); })
+            .catch(() => {});
+        }
       })
       .catch(err => setError(err.message))
       .finally(() => setLoading(false));
@@ -1237,12 +1244,37 @@ export default function VNextShipmentDetail() {
       </div>
 
       <div className="vn-page-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-          <h1>{shipment.reference || id}</h1>
-          <span className="vn-chip vn-chip-info">
-            <span className="vn-live-dot" style={{ width: 8, height: 8, marginRight: 2 }} />
-            {shipment.status || 'Unknown'}
-          </span>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {shipmentType && (
+              <span
+                className="material-icons"
+                style={{ color: shipmentType.color, fontSize: 28 }}
+                title={shipmentType.name}
+              >{shipmentType.icon}</span>
+            )}
+            <h1 style={{ margin: 0 }}>{shipment.reference || id}</h1>
+          </div>
+          <div className="vn-page-header-meta">
+            <span className="vn-chip vn-chip-info">
+              <span className="vn-live-dot" style={{ width: 8, height: 8, marginRight: 2 }} />
+              {shipment.status || 'Unknown'}
+            </span>
+            {shipmentType && (
+              <span
+                className="vn-chip"
+                style={{ background: `${shipmentType.color}20`, color: shipmentType.color, border: `1px solid ${shipmentType.color}40` }}
+              >
+                {shipmentType.name}
+              </span>
+            )}
+            {shipment.proNumber && (
+              <span style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>PRO# {shipment.proNumber}</span>
+            )}
+            {shipment.customer?.name && (
+              <span style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>· {shipment.customer.name}</span>
+            )}
+          </div>
         </div>
         <div className="vn-page-actions">
           <button className="vn-btn vn-btn-outline vn-btn-sm">
@@ -1558,9 +1590,19 @@ export default function VNextShipmentDetail() {
               <div className="vn-info-item" style={{ marginBottom: 8 }}>
                 <label>Address</label><span>{[origin.address1, origin.city, origin.state].filter(Boolean).join(', ') || '—'}</span>
               </div>
-              <div className="vn-info-item">
+              <div className="vn-info-item" style={{ marginBottom: 8 }}>
                 <label>Pickup Date</label><span>{shipment.pickupDate ? new Date(shipment.pickupDate).toLocaleDateString() : '—'}</span>
               </div>
+              {(shipment.pickupWindowStart || shipment.pickupWindowEnd) && (
+                <div className="vn-info-item">
+                  <label>Pickup Window</label>
+                  <span>
+                    {shipment.pickupWindowStart ? new Date(shipment.pickupWindowStart).toLocaleString() : '—'}
+                    {' – '}
+                    {shipment.pickupWindowEnd ? new Date(shipment.pickupWindowEnd).toLocaleString() : '—'}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -1577,9 +1619,19 @@ export default function VNextShipmentDetail() {
               <div className="vn-info-item" style={{ marginBottom: 8 }}>
                 <label>Address</label><span>{[destination.address1, destination.city, destination.state].filter(Boolean).join(', ') || '—'}</span>
               </div>
-              <div className="vn-info-item">
+              <div className="vn-info-item" style={{ marginBottom: 8 }}>
                 <label>Delivery Date</label><span>{shipment.deliveryDate ? new Date(shipment.deliveryDate).toLocaleDateString() : '—'}</span>
               </div>
+              {(shipment.deliveryWindowStart || shipment.deliveryWindowEnd) && (
+                <div className="vn-info-item">
+                  <label>Delivery Window</label>
+                  <span>
+                    {shipment.deliveryWindowStart ? new Date(shipment.deliveryWindowStart).toLocaleString() : '—'}
+                    {' – '}
+                    {shipment.deliveryWindowEnd ? new Date(shipment.deliveryWindowEnd).toLocaleString() : '—'}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         </div>

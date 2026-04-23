@@ -36,6 +36,7 @@ import { shipmentRoutes } from './routes/shipments.js';
 import { laneRoutes } from './routes/lanes.js';
 import { laneRouteRoutes } from './routes/laneRoutes.js';
 import { orderRoutes } from './routes/orders.js';
+import { shipmentTypeRoutes } from './routes/shipmentTypes.js';
 import { organizationRoutes } from './routes/organization.js';
 import { pendingLaneRequestRoutes } from './routes/pendingLaneRequests.js';
 import { seedRoutes } from './routes/seed.js';
@@ -173,6 +174,14 @@ async function start() {
   // Initialize Dependency Injection Container
   registerDependencies(server.prisma);
 
+  // Seed built-in shipment types (idempotent)
+  try {
+    const { seedBuiltInShipmentTypes } = await import('./bootstrap/seedShipmentTypes.js');
+    await seedBuiltInShipmentTypes(server.prisma);
+  } catch (err) {
+    server.log.warn(`[Bootstrap] Shipment type seed failed: ${(err as Error).message}`);
+  }
+
   // Health check
   server.get('/health', async () => ({ status: 'ok' }));
 
@@ -216,6 +225,7 @@ async function start() {
     await app.register(carrierRoutes);
     await app.register(locationRoutes);
     await app.register(shipmentRoutes);
+    await app.register(shipmentTypeRoutes);
     await app.register(laneRoutes);
     await app.register(laneRouteRoutes);
     await app.register(orderRoutes);

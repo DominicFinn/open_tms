@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API_URL } from '../api';
 
@@ -45,6 +45,23 @@ export default function VNextOrders() {
   const [customerFilter, setCustomerFilter] = useState('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [importMenuOpen, setImportMenuOpen] = useState(false);
+  const [rowMenuOpenId, setRowMenuOpenId] = useState<string | null>(null);
+  const importMenuRef = useRef<HTMLDivElement>(null);
+  const rowMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (importMenuRef.current && !importMenuRef.current.contains(e.target as Node)) {
+        setImportMenuOpen(false);
+      }
+      if (rowMenuRef.current && !rowMenuRef.current.contains(e.target as Node)) {
+        setRowMenuOpenId(null);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -112,11 +129,26 @@ export default function VNextOrders() {
           <p>{orders.length} orders</p>
         </div>
         <div className="vn-page-actions">
-          <button className="vn-btn vn-btn-outline">
-            <span className="material-icons">upload_file</span>
-            Import
-          </button>
-          <button className="vn-btn vn-btn-primary">
+          <div ref={importMenuRef} style={{ position: 'relative' }}>
+            <button className="vn-btn vn-btn-outline" onClick={() => setImportMenuOpen(o => !o)}>
+              <span className="material-icons">upload_file</span>
+              Import
+              <span className="material-icons" style={{ fontSize: 18 }}>arrow_drop_down</span>
+            </button>
+            {importMenuOpen && (
+              <div className="vn-menu" style={{ position: 'absolute', top: '100%', right: 0, marginTop: 4, minWidth: 180, zIndex: 10 }}>
+                <button className="vn-menu-item" onClick={() => { setImportMenuOpen(false); navigate('/orders/import/csv'); }}>
+                  <span className="material-icons" style={{ fontSize: 18 }}>table_chart</span>
+                  Import from CSV
+                </button>
+                <button className="vn-menu-item" onClick={() => { setImportMenuOpen(false); navigate('/orders/import/edi'); }}>
+                  <span className="material-icons" style={{ fontSize: 18 }}>swap_horiz</span>
+                  Import from EDI
+                </button>
+              </div>
+            )}
+          </div>
+          <button className="vn-btn vn-btn-primary" onClick={() => navigate('/orders/create')}>
             <span className="material-icons">add</span>
             New Order
           </button>
@@ -250,7 +282,7 @@ export default function VNextOrders() {
                   <td>{o.deliveryStatus || '—'}</td>
                   <td><span className={`vn-chip vn-chip-${orderStatusColor(o.status)}`}>{o.status}</span></td>
                   <td onClick={(e) => e.stopPropagation()}>
-                    <div style={{ display: 'flex', gap: 4 }}>
+                    <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                       {sNorm === 'readytoship' && (
                         <button className="vn-btn vn-btn-primary vn-btn-sm" onClick={() => navigate('/carrier-bidding')}>
                           <span className="material-icons">local_shipping</span>
@@ -263,7 +295,27 @@ export default function VNextOrders() {
                           Approve
                         </button>
                       )}
-                      <button className="vn-btn-icon"><span className="material-icons" style={{ fontSize: 18 }}>more_vert</span></button>
+                      <div ref={rowMenuOpenId === o.id ? rowMenuRef : undefined} style={{ position: 'relative' }}>
+                        <button className="vn-btn-icon" onClick={() => setRowMenuOpenId(rowMenuOpenId === o.id ? null : o.id)}>
+                          <span className="material-icons" style={{ fontSize: 18 }}>more_vert</span>
+                        </button>
+                        {rowMenuOpenId === o.id && (
+                          <div className="vn-menu" style={{ position: 'absolute', top: '100%', right: 0, marginTop: 4, minWidth: 180, zIndex: 10 }}>
+                            <button className="vn-menu-item" onClick={() => { setRowMenuOpenId(null); navigate(`/orders/${o.id}`); }}>
+                              <span className="material-icons" style={{ fontSize: 18 }}>visibility</span>
+                              View
+                            </button>
+                            <button className="vn-menu-item" onClick={() => { setRowMenuOpenId(null); navigate(`/orders/${o.id}/edit`); }}>
+                              <span className="material-icons" style={{ fontSize: 18 }}>edit</span>
+                              Edit
+                            </button>
+                            <button className="vn-menu-item" onClick={() => { setRowMenuOpenId(null); navigate(`/documents?orderId=${o.id}`); }}>
+                              <span className="material-icons" style={{ fontSize: 18 }}>description</span>
+                              Documents
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </td>
                 </tr>

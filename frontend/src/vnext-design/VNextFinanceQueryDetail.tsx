@@ -101,12 +101,14 @@ export default function VNextFinanceQueryDetail() {
       </div>
 
       <div className="vn-page-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+        <div>
           <h1>{q.queryNumber}</h1>
-          <span className={`vn-chip vn-chip-${q.queryType === 'customer_dispute' ? 'primary' : 'warning'}`}>
-            {q.queryType === 'customer_dispute' ? 'Customer Dispute' : 'Carrier Dispute'}
-          </span>
-          <span className={`vn-chip vn-chip-${statusChip(q.status)}`}>{q.status.replace(/_/g, ' ')}</span>
+          <div className="vn-page-header-meta">
+            <span className={`vn-chip vn-chip-${q.queryType === 'customer_dispute' ? 'primary' : 'warning'}`}>
+              {q.queryType === 'customer_dispute' ? 'Customer Dispute' : 'Carrier Dispute'}
+            </span>
+            <span className={`vn-chip vn-chip-${statusChip(q.status)}`}>{q.status.replace(/_/g, ' ')}</span>
+          </div>
         </div>
         <div className="vn-page-actions">
           {isOpen && (

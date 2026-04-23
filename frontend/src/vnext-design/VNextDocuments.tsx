@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { API_URL } from '../api';
 
 function formatFileSize(bytes: number): string {
@@ -23,6 +23,9 @@ function docIcon(mimeType: string): string {
 }
 
 export default function VNextDocuments() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const orderIdFilter = searchParams.get('orderId') || '';
+  const shipmentIdFilter = searchParams.get('shipmentId') || '';
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [documents, setDocuments] = useState<any[]>([]);
@@ -33,7 +36,11 @@ export default function VNextDocuments() {
     let cancelled = false;
     async function fetchDocs() {
       try {
-        const res = await fetch(`${API_URL}/api/v1/documents`);
+        const params = new URLSearchParams();
+        if (orderIdFilter) params.set('orderId', orderIdFilter);
+        if (shipmentIdFilter) params.set('shipmentId', shipmentIdFilter);
+        const qs = params.toString();
+        const res = await fetch(`${API_URL}/api/v1/documents${qs ? `?${qs}` : ''}`);
         if (!res.ok) throw new Error('Failed to load documents');
         const json = await res.json();
         if (!cancelled) setDocuments(json.data || []);
@@ -45,7 +52,14 @@ export default function VNextDocuments() {
     }
     fetchDocs();
     return () => { cancelled = true; };
-  }, []);
+  }, [orderIdFilter, shipmentIdFilter]);
+
+  const clearEntityFilter = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete('orderId');
+    next.delete('shipmentId');
+    setSearchParams(next);
+  };
 
   const mappedDocs = documents.map((d: any) => {
     const { type, typeColor } = docTypeLabel(d.documentType);
@@ -105,6 +119,22 @@ export default function VNextDocuments() {
           </button>
         </div>
       </div>
+
+      {(orderIdFilter || shipmentIdFilter) && (
+        <div className="vn-alert vn-alert-info" style={{ marginBottom: 16 }}>
+          <span className="material-icons">filter_alt</span>
+          <div className="vn-alert-content" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <span>
+              Filtered to {orderIdFilter ? 'order' : 'shipment'}{' '}
+              <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{orderIdFilter || shipmentIdFilter}</span>
+            </span>
+            <button className="vn-btn vn-btn-ghost vn-btn-sm" onClick={clearEntityFilter}>
+              <span className="material-icons" style={{ fontSize: 16 }}>close</span>
+              Clear filter
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="vn-stats">

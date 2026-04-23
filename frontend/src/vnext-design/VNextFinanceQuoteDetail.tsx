@@ -109,11 +109,13 @@ export default function VNextFinanceQuoteDetail() {
       </div>
 
       <div className="vn-page-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+        <div>
           <h1>{q.quoteNumber}</h1>
-          {q.version > 1 && <span className="vn-chip vn-chip-info">v{q.version}</span>}
-          <span className={`vn-chip vn-chip-${statusChip(q.status)}`}>{q.status}</span>
-          {isExpired && <span className="vn-chip vn-chip-error">EXPIRED</span>}
+          <div className="vn-page-header-meta">
+            {q.version > 1 && <span className="vn-chip vn-chip-info">v{q.version}</span>}
+            <span className={`vn-chip vn-chip-${statusChip(q.status)}`}>{q.status}</span>
+            {isExpired && <span className="vn-chip vn-chip-error">EXPIRED</span>}
+          </div>
         </div>
         <div className="vn-page-actions">
           {['draft', 'sent'].includes(q.status) && !isExpired && (

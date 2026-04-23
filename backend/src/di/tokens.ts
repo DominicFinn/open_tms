@@ -9,6 +9,7 @@ export const TOKENS = {
   ICarriersRepository: Symbol.for('ICarriersRepository'),
   ILocationsRepository: Symbol.for('ILocationsRepository'),
   IShipmentsRepository: Symbol.for('IShipmentsRepository'),
+  IShipmentTypesRepository: Symbol.for('IShipmentTypesRepository'),
   ILanesRepository: Symbol.for('ILanesRepository'),
   IOrdersRepository: Symbol.for('IOrdersRepository'),
   IOrganizationRepository: Symbol.for('IOrganizationRepository'),

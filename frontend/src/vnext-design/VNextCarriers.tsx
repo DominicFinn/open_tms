@@ -129,16 +129,16 @@ export default function VNextCarriers() {
         </div>
       </div>
 
-      {/* Search */}
-      <div style={{ marginBottom: 20 }}>
-        <div className="vn-filter-group">
+      {/* Filters */}
+      <div className="vn-filters">
+        <div className="vn-filter-group" style={{ flex: 1, minWidth: 240 }}>
           <span className="material-icons">search</span>
           <input
             className="vn-filter-input"
             placeholder="Search carriers by name, MC#, or contact..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            style={{ minWidth: 360 }}
+            style={{ width: '100%' }}
           />
         </div>
       </div>

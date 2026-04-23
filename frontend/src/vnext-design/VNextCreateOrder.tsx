@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { API_URL } from '../api';
 
 interface LineItem {
@@ -14,6 +14,8 @@ let nextLineId = 2;
 
 export default function VNextCreateOrder() {
   const navigate = useNavigate();
+  const { id } = useParams();
+  const isEdit = Boolean(id);
 
   const [customer, setCustomer] = useState('');
   const [poNumber, setPoNumber] = useState('');
@@ -48,10 +50,67 @@ export default function VNextCreateOrder() {
     }).catch(() => {});
   }, []);
 
+  useEffect(() => {
+    if (!id) return;
+    fetch(`${API_URL}/api/v1/orders/${id}`)
+      .then(r => { if (!r.ok) throw new Error('Failed to load order'); return r.json(); })
+      .then(json => {
+        const o = json.data;
+        if (!o) return;
+        setCustomer(o.customerId || '');
+        setPoNumber(o.poNumber || '');
+        setOrderDate(o.requestedPickupDate ? o.requestedPickupDate.slice(0, 10) : '');
+        setRequestedDelivery(o.requestedDeliveryDate ? o.requestedDeliveryDate.slice(0, 10) : '');
+        setServiceLevel(o.serviceLevel || '');
+        setOriginLocation(o.originId || '');
+        setDestLocation(o.destinationId || '');
+        setTempControl(o.temperatureControl || 'ambient');
+        setHazmat(Boolean(o.requiresHazmat));
+        setSpecialInstructions(o.specialInstructions || '');
+        setNotes(o.notes || '');
+        if (Array.isArray(o.lineItems) && o.lineItems.length > 0) {
+          setLineItems(o.lineItems.map((li: any, idx: number) => ({
+            id: idx + 1,
+            sku: li.sku || '',
+            description: li.description || '',
+            quantity: li.quantity != null ? String(li.quantity) : '',
+            weight: li.weight != null ? String(li.weight) : '',
+          })));
+          nextLineId = o.lineItems.length + 1;
+        }
+      })
+      .catch(err => setSubmitError(err.message));
+  }, [id]);
+
   const handleSubmit = async () => {
     setSubmitError('');
     setSubmitting(true);
     try {
+      const toIsoDate = (d: string) => d ? new Date(d + 'T00:00:00Z').toISOString() : undefined;
+      if (isEdit && id) {
+        const body: any = {
+          poNumber: poNumber || undefined,
+          originId: originLocation || undefined,
+          destinationId: destLocation || undefined,
+          requestedPickupDate: toIsoDate(orderDate),
+          requestedDeliveryDate: toIsoDate(requestedDelivery),
+          serviceLevel: serviceLevel || undefined,
+          temperatureControl: tempControl || undefined,
+          requiresHazmat: hazmat,
+          specialInstructions: specialInstructions || undefined,
+          notes: notes || undefined,
+        };
+        const res = await fetch(`${API_URL}/api/v1/orders/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) throw new Error('Failed to update order');
+        const json = await res.json();
+        if (json.error) throw new Error(json.error);
+        navigate(`/orders/${id}`);
+        return;
+      }
       const body: any = {
         poNumber, customerId: customer, originId: originLocation, destinationId: destLocation,
         requestedPickupDate: orderDate || undefined, requestedDeliveryDate: requestedDelivery || undefined,
@@ -98,9 +157,9 @@ export default function VNextCreateOrder() {
         <div>
           <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>
             <Link to="/orders" style={{ color: 'var(--color-primary)', textDecoration: 'none' }}>Orders</Link>
-            {' '}&gt; New Order
+            {' '}&gt; {isEdit ? 'Edit Order' : 'New Order'}
           </p>
-          <h1>New Order</h1>
+          <h1>{isEdit ? 'Edit Order' : 'New Order'}</h1>
         </div>
       </div>
 
@@ -116,10 +175,11 @@ export default function VNextCreateOrder() {
             <div className="vn-form-grid">
               <div className="vn-field">
                 <label className="vn-field-label">Customer</label>
-                <select className="vn-select" value={customer} onChange={e => setCustomer(e.target.value)}>
+                <select className="vn-select" value={customer} onChange={e => setCustomer(e.target.value)} disabled={isEdit}>
                   <option value="">Select customer...</option>
                   {customers.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
+                {isEdit && <div className="vn-field-hint">Customer cannot be changed after creation</div>}
               </div>
               <div className="vn-field">
                 <label className="vn-field-label">PO Number</label>
@@ -183,8 +243,9 @@ export default function VNextCreateOrder() {
                   <option value="frozen">Frozen</option>
                 </select>
               </div>
-              <div className="vn-field" style={{ display: 'flex', alignItems: 'flex-end' }}>
-                <label className="vn-checkbox">
+              <div className="vn-field">
+                <label className="vn-field-label" aria-hidden="true" style={{ visibility: 'hidden' }}>Hazmat</label>
+                <label className="vn-checkbox" style={{ display: 'flex', alignItems: 'center', gap: 8, height: 42 }}>
                   <input type="checkbox" checked={hazmat} onChange={e => setHazmat(e.target.checked)} />
                   Hazmat
                 </label>
@@ -197,6 +258,7 @@ export default function VNextCreateOrder() {
           </div>
 
           {/* Line Items */}
+          {!isEdit && (
           <div className="vn-form-section">
             <h3 className="vn-form-section-title">
               <span className="material-icons">list</span>
@@ -250,15 +312,16 @@ export default function VNextCreateOrder() {
               </button>
             </div>
           </div>
+          )}
 
           {submitError && <div className="vn-alert vn-alert-error" style={{ marginBottom: 16 }}>{submitError}</div>}
 
           {/* Form Actions */}
           <div className="vn-form-actions">
-            <Link to="/orders" className="vn-btn vn-btn-outline">Cancel</Link>
+            <Link to={isEdit && id ? `/orders/${id}` : '/orders'} className="vn-btn vn-btn-outline">Cancel</Link>
             <button className="vn-btn vn-btn-primary" onClick={handleSubmit} disabled={submitting}>
-              <span className="material-icons">add</span>
-              {submitting ? 'Creating...' : 'Create Order'}
+              <span className="material-icons">{isEdit ? 'save' : 'add'}</span>
+              {submitting ? (isEdit ? 'Saving...' : 'Creating...') : (isEdit ? 'Save Changes' : 'Create Order')}
             </button>
           </div>
 

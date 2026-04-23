@@ -104,6 +104,9 @@ const updateOrderSchema = z.object({
   destinationId: z.string().uuid().optional(),
   requestedPickupDate: z.string().datetime().optional(),
   requestedDeliveryDate: z.string().datetime().optional(),
+  serviceLevel: z.string().optional(),
+  temperatureControl: z.string().optional(),
+  requiresHazmat: z.boolean().optional(),
   specialInstructions: z.string().optional(),
   notes: z.string().optional()
 });

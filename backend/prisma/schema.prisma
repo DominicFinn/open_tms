@@ -152,6 +152,12 @@ model Shipment {
   status        String   @default("draft")
   pickupDate    DateTime?
   deliveryDate  DateTime?
+  pickupWindowStart    DateTime?
+  pickupWindowEnd      DateTime?
+  deliveryWindowStart  DateTime?
+  deliveryWindowEnd    DateTime?
+  shipmentType         ShipmentType? @relation(fields: [shipmentTypeId], references: [id])
+  shipmentTypeId       String?
   proNumber     String?
   items         Json?
   archived      Boolean  @default(false)
@@ -4873,4 +4879,37 @@ model RmaLine {
   @@index([orderLineItemId])
   @@index([disposition])
   @@index([inspectionStatus])
+}
+
+// Shipment templates - pre-decide required fields, default values, and icon
+// so users can spin up repeatable shipment patterns (Cold Chain, Hazmat, etc.)
+model ShipmentType {
+  id              String   @id @default(uuid())
+  name            String                                // "Cold Chain", "Hazmat", "Standard Parcel"
+  icon            String   @default("local_shipping")   // Material Icons name
+  color           String   @default("#6366F1")          // Accent color for chip/badge
+  description     String?
+
+  // Defaults applied when a shipment is created with this type.
+  // Flat key/value; client merges into form state. Example:
+  // { "customerId": "...", "originId": "...", "destinationId": "...",
+  //   "temperatureControlled": true, "tempMode": "refrigerated" }
+  defaults        Json     @default("{}")
+
+  // Array of field names that must be filled before transitioning out of draft.
+  // Example: ["customerId", "originId", "destinationId", "pickupDate", "pickupWindowStart"]
+  requiredFields  String[] @default([])
+
+  // If true, this is a system-seeded built-in type and cannot be deleted
+  isBuiltIn       Boolean  @default(false)
+
+  archived        Boolean  @default(false)
+  archivedAt      DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  shipments       Shipment[]
+
+  @@unique([name])
+  @@index([archived])
 }

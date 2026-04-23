@@ -9,8 +9,13 @@ export interface UpdateShipmentPayload {
   data: {
     reference?: string;
     status?: string;
-    pickupDate?: Date;
-    deliveryDate?: Date;
+    pickupDate?: Date | string;
+    deliveryDate?: Date | string;
+    pickupWindowStart?: Date | string;
+    pickupWindowEnd?: Date | string;
+    deliveryWindowStart?: Date | string;
+    deliveryWindowEnd?: Date | string;
+    shipmentTypeId?: string | null;
     customerId?: string;
     laneId?: string;
     carrierId?: string | null;

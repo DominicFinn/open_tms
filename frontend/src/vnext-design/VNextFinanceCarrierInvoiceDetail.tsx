@@ -105,11 +105,13 @@ export default function VNextFinanceCarrierInvoiceDetail() {
       </div>
 
       <div className="vn-page-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+        <div>
           <h1>{ci.invoiceNumber}</h1>
-          <span className={`vn-chip vn-chip-${statusChip(ci.status)}`}>{ci.status}</span>
-          <span className={`vn-chip vn-chip-${matchChip(ci.matchStatus)}`}>{ci.matchStatus.replace(/_/g, ' ')}</span>
-          {ci.autoApproved && <span className="vn-chip vn-chip-info">auto-approved</span>}
+          <div className="vn-page-header-meta">
+            <span className={`vn-chip vn-chip-${statusChip(ci.status)}`}>{ci.status}</span>
+            <span className={`vn-chip vn-chip-${matchChip(ci.matchStatus)}`}>{ci.matchStatus.replace(/_/g, ' ')}</span>
+            {ci.autoApproved && <span className="vn-chip vn-chip-info">auto-approved</span>}
+          </div>
         </div>
         <div className="vn-page-actions">
           {['received', 'matched', 'discrepancy'].includes(ci.status) && (

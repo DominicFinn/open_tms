@@ -351,6 +351,22 @@
   flex-wrap: wrap;
 }
 
+/* Status / metadata row that sits directly under the page-header h1.
+   Use this for chips (status, badges) so they don't visually float
+   alongside an oversized h1 — they get their own breathing room. */
+.vn-page-header-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.vn-page-header-meta .vn-chip {
+  font-size: 13px;
+  padding: 5px 13px;
+}
+
 /* ── Cards ────────────────────────────────────────────────── */
 .vn-card {
   background: var(--surface-container-lowest);
@@ -657,9 +673,41 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 12px 20px;
-  border-bottom: 1px solid var(--outline-variant);
+  padding: 12px 16px;
+  background: var(--surface-container-lowest);
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--border-radius-md);
   flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+/* When nested inside a vn-card it acts as the card's header — drop the
+   outer border so it merges visually with the table below it. */
+.vn-card > .vn-filters,
+.vn-card > .vn-card-body > .vn-filters {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--outline-variant);
+  border-radius: 0;
+  padding: 12px 20px;
+  margin-bottom: 0;
+}
+
+/* Inline label (used for checkbox + text) inside the filters bar */
+.vn-filters > label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--on-surface-variant);
+  cursor: pointer;
+  padding: 6px 4px;
+  white-space: nowrap;
+}
+
+.vn-filters > label > input[type="checkbox"] {
+  margin: 0;
+  cursor: pointer;
 }
 
 .vn-filter-input {
@@ -2478,5 +2526,35 @@
 }
 .vn-user-menu-item .material-icons {
   font-size: 18px;
+  color: var(--on-surface-variant);
+}
+
+/* Generic popover menu (used by Import dropdown, row Actions, etc.) */
+.vn-menu {
+  background: var(--surface-container-lowest);
+  border: 1px solid var(--outline-variant);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+  padding: 6px 0;
+  animation: vn-slide-up 0.15s ease-out;
+}
+.vn-menu-item {
+  width: 100%;
+  padding: 9px 14px;
+  background: none;
+  border: none;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--on-surface);
+  cursor: pointer;
+  font-size: 14px;
+  white-space: nowrap;
+}
+.vn-menu-item:hover {
+  background: var(--surface-container-low);
+}
+.vn-menu-item .material-icons {
   color: var(--on-surface-variant);
 }

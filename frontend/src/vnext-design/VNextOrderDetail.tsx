@@ -146,19 +146,24 @@ export default function VNextOrderDetail() {
 
       {/* Page Header */}
       <div className="vn-page-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+        <div>
           <h1>{order.orderNumber || order.id}</h1>
-          <span className={`vn-chip vn-chip-${statusChipColor(order.status)}`}>{order.status}</span>
-          {order.deliveryStatus && (
-            <span className={`vn-chip vn-chip-${deliveryStatusColor(order.deliveryStatus)}`}>{order.deliveryStatus}</span>
-          )}
+          <div className="vn-page-header-meta">
+            <span className={`vn-chip vn-chip-${statusChipColor(order.status)}`}>{order.status}</span>
+            {order.deliveryStatus && (
+              <span className={`vn-chip vn-chip-${deliveryStatusColor(order.deliveryStatus)}`}>{order.deliveryStatus}</span>
+            )}
+            {order.poNumber && (
+              <span style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>PO# {order.poNumber}</span>
+            )}
+          </div>
         </div>
         <div className="vn-page-actions">
-          <button className="vn-btn vn-btn-outline vn-btn-sm">
+          <button className="vn-btn vn-btn-outline vn-btn-sm" onClick={() => navigate(`/orders/${order.id}/edit`)}>
             <span className="material-icons">edit</span>
             Edit
           </button>
-          <button className="vn-btn vn-btn-outline vn-btn-sm">
+          <button className="vn-btn vn-btn-outline vn-btn-sm" onClick={() => navigate(`/documents?orderId=${order.id}`)}>
             <span className="material-icons">description</span>
             Documents
           </button>

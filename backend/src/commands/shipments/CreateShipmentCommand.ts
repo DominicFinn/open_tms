@@ -15,7 +15,7 @@ import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHan
 import { Command } from '../types.js';
 
 export interface CreateShipmentPayload {
-  reference: string;
+  reference?: string;
   customerId: string;
   laneId?: string;
   carrierId?: string;
@@ -46,6 +46,11 @@ export interface CreateShipmentPayload {
   };
   pickupDate?: string;
   deliveryDate?: string;
+  pickupWindowStart?: string;
+  pickupWindowEnd?: string;
+  deliveryWindowStart?: string;
+  deliveryWindowEnd?: string;
+  shipmentTypeId?: string;
   proNumber?: string;
   items?: Array<{
     sku: string;
@@ -190,9 +195,13 @@ export class CreateShipmentCommandHandler extends BaseCommandHandler<CreateShipm
       throw new Error('Either laneId, both originId/destinationId, or both originData/destinationData must be provided');
     }
 
+    const reference = body.reference && body.reference.trim().length > 0
+      ? body.reference
+      : `DRAFT-${Date.now().toString(36).toUpperCase()}`;
+
     const shipment = await tx.shipment.create({
       data: {
-        reference: body.reference,
+        reference,
         customerId: body.customerId,
         laneId: body.laneId,
         carrierId: body.carrierId,
@@ -200,6 +209,11 @@ export class CreateShipmentCommandHandler extends BaseCommandHandler<CreateShipm
         destinationId: finalDestinationId,
         pickupDate: body.pickupDate ? new Date(body.pickupDate) : undefined,
         deliveryDate: body.deliveryDate ? new Date(body.deliveryDate) : undefined,
+        pickupWindowStart: body.pickupWindowStart ? new Date(body.pickupWindowStart) : undefined,
+        pickupWindowEnd: body.pickupWindowEnd ? new Date(body.pickupWindowEnd) : undefined,
+        deliveryWindowStart: body.deliveryWindowStart ? new Date(body.deliveryWindowStart) : undefined,
+        deliveryWindowEnd: body.deliveryWindowEnd ? new Date(body.deliveryWindowEnd) : undefined,
+        shipmentTypeId: body.shipmentTypeId,
         proNumber: body.proNumber,
         items: body.items ?? [],
         status: 'draft',

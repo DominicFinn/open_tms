@@ -201,6 +201,7 @@ const APPS: AppDef[] = [
         { to: '/settings/email-templates', icon: 'mark_email_read', label: 'Email Templates' },
         { to: '/settings/document-templates', icon: 'article', label: 'Doc Templates' },
         { to: '/settings/custom-fields', icon: 'tune', label: 'Custom Fields' },
+        { to: '/settings/shipment-types', icon: 'category', label: 'Shipment Types' },
         { to: '/settings/maps', icon: 'map', label: 'Maps & Geocoding' },
         { to: '/settings/sla', icon: 'timer', label: 'SLA Policies' },
         { to: '/settings/llm', icon: 'smart_toy', label: 'AI / LLM' },

@@ -57,15 +57,17 @@ export default function VNextLaneDetail() {
 
       {/* Page Header */}
       <div className="vn-page-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+        <div>
           <h1>{laneName}</h1>
-          <span className={`vn-chip vn-chip-${lane.status === 'active' ? 'success' : 'secondary'}`}>{lane.status || 'Unknown'}</span>
-          {route && (
-            <span className="vn-chip vn-chip-info">
-              <span className="material-icons" style={{ fontSize: 14 }}>route</span>
-              Route Planned
-            </span>
-          )}
+          <div className="vn-page-header-meta">
+            <span className={`vn-chip vn-chip-${lane.status === 'active' ? 'success' : 'secondary'}`}>{lane.status || 'Unknown'}</span>
+            {route && (
+              <span className="vn-chip vn-chip-info">
+                <span className="material-icons" style={{ fontSize: 14 }}>route</span>
+                Route Planned
+              </span>
+            )}
+          </div>
         </div>
         <div className="vn-page-actions">
           <button className="vn-btn vn-btn-outline vn-btn-sm" onClick={() => navigate(`/lanes/${id}/edit`)}>

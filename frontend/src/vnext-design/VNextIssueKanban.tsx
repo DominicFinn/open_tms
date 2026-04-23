@@ -632,8 +632,17 @@ export default function VNextIssueKanban() {
       </div>
 
       {/* Filters */}
-      <div className="vn-filters" style={{ marginBottom: 16 }}>
-        <input className="vn-filter-input" placeholder="Search issues..." value={filterSearch} onChange={e => setFilterSearch(e.target.value)} style={{ minWidth: 200 }} />
+      <div className="vn-filters">
+        <div className="vn-filter-group" style={{ flex: 1, minWidth: 240 }}>
+          <span className="material-icons">search</span>
+          <input
+            className="vn-filter-input"
+            placeholder="Search issues by title, description, or assignee..."
+            value={filterSearch}
+            onChange={e => setFilterSearch(e.target.value)}
+            style={{ width: '100%' }}
+          />
+        </div>
         <select className="vn-filter-select" value={filterPriority} onChange={e => setFilterPriority(e.target.value)}>
           <option value="all">All Priorities</option>
           <option value="critical">Critical</option>
@@ -649,7 +658,7 @@ export default function VNextIssueKanban() {
           <option value="compliance">Compliance</option>
           <option value="other">Other</option>
         </select>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, cursor: 'pointer', color: 'var(--on-surface-variant)' }}>
+        <label>
           <input type="checkbox" checked={filterNeedsCapa} onChange={e => setFilterNeedsCapa(e.target.checked)} />
           Needs CAPA
         </label>

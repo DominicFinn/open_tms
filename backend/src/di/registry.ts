@@ -7,6 +7,7 @@ import { PrismaClient } from '@prisma/client';
 import { container } from './container.js';
 import { TOKENS } from './tokens.js';
 import { CustomersRepository } from '../repositories/CustomersRepository.js';
+import { ShipmentTypesRepository } from '../repositories/ShipmentTypesRepository.js';
 import { CarriersRepository } from '../repositories/CarriersRepository.js';
 import { LocationsRepository } from '../repositories/LocationsRepository.js';
 import { ShipmentsRepository } from '../repositories/ShipmentsRepository.js';
@@ -55,6 +56,9 @@ import { ArchiveCarrierCommandHandler } from '../commands/carriers/ArchiveCarrie
 import { CreateCustomerCommandHandler } from '../commands/customers/CreateCustomerCommand.js';
 import { UpdateCustomerCommandHandler } from '../commands/customers/UpdateCustomerCommand.js';
 import { ArchiveCustomerCommandHandler } from '../commands/customers/ArchiveCustomerCommand.js';
+import { CreateShipmentTypeCommandHandler } from '../commands/shipmentTypes/CreateShipmentTypeCommand.js';
+import { UpdateShipmentTypeCommandHandler } from '../commands/shipmentTypes/UpdateShipmentTypeCommand.js';
+import { ArchiveShipmentTypeCommandHandler } from '../commands/shipmentTypes/ArchiveShipmentTypeCommand.js';
 import { CreateLocationCommandHandler } from '../commands/locations/CreateLocationCommand.js';
 import { UpdateLocationCommandHandler } from '../commands/locations/UpdateLocationCommand.js';
 import { CreateLaneCommandHandler } from '../commands/lanes/CreateLaneCommand.js';
@@ -239,6 +243,10 @@ export function registerDependencies(prisma: PrismaClient): void {
 
   container.singleton(TOKENS.IShipmentsRepository).toFactory(() => {
     return new ShipmentsRepository(container.resolve(TOKENS.PrismaClient));
+  });
+
+  container.singleton(TOKENS.IShipmentTypesRepository).toFactory(() => {
+    return new ShipmentTypesRepository(container.resolve(TOKENS.PrismaClient));
   });
 
   container.singleton(TOKENS.ILanesRepository).toFactory(() => {
@@ -750,6 +758,9 @@ export function registerDependencies(prisma: PrismaClient): void {
     bus.register(new CreateCustomerCommandHandler(prisma, eventBus));
     bus.register(new UpdateCustomerCommandHandler(prisma, eventBus));
     bus.register(new ArchiveCustomerCommandHandler(prisma, eventBus));
+    bus.register(new CreateShipmentTypeCommandHandler(prisma, eventBus));
+    bus.register(new UpdateShipmentTypeCommandHandler(prisma, eventBus));
+    bus.register(new ArchiveShipmentTypeCommandHandler(prisma, eventBus));
 
     // Location commands
     bus.register(new CreateLocationCommandHandler(prisma, eventBus));

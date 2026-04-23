@@ -120,10 +120,12 @@ export default function VNextFinanceInvoiceDetail() {
       </div>
 
       <div className="vn-page-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+        <div>
           <h1>{i.invoiceNumber}</h1>
-          <span className={`vn-chip vn-chip-${statusChip(i.status)}`}>{i.status.replace(/_/g, ' ')}</span>
-          {isPastDue && <span className="vn-chip vn-chip-error">OVERDUE</span>}
+          <div className="vn-page-header-meta">
+            <span className={`vn-chip vn-chip-${statusChip(i.status)}`}>{i.status.replace(/_/g, ' ')}</span>
+            {isPastDue && <span className="vn-chip vn-chip-error">OVERDUE</span>}
+          </div>
         </div>
         <div className="vn-page-actions">
           {i.status === 'draft' && (

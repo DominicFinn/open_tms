@@ -21,12 +21,20 @@ interface Shipment {
   pickupDate?: string;
   deliveryDate?: string;
   proNumber?: string;
+  shipmentTypeId?: string | null;
   customer?: { name: string };
   origin?: { name: string; city: string; state: string; lat?: number; lng?: number };
   destination?: { name: string; city: string; state: string };
   lane?: { name: string };
   carrier?: { name: string };
   shipmentFinancialSummary?: FinancialSummary | null;
+}
+
+interface ShipmentTypeSummary {
+  id: string;
+  name: string;
+  icon: string;
+  color: string;
 }
 
 function statusColor(status: string): string {
@@ -124,6 +132,18 @@ export default function VNextShipments() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [viewMode, setViewMode] = useState<'table' | 'map'>('table');
   const [shipments, setShipments] = useState<Shipment[]>([]);
+  const [shipmentTypes, setShipmentTypes] = useState<Record<string, ShipmentTypeSummary>>({});
+
+  useEffect(() => {
+    fetch(`${API_URL}/api/v1/shipment-types`)
+      .then(r => r.json())
+      .then(j => {
+        const map: Record<string, ShipmentTypeSummary> = {};
+        (j.data || []).forEach((t: ShipmentTypeSummary) => { map[t.id] = t; });
+        setShipmentTypes(map);
+      })
+      .catch(() => {});
+  }, []);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -366,9 +386,24 @@ export default function VNextShipments() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map(s => (
+              {filtered.map(s => {
+                const type = s.shipmentTypeId ? shipmentTypes[s.shipmentTypeId] : null;
+                return (
                 <tr key={s.id} onClick={() => navigate(`/shipments/${s.id}`)}>
-                  <td><span className="vn-table-id">{s.reference || s.id}</span></td>
+                  <td>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {type ? (
+                        <span
+                          className="material-icons"
+                          style={{ color: type.color, fontSize: 20 }}
+                          title={type.name}
+                        >{type.icon}</span>
+                      ) : (
+                        <span style={{ width: 20, display: 'inline-block' }} />
+                      )}
+                      <span className="vn-table-id">{s.reference || s.id}</span>
+                    </div>
+                  </td>
                   <td>{s.customer?.name || '—'}</td>
                   <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -407,7 +442,8 @@ export default function VNextShipments() {
                   })()}
                   <td><span className={`vn-chip vn-chip-${statusColor(s.status)}`}>{s.status}</span></td>
                 </tr>
-              ))}
+                );
+              })}
               {filtered.length === 0 && (
                 <tr>
                   <td colSpan={showFinancials ? 12 : 9}>

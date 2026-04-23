@@ -44,6 +44,11 @@ export const EVENT_TYPES = {
   CUSTOMER_UPDATED: 'customer.updated',
   CUSTOMER_ARCHIVED: 'customer.archived',
 
+  // Shipment Types (templates)
+  SHIPMENT_TYPE_CREATED: 'shipment_type.created',
+  SHIPMENT_TYPE_UPDATED: 'shipment_type.updated',
+  SHIPMENT_TYPE_ARCHIVED: 'shipment_type.archived',
+
   // Locations
   LOCATION_CREATED: 'location.created',
   LOCATION_UPDATED: 'location.updated',
@@ -355,6 +360,9 @@ export const EVENT_SCHEMA_VERSIONS: Record<string, number> = {
   [EVENT_TYPES.CUSTOMER_CREATED]: 1,
   [EVENT_TYPES.CUSTOMER_UPDATED]: 1,
   [EVENT_TYPES.CUSTOMER_ARCHIVED]: 1,
+  [EVENT_TYPES.SHIPMENT_TYPE_CREATED]: 1,
+  [EVENT_TYPES.SHIPMENT_TYPE_UPDATED]: 1,
+  [EVENT_TYPES.SHIPMENT_TYPE_ARCHIVED]: 1,
   [EVENT_TYPES.LOCATION_CREATED]: 1,
   [EVENT_TYPES.LOCATION_UPDATED]: 1,
   [EVENT_TYPES.LANE_CREATED]: 1,

@@ -28,6 +28,7 @@ import VNextDocuments from './vnext-design/VNextDocuments';
 import VNextDailyReport from './vnext-design/VNextDailyReport';
 import VNextLocationReport from './vnext-design/VNextLocationReport';
 import VNextSettings from './vnext-design/VNextSettings';
+import VNextShipmentTypes from './vnext-design/VNextShipmentTypes';
 import VNextStyleGuide from './vnext-design/VNextStyleGuide';
 
 // VNext Create/Edit Pages
@@ -289,6 +290,7 @@ root.render(
           <Route path="orders/create" element={<VNextCreateOrder />} />
           <Route path="orders/import/csv" element={<VNextOrderImportCSV />} />
           <Route path="orders/import/edi" element={<VNextEdiImport />} />
+          <Route path="orders/:id/edit" element={<VNextCreateOrder />} />
           <Route path="orders/:id" element={<VNextOrderDetail />} />
 
           {/* Pending Lane Requests */}
@@ -375,6 +377,7 @@ root.render(
           <Route path="settings/skill-chains" element={<VNextSkillChains />} />
           <Route path="settings/roles" element={<VNextRoles />} />
           <Route path="settings/users" element={<VNextUsers />} />
+          <Route path="settings/shipment-types" element={<VNextShipmentTypes />} />
 
           {/* Finance */}
           <Route path="finance" element={<VNextFinanceDashboard />} />

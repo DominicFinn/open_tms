@@ -1,11 +1,25 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { API_URL } from '../api';
+import {
+  validateShipmentAgainstType,
+  applyShipmentTypeDefaults,
+  SHIPMENT_FIELD_LABELS,
+  ShipmentTypeConfig,
+} from '../shared/shipmentTypeValidator';
+
+interface ShipmentTypeRow extends ShipmentTypeConfig {
+  id: string;
+  description?: string | null;
+}
 
 export default function VNextCreateShipment() {
   const { id } = useParams();
   const navigate = useNavigate();
   const isEdit = Boolean(id);
+
+  const [shipmentTypeId, setShipmentTypeId] = useState('');
+  const [shipmentTypes, setShipmentTypes] = useState<ShipmentTypeRow[]>([]);
 
   const [customer, setCustomer] = useState('');
   const [reference, setReference] = useState('');
@@ -14,11 +28,13 @@ export default function VNextCreateShipment() {
 
   const [originLocation, setOriginLocation] = useState('');
   const [pickupDate, setPickupDate] = useState('');
+  const [hasPickupWindow, setHasPickupWindow] = useState(false);
   const [pickupWindowStart, setPickupWindowStart] = useState('');
   const [pickupWindowEnd, setPickupWindowEnd] = useState('');
 
   const [destLocation, setDestLocation] = useState('');
   const [deliveryDate, setDeliveryDate] = useState('');
+  const [hasDeliveryWindow, setHasDeliveryWindow] = useState(false);
   const [deliveryWindowStart, setDeliveryWindowStart] = useState('');
   const [deliveryWindowEnd, setDeliveryWindowEnd] = useState('');
 
@@ -40,17 +56,49 @@ export default function VNextCreateShipment() {
   const [submitError, setSubmitError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  const selectedType = useMemo(
+    () => shipmentTypes.find(t => t.id === shipmentTypeId) || null,
+    [shipmentTypeId, shipmentTypes]
+  );
+
   useEffect(() => {
     Promise.all([
       fetch(`${API_URL}/api/v1/customers`).then(r => r.json()),
       fetch(`${API_URL}/api/v1/locations`).then(r => r.json()),
       fetch(`${API_URL}/api/v1/lanes`).then(r => r.json()),
-    ]).then(([cRes, lRes, laRes]) => {
+      fetch(`${API_URL}/api/v1/shipment-types`).then(r => r.json()),
+    ]).then(([cRes, lRes, laRes, stRes]) => {
       setCustomers(cRes.data || []);
       setLocations(lRes.data || []);
       setLanes(laRes.data || []);
+      setShipmentTypes(stRes.data || []);
     }).catch(() => {});
   }, []);
+
+  // When the user picks a shipment type on a fresh form, fill in any empty
+  // fields from the type's defaults. User input always wins (shallow merge).
+  const applyTypeDefaults = (typeId: string) => {
+    setShipmentTypeId(typeId);
+    const type = shipmentTypes.find(t => t.id === typeId);
+    if (!type) return;
+    const current = {
+      customerId: customer,
+      originId: originLocation,
+      destinationId: destLocation,
+      reference,
+      proNumber,
+      pickupDate,
+      deliveryDate,
+      pickupWindowStart,
+      pickupWindowEnd,
+      deliveryWindowStart,
+      deliveryWindowEnd,
+    } as Record<string, string>;
+    const merged = applyShipmentTypeDefaults(current as any, type);
+    if (merged.customerId && !customer) setCustomer(String(merged.customerId));
+    if (merged.originId && !originLocation) setOriginLocation(String(merged.originId));
+    if (merged.destinationId && !destLocation) setDestLocation(String(merged.destinationId));
+  };
 
   useEffect(() => {
     if (!id) return;
@@ -67,31 +115,80 @@ export default function VNextCreateShipment() {
         setDestLocation(s.destinationId || '');
         setPickupDate(s.pickupDate ? s.pickupDate.slice(0, 10) : '');
         setDeliveryDate(s.deliveryDate ? s.deliveryDate.slice(0, 10) : '');
+        if (s.pickupWindowStart || s.pickupWindowEnd) {
+          setHasPickupWindow(true);
+          setPickupWindowStart(s.pickupWindowStart ? s.pickupWindowStart.slice(0, 16) : '');
+          setPickupWindowEnd(s.pickupWindowEnd ? s.pickupWindowEnd.slice(0, 16) : '');
+        }
+        if (s.deliveryWindowStart || s.deliveryWindowEnd) {
+          setHasDeliveryWindow(true);
+          setDeliveryWindowStart(s.deliveryWindowStart ? s.deliveryWindowStart.slice(0, 16) : '');
+          setDeliveryWindowEnd(s.deliveryWindowEnd ? s.deliveryWindowEnd.slice(0, 16) : '');
+        }
+        setShipmentTypeId(s.shipmentTypeId || '');
         setLaneId(s.laneId || '');
       })
       .catch(err => setSubmitError(err.message))
       .finally(() => setLoading(false));
   }, [id]);
 
+  // Compute missing required fields for the selected type (soft-warn only).
+  const missingRequired = useMemo(() => {
+    if (!selectedType) return [] as string[];
+    const shipment = {
+      customerId: customer,
+      originId: originLocation,
+      destinationId: destLocation,
+      reference,
+      proNumber,
+      pickupDate,
+      deliveryDate,
+      pickupWindowStart: hasPickupWindow ? pickupWindowStart : '',
+      pickupWindowEnd: hasPickupWindow ? pickupWindowEnd : '',
+      deliveryWindowStart: hasDeliveryWindow ? deliveryWindowStart : '',
+      deliveryWindowEnd: hasDeliveryWindow ? deliveryWindowEnd : '',
+    };
+    return validateShipmentAgainstType(shipment, selectedType).missing;
+  }, [
+    selectedType, customer, originLocation, destLocation, reference, proNumber,
+    pickupDate, deliveryDate,
+    hasPickupWindow, pickupWindowStart, pickupWindowEnd,
+    hasDeliveryWindow, deliveryWindowStart, deliveryWindowEnd,
+  ]);
+
+  const isFieldRequired = (field: string) => selectedType?.requiredFields?.includes(field) ?? false;
+
   const handleSubmit = async () => {
     setSubmitError('');
     setSubmitting(true);
     try {
       const body: any = {
-        reference, proNumber, customerId: customer, originId: originLocation, destinationId: destLocation,
-        laneId: laneId || undefined, status: 'draft',
-        pickupDate: pickupDate || undefined, deliveryDate: deliveryDate || undefined,
+        reference: reference || undefined,
+        proNumber: proNumber || undefined,
+        customerId: customer || undefined,
+        originId: originLocation || undefined,
+        destinationId: destLocation || undefined,
+        laneId: laneId || undefined,
+        shipmentTypeId: shipmentTypeId || undefined,
+        pickupDate: pickupDate || undefined,
+        deliveryDate: deliveryDate || undefined,
+        pickupWindowStart: hasPickupWindow && pickupWindowStart ? pickupWindowStart : undefined,
+        pickupWindowEnd: hasPickupWindow && pickupWindowEnd ? pickupWindowEnd : undefined,
+        deliveryWindowStart: hasDeliveryWindow && deliveryWindowStart ? deliveryWindowStart : undefined,
+        deliveryWindowEnd: hasDeliveryWindow && deliveryWindowEnd ? deliveryWindowEnd : undefined,
       };
+      // Create always saves as a draft. On edit we don't send status so the
+      // existing status is preserved unless the user explicitly changes it elsewhere.
+      if (!isEdit) body.status = 'draft';
       const url = isEdit ? `${API_URL}/api/v1/shipments/${id}` : `${API_URL}/api/v1/shipments`;
       const res = await fetch(url, {
         method: isEdit ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      if (!res.ok) throw new Error('Failed to save shipment');
-      const json = await res.json();
-      if (json.error) throw new Error(json.error);
-      navigate('/shipments');
+      const json = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+      if (!res.ok || json.error) throw new Error(json.error || 'Failed to save shipment');
+      navigate(isEdit ? `/shipments/${id}` : '/shipments');
     } catch (err: any) {
       setSubmitError(err.message);
     } finally {
@@ -116,6 +213,54 @@ export default function VNextCreateShipment() {
       <div className="vn-card">
         <div className="vn-card-body" style={{ padding: '2rem' }}>
 
+          {/* Shipment Type picker */}
+          {shipmentTypes.length > 0 && (
+            <div className="vn-form-section">
+              <h3 className="vn-form-section-title">
+                <span className="material-icons">category</span>
+                Shipment Type
+              </h3>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                <button
+                  type="button"
+                  onClick={() => setShipmentTypeId('')}
+                  className="vn-type-chip"
+                  style={{
+                    padding: '10px 14px', borderRadius: 10, cursor: 'pointer',
+                    border: `2px solid ${shipmentTypeId === '' ? 'var(--primary)' : 'var(--outline-variant)'}`,
+                    background: shipmentTypeId === '' ? 'var(--surface-container)' : 'var(--surface-container-lowest)',
+                    display: 'flex', alignItems: 'center', gap: 8, fontSize: 14,
+                  }}
+                >
+                  <span className="material-icons" style={{ fontSize: 18 }}>block</span>
+                  No template
+                </button>
+                {shipmentTypes.map(t => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => applyTypeDefaults(t.id)}
+                    style={{
+                      padding: '10px 14px', borderRadius: 10, cursor: 'pointer',
+                      border: `2px solid ${shipmentTypeId === t.id ? t.color : 'var(--outline-variant)'}`,
+                      background: shipmentTypeId === t.id ? `${t.color}15` : 'var(--surface-container-lowest)',
+                      display: 'flex', alignItems: 'center', gap: 8, fontSize: 14,
+                    }}
+                    title={t.description || undefined}
+                  >
+                    <span className="material-icons" style={{ fontSize: 20, color: t.color }}>{t.icon}</span>
+                    {t.name}
+                  </button>
+                ))}
+              </div>
+              {selectedType?.description && (
+                <p style={{ fontSize: 13, color: 'var(--on-surface-variant)', marginTop: 8, marginBottom: 0 }}>
+                  {selectedType.description}
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Basic Information */}
           <div className="vn-form-section">
             <h3 className="vn-form-section-title">
@@ -124,15 +269,15 @@ export default function VNextCreateShipment() {
             </h3>
             <div className="vn-form-grid">
               <div className="vn-field">
-                <label className="vn-field-label">Customer</label>
+                <label className="vn-field-label">Customer{isFieldRequired('customerId') && <span style={{ color: 'var(--color-error)' }}> *</span>}</label>
                 <select className="vn-select" value={customer} onChange={e => setCustomer(e.target.value)}>
                   <option value="">Select customer...</option>
                   {customers.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
               <div className="vn-field">
-                <label className="vn-field-label">Reference</label>
-                <input className="vn-input" type="text" placeholder="Enter reference number" value={reference} onChange={e => setReference(e.target.value)} />
+                <label className="vn-field-label">Reference{isFieldRequired('reference') && <span style={{ color: 'var(--color-error)' }}> *</span>}</label>
+                <input className="vn-input" type="text" placeholder="Auto-generated if left blank" value={reference} onChange={e => setReference(e.target.value)} />
               </div>
               <div className="vn-field">
                 <label className="vn-field-label">Mode</label>
@@ -143,7 +288,7 @@ export default function VNextCreateShipment() {
                 </select>
               </div>
               <div className="vn-field">
-                <label className="vn-field-label">PRO Number</label>
+                <label className="vn-field-label">PRO Number{isFieldRequired('proNumber') && <span style={{ color: 'var(--color-error)' }}> *</span>}</label>
                 <input className="vn-input" type="text" placeholder="Enter PRO number" value={proNumber} onChange={e => setProNumber(e.target.value)} />
               </div>
             </div>
@@ -157,24 +302,44 @@ export default function VNextCreateShipment() {
             </h3>
             <div className="vn-form-grid">
               <div className="vn-field">
-                <label className="vn-field-label">Location</label>
+                <label className="vn-field-label">Location{isFieldRequired('originId') && <span style={{ color: 'var(--color-error)' }}> *</span>}</label>
                 <select className="vn-select" value={originLocation} onChange={e => setOriginLocation(e.target.value)}>
                   <option value="">Select origin...</option>
                   {locations.map((l: any) => <option key={l.id} value={l.id}>{l.name} — {l.city}, {l.state}</option>)}
                 </select>
               </div>
               <div className="vn-field">
-                <label className="vn-field-label">Pickup Date</label>
+                <label className="vn-field-label">Pickup Date{isFieldRequired('pickupDate') && <span style={{ color: 'var(--color-error)' }}> *</span>}</label>
                 <input className="vn-input" type="date" value={pickupDate} onChange={e => setPickupDate(e.target.value)} />
               </div>
-              <div className="vn-field">
-                <label className="vn-field-label">Pickup Window Start</label>
-                <input className="vn-input" type="time" value={pickupWindowStart} onChange={e => setPickupWindowStart(e.target.value)} />
+              <div className="vn-field vn-col-span-2">
+                <label className="vn-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={hasPickupWindow}
+                    onChange={e => {
+                      setHasPickupWindow(e.target.checked);
+                      if (!e.target.checked) { setPickupWindowStart(''); setPickupWindowEnd(''); }
+                    }}
+                  />
+                  Specify pickup window
+                  {(isFieldRequired('pickupWindowStart') || isFieldRequired('pickupWindowEnd')) && (
+                    <span style={{ color: 'var(--color-error)', marginLeft: 4 }}>*</span>
+                  )}
+                </label>
               </div>
-              <div className="vn-field">
-                <label className="vn-field-label">Pickup Window End</label>
-                <input className="vn-input" type="time" value={pickupWindowEnd} onChange={e => setPickupWindowEnd(e.target.value)} />
-              </div>
+              {hasPickupWindow && (
+                <>
+                  <div className="vn-field">
+                    <label className="vn-field-label">Window start</label>
+                    <input className="vn-input" type="datetime-local" value={pickupWindowStart} onChange={e => setPickupWindowStart(e.target.value)} />
+                  </div>
+                  <div className="vn-field">
+                    <label className="vn-field-label">Window end</label>
+                    <input className="vn-input" type="datetime-local" value={pickupWindowEnd} onChange={e => setPickupWindowEnd(e.target.value)} />
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
@@ -186,24 +351,44 @@ export default function VNextCreateShipment() {
             </h3>
             <div className="vn-form-grid">
               <div className="vn-field">
-                <label className="vn-field-label">Location</label>
+                <label className="vn-field-label">Location{isFieldRequired('destinationId') && <span style={{ color: 'var(--color-error)' }}> *</span>}</label>
                 <select className="vn-select" value={destLocation} onChange={e => setDestLocation(e.target.value)}>
                   <option value="">Select destination...</option>
                   {locations.map((l: any) => <option key={l.id} value={l.id}>{l.name} — {l.city}, {l.state}</option>)}
                 </select>
               </div>
               <div className="vn-field">
-                <label className="vn-field-label">Delivery Date</label>
+                <label className="vn-field-label">Delivery Date{isFieldRequired('deliveryDate') && <span style={{ color: 'var(--color-error)' }}> *</span>}</label>
                 <input className="vn-input" type="date" value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)} />
               </div>
-              <div className="vn-field">
-                <label className="vn-field-label">Delivery Window Start</label>
-                <input className="vn-input" type="time" value={deliveryWindowStart} onChange={e => setDeliveryWindowStart(e.target.value)} />
+              <div className="vn-field vn-col-span-2">
+                <label className="vn-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={hasDeliveryWindow}
+                    onChange={e => {
+                      setHasDeliveryWindow(e.target.checked);
+                      if (!e.target.checked) { setDeliveryWindowStart(''); setDeliveryWindowEnd(''); }
+                    }}
+                  />
+                  Specify delivery window
+                  {(isFieldRequired('deliveryWindowStart') || isFieldRequired('deliveryWindowEnd')) && (
+                    <span style={{ color: 'var(--color-error)', marginLeft: 4 }}>*</span>
+                  )}
+                </label>
               </div>
-              <div className="vn-field">
-                <label className="vn-field-label">Delivery Window End</label>
-                <input className="vn-input" type="time" value={deliveryWindowEnd} onChange={e => setDeliveryWindowEnd(e.target.value)} />
-              </div>
+              {hasDeliveryWindow && (
+                <>
+                  <div className="vn-field">
+                    <label className="vn-field-label">Window start</label>
+                    <input className="vn-input" type="datetime-local" value={deliveryWindowStart} onChange={e => setDeliveryWindowStart(e.target.value)} />
+                  </div>
+                  <div className="vn-field">
+                    <label className="vn-field-label">Window end</label>
+                    <input className="vn-input" type="datetime-local" value={deliveryWindowEnd} onChange={e => setDeliveryWindowEnd(e.target.value)} />
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
@@ -266,14 +451,31 @@ export default function VNextCreateShipment() {
             </div>
           </div>
 
+          {missingRequired.length > 0 && (
+            <div className="vn-alert vn-alert-warning" style={{ marginBottom: 16 }}>
+              <span className="material-icons">info</span>
+              <div className="vn-alert-content">
+                <strong>Missing fields required by "{selectedType?.name}":</strong>{' '}
+                {missingRequired.map(f => SHIPMENT_FIELD_LABELS[f] || f).join(', ')}.
+                <div style={{ fontSize: 12, color: 'var(--on-surface-variant)', marginTop: 4 }}>
+                  You can still save as a draft. The shipment cannot leave draft status until these are filled in.
+                </div>
+              </div>
+            </div>
+          )}
+
           {submitError && <div className="vn-alert vn-alert-error" style={{ marginBottom: 16 }}>{submitError}</div>}
 
           {/* Form Actions */}
           <div className="vn-form-actions">
-            <Link to="/shipments" className="vn-btn vn-btn-outline">Cancel</Link>
+            <Link to={isEdit && id ? `/shipments/${id}` : '/shipments'} className="vn-btn vn-btn-outline">Cancel</Link>
             <button className="vn-btn vn-btn-primary" onClick={handleSubmit} disabled={submitting}>
               <span className="material-icons">{isEdit ? 'save' : 'add'}</span>
-              {submitting ? 'Saving...' : isEdit ? 'Update Shipment' : 'Create Shipment'}
+              {submitting
+                ? 'Saving...'
+                : isEdit
+                  ? 'Update Shipment'
+                  : missingRequired.length > 0 ? 'Save as Draft' : 'Create Shipment'}
             </button>
           </div>
 
