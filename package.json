@@ -7,6 +7,9 @@
     "frontend",
     "packages/*"
   ],
+  "overrides": {
+    "tailwindcss": "^3.4.19"
+  },
   "scripts": {
     "build": "npm -w packages/shared run build && npm -w backend run build && npm -w frontend run build",
     "dev": "concurrently -k -n backend,frontend -c blue,green \"npm -w backend run dev\" \"npm -w frontend run dev\"",
