@@ -1,6 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import {
+  AlertTriangle,
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  CheckCircle2,
+  Loader2,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+
 interface PutawayTaskDetail {
   id: string;
   status: string;
@@ -47,87 +60,148 @@ export default function WarehousePutawayTask() {
     finally { setConfirming(false); }
   };
 
-  if (loading) return <div style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>Loading...</div>;
-  if (!task) return <div style={{ padding: '1rem', color: '#ef4444' }}>{error}</div>;
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+  if (!task) {
+    return (
+      <Card className="mx-auto mt-4 max-w-2xl p-6 text-center">
+        <p className="text-base text-destructive">{error || 'Not found'}</p>
+      </Card>
+    );
+  }
 
   return (
-    <div>
-      <button onClick={() => navigate('/warehouse/tasks')} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '16px' }}>
-        <span className="material-icons" style={{ fontSize: '20px' }}>arrow_back</span> Tasks
-      </button>
+    <div className="mx-auto max-w-2xl space-y-4 px-1 py-2 pb-32">
+      <div className="flex items-center gap-3">
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className="h-12 w-12 shrink-0"
+          onClick={() => navigate('/warehouse/tasks')}
+          aria-label="Back to tasks"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
+      </div>
 
-      {error && <div style={{ padding: '10px', background: '#7f1d1d', borderRadius: '8px', color: '#fca5a5', marginBottom: '12px', fontSize: '13px' }}>{error}</div>}
+      {error && (
+        <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
 
       {result ? (
-        <div style={{ textAlign: 'center', padding: '2rem' }}>
-          <span className="material-icons" style={{ fontSize: '48px', color: result.deviation ? '#f59e0b' : '#10b981', display: 'block', marginBottom: '8px' }}>
-            {result.deviation ? 'warning' : 'check_circle'}
-          </span>
-          <div style={{ fontSize: '18px', fontWeight: 600, marginBottom: '4px' }}>
-            {result.deviation ? 'Putaway Complete (Deviation)' : 'Putaway Complete'}
-          </div>
-          <div style={{ color: '#94a3b8', fontSize: '13px' }}>
-            Placed at <strong>{result.actualBinLabel}</strong>
-          </div>
-          {result.deviation && (
-            <div style={{ marginTop: '8px', padding: '8px', background: '#78350f', borderRadius: '8px', fontSize: '12px', color: '#fde68a' }}>
-              {result.deviationReason}
-            </div>
-          )}
-          {result.constraintWarnings?.length > 0 && (
-            <div style={{ marginTop: '8px', padding: '8px', background: '#78350f', borderRadius: '8px', fontSize: '12px', color: '#fde68a' }}>
-              {result.constraintWarnings.join('; ')}
-            </div>
-          )}
-          <button onClick={() => navigate('/warehouse/tasks')} style={{ marginTop: '16px', padding: '12px 24px', borderRadius: '10px', border: 'none', background: '#3b82f6', color: 'white', fontWeight: 600, cursor: 'pointer' }}>
-            Back to Tasks
-          </button>
-        </div>
+        <Card className="text-center">
+          <CardContent className="flex flex-col items-center gap-2 py-10">
+            {result.deviation ? (
+              <AlertTriangle className="h-14 w-14 text-warning" />
+            ) : (
+              <CheckCircle2 className="h-14 w-14 text-success" />
+            )}
+            <p className="text-lg font-semibold">
+              {result.deviation ? 'Putaway Complete (Deviation)' : 'Putaway Complete'}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Placed at <strong className="text-foreground">{result.actualBinLabel}</strong>
+            </p>
+            {result.deviation && (
+              <div className="mt-2 w-full rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning">
+                {result.deviationReason}
+              </div>
+            )}
+            {result.constraintWarnings?.length > 0 && (
+              <div className="mt-1 w-full rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning">
+                {result.constraintWarnings.join('; ')}
+              </div>
+            )}
+            <Button
+              type="button"
+              variant="gradient"
+              size="lg"
+              className="mt-4"
+              onClick={() => navigate('/warehouse/tasks')}
+            >
+              Back to Tasks
+            </Button>
+          </CardContent>
+        </Card>
       ) : (
         <>
           {/* Direction */}
-          <div style={{ background: '#1e293b', borderRadius: '16px', padding: '20px', marginBottom: '16px' }}>
-            <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              {task.putawayType === 'replenishment' ? 'Replenishment' : 'Putaway'}
-            </div>
-
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '14px', color: '#64748b' }}>Unit</div>
-              <div style={{ fontSize: '18px', fontWeight: 600, marginBottom: '16px' }}>{task.trackableUnit.identifier}</div>
-
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '16px' }}>
-                <div>
-                  <div style={{ fontSize: '11px', color: '#64748b' }}>From</div>
-                  <div style={{ fontSize: '16px', fontWeight: 600 }}>{task.sourceBin?.label ?? 'Dock'}</div>
+          <Card>
+            <CardContent className="pt-6">
+              <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                {task.putawayType === 'replenishment' ? 'Replenishment' : 'Putaway'}
+              </div>
+              <div className="mt-3 text-center">
+                <div className="text-sm text-muted-foreground">Unit</div>
+                <div className="mb-4 text-lg font-semibold">
+                  {task.trackableUnit.identifier}
                 </div>
-                <span className="material-icons" style={{ fontSize: '28px', color: '#3b82f6' }}>arrow_forward</span>
-                <div>
-                  <div style={{ fontSize: '11px', color: '#64748b' }}>To</div>
-                  <div style={{ fontSize: '20px', fontWeight: 700, color: '#3b82f6' }}>{task.targetBin.label}</div>
-                  <div style={{ fontSize: '11px', color: '#64748b' }}>{task.targetBin.zone.name}</div>
+
+                <div className="flex items-center justify-center gap-4">
+                  <div>
+                    <div className="text-xs text-muted-foreground">From</div>
+                    <div className="text-base font-semibold">
+                      {task.sourceBin?.label ?? 'Dock'}
+                    </div>
+                  </div>
+                  <ArrowRight className="h-7 w-7 text-primary" />
+                  <div>
+                    <div className="text-xs text-muted-foreground">To</div>
+                    <div className="text-2xl font-bold tabular-nums text-primary">
+                      {task.targetBin.label}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {task.targetBin.zone.name}
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
 
           {/* Scan to confirm */}
-          <div style={{ background: '#1e293b', borderRadius: '16px', padding: '20px', border: '2px solid #3b82f6' }}>
-            <div style={{ fontSize: '11px', color: '#3b82f6', fontWeight: 600, marginBottom: '12px', textTransform: 'uppercase' }}>Scan Destination Bin</div>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <input
+          <Card className="border-2 border-primary">
+            <CardContent className="pt-6">
+              <div className="text-xs font-semibold uppercase tracking-wider text-primary">
+                Scan Destination Bin
+              </div>
+              <Input
                 value={scannedBin}
                 onChange={e => setScannedBin(e.target.value)}
                 placeholder={task.targetBin.label}
                 autoFocus
-                style={{ flex: 1, padding: '14px', borderRadius: '10px', border: '1px solid #475569', background: '#0f172a', color: 'white', fontSize: '18px', textAlign: 'center' }}
+                data-manual-input="true"
+                className="mt-3 h-14 text-center text-2xl font-bold tabular-nums"
               />
-              <button onClick={handleConfirm} disabled={confirming || !scannedBin.trim()}
-                style={{ padding: '14px 24px', borderRadius: '10px', border: 'none', background: '#10b981', color: 'white', fontWeight: 700, fontSize: '16px', cursor: 'pointer', opacity: confirming ? 0.5 : 1 }}>
-                {confirming ? '...' : 'Confirm'}
-              </button>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
         </>
+      )}
+
+      {/* Fixed bottom action bar */}
+      {!result && (
+        <div className="fixed inset-x-0 bottom-16 z-20 border-t border-border bg-background/95 p-4 backdrop-blur">
+          <Button
+            type="button"
+            variant="gradient"
+            size="lg"
+            className="w-full text-base"
+            onClick={handleConfirm}
+            disabled={confirming || !scannedBin.trim()}
+          >
+            {confirming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+            {confirming ? 'Confirming...' : 'Confirm putaway'}
+          </Button>
+        </div>
       )}
     </div>
   );

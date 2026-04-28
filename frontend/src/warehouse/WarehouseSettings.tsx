@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import './warehouse.css';
+import { ArrowLeftRight, LogOut } from 'lucide-react';
+
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 export default function WarehouseSettings() {
   const navigate = useNavigate();
@@ -25,65 +28,86 @@ export default function WarehouseSettings() {
   }
 
   return (
-    <>
-      <h2 style={{ margin: '0 0 16px', fontSize: '18px', fontWeight: 700 }}>Settings</h2>
-
-      <div className="wh-detail-section">
-        <h3 className="wh-detail-section-title">Account</h3>
-        <div className="wh-detail-row">
-          <span className="wh-detail-label">Name</span>
-          <span className="wh-detail-value">{user.firstName} {user.lastName}</span>
-        </div>
-        <div className="wh-detail-row">
-          <span className="wh-detail-label">Email</span>
-          <span className="wh-detail-value">{user.email}</span>
-        </div>
-        <div className="wh-detail-row">
-          <span className="wh-detail-label">Role</span>
-          <span className="wh-detail-value">{user.roles?.join(', ') || '—'}</span>
-        </div>
+    <div className="mx-auto max-w-2xl space-y-4 px-1 py-2">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
+        <p className="text-sm text-muted-foreground">Account and device configuration</p>
       </div>
 
-      <div className="wh-detail-section">
-        <h3 className="wh-detail-section-title">Location</h3>
-        <div className="wh-detail-row">
-          <span className="wh-detail-label">Current</span>
-          <span className="wh-detail-value">{location.name || '—'}</span>
-        </div>
-        <div className="wh-detail-row">
-          <span className="wh-detail-label">City</span>
-          <span className="wh-detail-value">{[location.city, location.state].filter(Boolean).join(', ') || '—'}</span>
-        </div>
-        <button
-          className="wh-action-btn wh-action-btn-outline"
-          style={{ width: '100%', marginTop: '8px' }}
-          onClick={changeLocation}
-        >
-          <span className="material-icons">swap_horiz</span>
-          Change Location
-        </button>
-      </div>
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Account</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm text-muted-foreground">Name</span>
+            <span className="text-base font-medium">
+              {user.firstName} {user.lastName}
+            </span>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm text-muted-foreground">Email</span>
+            <span className="text-base font-medium">{user.email || '-'}</span>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm text-muted-foreground">Role</span>
+            <span className="text-base font-medium">{user.roles?.join(', ') || '-'}</span>
+          </div>
+        </CardContent>
+      </Card>
 
-      <div className="wh-detail-section">
-        <h3 className="wh-detail-section-title">App Info</h3>
-        <div className="wh-detail-row">
-          <span className="wh-detail-label">Version</span>
-          <span className="wh-detail-value">1.0.0</span>
-        </div>
-        <div className="wh-detail-row">
-          <span className="wh-detail-label">Scanner</span>
-          <span className="wh-detail-value">HID (built-in)</span>
-        </div>
-      </div>
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Location</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm text-muted-foreground">Current</span>
+            <span className="text-base font-medium">{location.name || '-'}</span>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm text-muted-foreground">City</span>
+            <span className="text-base font-medium">
+              {[location.city, location.state].filter(Boolean).join(', ') || '-'}
+            </span>
+          </div>
+          <Button
+            variant="outline"
+            size="lg"
+            className="w-full"
+            onClick={changeLocation}
+          >
+            <ArrowLeftRight className="h-4 w-4" />
+            Change Location
+          </Button>
+        </CardContent>
+      </Card>
 
-      <button
-        className="wh-action-btn wh-action-btn-danger"
-        style={{ width: '100%', marginTop: '16px' }}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">App Info</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm text-muted-foreground">Version</span>
+            <span className="text-base font-medium">1.0.0</span>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm text-muted-foreground">Scanner</span>
+            <span className="text-base font-medium">HID (built-in)</span>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Button
+        variant="destructive"
+        size="lg"
+        className="w-full"
         onClick={handleLogout}
       >
-        <span className="material-icons">logout</span>
+        <LogOut className="h-4 w-4" />
         Sign Out
-      </button>
-    </>
+      </Button>
+    </div>
   );
 }

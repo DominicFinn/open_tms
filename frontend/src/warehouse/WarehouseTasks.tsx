@@ -1,6 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import {
+  CheckCircle2,
+  ChevronRight,
+  ClipboardList,
+  Loader2,
+  Package,
+  PackageCheck,
+  PackageOpen,
+  PackagePlus,
+  RotateCcw,
+  ScanLine,
+  type LucideIcon,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Badge } from '@/components/ui/badge';
+import { Card } from '@/components/ui/card';
 
 type TaskType = 'pick' | 'putaway' | 'receive' | 'pack' | 'return-receive' | 'return-inspect';
 
@@ -13,15 +29,41 @@ interface TaskItem {
   priority: number;
 }
 
-function statusColor(s: string): string {
-  switch (s) { case 'pending': return '#94a3b8'; case 'assigned': return '#3b82f6'; case 'in_progress': return '#f59e0b'; case 'completed': return '#10b981'; default: return '#94a3b8'; }
+const TASK_ICONS: Record<TaskType, LucideIcon> = {
+  pick: ScanLine,
+  putaway: PackagePlus,
+  receive: PackageOpen,
+  pack: Package,
+  'return-receive': RotateCcw,
+  'return-inspect': PackageCheck,
+};
+
+function statusVariant(s: string): 'muted' | 'info' | 'warning' | 'success' {
+  switch (s) {
+    case 'pending': return 'muted';
+    case 'assigned': return 'info';
+    case 'in_progress': return 'warning';
+    case 'completed': return 'success';
+    default: return 'muted';
+  }
 }
+
+const TABS = [
+  { value: 'all', label: 'All' },
+  { value: 'receive', label: 'Receive' },
+  { value: 'putaway', label: 'Putaway' },
+  { value: 'pick', label: 'Pick' },
+  { value: 'pack', label: 'Pack' },
+  { value: 'returns', label: 'Returns' },
+] as const;
+
+type Tab = (typeof TABS)[number]['value'];
 
 export default function WarehouseTasks() {
   const navigate = useNavigate();
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'all' | 'pick' | 'putaway' | 'receive' | 'pack' | 'returns'>('all');
+  const [tab, setTab] = useState<Tab>('all');
 
   const locationId = (() => {
     try { return JSON.parse(localStorage.getItem('warehouse_location') || '{}').id; } catch { return null; }
@@ -121,58 +163,79 @@ export default function WarehouseTasks() {
       ? tasks.filter(t => t.type === 'return-receive' || t.type === 'return-inspect')
       : tasks.filter(t => t.type === tab);
 
+  const countFor = (k: Tab) =>
+    k === 'all' ? tasks.length
+      : k === 'returns' ? tasks.filter(x => x.type === 'return-receive' || x.type === 'return-inspect').length
+      : tasks.filter(x => x.type === k).length;
+
   return (
-    <div>
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-        {(['all', 'receive', 'putaway', 'pick', 'pack', 'returns'] as const).map(t => {
-          const countFor = (k: typeof t) =>
-            k === 'all' ? tasks.length
-              : k === 'returns' ? tasks.filter(x => x.type === 'return-receive' || x.type === 'return-inspect').length
-              : tasks.filter(x => x.type === k).length;
-          const labels: Record<typeof t, string> = {
-            all: 'All', receive: 'Receive', putaway: 'Putaway', pick: 'Pick', pack: 'Pack', returns: 'Returns',
-          };
+    <div className="mx-auto max-w-2xl space-y-4 px-1 py-2 pb-24">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Tasks</h1>
+        <p className="text-sm text-muted-foreground">Active warehouse work assigned to you</p>
+      </div>
+
+      {/* Tab pills - scrollable on small screens */}
+      <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+        {TABS.map(t => {
+          const isActive = tab === t.value;
+          const count = countFor(t.value);
           return (
-            <button key={t} onClick={() => setTab(t)}
-              style={{
-                flex: 1, padding: '10px', borderRadius: '8px', border: 'none',
-                background: tab === t ? '#3b82f6' : '#1e293b', color: 'white',
-                fontWeight: tab === t ? 600 : 400, fontSize: '13px', cursor: 'pointer',
-              }}>
-              {labels[t]}
-              {tab !== t && <span style={{ marginLeft: '4px', opacity: 0.6 }}>({countFor(t)})</span>}
+            <button
+              key={t.value}
+              type="button"
+              onClick={() => setTab(t.value)}
+              className={
+                isActive
+                  ? 'inline-flex h-11 shrink-0 items-center gap-2 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground'
+                  : 'inline-flex h-11 shrink-0 items-center gap-2 rounded-full border border-border bg-card px-4 text-sm font-medium text-foreground hover:bg-muted/40 active:bg-muted/60'
+              }
+            >
+              <span>{t.label}</span>
+              <span className={isActive ? 'text-primary-foreground/80' : 'text-muted-foreground'}>
+                ({count})
+              </span>
             </button>
           );
         })}
       </div>
 
       {loading ? (
-        <div style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>Loading tasks...</div>
-      ) : filtered.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '2rem' }}>
-          <span className="material-icons" style={{ fontSize: '48px', color: '#475569', display: 'block', marginBottom: '8px' }}>check_circle</span>
-          <div style={{ color: '#94a3b8' }}>No active tasks</div>
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
+      ) : filtered.length === 0 ? (
+        <Card className="flex flex-col items-center gap-2 py-12 text-center">
+          <CheckCircle2 className="h-12 w-12 text-success" />
+          <p className="text-base font-semibold">No active tasks</p>
+          <p className="px-6 text-sm text-muted-foreground">You're all caught up.</p>
+        </Card>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          {filtered.map(task => (
-            <button key={task.id} onClick={() => navigate(`/warehouse/tasks/${task.type}/${task.id}`)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 16px',
-                background: '#1e293b', borderRadius: '12px', border: '1px solid #334155',
-                textAlign: 'left', cursor: 'pointer', color: 'white', width: '100%',
-              }}>
-              <div style={{
-                width: '10px', height: '10px', borderRadius: '50%',
-                background: statusColor(task.status), flexShrink: 0,
-              }} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 600, fontSize: '14px', marginBottom: '2px' }}>{task.summary}</div>
-                <div style={{ fontSize: '12px', color: '#94a3b8' }}>{task.detail}</div>
-              </div>
-              <span className="material-icons" style={{ color: '#475569', fontSize: '20px' }}>chevron_right</span>
-            </button>
-          ))}
+        <div className="space-y-3">
+          {filtered.map(task => {
+            const Icon = TASK_ICONS[task.type] || ClipboardList;
+            return (
+              <Card
+                key={`${task.type}-${task.id}`}
+                onClick={() => navigate(`/warehouse/tasks/${task.type}/${task.id}`)}
+                className="cursor-pointer transition-colors active:bg-muted/50"
+              >
+                <div className="flex items-center gap-4 p-4">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    <Icon className="h-6 w-6" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-base font-semibold">{task.summary}</div>
+                    <div className="truncate text-sm text-muted-foreground">{task.detail}</div>
+                  </div>
+                  <Badge variant={statusVariant(task.status)} className="px-3 py-1 text-sm capitalize">
+                    {task.status.replace(/_/g, ' ')}
+                  </Badge>
+                  <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
+                </div>
+              </Card>
+            );
+          })}
         </div>
       )}
     </div>

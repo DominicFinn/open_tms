@@ -14,11 +14,6 @@ import {
 
 import { cn } from '@/lib/utils';
 
-// Keep importing warehouse.css for now: phase 11 inner pages still rely on
-// some `wh-*` utility classes from it. Phase 11 migrates those pages and
-// phase 12 deletes the CSS file.
-import './warehouse.css';
-
 interface WarehouseUser {
   email?: string;
   roles?: string[];

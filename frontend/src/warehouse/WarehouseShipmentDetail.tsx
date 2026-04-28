@@ -1,9 +1,45 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Bluetooth,
+  Camera,
+  Check,
+  CheckCircle2,
+  DoorClosed,
+  Flag,
+  Link as LinkIcon,
+  Loader2,
+  Lock,
+  Package,
+  Play,
+  Plus,
+  Radio,
+  Rocket,
+  Save,
+  ScanLine,
+  Thermometer,
+  Trash2,
+  X,
+  type LucideIcon,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
 import { useBarcodeScanner } from './useBarcodeScanner';
 import { CameraScannerModal } from './CameraScannerModal';
-import './warehouse.css';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { cn } from '@/lib/utils';
 
 type WizardStep = 'detail' | 'trackers' | 'accessories' | 'units' | 'review';
 
@@ -15,6 +51,33 @@ const ACCESSORY_TYPES = [
   { value: 'door_seal', label: 'Door Seal (Non-IoT)', icon: 'lock', isIoT: false },
   { value: 'ble_tracker', label: 'BLE Tracker', icon: 'bluetooth', isIoT: true },
 ];
+
+const ACCESSORY_ICON: Record<string, LucideIcon> = {
+  thermostat: Thermometer,
+  sensor_door: DoorClosed,
+  lock: Lock,
+  bluetooth: Bluetooth,
+};
+
+const STEPS: { key: WizardStep; label: string }[] = [
+  { key: 'detail', label: 'Detail' },
+  { key: 'trackers', label: 'Trackers' },
+  { key: 'accessories', label: 'Accessories' },
+  { key: 'units', label: 'Units' },
+  { key: 'review', label: 'Review' },
+];
+
+type StatusVariant = 'success' | 'info' | 'warning' | 'destructive' | 'muted';
+
+function statusVariant(status?: string): StatusVariant {
+  if (!status) return 'muted';
+  const s = status.toLowerCase();
+  if (s === 'delivered') return 'success';
+  if (s === 'in_transit' || s === 'in transit') return 'info';
+  if (s === 'booked' || s === 'pickup') return 'warning';
+  if (s === 'exception' || s === 'issue') return 'destructive';
+  return 'muted';
+}
 
 export default function WarehouseShipmentDetail() {
   const { id } = useParams<{ id: string }>();
@@ -69,11 +132,10 @@ export default function WarehouseShipmentDetail() {
 
   useEffect(() => { loadShipment(); }, [loadShipment]);
 
-  // Barcode scanner — context-aware
+  // Barcode scanner - context-aware
   const handleScan = useCallback(async (barcode: string) => {
     setScanError('');
     if (step === 'trackers' || scanMode === 'tracker') {
-      // Look up device by barcode
       try {
         const res = await fetch(`${API_URL}/api/v1/warehouse/devices/lookup?barcode=${encodeURIComponent(barcode)}`);
         const json = await res.json();
@@ -89,7 +151,6 @@ export default function WarehouseShipmentDetail() {
       setAccessoryIdentifier(barcode);
     } else if (step === 'units') {
       if (scanMode === 'unit') {
-        // Look up trackable unit
         try {
           const res = await fetch(`${API_URL}/api/v1/warehouse/trackable-units/lookup?barcode=${encodeURIComponent(barcode)}`);
           const json = await res.json();
@@ -97,13 +158,12 @@ export default function WarehouseShipmentDetail() {
             setScanError(json.error);
           } else {
             setScannedUnit(json.data);
-            setScanMode(null); // Next scan should be device
+            setScanMode(null);
           }
         } catch {
           setScanError('Network error looking up unit');
         }
       } else {
-        // Scan mode null — this is a device scan for the current unit
         if (scannedUnit) {
           try {
             const res = await fetch(`${API_URL}/api/v1/warehouse/devices/lookup?barcode=${encodeURIComponent(barcode)}`);
@@ -118,7 +178,7 @@ export default function WarehouseShipmentDetail() {
                 deviceName: json.data.displayId || json.data.name,
               }]);
               setScannedUnit(null);
-              setScanMode('unit'); // Ready for next unit
+              setScanMode('unit');
             }
           } catch {
             setScanError('Network error looking up device');
@@ -130,7 +190,6 @@ export default function WarehouseShipmentDetail() {
 
   useBarcodeScanner(handleScan, { enabled: step !== 'detail' && step !== 'review' });
 
-  // Camera scan handler — routes scanned barcode same as HID scanner
   const handleCameraScan = useCallback((barcode: string) => {
     handleScan(barcode);
     setCameraOpen(false);
@@ -141,7 +200,7 @@ export default function WarehouseShipmentDetail() {
     setCameraOpen(true);
   }
 
-  // ─── Actions ────────────────────────────────────────────────────────────
+  // Actions
 
   async function assignTracker() {
     if (!scannedDevice || !id) return;
@@ -246,614 +305,884 @@ export default function WarehouseShipmentDetail() {
     setTimeout(() => navigate('/warehouse'), 1500);
   }
 
-  // ─── Render ─────────────────────────────────────────────────────────────
+  // Render
 
   if (loading) {
-    return <div className="wh-loading"><div className="wh-spinner" /></div>;
-  }
-
-  if (!shipment) {
     return (
-      <div className="wh-empty">
-        <span className="material-icons">error</span>
-        <p className="wh-empty-title">Shipment not found</p>
-        <button className="wh-action-btn wh-action-btn-outline" onClick={() => navigate('/warehouse')}>
-          Back to list
-        </button>
+      <div className="flex flex-col items-center gap-3 py-16 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
       </div>
     );
   }
 
-  const steps: WizardStep[] = ['detail', 'trackers', 'accessories', 'units', 'review'];
-  const stepIndex = steps.indexOf(step);
+  if (!shipment) {
+    return (
+      <div className="space-y-4 pb-24">
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 py-10 text-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-destructive/15 text-destructive">
+              <AlertTriangle className="h-8 w-8" />
+            </div>
+            <div className="text-lg font-semibold">Shipment not found</div>
+            <Button variant="outline" size="lg" onClick={() => navigate('/warehouse')}>
+              Back to list
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const stepIndex = STEPS.findIndex(s => s.key === step);
+  const completedKeys = STEPS.slice(0, stepIndex).map(s => s.key);
   const hasUnits = shipment.orderShipments?.some((os: any) => os.order?.trackableUnits?.length > 0);
+  const unresolvedFlags = shipment.flags?.filter((f: any) => !f.resolved) || [];
+  const canLaunch = unresolvedFlags.length === 0;
+
+  const fmtDate = (d: any) => (d ? new Date(d).toLocaleDateString() : '-');
+
+  const selectedAcc = ACCESSORY_TYPES.find(a => a.value === selectedAccessoryType);
 
   return (
-    <>
+    <div className="space-y-4 pb-24">
       {/* Success banner */}
       {success && (
-        <div className="wh-banner wh-banner-success">
-          <span className="material-icons">check_circle</span>
-          {success}
+        <div className="flex items-center gap-2 rounded-md border border-success/30 bg-success/10 px-3 py-2 text-sm text-success">
+          <CheckCircle2 className="h-4 w-4" />
+          <span>{success}</span>
         </div>
       )}
 
       {/* Error banner */}
       {error && (
-        <div className="wh-banner wh-banner-error">
-          <span className="material-icons">error</span>
-          {error}
-          <button onClick={() => setError('')} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer' }}>
-            <span className="material-icons" style={{ fontSize: '16px' }}>close</span>
+        <div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <span className="flex-1">{error}</span>
+          <button
+            type="button"
+            onClick={() => setError('')}
+            aria-label="Dismiss"
+            className="text-destructive hover:opacity-70"
+          >
+            <X className="h-4 w-4" />
           </button>
         </div>
       )}
 
-      {/* Wizard progress bar */}
+      {/* Wizard step indicator (hidden on detail step) */}
       {step !== 'detail' && (
-        <div className="wh-wizard-steps">
-          {steps.map((s, i) => (
-            <div
-              key={s}
-              className={`wh-wizard-step ${i <= stepIndex ? (i < stepIndex ? 'completed' : 'active') : ''}`}
-            />
-          ))}
+        <div className="flex items-center gap-1 overflow-x-auto pb-2">
+          {STEPS.map((s, i) => {
+            const isActive = step === s.key;
+            const isCompleted = completedKeys.includes(s.key);
+            return (
+              <button
+                key={s.key}
+                type="button"
+                onClick={() => setStep(s.key)}
+                className={cn(
+                  'flex shrink-0 items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors',
+                  isActive
+                    ? 'bg-primary text-primary-foreground'
+                    : isCompleted
+                    ? 'bg-success/15 text-success'
+                    : 'bg-muted text-muted-foreground'
+                )}
+              >
+                <span className="flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold">
+                  {isCompleted ? <Check className="h-3 w-3" /> : i + 1}
+                </span>
+                <span>{s.label}</span>
+              </button>
+            );
+          })}
         </div>
       )}
 
-      {/* ─── STEP: Detail ──────────────────────────────────────────────── */}
+      {/* STEP: Detail */}
       {step === 'detail' && (
         <>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-            <button className="wh-action-btn wh-action-btn-outline" style={{ flex: 'none', padding: '8px 12px' }} onClick={() => navigate('/warehouse')}>
-              <span className="material-icons">arrow_back</span>
-            </button>
-            <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 700 }}>{shipment.reference}</h2>
-            <button
-              className="wh-action-btn wh-action-btn-danger"
-              style={{ flex: 'none', padding: '8px 12px' }}
+          <div className="flex items-center justify-between gap-2">
+            <Button variant="ghost" size="sm" onClick={() => navigate('/warehouse')} className="-ml-2">
+              <ArrowLeft className="h-5 w-5" />
+              <span className="text-base">Shipments</span>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => setShowFlagForm(true)}
+              className="border-destructive/40 text-destructive hover:bg-destructive/10"
+              aria-label="Flag shipment"
             >
-              <span className="material-icons">flag</span>
-            </button>
+              <Flag className="h-4 w-4" />
+              Flag
+            </Button>
+          </div>
+
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Shipment
+              </div>
+              <div className="text-xl font-bold">{shipment.reference}</div>
+            </div>
+            {shipment.status && (
+              <Badge variant={statusVariant(shipment.status)} className="capitalize">
+                {String(shipment.status).replace(/_/g, ' ')}
+              </Badge>
+            )}
           </div>
 
           {/* Flags */}
-          {shipment.flags?.filter((f: any) => !f.resolved).length > 0 && (
-            <div className="wh-banner wh-banner-error">
-              <span className="material-icons">warning</span>
-              {shipment.flags.filter((f: any) => !f.resolved).length} unresolved flag(s):
-              {shipment.flags.filter((f: any) => !f.resolved).map((f: any) => ` "${f.reason}"`).join(', ')}
+          {unresolvedFlags.length > 0 && (
+            <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <div>
+                <div className="font-semibold">
+                  {unresolvedFlags.length} unresolved flag{unresolvedFlags.length !== 1 ? 's' : ''}
+                </div>
+                <div className="text-xs">
+                  {unresolvedFlags.map((f: any) => `"${f.reason}"`).join(', ')}
+                </div>
+              </div>
             </div>
           )}
 
           {/* Route */}
-          <div className="wh-detail-section">
-            <h3 className="wh-detail-section-title">Route</h3>
-            <div className="wh-detail-row">
-              <span className="wh-detail-label">From</span>
-              <span className="wh-detail-value">{shipment.origin?.name} — {shipment.origin?.city}</span>
-            </div>
-            <div className="wh-detail-row">
-              <span className="wh-detail-label">To</span>
-              <span className="wh-detail-value">{shipment.destination?.name} — {shipment.destination?.city}</span>
-            </div>
-            {shipment.stops?.length > 0 && (
-              <div className="wh-detail-row">
-                <span className="wh-detail-label">Stops</span>
-                <span className="wh-detail-value">{shipment.stops.length} stop{shipment.stops.length !== 1 ? 's' : ''}</span>
+          <Card>
+            <CardContent className="p-0">
+              <div className="border-b border-border px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Route
               </div>
-            )}
-          </div>
-
-          {/* Customer & Dates */}
-          <div className="wh-detail-section">
-            <h3 className="wh-detail-section-title">Details</h3>
-            <div className="wh-detail-row">
-              <span className="wh-detail-label">Customer</span>
-              <span className="wh-detail-value">{shipment.customer?.name}</span>
-            </div>
-            <div className="wh-detail-row">
-              <span className="wh-detail-label">Pickup</span>
-              <span className="wh-detail-value">{shipment.pickupDate ? new Date(shipment.pickupDate).toLocaleDateString() : '—'}</span>
-            </div>
-            <div className="wh-detail-row">
-              <span className="wh-detail-label">Delivery</span>
-              <span className="wh-detail-value">{shipment.deliveryDate ? new Date(shipment.deliveryDate).toLocaleDateString() : '—'}</span>
-            </div>
-            {shipment.proNumber && (
-              <div className="wh-detail-row">
-                <span className="wh-detail-label">PRO #</span>
-                <span className="wh-detail-value">{shipment.proNumber}</span>
-              </div>
-            )}
-          </div>
-
-          {/* Carrier & Vehicle */}
-          <div className="wh-detail-section">
-            <h3 className="wh-detail-section-title">Transport</h3>
-            <div className="wh-detail-row">
-              <span className="wh-detail-label">Carrier</span>
-              <span className="wh-detail-value">{shipment.carrier?.name || '—'}</span>
-            </div>
-            {shipment.loads?.[0] && (
-              <>
-                {shipment.loads[0].driver && (
-                  <div className="wh-detail-row">
-                    <span className="wh-detail-label">Driver</span>
-                    <span className="wh-detail-value">{shipment.loads[0].driver.name}</span>
+              <div className="divide-y divide-border">
+                <div className="flex items-center justify-between gap-3 p-4 text-sm">
+                  <span className="text-muted-foreground">From</span>
+                  <span className="text-right font-medium">
+                    {shipment.origin?.name} - {shipment.origin?.city}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-3 p-4 text-sm">
+                  <span className="text-muted-foreground">To</span>
+                  <span className="text-right font-medium">
+                    {shipment.destination?.name} - {shipment.destination?.city}
+                  </span>
+                </div>
+                {shipment.stops?.length > 0 && (
+                  <div className="flex items-center justify-between gap-3 p-4 text-sm">
+                    <span className="text-muted-foreground">Stops</span>
+                    <span className="font-medium">
+                      {shipment.stops.length} stop{shipment.stops.length !== 1 ? 's' : ''}
+                    </span>
                   </div>
                 )}
-                {shipment.loads[0].vehicle && (
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Customer & Dates */}
+          <Card>
+            <CardContent className="p-0">
+              <div className="border-b border-border px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Details
+              </div>
+              <div className="divide-y divide-border">
+                <div className="flex items-center justify-between gap-3 p-4 text-sm">
+                  <span className="text-muted-foreground">Customer</span>
+                  <span className="text-right font-medium">{shipment.customer?.name}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3 p-4 text-sm">
+                  <span className="text-muted-foreground">Pickup</span>
+                  <span className="font-medium">{fmtDate(shipment.pickupDate)}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3 p-4 text-sm">
+                  <span className="text-muted-foreground">Delivery</span>
+                  <span className="font-medium">{fmtDate(shipment.deliveryDate)}</span>
+                </div>
+                {shipment.proNumber && (
+                  <div className="flex items-center justify-between gap-3 p-4 text-sm">
+                    <span className="text-muted-foreground">PRO #</span>
+                    <span className="font-medium">{shipment.proNumber}</span>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Carrier & Vehicle */}
+          <Card>
+            <CardContent className="p-0">
+              <div className="border-b border-border px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Transport
+              </div>
+              <div className="divide-y divide-border">
+                <div className="flex items-center justify-between gap-3 p-4 text-sm">
+                  <span className="text-muted-foreground">Carrier</span>
+                  <span className="font-medium">{shipment.carrier?.name || '-'}</span>
+                </div>
+                {shipment.loads?.[0]?.driver && (
+                  <div className="flex items-center justify-between gap-3 p-4 text-sm">
+                    <span className="text-muted-foreground">Driver</span>
+                    <span className="font-medium">{shipment.loads[0].driver.name}</span>
+                  </div>
+                )}
+                {shipment.loads?.[0]?.vehicle && (
                   <>
-                    <div className="wh-detail-row">
-                      <span className="wh-detail-label">Vehicle</span>
-                      <span className="wh-detail-value">{shipment.loads[0].vehicle.plate}</span>
+                    <div className="flex items-center justify-between gap-3 p-4 text-sm">
+                      <span className="text-muted-foreground">Vehicle</span>
+                      <span className="font-medium">{shipment.loads[0].vehicle.plate}</span>
                     </div>
-                    <div className="wh-detail-row">
-                      <span className="wh-detail-label">Type</span>
-                      <span className="wh-detail-value">{shipment.loads[0].vehicle.type}</span>
+                    <div className="flex items-center justify-between gap-3 p-4 text-sm">
+                      <span className="text-muted-foreground">Type</span>
+                      <span className="font-medium">{shipment.loads[0].vehicle.type}</span>
                     </div>
                   </>
                 )}
-              </>
-            )}
-          </div>
+              </div>
+            </CardContent>
+          </Card>
 
           {/* Orders & Units */}
           {shipment.orderShipments?.length > 0 && (
-            <div className="wh-detail-section">
-              <h3 className="wh-detail-section-title">Orders & Units</h3>
-              {shipment.orderShipments.map((os: any) => (
-                <div key={os.order.id} style={{ marginBottom: '8px' }}>
-                  <div className="wh-detail-row">
-                    <span className="wh-detail-label">Order</span>
-                    <span className="wh-detail-value" style={{ fontWeight: 700 }}>{os.order.orderNumber}</span>
-                  </div>
-                  {os.order.trackableUnits?.map((u: any) => (
-                    <div key={u.id} className="wh-scan-result" style={{ marginTop: '4px' }}>
-                      <span className="material-icons">inventory_2</span>
-                      <div className="wh-scan-result-info">
-                        <div className="wh-scan-result-name">{u.identifier}</div>
-                        <div className="wh-scan-result-detail">{u.unitType} {u.barcode ? `· ${u.barcode}` : ''}</div>
+            <Card>
+              <CardContent className="p-0">
+                <div className="border-b border-border px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Orders & Units
+                </div>
+                <div className="divide-y divide-border">
+                  {shipment.orderShipments.map((os: any) => (
+                    <div key={os.order.id} className="space-y-2 p-4">
+                      <div className="flex items-center justify-between gap-3 text-sm">
+                        <span className="text-muted-foreground">Order</span>
+                        <span className="font-bold">{os.order.orderNumber}</span>
                       </div>
+                      {os.order.trackableUnits?.map((u: any) => (
+                        <div
+                          key={u.id}
+                          className="flex items-center gap-3 rounded-md border border-border bg-muted/30 p-3"
+                        >
+                          <Package className="h-5 w-5 text-muted-foreground" />
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-sm font-semibold">{u.identifier}</div>
+                            <div className="truncate text-xs text-muted-foreground">
+                              {u.unitType}
+                              {u.barcode ? ` - ${u.barcode}` : ''}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   ))}
                 </div>
-              ))}
-            </div>
+              </CardContent>
+            </Card>
           )}
 
           {/* Existing trackers */}
           {shipment.deviceAssignments?.length > 0 && (
-            <div className="wh-detail-section">
-              <h3 className="wh-detail-section-title">Assigned Trackers</h3>
-              {shipment.deviceAssignments.map((da: any) => (
-                <div key={da.id} className="wh-scan-result">
-                  <span className="material-icons">sensors</span>
-                  <div className="wh-scan-result-info">
-                    <div className="wh-scan-result-name">{da.device?.displayId || da.device?.name}</div>
-                    <div className="wh-scan-result-detail">Battery: {da.device?.batteryLevel ?? '—'}%</div>
-                  </div>
+            <Card>
+              <CardContent className="p-0">
+                <div className="border-b border-border px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Assigned Trackers
                 </div>
-              ))}
-            </div>
+                <div className="divide-y divide-border">
+                  {shipment.deviceAssignments.map((da: any) => (
+                    <div key={da.id} className="flex items-center gap-3 p-4">
+                      <Radio className="h-5 w-5 text-primary" />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-semibold">
+                          {da.device?.displayId || da.device?.name}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          Battery: {da.device?.batteryLevel ?? '-'}%
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
           )}
 
           {/* Action bar */}
-          <div className="wh-action-bar" style={{ position: 'relative' }}>
+          <div className="fixed inset-x-0 bottom-16 z-20 border-t border-border bg-background/95 p-4 backdrop-blur">
             {shipment.launchedAt ? (
-              <div className="wh-banner wh-banner-success" style={{ margin: 0, flex: 1 }}>
-                <span className="material-icons">check_circle</span>
+              <div className="flex items-center justify-center gap-2 rounded-md border border-success/30 bg-success/10 px-3 py-3 text-sm font-semibold text-success">
+                <CheckCircle2 className="h-5 w-5" />
                 Launched
               </div>
             ) : (
-              <button className="wh-action-btn wh-action-btn-primary" onClick={() => setStep('trackers')}>
-                <span className="material-icons">play_arrow</span>
-                Start Launch Wizard
-              </button>
+              <Button
+                size="lg"
+                variant="gradient"
+                className="w-full text-base"
+                onClick={() => setStep('trackers')}
+              >
+                <Play className="h-5 w-5" />
+                Start launch wizard
+              </Button>
             )}
           </div>
 
           {/* Flag dialog */}
-          {showFlagForm && (
-            <div style={{
-              position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 300,
-              display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: '60px',
-            }} onClick={() => setShowFlagForm(false)}>
-              <div style={{
-                background: 'var(--surface)', borderRadius: '16px', padding: '20px',
-                width: '90%', maxWidth: '360px',
-              }} onClick={e => e.stopPropagation()}>
-                <h3 style={{ margin: '0 0 12px', fontSize: '16px' }}>Flag an Issue</h3>
-                <textarea
-                  value={flagReason}
-                  onChange={e => setFlagReason(e.target.value)}
-                  placeholder="Describe the issue..."
-                  rows={3}
-                  style={{
-                    width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--outline-variant)',
-                    fontSize: '14px', resize: 'none', boxSizing: 'border-box',
-                    background: 'var(--surface-container)', color: 'var(--on-surface)',
-                  }}
-                  autoFocus
-                />
-                <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
-                  <button className="wh-action-btn wh-action-btn-outline" onClick={() => setShowFlagForm(false)}>Cancel</button>
-                  <button className="wh-action-btn wh-action-btn-danger" onClick={flagShipment} disabled={!flagReason.trim()}>
-                    <span className="material-icons">flag</span>
-                    Flag
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
+          <Dialog open={showFlagForm} onOpenChange={setShowFlagForm}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Flag an issue</DialogTitle>
+              </DialogHeader>
+              <textarea
+                value={flagReason}
+                onChange={e => setFlagReason(e.target.value)}
+                placeholder="Describe the issue..."
+                rows={4}
+                autoFocus
+                className="w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+              <DialogFooter className="flex flex-row gap-2 sm:justify-end">
+                <Button variant="outline" onClick={() => setShowFlagForm(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={flagShipment}
+                  disabled={!flagReason.trim()}
+                >
+                  <Flag className="h-4 w-4" />
+                  Flag
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </>
       )}
 
-      {/* ─── STEP: Trackers ────────────────────────────────────────────── */}
+      {/* STEP: Trackers */}
       {step === 'trackers' && (
         <>
-          <h2 className="wh-wizard-title">Assign Trackers</h2>
-          <p className="wh-wizard-subtitle">Scan the barcode on each IoT tracker to assign it to this shipment.</p>
+          <div>
+            <h2 className="text-xl font-bold">Assign trackers</h2>
+            <p className="text-sm text-muted-foreground">
+              Scan the barcode on each IoT tracker to assign it to this shipment.
+            </p>
+          </div>
 
           {scanError && (
-            <div className="wh-banner wh-banner-error">
-              <span className="material-icons">error</span>
-              {scanError}
+            <div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <span>{scanError}</span>
             </div>
           )}
 
-          {/* Scan area */}
-          <div className="wh-scan-area">
-            <span className="material-icons">qr_code_scanner</span>
-            <p className="wh-scan-area-title">Scan Tracker Barcode</p>
-            <p className="wh-scan-area-hint">Use built-in scanner or tap camera button</p>
-            <button className="wh-scan-camera-btn" onClick={() => openCameraScanner('tracker')}>
-              <span className="material-icons">photo_camera</span>
-              Scan with Camera
-            </button>
-          </div>
+          <Card className="border-primary/40 bg-primary/5">
+            <CardContent className="p-5 text-center">
+              <ScanLine className="mx-auto h-12 w-12 text-primary" />
+              <div className="mt-2 text-base font-semibold">Scan tracker barcode</div>
+              <div className="text-sm text-muted-foreground">
+                Use built-in scanner or tap camera button
+              </div>
+              <Button
+                variant="gradient"
+                size="lg"
+                className="mt-3 w-full text-base"
+                onClick={() => openCameraScanner('tracker')}
+              >
+                <Camera className="h-5 w-5" />
+                Use camera
+              </Button>
+            </CardContent>
+          </Card>
 
           {/* Scanned device preview */}
           {scannedDevice && (
-            <div className="wh-scan-result" style={{ border: '2px solid var(--primary)' }}>
-              <span className="material-icons">sensors</span>
-              <div className="wh-scan-result-info">
-                <div className="wh-scan-result-name">{scannedDevice.displayId || scannedDevice.name}</div>
-                <div className="wh-scan-result-detail">
-                  {scannedDevice.model || scannedDevice.provider}
-                  {scannedDevice.alreadyAssigned && (
-                    <span style={{ color: 'var(--color-warning, orange)' }}> · Currently on {scannedDevice.currentShipmentRef}</span>
-                  )}
+            <Card className="border-primary">
+              <CardContent className="flex items-center gap-3 p-4">
+                <Radio className="h-5 w-5 text-primary" />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-semibold">
+                    {scannedDevice.displayId || scannedDevice.name}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {scannedDevice.model || scannedDevice.provider}
+                    {scannedDevice.alreadyAssigned && (
+                      <span className="text-warning">
+                        {' '}- Currently on {scannedDevice.currentShipmentRef}
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
-              <button className="wh-action-btn wh-action-btn-primary" style={{ flex: 'none', padding: '8px 16px' }} onClick={assignTracker}>
-                Assign
-              </button>
-            </div>
+                <Button size="sm" onClick={assignTracker}>
+                  Assign
+                </Button>
+              </CardContent>
+            </Card>
           )}
 
           {/* Already assigned trackers */}
           {shipment.deviceAssignments?.length > 0 && (
-            <div className="wh-detail-section" style={{ marginTop: '16px' }}>
-              <h3 className="wh-detail-section-title">Assigned ({shipment.deviceAssignments.length})</h3>
-              {shipment.deviceAssignments.map((da: any) => (
-                <div key={da.id} className="wh-scan-result">
-                  <span className="material-icons">sensors</span>
-                  <div className="wh-scan-result-info">
-                    <div className="wh-scan-result-name">{da.device?.displayId || da.device?.name}</div>
-                    <div className="wh-scan-result-detail">{da.device?.model || 'Tracker'}</div>
-                  </div>
-                  <button className="wh-scan-result-action" onClick={() => removeDevice(da.device?.id)}>
-                    <span className="material-icons">delete</span>
-                  </button>
+            <Card>
+              <CardContent className="p-0">
+                <div className="border-b border-border px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Assigned ({shipment.deviceAssignments.length})
                 </div>
-              ))}
-            </div>
+                <div className="divide-y divide-border">
+                  {shipment.deviceAssignments.map((da: any) => (
+                    <div key={da.id} className="flex items-center gap-3 p-4">
+                      <Radio className="h-5 w-5 text-primary" />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-semibold">
+                          {da.device?.displayId || da.device?.name}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {da.device?.model || 'Tracker'}
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-11 w-11 text-destructive hover:bg-destructive/10"
+                        aria-label="Remove tracker"
+                        onClick={() => removeDevice(da.device?.id)}
+                      >
+                        <Trash2 className="h-5 w-5" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
           )}
 
-          <div className="wh-action-bar" style={{ position: 'relative' }}>
-            <button className="wh-action-btn wh-action-btn-outline" onClick={() => setStep('detail')}>Back</button>
-            <button className="wh-action-btn wh-action-btn-primary" onClick={() => { setStep('accessories'); setScanMode('accessory'); setScannedDevice(null); }}>
+          <div className="fixed inset-x-0 bottom-16 z-20 flex gap-2 border-t border-border bg-background/95 p-4 backdrop-blur">
+            <Button
+              variant="outline"
+              size="lg"
+              className="flex-1 text-base"
+              onClick={() => setStep('detail')}
+            >
+              Back
+            </Button>
+            <Button
+              size="lg"
+              variant="gradient"
+              className="flex-[2] text-base"
+              onClick={() => {
+                setStep('accessories');
+                setScanMode('accessory');
+                setScannedDevice(null);
+              }}
+            >
               Next
-            </button>
+            </Button>
           </div>
         </>
       )}
 
-      {/* ─── STEP: Accessories ─────────────────────────────────────────── */}
+      {/* STEP: Accessories */}
       {step === 'accessories' && (
         <>
-          <h2 className="wh-wizard-title">Add Accessories</h2>
-          <p className="wh-wizard-subtitle">Add door seals, temperature sensors, or BLE devices.</p>
+          <div>
+            <h2 className="text-xl font-bold">Add accessories</h2>
+            <p className="text-sm text-muted-foreground">
+              Add door seals, temperature sensors, or BLE devices.
+            </p>
+          </div>
 
           {scanError && (
-            <div className="wh-banner wh-banner-error">
-              <span className="material-icons">error</span>
-              {scanError}
+            <div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <span>{scanError}</span>
             </div>
           )}
 
           {/* Accessory type grid */}
-          <div className="wh-accessory-grid">
-            {ACCESSORY_TYPES.map(acc => (
-              <div
-                key={acc.value}
-                className={`wh-accessory-option ${selectedAccessoryType === acc.value ? 'selected' : ''}`}
-                onClick={() => setSelectedAccessoryType(acc.value)}
-              >
-                <span className="material-icons">{acc.icon}</span>
-                {acc.label}
-              </div>
-            ))}
+          <div className="grid grid-cols-2 gap-2">
+            {ACCESSORY_TYPES.map(acc => {
+              const Icon = ACCESSORY_ICON[acc.icon] ?? Radio;
+              const isSelected = selectedAccessoryType === acc.value;
+              return (
+                <button
+                  key={acc.value}
+                  type="button"
+                  onClick={() => setSelectedAccessoryType(acc.value)}
+                  className={cn(
+                    'flex min-h-[88px] flex-col items-center justify-center gap-2 rounded-md border p-3 text-center text-sm font-medium transition-colors',
+                    isSelected
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-border bg-card text-foreground hover:bg-muted/40'
+                  )}
+                >
+                  <Icon className="h-6 w-6" />
+                  <span>{acc.label}</span>
+                </button>
+              );
+            })}
           </div>
 
-          {selectedAccessoryType && (
+          {selectedAcc && (
             <>
-              {ACCESSORY_TYPES.find(a => a.value === selectedAccessoryType)?.isIoT ? (
-                <div className="wh-scan-area" style={{ padding: '16px' }}>
-                  <span className="material-icons">qr_code_scanner</span>
-                  <p className="wh-scan-area-title">Scan Device ID</p>
-                  <p className="wh-scan-area-hint">Scan the barcode on the BLE device</p>
-                  <button className="wh-scan-camera-btn" onClick={() => openCameraScanner('accessory')}>
-                    <span className="material-icons">photo_camera</span>
-                    Scan with Camera
-                  </button>
-                  {scannedDevice && (
-                    <div style={{ marginTop: '8px', fontSize: '14px', fontWeight: 600, color: 'var(--primary)' }}>
+              <Card className="border-primary/40 bg-primary/5">
+                <CardContent className="p-5 text-center">
+                  <ScanLine className="mx-auto h-10 w-10 text-primary" />
+                  <div className="mt-2 text-base font-semibold">
+                    {selectedAcc.isIoT ? 'Scan device ID' : 'Scan seal ID'}
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    {selectedAcc.isIoT
+                      ? 'Scan the barcode on the BLE device'
+                      : 'Scan or type the door seal identifier'}
+                  </div>
+                  <Button
+                    variant="gradient"
+                    size="lg"
+                    className="mt-3 w-full text-base"
+                    onClick={() => openCameraScanner('accessory')}
+                  >
+                    <Camera className="h-5 w-5" />
+                    Use camera
+                  </Button>
+                  {selectedAcc.isIoT && scannedDevice && (
+                    <div className="mt-2 text-sm font-semibold text-primary">
                       Found: {scannedDevice.displayId || scannedDevice.name}
                     </div>
                   )}
-                </div>
-              ) : (
-                <div style={{ marginBottom: '12px' }}>
-                  <div className="wh-scan-area" style={{ padding: '16px' }}>
-                    <span className="material-icons">qr_code_scanner</span>
-                    <p className="wh-scan-area-title">Scan Seal ID</p>
-                    <p className="wh-scan-area-hint">Scan or type the door seal identifier</p>
-                    <button className="wh-scan-camera-btn" onClick={() => openCameraScanner('accessory')}>
-                      <span className="material-icons">photo_camera</span>
-                      Scan with Camera
-                    </button>
-                    {accessoryIdentifier && (
-                      <div style={{ marginTop: '8px', fontSize: '14px', fontWeight: 600, color: 'var(--primary)' }}>
-                        ID: {accessoryIdentifier}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-              <button
-                className="wh-action-btn wh-action-btn-primary"
-                style={{ width: '100%', marginBottom: '12px' }}
+                  {!selectedAcc.isIoT && (
+                    <div className="mt-3 text-left">
+                      <Input
+                        value={accessoryIdentifier}
+                        onChange={e => setAccessoryIdentifier(e.target.value)}
+                        placeholder="Or type seal ID..."
+                        data-manual-input="true"
+                        className="h-12 text-center text-base"
+                      />
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Button
+                size="lg"
+                variant="gradient"
+                className="w-full text-base"
                 onClick={addAccessory}
               >
-                <span className="material-icons">add</span>
-                Add {ACCESSORY_TYPES.find(a => a.value === selectedAccessoryType)?.label}
-              </button>
+                <Plus className="h-5 w-5" />
+                Add {selectedAcc.label}
+              </Button>
             </>
           )}
 
           {/* Existing accessories */}
           {shipment.accessories?.length > 0 && (
-            <div className="wh-detail-section">
-              <h3 className="wh-detail-section-title">Added ({shipment.accessories.length})</h3>
-              {shipment.accessories.map((acc: any) => (
-                <div key={acc.id} className="wh-scan-result">
-                  <span className="material-icons">
-                    {acc.isIoT ? 'bluetooth' : 'lock'}
-                  </span>
-                  <div className="wh-scan-result-info">
-                    <div className="wh-scan-result-name">{acc.alias || acc.accessoryType}</div>
-                    <div className="wh-scan-result-detail">{acc.identifier || 'No ID'}</div>
-                  </div>
-                  <button className="wh-scan-result-action" onClick={() => removeAccessory(acc.id)}>
-                    <span className="material-icons">delete</span>
-                  </button>
+            <Card>
+              <CardContent className="p-0">
+                <div className="border-b border-border px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Added ({shipment.accessories.length})
                 </div>
-              ))}
-            </div>
+                <div className="divide-y divide-border">
+                  {shipment.accessories.map((acc: any) => {
+                    const Icon = acc.isIoT ? Bluetooth : Lock;
+                    return (
+                      <div key={acc.id} className="flex items-center gap-3 p-4">
+                        <Icon className="h-5 w-5 text-primary" />
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm font-semibold">
+                            {acc.alias || acc.accessoryType}
+                          </div>
+                          <div className="truncate text-xs text-muted-foreground">
+                            {acc.identifier || 'No ID'}
+                          </div>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-11 w-11 text-destructive hover:bg-destructive/10"
+                          aria-label="Remove accessory"
+                          onClick={() => removeAccessory(acc.id)}
+                        >
+                          <Trash2 className="h-5 w-5" />
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
           )}
 
-          <div className="wh-action-bar" style={{ position: 'relative' }}>
-            <button className="wh-action-btn wh-action-btn-outline" onClick={() => { setStep('trackers'); setScanMode('tracker'); }}>Back</button>
-            <button className="wh-action-btn wh-action-btn-primary" onClick={() => {
-              if (hasUnits) {
-                setStep('units');
-                setScanMode('unit');
-              } else {
-                setStep('review');
-                setScanMode(null);
-              }
-            }}>
+          <div className="fixed inset-x-0 bottom-16 z-20 flex gap-2 border-t border-border bg-background/95 p-4 backdrop-blur">
+            <Button
+              variant="outline"
+              size="lg"
+              className="flex-1 text-base"
+              onClick={() => {
+                setStep('trackers');
+                setScanMode('tracker');
+              }}
+            >
+              Back
+            </Button>
+            <Button
+              size="lg"
+              variant="gradient"
+              className="flex-[2] text-base"
+              onClick={() => {
+                if (hasUnits) {
+                  setStep('units');
+                  setScanMode('unit');
+                } else {
+                  setStep('review');
+                  setScanMode(null);
+                }
+              }}
+            >
               {hasUnits ? 'Next' : 'Review'}
-            </button>
+            </Button>
           </div>
         </>
       )}
 
-      {/* ─── STEP: Unit Pairing ────────────────────────────────────────── */}
+      {/* STEP: Unit Pairing */}
       {step === 'units' && (
         <>
-          <h2 className="wh-wizard-title">Track Units</h2>
-          <p className="wh-wizard-subtitle">Scan a pallet/tote barcode, then scan the IoT device to pair them.</p>
+          <div>
+            <h2 className="text-xl font-bold">Track units</h2>
+            <p className="text-sm text-muted-foreground">
+              Scan a pallet/tote barcode, then scan the IoT device to pair them.
+            </p>
+          </div>
 
           {scanError && (
-            <div className="wh-banner wh-banner-error">
-              <span className="material-icons">error</span>
-              {scanError}
+            <div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <span>{scanError}</span>
             </div>
           )}
 
-          <div className="wh-split">
-            <div className="wh-split-panel">
-              <div className="wh-split-panel-title">
-                <span className="material-icons">inventory_2</span>
-                Step 1: Scan Unit
-              </div>
-              {scannedUnit ? (
-                <div className="wh-scan-result" style={{ margin: 0 }}>
-                  <span className="material-icons">inventory_2</span>
-                  <div className="wh-scan-result-info">
-                    <div className="wh-scan-result-name">{scannedUnit.identifier}</div>
-                    <div className="wh-scan-result-detail">{scannedUnit.unitType}</div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {/* Step 1: Scan unit */}
+            <Card className={cn(scanMode === 'unit' && !scannedUnit && 'border-primary')}>
+              <CardContent className="space-y-3 p-4">
+                <div className="flex items-center gap-2 text-sm font-semibold">
+                  <Package className="h-4 w-4 text-primary" />
+                  Step 1: Scan unit
+                </div>
+                {scannedUnit ? (
+                  <div className="flex items-center gap-3 rounded-md border border-border bg-muted/30 p-3">
+                    <Package className="h-5 w-5 text-primary" />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-semibold">{scannedUnit.identifier}</div>
+                      <div className="text-xs text-muted-foreground">{scannedUnit.unitType}</div>
+                    </div>
                   </div>
-                </div>
-              ) : (
-                <div className="wh-scan-area" style={{ border: scanMode === 'unit' ? '2px dashed var(--primary)' : undefined, padding: '12px' }}>
-                  <span className="material-icons" style={{ fontSize: '32px' }}>qr_code_scanner</span>
-                  <p className="wh-scan-area-hint" style={{ margin: 0 }}>Scan unit barcode</p>
-                  <button className="wh-scan-camera-btn" onClick={() => { setScanMode('unit'); openCameraScanner('unit'); }}>
-                    <span className="material-icons">photo_camera</span>
-                    Camera
-                  </button>
-                </div>
-              )}
-            </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-2 rounded-md border border-dashed border-border p-3 text-center">
+                    <ScanLine className="h-8 w-8 text-muted-foreground" />
+                    <div className="text-xs text-muted-foreground">Scan unit barcode</div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => {
+                        setScanMode('unit');
+                        openCameraScanner('unit');
+                      }}
+                    >
+                      <Camera className="h-4 w-4" />
+                      Camera
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
-            <div className="wh-split-panel">
-              <div className="wh-split-panel-title">
-                <span className="material-icons">sensors</span>
-                Step 2: Scan Tracker
-              </div>
-              {scannedUnit ? (
-                <div className="wh-scan-area" style={{ border: '2px dashed var(--primary)', padding: '12px' }}>
-                  <span className="material-icons" style={{ fontSize: '32px' }}>qr_code_scanner</span>
-                  <p className="wh-scan-area-hint" style={{ margin: 0 }}>Now scan the tracker</p>
-                  <button className="wh-scan-camera-btn" onClick={() => openCameraScanner('unit-device')}>
-                    <span className="material-icons">photo_camera</span>
-                    Camera
-                  </button>
+            {/* Step 2: Scan tracker */}
+            <Card className={cn(scannedUnit && 'border-primary')}>
+              <CardContent className="space-y-3 p-4">
+                <div className="flex items-center gap-2 text-sm font-semibold">
+                  <Radio className="h-4 w-4 text-primary" />
+                  Step 2: Scan tracker
                 </div>
-              ) : (
-                <div style={{ padding: '12px', textAlign: 'center', color: 'var(--on-surface-variant)', fontSize: '13px' }}>
-                  Scan a unit first
-                </div>
-              )}
-            </div>
+                {scannedUnit ? (
+                  <div className="flex flex-col items-center gap-2 rounded-md border border-dashed border-primary p-3 text-center">
+                    <ScanLine className="h-8 w-8 text-primary" />
+                    <div className="text-xs text-muted-foreground">Now scan the tracker</div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => openCameraScanner('unit-device')}
+                    >
+                      <Camera className="h-4 w-4" />
+                      Camera
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="rounded-md border border-dashed border-border p-3 text-center text-xs text-muted-foreground">
+                    Scan a unit first
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </div>
 
           {/* Paired items */}
           {unitDevicePairs.length > 0 && (
-            <div className="wh-detail-section" style={{ marginTop: '16px' }}>
-              <h3 className="wh-detail-section-title">Paired ({unitDevicePairs.length})</h3>
-              {unitDevicePairs.map((pair, i) => (
-                <div key={i} className="wh-scan-result">
-                  <span className="material-icons">link</span>
-                  <div className="wh-scan-result-info">
-                    <div className="wh-scan-result-name">{pair.unitName}</div>
-                    <div className="wh-scan-result-detail">Tracker: {pair.deviceName}</div>
-                  </div>
-                  <button className="wh-scan-result-action" onClick={() => setUnitDevicePairs(prev => prev.filter((_, j) => j !== i))}>
-                    <span className="material-icons">delete</span>
-                  </button>
+            <Card>
+              <CardContent className="p-0">
+                <div className="border-b border-border px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Paired ({unitDevicePairs.length})
                 </div>
-              ))}
-              <button className="wh-action-btn wh-action-btn-primary" style={{ width: '100%', marginTop: '8px' }} onClick={saveUnitPairings}>
-                <span className="material-icons">save</span>
-                Save Pairings
-              </button>
-            </div>
+                <div className="divide-y divide-border">
+                  {unitDevicePairs.map((pair, i) => (
+                    <div key={i} className="flex items-center gap-3 p-4">
+                      <LinkIcon className="h-5 w-5 text-primary" />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-semibold">{pair.unitName}</div>
+                        <div className="truncate text-xs text-muted-foreground">
+                          Tracker: {pair.deviceName}
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-11 w-11 text-destructive hover:bg-destructive/10"
+                        aria-label="Remove pairing"
+                        onClick={() =>
+                          setUnitDevicePairs(prev => prev.filter((_, j) => j !== i))
+                        }
+                      >
+                        <Trash2 className="h-5 w-5" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+                <div className="border-t border-border p-4">
+                  <Button
+                    size="lg"
+                    variant="gradient"
+                    className="w-full text-base"
+                    onClick={saveUnitPairings}
+                  >
+                    <Save className="h-5 w-5" />
+                    Save pairings
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           )}
 
-          <div className="wh-action-bar" style={{ position: 'relative' }}>
-            <button className="wh-action-btn wh-action-btn-outline" onClick={() => { setStep('accessories'); setScanMode('accessory'); }}>Back</button>
-            <button className="wh-action-btn wh-action-btn-primary" onClick={() => { setStep('review'); setScanMode(null); }}>Review</button>
+          <div className="fixed inset-x-0 bottom-16 z-20 flex gap-2 border-t border-border bg-background/95 p-4 backdrop-blur">
+            <Button
+              variant="outline"
+              size="lg"
+              className="flex-1 text-base"
+              onClick={() => {
+                setStep('accessories');
+                setScanMode('accessory');
+              }}
+            >
+              Back
+            </Button>
+            <Button
+              size="lg"
+              variant="gradient"
+              className="flex-[2] text-base"
+              onClick={() => {
+                setStep('review');
+                setScanMode(null);
+              }}
+            >
+              Review
+            </Button>
           </div>
         </>
       )}
 
-      {/* ─── STEP: Review & Launch ─────────────────────────────────────── */}
+      {/* STEP: Review & Launch */}
       {step === 'review' && (
         <>
-          <h2 className="wh-wizard-title">Review & Launch</h2>
-          <p className="wh-wizard-subtitle">Confirm everything looks good before launching.</p>
-
-          <div className="wh-review-item ok">
-            <span className="material-icons">check_circle</span>
-            <div className="wh-review-item-text">
-              <div className="wh-review-item-label">Shipment</div>
-              <div className="wh-review-item-detail">{shipment.reference} — {shipment.customer?.name}</div>
-            </div>
+          <div>
+            <h2 className="text-xl font-bold">Review & launch</h2>
+            <p className="text-sm text-muted-foreground">
+              Confirm everything looks good before launching.
+            </p>
           </div>
 
-          <div className="wh-review-item ok">
-            <span className="material-icons">check_circle</span>
-            <div className="wh-review-item-text">
-              <div className="wh-review-item-label">Route</div>
-              <div className="wh-review-item-detail">{shipment.origin?.name} → {shipment.destination?.name}</div>
-            </div>
-          </div>
-
-          <div className={`wh-review-item ${shipment.deviceAssignments?.length > 0 ? 'ok' : 'warning'}`}>
-            <span className="material-icons">{shipment.deviceAssignments?.length > 0 ? 'check_circle' : 'warning'}</span>
-            <div className="wh-review-item-text">
-              <div className="wh-review-item-label">Trackers</div>
-              <div className="wh-review-item-detail">
-                {shipment.deviceAssignments?.length || 0} tracker{shipment.deviceAssignments?.length !== 1 ? 's' : ''} assigned
+          <Card>
+            <CardContent className="p-0">
+              <div className="divide-y divide-border">
+                <ReviewRow
+                  ok
+                  label="Shipment"
+                  detail={`${shipment.reference} - ${shipment.customer?.name}`}
+                />
+                <ReviewRow
+                  ok
+                  label="Route"
+                  detail={`${shipment.origin?.name} -> ${shipment.destination?.name}`}
+                />
+                <ReviewRow
+                  ok={shipment.deviceAssignments?.length > 0}
+                  label="Trackers"
+                  detail={`${shipment.deviceAssignments?.length || 0} tracker${
+                    shipment.deviceAssignments?.length !== 1 ? 's' : ''
+                  } assigned`}
+                />
+                <ReviewRow
+                  ok
+                  label="Accessories"
+                  detail={`${shipment.accessories?.length || 0} accessory item${
+                    shipment.accessories?.length !== 1 ? 's' : ''
+                  }`}
+                />
+                {shipment.carrier && (
+                  <ReviewRow ok label="Carrier" detail={shipment.carrier.name} />
+                )}
+                {unresolvedFlags.length > 0 && (
+                  <ReviewRow
+                    error
+                    label="Unresolved flags"
+                    detail={`${unresolvedFlags.length} flag${
+                      unresolvedFlags.length !== 1 ? 's' : ''
+                    } must be resolved before launch`}
+                  />
+                )}
               </div>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
 
-          <div className={`wh-review-item ${shipment.accessories?.length > 0 ? 'ok' : 'ok'}`}>
-            <span className="material-icons">check_circle</span>
-            <div className="wh-review-item-text">
-              <div className="wh-review-item-label">Accessories</div>
-              <div className="wh-review-item-detail">
-                {shipment.accessories?.length || 0} accessory item{shipment.accessories?.length !== 1 ? 's' : ''}
-              </div>
-            </div>
-          </div>
-
-          {shipment.carrier && (
-            <div className="wh-review-item ok">
-              <span className="material-icons">check_circle</span>
-              <div className="wh-review-item-text">
-                <div className="wh-review-item-label">Carrier</div>
-                <div className="wh-review-item-detail">{shipment.carrier.name}</div>
-              </div>
-            </div>
-          )}
-
-          {shipment.flags?.filter((f: any) => !f.resolved).length > 0 && (
-            <div className="wh-review-item error">
-              <span className="material-icons">error</span>
-              <div className="wh-review-item-text">
-                <div className="wh-review-item-label">Unresolved Flags</div>
-                <div className="wh-review-item-detail">
-                  {shipment.flags.filter((f: any) => !f.resolved).length} flag(s) must be resolved before launch
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div className="wh-action-bar" style={{ position: 'relative' }}>
-            <button className="wh-action-btn wh-action-btn-outline" onClick={() => setStep(hasUnits ? 'units' : 'accessories')}>
-              Back
-            </button>
-            <button
-              className="wh-action-btn wh-action-btn-success"
-              onClick={launchShipment}
-              disabled={shipment.flags?.filter((f: any) => !f.resolved).length > 0}
+          <div className="fixed inset-x-0 bottom-16 z-20 flex gap-2 border-t border-border bg-background/95 p-4 backdrop-blur">
+            <Button
+              variant="outline"
+              size="lg"
+              className="flex-1 text-base"
+              onClick={() => setStep(hasUnits ? 'units' : 'accessories')}
             >
-              <span className="material-icons">rocket_launch</span>
-              Launch Shipment
-            </button>
+              Back
+            </Button>
+            <Button
+              size="lg"
+              variant="gradient"
+              className="flex-[2] text-base"
+              onClick={launchShipment}
+              disabled={!canLaunch}
+            >
+              <Rocket className="h-5 w-5" />
+              Launch shipment
+            </Button>
           </div>
         </>
       )}
 
-      {/* Camera scanner modal — shared across all wizard steps */}
+      {/* Camera scanner modal - shared across all wizard steps */}
       <CameraScannerModal
         open={cameraOpen}
         onClose={() => setCameraOpen(false)}
         onScan={handleCameraScan}
         title={
-          cameraScanContext === 'tracker' ? 'Scan Tracker' :
-          cameraScanContext === 'accessory' ? 'Scan Accessory' :
-          cameraScanContext === 'unit' ? 'Scan Unit' :
-          'Scan Device'
+          cameraScanContext === 'tracker' ? 'Scan tracker' :
+          cameraScanContext === 'accessory' ? 'Scan accessory' :
+          cameraScanContext === 'unit' ? 'Scan unit' :
+          'Scan device'
         }
         hint={
           cameraScanContext === 'tracker' ? 'Point camera at the tracker barcode' :
@@ -862,6 +1191,27 @@ export default function WarehouseShipmentDetail() {
           'Point camera at the IoT device barcode'
         }
       />
-    </>
+    </div>
+  );
+}
+
+interface ReviewRowProps {
+  ok?: boolean;
+  error?: boolean;
+  label: string;
+  detail: string;
+}
+
+function ReviewRow({ ok, error, label, detail }: ReviewRowProps) {
+  const Icon = error ? AlertTriangle : ok ? CheckCircle2 : CheckCircle2;
+  const tint = error ? 'text-destructive' : ok ? 'text-success' : 'text-muted-foreground';
+  return (
+    <div className="flex items-start gap-3 p-4">
+      <Icon className={cn('mt-0.5 h-5 w-5 shrink-0', tint)} />
+      <div className="min-w-0 flex-1">
+        <div className="text-sm font-semibold">{label}</div>
+        <div className="text-xs text-muted-foreground">{detail}</div>
+      </div>
+    </div>
   );
 }

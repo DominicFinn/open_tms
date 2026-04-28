@@ -1,6 +1,19 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Check,
+  CheckCircle2,
+  Loader2,
+  X,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { cn } from '@/lib/utils';
 
 interface RmaLine {
   id: string;
@@ -57,99 +70,155 @@ export default function WarehouseReturnReceive() {
     } finally { setBusy(false); }
   };
 
-  if (loading) return <div style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>Loading...</div>;
-  if (!rma) return <div style={{ padding: '1rem', color: '#ef4444' }}>{error || 'Not found'}</div>;
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+  if (!rma) {
+    return (
+      <Card className="mx-auto mt-4 max-w-2xl p-6 text-center">
+        <p className="text-base text-destructive">{error || 'Not found'}</p>
+      </Card>
+    );
+  }
 
   const linesToReceive = rma.lines.filter(l => l.receivedQuantity < l.requestedQuantity);
   const allReceived = linesToReceive.length === 0;
 
   return (
-    <div>
-      <button onClick={() => navigate('/warehouse/tasks')} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '16px' }}>
-        <span className="material-icons" style={{ fontSize: '20px' }}>arrow_back</span> Tasks
-      </button>
-
-      {error && <div style={{ padding: '10px', background: '#7f1d1d', borderRadius: '8px', color: '#fca5a5', marginBottom: '12px', fontSize: '13px' }}>{error}</div>}
-
-      {/* RMA summary */}
-      <div style={{ background: '#1e293b', borderRadius: '16px', padding: '20px', marginBottom: '16px' }}>
-        <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Return Receipt</div>
-        <div style={{ fontSize: '20px', fontWeight: 700, marginBottom: '4px' }}>{rma.rmaNumber}</div>
-        <div style={{ fontSize: '13px', color: '#94a3b8' }}>{rma.returnReason.replace(/_/g, ' ')}</div>
-        {rma.returnTrackingNumber && (
-          <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '4px' }}>Tracking: {rma.returnTrackingNumber}</div>
-        )}
-        {rma.customerNotes && (
-          <div style={{ marginTop: '8px', padding: '8px', background: '#0f172a', borderRadius: '8px', fontSize: '12px', color: '#cbd5e1' }}>
-            {rma.customerNotes}
-          </div>
-        )}
+    <div className="mx-auto max-w-2xl space-y-4 px-1 py-2 pb-24">
+      <div className="flex items-center gap-3">
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className="h-12 w-12 shrink-0"
+          onClick={() => navigate('/warehouse/tasks')}
+          aria-label="Back to tasks"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
       </div>
 
-      {allReceived ? (
-        <div style={{ textAlign: 'center', padding: '2rem' }}>
-          <span className="material-icons" style={{ fontSize: '48px', color: '#10b981', display: 'block', marginBottom: '8px' }}>check_circle</span>
-          <div style={{ fontSize: '18px', fontWeight: 600, marginBottom: '4px' }}>All lines received</div>
-          <div style={{ color: '#94a3b8', fontSize: '13px' }}>Ready for inspection</div>
-          <button
-            onClick={() => navigate(`/warehouse/tasks/return-inspect/${rma.id}`)}
-            style={{ marginTop: '16px', padding: '12px 24px', borderRadius: '10px', border: 'none', background: '#3b82f6', color: 'white', fontWeight: 600, cursor: 'pointer' }}
-          >
-            Start Inspection
-          </button>
+      {error && (
+        <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>{error}</span>
         </div>
+      )}
+
+      {/* RMA summary */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Return Receipt
+          </div>
+          <div className="mt-1 text-xl font-bold">{rma.rmaNumber}</div>
+          <div className="text-sm text-muted-foreground capitalize">
+            {rma.returnReason.replace(/_/g, ' ')}
+          </div>
+          {rma.returnTrackingNumber && (
+            <div className="mt-1 text-sm text-muted-foreground">
+              Tracking: {rma.returnTrackingNumber}
+            </div>
+          )}
+          {rma.customerNotes && (
+            <div className="mt-3 rounded-md bg-muted/40 px-3 py-2 text-sm">
+              {rma.customerNotes}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {allReceived ? (
+        <Card className="text-center">
+          <CardContent className="flex flex-col items-center gap-2 py-10">
+            <CheckCircle2 className="h-12 w-12 text-success" />
+            <p className="text-lg font-semibold">All lines received</p>
+            <p className="text-sm text-muted-foreground">Ready for inspection</p>
+            <Button
+              type="button"
+              variant="gradient"
+              size="lg"
+              className="mt-4"
+              onClick={() => navigate(`/warehouse/tasks/return-inspect/${rma.id}`)}
+            >
+              Start Inspection
+            </Button>
+          </CardContent>
+        </Card>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div className="space-y-3">
           {rma.lines.map(line => {
             const remaining = line.requestedQuantity - line.receivedQuantity;
             const done = remaining === 0;
             const active = activeLineId === line.id;
             return (
-              <div key={line.id} style={{ background: '#1e293b', borderRadius: '12px', padding: '14px 16px', border: active ? '2px solid #3b82f6' : '1px solid #334155' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 600, fontSize: '14px' }}>{line.sku}</div>
-                    <div style={{ fontSize: '12px', color: '#94a3b8' }}>
-                      {line.receivedQuantity} / {line.requestedQuantity} received
-                      {done && <span style={{ color: '#10b981', marginLeft: '6px' }}>✓</span>}
+              <Card
+                key={line.id}
+                className={cn(active && 'border-2 border-primary')}
+              >
+                <CardContent className="pt-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-base font-semibold">{line.sku}</div>
+                      <div className="text-sm text-muted-foreground">
+                        <span className="tabular-nums">{line.receivedQuantity} / {line.requestedQuantity}</span> received
+                        {done && <Check className="ml-1 inline h-4 w-4 text-success" />}
+                      </div>
                     </div>
+                    {!done && !active && (
+                      <Button
+                        type="button"
+                        size="lg"
+                        onClick={() => { setActiveLineId(line.id); setReceiveQty(String(remaining)); }}
+                      >
+                        Receive
+                      </Button>
+                    )}
                   </div>
-                  {!done && !active && (
-                    <button
-                      onClick={() => { setActiveLineId(line.id); setReceiveQty(String(remaining)); }}
-                      style={{ padding: '8px 12px', borderRadius: '8px', border: 'none', background: '#3b82f6', color: 'white', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}
-                    >
-                      Receive
-                    </button>
-                  )}
-                </div>
 
-                {active && (
-                  <div style={{ marginTop: '12px', display: 'flex', gap: '8px' }}>
-                    <input
-                      type="number" min={1} max={remaining}
-                      value={receiveQty}
-                      onChange={e => setReceiveQty(e.target.value)}
-                      autoFocus
-                      style={{ flex: 1, padding: '12px', borderRadius: '10px', border: '1px solid #475569', background: '#0f172a', color: 'white', fontSize: '16px', textAlign: 'center' }}
-                    />
-                    <button
-                      onClick={() => handleReceive(line.id)}
-                      disabled={busy}
-                      style={{ padding: '12px 20px', borderRadius: '10px', border: 'none', background: '#10b981', color: 'white', fontWeight: 700, fontSize: '15px', cursor: 'pointer', opacity: busy ? 0.5 : 1 }}
-                    >
-                      {busy ? '...' : 'Confirm'}
-                    </button>
-                    <button
-                      onClick={() => { setActiveLineId(null); setReceiveQty(''); }}
-                      disabled={busy}
-                      style={{ padding: '12px', borderRadius: '10px', border: '1px solid #475569', background: 'transparent', color: '#94a3b8', cursor: 'pointer' }}
-                    >
-                      <span className="material-icons">close</span>
-                    </button>
-                  </div>
-                )}
-              </div>
+                  {active && (
+                    <div className="mt-3 flex items-center gap-2">
+                      <Input
+                        type="number"
+                        inputMode="numeric"
+                        min={1}
+                        max={remaining}
+                        value={receiveQty}
+                        onChange={e => setReceiveQty(e.target.value)}
+                        autoFocus
+                        data-manual-input="true"
+                        className="h-14 flex-1 text-center text-2xl font-bold tabular-nums"
+                      />
+                      <Button
+                        type="button"
+                        variant="gradient"
+                        size="lg"
+                        onClick={() => handleReceive(line.id)}
+                        disabled={busy}
+                      >
+                        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                        {busy ? '...' : 'Confirm'}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="h-12 w-12"
+                        onClick={() => { setActiveLineId(null); setReceiveQty(''); }}
+                        disabled={busy}
+                        aria-label="Cancel"
+                      >
+                        <X className="h-5 w-5" />
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             );
           })}
         </div>

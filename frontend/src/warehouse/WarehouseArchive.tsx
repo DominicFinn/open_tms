@@ -1,7 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import {
+  ChevronRight,
+  Clock,
+  Flag,
+  Loader2,
+  Package,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
-import './warehouse.css';
+import { Badge } from '@/components/ui/badge';
+import { Card } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 
 export default function WarehouseArchive() {
   const navigate = useNavigate();
@@ -31,63 +41,75 @@ export default function WarehouseArchive() {
   }, [locationId]);
 
   if (loading) {
-    return <div className="wh-loading"><div className="wh-spinner" /></div>;
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
   }
 
   return (
-    <>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-        <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 700 }}>Archive</h2>
-        <span style={{ fontSize: '13px', color: 'var(--on-surface-variant)' }}>
-          Shipments idle {'>'}2 days
-        </span>
+    <div className="mx-auto max-w-2xl space-y-4 px-1 py-2 pb-24">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Archive</h1>
+          <p className="text-sm text-muted-foreground">Shipments idle &gt;2 days</p>
+        </div>
       </div>
 
       {shipments.length === 0 ? (
-        <div className="wh-empty">
-          <span className="material-icons">inventory_2</span>
-          <p className="wh-empty-title">No stale shipments</p>
-          <p className="wh-empty-message">All shipments are being processed on time.</p>
-        </div>
+        <Card className="flex flex-col items-center gap-2 py-12 text-center">
+          <Package className="h-12 w-12 text-muted-foreground" />
+          <p className="text-base font-semibold">No stale shipments</p>
+          <p className="px-6 text-sm text-muted-foreground">
+            All shipments are being processed on time.
+          </p>
+        </Card>
       ) : (
-        <div className="wh-shipment-list">
-          {shipments.map(s => (
-            <div
-              key={s.id}
-              className={`wh-shipment-card ${s.flags?.length > 0 ? 'flagged' : ''}`}
-              onClick={() => navigate(`/warehouse/shipments/${s.id}`)}
-            >
-              <div className="wh-shipment-header">
-                <span className="wh-shipment-ref">{s.reference}</span>
-                <span className="wh-shipment-status draft">{s.status}</span>
-              </div>
-              <div className="wh-shipment-route">
-                <span className="material-icons">trip_origin</span>
-                {s.origin?.name || '—'}
-                <span className="material-icons">arrow_forward</span>
-                <span className="material-icons">flag</span>
-                {s.destination?.name || '—'}
-              </div>
-              <div className="wh-shipment-meta">
-                <span className="wh-shipment-meta-item">
-                  <span className="material-icons">schedule</span>
-                  Created {new Date(s.createdAt).toLocaleDateString()}
-                </span>
-                {s.flags?.length > 0 && (
-                  <span className="wh-shipment-meta-item" style={{ color: 'var(--error)' }}>
-                    <span className="material-icons">flag</span>
-                    {s.flags.length} flag{s.flags.length !== 1 ? 's' : ''}
-                  </span>
+        <div className="space-y-3">
+          {shipments.map(s => {
+            const hasFlags = s.flags?.length > 0;
+            return (
+              <Card
+                key={s.id}
+                onClick={() => navigate(`/warehouse/shipments/${s.id}`)}
+                className={cn(
+                  'cursor-pointer p-4 transition-colors active:bg-muted/50',
+                  hasFlags && 'border-warning/40',
                 )}
-              </div>
-            </div>
-          ))}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <span className="truncate text-base font-bold">{s.reference}</span>
+                  <Badge variant="muted" className="px-3 py-1 text-sm capitalize">
+                    {s.status}
+                  </Badge>
+                </div>
+                <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
+                  <span className="truncate">{s.origin?.name || '-'}</span>
+                  <ChevronRight className="h-4 w-4 shrink-0" />
+                  <span className="truncate">{s.destination?.name || '-'}</span>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-sm text-muted-foreground">
+                  <span className="inline-flex items-center gap-1.5">
+                    <Clock className="h-4 w-4" />
+                    Created {new Date(s.createdAt).toLocaleDateString()}
+                  </span>
+                  {hasFlags && (
+                    <span className="inline-flex items-center gap-1.5 text-destructive">
+                      <Flag className="h-4 w-4" />
+                      {s.flags.length} flag{s.flags.length !== 1 ? 's' : ''}
+                    </span>
+                  )}
+                </div>
+              </Card>
+            );
+          })}
         </div>
       )}
 
-      <div style={{ textAlign: 'center', padding: '16px', fontSize: '12px', color: 'var(--on-surface-variant)' }}>
+      <div className="text-center text-xs text-muted-foreground">
         {shipments.length} stale shipment{shipments.length !== 1 ? 's' : ''}
       </div>
-    </>
+    </div>
   );
 }

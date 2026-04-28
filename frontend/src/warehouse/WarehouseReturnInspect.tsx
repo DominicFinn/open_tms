@@ -1,6 +1,18 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Check,
+  CheckCircle2,
+  Loader2,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
 
 interface RmaLine {
   id: string;
@@ -31,10 +43,12 @@ const DISPOSITIONS: { v: string; l: string; hint: string }[] = [
   { v: 'customer_keeps', l: 'Customer Keeps', hint: 'Item never received; refund only.' },
 ];
 
-const INSPECTION_STATUSES = [
-  { v: 'pass', l: 'Pass', color: '#10b981' },
-  { v: 'fail', l: 'Fail', color: '#ef4444' },
-  { v: 'partial_damage', l: 'Partial Damage', color: '#f59e0b' },
+type Inspection = 'pass' | 'fail' | 'partial_damage';
+
+const INSPECTION_STATUSES: { v: Inspection; l: string; tone: 'success' | 'destructive' | 'warning' }[] = [
+  { v: 'pass', l: 'Pass', tone: 'success' },
+  { v: 'fail', l: 'Fail', tone: 'destructive' },
+  { v: 'partial_damage', l: 'Partial Damage', tone: 'warning' },
 ];
 
 export default function WarehouseReturnInspect() {
@@ -44,7 +58,7 @@ export default function WarehouseReturnInspect() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeLineId, setActiveLineId] = useState<string | null>(null);
-  const [inspectionStatus, setInspectionStatus] = useState('pass');
+  const [inspectionStatus, setInspectionStatus] = useState<Inspection>('pass');
   const [disposition, setDisposition] = useState('');
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
@@ -81,146 +95,218 @@ export default function WarehouseReturnInspect() {
     } finally { setBusy(false); }
   };
 
-  if (loading) return <div style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>Loading...</div>;
-  if (!rma) return <div style={{ padding: '1rem', color: '#ef4444' }}>{error || 'Not found'}</div>;
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+  if (!rma) {
+    return (
+      <Card className="mx-auto mt-4 max-w-2xl p-6 text-center">
+        <p className="text-base text-destructive">{error || 'Not found'}</p>
+      </Card>
+    );
+  }
 
   const linesToInspect = rma.lines.filter(l => l.receivedQuantity > 0 && l.disposition === 'pending');
   const allInspected = linesToInspect.length === 0;
 
   return (
-    <div>
-      <button onClick={() => navigate('/warehouse/tasks')} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '16px' }}>
-        <span className="material-icons" style={{ fontSize: '20px' }}>arrow_back</span> Tasks
-      </button>
-
-      {error && <div style={{ padding: '10px', background: '#7f1d1d', borderRadius: '8px', color: '#fca5a5', marginBottom: '12px', fontSize: '13px' }}>{error}</div>}
-
-      <div style={{ background: '#1e293b', borderRadius: '16px', padding: '20px', marginBottom: '16px' }}>
-        <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Return Inspection</div>
-        <div style={{ fontSize: '20px', fontWeight: 700, marginBottom: '4px' }}>{rma.rmaNumber}</div>
-        <div style={{ fontSize: '13px', color: '#94a3b8' }}>{rma.returnReason.replace(/_/g, ' ')}</div>
+    <div className="mx-auto max-w-2xl space-y-4 px-1 py-2 pb-24">
+      <div className="flex items-center gap-3">
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className="h-12 w-12 shrink-0"
+          onClick={() => navigate('/warehouse/tasks')}
+          aria-label="Back to tasks"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
       </div>
 
-      {allInspected ? (
-        <div style={{ textAlign: 'center', padding: '2rem' }}>
-          <span className="material-icons" style={{ fontSize: '48px', color: '#10b981', display: 'block', marginBottom: '8px' }}>check_circle</span>
-          <div style={{ fontSize: '18px', fontWeight: 600, marginBottom: '4px' }}>All lines inspected</div>
-          <div style={{ color: '#94a3b8', fontSize: '13px' }}>Finance will process the refund.</div>
-          <button
-            onClick={() => navigate('/warehouse/tasks')}
-            style={{ marginTop: '16px', padding: '12px 24px', borderRadius: '10px', border: 'none', background: '#3b82f6', color: 'white', fontWeight: 600, cursor: 'pointer' }}
-          >
-            Back to Tasks
-          </button>
+      {error && (
+        <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>{error}</span>
         </div>
+      )}
+
+      <Card>
+        <CardContent className="pt-6">
+          <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Return Inspection
+          </div>
+          <div className="mt-1 text-xl font-bold">{rma.rmaNumber}</div>
+          <div className="text-sm text-muted-foreground capitalize">
+            {rma.returnReason.replace(/_/g, ' ')}
+          </div>
+        </CardContent>
+      </Card>
+
+      {allInspected ? (
+        <Card className="text-center">
+          <CardContent className="flex flex-col items-center gap-2 py-10">
+            <CheckCircle2 className="h-12 w-12 text-success" />
+            <p className="text-lg font-semibold">All lines inspected</p>
+            <p className="text-sm text-muted-foreground">Finance will process the refund.</p>
+            <Button
+              type="button"
+              variant="gradient"
+              size="lg"
+              className="mt-4"
+              onClick={() => navigate('/warehouse/tasks')}
+            >
+              Back to Tasks
+            </Button>
+          </CardContent>
+        </Card>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div className="space-y-3">
           {rma.lines.map(line => {
             const needsInspection = line.receivedQuantity > 0 && line.disposition === 'pending';
             const active = activeLineId === line.id;
             return (
-              <div key={line.id} style={{ background: '#1e293b', borderRadius: '12px', padding: '14px 16px', border: active ? '2px solid #3b82f6' : '1px solid #334155' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 600, fontSize: '14px' }}>{line.sku}</div>
-                    <div style={{ fontSize: '12px', color: '#94a3b8' }}>
-                      {line.receivedQuantity} received
-                      {line.disposition !== 'pending' && <span style={{ color: '#10b981', marginLeft: '6px' }}>✓ {line.disposition.replace(/_/g, ' ')}</span>}
-                      {line.requestedDisposition && line.disposition === 'pending' && (
-                        <span style={{ marginLeft: '6px', color: '#94a3b8' }}>(customer asked: {line.requestedDisposition.replace(/_/g, ' ')})</span>
-                      )}
+              <Card
+                key={line.id}
+                className={cn(active && 'border-2 border-primary')}
+              >
+                <CardContent className="pt-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-base font-semibold">{line.sku}</div>
+                      <div className="text-sm text-muted-foreground">
+                        <span className="tabular-nums">{line.receivedQuantity}</span> received
+                        {line.disposition !== 'pending' && (
+                          <span className="ml-1 text-success">
+                            <Check className="inline h-4 w-4" /> {line.disposition.replace(/_/g, ' ')}
+                          </span>
+                        )}
+                        {line.requestedDisposition && line.disposition === 'pending' && (
+                          <span className="ml-2">
+                            (customer asked: {line.requestedDisposition.replace(/_/g, ' ')})
+                          </span>
+                        )}
+                      </div>
                     </div>
+                    {needsInspection && !active && (
+                      <Button
+                        type="button"
+                        size="lg"
+                        onClick={() => openLine(line)}
+                      >
+                        Inspect
+                      </Button>
+                    )}
                   </div>
-                  {needsInspection && !active && (
-                    <button
-                      onClick={() => openLine(line)}
-                      style={{ padding: '8px 12px', borderRadius: '8px', border: 'none', background: '#3b82f6', color: 'white', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}
-                    >
-                      Inspect
-                    </button>
-                  )}
-                </div>
 
-                {active && (
-                  <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    <div>
-                      <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, marginBottom: '6px', textTransform: 'uppercase' }}>Condition</div>
-                      <div style={{ display: 'flex', gap: '6px' }}>
-                        {INSPECTION_STATUSES.map(s => (
-                          <button
-                            key={s.v}
-                            onClick={() => setInspectionStatus(s.v)}
-                            style={{
-                              flex: 1, padding: '10px', borderRadius: '8px',
-                              border: `2px solid ${inspectionStatus === s.v ? s.color : '#334155'}`,
-                              background: inspectionStatus === s.v ? `${s.color}22` : '#0f172a',
-                              color: inspectionStatus === s.v ? s.color : '#94a3b8',
-                              fontWeight: 600, fontSize: '13px', cursor: 'pointer',
-                            }}
-                          >
-                            {s.l}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div>
-                      <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, marginBottom: '6px', textTransform: 'uppercase' }}>Disposition</div>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '6px' }}>
-                        {DISPOSITIONS.map(d => (
-                          <button
-                            key={d.v}
-                            onClick={() => setDisposition(d.v)}
-                            title={d.hint}
-                            style={{
-                              padding: '10px', borderRadius: '8px',
-                              border: `2px solid ${disposition === d.v ? '#3b82f6' : '#334155'}`,
-                              background: disposition === d.v ? '#3b82f622' : '#0f172a',
-                              color: disposition === d.v ? '#3b82f6' : '#cbd5e1',
-                              fontWeight: 600, fontSize: '13px', cursor: 'pointer', textAlign: 'left',
-                            }}
-                          >
-                            {d.l}
-                          </button>
-                        ))}
-                      </div>
-                      {disposition && (
-                        <div style={{ marginTop: '6px', fontSize: '12px', color: '#64748b' }}>
-                          {DISPOSITIONS.find(d => d.v === disposition)?.hint}
+                  {active && (
+                    <div className="mt-4 space-y-4">
+                      <div>
+                        <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                          Condition
+                        </Label>
+                        <div className="mt-2 flex gap-2">
+                          {INSPECTION_STATUSES.map(s => {
+                            const isSelected = inspectionStatus === s.v;
+                            const tone =
+                              s.tone === 'success' ? 'border-success text-success bg-success/10' :
+                              s.tone === 'destructive' ? 'border-destructive text-destructive bg-destructive/10' :
+                              'border-warning text-warning bg-warning/10';
+                            return (
+                              <button
+                                key={s.v}
+                                type="button"
+                                onClick={() => setInspectionStatus(s.v)}
+                                className={cn(
+                                  'flex-1 rounded-md border-2 px-3 py-3 text-sm font-semibold transition-colors',
+                                  isSelected
+                                    ? tone
+                                    : 'border-border bg-card text-muted-foreground hover:bg-muted/40',
+                                )}
+                              >
+                                {s.l}
+                              </button>
+                            );
+                          })}
                         </div>
-                      )}
-                    </div>
+                      </div>
 
-                    <div>
-                      <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, marginBottom: '6px', textTransform: 'uppercase' }}>Notes (optional)</div>
-                      <textarea
-                        rows={2}
-                        value={notes}
-                        onChange={e => setNotes(e.target.value)}
-                        placeholder="Observations, damage details, etc."
-                        style={{ width: '100%', padding: '10px', borderRadius: '10px', border: '1px solid #475569', background: '#0f172a', color: 'white', fontSize: '13px' }}
-                      />
-                    </div>
+                      <div>
+                        <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                          Disposition
+                        </Label>
+                        <div className="mt-2 grid grid-cols-2 gap-2">
+                          {DISPOSITIONS.map(d => {
+                            const selected = disposition === d.v;
+                            return (
+                              <button
+                                key={d.v}
+                                type="button"
+                                onClick={() => setDisposition(d.v)}
+                                title={d.hint}
+                                className={cn(
+                                  'rounded-md border-2 px-3 py-3 text-left text-sm font-semibold transition-colors',
+                                  selected
+                                    ? 'border-primary bg-primary/10 text-primary'
+                                    : 'border-border bg-card text-foreground hover:bg-muted/40',
+                                )}
+                              >
+                                {d.l}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {disposition && (
+                          <p className="mt-2 text-sm text-muted-foreground">
+                            {DISPOSITIONS.find(d => d.v === disposition)?.hint}
+                          </p>
+                        )}
+                      </div>
 
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <button
-                        onClick={() => setActiveLineId(null)}
-                        disabled={busy}
-                        style={{ flex: 1, padding: '12px', borderRadius: '10px', border: '1px solid #475569', background: 'transparent', color: '#94a3b8', cursor: 'pointer', fontWeight: 600 }}
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={() => handleInspect(line.id)}
-                        disabled={busy || !disposition}
-                        style={{ flex: 2, padding: '12px', borderRadius: '10px', border: 'none', background: '#10b981', color: 'white', fontWeight: 700, fontSize: '15px', cursor: 'pointer', opacity: busy || !disposition ? 0.5 : 1 }}
-                      >
-                        {busy ? '...' : 'Submit'}
-                      </button>
+                      <div>
+                        <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                          Notes (optional)
+                        </Label>
+                        <textarea
+                          rows={2}
+                          value={notes}
+                          onChange={e => setNotes(e.target.value)}
+                          placeholder="Observations, damage details, etc."
+                          className="mt-2 flex w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        />
+                      </div>
+
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="lg"
+                          className="flex-1"
+                          onClick={() => setActiveLineId(null)}
+                          disabled={busy}
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="gradient"
+                          size="lg"
+                          className="flex-[2]"
+                          onClick={() => handleInspect(line.id)}
+                          disabled={busy || !disposition}
+                        >
+                          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                          {busy ? '...' : 'Submit'}
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                )}
-              </div>
+                  )}
+                </CardContent>
+              </Card>
             );
           })}
         </div>

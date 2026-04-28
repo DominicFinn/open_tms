@@ -1,6 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Check,
+  CheckCircle2,
+  Loader2,
+  Minus,
+  Plus,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { cn } from '@/lib/utils';
 // Barcode scanner would be used for bin verification in production
 // import { useBarcodeScanner } from './useBarcodeScanner';
 
@@ -67,96 +82,190 @@ export default function WarehousePickTask() {
     handlePick(nextLine.id, qty);
   };
 
-  if (loading) return <div style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>Loading...</div>;
-  if (!task) return <div style={{ padding: '1rem', color: '#ef4444' }}>{error}</div>;
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+  if (!task) {
+    return (
+      <Card className="mx-auto mt-4 max-w-2xl p-6 text-center">
+        <p className="text-base text-destructive">{error || 'Not found'}</p>
+      </Card>
+    );
+  }
 
   const isComplete = task.status === 'completed' || task.status === 'short_pick';
   const progress = task.totalLines > 0 ? (task.completedLines / task.totalLines) * 100 : 0;
+  const currentQty = pickedQty
+    ? parseInt(pickedQty) || 0
+    : nextLine?.requestedQuantity ?? 0;
 
   return (
-    <div>
+    <div className="mx-auto max-w-2xl space-y-4 px-1 py-2 pb-32">
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-        <button onClick={() => navigate('/warehouse/tasks')} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <span className="material-icons" style={{ fontSize: '20px' }}>arrow_back</span> Tasks
-        </button>
-        <div style={{ fontSize: '12px', color: '#94a3b8' }}>
-          {task.wave?.waveNumber}{task.zone ? ` | ${task.zone.name}` : ''}
+      <div className="flex items-center justify-between gap-3">
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className="h-12 w-12 shrink-0"
+          onClick={() => navigate('/warehouse/tasks')}
+          aria-label="Back to tasks"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
+        <div className="flex-1 text-right text-sm text-muted-foreground">
+          {task.wave?.waveNumber}
+          {task.zone ? ` | ${task.zone.name}` : ''}
         </div>
       </div>
 
-      {error && <div style={{ padding: '10px', background: '#7f1d1d', borderRadius: '8px', color: '#fca5a5', marginBottom: '12px', fontSize: '13px' }}>{error}</div>}
+      {error && (
+        <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
 
       {/* Progress */}
-      <div style={{ marginBottom: '20px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#94a3b8', marginBottom: '6px' }}>
-          <span>Pick Progress</span>
-          <span>{task.completedLines}/{task.totalLines}</span>
+      <div>
+        <div className="mb-1.5 flex items-center justify-between text-sm text-muted-foreground">
+          <span className="font-medium">Pick Progress</span>
+          <span className="tabular-nums">{task.completedLines}/{task.totalLines}</span>
         </div>
-        <div style={{ height: '8px', background: '#334155', borderRadius: '4px', overflow: 'hidden' }}>
-          <div style={{ width: `${progress}%`, height: '100%', background: '#10b981', borderRadius: '4px', transition: 'width 0.3s' }} />
+        <div className="h-2 overflow-hidden rounded-full bg-muted">
+          <div
+            className="h-full rounded-full bg-success transition-[width]"
+            style={{ width: `${progress}%` }}
+          />
         </div>
       </div>
 
       {/* Current pick */}
       {!isComplete && nextLine ? (
-        <div style={{ background: '#1e293b', borderRadius: '16px', padding: '20px', marginBottom: '16px', border: '2px solid #3b82f6' }}>
-          <div style={{ fontSize: '11px', color: '#3b82f6', fontWeight: 600, marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Next Pick</div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
-            <div>
-              <div style={{ fontSize: '11px', color: '#64748b' }}>Bin</div>
-              <div style={{ fontSize: '24px', fontWeight: 700, color: '#3b82f6' }}>{nextLine.bin.label}</div>
-              <div style={{ fontSize: '11px', color: '#64748b' }}>{nextLine.bin.zone.name}</div>
+        <Card className="border-2 border-primary">
+          <CardContent className="pt-6">
+            <div className="text-xs font-semibold uppercase tracking-wider text-primary">
+              Next Pick
             </div>
-            <div>
-              <div style={{ fontSize: '11px', color: '#64748b' }}>SKU</div>
-              <div style={{ fontSize: '18px', fontWeight: 600 }}>{nextLine.sku}</div>
-              <div style={{ fontSize: '14px', color: '#94a3b8' }}>Qty: <strong>{nextLine.requestedQuantity}</strong></div>
-            </div>
-          </div>
 
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <input
-              type="number" min="0" value={pickedQty}
-              onChange={e => setPickedQty(e.target.value)}
-              placeholder={String(nextLine.requestedQuantity)}
-              style={{ flex: 1, padding: '12px', borderRadius: '10px', border: '1px solid #475569', background: '#0f172a', color: 'white', fontSize: '18px', textAlign: 'center' }}
-            />
-            <button onClick={handleConfirmNext} disabled={picking}
-              style={{ padding: '12px 24px', borderRadius: '10px', border: 'none', background: '#10b981', color: 'white', fontWeight: 700, fontSize: '16px', cursor: 'pointer', opacity: picking ? 0.5 : 1 }}>
-              {picking ? '...' : 'Confirm'}
-            </button>
-          </div>
-        </div>
+            <div className="mt-4 grid grid-cols-2 gap-4">
+              <div>
+                <div className="text-xs text-muted-foreground">Bin</div>
+                <div className="text-2xl font-bold tabular-nums text-primary">
+                  {nextLine.bin.label}
+                </div>
+                <div className="text-xs text-muted-foreground">{nextLine.bin.zone.name}</div>
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">SKU</div>
+                <div className="text-base font-semibold">{nextLine.sku}</div>
+                <div className="text-sm text-muted-foreground">
+                  Qty: <strong className="text-foreground">{nextLine.requestedQuantity}</strong>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 text-center">
+              <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Quantity to pick
+              </div>
+              <div className="mt-2 flex items-center justify-center gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-14 w-14"
+                  onClick={() => setPickedQty(String(Math.max(0, currentQty - 1)))}
+                  disabled={picking || currentQty <= 0}
+                  aria-label="Decrement"
+                >
+                  <Minus className="h-6 w-6" />
+                </Button>
+                <Input
+                  type="number"
+                  min="0"
+                  inputMode="numeric"
+                  value={pickedQty}
+                  onChange={e => setPickedQty(e.target.value)}
+                  placeholder={String(nextLine.requestedQuantity)}
+                  data-manual-input="true"
+                  className="h-14 w-32 text-center text-3xl font-bold tabular-nums"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-14 w-14"
+                  onClick={() => setPickedQty(String(currentQty + 1))}
+                  disabled={picking}
+                  aria-label="Increment"
+                >
+                  <Plus className="h-6 w-6" />
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       ) : isComplete ? (
-        <div style={{ textAlign: 'center', padding: '2rem' }}>
-          <span className="material-icons" style={{ fontSize: '48px', color: '#10b981', display: 'block', marginBottom: '8px' }}>check_circle</span>
-          <div style={{ fontSize: '18px', fontWeight: 600, marginBottom: '4px' }}>Pick Complete</div>
-          <div style={{ color: '#94a3b8', fontSize: '13px' }}>{task.completedLines} lines picked</div>
-        </div>
+        <Card className="flex flex-col items-center gap-2 py-12 text-center">
+          <CheckCircle2 className="h-12 w-12 text-success" />
+          <p className="text-lg font-semibold">Pick Complete</p>
+          <p className="text-sm text-muted-foreground">{task.completedLines} lines picked</p>
+        </Card>
       ) : null}
 
       {/* Lines list */}
-      <div style={{ marginTop: '8px' }}>
-        <div style={{ fontSize: '13px', color: '#64748b', fontWeight: 600, marginBottom: '8px' }}>All Lines</div>
-        {task.pickLines.map(line => (
-          <div key={line.id} style={{
-            display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px',
-            background: line.status === 'pending' && line.id === nextLine?.id ? '#1e3a5f' : '#0f172a',
-            borderRadius: '8px', marginBottom: '4px', fontSize: '13px',
-            borderLeft: line.status === 'picked' ? '3px solid #10b981' : line.status === 'short' ? '3px solid #f59e0b' : '3px solid transparent',
-          }}>
-            <div style={{ flex: 1 }}>
-              <span style={{ fontWeight: 600 }}>{line.bin.label}</span>
-              <span style={{ color: '#64748b', marginLeft: '8px' }}>{line.sku}</span>
+      <div>
+        <div className="mb-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+          All Lines
+        </div>
+        <div className="space-y-1.5">
+          {task.pickLines.map(line => (
+            <div
+              key={line.id}
+              className={cn(
+                'flex items-center gap-3 rounded-md border-l-4 px-3 py-2.5 text-sm',
+                line.status === 'picked' && 'border-l-success bg-card',
+                line.status === 'short' && 'border-l-warning bg-card',
+                line.status === 'pending' && line.id === nextLine?.id && 'border-l-primary bg-primary/5',
+                line.status === 'pending' && line.id !== nextLine?.id && 'border-l-transparent bg-card',
+              )}
+            >
+              <div className="flex-1 min-w-0">
+                <span className="font-semibold">{line.bin.label}</span>
+                <span className="ml-2 text-muted-foreground truncate">{line.sku}</span>
+              </div>
+              <div className={cn(
+                'tabular-nums font-medium',
+                line.pickedQuantity > 0 ? 'text-success' : 'text-muted-foreground',
+              )}>
+                {line.pickedQuantity}/{line.requestedQuantity}
+              </div>
             </div>
-            <div style={{ color: line.pickedQuantity > 0 ? '#10b981' : '#64748b' }}>
-              {line.pickedQuantity}/{line.requestedQuantity}
-            </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
+
+      {/* Fixed bottom action bar */}
+      {!isComplete && nextLine && (
+        <div className="fixed inset-x-0 bottom-16 z-20 border-t border-border bg-background/95 p-4 backdrop-blur">
+          <Button
+            type="button"
+            variant="gradient"
+            size="lg"
+            className="w-full text-base"
+            onClick={handleConfirmNext}
+            disabled={picking}
+          >
+            {picking ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+            {picking ? 'Confirming...' : 'Confirm pick'}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

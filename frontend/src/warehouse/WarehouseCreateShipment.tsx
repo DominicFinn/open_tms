@@ -1,7 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { AlertTriangle, ArrowLeft, Loader2 } from 'lucide-react';
+
 import { API_URL } from '../api';
-import './warehouse.css';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 export default function WarehouseCreateShipment() {
   const navigate = useNavigate();
@@ -73,133 +85,133 @@ export default function WarehouseCreateShipment() {
   }
 
   return (
-    <>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-        <button className="wh-action-btn wh-action-btn-outline" style={{ flex: 'none', padding: '8px 12px' }} onClick={() => navigate('/warehouse')}>
-          <span className="material-icons">arrow_back</span>
-        </button>
-        <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 700 }}>Create Shipment</h2>
+    <div className="mx-auto max-w-2xl space-y-4 px-1 py-2 pb-24">
+      <div className="flex items-center gap-3">
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className="h-12 w-12 shrink-0"
+          onClick={() => navigate('/warehouse')}
+          aria-label="Back"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
+        <h1 className="text-2xl font-bold tracking-tight">Create Shipment</h1>
       </div>
 
       {error && (
-        <div className="wh-banner wh-banner-error">
-          <span className="material-icons">error</span>
-          {error}
+        <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>{error}</span>
         </div>
       )}
 
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        <div className="wh-login-field">
-          <label>Reference *</label>
-          <input
-            type="text"
-            value={reference}
-            onChange={e => setReference(e.target.value)}
-            placeholder="SH-001"
-            required
-            data-manual-input="true"
-          />
-        </div>
+      <Card>
+        <CardContent className="pt-6">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="wh-reference" className="text-base">Reference *</Label>
+              <Input
+                id="wh-reference"
+                type="text"
+                value={reference}
+                onChange={e => setReference(e.target.value)}
+                placeholder="SH-001"
+                required
+                data-manual-input="true"
+                className="h-12 text-base"
+              />
+            </div>
 
-        <div className="wh-login-field">
-          <label>Customer *</label>
-          <select
-            value={customerId}
-            onChange={e => setCustomerId(e.target.value)}
-            required
-            style={{
-              width: '100%', padding: '10px 12px', borderRadius: '8px',
-              border: '1px solid var(--outline-variant)', fontSize: '16px',
-              background: 'var(--surface)', color: 'var(--on-surface)',
-            }}
-          >
-            <option value="">Select customer</option>
-            {customers.map(c => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-        </div>
+            <div className="space-y-2">
+              <Label htmlFor="wh-customer" className="text-base">Customer *</Label>
+              <Select value={customerId} onValueChange={setCustomerId}>
+                <SelectTrigger id="wh-customer" className="h-12 text-base">
+                  <SelectValue placeholder="Select customer" />
+                </SelectTrigger>
+                <SelectContent>
+                  {customers.map(c => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-        <div className="wh-login-field">
-          <label>Origin *</label>
-          <select
-            value={originId}
-            onChange={e => setOriginId(e.target.value)}
-            required
-            style={{
-              width: '100%', padding: '10px 12px', borderRadius: '8px',
-              border: '1px solid var(--outline-variant)', fontSize: '16px',
-              background: 'var(--surface)', color: 'var(--on-surface)',
-            }}
-          >
-            <option value="">Select origin</option>
-            {locations.map(l => (
-              <option key={l.id} value={l.id}>{l.name} — {l.city}</option>
-            ))}
-          </select>
-        </div>
+            <div className="space-y-2">
+              <Label htmlFor="wh-origin" className="text-base">Origin *</Label>
+              <Select value={originId} onValueChange={setOriginId}>
+                <SelectTrigger id="wh-origin" className="h-12 text-base">
+                  <SelectValue placeholder="Select origin" />
+                </SelectTrigger>
+                <SelectContent>
+                  {locations.map(l => (
+                    <SelectItem key={l.id} value={l.id}>
+                      {l.name} - {l.city}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-        <div className="wh-login-field">
-          <label>Destination *</label>
-          <select
-            value={destinationId}
-            onChange={e => setDestinationId(e.target.value)}
-            required
-            style={{
-              width: '100%', padding: '10px 12px', borderRadius: '8px',
-              border: '1px solid var(--outline-variant)', fontSize: '16px',
-              background: 'var(--surface)', color: 'var(--on-surface)',
-            }}
-          >
-            <option value="">Select destination</option>
-            {locations.map(l => (
-              <option key={l.id} value={l.id}>{l.name} — {l.city}</option>
-            ))}
-          </select>
-        </div>
+            <div className="space-y-2">
+              <Label htmlFor="wh-destination" className="text-base">Destination *</Label>
+              <Select value={destinationId} onValueChange={setDestinationId}>
+                <SelectTrigger id="wh-destination" className="h-12 text-base">
+                  <SelectValue placeholder="Select destination" />
+                </SelectTrigger>
+                <SelectContent>
+                  {locations.map(l => (
+                    <SelectItem key={l.id} value={l.id}>
+                      {l.name} - {l.city}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-        <div className="wh-login-field">
-          <label>Pickup Date</label>
-          <input
-            type="date"
-            value={pickupDate}
-            onChange={e => setPickupDate(e.target.value)}
-            style={{
-              width: '100%', padding: '10px 12px', borderRadius: '8px',
-              border: '1px solid var(--outline-variant)', fontSize: '16px',
-              background: 'var(--surface)', color: 'var(--on-surface)',
-              boxSizing: 'border-box',
-            }}
-          />
-        </div>
+            <div className="space-y-2">
+              <Label htmlFor="wh-pickup" className="text-base">Pickup Date</Label>
+              <Input
+                id="wh-pickup"
+                type="date"
+                value={pickupDate}
+                onChange={e => setPickupDate(e.target.value)}
+                className="h-12 text-base"
+              />
+            </div>
 
-        <div className="wh-login-field">
-          <label>Carrier</label>
-          <select
-            value={carrierId}
-            onChange={e => setCarrierId(e.target.value)}
-            style={{
-              width: '100%', padding: '10px 12px', borderRadius: '8px',
-              border: '1px solid var(--outline-variant)', fontSize: '16px',
-              background: 'var(--surface)', color: 'var(--on-surface)',
-            }}
-          >
-            <option value="">None</option>
-            {carriers.map(c => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-        </div>
+            <div className="space-y-2">
+              <Label htmlFor="wh-carrier" className="text-base">Carrier</Label>
+              <Select value={carrierId} onValueChange={setCarrierId}>
+                <SelectTrigger id="wh-carrier" className="h-12 text-base">
+                  <SelectValue placeholder="None" />
+                </SelectTrigger>
+                <SelectContent>
+                  {carriers.map(c => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-        <button
-          type="submit"
-          className="wh-login-btn wh-login-btn-primary"
-          disabled={loading}
-          style={{ marginTop: '8px' }}
-        >
-          {loading ? 'Creating...' : 'Create Shipment'}
-        </button>
-      </form>
-    </>
+            <Button
+              type="submit"
+              variant="gradient"
+              size="lg"
+              className="w-full text-base"
+              disabled={loading}
+            >
+              {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+              {loading ? 'Creating...' : 'Create Shipment'}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

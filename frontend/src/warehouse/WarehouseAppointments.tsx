@@ -1,6 +1,16 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import {
+  AlertTriangle,
+  ArrowLeft,
+  CalendarCheck,
+  Loader2,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 
 interface Appointment {
   id: string;
@@ -14,12 +24,11 @@ interface Appointment {
   dockBin: { id: string; label: string } | null;
 }
 
-function statusColour(s: string): string {
-  if (s === 'scheduled') return '#3b82f6';
-  if (s === 'checked_in') return '#f59e0b';
-  if (s === 'receiving') return '#f59e0b';
-  if (s === 'completed') return '#10b981';
-  return '#94a3b8';
+function statusVariant(s: string): 'success' | 'warning' | 'info' | 'muted' {
+  if (s === 'scheduled') return 'info';
+  if (s === 'checked_in' || s === 'receiving') return 'warning';
+  if (s === 'completed') return 'success';
+  return 'muted';
 }
 
 export default function WarehouseAppointments() {
@@ -61,66 +70,85 @@ export default function WarehouseAppointments() {
   };
 
   return (
-    <div>
-      <button onClick={() => navigate('/warehouse')} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '16px' }}>
-        <span className="material-icons" style={{ fontSize: '20px' }}>arrow_back</span> Home
-      </button>
+    <div className="mx-auto max-w-2xl space-y-4 px-1 py-2 pb-24">
+      <div className="flex items-center gap-3">
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className="h-12 w-12 shrink-0"
+          onClick={() => navigate('/warehouse')}
+          aria-label="Home"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Today's Appointments</h1>
+          <p className="text-sm text-muted-foreground">Check in arriving carriers before receiving.</p>
+        </div>
+      </div>
 
-      <h1 style={{ fontSize: '20px', fontWeight: 700, margin: '0 0 4px' }}>Today's Appointments</h1>
-      <p style={{ color: '#94a3b8', fontSize: '13px', margin: '0 0 16px' }}>Check in arriving carriers before receiving.</p>
-
-      {error && <div style={{ padding: '10px', background: '#7f1d1d', borderRadius: '8px', color: '#fca5a5', marginBottom: '12px', fontSize: '13px' }}>{error}</div>}
+      {error && (
+        <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
 
       {loading ? (
-        <div style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>Loading...</div>
-      ) : appointments.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '2rem' }}>
-          <span className="material-icons" style={{ fontSize: '48px', color: '#475569', display: 'block', marginBottom: '8px' }}>event_available</span>
-          <div style={{ color: '#94a3b8' }}>No appointments today</div>
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
+      ) : appointments.length === 0 ? (
+        <Card className="flex flex-col items-center gap-2 py-12 text-center">
+          <CalendarCheck className="h-12 w-12 text-muted-foreground" />
+          <p className="text-base font-semibold">No appointments today</p>
+        </Card>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        <div className="space-y-3">
           {appointments.map(a => (
-            <div key={a.id} style={{ background: '#1e293b', borderRadius: '12px', padding: '14px 16px', border: '1px solid #334155' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: '12px' }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, fontSize: '15px' }}>
+            <Card key={a.id} className="p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="text-base font-semibold tabular-nums">
                     {new Date(a.scheduledAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    {' '}-{' '}
+                    {' - '}
                     {new Date(a.scheduledEndAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </div>
-                  <div style={{ fontSize: '13px', color: '#94a3b8', marginTop: 2 }}>
+                  <div className="mt-1 text-sm text-muted-foreground">
                     {a.carrierName ?? 'Carrier TBD'}
                     {a.dockBin?.label && <> &middot; {a.dockBin.label}</>}
                   </div>
                   {(a.trailerNumber || a.asnReference) && (
-                    <div style={{ fontSize: '12px', color: '#64748b', marginTop: 2 }}>
+                    <div className="mt-1 text-sm text-muted-foreground">
                       {a.trailerNumber && <>Trailer {a.trailerNumber}</>}
                       {a.trailerNumber && a.asnReference && <> &middot; </>}
                       {a.asnReference && <>ASN {a.asnReference}</>}
                     </div>
                   )}
                 </div>
-                <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
-                  <div style={{
-                    padding: '4px 8px', borderRadius: '8px', fontSize: '11px',
-                    background: statusColour(a.status) + '22', color: statusColour(a.status),
-                    textTransform: 'uppercase', fontWeight: 600,
-                  }}>
+                <div className="flex flex-col items-end gap-2">
+                  <Badge variant={statusVariant(a.status)} className="px-3 py-1 text-sm uppercase tracking-wider">
                     {a.status.replace('_', ' ')}
-                  </div>
+                  </Badge>
                   {a.status === 'scheduled' && (
-                    <button onClick={() => handleCheckIn(a.id)} disabled={busy === a.id}
-                      style={{ padding: '8px 12px', borderRadius: '8px', border: 'none', background: '#10b981', color: 'white', fontWeight: 700, fontSize: '13px', cursor: 'pointer', opacity: busy === a.id ? 0.5 : 1 }}>
+                    <Button
+                      type="button"
+                      size="lg"
+                      variant="gradient"
+                      onClick={() => handleCheckIn(a.id)}
+                      disabled={busy === a.id}
+                    >
+                      {busy === a.id && <Loader2 className="h-4 w-4 animate-spin" />}
                       {busy === a.id ? '...' : 'Check In'}
-                    </button>
+                    </Button>
                   )}
                   {a.status === 'checked_in' && (
-                    <div style={{ fontSize: '11px', color: '#f59e0b' }}>Ready to receive</div>
+                    <span className="text-sm font-medium text-warning">Ready to receive</span>
                   )}
                 </div>
               </div>
-            </div>
+            </Card>
           ))}
         </div>
       )}

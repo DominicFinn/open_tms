@@ -1,7 +1,21 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { ArrowLeft, CheckCircle2, Loader2, X } from 'lucide-react';
+
 import { API_URL } from '../api';
 import { useBarcodeScanner } from './useBarcodeScanner';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { cn } from '@/lib/utils';
 
 interface PackLine {
   id: string;
@@ -47,7 +61,10 @@ export default function WarehousePack() {
     setLoading(true);
     fetch(`${API_URL}/api/v1/pack-tasks/${id}`)
       .then(r => r.json())
-      .then(res => { if (res.error) setError(res.error); else setTask(res.data); })
+      .then(res => {
+        if (res.error) setError(res.error);
+        else setTask(res.data);
+      })
       .finally(() => setLoading(false));
   };
 
@@ -79,110 +96,187 @@ export default function WarehousePack() {
 
   const handlePack = async (lineId: string) => {
     const qty = parseInt(packQty);
-    if (!qty || qty < 1) { setError('Enter a valid quantity'); return; }
-    setError(''); setBusy(true);
+    if (!qty || qty < 1) {
+      setError('Enter a valid quantity');
+      return;
+    }
+    setError('');
+    setBusy(true);
     try {
       const res = await fetch(`${API_URL}/api/v1/pack-lines/${lineId}/complete`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ packedQuantity: qty }),
       });
       const data = await res.json();
       if (data.error) setError(data.error);
-      else { setActiveLineId(null); setPackQty(''); load(); }
-    } finally { setBusy(false); }
+      else {
+        setActiveLineId(null);
+        setPackQty('');
+        load();
+      }
+    } finally {
+      setBusy(false);
+    }
   };
 
-  if (loading) return <div style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>Loading...</div>;
-  if (!task) return <div style={{ padding: '1rem', color: '#ef4444' }}>{error || 'Not found'}</div>;
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-16 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+  if (!task) {
+    return (
+      <div className="rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+        {error || 'Not found'}
+      </div>
+    );
+  }
 
   const linesToPack = task.packLines.filter(l => l.packedQuantity < l.expectedQuantity);
   const allDone = linesToPack.length === 0 && task.packLines.length > 0;
 
   return (
-    <div>
-      <button onClick={() => navigate('/warehouse/tasks')} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '16px' }}>
-        <span className="material-icons" style={{ fontSize: '20px' }}>arrow_back</span> Tasks
-      </button>
+    <div className="space-y-4 pb-24">
+      <Button variant="ghost" size="sm" onClick={() => navigate('/warehouse/tasks')} className="-ml-2">
+        <ArrowLeft className="h-5 w-5" />
+        <span className="text-base">Tasks</span>
+      </Button>
 
-      {error && <div style={{ padding: '10px', background: '#7f1d1d', borderRadius: '8px', color: '#fca5a5', marginBottom: '12px', fontSize: '13px' }}>{error}</div>}
-
-      <div style={{ background: '#1e293b', borderRadius: '16px', padding: '20px', marginBottom: '16px' }}>
-        <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Pack Task</div>
-        <div style={{ fontSize: '20px', fontWeight: 700 }}>{task.id.slice(0, 8)}</div>
-        <div style={{ fontSize: '13px', color: '#94a3b8' }}>
-          Station: <strong>{task.packStationBin?.label ?? 'any'}</strong> &middot; {task.packLines.length} line{task.packLines.length === 1 ? '' : 's'}
+      {error && (
+        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {error}
         </div>
-      </div>
+      )}
 
-      <div style={{ background: '#1e293b', borderRadius: '16px', padding: '16px', marginBottom: '12px' }}>
-        <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, marginBottom: '8px', textTransform: 'uppercase' }}>Carton</div>
-        <select value={selectedCartonId} onChange={e => setSelectedCartonId(e.target.value)}
-          style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid #475569', background: '#0f172a', color: 'white', fontSize: '14px' }}>
-          <option value="">Select a carton...</option>
-          {cartons.map(c => (
-            <option key={c.id} value={c.id}>
-              {c.name} - {(c.lengthMm / 10).toFixed(0)}x{(c.widthMm / 10).toFixed(0)}x{(c.heightMm / 10).toFixed(0)}cm, max {(c.maxWeightGrams / 1000).toFixed(0)}kg{c.temperatureZone !== 'any' ? ` (${c.temperatureZone})` : ''}
-            </option>
-          ))}
-        </select>
-        {allDone && (
-          <button onClick={() => navigate(`/warehouse/tasks/pack-audit/${task.id}`)}
-            style={{ marginTop: 10, width: '100%', padding: '12px', borderRadius: '10px', border: 'none', background: '#3b82f6', color: 'white', fontWeight: 600, fontSize: '14px', cursor: 'pointer' }}>
-            Run Pack Audit
-          </button>
-        )}
-      </div>
+      <Card>
+        <CardContent className="space-y-1 p-5">
+          <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Pack task
+          </div>
+          <div className="text-xl font-bold">{task.id.slice(0, 8)}</div>
+          <div className="text-sm text-muted-foreground">
+            Station: <strong>{task.packStationBin?.label ?? 'any'}</strong> &middot; {task.packLines.length} line{task.packLines.length === 1 ? '' : 's'}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="space-y-3 p-5">
+          <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Carton
+          </Label>
+          <Select value={selectedCartonId} onValueChange={setSelectedCartonId}>
+            <SelectTrigger className="h-12 text-base">
+              <SelectValue placeholder="Select a carton..." />
+            </SelectTrigger>
+            <SelectContent>
+              {cartons.map(c => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.name} - {(c.lengthMm / 10).toFixed(0)}x{(c.widthMm / 10).toFixed(0)}x{(c.heightMm / 10).toFixed(0)}cm,
+                  {' '}max {(c.maxWeightGrams / 1000).toFixed(0)}kg
+                  {c.temperatureZone !== 'any' ? ` (${c.temperatureZone})` : ''}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {allDone && (
+            <Button
+              size="lg"
+              variant="gradient"
+              className="w-full text-base"
+              onClick={() => navigate(`/warehouse/tasks/pack-audit/${task.id}`)}
+            >
+              Run pack audit
+            </Button>
+          )}
+        </CardContent>
+      </Card>
 
       {allDone ? (
-        <div style={{ textAlign: 'center', padding: '2rem' }}>
-          <span className="material-icons" style={{ fontSize: '48px', color: '#10b981', display: 'block', marginBottom: '8px' }}>check_circle</span>
-          <div style={{ fontSize: '18px', fontWeight: 600, marginBottom: '4px' }}>All items packed</div>
-          <div style={{ color: '#94a3b8', fontSize: '13px' }}>Run a pack audit to verify weight before ship.</div>
-        </div>
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 py-10 text-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-success/15 text-success">
+              <CheckCircle2 className="h-8 w-8" />
+            </div>
+            <div className="text-lg font-semibold">All items packed</div>
+            <div className="text-sm text-muted-foreground">Run a pack audit to verify weight before ship.</div>
+          </CardContent>
+        </Card>
       ) : (
         <>
-          <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, marginBottom: '8px', textTransform: 'uppercase' }}>
+          <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             Scan item to pack
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          </Label>
+          <div className="space-y-2">
             {task.packLines.map(line => {
               const remaining = line.expectedQuantity - line.packedQuantity;
               const done = remaining <= 0;
               const active = activeLineId === line.id;
               return (
-                <div key={line.id} style={{ background: '#1e293b', borderRadius: '12px', padding: '14px 16px', border: active ? '2px solid #3b82f6' : '1px solid #334155' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 600, fontSize: '14px' }}>{line.sku}</div>
-                      <div style={{ fontSize: '12px', color: '#94a3b8' }}>
-                        {line.packedQuantity} / {line.expectedQuantity} packed
-                        {done && <span style={{ color: '#10b981', marginLeft: 6 }}>✓</span>}
+                <Card key={line.id} className={cn(active && 'border-primary')}>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex-1">
+                        <div className="text-base font-semibold">{line.sku}</div>
+                        <div className="text-sm text-muted-foreground">
+                          {line.packedQuantity} / {line.expectedQuantity} packed
+                          {done && <CheckCircle2 className="ml-2 inline h-4 w-4 text-success" />}
+                        </div>
                       </div>
+                      {!done && !active && (
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            setActiveLineId(line.id);
+                            setPackQty(String(remaining));
+                          }}
+                        >
+                          Pack
+                        </Button>
+                      )}
                     </div>
-                    {!done && !active && (
-                      <button onClick={() => { setActiveLineId(line.id); setPackQty(String(remaining)); }}
-                        style={{ padding: '8px 12px', borderRadius: '8px', border: 'none', background: '#3b82f6', color: 'white', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}>
-                        Pack
-                      </button>
-                    )}
-                  </div>
 
-                  {active && (
-                    <div style={{ marginTop: '12px', display: 'flex', gap: '8px' }}>
-                      <input type="number" inputMode="numeric" min={1} max={remaining}
-                        value={packQty} onChange={e => setPackQty(e.target.value)} autoFocus data-manual-input="true"
-                        style={{ flex: 1, padding: '12px', borderRadius: '10px', border: '1px solid #475569', background: '#0f172a', color: 'white', fontSize: '18px', textAlign: 'center' }}/>
-                      <button onClick={() => handlePack(line.id)} disabled={busy}
-                        style={{ padding: '12px 20px', borderRadius: '10px', border: 'none', background: '#10b981', color: 'white', fontWeight: 700, fontSize: '15px', cursor: 'pointer', opacity: busy ? 0.5 : 1 }}>
-                        {busy ? '...' : 'Confirm'}
-                      </button>
-                      <button onClick={() => { setActiveLineId(null); setPackQty(''); }} disabled={busy}
-                        style={{ padding: '12px', borderRadius: '10px', border: '1px solid #475569', background: 'transparent', color: '#94a3b8', cursor: 'pointer' }}>
-                        <span className="material-icons">close</span>
-                      </button>
-                    </div>
-                  )}
-                </div>
+                    {active && (
+                      <div className="mt-3 flex gap-2">
+                        <Input
+                          type="number"
+                          inputMode="numeric"
+                          min={1}
+                          max={remaining}
+                          value={packQty}
+                          onChange={e => setPackQty(e.target.value)}
+                          autoFocus
+                          data-manual-input="true"
+                          className="h-12 flex-1 text-center text-lg"
+                        />
+                        <Button
+                          size="lg"
+                          variant="gradient"
+                          onClick={() => handlePack(line.id)}
+                          disabled={busy}
+                        >
+                          {busy ? '...' : 'Confirm'}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-12 w-12"
+                          onClick={() => {
+                            setActiveLineId(null);
+                            setPackQty('');
+                          }}
+                          disabled={busy}
+                          aria-label="Cancel"
+                        >
+                          <X className="h-5 w-5" />
+                        </Button>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               );
             })}
           </div>
