@@ -760,6 +760,70 @@
   cursor: pointer;
 }
 
+/* Buttons that sit inside a .vn-filters bar — height matches .vn-filter-input
+   and .vn-filter-select so all controls in the row line up on one baseline. */
+.vn-filter-btn {
+  padding: 7px 12px;
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--border-radius-sm);
+  background: var(--surface-container);
+  color: var(--on-surface);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-sizing: border-box;
+  outline: none;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.vn-filter-btn:hover {
+  background: var(--surface-container-high, var(--surface-container));
+}
+
+.vn-filter-btn.is-active {
+  background: var(--surface-container-high, var(--surface-container));
+  border-color: var(--primary);
+}
+
+.vn-filter-btn .material-icons {
+  font-size: 16px;
+  line-height: 1;
+}
+
+/* Connected button group inside .vn-filters — segmented control style. */
+.vn-filter-btn-group {
+  display: inline-flex;
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--border-radius-sm);
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.vn-filter-btn-group > .vn-filter-btn {
+  border: 0;
+  border-radius: 0;
+  background: var(--surface-container);
+}
+
+.vn-filter-btn-group > .vn-filter-btn + .vn-filter-btn {
+  border-left: 1px solid var(--outline-variant);
+}
+
+.vn-filter-btn-group > .vn-filter-btn.is-active {
+  background: var(--surface-container-high, var(--surface-container));
+}
+
+/* When the filter row is dense, allow inputs/selects/buttons to share spacing
+   without the buttons looking taller than the selects. */
+.vn-filters .vn-filter-btn,
+.vn-filters .vn-filter-btn-group {
+  align-self: center;
+}
+
 /* ── Tabs ─────────────────────────────────────────────────── */
 .vn-tabs {
   display: flex;
@@ -1025,6 +1089,12 @@
   display: flex;
   flex-direction: column;
   gap: 24px;
+  /* Grid items default to min-width: auto, which is min-content. A wide child
+     (e.g. the .vn-tabs row, a long unbroken string, an unwrapped table) can
+     therefore push this 1fr column past the available width and cause the
+     whole page to overflow horizontally. min-width: 0 lets the column
+     actually honour its 1fr track size. */
+  min-width: 0;
 }
 
 .vn-detail-sidebar {
@@ -1033,6 +1103,7 @@
   gap: 16px;
   position: sticky;
   top: 80px;
+  min-width: 0;
 }
 
 /* ── Info Grid ────────────────────────────────────────────── */

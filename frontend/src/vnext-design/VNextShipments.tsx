@@ -1,18 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { API_URL } from '../api';
-import { useOrgContext } from '../hooks/useOrgContext';
-
-interface FinancialSummary {
-  actualRevenueCents?: number;
-  actualCostCents?: number;
-  actualMarginCents?: number;
-  expectedRevenueCents?: number;
-  expectedCostCents?: number;
-  expectedMarginCents?: number;
-}
+import { VnFilterBar, VnDateRangeFilter } from './components';
 
 interface Shipment {
   id: string;
@@ -27,7 +18,8 @@ interface Shipment {
   destination?: { name: string; city: string; state: string };
   lane?: { name: string };
   carrier?: { name: string };
-  shipmentFinancialSummary?: FinancialSummary | null;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 interface ShipmentTypeSummary {
@@ -37,12 +29,16 @@ interface ShipmentTypeSummary {
   color: string;
 }
 
+type SortField = 'createdAt' | 'updatedAt' | 'pickupDate' | 'deliveryDate';
+type SortOrder = 'asc' | 'desc';
+
 function statusColor(status: string): string {
   const s = status?.toLowerCase().replace(/[_ ]/g, '');
   if (s === 'intransit') return 'info';
   if (s === 'delivered') return 'success';
   if (s === 'booked' || s === 'atpickup') return 'warning';
   if (s === 'issue' || s === 'exception') return 'error';
+  if (s === 'draft') return 'secondary';
   return 'secondary';
 }
 
@@ -52,22 +48,10 @@ function formatDate(d?: string): string {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-function formatCents(cents?: number | null): string {
-  if (cents == null) return '-';
-  return `$${(cents / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
-function marginColor(marginCents?: number | null, revenueCents?: number | null): string {
-  if (marginCents == null || revenueCents == null || revenueCents === 0) return 'var(--on-surface-variant)';
-  const pct = (marginCents / revenueCents) * 100;
-  if (pct >= 15) return 'var(--color-success)';
-  if (pct >= 5) return 'var(--color-warning)';
-  return 'var(--color-error)';
-}
-
-function marginPercent(marginCents?: number | null, revenueCents?: number | null): string {
-  if (marginCents == null || revenueCents == null || revenueCents === 0) return '-';
-  return `${((marginCents / revenueCents) * 100).toFixed(1)}%`;
+function formatDateTime(d?: string): string {
+  if (!d) return '-';
+  const date = new Date(d);
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 function csvEscape(value: unknown): string {
@@ -77,18 +61,13 @@ function csvEscape(value: unknown): string {
   return s;
 }
 
-function exportShipmentsCsv(rows: Shipment[], includeFinancials: boolean): void {
+function exportShipmentsCsv(rows: Shipment[]): void {
   const headers = [
     'Reference', 'Status', 'Customer', 'Origin', 'Destination', 'Carrier', 'Lane',
-    'Pickup Date', 'Delivery Date', 'PRO #',
-    ...(includeFinancials ? ['Revenue (USD)', 'Cost (USD)', 'Margin (USD)', 'Margin %'] : []),
+    'Pickup Date', 'Delivery Date', 'PRO #', 'Created', 'Updated',
   ];
   const lines = [headers.join(',')];
   for (const s of rows) {
-    const fin = s.shipmentFinancialSummary;
-    const revenue = fin?.actualRevenueCents ?? fin?.expectedRevenueCents;
-    const cost = fin?.actualCostCents ?? fin?.expectedCostCents;
-    const margin = fin?.actualMarginCents ?? fin?.expectedMarginCents;
     const row = [
       s.reference || s.id,
       s.status,
@@ -100,16 +79,12 @@ function exportShipmentsCsv(rows: Shipment[], includeFinancials: boolean): void 
       s.pickupDate || '',
       s.deliveryDate || '',
       s.proNumber || '',
-      ...(includeFinancials ? [
-        revenue != null ? (revenue / 100).toFixed(2) : '',
-        cost != null ? (cost / 100).toFixed(2) : '',
-        margin != null ? (margin / 100).toFixed(2) : '',
-        (margin != null && revenue != null && revenue !== 0) ? ((margin / revenue) * 100).toFixed(1) : '',
-      ] : []),
+      s.createdAt || '',
+      s.updatedAt || '',
     ].map(csvEscape);
     lines.push(row.join(','));
   }
-  const blob = new Blob(['\uFEFF' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const blob = new Blob(['﻿' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const stamp = new Date().toISOString().slice(0, 10);
   const a = document.createElement('a');
@@ -123,16 +98,22 @@ function exportShipmentsCsv(rows: Shipment[], includeFinancials: boolean): void 
 
 export default function VNextShipments() {
   const navigate = useNavigate();
-  const { isBroker } = useOrgContext();
-  const [showFinancials, setShowFinancials] = useState(isBroker);
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<L.Map | null>(null);
   const markersRef = useRef<L.LayerGroup | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [createdFrom, setCreatedFrom] = useState('');
+  const [createdTo, setCreatedTo] = useState('');
+  const [updatedFrom, setUpdatedFrom] = useState('');
+  const [updatedTo, setUpdatedTo] = useState('');
+  const [sortBy, setSortBy] = useState<SortField>('createdAt');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [viewMode, setViewMode] = useState<'table' | 'map'>('table');
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [shipmentTypes, setShipmentTypes] = useState<Record<string, ShipmentTypeSummary>>({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     fetch(`${API_URL}/api/v1/shipment-types`)
@@ -144,16 +125,22 @@ export default function VNextShipments() {
       })
       .catch(() => {});
   }, []);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
 
-  // Fetch shipments from API
+  // Fetch shipments from API with server-side date filters and sort
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         setLoading(true);
-        const res = await fetch(`${API_URL}/api/v1/shipments`);
+        const params = new URLSearchParams();
+        if (createdFrom) params.set('createdFrom', createdFrom);
+        if (createdTo) params.set('createdTo', `${createdTo}T23:59:59Z`);
+        if (updatedFrom) params.set('updatedFrom', updatedFrom);
+        if (updatedTo) params.set('updatedTo', `${updatedTo}T23:59:59Z`);
+        params.set('sortBy', sortBy);
+        params.set('sortOrder', sortOrder);
+        const qs = params.toString();
+        const res = await fetch(`${API_URL}/api/v1/shipments${qs ? `?${qs}` : ''}`);
         if (!res.ok) throw new Error(`Failed to load shipments (${res.status})`);
         const json = await res.json();
         if (!cancelled) {
@@ -167,15 +154,16 @@ export default function VNextShipments() {
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [createdFrom, createdTo, updatedFrom, updatedTo, sortBy, sortOrder]);
 
-  const statusCounts = {
+  const statusCounts = useMemo(() => ({
     all: shipments.length,
+    draft: shipments.filter(s => s.status?.toLowerCase() === 'draft').length,
     transit: shipments.filter(s => s.status?.toLowerCase().replace(/[_ ]/g, '') === 'intransit').length,
     delivered: shipments.filter(s => s.status?.toLowerCase() === 'delivered').length,
     booked: shipments.filter(s => s.status?.toLowerCase() === 'booked').length,
     issue: shipments.filter(s => ['issue', 'exception'].includes(s.status?.toLowerCase())).length,
-  };
+  }), [shipments]);
 
   // Initialize map
   useEffect(() => {
@@ -229,6 +217,7 @@ export default function VNextShipments() {
 
   const filtered = shipments.filter(s => {
     const sNorm = s.status?.toLowerCase().replace(/[_ ]/g, '');
+    if (statusFilter === 'draft' && s.status?.toLowerCase() !== 'draft') return false;
     if (statusFilter === 'transit' && sNorm !== 'intransit') return false;
     if (statusFilter === 'delivered' && sNorm !== 'delivered') return false;
     if (statusFilter === 'booked' && sNorm !== 'booked') return false;
@@ -244,6 +233,14 @@ export default function VNextShipments() {
     }
     return true;
   });
+
+  const hasDateFilters = createdFrom || createdTo || updatedFrom || updatedTo;
+  const clearDateFilters = () => {
+    setCreatedFrom('');
+    setCreatedTo('');
+    setUpdatedFrom('');
+    setUpdatedTo('');
+  };
 
   if (loading) {
     return (
@@ -265,7 +262,7 @@ export default function VNextShipments() {
           <p>{shipments.length} total shipments</p>
         </div>
         <div className="vn-page-actions">
-          <button className="vn-btn vn-btn-outline" onClick={() => exportShipmentsCsv(filtered, showFinancials)}>
+          <button className="vn-btn vn-btn-outline" onClick={() => exportShipmentsCsv(filtered)}>
             <span className="material-icons">download</span>
             Export
           </button>
@@ -278,6 +275,13 @@ export default function VNextShipments() {
 
       {/* Stats */}
       <div className="vn-stats">
+        <div className="vn-stat" style={{ cursor: 'pointer' }} onClick={() => setStatusFilter('draft')}>
+          <div className="vn-stat-icon"><span className="material-icons">edit_note</span></div>
+          <div>
+            <div className="vn-stat-value">{statusCounts.draft}</div>
+            <div className="vn-stat-label">Draft</div>
+          </div>
+        </div>
         <div className="vn-stat" style={{ cursor: 'pointer' }} onClick={() => setStatusFilter('transit')}>
           <div className="vn-stat-icon info"><span className="material-icons">local_shipping</span></div>
           <div>
@@ -315,57 +319,89 @@ export default function VNextShipments() {
 
       {/* Shipments Table Card */}
       <div className="vn-card">
-        <div className="vn-filters">
-          <div className="vn-filter-group" style={{ flex: 1 }}>
-            <span className="material-icons">search</span>
-            <input
-              className="vn-filter-input"
-              placeholder="Search by ID, customer, origin, destination, carrier..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              style={{ width: '100%' }}
-            />
-          </div>
-          <select className="vn-filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+        <VnFilterBar
+          searchPlaceholder="Search by ID, customer, origin, destination, carrier..."
+          searchValue={search}
+          onSearchChange={setSearch}
+        >
+          <select
+            className="vn-filter-select"
+            value={statusFilter}
+            onChange={e => setStatusFilter(e.target.value)}
+          >
             <option value="all">All Statuses ({statusCounts.all})</option>
+            <option value="draft">Draft ({statusCounts.draft})</option>
             <option value="transit">In Transit ({statusCounts.transit})</option>
             <option value="booked">Booked ({statusCounts.booked})</option>
             <option value="delivered">Delivered ({statusCounts.delivered})</option>
             <option value="issue">Issue ({statusCounts.issue})</option>
           </select>
-          <select className="vn-filter-select">
-            <option>All Modes</option>
-            <option>FTL</option>
-            <option>LTL</option>
-            <option>Reefer</option>
-            <option>Flatbed</option>
+          <select
+            className="vn-filter-select"
+            value={sortBy}
+            onChange={e => setSortBy(e.target.value as SortField)}
+            title="Sort by"
+          >
+            <option value="createdAt">Sort: Created</option>
+            <option value="updatedAt">Sort: Updated</option>
+            <option value="pickupDate">Sort: Pickup</option>
+            <option value="deliveryDate">Sort: Delivery</option>
           </select>
           <button
-            className={`vn-btn ${showFinancials ? 'vn-btn-primary' : 'vn-btn-outline'}`}
-            onClick={() => setShowFinancials(!showFinancials)}
-            title="Toggle financial columns"
-            style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, padding: '7px 12px' }}
+            type="button"
+            className="vn-filter-btn"
+            onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+            title={sortOrder === 'asc' ? 'Ascending (oldest first)' : 'Descending (newest first)'}
           >
-            <span className="material-icons" style={{ fontSize: 16 }}>attach_money</span>
-            Margin
+            <span className="material-icons">
+              {sortOrder === 'asc' ? 'arrow_upward' : 'arrow_downward'}
+            </span>
+            {sortOrder === 'asc' ? 'Asc' : 'Desc'}
           </button>
-          <div style={{ display: 'flex', border: '1px solid var(--outline-variant)', borderRadius: 'var(--border-radius-sm)', overflow: 'hidden' }}>
+          <div className="vn-filter-btn-group">
             <button
-              className="vn-btn-icon"
-              style={{ borderRadius: 0, background: viewMode === 'table' ? 'var(--surface-container)' : 'transparent' }}
+              type="button"
+              className={`vn-filter-btn${viewMode === 'table' ? ' is-active' : ''}`}
               onClick={() => setViewMode('table')}
+              title="Table view"
+              aria-label="Table view"
             >
-              <span className="material-icons" style={{ fontSize: 20 }}>view_list</span>
+              <span className="material-icons">view_list</span>
             </button>
             <button
-              className="vn-btn-icon"
-              style={{ borderRadius: 0, background: viewMode === 'map' ? 'var(--surface-container)' : 'transparent' }}
+              type="button"
+              className={`vn-filter-btn${viewMode === 'map' ? ' is-active' : ''}`}
               onClick={() => setViewMode('map')}
+              title="Map view"
+              aria-label="Map view"
             >
-              <span className="material-icons" style={{ fontSize: 20 }}>map</span>
+              <span className="material-icons">map</span>
             </button>
           </div>
-        </div>
+        </VnFilterBar>
+
+        <VnDateRangeFilter
+          rows={[
+            {
+              iconName: 'event',
+              label: 'Created',
+              from: createdFrom,
+              to: createdTo,
+              onFromChange: setCreatedFrom,
+              onToChange: setCreatedTo,
+            },
+            {
+              iconName: 'update',
+              label: 'Updated',
+              from: updatedFrom,
+              to: updatedTo,
+              onFromChange: setUpdatedFrom,
+              onToChange: setUpdatedTo,
+            },
+          ]}
+          onClear={clearDateFilters}
+          showClear={!!hasDateFilters}
+        />
 
         <div className="vn-table-wrap">
           <table className="vn-table">
@@ -379,9 +415,8 @@ export default function VNextShipments() {
                 <th>Pickup</th>
                 <th>Delivery</th>
                 <th>PRO #</th>
-                {showFinancials && <th style={{ textAlign: 'right' }}>Revenue</th>}
-                {showFinancials && <th style={{ textAlign: 'right' }}>Cost</th>}
-                {showFinancials && <th style={{ textAlign: 'right' }}>Margin</th>}
+                <th>Created</th>
+                <th>Updated</th>
                 <th>Status</th>
               </tr>
             </thead>
@@ -420,33 +455,15 @@ export default function VNextShipments() {
                   <td style={{ fontSize: 13, whiteSpace: 'nowrap' }}>{formatDate(s.pickupDate)}</td>
                   <td style={{ fontSize: 13, whiteSpace: 'nowrap' }}>{formatDate(s.deliveryDate)}</td>
                   <td style={{ fontSize: 13 }}>{s.proNumber || '-'}</td>
-                  {showFinancials && (
-                    <td style={{ fontSize: 13, textAlign: 'right', whiteSpace: 'nowrap' }}>
-                      {formatCents(s.shipmentFinancialSummary?.actualRevenueCents ?? s.shipmentFinancialSummary?.expectedRevenueCents)}
-                    </td>
-                  )}
-                  {showFinancials && (
-                    <td style={{ fontSize: 13, textAlign: 'right', whiteSpace: 'nowrap' }}>
-                      {formatCents(s.shipmentFinancialSummary?.actualCostCents ?? s.shipmentFinancialSummary?.expectedCostCents)}
-                    </td>
-                  )}
-                  {showFinancials && (() => {
-                    const fin = s.shipmentFinancialSummary;
-                    const margin = fin?.actualMarginCents ?? fin?.expectedMarginCents;
-                    const revenue = fin?.actualRevenueCents ?? fin?.expectedRevenueCents;
-                    return (
-                      <td style={{ fontSize: 13, textAlign: 'right', whiteSpace: 'nowrap', fontWeight: 600, color: marginColor(margin, revenue) }}>
-                        {formatCents(margin)} <span style={{ fontSize: 11, fontWeight: 400 }}>({marginPercent(margin, revenue)})</span>
-                      </td>
-                    );
-                  })()}
+                  <td style={{ fontSize: 13, whiteSpace: 'nowrap', color: 'var(--on-surface-variant)' }}>{formatDateTime(s.createdAt)}</td>
+                  <td style={{ fontSize: 13, whiteSpace: 'nowrap', color: 'var(--on-surface-variant)' }}>{formatDateTime(s.updatedAt)}</td>
                   <td><span className={`vn-chip vn-chip-${statusColor(s.status)}`}>{s.status}</span></td>
                 </tr>
                 );
               })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={showFinancials ? 12 : 9}>
+                  <td colSpan={11}>
                     <div className="vn-empty">
                       <span className="material-icons">search_off</span>
                       <h3>No shipments found</h3>

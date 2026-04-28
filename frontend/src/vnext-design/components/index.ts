@@ -4,6 +4,7 @@ export { VnChip } from './VnChip';
 export { VnStatCard } from './VnStatCard';
 export { VnDataTable } from './VnDataTable';
 export { VnFilterBar } from './VnFilterBar';
+export { VnDateRangeFilter, VnDateRangeRow } from './VnDateRangeFilter';
 export { VnTabs } from './VnTabs';
 export { VnTimeline } from './VnTimeline';
 export { VnKanban } from './VnKanban';

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API_URL } from '../api';
+import { VnFilterBar } from './components';
 
 interface Order {
   id: string;
@@ -207,17 +208,11 @@ export default function VNextOrders() {
 
       {/* Orders Table */}
       <div className="vn-card">
-        <div className="vn-filters">
-          <div className="vn-filter-group" style={{ flex: 1 }}>
-            <span className="material-icons">search</span>
-            <input
-              className="vn-filter-input"
-              placeholder="Search orders by ID, customer, route, commodity..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              style={{ width: '100%' }}
-            />
-          </div>
+        <VnFilterBar
+          searchPlaceholder="Search orders by ID, customer, route, commodity..."
+          searchValue={search}
+          onSearchChange={setSearch}
+        >
           <select className="vn-filter-select">
             <option>All Modes</option>
             <option>FTL</option>
@@ -231,7 +226,7 @@ export default function VNextOrders() {
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
-        </div>
+        </VnFilterBar>
 
         <div className="vn-table-wrap">
           <table className="vn-table">

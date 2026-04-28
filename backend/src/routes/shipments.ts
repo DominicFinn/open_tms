@@ -29,28 +29,84 @@ export async function shipmentRoutes(server: FastifyInstance) {
   };
 
   // Get all shipments (uses denormalized read model for performance).
-  // We enrich with shipmentTypeId from the live Shipment table so the list
-  // can render the type icon without a projection change.
+  // We attach relation objects (customer/origin/destination/carrier/lane) so
+  // the UI can use nested access (s.customer.name) the same way it would for
+  // a live query, and enrich with shipmentTypeId from the live Shipment table.
   server.get('/api/v1/shipments', async (req: FastifyRequest, _reply: FastifyReply) => {
-    const { status, customerId, carrierId } = (req.query as any) || {};
+    const {
+      status,
+      customerId,
+      carrierId,
+      createdFrom,
+      createdTo,
+      updatedFrom,
+      updatedTo,
+      sortBy,
+      sortOrder,
+    } = (req.query as any) || {};
     const where: any = {};
     if (status) where.status = status;
     if (customerId) where.customerId = customerId;
     if (carrierId) where.carrierId = carrierId;
 
-    const shipments = await server.prisma.shipmentReadModel.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-    });
-    if (shipments.length === 0) return { data: shipments, error: null };
+    const parseDate = (v: unknown): Date | null => {
+      if (typeof v !== 'string' || v.length === 0) return null;
+      const candidate = /^\d{4}-\d{2}-\d{2}$/.test(v) ? `${v}T00:00:00Z` : v;
+      const d = new Date(candidate);
+      return isNaN(d.getTime()) ? null : d;
+    };
 
-    const ids = shipments.map(s => s.id);
+    const createdFromDate = parseDate(createdFrom);
+    const createdToDate = parseDate(createdTo);
+    if (createdFromDate || createdToDate) {
+      where.createdAt = {
+        ...(createdFromDate ? { gte: createdFromDate } : {}),
+        ...(createdToDate ? { lte: createdToDate } : {}),
+      };
+    }
+
+    const updatedFromDate = parseDate(updatedFrom);
+    const updatedToDate = parseDate(updatedTo);
+    if (updatedFromDate || updatedToDate) {
+      where.updatedAt = {
+        ...(updatedFromDate ? { gte: updatedFromDate } : {}),
+        ...(updatedToDate ? { lte: updatedToDate } : {}),
+      };
+    }
+
+    const allowedSortFields = new Set(['createdAt', 'updatedAt', 'pickupDate', 'deliveryDate']);
+    const sortField = typeof sortBy === 'string' && allowedSortFields.has(sortBy) ? sortBy : 'createdAt';
+    const sortDir = sortOrder === 'asc' ? 'asc' : 'desc';
+
+    const rows = await server.prisma.shipmentReadModel.findMany({
+      where,
+      orderBy: { [sortField]: sortDir },
+    });
+    if (rows.length === 0) return { data: rows, error: null };
+
+    const ids = rows.map(s => s.id);
     const typeLinks = await server.prisma.shipment.findMany({
       where: { id: { in: ids } },
       select: { id: true, shipmentTypeId: true },
     });
     const typeById = new Map(typeLinks.map(t => [t.id, t.shipmentTypeId]));
-    const enriched = shipments.map(s => ({ ...s, shipmentTypeId: typeById.get(s.id) ?? null }));
+
+    // Reshape the read-model rows so the frontend can use nested relation
+    // access (s.customer.name, s.origin.city, etc.) without a separate code
+    // path for read-model vs live shape.
+    const enriched = rows.map(s => ({
+      ...s,
+      shipmentTypeId: typeById.get(s.id) ?? null,
+      customer: { id: s.customerId, name: s.customerName },
+      origin: s.originName != null || s.originCity != null
+        ? { name: s.originName, city: s.originCity, state: s.originState, lat: s.currentLat, lng: s.currentLng }
+        : null,
+      destination: s.destinationName != null || s.destinationCity != null
+        ? { name: s.destinationName, city: s.destinationCity, state: s.destinationState }
+        : null,
+      carrier: s.carrierId ? { id: s.carrierId, name: s.carrierName } : null,
+      lane: s.laneId ? { id: s.laneId, name: s.laneName } : null,
+    }));
     return { data: enriched, error: null };
   });
 

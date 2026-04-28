@@ -78,7 +78,15 @@ export class PgBossQueueAdapter implements IQueueAdapter {
 
     await this.boss.work(
       queueName,
-      { localConcurrency: 2 },
+      {
+        localConcurrency: 2,
+        // pg-boss defaults to a 2-second poll. Lowering to the minimum (500ms)
+        // means projections (e.g. ShipmentReadModel) update soon enough after
+        // a write that "POST then navigate to list" reliably shows the new
+        // entity. Each subscribed queue is one polling loop; the extra DB
+        // pressure is negligible for our handler count.
+        pollingIntervalSeconds: 0.5,
+      },
       async (jobs: any[]) => {
         for (const job of jobs) {
           try {

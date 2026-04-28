@@ -27,6 +27,12 @@ All endpoints return `{ data, error }` — never a bare object.
 - Use `tags` for grouping in Swagger UI
 - Nullable JSON fields must use `Prisma.JsonNull`, not `null`
 
+### Read Models on List Endpoints
+- List endpoints **should use the denormalized read model** (e.g. `ShipmentReadModel`) for performance. Projections maintain these tables.
+- Projections are wired through pg-boss. The worker polls every **0.5 seconds** (set via `pollingIntervalSeconds: 0.5` in `backend/src/queue/PgBossQueueAdapter.ts`), so a fresh write is reflected in the read model within roughly half a second of the transaction committing. That's "timely enough" that POST-then-navigate-to-list works.
+- When a list endpoint reads from a `*ReadModel`, reshape the flat denormalized fields into the nested relation shape the UI expects (e.g. expose `s.customer.name`, `s.origin.city`, not just `s.customerName`, `s.originCity`). `GET /api/v1/shipments` in `backend/src/routes/shipments.ts` is the canonical example.
+- If the projection ever appears stuck, check the `evt.projection.<name>` queue stats and the dead-letter queue rather than papering over it by switching to a live read.
+
 ### File Storage
 - Storage keys are opaque: `files/{uuid}` — no entity info, filenames, or customer data
 - All file ops go through `IBinaryStorageProvider` (S3 or DB fallback)

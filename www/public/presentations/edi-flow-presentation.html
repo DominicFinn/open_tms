@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>The EDI Flow - Open TMS</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --p300:#93c5fd; --p400:#60a5fa; --p500:#3b82f6; --p600:#2563eb; --p900:#1e3a8a; --p950:#172554;
+    --a400:#a78bfa; --a500:#8b5cf6;
+    --s200:#e2e8f0; --s300:#cbd5e1; --s400:#94a3b8; --s500:#64748b; --s700:#334155; --s800:#1e293b; --s900:#0f172a; --s950:#020617;
+    --green:#22c55e; --yellow:#eab308; --red:#ef4444; --cyan:#06b6d4;
+    --amber:#f59e0b; --emerald:#10b981; --pink:#ec4899; --rose:#f43f5e;
+    /* Party colours */
+    --c1:#60a5fa; /* Buyer */
+    --c2:#a78bfa; /* Shipper / TMS */
+    --c3:#f59e0b; /* Warehouse / WMS */
+    --c4:#22c55e; /* Carrier */
+    --c5:#ec4899; /* Receiver / Retailer */
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%; overflow: hidden;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    color: #fff; background: var(--s950);
+  }
+  body::before {
+    content: ''; position: fixed; inset: 0;
+    background: linear-gradient(135deg, var(--s950) 0%, var(--p950) 50%, var(--s900) 100%);
+    z-index: -2;
+  }
+  body::after {
+    content: ''; position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    opacity: 0.03; z-index: -1; pointer-events: none;
+  }
+
+  .deck { position: relative; width: 100vw; height: 100vh; overflow: hidden; }
+  .slide {
+    position: absolute; inset: 0; padding: 48px 64px 60px;
+    display: none; flex-direction: column; opacity: 0;
+    transition: opacity .4s ease; overflow: hidden;
+  }
+  .slide.active { display: flex; opacity: 1; }
+
+  .glow-orb { position: absolute; width: 700px; height: 700px; border-radius: 50%; pointer-events: none; z-index: 0; filter: blur(120px); }
+  .glow-orb.p { background: rgba(37,99,235,0.14); }
+  .glow-orb.a { background: rgba(139,92,246,0.12); }
+  .glow-orb.g { background: rgba(34,197,94,0.08); }
+  .glow-orb.m { background: rgba(245,158,11,0.08); }
+
+  .content { position: relative; z-index: 1; display: flex; flex-direction: column; height: 100%; }
+
+  .pill {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 16px; border-radius: 999px;
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    background: rgba(59, 130, 246, 0.1);
+    font-size: 13px; font-weight: 500; color: var(--p300);
+    letter-spacing: 0.02em; width: fit-content;
+  }
+  .pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.4} }
+
+  h1.title { font-size: 68px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.02; margin: 18px 0 12px; }
+  h1.title.small { font-size: 48px; }
+  h2.section { font-size: 42px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.08; margin: 12px 0 8px; }
+  .subtitle { font-size: 18px; color: var(--s300); line-height: 1.5; max-width: 1020px; font-weight: 400; }
+  .subtitle.lg { font-size: 22px; max-width: 1080px; }
+  .gradient-text {
+    background: linear-gradient(135deg, var(--p500), var(--a500));
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent; color: transparent;
+  }
+  .eyebrow { text-transform: uppercase; letter-spacing: 0.15em; font-size: 11px; font-weight: 600; color: var(--p400); }
+
+  .glass {
+    background: rgba(255,255,255,0.03);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 16px; padding: 20px;
+  }
+  .glass.hl {
+    background: linear-gradient(135deg, rgba(37,99,235,0.10), rgba(139,92,246,0.10));
+    border-color: rgba(59,130,246,0.22);
+  }
+  .glass.sm { padding: 14px; border-radius: 12px; }
+
+  .grid { display: grid; gap: 14px; }
+  .g2 { grid-template-columns: repeat(2, 1fr); }
+  .g3 { grid-template-columns: repeat(3, 1fr); }
+  .g4 { grid-template-columns: repeat(4, 1fr); }
+  .g5 { grid-template-columns: repeat(5, 1fr); }
+
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 3px 9px; border-radius: 6px;
+    font-size: 11px; font-weight: 600;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.02em;
+  }
+
+  /* ============ SEQUENCE DIAGRAM ============ */
+  .sq {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+  }
+  .sq-header {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0;
+    margin-bottom: 12px;
+  }
+  .sq-party {
+    text-align: center;
+    padding: 14px 8px;
+    border-radius: 12px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+  .sq-party .sp-sub { font-size: 10px; color: var(--s500); font-weight: 500; margin-top: 3px; text-transform: uppercase; letter-spacing: 0.08em; }
+  .sq-party[data-party="1"] { border-color: rgba(96,165,250,0.35); background: rgba(96,165,250,0.08); }
+  .sq-party[data-party="1"] .sp-name { color: var(--c1); }
+  .sq-party[data-party="2"] { border-color: rgba(167,139,250,0.35); background: rgba(167,139,250,0.08); }
+  .sq-party[data-party="2"] .sp-name { color: var(--c2); }
+  .sq-party[data-party="3"] { border-color: rgba(245,158,11,0.35); background: rgba(245,158,11,0.08); }
+  .sq-party[data-party="3"] .sp-name { color: var(--c3); }
+  .sq-party[data-party="4"] { border-color: rgba(34,197,94,0.35); background: rgba(34,197,94,0.08); }
+  .sq-party[data-party="4"] .sp-name { color: var(--c4); }
+  .sq-party[data-party="5"] { border-color: rgba(236,72,153,0.35); background: rgba(236,72,153,0.08); }
+  .sq-party[data-party="5"] .sp-name { color: var(--c5); }
+
+  .sq-body {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    padding: 12px 0;
+  }
+
+  /* Five dashed lifelines at 10%, 30%, 50%, 70%, 90% */
+  .sq-body::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(to right, transparent 9.9%, rgba(96,165,250,0.25) 9.9%, rgba(96,165,250,0.25) 10.1%, transparent 10.1%),
+      linear-gradient(to right, transparent 29.9%, rgba(167,139,250,0.25) 29.9%, rgba(167,139,250,0.25) 30.1%, transparent 30.1%),
+      linear-gradient(to right, transparent 49.9%, rgba(245,158,11,0.25) 49.9%, rgba(245,158,11,0.25) 50.1%, transparent 50.1%),
+      linear-gradient(to right, transparent 69.9%, rgba(34,197,94,0.25) 69.9%, rgba(34,197,94,0.25) 70.1%, transparent 70.1%),
+      linear-gradient(to right, transparent 89.9%, rgba(236,72,153,0.25) 89.9%, rgba(236,72,153,0.25) 90.1%, transparent 90.1%);
+    pointer-events: none;
+  }
+
+  /* A message row */
+  .msg {
+    position: absolute;
+    top: var(--top);
+    left: var(--left, 10%);
+    right: var(--right, 10%);
+    height: 32px;
+    opacity: 0;
+    animation: msg-appear 0.4s ease-out forwards;
+    animation-delay: var(--delay, 0s);
+    display: flex;
+    align-items: center;
+  }
+  @keyframes msg-appear { to { opacity: 1; } }
+
+  /* The line with arrowhead */
+  .msg-line {
+    position: absolute;
+    left: 0; right: 0; top: 50%;
+    height: 2px;
+    transform: translateY(-50%) scaleX(0);
+    transform-origin: left center;
+    animation: line-grow 0.7s cubic-bezier(0.25, 0.9, 0.35, 1) forwards;
+    animation-delay: var(--delay, 0s);
+    border-radius: 2px;
+  }
+  @keyframes line-grow { to { transform: translateY(-50%) scaleX(1); } }
+
+  .msg.rev .msg-line { transform-origin: right center; }
+
+  /* Forward arrow (pointing right) */
+  .msg:not(.rev) .msg-line {
+    background: linear-gradient(90deg, transparent 0%, currentColor 8%, currentColor 92%, transparent 100%);
+    color: var(--p400);
+  }
+  .msg:not(.rev) .msg-line::after {
+    content: ''; position: absolute; right: 6%; top: 50%;
+    width: 0; height: 0;
+    border-left: 10px solid currentColor;
+    border-top: 6px solid transparent;
+    border-bottom: 6px solid transparent;
+    transform: translateY(-50%);
+  }
+  /* Reverse arrow (pointing left) */
+  .msg.rev .msg-line {
+    background: linear-gradient(270deg, transparent 0%, currentColor 8%, currentColor 92%, transparent 100%);
+    color: var(--a400);
+  }
+  .msg.rev .msg-line::before {
+    content: ''; position: absolute; left: 6%; top: 50%;
+    width: 0; height: 0;
+    border-right: 10px solid currentColor;
+    border-top: 6px solid transparent;
+    border-bottom: 6px solid transparent;
+    transform: translateY(-50%);
+  }
+
+  /* Chip with EDI code + label, sits in centre */
+  .msg-chip {
+    position: relative;
+    margin: 0 auto;
+    padding: 4px 12px;
+    border-radius: 20px;
+    background: var(--s900);
+    border: 1px solid currentColor;
+    color: var(--p400);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    opacity: 0;
+    transform: scale(0.6);
+    animation: chip-pop 0.35s cubic-bezier(0.2, 1.4, 0.4, 1) forwards;
+    animation-delay: calc(var(--delay, 0s) + 0.45s);
+    z-index: 2;
+    white-space: nowrap;
+  }
+  @keyframes chip-pop { to { opacity: 1; transform: scale(1); } }
+  .msg-chip .lbl { color: var(--s300); font-weight: 500; font-family: 'Inter', sans-serif; }
+  .msg-chip.r { color: var(--rose); }
+  .msg-chip.g { color: var(--emerald); }
+  .msg-chip.m { color: var(--amber); }
+  .msg-chip.c { color: var(--cyan); }
+  .msg-chip.k { color: var(--pink); }
+  .msg-chip.y { color: var(--yellow); }
+
+  .msg.col-g .msg-line { color: var(--emerald); }
+  .msg.col-m .msg-line { color: var(--amber); }
+  .msg.col-r .msg-line { color: var(--rose); }
+  .msg.col-c .msg-line { color: var(--cyan); }
+  .msg.col-k .msg-line { color: var(--pink); }
+  .msg.col-y .msg-line { color: var(--yellow); }
+  .msg.col-s .msg-line { color: var(--s500); }
+
+  /* Flowing particle */
+  .msg-dot {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: currentColor;
+    color: var(--p400);
+    transform: translate(-50%, -50%);
+    box-shadow: 0 0 12px currentColor;
+    opacity: 0;
+    animation: dot-flow 1.2s cubic-bezier(0.4, 0, 0.6, 1) forwards;
+    animation-delay: calc(var(--delay, 0s) + 0.1s);
+  }
+  @keyframes dot-flow {
+    0% { left: 2%; opacity: 0; }
+    15% { opacity: 1; }
+    85% { opacity: 1; }
+    100% { left: 98%; opacity: 0; }
+  }
+  .msg.rev .msg-dot {
+    animation-name: dot-flow-rev;
+  }
+  @keyframes dot-flow-rev {
+    0% { left: 98%; opacity: 0; }
+    15% { opacity: 1; }
+    85% { opacity: 1; }
+    100% { left: 2%; opacity: 0; }
+  }
+  .msg.col-g .msg-dot { color: var(--emerald); }
+  .msg.col-m .msg-dot { color: var(--amber); }
+  .msg.col-r .msg-dot { color: var(--rose); }
+  .msg.col-c .msg-dot { color: var(--cyan); }
+  .msg.col-k .msg-dot { color: var(--pink); }
+  .msg.col-y .msg-dot { color: var(--yellow); }
+  .msg.col-s .msg-dot { color: var(--s500); }
+
+  /* Scene caption */
+  .scene-caption {
+    margin-top: 8px;
+    font-size: 13px;
+    color: var(--s400);
+    line-height: 1.5;
+    padding: 12px 16px;
+    background: rgba(255,255,255,0.03);
+    border-radius: 10px;
+    border-left: 3px solid var(--p500);
+    opacity: 0;
+    animation: msg-appear 0.5s ease-out forwards;
+    animation-delay: 0.15s;
+  }
+
+  /* Trigger chain table */
+  .chain-row {
+    display: grid;
+    grid-template-columns: 30px 1.6fr 1.6fr 0.8fr 2fr;
+    gap: 10px;
+    padding: 8px 12px;
+    align-items: center;
+    border-radius: 8px;
+    font-size: 12px;
+    opacity: 0;
+    animation: chain-in 0.4s ease forwards;
+    animation-delay: var(--d, 0s);
+  }
+  @keyframes chain-in { to { opacity: 1; } }
+  .chain-row.alt { background: rgba(255,255,255,0.02); }
+  .chain-num { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--p400); font-weight: 700; }
+  .chain-from { color: var(--s200); font-size: 12px; }
+  .chain-arrow { color: var(--s500); }
+  .chain-trigger { color: var(--s300); font-size: 12px; line-height: 1.3; }
+
+  .nav {
+    position: fixed; bottom: 18px; left: 0; right: 0;
+    display: flex; align-items: center; justify-content: center;
+    gap: 12px; z-index: 100;
+  }
+  .nav-btn {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: #fff; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .nav-btn:hover { background: rgba(255,255,255,0.12); }
+  .nav-count { font-size: 12.5px; font-family: 'JetBrains Mono', monospace; color: var(--s400); min-width: 60px; text-align: center; font-weight: 500; }
+  .replay-btn {
+    font-size: 11.5px; font-weight: 500;
+    padding: 6px 14px;
+    border-radius: 8px;
+    background: rgba(96,165,250,0.12);
+    border: 1px solid rgba(96,165,250,0.25);
+    color: var(--p300);
+    cursor: pointer;
+    margin-left: 12px;
+    font-family: 'Inter', sans-serif;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .replay-btn:hover { background: rgba(96,165,250,0.2); }
+
+  .progress {
+    position: fixed; top: 0; left: 0; right: 0; height: 3px;
+    background: rgba(255,255,255,0.05); z-index: 100;
+  }
+  .progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--p500), var(--a500), var(--pink));
+    transition: width .4s ease;
+  }
+
+  .logo-badge {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 8px 16px; border-radius: 12px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    font-size: 14px; font-weight: 600; letter-spacing: -0.01em;
+  }
+
+  .kbd {
+    display: inline-block; padding: 2px 8px;
+    border-radius: 6px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.14);
+    border-bottom-width: 2px;
+    font-family: 'JetBrains Mono', monospace; font-size: 12px;
+    color: var(--s200);
+  }
+</style>
+</head>
+<body>
+<div class="progress"><div class="progress-bar" id="progressBar"></div></div>
+<div class="deck" id="deck"></div>
+<div class="nav">
+  <button class="nav-btn" onclick="prev()" aria-label="Previous">
+    <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+  </button>
+  <div class="nav-count" id="navCount">01 / 11</div>
+  <button class="nav-btn" onclick="next()" aria-label="Next">
+    <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+  </button>
+  <button class="replay-btn" onclick="replay()" aria-label="Replay">
+    <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/></svg>
+    Replay
+  </button>
+</div>
+
+<script>
+  let current = 0;
+  const slides = [];
+  function render() {
+    const deck = document.getElementById('deck');
+    deck.innerHTML = slides.map((s, i) => `<section class="slide ${i===current?'active':''}" data-i="${i}">${s}</section>`).join('');
+    document.getElementById('navCount').textContent = String(current+1).padStart(2,'0') + ' / ' + String(slides.length).padStart(2,'0');
+    document.getElementById('progressBar').style.width = ((current+1)/slides.length*100) + '%';
+  }
+  function go(i) { if (i < 0 || i >= slides.length) return; current = i; render(); }
+  function next() { go(current+1); }
+  function prev() { go(current-1); }
+  function replay() { render(); }
+  document.addEventListener('keydown', e => {
+    if (['ArrowRight','PageDown',' '].includes(e.key)) { e.preventDefault(); next(); }
+    else if (['ArrowLeft','PageUp'].includes(e.key)) { e.preventDefault(); prev(); }
+    else if (e.key === 'Home') go(0);
+    else if (e.key === 'End') go(slides.length-1);
+    else if (e.key === 'r' || e.key === 'R') replay();
+  });
+
+  // Helper to create a message row
+  function msg({ from, to, top, delay, code, label, colour }) {
+    // left/right boundaries based on party columns (10%, 30%, 50%, 70%, 90%)
+    const pos = [10, 30, 50, 70, 90];
+    const rev = from > to;
+    const lo = Math.min(from, to) - 1;
+    const hi = Math.max(from, to) - 1;
+    const left = pos[lo] + '%';
+    const right = (100 - pos[hi]) + '%';
+    const colClass = colour ? 'col-' + colour : '';
+    const chipClass = colour || '';
+    return `
+      <div class="msg ${rev ? 'rev' : ''} ${colClass}" style="--top:${top}px; --left:${left}; --right:${right}; --delay:${delay}s;">
+        <div class="msg-line"></div>
+        <div class="msg-dot"></div>
+        <div class="msg-chip ${chipClass}"><span>${code}</span><span class="lbl">${label}</span></div>
+      </div>
+    `;
+  }
+  window.msg = msg;
+</script>
+
+<script id="slides-content">
+// SLIDE 1 - TITLE
+slides.push(`
+  <div class="glow-orb p" style="top:-200px;left:-200px;"></div>
+  <div class="glow-orb a" style="bottom:-250px;right:-150px;"></div>
+  <div class="content">
+    <div class="logo-badge">
+      <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" style="color:var(--p400);"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5"/></svg>
+      <span>Open TMS &middot; EDI Flow</span>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; justify-content:center; max-width:1100px;">
+      <div class="pill" style="margin-bottom:24px;">
+        <span class="dot"></span>
+        <span>An animated walk-through of every EDI handshake</span>
+      </div>
+      <h1 class="title">
+        The EDI <br/>
+        <span class="gradient-text">dance.</span>
+      </h1>
+      <p class="subtitle lg" style="margin-top:20px;">
+        Who sends what to whom, and what trips the wire each time.
+        A full lap around the supply chain in fourteen messages.
+      </p>
+      <div style="display:flex; gap:18px; margin-top:40px; align-items:center;">
+        <div style="font-size:38px; font-weight:800; letter-spacing:-0.02em; line-height:1;" class="gradient-text">12</div>
+        <div style="font-size:14px; color:var(--s400); line-height:1.45;">
+          slides &middot; <span class="kbd">&rarr;</span> <span class="kbd">&larr;</span> to navigate,<br/>
+          <span class="kbd">Space</span> for next, <span class="kbd">R</span> to replay current animation
+        </div>
+      </div>
+    </div>
+  </div>
+`);
+
+// SLIDE 2 - THE CAST
+slides.push(`
+  <div class="glow-orb p" style="top:10%;right:-150px;"></div>
+  <div class="content">
+    <div class="pill" style="margin-bottom:14px;">The cast</div>
+    <h2 class="section">Five parties, <span class="gradient-text">one conversation</span>.</h2>
+    <p class="subtitle" style="margin-top:12px;">
+      Every EDI transaction moves between two of these parties. The same five lanes
+      will appear on every animated slide that follows.
+    </p>
+
+    <div class="grid g5" style="margin-top:28px;">
+      <div class="glass" style="border-color:rgba(96,165,250,0.3); background:rgba(96,165,250,0.05);">
+        <div style="width:44px; height:44px; border-radius:11px; background:rgba(96,165,250,0.2); color:var(--c1); display:flex; align-items:center; justify-content:center; font-weight:800; font-size:14px; margin-bottom:10px;">01</div>
+        <div style="font-weight:700; color:var(--c1); font-size:15px; margin-bottom:4px;">Buyer</div>
+        <div style="font-size:12px; color:var(--s400); line-height:1.5;">Retailer, distributor or end customer. Owns the ERP that issues the Purchase Order - the trigger for everything.</div>
+      </div>
+      <div class="glass" style="border-color:rgba(167,139,250,0.3); background:rgba(167,139,250,0.05);">
+        <div style="width:44px; height:44px; border-radius:11px; background:rgba(167,139,250,0.2); color:var(--c2); display:flex; align-items:center; justify-content:center; font-weight:800; font-size:14px; margin-bottom:10px;">02</div>
+        <div style="font-weight:700; color:var(--c2); font-size:15px; margin-bottom:4px;">Shipper &middot; TMS</div>
+        <div style="font-size:12px; color:var(--s400); line-height:1.5;">Owns the goods and the TMS. Orchestrates the whole flow. The only party talking to all the others.</div>
+      </div>
+      <div class="glass" style="border-color:rgba(245,158,11,0.3); background:rgba(245,158,11,0.05);">
+        <div style="width:44px; height:44px; border-radius:11px; background:rgba(245,158,11,0.2); color:var(--c3); display:flex; align-items:center; justify-content:center; font-weight:800; font-size:14px; margin-bottom:10px;">03</div>
+        <div style="font-weight:700; color:var(--c3); font-size:15px; margin-bottom:4px;">Warehouse &middot; WMS</div>
+        <div style="font-size:12px; color:var(--s400); line-height:1.5;">3PL or in-house warehouse. Picks, packs and ships. Often a separate company, always a separate system.</div>
+      </div>
+      <div class="glass" style="border-color:rgba(34,197,94,0.3); background:rgba(34,197,94,0.05);">
+        <div style="width:44px; height:44px; border-radius:11px; background:rgba(34,197,94,0.2); color:var(--c4); display:flex; align-items:center; justify-content:center; font-weight:800; font-size:14px; margin-bottom:10px;">04</div>
+        <div style="font-weight:700; color:var(--c4); font-size:15px; margin-bottom:4px;">Carrier</div>
+        <div style="font-size:12px; color:var(--s400); line-height:1.5;">Trucking, parcel, LTL, rail. Owns the physical movement and the in-transit status stream.</div>
+      </div>
+      <div class="glass" style="border-color:rgba(236,72,153,0.3); background:rgba(236,72,153,0.05);">
+        <div style="width:44px; height:44px; border-radius:11px; background:rgba(236,72,153,0.2); color:var(--c5); display:flex; align-items:center; justify-content:center; font-weight:800; font-size:14px; margin-bottom:10px;">05</div>
+        <div style="font-weight:700; color:var(--c5); font-size:15px; margin-bottom:4px;">Receiver</div>
+        <div style="font-size:12px; color:var(--s400); line-height:1.5;">The destination DC or store. Often the same company as the Buyer, but physically separate. Signs the POD.</div>
+      </div>
+    </div>
+
+    <div class="glass hl" style="margin-top:20px;">
+      <div style="font-size:13.5px; color:var(--s300); line-height:1.55;">
+        In many flows the <strong style="color:var(--c1);">Buyer</strong> and <strong style="color:var(--c5);">Receiver</strong>
+        are the same corporate entity - a retailer placing the PO with the 850 and also receiving the goods at its DC.
+        They are drawn as separate lanes because the commercial conversation (850, 810, 820) and the physical conversation
+        (856, 214) happen between different systems inside that company.
+      </div>
+    </div>
+  </div>
+`);
+
+// SLIDE 3 - THE TRIGGER CHAIN
+slides.push(`
+  <div class="glow-orb a" style="top:-100px;right:-150px;"></div>
+  <div class="content">
+    <div class="pill" style="margin-bottom:12px;">The spine &middot; who triggers what</div>
+    <h2 class="section" style="font-size:38px;">Where does it <span class="gradient-text">start</span>?</h2>
+    <p class="subtitle" style="margin-top:10px;">
+      Everything starts with a buying decision. The buyer's ERP issues a Purchase Order -
+      and that single act sets off a fourteen-step chain reaction across five parties.
+    </p>
+
+    <div style="margin-top:16px; display:flex; flex-direction:column; gap:2px; font-size:12px;">
+      <div style="display:grid; grid-template-columns:30px 1.6fr 1.6fr 0.8fr 2fr; gap:10px; padding:8px 12px; border-bottom:1px solid rgba(255,255,255,0.1); font-size:10.5px; color:var(--s500); text-transform:uppercase; letter-spacing:0.08em; font-weight:600;">
+        <div>#</div><div>From &rarr; To</div><div>What</div><div>EDI</div><div>Triggered by</div>
+      </div>
+      <div class="chain-row alt" style="--d:0.1s;"><div class="chain-num">01</div><div class="chain-from"><span style="color:var(--c1);">Buyer</span> <span class="chain-arrow">&rarr;</span> <span style="color:var(--c2);">Shipper</span></div><div style="color:var(--s200);">Purchase Order</div><div><span class="chip" style="background:rgba(96,165,250,0.15); color:var(--p300); border:1px solid rgba(96,165,250,0.25);">850</span></div><div class="chain-trigger">Buyer's ERP approves the PO</div></div>
+      <div class="chain-row" style="--d:0.15s;"><div class="chain-num">02</div><div class="chain-from"><span style="color:var(--c2);">Shipper</span> <span class="chain-arrow">&rarr;</span> <span style="color:var(--c1);">Buyer</span></div><div style="color:var(--s200);">Functional Ack</div><div><span class="chip" style="background:rgba(148,163,184,0.15); color:var(--s300); border:1px solid rgba(148,163,184,0.25);">997</span></div><div class="chain-trigger">Automatic &middot; file parsed cleanly</div></div>
+      <div class="chain-row alt" style="--d:0.2s;"><div class="chain-num">03</div><div class="chain-from"><span style="color:var(--c2);">Shipper</span> <span class="chain-arrow">&rarr;</span> <span style="color:var(--c1);">Buyer</span></div><div style="color:var(--s200);">PO Acknowledgment</div><div><span class="chip" style="background:rgba(96,165,250,0.15); color:var(--p300); border:1px solid rgba(96,165,250,0.25);">855</span></div><div class="chain-trigger">Internal allocation check completes</div></div>
+      <div class="chain-row" style="--d:0.3s;"><div class="chain-num">04</div><div class="chain-from"><span style="color:var(--c2);">Shipper</span> <span class="chain-arrow">&rarr;</span> <span style="color:var(--c3);">Warehouse</span></div><div style="color:var(--s200);">Shipping Order</div><div><span class="chip" style="background:rgba(245,158,11,0.15); color:#fcd34d; border:1px solid rgba(245,158,11,0.25);">940</span></div><div class="chain-trigger">TMS converts order into fulfilment</div></div>
+      <div class="chain-row alt" style="--d:0.35s;"><div class="chain-num">05</div><div class="chain-from"><span style="color:var(--c3);">Warehouse</span> <span class="chain-arrow">&rarr;</span> <span style="color:var(--c2);">Shipper</span></div><div style="color:var(--s200);">Shipping Advice</div><div><span class="chip" style="background:rgba(245,158,11,0.15); color:#fcd34d; border:1px solid rgba(245,158,11,0.25);">945</span></div><div class="chain-trigger">Carton leaves the dock</div></div>
+      <div class="chain-row" style="--d:0.4s;"><div class="chain-num">06</div><div class="chain-from"><span style="color:var(--c2);">Shipper</span> <span class="chain-arrow">&rarr;</span> <span style="color:var(--c4);">Carrier</span></div><div style="color:var(--s200);">Load Tender</div><div><span class="chip" style="background:rgba(34,197,94,0.15); color:#86efac; border:1px solid rgba(34,197,94,0.25);">204</span></div><div class="chain-trigger">Shipment ready, lane rule selects carrier</div></div>
+      <div class="chain-row alt" style="--d:0.45s;"><div class="chain-num">07</div><div class="chain-from"><span style="color:var(--c4);">Carrier</span> <span class="chain-arrow">&rarr;</span> <span style="color:var(--c2);">Shipper</span></div><div style="color:var(--s200);">Tender Response</div><div><span class="chip" style="background:rgba(34,197,94,0.15); color:#86efac; border:1px solid rgba(34,197,94,0.25);">990</span></div><div class="chain-trigger">Carrier dispatcher accepts or rejects</div></div>
+      <div class="chain-row" style="--d:0.5s;"><div class="chain-num">08</div><div class="chain-from"><span style="color:var(--c2);">Shipper</span> <span class="chain-arrow">&rarr;</span> <span style="color:var(--c5);">Receiver</span></div><div style="color:var(--s200);">Advance Ship Notice</div><div><span class="chip" style="background:rgba(236,72,153,0.15); color:#f9a8d4; border:1px solid rgba(236,72,153,0.25);">856</span></div><div class="chain-trigger">load_plan.completed fires</div></div>
+      <div class="chain-row alt" style="--d:0.55s;"><div class="chain-num">09</div><div class="chain-from"><span style="color:var(--c4);">Carrier</span> <span class="chain-arrow">&rarr;</span> <span style="color:var(--c2);">Shipper</span></div><div style="color:var(--s200);">Status updates (many)</div><div><span class="chip" style="background:rgba(34,197,94,0.15); color:#86efac; border:1px solid rgba(34,197,94,0.25);">214</span></div><div class="chain-trigger">Each physical milestone</div></div>
+      <div class="chain-row" style="--d:0.6s;"><div class="chain-num">10</div><div class="chain-from"><span style="color:var(--c4);">Carrier</span> <span class="chain-arrow">&rarr;</span> <span style="color:var(--c2);">Shipper</span></div><div style="color:var(--s200);">Freight Invoice</div><div><span class="chip" style="background:rgba(234,179,8,0.15); color:#fde047; border:1px solid rgba(234,179,8,0.25);">210</span></div><div class="chain-trigger">Carrier billing run, post-POD</div></div>
+      <div class="chain-row alt" style="--d:0.65s;"><div class="chain-num">11</div><div class="chain-from"><span style="color:var(--c2);">Shipper</span> <span class="chain-arrow">&rarr;</span> <span style="color:var(--c1);">Buyer</span></div><div style="color:var(--s200);">Customer Invoice</div><div><span class="chip" style="background:rgba(234,179,8,0.15); color:#fde047; border:1px solid rgba(234,179,8,0.25);">810</span></div><div class="chain-trigger">shipment.delivered event fires</div></div>
+      <div class="chain-row" style="--d:0.7s;"><div class="chain-num">12</div><div class="chain-from"><span style="color:var(--c1);">Buyer</span> <span class="chain-arrow">&rarr;</span> <span style="color:var(--c2);">Shipper</span></div><div style="color:var(--s200);">Payment Remittance</div><div><span class="chip" style="background:rgba(234,179,8,0.15); color:#fde047; border:1px solid rgba(234,179,8,0.25);">820</span></div><div class="chain-trigger">Buyer's AP runs the invoice through net terms</div></div>
+    </div>
+
+    <div class="glass hl" style="margin-top:14px; padding:12px 18px;">
+      <div style="font-size:13px; color:var(--s300); line-height:1.5;">
+        <strong style="color:var(--s200);">The heartbeat:</strong> every inbound file triggers a 997 Functional Acknowledgment
+        back to the sender within seconds - parsed cleanly or parsed with errors. The 997 is how each party proves the previous
+        message was received.
+      </div>
+    </div>
+  </div>
+`);
+
+// Reusable header + body shell for animated scenes
+function sceneShell(title, pillText, caption, bodyMsgs) {
+  return `
+    <div class="glow-orb p" style="top:-150px;left:-150px;"></div>
+    <div class="glow-orb a" style="bottom:-150px;right:-150px;"></div>
+    <div class="content">
+      <div class="pill" style="margin-bottom:10px;">${pillText}</div>
+      <h2 class="section" style="font-size:36px; margin-bottom:6px;">${title}</h2>
+      <p class="scene-caption" style="margin-top:8px; max-width:1100px;">${caption}</p>
+
+      <div class="sq" style="margin-top:18px;">
+        <div class="sq-header">
+          <div class="sq-party" data-party="1"><div class="sp-name">Buyer</div><div class="sp-sub">end customer ERP</div></div>
+          <div class="sq-party" data-party="2"><div class="sp-name">Shipper / TMS</div><div class="sp-sub">central orchestrator</div></div>
+          <div class="sq-party" data-party="3"><div class="sp-name">Warehouse / WMS</div><div class="sp-sub">3PL or in-house</div></div>
+          <div class="sq-party" data-party="4"><div class="sp-name">Carrier</div><div class="sp-sub">transport provider</div></div>
+          <div class="sq-party" data-party="5"><div class="sp-name">Receiver</div><div class="sp-sub">destination DC</div></div>
+        </div>
+        <div class="sq-body">
+          ${bodyMsgs}
+        </div>
+      </div>
+    </div>
+  `;
+}
+window.sceneShell = sceneShell;
+
+// SLIDE 4 - SCENE 1: ORDER INTAKE
+slides.push(sceneShell(
+  'Scene 1 - <span class="gradient-text">Order intake</span>',
+  'Stage 01 &middot; Order flows in',
+  "The buyer's ERP issues the PO. The 850 lands on the Shipper's TMS inbound endpoint. A 997 goes straight back as a heartbeat. Once the TMS has allocated stock, an optional 855 confirms what will ship and when.",
+  [
+    msg({from:1, to:2, top:30,  delay:0.2, code:'850', label:'Purchase Order', colour:'p'}),
+    msg({from:2, to:1, top:78,  delay:1.1, code:'997', label:'Functional Ack (instant)', colour:'s'}),
+    msg({from:2, to:1, top:138, delay:2.0, code:'855', label:'PO Acknowledgment (after allocation)', colour:'p'}),
+    msg({from:1, to:2, top:186, delay:3.0, code:'997', label:'Functional Ack', colour:'s'}),
+  ].join('')
+));
+
+// SLIDE 5 - SCENE 2: WAREHOUSE HANDOFF
+slides.push(sceneShell(
+  'Scene 2 - <span class="gradient-text">Warehouse handoff</span>',
+  'Stage 02 &middot; TMS hands fulfilment to the WMS',
+  'The TMS converts the order into warehouse instructions (EDI 940). When the WMS picks, packs and loads the trailer, a 945 Shipping Advice comes back confirming what actually left the dock - short picks, substitutions and all.',
+  [
+    msg({from:2, to:3, top:30,  delay:0.2, code:'940', label:'Warehouse Shipping Order', colour:'m'}),
+    msg({from:3, to:2, top:78,  delay:1.1, code:'997', label:'Functional Ack', colour:'s'}),
+    msg({from:3, to:2, top:140, delay:2.2, code:'945', label:'Shipping Advice (after loading)', colour:'m'}),
+    msg({from:2, to:3, top:188, delay:3.1, code:'997', label:'Functional Ack', colour:'s'}),
+  ].join('')
+));
+
+// SLIDE 6 - SCENE 3: CARRIER TENDERING
+slides.push(sceneShell(
+  'Scene 3 - <span class="gradient-text">Carrier tendering</span>',
+  'Stage 03 &middot; Who carries the load',
+  "The TMS's lane rules pick a carrier. A 204 Load Tender goes out with origin, destination, equipment and rate. The carrier responds with 990 - accept or reject. On reject, a waterfall tender rolls to the next carrier automatically.",
+  [
+    msg({from:2, to:4, top:30,  delay:0.2, code:'204', label:'Motor Carrier Load Tender', colour:'g'}),
+    msg({from:4, to:2, top:78,  delay:1.1, code:'997', label:'Functional Ack', colour:'s'}),
+    msg({from:4, to:2, top:140, delay:2.2, code:'990', label:'Tender Response: ACCEPT', colour:'g'}),
+    msg({from:2, to:4, top:188, delay:3.1, code:'997', label:'Functional Ack', colour:'s'}),
+  ].join('')
+));
+
+// SLIDE 7 - SCENE 4: IN-TRANSIT
+slides.push(sceneShell(
+  'Scene 4 - <span class="gradient-text">In transit &amp; ASN</span>',
+  'Stage 04 &middot; Physical milestones',
+  'As soon as the warehouse finishes loading, an 856 Advance Ship Notice goes to the receiver so they can prepare the dock. The carrier streams 214 status messages back to the shipper at every milestone: picked up, in transit, delivered.',
+  [
+    msg({from:2, to:5, top:20,  delay:0.2, code:'856', label:'Advance Ship Notice (load_plan.completed)', colour:'k'}),
+    msg({from:4, to:2, top:66,  delay:1.1, code:'214', label:'Status: AF &middot; picked up', colour:'g'}),
+    msg({from:4, to:2, top:112, delay:2.0, code:'214', label:'Status: X3 &middot; arrived at intermediate stop', colour:'g'}),
+    msg({from:4, to:2, top:158, delay:2.9, code:'214', label:'Status: X1 &middot; arrived at destination', colour:'g'}),
+    msg({from:4, to:2, top:204, delay:3.8, code:'214', label:'Status: D1 &middot; delivered', colour:'g'}),
+  ].join('')
+));
+
+// SLIDE 8 - SCENE 5: SETTLEMENT
+slides.push(sceneShell(
+  'Scene 5 - <span class="gradient-text">Settlement</span>',
+  'Stage 05 &middot; The money moves',
+  'Delivery confirmed. Three invoices cascade: the carrier bills the shipper (210), the shipper bills the buyer (810), the buyer pays (820). Open TMS auto-raises the 810 on shipment.delivered and runs a three-way match against the inbound 210.',
+  [
+    msg({from:4, to:2, top:30,  delay:0.2, code:'210', label:'Freight Invoice (carrier &rarr; shipper)', colour:'y'}),
+    msg({from:2, to:1, top:78,  delay:1.2, code:'810', label:'Invoice (shipper &rarr; buyer, on delivered)', colour:'y'}),
+    msg({from:1, to:2, top:138, delay:2.4, code:'820', label:'Payment / Remittance Advice', colour:'y'}),
+    msg({from:2, to:1, top:186, delay:3.4, code:'997', label:'Functional Ack', colour:'s'}),
+  ].join('')
+));
+
+// SLIDE 9 - THE WHOLE DANCE
+slides.push(`
+  <div class="glow-orb p" style="top:-150px;left:-100px;"></div>
+  <div class="glow-orb a" style="bottom:-150px;right:-100px;"></div>
+  <div class="content">
+    <div class="pill" style="margin-bottom:8px;">End to end</div>
+    <h2 class="section" style="font-size:34px; margin-bottom:4px;">The whole <span class="gradient-text">dance</span>, in one go.</h2>
+    <p class="scene-caption" style="margin-top:6px; max-width:1100px; font-size:12px;">
+      Fourteen messages across five parties, cascading in the order they would fire for a real shipment.
+      Hit <span class="kbd">R</span> to replay.
+    </p>
+
+    <div class="sq" style="margin-top:12px;">
+      <div class="sq-header">
+        <div class="sq-party" data-party="1"><div class="sp-name">Buyer</div></div>
+        <div class="sq-party" data-party="2"><div class="sp-name">Shipper / TMS</div></div>
+        <div class="sq-party" data-party="3"><div class="sp-name">Warehouse / WMS</div></div>
+        <div class="sq-party" data-party="4"><div class="sp-name">Carrier</div></div>
+        <div class="sq-party" data-party="5"><div class="sp-name">Receiver</div></div>
+      </div>
+      <div class="sq-body">
+        ${msg({from:1, to:2, top:4,   delay:0.15, code:'850', label:'PO', colour:'p'})}
+        ${msg({from:2, to:1, top:36,  delay:0.55, code:'997', colour:'s', label:'Ack'})}
+        ${msg({from:2, to:1, top:68,  delay:0.85, code:'855', colour:'p', label:'PO Ack'})}
+        ${msg({from:2, to:3, top:100, delay:1.15, code:'940', colour:'m', label:'Shipping Order'})}
+        ${msg({from:3, to:2, top:132, delay:1.45, code:'997', colour:'s', label:'Ack'})}
+        ${msg({from:3, to:2, top:164, delay:1.75, code:'945', colour:'m', label:'Shipping Advice'})}
+        ${msg({from:2, to:4, top:196, delay:2.05, code:'204', colour:'g', label:'Load Tender'})}
+        ${msg({from:4, to:2, top:228, delay:2.35, code:'990', colour:'g', label:'Accept'})}
+        ${msg({from:2, to:5, top:260, delay:2.65, code:'856', colour:'k', label:'ASN'})}
+        ${msg({from:4, to:2, top:292, delay:2.95, code:'214', colour:'g', label:'Picked up'})}
+        ${msg({from:4, to:2, top:324, delay:3.25, code:'214', colour:'g', label:'Delivered'})}
+        ${msg({from:4, to:2, top:356, delay:3.55, code:'210', colour:'y', label:'Freight Invoice'})}
+        ${msg({from:2, to:1, top:388, delay:3.85, code:'810', colour:'y', label:'Invoice'})}
+        ${msg({from:1, to:2, top:420, delay:4.15, code:'820', colour:'y', label:'Remittance'})}
+      </div>
+    </div>
+  </div>
+`);
+
+// SLIDE 10 - TRANSPORT & RELIABILITY
+slides.push(`
+  <div class="glow-orb a" style="top:-150px;right:-150px;"></div>
+  <div class="content">
+    <div class="pill" style="margin-bottom:14px;">The plumbing</div>
+    <h2 class="section">How these files actually <span class="gradient-text">move</span>.</h2>
+    <p class="subtitle" style="margin-top:12px;">
+      EDI is a 50-year-old standard and it runs trillions of dollars of trade. The rails are boring
+      on purpose - SFTP, HTTP POST, and an obsessive little 997 heartbeat.
+    </p>
+
+    <div class="grid g3" style="margin-top:28px;">
+      <div class="glass hl">
+        <div style="width:42px; height:42px; border-radius:10px; background:rgba(96,165,250,0.18); color:var(--p400); display:flex; align-items:center; justify-content:center; margin-bottom:12px;">
+          <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0021 18V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v12a2.25 2.25 0 002.25 2.25z"/></svg>
+        </div>
+        <div style="font-weight:700; margin-bottom:6px;">SFTP</div>
+        <div style="font-size:13px; color:var(--s300); line-height:1.55;">The classic. Partner drops a file into an inbound directory; Open TMS's edi-collector polls every few minutes and hands it to the universal inbound endpoint.</div>
+      </div>
+      <div class="glass hl">
+        <div style="width:42px; height:42px; border-radius:10px; background:rgba(167,139,250,0.18); color:var(--a400); display:flex; align-items:center; justify-content:center; margin-bottom:12px;">
+          <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5"/></svg>
+        </div>
+        <div style="font-weight:700; margin-bottom:6px;">HTTP POST</div>
+        <div style="font-size:13px; color:var(--s300); line-height:1.55;">The modern path. Partner POSTs raw X12 (or JSON-wrapped) to <span class="chip" style="background:rgba(167,139,250,0.15); color:var(--a400); border:1px solid rgba(167,139,250,0.25);">/api/v1/edi/inbound</span>. Auto-detects transaction type, routes to the right handler, fires the 997.</div>
+      </div>
+      <div class="glass hl">
+        <div style="width:42px; height:42px; border-radius:10px; background:rgba(34,197,94,0.18); color:#86efac; display:flex; align-items:center; justify-content:center; margin-bottom:12px;">
+          <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
+        </div>
+        <div style="font-weight:700; margin-bottom:6px;">997 heartbeat</div>
+        <div style="font-size:13px; color:var(--s300); line-height:1.55;">Every inbound file gets a 997 back within seconds - accepted, accepted-with-errors, or rejected. No 997 means the sender retries. That's how you know the plumbing is alive.</div>
+      </div>
+    </div>
+
+    <div class="grid g3" style="margin-top:16px;">
+      <div class="glass sm">
+        <div style="font-weight:700; color:var(--s200); margin-bottom:4px; font-size:14px;">Idempotency</div>
+        <div style="font-size:12.5px; color:var(--s400); line-height:1.5;">Same ISA control number twice = no duplicate. Replay is safe.</div>
+      </div>
+      <div class="glass sm">
+        <div style="font-weight:700; color:var(--s200); margin-bottom:4px; font-size:14px;">Unified partner model</div>
+        <div style="font-size:12.5px; color:var(--s400); line-height:1.5;">One TradingPartner record handles SFTP + HTTP, inbound + outbound, across all EDI types.</div>
+      </div>
+      <div class="glass sm">
+        <div style="font-weight:700; color:var(--s200); margin-bottom:4px; font-size:14px;">Full transaction log</div>
+        <div style="font-size:12.5px; color:var(--s400); line-height:1.5;">Every inbound and outbound file recorded in EdiTransactionLog - parse result, entities created, 997 status.</div>
+      </div>
+    </div>
+  </div>
+`);
+
+// SLIDE 11 - CLOSE
+slides.push(`
+  <div class="glow-orb p" style="top:-200px;left:50%; transform:translateX(-50%);"></div>
+  <div class="glow-orb a" style="bottom:-200px;left:50%; transform:translateX(-50%);"></div>
+  <div class="content" style="align-items:center; justify-content:center; text-align:center;">
+    <div class="pill" style="margin-bottom:24px;">
+      <span class="dot"></span>
+      <span>Open Source &middot; MIT Licensed &middot; Free Forever</span>
+    </div>
+    <h1 class="title small" style="max-width:1100px;">
+      One PO. Fourteen <span class="gradient-text">messages</span>.<br/>
+      Five parties that never stop <span class="gradient-text">talking</span>.
+    </h1>
+    <p class="subtitle lg" style="margin-top:22px; max-width:980px;">
+      Every EDI flow starts with a buyer who has made a decision and ends with a payment they have made good on.
+      Everything in between is orchestration - and in Open TMS, every message is logged, acknowledged,
+      auto-matched and auditable for ten years.
+    </p>
+
+    <div class="grid g4" style="margin-top:40px; width:100%; max-width:1000px;">
+      <div class="glass sm" style="text-align:center;"><div style="font-size:36px; font-weight:800;" class="gradient-text">14</div><div style="font-size:11.5px; color:var(--s400); margin-top:4px; text-transform:uppercase; letter-spacing:0.08em;">Messages</div></div>
+      <div class="glass sm" style="text-align:center;"><div style="font-size:36px; font-weight:800;" class="gradient-text">5</div><div style="font-size:11.5px; color:var(--s400); margin-top:4px; text-transform:uppercase; letter-spacing:0.08em;">Parties</div></div>
+      <div class="glass sm" style="text-align:center;"><div style="font-size:36px; font-weight:800;" class="gradient-text">997</div><div style="font-size:11.5px; color:var(--s400); margin-top:4px; text-transform:uppercase; letter-spacing:0.08em;">Heartbeat on every file</div></div>
+      <div class="glass sm" style="text-align:center;"><div style="font-size:36px; font-weight:800;" class="gradient-text">10 yr</div><div style="font-size:11.5px; color:var(--s400); margin-top:4px; text-transform:uppercase; letter-spacing:0.08em;">Log retention</div></div>
+    </div>
+
+    <div style="margin-top:40px;">
+      <div class="logo-badge" style="padding:12px 20px;">
+        <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" style="color:var(--p400);"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5"/></svg>
+        <span>github.com/dominicfinn/open_tms</span>
+      </div>
+    </div>
+    <div style="margin-top:22px; font-size:12.5px; color:var(--s500);">
+      <span class="kbd">&larr;</span> previous &middot; <span class="kbd">R</span> replay &middot; <span class="kbd">Home</span> back to start
+    </div>
+  </div>
+`);
+</script>
+<script>
+  document.addEventListener('DOMContentLoaded', render);
+</script>
+</body>
+</html>

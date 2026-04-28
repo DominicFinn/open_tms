@@ -1277,11 +1277,17 @@ export default function VNextShipmentDetail() {
           </div>
         </div>
         <div className="vn-page-actions">
-          <button className="vn-btn vn-btn-outline vn-btn-sm">
+          <button
+            className="vn-btn vn-btn-outline vn-btn-sm"
+            onClick={() => navigate(`/shipments/${id}/edit`)}
+          >
             <span className="material-icons">edit</span>
             Edit
           </button>
-          <button className="vn-btn vn-btn-outline vn-btn-sm">
+          <button
+            className="vn-btn vn-btn-outline vn-btn-sm"
+            onClick={() => setActiveTab('documents')}
+          >
             <span className="material-icons">description</span>
             Documents
           </button>
