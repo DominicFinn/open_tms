@@ -1,14 +1,33 @@
 import React from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import './theme.css';
+import { LogOut } from 'lucide-react';
+
+import { Logo } from '@/components/brand/Logo';
+import { Button } from '@/components/ui/button';
+import { Separator } from '@/components/ui/separator';
+import { cn } from '@/lib/utils';
+
+interface CarrierUser {
+  carrierName?: string;
+  email?: string;
+}
+
+const NAV: { to: string; label: string; end?: boolean }[] = [
+  { to: '/carrier-portal', label: 'Dashboard', end: true },
+  { to: '/carrier-portal/history', label: 'Tender History' },
+  { to: '/carrier-portal/bids', label: 'Bid History' },
+  { to: '/carrier-portal/profile', label: 'Profile' },
+];
 
 export function CarrierPortalLayout() {
   const navigate = useNavigate();
 
-  function getCarrierUser() {
+  function getCarrierUser(): CarrierUser {
     try {
       return JSON.parse(localStorage.getItem('carrier_user') || '{}');
-    } catch { return {}; }
+    } catch {
+      return {};
+    }
   }
 
   function handleLogout() {
@@ -20,101 +39,50 @@ export function CarrierPortalLayout() {
   const user = getCarrierUser();
 
   return (
-    <>
-      {/* Carrier Portal Header */}
-      <header style={{
-        background: 'var(--surface-container)',
-        borderBottom: '1px solid var(--outline-variant)',
-        padding: '0 var(--spacing-3)',
-        height: '56px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        position: 'sticky',
-        top: 0,
-        zIndex: 100,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-2)' }}>
-          <span className="material-icons" style={{ color: 'var(--primary)', fontSize: '28px' }}>local_shipping</span>
-          <span style={{ fontWeight: 700, fontSize: '16px' }}>Carrier Portal</span>
-          <span style={{ color: 'var(--on-surface-variant)', fontSize: '14px' }}>
-            {user.carrierName ? `| ${user.carrierName}` : ''}
-          </span>
+    <div className="min-h-screen bg-background text-foreground font-sans">
+      <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-4 border-b border-border bg-background/80 px-4 backdrop-blur md:px-6">
+        <div className="flex items-center gap-3">
+          <Logo size="sm" wordmark={<>Carrier <span className="text-primary">Portal</span></>} />
+          {user.carrierName && (
+            <>
+              <Separator orientation="vertical" className="h-5" />
+              <span className="text-sm text-muted-foreground">{user.carrierName}</span>
+            </>
+          )}
         </div>
 
-        <nav style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-2)' }}>
-          <NavLink
-            to="/carrier-portal"
-            end
-            style={({ isActive }) => ({
-              padding: '6px 12px',
-              borderRadius: 'var(--radius-sm)',
-              textDecoration: 'none',
-              fontSize: '14px',
-              fontWeight: isActive ? 600 : 400,
-              color: isActive ? 'var(--primary)' : 'var(--on-surface)',
-              background: isActive ? 'var(--primary-container)' : 'transparent',
-            })}
-          >
-            Dashboard
-          </NavLink>
-          <NavLink
-            to="/carrier-portal/history"
-            style={({ isActive }) => ({
-              padding: '6px 12px',
-              borderRadius: 'var(--radius-sm)',
-              textDecoration: 'none',
-              fontSize: '14px',
-              fontWeight: isActive ? 600 : 400,
-              color: isActive ? 'var(--primary)' : 'var(--on-surface)',
-              background: isActive ? 'var(--primary-container)' : 'transparent',
-            })}
-          >
-            Tender History
-          </NavLink>
-          <NavLink
-            to="/carrier-portal/bids"
-            style={({ isActive }) => ({
-              padding: '6px 12px',
-              borderRadius: 'var(--radius-sm)',
-              textDecoration: 'none',
-              fontSize: '14px',
-              fontWeight: isActive ? 600 : 400,
-              color: isActive ? 'var(--primary)' : 'var(--on-surface)',
-              background: isActive ? 'var(--primary-container)' : 'transparent',
-            })}
-          >
-            Bid History
-          </NavLink>
-          <NavLink
-            to="/carrier-portal/profile"
-            style={({ isActive }) => ({
-              padding: '6px 12px',
-              borderRadius: 'var(--radius-sm)',
-              textDecoration: 'none',
-              fontSize: '14px',
-              fontWeight: isActive ? 600 : 400,
-              color: isActive ? 'var(--primary)' : 'var(--on-surface)',
-              background: isActive ? 'var(--primary-container)' : 'transparent',
-            })}
-          >
-            Profile
-          </NavLink>
-          <div style={{ borderLeft: '1px solid var(--outline-variant)', height: '24px', margin: '0 8px' }} />
-          <span style={{ fontSize: '13px', color: 'var(--on-surface-variant)' }}>{user.email}</span>
-          <button className="vn-btn vn-btn-outline" style={{ padding: '4px 12px', fontSize: '12px' }} onClick={handleLogout}>
+        <nav className="flex items-center gap-1">
+          {NAV.map(item => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.end}
+              className={({ isActive }) =>
+                cn(
+                  'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                  isActive
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground',
+                )
+              }
+            >
+              {item.label}
+            </NavLink>
+          ))}
+          <Separator orientation="vertical" className="mx-2 h-5" />
+          {user.email && (
+            <span className="hidden text-xs text-muted-foreground sm:inline">{user.email}</span>
+          )}
+          <Button variant="outline" size="sm" onClick={handleLogout}>
+            <LogOut className="h-4 w-4" />
             Logout
-          </button>
+          </Button>
         </nav>
       </header>
 
-      <main style={{
-        maxWidth: '1200px',
-        margin: '0 auto',
-        padding: 'var(--spacing-3)',
-      }}>
+      <main className="mx-auto max-w-[1200px] px-4 py-6 md:px-6 md:py-8">
         <Outlet />
       </main>
-    </>
+    </div>
   );
 }
