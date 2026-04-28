@@ -1,10 +1,34 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import {
+  ArrowDown,
+  ArrowUp,
+  BarChart3,
+  Building2,
+  CircleAlert,
+  Loader2,
+  MapPin,
+  Route,
+  Search,
+  Truck,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
-import { VnPageHeader, VnTabs, VnFilterBar, VnChip } from './components';
+import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 
 interface QualitySummary {
-  [key: string]: unknown;
   id: string;
   orgId: string;
   dimensionType: string;
@@ -65,11 +89,11 @@ function timeAgo(dateStr: string | null): string {
   return new Date(dateStr).toLocaleDateString();
 }
 
-const TABS: { key: DimensionTab; label: string; icon: string }[] = [
-  { key: 'carrier', label: 'Carriers', icon: 'local_shipping' },
-  { key: 'lane', label: 'Lanes', icon: 'route' },
-  { key: 'location', label: 'Locations', icon: 'location_on' },
-  { key: 'customer', label: 'Customers', icon: 'business' },
+const TABS: { key: DimensionTab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  { key: 'carrier', label: 'Carriers', icon: Truck },
+  { key: 'lane', label: 'Lanes', icon: Route },
+  { key: 'location', label: 'Locations', icon: MapPin },
+  { key: 'customer', label: 'Customers', icon: Building2 },
 ];
 
 export default function VNextQualityIssueSummaries() {
@@ -124,150 +148,142 @@ export default function VNextQualityIssueSummaries() {
     }
   }
 
-  function sortIndicator(field: SortField) {
+  function SortIndicator({ field }: { field: SortField }) {
     if (sortBy !== field) return null;
-    return (
-      <span className="material-icons" style={{ fontSize: 16, verticalAlign: 'middle', marginLeft: 2 }}>
-        {sortOrder === 'asc' ? 'arrow_upward' : 'arrow_downward'}
-      </span>
-    );
+    return sortOrder === 'asc' ? <ArrowUp className="ml-1 inline h-3 w-3" /> : <ArrowDown className="ml-1 inline h-3 w-3" />;
   }
 
   if (loading) {
     return (
-      <div className="vn-empty">
-        <span className="material-icons" style={{ animation: 'spin 1s linear infinite' }}>refresh</span>
-        <h3>Loading...</h3>
+      <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <h3 className="text-lg font-medium">Loading...</h3>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="vn-alert vn-alert-error">
-        <span className="material-icons">error</span>
-        <div className="vn-alert-content">{error}</div>
+      <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+        <CircleAlert className="h-5 w-5" />
+        {error}
       </div>
     );
   }
 
   return (
-    <>
-      <VnPageHeader
-        title="Issue Analysis"
-        subtitle="Quality metrics by carrier, lane, location, and customer"
-      />
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Issue analysis</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Quality metrics by carrier, lane, location, and customer</p>
+      </div>
 
-      <VnTabs
-        tabs={TABS.map(t => ({ key: t.key, label: t.label, icon: t.icon }))}
-        activeTab={activeTab}
-        onTabChange={(key) => {
-          setActiveTab(key as DimensionTab);
-          setSearch('');
-        }}
-      />
+      <div className="flex flex-wrap items-center gap-1 border-b border-border">
+        {TABS.map(tab => {
+          const Icon = tab.icon;
+          const active = activeTab === tab.key;
+          return (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => { setActiveTab(tab.key); setSearch(''); }}
+              className={cn(
+                '-mb-px flex items-center gap-2 border-b-2 px-3 py-2 text-sm font-medium transition-colors',
+                active
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-muted-foreground hover:text-foreground',
+              )}
+            >
+              <Icon className="h-4 w-4" />
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
 
-      <div className="vn-card" style={{ marginTop: 24 }}>
-        <VnFilterBar
-          searchPlaceholder={`Search ${TABS.find(t => t.key === activeTab)?.label.toLowerCase() || ''}...`}
-          searchValue={search}
-          onSearchChange={setSearch}
-        />
+      <Card>
+        <div className="flex flex-wrap items-center gap-3 p-4">
+          <div className="relative min-w-[240px] flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder={`Search ${TABS.find(t => t.key === activeTab)?.label.toLowerCase() || ''}...`}
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+        </div>
+
+        <Separator />
 
         {filtered.length === 0 ? (
-          <div className="vn-empty">
-            <span className="material-icons">analytics</span>
-            <h3>No data found</h3>
-            <p>
+          <div className="flex flex-col items-center gap-3 py-12 text-muted-foreground">
+            <BarChart3 className="h-10 w-10 opacity-40" />
+            <h3 className="text-base font-medium">No data found</h3>
+            <p className="text-sm">
               {search
                 ? `No ${TABS.find(t => t.key === activeTab)?.label.toLowerCase() || 'results'} match your search.`
                 : `No quality issue data available for ${TABS.find(t => t.key === activeTab)?.label.toLowerCase() || 'this dimension'} yet.`}
             </p>
           </div>
         ) : (
-          <div className="vn-table-wrap">
-            <table className="vn-table">
-              <thead>
-                <tr>
-                  <th style={{ cursor: 'pointer' }} onClick={() => handleSort('dimensionName')}>
-                    Name {sortIndicator('dimensionName')}
-                  </th>
-                  <th style={{ cursor: 'pointer', textAlign: 'right' }} onClick={() => handleSort('totalIssues')}>
-                    Total Issues {sortIndicator('totalIssues')}
-                  </th>
-                  <th style={{ cursor: 'pointer', textAlign: 'center' }} onClick={() => handleSort('criticalCount')}>
-                    Critical {sortIndicator('criticalCount')}
-                  </th>
-                  <th style={{ cursor: 'pointer', textAlign: 'center' }} onClick={() => handleSort('highCount')}>
-                    High {sortIndicator('highCount')}
-                  </th>
-                  <th style={{ cursor: 'pointer', textAlign: 'right' }} onClick={() => handleSort('exceptionCount')}>
-                    Exceptions {sortIndicator('exceptionCount')}
-                  </th>
-                  <th style={{ cursor: 'pointer', textAlign: 'right' }} onClick={() => handleSort('delayCount')}>
-                    Delays {sortIndicator('delayCount')}
-                  </th>
-                  <th style={{ cursor: 'pointer', textAlign: 'right' }} onClick={() => handleSort('damageCount')}>
-                    Damage {sortIndicator('damageCount')}
-                  </th>
-                  <th style={{ cursor: 'pointer', textAlign: 'right' }} onClick={() => handleSort('complianceCount')}>
-                    Compliance {sortIndicator('complianceCount')}
-                  </th>
-                  <th style={{ cursor: 'pointer', textAlign: 'right' }} onClick={() => handleSort('capaCount')}>
-                    CAPA Required {sortIndicator('capaCount')}
-                  </th>
-                  <th style={{ cursor: 'pointer', textAlign: 'right' }} onClick={() => handleSort('avgResolutionHours')}>
-                    Avg Resolution {sortIndicator('avgResolutionHours')}
-                  </th>
-                  <th style={{ cursor: 'pointer', textAlign: 'right' }} onClick={() => handleSort('lastIssueAt')}>
-                    Last Issue {sortIndicator('lastIssueAt')}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map(s => (
-                  <tr key={s.id}>
-                    <td>
-                      <span style={{ fontWeight: 600, color: 'var(--on-surface)' }}>{s.dimensionName}</span>
-                      <div className="vn-table-secondary">
-                        {s.openCount} open / {s.inProgressCount} in progress / {s.resolvedCount} resolved
-                      </div>
-                    </td>
-                    <td style={{ textAlign: 'right', fontWeight: 600 }}>
-                      {s.totalIssues}
-                    </td>
-                    <td style={{ textAlign: 'center' }}>
-                      {s.criticalCount > 0
-                        ? <VnChip variant="error">{s.criticalCount}</VnChip>
-                        : <span style={{ color: 'var(--on-surface-variant)', fontSize: 13 }}>0</span>}
-                    </td>
-                    <td style={{ textAlign: 'center' }}>
-                      {s.highCount > 0
-                        ? <VnChip variant="warning">{s.highCount}</VnChip>
-                        : <span style={{ color: 'var(--on-surface-variant)', fontSize: 13 }}>0</span>}
-                    </td>
-                    <td style={{ textAlign: 'right', fontSize: 13 }}>{s.exceptionCount}</td>
-                    <td style={{ textAlign: 'right', fontSize: 13 }}>{s.delayCount}</td>
-                    <td style={{ textAlign: 'right', fontSize: 13 }}>{s.damageCount}</td>
-                    <td style={{ textAlign: 'right', fontSize: 13 }}>{s.complianceCount}</td>
-                    <td style={{ textAlign: 'right', fontSize: 13 }}>
-                      {s.capaCount > 0
-                        ? <span style={{ fontWeight: 600, color: 'var(--error)' }}>{s.capaCount}</span>
-                        : '0'}
-                    </td>
-                    <td style={{ textAlign: 'right', fontSize: 13, color: 'var(--on-surface-variant)' }}>
-                      {formatHours(s.avgResolutionHours)}
-                    </td>
-                    <td style={{ textAlign: 'right', fontSize: 13, color: 'var(--on-surface-variant)' }}>
-                      {timeAgo(s.lastIssueAt)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="cursor-pointer" onClick={() => handleSort('dimensionName')}>Name<SortIndicator field="dimensionName" /></TableHead>
+                <TableHead className="cursor-pointer text-right" onClick={() => handleSort('totalIssues')}>Total<SortIndicator field="totalIssues" /></TableHead>
+                <TableHead className="cursor-pointer text-center" onClick={() => handleSort('criticalCount')}>Critical<SortIndicator field="criticalCount" /></TableHead>
+                <TableHead className="cursor-pointer text-center" onClick={() => handleSort('highCount')}>High<SortIndicator field="highCount" /></TableHead>
+                <TableHead className="cursor-pointer text-right" onClick={() => handleSort('exceptionCount')}>Exceptions<SortIndicator field="exceptionCount" /></TableHead>
+                <TableHead className="cursor-pointer text-right" onClick={() => handleSort('delayCount')}>Delays<SortIndicator field="delayCount" /></TableHead>
+                <TableHead className="cursor-pointer text-right" onClick={() => handleSort('damageCount')}>Damage<SortIndicator field="damageCount" /></TableHead>
+                <TableHead className="cursor-pointer text-right" onClick={() => handleSort('complianceCount')}>Compliance<SortIndicator field="complianceCount" /></TableHead>
+                <TableHead className="cursor-pointer text-right" onClick={() => handleSort('capaCount')}>CAPA req.<SortIndicator field="capaCount" /></TableHead>
+                <TableHead className="cursor-pointer text-right" onClick={() => handleSort('avgResolutionHours')}>Avg res.<SortIndicator field="avgResolutionHours" /></TableHead>
+                <TableHead className="cursor-pointer text-right" onClick={() => handleSort('lastIssueAt')}>Last issue<SortIndicator field="lastIssueAt" /></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filtered.map(s => (
+                <TableRow key={s.id}>
+                  <TableCell>
+                    <div className="font-semibold">{s.dimensionName}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {s.openCount} open / {s.inProgressCount} in progress / {s.resolvedCount} resolved
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-right font-semibold">{s.totalIssues}</TableCell>
+                  <TableCell className="text-center">
+                    {s.criticalCount > 0
+                      ? <Badge variant="destructive">{s.criticalCount}</Badge>
+                      : <span className="text-sm text-muted-foreground">0</span>}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    {s.highCount > 0
+                      ? <Badge variant="warning">{s.highCount}</Badge>
+                      : <span className="text-sm text-muted-foreground">0</span>}
+                  </TableCell>
+                  <TableCell className="text-right text-sm">{s.exceptionCount}</TableCell>
+                  <TableCell className="text-right text-sm">{s.delayCount}</TableCell>
+                  <TableCell className="text-right text-sm">{s.damageCount}</TableCell>
+                  <TableCell className="text-right text-sm">{s.complianceCount}</TableCell>
+                  <TableCell className="text-right text-sm">
+                    {s.capaCount > 0
+                      ? <span className="font-semibold text-destructive">{s.capaCount}</span>
+                      : '0'}
+                  </TableCell>
+                  <TableCell className="text-right text-sm text-muted-foreground">
+                    {formatHours(s.avgResolutionHours)}
+                  </TableCell>
+                  <TableCell className="text-right text-sm text-muted-foreground">
+                    {timeAgo(s.lastIssueAt)}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         )}
-      </div>
-    </>
+      </Card>
+    </div>
   );
 }

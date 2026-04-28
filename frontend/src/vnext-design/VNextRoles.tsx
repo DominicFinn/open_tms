@@ -1,5 +1,10 @@
 import React, { useEffect, useState } from 'react';
+import { ShieldCheck, RefreshCw, Loader2 } from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 
 interface Role {
   id: string;
@@ -11,13 +16,21 @@ interface Role {
   createdAt: string;
 }
 
-function permissionBadge(name: string): string {
-  if (name === 'admin' || name === 'broker_admin') return 'primary';
+function permissionVariant(name: string): 'info' | 'success' | 'warning' | 'secondary' | 'default' {
+  if (name === 'admin' || name === 'broker_admin') return 'default';
   if (name.includes('broker')) return 'info';
   if (name === 'finance') return 'success';
   if (name === 'readonly') return 'secondary';
   if (name === 'warehouse') return 'warning';
   return 'secondary';
+}
+
+function Banner({ variant, message }: { variant: 'success' | 'error'; message: string }) {
+  const tone =
+    variant === 'success'
+      ? 'border-success/30 bg-success/10 text-success'
+      : 'border-destructive/30 bg-destructive/10 text-destructive';
+  return <div className={`rounded-md border p-3 text-sm ${tone}`}>{message}</div>;
 }
 
 export default function VNextRoles() {
@@ -60,67 +73,65 @@ export default function VNextRoles() {
   };
 
   return (
-    <div style={{ padding: '24px 32px' }}>
-      <div className="vn-page-header">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700 }}>Roles & Permissions</h1>
-          <p style={{ margin: '4px 0 0', color: 'var(--on-surface-variant)', fontSize: 14 }}>
-            Manage user roles and their associated permissions
-          </p>
+          <h1 className="text-3xl font-bold tracking-tight">Roles and permissions</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Manage user roles and their associated permissions</p>
         </div>
-        <div className="vn-page-actions">
-          <button className="vn-btn vn-btn-outline vn-btn-sm" onClick={handleSeedRoles} disabled={seeding}>
-            <span className="material-icons">sync</span>
-            {seeding ? 'Seeding...' : 'Seed System Roles'}
-          </button>
-        </div>
+        <Button variant="outline" onClick={handleSeedRoles} disabled={seeding}>
+          {seeding ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+          {seeding ? 'Seeding...' : 'Seed system roles'}
+        </Button>
       </div>
 
-      {error && <div className="vn-alert vn-alert-error" style={{ marginBottom: 16 }}>{error}</div>}
-      {seedMessage && <div className="vn-alert vn-alert-success" style={{ marginBottom: 16 }}>{seedMessage}</div>}
+      {error && <Banner variant="error" message={error} />}
+      {seedMessage && <Banner variant="success" message={seedMessage} />}
 
       {loading ? (
-        <div style={{ textAlign: 'center', padding: 40 }}><div className="loading-spinner" /></div>
-      ) : roles.length === 0 ? (
-        <div className="vn-card" style={{ textAlign: 'center', padding: 40 }}>
-          <span className="material-icons" style={{ fontSize: 48, color: 'var(--on-surface-variant)' }}>admin_panel_settings</span>
-          <h3 style={{ margin: '12px 0 4px' }}>No roles defined</h3>
-          <p style={{ color: 'var(--on-surface-variant)', marginBottom: 16 }}>Click "Seed System Roles" to create the default roles.</p>
-          <button className="vn-btn vn-btn-primary" onClick={handleSeedRoles} disabled={seeding}>
-            Seed System Roles
-          </button>
+        <div className="flex justify-center py-12">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
+      ) : roles.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+            <ShieldCheck className="h-10 w-10 text-muted-foreground" />
+            <h3 className="text-lg font-medium">No roles defined</h3>
+            <p className="text-sm text-muted-foreground">Click "Seed system roles" to create the default roles.</p>
+            <Button variant="gradient" onClick={handleSeedRoles} disabled={seeding}>
+              Seed system roles
+            </Button>
+          </CardContent>
+        </Card>
       ) : (
-        <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))' }}>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {roles.map(role => (
-            <div key={role.id} className="vn-card" style={{ padding: '20px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontWeight: 700, fontSize: 16 }}>{role.name}</span>
-                    <span className={`vn-chip vn-chip-${permissionBadge(role.name)}`} style={{ fontSize: 10 }}>
-                      {role.isSystem ? 'System' : 'Custom'}
-                    </span>
+            <Card key={role.id}>
+              <CardContent className="p-5">
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-base font-semibold">{role.name}</span>
+                      <Badge variant={permissionVariant(role.name)}>{role.isSystem ? 'System' : 'Custom'}</Badge>
+                    </div>
+                    <p className="mt-1 text-sm text-muted-foreground">{role.description || 'No description'}</p>
                   </div>
-                  <p style={{ fontSize: 13, color: 'var(--on-surface-variant)', margin: '4px 0 0' }}>
-                    {role.description || 'No description'}
-                  </p>
+                  <div className="text-xs text-muted-foreground">
+                    {role._count?.users ?? 0} user{(role._count?.users ?? 0) !== 1 ? 's' : ''}
+                  </div>
                 </div>
-                <div style={{ textAlign: 'right', fontSize: 12, color: 'var(--on-surface-variant)' }}>
-                  {role._count?.users ?? 0} user{(role._count?.users ?? 0) !== 1 ? 's' : ''}
+                <div className="flex flex-wrap gap-1">
+                  {(role.permissions as string[]).slice(0, 8).map((p, i) => (
+                    <Badge key={i} variant="secondary" className="text-[10px]">{p}</Badge>
+                  ))}
+                  {(role.permissions as string[]).length > 8 && (
+                    <Badge variant="secondary" className="text-[10px]">
+                      +{(role.permissions as string[]).length - 8} more
+                    </Badge>
+                  )}
                 </div>
-              </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                {(role.permissions as string[]).slice(0, 8).map((p, i) => (
-                  <span key={i} className="vn-chip vn-chip-secondary" style={{ fontSize: 10 }}>{p}</span>
-                ))}
-                {(role.permissions as string[]).length > 8 && (
-                  <span className="vn-chip vn-chip-secondary" style={{ fontSize: 10 }}>
-                    +{(role.permissions as string[]).length - 8} more
-                  </span>
-                )}
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           ))}
         </div>
       )}

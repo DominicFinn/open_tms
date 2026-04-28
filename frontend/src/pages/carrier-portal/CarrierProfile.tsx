@@ -1,7 +1,14 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Lock, User } from 'lucide-react';
+
 import { API_URL } from '../../api';
 import { carrierFetch, getCarrierToken, getCarrierUser } from './CarrierDashboard';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 export default function CarrierProfile() {
   const navigate = useNavigate();
@@ -58,69 +65,78 @@ export default function CarrierProfile() {
   }
 
   return (
-    <div>
-      <div className="vn-page-header">
-        <h1>Profile & Settings</h1>
-      </div>
+    <div className="space-y-6">
+      <h1 className="text-3xl font-bold tracking-tight">Profile &amp; settings</h1>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-3)' }}>
-        {/* Profile Info */}
-        <div className="vn-card">
-          <div className="vn-card-header">
-            <h2>
-              <span className="material-icons" style={{ verticalAlign: 'middle', marginRight: '8px', fontSize: '20px' }}>person</span>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <User className="h-5 w-5" />
               Profile
-            </h2>
-          </div>
-          <div className="vn-card-body">
-            <div style={{ display: 'grid', gap: 'var(--spacing-1)', fontSize: '14px' }}>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 text-sm">
               <div><strong>Name:</strong> {user.name}</div>
               <div><strong>Email:</strong> {user.email}</div>
-              <div><strong>Role:</strong> <span className={`vn-chip vn-chip-${user.role === 'admin' ? 'primary' : 'secondary'}`}>{user.role}</span></div>
+              <div className="flex items-center gap-2">
+                <strong>Role:</strong>
+                <Badge variant={user.role === 'admin' ? 'default' : 'secondary'}>{user.role}</Badge>
+              </div>
               <div><strong>Carrier:</strong> {user.carrierName}</div>
             </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
 
-        {/* Change Password */}
-        <div className="vn-card">
-          <div className="vn-card-header">
-            <h2>
-              <span className="material-icons" style={{ verticalAlign: 'middle', marginRight: '8px', fontSize: '20px' }}>lock</span>
-              Change Password
-            </h2>
-          </div>
-          <div className="vn-card-body">
-            {error && <div className="vn-alert vn-alert-error" style={{ marginBottom: 'var(--spacing-2)' }}>{error}</div>}
-            {success && <div className="vn-alert vn-alert-success" style={{ marginBottom: 'var(--spacing-2)' }}>{success}</div>}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Lock className="h-5 w-5" />
+              Change password
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {error && (
+              <div className="mb-4 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {error}
+              </div>
+            )}
+            {success && (
+              <div className="mb-4 rounded-md border border-success/30 bg-success/10 px-3 py-2 text-sm text-success">
+                {success}
+              </div>
+            )}
 
-            <form onSubmit={handleChangePassword}>
-              <div className="vn-field" style={{ marginBottom: 'var(--spacing-2)' }}>
-                <label className="vn-field-label">Current Password</label>
-                <input
-                  className="vn-input"
+            <form onSubmit={handleChangePassword} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="current-password">Current password</Label>
+                <Input
+                  id="current-password"
                   type="password"
                   value={currentPassword}
                   onChange={e => setCurrentPassword(e.target.value)}
                   required
                 />
               </div>
-              <div className="vn-field" style={{ marginBottom: 'var(--spacing-2)' }}>
-                <label className="vn-field-label">New Password</label>
-                <input
-                  className="vn-input"
+              <div className="space-y-2">
+                <Label htmlFor="new-password">New password</Label>
+                <Input
+                  id="new-password"
                   type="password"
                   value={newPassword}
                   onChange={e => setNewPassword(e.target.value)}
                   required
                   minLength={8}
                 />
-                <span className="vn-field-hint">Min 8 chars, must include uppercase, lowercase, and a number</span>
+                <div className="text-xs text-muted-foreground">
+                  Min 8 chars, must include uppercase, lowercase, and a number
+                </div>
               </div>
-              <div className="vn-field" style={{ marginBottom: 'var(--spacing-2)' }}>
-                <label className="vn-field-label">Confirm New Password</label>
-                <input
-                  className="vn-input"
+              <div className="space-y-2">
+                <Label htmlFor="confirm-password">Confirm new password</Label>
+                <Input
+                  id="confirm-password"
                   type="password"
                   value={confirmPassword}
                   onChange={e => setConfirmPassword(e.target.value)}
@@ -128,12 +144,12 @@ export default function CarrierProfile() {
                   minLength={8}
                 />
               </div>
-              <button type="submit" className="vn-btn vn-btn-primary" disabled={loading}>
-                {loading ? 'Changing...' : 'Change Password'}
-              </button>
+              <Button type="submit" variant="gradient" disabled={loading}>
+                {loading ? 'Changing...' : 'Change password'}
+              </Button>
             </form>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

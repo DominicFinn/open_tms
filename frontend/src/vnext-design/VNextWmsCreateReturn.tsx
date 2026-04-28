@@ -1,6 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { CircleAlert } from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 interface Customer { id: string; name: string; }
 interface OrderLine { id: string; sku: string; description: string | null; quantity: number; unitPriceCents: number | null; }
@@ -69,7 +90,7 @@ export default function VNextWmsCreateReturn() {
   const setLineDisposition = (lineId: string, disp: string) => {
     setLineSelections(prev => ({
       ...prev,
-      [lineId]: { ...prev[lineId], disposition: disp || undefined },
+      [lineId]: { ...prev[lineId], disposition: disp === 'undecided' ? undefined : disp },
     }));
   };
 
@@ -115,135 +136,196 @@ export default function VNextWmsCreateReturn() {
   };
 
   return (
-    <div>
-      <div className="vn-page-header">
-        <div>
-          <h1>Create Return (RMA)</h1>
-          <p className="vn-page-subtitle">Authorize a customer return and select items</p>
-        </div>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Create Return (RMA)</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Authorize a customer return and select items</p>
       </div>
 
-      {error && <div className="vn-alert vn-alert-error" style={{ marginBottom: '1rem' }}>{error}</div>}
-
-      <form onSubmit={handleSubmit}>
-        <div className="vn-card" style={{ marginBottom: '1rem' }}>
-          <h3 style={{ margin: '0 0 1rem' }}>1. Customer & Order</h3>
-          <div className="vn-form-grid">
-            <div className="vn-field">
-              <label className="vn-field-label">Customer *</label>
-              <select className="vn-input" value={selectedCustomer} onChange={e => { setSelectedCustomer(e.target.value); setSelectedOrderId(''); setLineSelections({}); }} required>
-                <option value="">Select customer...</option>
-                {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            </div>
-            <div className="vn-field">
-              <label className="vn-field-label">Order *</label>
-              <select className="vn-input" value={selectedOrderId} onChange={e => { setSelectedOrderId(e.target.value); setLineSelections({}); }} required disabled={!selectedCustomer}>
-                <option value="">Select order...</option>
-                {orders.map(o => <option key={o.id} value={o.id}>{o.orderNumber || o.id.slice(0, 8)}</option>)}
-              </select>
-            </div>
-          </div>
+      {error && (
+        <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+          <CircleAlert className="h-5 w-5" />
+          {error}
         </div>
+      )}
+
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>1. Customer &amp; Order</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Customer *</Label>
+              <Select value={selectedCustomer} onValueChange={(v) => { setSelectedCustomer(v); setSelectedOrderId(''); setLineSelections({}); }}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select customer..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {customers.map(c => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Order *</Label>
+              <Select value={selectedOrderId} onValueChange={(v) => { setSelectedOrderId(v); setLineSelections({}); }} disabled={!selectedCustomer}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select order..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {orders.map(o => (
+                    <SelectItem key={o.id} value={o.id}>{o.orderNumber || o.id.slice(0, 8)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
 
         {selectedOrder && (
           <>
-            <div className="vn-card" style={{ marginBottom: '1rem' }}>
-              <h3 style={{ margin: '0 0 1rem' }}>2. Items to Return</h3>
-              {selectedOrder.lineItems.length === 0 ? (
-                <p style={{ color: 'var(--text-secondary)' }}>Order has no line items</p>
-              ) : (
-                <div className="vn-table-wrap">
-                  <table className="vn-table">
-                    <thead>
-                      <tr>
-                        <th style={{ width: '40px' }}></th>
-                        <th>SKU</th>
-                        <th>Description</th>
-                        <th>Ordered</th>
-                        <th>Return Qty</th>
-                        <th>Unit Price</th>
-                        <th>Suggested Disposition</th>
-                      </tr>
-                    </thead>
-                    <tbody>
+            <Card>
+              <CardHeader>
+                <CardTitle>2. Items to Return</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                {selectedOrder.lineItems.length === 0 ? (
+                  <p className="px-6 py-4 text-sm text-muted-foreground">Order has no line items</p>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-10"></TableHead>
+                        <TableHead>SKU</TableHead>
+                        <TableHead>Description</TableHead>
+                        <TableHead>Ordered</TableHead>
+                        <TableHead>Return Qty</TableHead>
+                        <TableHead>Unit Price</TableHead>
+                        <TableHead>Suggested Disposition</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
                       {selectedOrder.lineItems.map(line => {
                         const sel = lineSelections[line.id];
                         return (
-                          <tr key={line.id}>
-                            <td><input type="checkbox" checked={!!sel} onChange={() => toggleLine(line.id, line.quantity)} /></td>
-                            <td><strong>{line.sku}</strong></td>
-                            <td>{line.description || '--'}</td>
-                            <td>{line.quantity}</td>
-                            <td>
+                          <TableRow key={line.id}>
+                            <TableCell>
+                              <input
+                                type="checkbox"
+                                checked={!!sel}
+                                onChange={() => toggleLine(line.id, line.quantity)}
+                                className="h-4 w-4 rounded border border-input bg-background accent-primary"
+                              />
+                            </TableCell>
+                            <TableCell className="font-mono text-sm font-semibold">{line.sku}</TableCell>
+                            <TableCell>{line.description || '-'}</TableCell>
+                            <TableCell>{line.quantity}</TableCell>
+                            <TableCell>
                               {sel && (
-                                <input className="vn-input" type="number" min="1" max={line.quantity}
+                                <Input
+                                  type="number"
+                                  min="1"
+                                  max={line.quantity}
                                   value={sel.quantity}
                                   onChange={e => setLineQty(line.id, parseInt(e.target.value) || 1)}
-                                  style={{ width: '80px' }} />
+                                  className="w-24"
+                                />
                               )}
-                            </td>
-                            <td>{line.unitPriceCents != null ? `$${(line.unitPriceCents / 100).toFixed(2)}` : '--'}</td>
-                            <td>
+                            </TableCell>
+                            <TableCell>{line.unitPriceCents != null ? `$${(line.unitPriceCents / 100).toFixed(2)}` : '-'}</TableCell>
+                            <TableCell>
                               {sel && (
-                                <select className="vn-input" value={sel.disposition || ''} onChange={e => setLineDisposition(line.id, e.target.value)} style={{ fontSize: '0.85rem' }}>
-                                  <option value="">(decide at inspection)</option>
-                                  {DISPOSITIONS.map(d => <option key={d} value={d}>{formatStr(d)}</option>)}
-                                </select>
+                                <Select value={sel.disposition || 'undecided'} onValueChange={(v) => setLineDisposition(line.id, v)}>
+                                  <SelectTrigger className="w-44">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="undecided">(decide at inspection)</SelectItem>
+                                    {DISPOSITIONS.map(d => (
+                                      <SelectItem key={d} value={d}>{formatStr(d)}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
                               )}
-                            </td>
-                          </tr>
+                            </TableCell>
+                          </TableRow>
                         );
                       })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
 
-            <div className="vn-card" style={{ marginBottom: '1rem' }}>
-              <h3 style={{ margin: '0 0 1rem' }}>3. Reason & Notes</h3>
-              <div className="vn-form-grid">
-                <div className="vn-field">
-                  <label className="vn-field-label">Return Reason *</label>
-                  <select className="vn-input" value={returnReason} onChange={e => setReturnReason(e.target.value)}>
-                    {RETURN_REASONS.map(r => <option key={r} value={r}>{formatStr(r)}</option>)}
-                  </select>
+            <Card>
+              <CardHeader>
+                <CardTitle>3. Reason &amp; Notes</CardTitle>
+              </CardHeader>
+              <CardContent className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Return Reason *</Label>
+                  <Select value={returnReason} onValueChange={setReturnReason}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {RETURN_REASONS.map(r => (
+                        <SelectItem key={r} value={r}>{formatStr(r)}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-                <div className="vn-field" style={{ gridColumn: '1 / -1' }}>
-                  <label className="vn-field-label">Customer Notes</label>
-                  <textarea className="vn-input" rows={3} value={customerNotes} onChange={e => setCustomerNotes(e.target.value)} placeholder="Describe the issue..." />
+                <div className="space-y-2 md:col-span-2">
+                  <Label>Customer Notes</Label>
+                  <textarea
+                    rows={3}
+                    value={customerNotes}
+                    onChange={e => setCustomerNotes(e.target.value)}
+                    placeholder="Describe the issue..."
+                    className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  />
                 </div>
-                <div className="vn-field" style={{ gridColumn: '1 / -1' }}>
-                  <label style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', cursor: 'pointer' }}>
-                    <input type="checkbox" checked={autoAuthorize} onChange={e => setAutoAuthorize(e.target.checked)} />
-                    <span>Auto-authorize (skip the "requested" state, go straight to "authorized")</span>
+                <div className="md:col-span-2">
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={autoAuthorize}
+                      onChange={e => setAutoAuthorize(e.target.checked)}
+                      className="h-4 w-4 rounded border border-input bg-background accent-primary"
+                    />
+                    Auto-authorize (skip the "requested" state, go straight to "authorized")
                   </label>
                 </div>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
 
-            <div className="vn-card" style={{ marginBottom: '1rem' }}>
-              <h3 style={{ margin: '0 0 0.5rem' }}>4. Review</h3>
-              <div style={{ display: 'flex', gap: '2rem', alignItems: 'center' }}>
-                <div>
-                  <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Lines selected</div>
-                  <div style={{ fontSize: '1.5rem', fontWeight: 700 }}>{Object.keys(lineSelections).length}</div>
+            <Card>
+              <CardHeader>
+                <CardTitle>4. Review</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-wrap gap-8">
+                  <div>
+                    <div className="text-xs text-muted-foreground">Lines selected</div>
+                    <div className="text-2xl font-bold">{Object.keys(lineSelections).length}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground">Suggested refund</div>
+                    <div className="text-2xl font-bold text-primary">${(calculatedRefund / 100).toFixed(2)}</div>
+                  </div>
                 </div>
-                <div>
-                  <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Suggested refund</div>
-                  <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--color-primary)' }}>${(calculatedRefund / 100).toFixed(2)}</div>
-                </div>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           </>
         )}
 
-        <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-          <button type="button" className="vn-btn vn-btn-outline" onClick={() => navigate('/wms/returns')}>Cancel</button>
-          <button type="submit" className="vn-btn vn-btn-primary" disabled={saving || Object.keys(lineSelections).length === 0}>
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" type="button" onClick={() => navigate('/wms/returns')}>Cancel</Button>
+          <Button variant="gradient" type="submit" disabled={saving || Object.keys(lineSelections).length === 0}>
             {saving ? 'Creating...' : 'Create RMA'}
-          </button>
+          </Button>
         </div>
       </form>
     </div>

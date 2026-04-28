@@ -1,6 +1,32 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import {
+  AlertTriangle,
+  Boxes,
+  CircleAlert,
+  ClipboardCheck,
+  Clock,
+  Database,
+  FileWarning,
+  Grid3x3,
+  Loader2,
+  Package,
+  PackageOpen,
+  PackagePlus,
+  RefreshCw,
+  RotateCcw,
+  ShieldCheck,
+  ShoppingCart,
+  Timer,
+  Truck,
+  Waves,
+  type LucideIcon,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 
 interface DashboardPayload {
   generatedAt: string;
@@ -43,19 +69,28 @@ interface DashboardPayload {
   };
 }
 
-const fmt = (n: number | null, suffix = '') => n == null ? '—' : `${n}${suffix}`;
+const fmt = (n: number | null, suffix = '') => n == null ? '-' : `${n}${suffix}`;
 
 type IconTone = 'primary' | 'success' | 'warning' | 'error' | 'info' | 'secondary';
 
+const TONE_CLASSES: Record<IconTone, string> = {
+  primary: 'bg-primary/10 text-primary',
+  success: 'bg-success/15 text-success',
+  warning: 'bg-warning/15 text-warning',
+  error: 'bg-destructive/10 text-destructive',
+  info: 'bg-info/15 text-info',
+  secondary: 'bg-muted text-muted-foreground',
+};
+
 function StatTile({
-  icon,
+  icon: Icon,
   tone,
   label,
   value,
   sub,
   to,
 }: {
-  icon: string;
+  icon: LucideIcon;
   tone: IconTone;
   label: string;
   value: string | number;
@@ -64,30 +99,31 @@ function StatTile({
 }) {
   const navigate = useNavigate();
   return (
-    <div
-      className="vn-stat"
-      style={to ? { cursor: 'pointer' } : undefined}
-      onClick={to ? () => navigate(to) : undefined}
-    >
-      <div className={`vn-stat-icon ${tone}`}>
-        <span className="material-icons">{icon}</span>
-      </div>
-      <div>
-        <div className="vn-stat-value">{value}</div>
-        <div className="vn-stat-label">{label}</div>
-        {sub && <div className="vn-stat-label" style={{ marginTop: 2, opacity: 0.8 }}>{sub}</div>}
-      </div>
-    </div>
+    <Card className={to ? 'cursor-pointer transition-colors hover:border-primary/40' : ''}>
+      <button
+        type="button"
+        onClick={to ? () => navigate(to) : undefined}
+        disabled={!to}
+        className="block w-full text-left disabled:cursor-default"
+      >
+        <CardContent className="p-5">
+          <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', TONE_CLASSES[tone])}>
+            <Icon className="h-5 w-5" />
+          </div>
+          <div className="mt-3 text-2xl font-bold tracking-tight">{value}</div>
+          <div className="mt-1 text-sm text-muted-foreground">{label}</div>
+          {sub && <div className="mt-1 text-xs text-muted-foreground">{sub}</div>}
+        </CardContent>
+      </button>
+    </Card>
   );
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="vn-card" style={{ padding: 20, marginBottom: 20 }}>
-      <h2 style={{ margin: '0 0 14px', fontSize: 13, fontWeight: 600, color: 'var(--on-surface-variant)', textTransform: 'uppercase', letterSpacing: 0.6 }}>
-        {title}
-      </h2>
-      <div className="vn-stats" style={{ marginBottom: 0 }}>
+    <div className="space-y-3">
+      <h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">{title}</h2>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         {children}
       </div>
     </div>
@@ -129,53 +165,60 @@ export default function VNextWmsOperationsDashboard() {
 
   if (loading) {
     return (
-      <div className="vn-empty">
-        <span className="material-icons" style={{ animation: 'spin 1s linear infinite' }}>refresh</span>
-        <h3>Loading operations dashboard...</h3>
+      <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <h3 className="text-lg font-medium">Loading operations dashboard...</h3>
       </div>
     );
   }
-  if (!data) return <div className="vn-alert vn-alert-error"><span className="material-icons">error</span><div className="vn-alert-content">Could not load dashboard.</div></div>;
+  if (!data) {
+    return (
+      <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+        <CircleAlert className="h-5 w-5" />
+        Could not load dashboard.
+      </div>
+    );
+  }
 
   return (
-    <>
-      <div className="vn-page-header">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1>Warehouse Operations</h1>
-          <p>Live at {new Date(data.generatedAt).toLocaleTimeString()} · auto-refreshes every minute</p>
+          <h1 className="text-3xl font-bold tracking-tight">Warehouse Operations</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Live at {new Date(data.generatedAt).toLocaleTimeString()} - auto-refreshes every minute
+          </p>
         </div>
-        <div className="vn-page-actions">
-          <button className="vn-btn vn-btn-outline" onClick={() => load(true)} disabled={refreshing}>
-            <span className="material-icons" style={refreshing ? { animation: 'spin 1s linear infinite' } : undefined}>refresh</span>
-            {refreshing ? 'Refreshing...' : 'Refresh'}
-          </button>
-        </div>
+        <Button variant="outline" onClick={() => load(true)} disabled={refreshing}>
+          <RefreshCw className={cn('h-4 w-4', refreshing && 'animate-spin')} />
+          {refreshing ? 'Refreshing...' : 'Refresh'}
+        </Button>
       </div>
 
       <Section title="Throughput today">
-        <StatTile icon="move_to_inbox" tone="primary" label="Receipts" value={data.throughput.today.receipts} sub={`${data.throughput.last7Days.receipts} last 7d`} />
-        <StatTile icon="system_update_alt" tone="primary" label="Putaways" value={data.throughput.today.putaways} sub={`${data.throughput.last7Days.putaways} last 7d`} />
-        <StatTile icon="shopping_cart_checkout" tone="primary" label="Picks" value={data.throughput.today.picks} sub={`${data.throughput.last7Days.picks} last 7d`} />
-        <StatTile icon="inventory_2" tone="primary" label="Packs" value={data.throughput.today.packs} sub={`${data.throughput.last7Days.packs} last 7d`} />
-        <StatTile icon="local_shipping" tone="info" label="Shipments dispatched" value={data.throughput.today.shipmentsDispatched} sub={`${data.throughput.last7Days.shipmentsDispatched} last 7d`} />
+        <StatTile icon={PackageOpen} tone="primary" label="Receipts" value={data.throughput.today.receipts} sub={`${data.throughput.last7Days.receipts} last 7d`} />
+        <StatTile icon={PackagePlus} tone="primary" label="Putaways" value={data.throughput.today.putaways} sub={`${data.throughput.last7Days.putaways} last 7d`} />
+        <StatTile icon={ShoppingCart} tone="primary" label="Picks" value={data.throughput.today.picks} sub={`${data.throughput.last7Days.picks} last 7d`} />
+        <StatTile icon={Package} tone="primary" label="Packs" value={data.throughput.today.packs} sub={`${data.throughput.last7Days.packs} last 7d`} />
+        <StatTile icon={Truck} tone="info" label="Shipments dispatched" value={data.throughput.today.shipmentsDispatched} sub={`${data.throughput.last7Days.shipmentsDispatched} last 7d`} />
       </Section>
 
       <Section title="Cycle times (30 days)">
-        <StatTile icon="timer" tone="info" label="Pick cycle" value={data.cycleTimes.pickCycleMinutes != null ? `${data.cycleTimes.pickCycleMinutes}m` : '—'} sub={`${data.cycleTimes.samples.pickCycle} picks`} />
-        <StatTile icon="schedule" tone="info" label="Dock to stock" value={data.cycleTimes.dockToStockMinutes != null ? `${data.cycleTimes.dockToStockMinutes}m` : '—'} sub={`${data.cycleTimes.samples.dockToStock} putaways`} />
-        <StatTile icon="pending" tone="info" label="Order to ship" value={data.cycleTimes.orderToShipHours != null ? `${data.cycleTimes.orderToShipHours}h` : '—'} sub={`${data.cycleTimes.samples.orderToShip} orders`} />
+        <StatTile icon={Timer} tone="info" label="Pick cycle" value={data.cycleTimes.pickCycleMinutes != null ? `${data.cycleTimes.pickCycleMinutes}m` : '-'} sub={`${data.cycleTimes.samples.pickCycle} picks`} />
+        <StatTile icon={Clock} tone="info" label="Dock to stock" value={data.cycleTimes.dockToStockMinutes != null ? `${data.cycleTimes.dockToStockMinutes}m` : '-'} sub={`${data.cycleTimes.samples.dockToStock} putaways`} />
+        <StatTile icon={Clock} tone="info" label="Order to ship" value={data.cycleTimes.orderToShipHours != null ? `${data.cycleTimes.orderToShipHours}h` : '-'} sub={`${data.cycleTimes.samples.orderToShip} orders`} />
       </Section>
 
       <Section title="Quality & accuracy (30 days)">
         <StatTile
-          icon="verified"
+          icon={ShieldCheck}
           tone={accuracyTone(data.quality.pickAccuracyPercent)}
           label="Pick accuracy"
           value={fmt(data.quality.pickAccuracyPercent, '%')}
           sub={`${data.quality.pickAccuracySamples} picks`}
         />
         <StatTile
-          icon="fact_check"
+          icon={ClipboardCheck}
           tone={accuracyTone(data.quality.packAuditPassRatePercent)}
           label="Pack audit pass rate"
           value={fmt(data.quality.packAuditPassRatePercent, '%')}
@@ -183,7 +226,7 @@ export default function VNextWmsOperationsDashboard() {
           to="/wms/pack-audits"
         />
         <StatTile
-          icon="inventory"
+          icon={Boxes}
           tone={accuracyTone(data.quality.inventoryAccuracyPercent)}
           label="Inventory accuracy"
           value={fmt(data.quality.inventoryAccuracyPercent, '%')}
@@ -192,16 +235,16 @@ export default function VNextWmsOperationsDashboard() {
       </Section>
 
       <Section title="Live work queue">
-        <StatTile icon="shopping_cart" tone="warning" label="Pending picks" value={data.liveWork.pendingPickTasks} to="/wms/picking" />
-        <StatTile icon="system_update_alt" tone="warning" label="Pending putaways" value={data.liveWork.pendingPutawayTasks} to="/wms/putaway" />
-        <StatTile icon="inventory_2" tone="warning" label="Pending packs" value={data.liveWork.pendingPackTasks} to="/wms/packing" />
-        <StatTile icon="waves" tone="primary" label="Active waves" value={data.liveWork.activeWaves} to="/wms/waves" />
-        <StatTile icon="move_to_inbox" tone="primary" label="Receiving in progress" value={data.liveWork.receivingInProgress} to="/wms/receiving" />
+        <StatTile icon={ShoppingCart} tone="warning" label="Pending picks" value={data.liveWork.pendingPickTasks} to="/wms/picking" />
+        <StatTile icon={PackagePlus} tone="warning" label="Pending putaways" value={data.liveWork.pendingPutawayTasks} to="/wms/putaway" />
+        <StatTile icon={Package} tone="warning" label="Pending packs" value={data.liveWork.pendingPackTasks} to="/wms/packing" />
+        <StatTile icon={Waves} tone="primary" label="Active waves" value={data.liveWork.activeWaves} to="/wms/waves" />
+        <StatTile icon={PackageOpen} tone="primary" label="Receiving in progress" value={data.liveWork.receivingInProgress} to="/wms/receiving" />
       </Section>
 
       <Section title="Exceptions">
         <StatTile
-          icon="warning"
+          icon={AlertTriangle}
           tone={data.exceptions.criticalIssues > 0 ? 'error' : 'warning'}
           label="Open issues"
           value={data.exceptions.openIssues}
@@ -209,27 +252,27 @@ export default function VNextWmsOperationsDashboard() {
           to="/issues"
         />
         <StatTile
-          icon="schedule"
+          icon={Clock}
           tone={data.exceptions.cutoffAtRisk.critical > 0 ? 'error' : 'warning'}
           label="Cutoff risk"
           value={data.exceptions.cutoffAtRisk.critical}
           sub={`${data.exceptions.cutoffAtRisk.warning} warning`}
           to="/wms/cutoff-monitor"
         />
-        <StatTile icon="keyboard_return" tone="info" label="Returns in progress" value={data.exceptions.pendingReturns} to="/wms/returns" />
-        <StatTile icon="report" tone="error" label="Open pack audit fails" value={data.exceptions.packAuditFailuresOpen} to="/wms/pack-audits" />
+        <StatTile icon={RotateCcw} tone="info" label="Returns in progress" value={data.exceptions.pendingReturns} to="/wms/returns" />
+        <StatTile icon={FileWarning} tone="error" label="Open pack audit fails" value={data.exceptions.packAuditFailuresOpen} to="/wms/pack-audits" />
       </Section>
 
       <Section title="Capacity">
-        <StatTile icon="grid_view" tone="primary" label="Total bins" value={data.capacity.totalBins} />
-        <StatTile icon="inventory_2" tone="primary" label="Bins with inventory" value={data.capacity.binsWithInventory} />
+        <StatTile icon={Grid3x3} tone="primary" label="Total bins" value={data.capacity.totalBins} />
+        <StatTile icon={Boxes} tone="primary" label="Bins with inventory" value={data.capacity.binsWithInventory} />
         <StatTile
-          icon="storage"
+          icon={Database}
           tone={utilizationTone(data.capacity.utilizationPercent)}
           label="Utilization"
           value={fmt(data.capacity.utilizationPercent, '%')}
         />
       </Section>
-    </>
+    </div>
   );
 }

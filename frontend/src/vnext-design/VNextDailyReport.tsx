@@ -1,17 +1,49 @@
 import React, { useEffect, useState } from 'react';
-import { API_URL } from '../api';
+import {
+  CheckCircle2,
+  Download,
+  Loader2,
+  Mail,
+  Package,
+  Truck,
+  XCircle,
+} from 'lucide-react';
 
-function statusChip(status: string): { label: string; color: string } {
+import { API_URL } from '../api';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
+
+type StatusVariant = 'success' | 'warning' | 'destructive' | 'info' | 'muted';
+
+function statusChip(status: string): { label: string; variant: StatusVariant } {
   switch ((status || '').toLowerCase()) {
-    case 'in_transit': return { label: 'In Transit', color: 'info' };
-    case 'delivered': return { label: 'Delivered', color: 'success' };
-    case 'delayed': return { label: 'Delayed', color: 'warning' };
-    case 'picked_up': case 'pickup': return { label: 'Pickup', color: 'warning' };
-    case 'cancelled': return { label: 'Cancelled', color: 'error' };
-    case 'booked': return { label: 'Booked', color: 'secondary' };
-    default: return { label: status || 'Unknown', color: 'secondary' };
+    case 'in_transit': return { label: 'In Transit', variant: 'info' };
+    case 'delivered': return { label: 'Delivered', variant: 'success' };
+    case 'delayed': return { label: 'Delayed', variant: 'warning' };
+    case 'picked_up':
+    case 'pickup': return { label: 'Pickup', variant: 'warning' };
+    case 'cancelled': return { label: 'Cancelled', variant: 'destructive' };
+    case 'booked': return { label: 'Booked', variant: 'muted' };
+    default: return { label: status || 'Unknown', variant: 'muted' };
   }
 }
+
+const STAT_TONES = {
+  primary: 'bg-primary/10 text-primary',
+  success: 'bg-success/15 text-success',
+  info: 'bg-info/15 text-info',
+  warning: 'bg-warning/15 text-warning',
+} as const;
 
 export default function VNextDailyReport() {
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
@@ -25,19 +57,16 @@ export default function VNextDailyReport() {
     let cancelled = false;
     async function fetchData() {
       try {
-        // Try the daily summary endpoint first, fall back to shipments list
         let data: any[] = [];
         const summaryRes = await fetch(`${API_URL}/api/v1/reports/daily/summary?date=${todayISO}`);
         if (summaryRes.ok) {
           const summaryJson = await summaryRes.json();
-          // If the endpoint returns shipments data, use it
           if (summaryJson.data && Array.isArray(summaryJson.data)) {
             data = summaryJson.data;
           } else if (summaryJson.data?.shipments && Array.isArray(summaryJson.data.shipments)) {
             data = summaryJson.data.shipments;
           }
         }
-        // Fallback: fetch all shipments if summary didn't provide data
         if (data.length === 0) {
           const shipRes = await fetch(`${API_URL}/api/v1/shipments`);
           if (!shipRes.ok) throw new Error('Failed to load shipments');
@@ -57,19 +86,18 @@ export default function VNextDailyReport() {
 
   if (loading) {
     return (
-      <div className="vn-empty">
-        <span className="material-icons" style={{ animation: 'spin 1s linear infinite' }}>refresh</span>
-        <h3>Loading...</h3>
+      <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <h3 className="text-lg font-medium">Loading...</h3>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="vn-empty">
-        <span className="material-icons" style={{ color: 'var(--error)' }}>error</span>
-        <h3>Error</h3>
-        <p>{error}</p>
+      <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+        <XCircle className="h-5 w-5" />
+        {error}
       </div>
     );
   }
@@ -80,180 +108,162 @@ export default function VNextDailyReport() {
   const deliveredPct = parseFloat(((delivered.length / totalCount) * 100).toFixed(1));
   const inTransitPct = parseFloat(((inTransit.length / totalCount) * 100).toFixed(1));
 
-  // Deliveries due: in_transit or delivered today
   const deliveriesDue = shipments.filter((s: any) => s.status === 'in_transit' || s.status === 'delivered').slice(0, 10);
 
+  const stats = [
+    { tone: 'primary' as const, label: 'Total Shipments', value: shipments.length, icon: Truck },
+    { tone: 'success' as const, label: 'Delivered', value: `${deliveredPct}%`, icon: CheckCircle2 },
+    { tone: 'info' as const, label: 'In Transit', value: inTransit.length, icon: Package },
+    { tone: 'warning' as const, label: 'Delivered Today', value: delivered.length, icon: CheckCircle2 },
+  ];
+
   return (
-    <>
-      {/* Page Header */}
-      <div className="vn-page-header">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1>Daily Report</h1>
-          <p style={{ color: 'var(--on-surface-variant)', fontSize: 14, marginTop: 4 }}>{today}</p>
+          <h1 className="text-3xl font-bold tracking-tight">Daily Report</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{today}</p>
         </div>
-        <div className="vn-page-actions">
-          <button className="vn-btn vn-btn-outline">
-            <span className="material-icons">download</span>
+        <div className="flex gap-2">
+          <Button variant="outline">
+            <Download className="h-4 w-4" />
             Export PDF
-          </button>
-          <button className="vn-btn vn-btn-outline">
-            <span className="material-icons">email</span>
+          </Button>
+          <Button variant="outline">
+            <Mail className="h-4 w-4" />
             Email Report
-          </button>
+          </Button>
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="vn-stats">
-        <div className="vn-stat">
-          <div className="vn-stat-icon primary">
-            <span className="material-icons">local_shipping</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{shipments.length}</div>
-            <div className="vn-stat-label">Total Shipments</div>
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon success">
-            <span className="material-icons">check_circle</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{deliveredPct}%</div>
-            <div className="vn-stat-label">Delivered</div>
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon info">
-            <span className="material-icons">inventory_2</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{inTransit.length}</div>
-            <div className="vn-stat-label">In Transit</div>
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon warning">
-            <span className="material-icons">check_circle</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{delivered.length}</div>
-            <div className="vn-stat-label">Delivered Today</div>
-          </div>
-        </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {stats.map(stat => {
+          const Icon = stat.icon;
+          return (
+            <Card key={stat.label} className="p-5">
+              <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', STAT_TONES[stat.tone])}>
+                <Icon className="h-5 w-5" />
+              </div>
+              <div className="mt-3 text-2xl font-bold tracking-tight">{stat.value}</div>
+              <div className="mt-1 text-sm text-muted-foreground">{stat.label}</div>
+            </Card>
+          );
+        })}
       </div>
 
-      {/* Two-Column Grid */}
-      <div className="vn-grid-2" style={{ marginBottom: 24 }}>
+      <div className="grid gap-6 lg:grid-cols-2">
         {/* Shipments In Transit */}
-        <div className="vn-card">
-          <div className="vn-card-header">
-            <h2>Shipments In Transit</h2>
-            <span className="vn-chip vn-chip-info">{inTransit.length} active</span>
-          </div>
-          <div className="vn-card-body vn-card-flush">
-            <div className="vn-table-wrap">
-              <table className="vn-table">
-                <thead>
-                  <tr>
-                    <th>Ref</th>
-                    <th>Origin</th>
-                    <th>Destination</th>
-                    <th>ETA</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {inTransit.length === 0 && (
-                    <tr><td colSpan={5} style={{ textAlign: 'center', color: 'var(--on-surface-variant)' }}>No shipments in transit</td></tr>
-                  )}
-                  {inTransit.slice(0, 10).map((s: any, i: number) => {
-                    const chip = statusChip(s.status);
-                    const origin = s.originCity && s.originState ? `${s.originCity}, ${s.originState}` : s.originCity || 'N/A';
-                    const dest = s.destinationCity && s.destinationState ? `${s.destinationCity}, ${s.destinationState}` : s.destinationCity || 'N/A';
-                    const eta = s.estimatedDelivery ? new Date(s.estimatedDelivery).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'N/A';
-                    return (
-                      <tr key={s.id || i}>
-                        <td><span className="vn-table-id">{s.referenceNumber || `SHP-${s.id}`}</span></td>
-                        <td style={{ fontSize: 13 }}>{origin}</td>
-                        <td style={{ fontSize: 13 }}>{dest}</td>
-                        <td style={{ fontSize: 13 }}>{eta}</td>
-                        <td><span className={`vn-chip vn-chip-${chip.color}`}>{chip.label}</span></td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-base">Shipments In Transit</CardTitle>
+            <Badge variant="info">{inTransit.length} active</Badge>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Ref</TableHead>
+                  <TableHead>Origin</TableHead>
+                  <TableHead>Destination</TableHead>
+                  <TableHead>ETA</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {inTransit.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
+                      No shipments in transit
+                    </TableCell>
+                  </TableRow>
+                )}
+                {inTransit.slice(0, 10).map((s: any, i: number) => {
+                  const chip = statusChip(s.status);
+                  const origin = s.originCity && s.originState ? `${s.originCity}, ${s.originState}` : s.originCity || 'N/A';
+                  const dest = s.destinationCity && s.destinationState ? `${s.destinationCity}, ${s.destinationState}` : s.destinationCity || 'N/A';
+                  const eta = s.estimatedDelivery ? new Date(s.estimatedDelivery).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'N/A';
+                  return (
+                    <TableRow key={s.id || i}>
+                      <TableCell className="font-mono text-sm font-semibold">{s.referenceNumber || `SHP-${s.id}`}</TableCell>
+                      <TableCell className="text-sm">{origin}</TableCell>
+                      <TableCell className="text-sm">{dest}</TableCell>
+                      <TableCell className="text-sm">{eta}</TableCell>
+                      <TableCell><Badge variant={chip.variant}>{chip.label}</Badge></TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
 
         {/* Deliveries Due Today */}
-        <div className="vn-card">
-          <div className="vn-card-header">
-            <h2>Deliveries Due Today</h2>
-            <span className="vn-chip vn-chip-success">{deliveriesDue.length} expected</span>
-          </div>
-          <div className="vn-card-body vn-card-flush">
-            <div className="vn-table-wrap">
-              <table className="vn-table">
-                <thead>
-                  <tr>
-                    <th>Ref</th>
-                    <th>Destination</th>
-                    <th>Carrier</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {deliveriesDue.length === 0 && (
-                    <tr><td colSpan={4} style={{ textAlign: 'center', color: 'var(--on-surface-variant)' }}>No deliveries due today</td></tr>
-                  )}
-                  {deliveriesDue.map((d: any, i: number) => {
-                    const chip = statusChip(d.status);
-                    const dest = d.destinationCity && d.destinationState ? `${d.destinationCity}, ${d.destinationState}` : d.destinationCity || 'N/A';
-                    const carrier = d.carrier?.name || d.carrierName || 'N/A';
-                    return (
-                      <tr key={d.id || i}>
-                        <td><span className="vn-table-id">{d.referenceNumber || `SHP-${d.id}`}</span></td>
-                        <td style={{ fontSize: 13 }}>{dest}</td>
-                        <td style={{ fontSize: 13 }}>{carrier}</td>
-                        <td><span className={`vn-chip vn-chip-${chip.color}`}>{chip.label}</span></td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-base">Deliveries Due Today</CardTitle>
+            <Badge variant="success">{deliveriesDue.length} expected</Badge>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Ref</TableHead>
+                  <TableHead>Destination</TableHead>
+                  <TableHead>Carrier</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {deliveriesDue.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center text-sm text-muted-foreground">
+                      No deliveries due today
+                    </TableCell>
+                  </TableRow>
+                )}
+                {deliveriesDue.map((d: any, i: number) => {
+                  const chip = statusChip(d.status);
+                  const dest = d.destinationCity && d.destinationState ? `${d.destinationCity}, ${d.destinationState}` : d.destinationCity || 'N/A';
+                  const carrier = d.carrier?.name || d.carrierName || 'N/A';
+                  return (
+                    <TableRow key={d.id || i}>
+                      <TableCell className="font-mono text-sm font-semibold">{d.referenceNumber || `SHP-${d.id}`}</TableCell>
+                      <TableCell className="text-sm">{dest}</TableCell>
+                      <TableCell className="text-sm">{carrier}</TableCell>
+                      <TableCell><Badge variant={chip.variant}>{chip.label}</Badge></TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Delivery Performance */}
-      <div className="vn-card">
-        <div className="vn-card-header">
-          <h2>Delivery Performance</h2>
-        </div>
-        <div className="vn-card-body">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Delivery Performance</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
             {[
-              { label: 'Delivered', value: deliveredPct, variant: 'success' },
-              { label: 'In Transit', value: inTransitPct, variant: 'info' },
-              { label: 'Other', value: parseFloat((100 - deliveredPct - inTransitPct).toFixed(1)), variant: 'warning' },
+              { label: 'Delivered', value: deliveredPct, color: 'bg-success' },
+              { label: 'In Transit', value: inTransitPct, color: 'bg-info' },
+              { label: 'Other', value: parseFloat((100 - deliveredPct - inTransitPct).toFixed(1)), color: 'bg-warning' },
             ].map(row => (
               <div key={row.label}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 14 }}>
-                  <span style={{ fontWeight: 500, color: 'var(--on-surface)' }}>{row.label}</span>
-                  <span style={{ color: 'var(--on-surface-variant)' }}>{row.value}%</span>
+                <div className="mb-1.5 flex justify-between text-sm">
+                  <span className="font-medium">{row.label}</span>
+                  <span className="text-muted-foreground">{row.value}%</span>
                 </div>
-                <div className="vn-progress">
-                  <div className={`vn-progress-bar ${row.variant}`} style={{ width: `${row.value}%` }} />
+                <div className="h-2 overflow-hidden rounded-full bg-muted">
+                  <div className={cn('h-full rounded-full transition-all', row.color)} style={{ width: `${row.value}%` }} />
                 </div>
               </div>
             ))}
           </div>
-        </div>
-      </div>
-    </>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

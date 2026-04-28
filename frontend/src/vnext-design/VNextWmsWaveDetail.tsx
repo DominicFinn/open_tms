@@ -1,6 +1,31 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import {
+  AlertTriangle,
+  ArrowLeft,
+  CheckCircle2,
+  ChevronRight,
+  CircleAlert,
+  ClipboardList,
+  List,
+  Loader2,
+  Play,
+  Receipt,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 
 interface WaveDetail {
   id: string;
@@ -23,15 +48,17 @@ interface WaveDetail {
   }>;
 }
 
-function statusChip(s: string): string {
+type BadgeVariant = 'success' | 'info' | 'warning' | 'destructive' | 'muted' | 'secondary' | 'default';
+
+function statusVariant(s: string): BadgeVariant {
   switch (s) {
-    case 'planning': return 'vn-chip-secondary';
-    case 'released': return 'vn-chip-info';
-    case 'in_progress': return 'vn-chip-warning';
-    case 'completed': return 'vn-chip-success';
-    case 'cancelled': return 'vn-chip-error';
-    case 'short_pick': return 'vn-chip-error';
-    default: return 'vn-chip-secondary';
+    case 'planning': return 'secondary';
+    case 'released': return 'info';
+    case 'in_progress': return 'warning';
+    case 'completed': return 'success';
+    case 'cancelled': return 'destructive';
+    case 'short_pick': return 'destructive';
+    default: return 'secondary';
   }
 }
 
@@ -74,124 +101,165 @@ export default function VNextWmsWaveDetail() {
     finally { setReleasing(false); }
   };
 
-  if (loading) return <div style={{ padding: '2rem', textAlign: 'center' }}><div className="vn-loading-spinner" /></div>;
-  if (error && !wave) return <div className="vn-alert vn-alert-error">{error}</div>;
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+  if (error && !wave) {
+    return (
+      <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+        <CircleAlert className="h-5 w-5" />
+        {error}
+      </div>
+    );
+  }
   if (!wave) return null;
 
   const totalPickLines = wave.pickTasks.reduce((s, t) => s + t.totalLines, 0);
   const completedPickLines = wave.pickTasks.reduce((s, t) => s + t.completedLines, 0);
 
   return (
-    <div>
-      <div className="vn-page-header">
+    <div className="space-y-6">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Link to="/wms/waves" className="hover:text-foreground">
+          <ArrowLeft className="inline h-4 w-4" /> Waves
+        </Link>
+        <ChevronRight className="h-3 w-3" />
+        <span>{wave.waveNumber}</span>
+      </div>
+
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1>{wave.waveNumber}</h1>
-          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-            <span className={`vn-chip ${statusChip(wave.status)}`}>{formatStatus(wave.status)}</span>
-            <span className="vn-chip vn-chip-primary">{formatStatus(wave.pickStrategy)}</span>
+          <h1 className="text-3xl font-bold tracking-tight">{wave.waveNumber}</h1>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <Badge variant={statusVariant(wave.status)}>{formatStatus(wave.status)}</Badge>
+            <Badge variant="default">{formatStatus(wave.pickStrategy)}</Badge>
             {wave.cutoffAt && (
-              <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+              <span className="text-sm text-muted-foreground">
                 Cutoff: {new Date(wave.cutoffAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </span>
             )}
           </div>
         </div>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
+        <div className="flex gap-2">
           {wave.status === 'planning' && (
-            <button className="vn-btn vn-btn-primary" onClick={handleRelease} disabled={releasing}>
-              <span className="material-icons" style={{ fontSize: '18px', marginRight: '0.5rem' }}>play_arrow</span>
+            <Button variant="gradient" onClick={handleRelease} disabled={releasing}>
+              <Play className="h-4 w-4" />
               {releasing ? 'Releasing...' : 'Release Wave'}
-            </button>
+            </Button>
           )}
         </div>
       </div>
 
-      {error && <div className="vn-alert vn-alert-error" style={{ marginBottom: '1rem' }}>{error}</div>}
+      {error && (
+        <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+          <CircleAlert className="h-5 w-5" />
+          {error}
+        </div>
+      )}
 
       {releaseResult && (
-        <div style={{ marginBottom: '1rem' }}>
-          <div className="vn-alert vn-alert-success">
+        <div className="space-y-2">
+          <div className="flex items-center gap-3 rounded-md border border-success/30 bg-success/10 p-4 text-sm text-success">
+            <CheckCircle2 className="h-5 w-5" />
             Wave released: {releaseResult.pickTasksCreated} pick task(s) created
           </div>
           {releaseResult.allocationFailures?.length > 0 && (
-            <div className="vn-alert vn-alert-warning" style={{ marginTop: '0.5rem' }}>
-              <strong>Allocation warnings:</strong>
-              <ul style={{ margin: '0.5rem 0 0', paddingLeft: '1.2rem' }}>
-                {releaseResult.allocationFailures.map((f: string, i: number) => <li key={i}>{f}</li>)}
-              </ul>
+            <div className="flex items-start gap-3 rounded-md border border-warning/30 bg-warning/10 p-4 text-sm text-warning">
+              <AlertTriangle className="h-5 w-5" />
+              <div>
+                <strong>Allocation warnings:</strong>
+                <ul className="ml-5 mt-1 list-disc">
+                  {releaseResult.allocationFailures.map((f: string, i: number) => <li key={i}>{f}</li>)}
+                </ul>
+              </div>
             </div>
           )}
         </div>
       )}
 
-      {/* Stats */}
-      <div className="vn-stats" style={{ marginBottom: '1.5rem' }}>
-        <div className="vn-stat">
-          <div className="vn-stat-icon vn-stat-icon-primary"><span className="material-icons">receipt_long</span></div>
-          <div className="vn-stat-value">{wave.orderCount}</div>
-          <div className="vn-stat-label">Orders</div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon vn-stat-icon-info"><span className="material-icons">list</span></div>
-          <div className="vn-stat-value">{wave.lineCount}</div>
-          <div className="vn-stat-label">Order Lines</div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon vn-stat-icon-warning"><span className="material-icons">assignment</span></div>
-          <div className="vn-stat-value">{wave.pickTasks.length}</div>
-          <div className="vn-stat-label">Pick Tasks</div>
-        </div>
-        {totalPickLines > 0 && (
-          <div className="vn-stat">
-            <div className="vn-stat-icon vn-stat-icon-success"><span className="material-icons">check_circle</span></div>
-            <div className="vn-stat-value">{completedPickLines}/{totalPickLines}</div>
-            <div className="vn-stat-label">Lines Picked</div>
-          </div>
-        )}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {[
+          { label: 'Orders', value: wave.orderCount, icon: Receipt, tone: 'bg-primary/10 text-primary' },
+          { label: 'Order Lines', value: wave.lineCount, icon: List, tone: 'bg-info/15 text-info' },
+          { label: 'Pick Tasks', value: wave.pickTasks.length, icon: ClipboardList, tone: 'bg-warning/15 text-warning' },
+          ...(totalPickLines > 0 ? [{ label: 'Lines Picked', value: `${completedPickLines}/${totalPickLines}`, icon: CheckCircle2, tone: 'bg-success/15 text-success' }] : []),
+        ].map(s => {
+          const Icon = s.icon;
+          return (
+            <Card key={s.label}>
+              <CardContent className="p-5">
+                <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', s.tone)}>
+                  <Icon className="h-5 w-5" />
+                </div>
+                <div className="mt-3 text-2xl font-bold tracking-tight">{s.value}</div>
+                <div className="mt-1 text-sm text-muted-foreground">{s.label}</div>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
-      {/* Pick Tasks */}
-      <div className="vn-card">
-        <h3 style={{ margin: '0 0 1rem' }}>Pick Tasks</h3>
-        {wave.pickTasks.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>
-            {wave.status === 'planning' ? 'Release the wave to generate pick tasks.' : 'No pick tasks.'}
-          </div>
-        ) : (
-          <div className="vn-table-wrap">
-            <table className="vn-table">
-              <thead>
-                <tr><th>Task</th><th>Type</th><th>Order</th><th>Progress</th><th>Assigned</th><th>Status</th><th></th></tr>
-              </thead>
-              <tbody>
+      <Card>
+        <CardHeader>
+          <CardTitle>Pick Tasks</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {wave.pickTasks.length === 0 ? (
+            <div className="px-6 py-8 text-center text-sm text-muted-foreground">
+              {wave.status === 'planning' ? 'Release the wave to generate pick tasks.' : 'No pick tasks.'}
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Task</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Order</TableHead>
+                  <TableHead>Progress</TableHead>
+                  <TableHead>Assigned</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {wave.pickTasks.map(t => (
-                  <tr key={t.id}>
-                    <td><span className="vn-table-id">{t.id.slice(0, 8)}</span></td>
-                    <td><span className="vn-chip vn-chip-primary">{formatStatus(t.pickType)}</span></td>
-                    <td>{t.orderId?.slice(0, 8) ?? 'Batch'}</td>
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <div style={{ flex: 1, height: '6px', background: 'var(--border)', borderRadius: '3px', overflow: 'hidden' }}>
-                          <div style={{ width: `${t.totalLines > 0 ? (t.completedLines / t.totalLines) * 100 : 0}%`, height: '100%', background: 'var(--color-success)', borderRadius: '3px' }} />
+                  <TableRow key={t.id}>
+                    <TableCell className="font-mono text-sm font-semibold">{t.id.slice(0, 8)}</TableCell>
+                    <TableCell>
+                      <Badge variant="default">{formatStatus(t.pickType)}</Badge>
+                    </TableCell>
+                    <TableCell>{t.orderId?.slice(0, 8) ?? 'Batch'}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <div className="h-2 w-32 overflow-hidden rounded-full bg-muted">
+                          <div
+                            className="h-full rounded-full bg-success"
+                            style={{ width: `${t.totalLines > 0 ? (t.completedLines / t.totalLines) * 100 : 0}%` }}
+                          />
                         </div>
-                        <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{t.completedLines}/{t.totalLines}</span>
+                        <span className="text-xs text-muted-foreground">{t.completedLines}/{t.totalLines}</span>
                       </div>
-                    </td>
-                    <td>{t.assignedToUserId || 'Unassigned'}</td>
-                    <td><span className={`vn-chip ${statusChip(t.status)}`}>{formatStatus(t.status)}</span></td>
-                    <td>
-                      <button className="vn-btn vn-btn-outline" style={{ fontSize: '0.8rem', padding: '0.15rem 0.5rem' }}
-                        onClick={() => navigate(`/wms/picking/${t.id}`)}>
+                    </TableCell>
+                    <TableCell>{t.assignedToUserId || 'Unassigned'}</TableCell>
+                    <TableCell>
+                      <Badge variant={statusVariant(t.status)}>{formatStatus(t.status)}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Button variant="outline" size="sm" onClick={() => navigate(`/wms/picking/${t.id}`)}>
                         View
-                      </button>
-                    </td>
-                  </tr>
+                      </Button>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

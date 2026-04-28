@@ -1,5 +1,5 @@
 /**
- * VNextShipmentMap — full-page map view of shipments, orders, and trackable units.
+ * VNextShipmentMap - full-page map view of shipments, orders, and trackable units.
  *
  * Uses Leaflet (OSM default, Google Maps if API key configured) with supercluster
  * for client-side point clustering. At zoomed-out levels, shipments aggregate into
@@ -13,7 +13,28 @@ import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import Supercluster from 'supercluster';
+import {
+  AlertTriangle,
+  Bell,
+  BellOff,
+  Bug,
+  CheckCircle2,
+  Edit3,
+  FileText,
+  Loader2,
+  Maximize2,
+  Minimize2,
+  Pause,
+  Play,
+  Route,
+  Truck,
+  Warehouse,
+  Package,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { getLocationTypeMeta } from './locationTypesMeta';
 
 // Fix for default markers in Leaflet with Vite
@@ -38,51 +59,48 @@ interface IssueFeature {
   properties: Record<string, any>;
 }
 
-// Status → CSS variable mapping for markers
+// Status-to-hex mapping (replaces var(--*) for use inside Leaflet HTML strings)
+const COLOR_INFO = '#3b82f6';
+const COLOR_SUCCESS = '#22c55e';
+const COLOR_WARNING = '#eab308';
+const COLOR_DESTRUCTIVE = '#ef4444';
+const COLOR_MUTED = '#94a3b8';
+const COLOR_PRIMARY = '#6366f1';
+
 function getStatusColor(status: string): string {
   switch (status) {
     case 'in_transit':
     case 'dispatched':
-      return 'var(--color-info)';
+      return COLOR_INFO;
     case 'delivered':
     case 'completed':
-      return 'var(--color-success)';
+      return COLOR_SUCCESS;
     case 'exception':
-      return 'var(--color-error)';
+      return COLOR_DESTRUCTIVE;
     case 'draft':
     case 'pending':
-      return 'var(--on-surface-variant)';
+      return COLOR_MUTED;
     default:
-      return 'var(--marker-default)';
+      return COLOR_MUTED;
   }
 }
 
-function getStatusIcon(status: string): string {
-  switch (status) {
-    case 'in_transit':
-    case 'dispatched':
-      return 'local_shipping';
-    case 'delivered':
-    case 'completed':
-      return 'check_circle';
-    case 'exception':
-      return 'error';
-    case 'draft':
-      return 'edit_note';
-    default:
-      return 'location_on';
-  }
-}
-
-function getEntityIcon(entityType: EntityType): string {
+function getEntityIcon(entityType: EntityType): typeof Truck {
   switch (entityType) {
-    case 'shipments': return 'local_shipping';
-    case 'orders': return 'receipt_long';
-    case 'units': return 'inventory_2';
+    case 'shipments': return Truck;
+    case 'orders': return FileText;
+    case 'units': return Package;
   }
 }
 
-// Build popup HTML for different entity types
+function entityIconLabel(entityType: EntityType): string {
+  switch (entityType) {
+    case 'shipments': return 'Shipments';
+    case 'orders': return 'Orders';
+    case 'units': return 'Trackable Units';
+  }
+}
+
 function buildPopupHtml(entityType: EntityType, props: Record<string, any>): string {
   if (entityType === 'shipments') {
     const staleMinutes = props.lastLocationAt
@@ -93,22 +111,21 @@ function buildPopupHtml(entityType: EntityType, props: Record<string, any>): str
       : 'No GPS';
 
     return `
-      <div style="min-width:220px;font-family:var(--font-family,Roboto,sans-serif)">
+      <div style="min-width:220px">
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-          <span class="material-icons" style="font-size:18px;color:${getStatusColor(props.status)}">${getStatusIcon(props.status)}</span>
           <strong style="font-size:14px">${props.reference}</strong>
         </div>
-        <div style="font-size:12px;color:var(--on-surface-variant);line-height:1.6">
-          <div><strong>Status:</strong> ${props.status.replace(/_/g, ' ')}</div>
+        <div style="font-size:12px;line-height:1.6">
+          <div><strong>Status:</strong> ${(props.status || '').replace(/_/g, ' ')}</div>
           ${props.customerName ? `<div><strong>Customer:</strong> ${props.customerName}</div>` : ''}
           ${props.carrierName ? `<div><strong>Carrier:</strong> ${props.carrierName}</div>` : ''}
           <div><strong>Origin:</strong> ${props.originName || ''}${props.originCity ? `, ${props.originCity}` : ''}</div>
           <div><strong>Dest:</strong> ${props.destinationName || ''}${props.destinationCity ? `, ${props.destinationCity}` : ''}</div>
-          <div style="margin-top:4px;color:${staleMinutes !== null && staleMinutes < 60 ? 'var(--color-success)' : 'var(--on-surface-variant)'}">
+          <div style="margin-top:4px;color:${staleMinutes !== null && staleMinutes < 60 ? COLOR_SUCCESS : COLOR_MUTED}">
             GPS: ${staleLabel}
           </div>
         </div>
-        <a href="/shipments/${props.id}" style="display:inline-block;margin-top:8px;font-size:12px;color:var(--primary);text-decoration:none">
+        <a href="/shipments/${props.id}" style="display:inline-block;margin-top:8px;font-size:12px;color:${COLOR_PRIMARY};text-decoration:none">
           View Details &rarr;
         </a>
       </div>
@@ -117,19 +134,18 @@ function buildPopupHtml(entityType: EntityType, props: Record<string, any>): str
 
   if (entityType === 'orders') {
     return `
-      <div style="min-width:200px;font-family:var(--font-family,Roboto,sans-serif)">
+      <div style="min-width:200px">
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-          <span class="material-icons" style="font-size:18px;color:var(--primary)">receipt_long</span>
           <strong style="font-size:14px">${props.reference}</strong>
         </div>
-        <div style="font-size:12px;color:var(--on-surface-variant);line-height:1.6">
+        <div style="font-size:12px;line-height:1.6">
           <div><strong>Status:</strong> ${props.status}</div>
           <div><strong>Delivery:</strong> ${props.deliveryStatus || 'N/A'}</div>
           ${props.customerName ? `<div><strong>Customer:</strong> ${props.customerName}</div>` : ''}
           <div><strong>Origin:</strong> ${props.originName || ''}${props.originCity ? `, ${props.originCity}` : ''}</div>
           <div><strong>Dest:</strong> ${props.destinationName || ''}${props.destinationCity ? `, ${props.destinationCity}` : ''}</div>
         </div>
-        <a href="/orders/${props.id}" style="display:inline-block;margin-top:8px;font-size:12px;color:var(--primary);text-decoration:none">
+        <a href="/orders/${props.id}" style="display:inline-block;margin-top:8px;font-size:12px;color:${COLOR_PRIMARY};text-decoration:none">
           View Details &rarr;
         </a>
       </div>
@@ -138,12 +154,11 @@ function buildPopupHtml(entityType: EntityType, props: Record<string, any>): str
 
   // units
   return `
-    <div style="min-width:200px;font-family:var(--font-family,Roboto,sans-serif)">
+    <div style="min-width:200px">
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-        <span class="material-icons" style="font-size:18px;color:var(--primary)">inventory_2</span>
         <strong style="font-size:14px">${props.reference}</strong>
       </div>
-      <div style="font-size:12px;color:var(--on-surface-variant);line-height:1.6">
+      <div style="font-size:12px;line-height:1.6">
         <div><strong>Type:</strong> ${props.unitType}</div>
         <div><strong>Condition:</strong> ${props.condition || 'unknown'}</div>
         ${props.orderNumber ? `<div><strong>Order:</strong> ${props.orderNumber}</div>` : ''}
@@ -156,46 +171,43 @@ function buildPopupHtml(entityType: EntityType, props: Record<string, any>): str
 
 function getPriorityColor(priority: string): string {
   switch (priority) {
-    case 'critical': return 'var(--color-error)';
-    case 'high': return 'var(--color-warning)';
-    case 'medium': return 'var(--color-info)';
-    default: return 'var(--on-surface-variant)';
+    case 'critical': return COLOR_DESTRUCTIVE;
+    case 'high': return COLOR_WARNING;
+    case 'medium': return COLOR_INFO;
+    default: return COLOR_MUTED;
   }
 }
 
 function buildIssuePopupHtml(props: Record<string, any>): string {
   const slaLine = props.slaStatus
     ? `<div style="margin-top:4px;padding:4px 8px;border-radius:4px;font-size:11px;font-weight:600;
-        background:${props.slaStatus === 'breached' ? 'var(--color-error)' : props.slaStatus === 'warning' ? 'var(--color-warning)' : 'var(--color-info)'};
+        background:${props.slaStatus === 'breached' ? COLOR_DESTRUCTIVE : props.slaStatus === 'warning' ? COLOR_WARNING : COLOR_INFO};
         color:#fff;">
-        SLA: ${props.slaRuleName} — ${props.slaStatus.toUpperCase()}
+        SLA: ${props.slaRuleName} - ${props.slaStatus.toUpperCase()}
         ${props.slaRemainingMinutes != null ? ` (${props.slaRemainingMinutes}m remaining)` : ''}
-        ${props.slaBreachedAt ? ` — breached ${new Date(props.slaBreachedAt).toLocaleString()}` : ''}
+        ${props.slaBreachedAt ? ` - breached ${new Date(props.slaBreachedAt).toLocaleString()}` : ''}
       </div>`
     : '';
 
   return `
-    <div style="min-width:240px;font-family:var(--font-family,Roboto,sans-serif)">
+    <div style="min-width:240px">
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-        <span class="material-icons" style="font-size:18px;color:${getPriorityColor(props.priority)}">
-          ${props.type === 'sla_breach' ? 'timer_off' : 'bug_report'}
-        </span>
         <strong style="font-size:13px">${props.title}</strong>
       </div>
-      <div style="font-size:12px;color:var(--on-surface-variant);line-height:1.6">
+      <div style="font-size:12px;line-height:1.6">
         <div><strong>Priority:</strong> <span style="color:${getPriorityColor(props.priority)};font-weight:600">${props.priority}</span></div>
-        <div><strong>Status:</strong> ${props.status.replace(/_/g, ' ')}</div>
+        <div><strong>Status:</strong> ${(props.status || '').replace(/_/g, ' ')}</div>
         <div><strong>Category:</strong> ${props.category}</div>
-        ${props.assigneeName ? `<div><strong>Assigned:</strong> ${props.assigneeName}</div>` : '<div style="color:var(--color-warning)">Unassigned</div>'}
-        <div style="margin-top:4px;border-top:1px solid var(--outline-variant);padding-top:4px">
+        ${props.assigneeName ? `<div><strong>Assigned:</strong> ${props.assigneeName}</div>` : `<div style="color:${COLOR_WARNING}">Unassigned</div>`}
+        <div style="margin-top:4px;padding-top:4px;border-top:1px solid #e2e8f0">
           <strong>Shipment:</strong> ${props.shipmentReference} (${props.shipmentStatus})
         </div>
         ${props.customerName ? `<div><strong>Customer:</strong> ${props.customerName}</div>` : ''}
       </div>
       ${slaLine}
       <div style="display:flex;gap:12px;margin-top:8px">
-        <a href="/issues" style="font-size:12px;color:var(--primary);text-decoration:none">Issues &rarr;</a>
-        <a href="/shipments/${props.shipmentId}" style="font-size:12px;color:var(--primary);text-decoration:none">Shipment &rarr;</a>
+        <a href="/issues" style="font-size:12px;color:${COLOR_PRIMARY};text-decoration:none">Issues &rarr;</a>
+        <a href="/shipments/${props.shipmentId}" style="font-size:12px;color:${COLOR_PRIMARY};text-decoration:none">Shipment &rarr;</a>
       </div>
     </div>
   `;
@@ -214,38 +226,32 @@ export default function VNextShipmentMap() {
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  // Issue/SLA overlay state
   const [showIssues, setShowIssues] = useState(false);
   const [issueFeatures, setIssueFeatures] = useState<IssueFeature[]>([]);
   const [issueCount, setIssueCount] = useState(0);
   const issuesLayer = useRef<L.LayerGroup | null>(null);
 
-  // Location markers overlay state
   const [showLocations, setShowLocations] = useState(false);
   const locationsLayer = useRef<L.LayerGroup | null>(null);
 
-  // Route arcs overlay
   const [showRoutes, setShowRoutes] = useState(false);
   const routesLayer = useRef<L.LayerGroup | null>(null);
 
-  // Fullscreen and auto-refresh
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Supercluster instance — memoised on feature data
   const cluster = useMemo(() => {
     const sc = new Supercluster({
-      radius: 60,     // cluster radius in pixels
-      maxZoom: 16,    // beyond this, all points are individual
-      minPoints: 3,   // minimum points to form a cluster
+      radius: 60,
+      maxZoom: 16,
+      minPoints: 3,
     });
     sc.load(features as any);
     return sc;
   }, [features]);
 
-  // Fetch data from the API
   const fetchData = useCallback(async () => {
     if (!mapInstance.current) return;
 
@@ -299,12 +305,12 @@ export default function VNextShipmentMap() {
     if (!mapRef.current || mapInstance.current) return;
 
     const map = L.map(mapRef.current, {
-      center: [39.8283, -98.5795], // Center of US
+      center: [39.8283, -98.5795],
       zoom: 5,
       zoomControl: true,
     });
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
       attribution: '&copy; OpenStreetMap contributors',
       maxZoom: 19,
     }).addTo(map);
@@ -315,7 +321,6 @@ export default function VNextShipmentMap() {
     locationsLayer.current = L.layerGroup().addTo(map);
     mapInstance.current = map;
 
-    // Fetch on map move (debounced)
     let moveTimeout: ReturnType<typeof setTimeout>;
     map.on('moveend', () => {
       clearTimeout(moveTimeout);
@@ -324,7 +329,6 @@ export default function VNextShipmentMap() {
       }, 300);
     });
 
-    // Initial fetch
     fetchData();
 
     return () => {
@@ -336,12 +340,10 @@ export default function VNextShipmentMap() {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Re-fetch when entity type or filter changes
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  // Render clusters/markers when features or zoom change
   useEffect(() => {
     if (!mapInstance.current || !markersLayer.current) return;
 
@@ -361,7 +363,6 @@ export default function VNextShipmentMap() {
       const [lng, lat] = c.geometry.coordinates;
 
       if (c.properties.cluster) {
-        // Cluster marker
         const count = c.properties.point_count;
         const size = count < 10 ? 36 : count < 100 ? 44 : 52;
 
@@ -371,11 +372,11 @@ export default function VNextShipmentMap() {
             html: `<div style="
               width:${size}px;height:${size}px;
               border-radius:50%;
-              background:var(--primary);
-              color:var(--on-primary);
+              background:${COLOR_PRIMARY};
+              color:#fff;
               display:flex;align-items:center;justify-content:center;
               font-weight:700;font-size:${count < 100 ? 14 : 12}px;
-              border:3px solid var(--surface);
+              border:3px solid #fff;
               box-shadow:0 2px 8px rgba(0,0,0,0.3);
             ">${count < 1000 ? count : `${(count / 1000).toFixed(1)}k`}</div>`,
             iconSize: [size, size],
@@ -383,7 +384,6 @@ export default function VNextShipmentMap() {
           }),
         });
 
-        // Click to zoom into cluster
         marker.on('click', () => {
           const expansionZoom = Math.min(cluster.getClusterExpansionZoom(c.properties.cluster_id), 18);
           map.setView([lat, lng], expansionZoom, { animate: true });
@@ -391,13 +391,9 @@ export default function VNextShipmentMap() {
 
         marker.addTo(layer);
       } else {
-        // Individual marker
         const props = c.properties;
         const status = props.status || '';
         const color = getStatusColor(status);
-        const icon = entityType === 'shipments' ? getStatusIcon(status)
-          : entityType === 'orders' ? 'receipt_long'
-          : 'inventory_2';
 
         const marker = L.marker([lat, lng], {
           icon: L.divIcon({
@@ -408,9 +404,9 @@ export default function VNextShipmentMap() {
               background:${color};
               color:#fff;
               display:flex;align-items:center;justify-content:center;
-              border:2px solid var(--surface);
+              border:2px solid #fff;
               box-shadow:0 2px 4px rgba(0,0,0,0.3);
-            "><span class="material-icons" style="font-size:18px">${icon}</span></div>`,
+            "></div>`,
             iconSize: [32, 32],
             iconAnchor: [16, 16],
           }),
@@ -426,19 +422,16 @@ export default function VNextShipmentMap() {
     }
   }, [features, cluster, entityType]);
 
-  // Also re-render on zoom changes
   useEffect(() => {
     if (!mapInstance.current) return;
     const map = mapInstance.current;
     const onZoom = () => {
-      // Trigger re-render of clusters at new zoom level
       setFeatures((prev) => [...prev]);
     };
     map.on('zoomend', onZoom);
     return () => { map.off('zoomend', onZoom); };
   }, []);
 
-  // Fetch and render issue/SLA overlay
   useEffect(() => {
     if (!showIssues || !mapInstance.current || !issuesLayer.current) {
       issuesLayer.current?.clearLayers();
@@ -466,7 +459,6 @@ export default function VNextShipmentMap() {
     return () => { cancelled = true; };
   }, [showIssues]);
 
-  // Render issue markers onto their own layer
   useEffect(() => {
     if (!issuesLayer.current) return;
     const layer = issuesLayer.current;
@@ -479,8 +471,7 @@ export default function VNextShipmentMap() {
       const props = feat.properties;
       const isBreach = props.slaStatus === 'breached';
       const isWarning = props.slaStatus === 'warning';
-      const color = isBreach ? 'var(--color-error)' : isWarning ? 'var(--color-warning)' : getPriorityColor(props.priority);
-      const icon = props.type === 'sla_breach' ? 'timer_off' : 'bug_report';
+      const color = isBreach ? COLOR_DESTRUCTIVE : isWarning ? COLOR_WARNING : getPriorityColor(props.priority);
       const pulseClass = isBreach ? 'issue-pulse-breach' : isWarning ? 'issue-pulse-warning' : '';
 
       const marker = L.marker([lat, lng], {
@@ -492,14 +483,14 @@ export default function VNextShipmentMap() {
             background:${color};
             color:#fff;
             display:flex;align-items:center;justify-content:center;
-            border:2px solid var(--surface);
-            box-shadow:0 0 0 3px ${isBreach ? 'var(--color-error)' : isWarning ? 'var(--color-warning)' : 'transparent'},
+            border:2px solid #fff;
+            box-shadow:0 0 0 3px ${isBreach ? COLOR_DESTRUCTIVE : isWarning ? COLOR_WARNING : 'transparent'},
                         0 2px 6px rgba(0,0,0,0.3);
-          "><span class="material-icons" style="font-size:16px">${icon}</span></div>`,
+          "></div>`,
           iconSize: [28, 28],
           iconAnchor: [14, 14],
         }),
-        zIndexOffset: 1000, // Issues render above shipments
+        zIndexOffset: 1000,
       });
 
       marker.bindPopup(buildIssuePopupHtml(props), {
@@ -511,12 +502,10 @@ export default function VNextShipmentMap() {
     }
   }, [issueFeatures, showIssues]);
 
-  // Auto-refresh (30s interval)
   useEffect(() => {
     if (!autoRefresh) return;
     const interval = setInterval(() => {
       fetchData();
-      // Re-fetch issues too if overlay is active
       if (showIssues) {
         setShowIssues(false);
         setTimeout(() => setShowIssues(true), 50);
@@ -525,7 +514,6 @@ export default function VNextShipmentMap() {
     return () => clearInterval(interval);
   }, [autoRefresh, fetchData, showIssues]);
 
-  // Fullscreen toggle
   const toggleFullscreen = useCallback(() => {
     if (!containerRef.current) return;
     if (!document.fullscreenElement) {
@@ -541,14 +529,12 @@ export default function VNextShipmentMap() {
     return () => document.removeEventListener('fullscreenchange', onFsChange);
   }, []);
 
-  // Invalidate map size after fullscreen toggle (Leaflet needs this)
   useEffect(() => {
     if (mapInstance.current) {
       setTimeout(() => mapInstance.current?.invalidateSize(), 100);
     }
   }, [isFullscreen]);
 
-  // Location markers overlay
   useEffect(() => {
     if (!showLocations || !mapInstance.current || !locationsLayer.current) {
       locationsLayer.current?.clearLayers();
@@ -568,7 +554,6 @@ export default function VNextShipmentMap() {
 
         for (const loc of locs) {
           const typeMeta = getLocationTypeMeta(loc.locationType);
-          const locIcon = typeMeta?.icon || 'place';
           const locLabel = typeMeta?.label || 'Location';
 
           const marker = L.marker([loc.lat, loc.lng], {
@@ -577,36 +562,35 @@ export default function VNextShipmentMap() {
               html: `<div style="
                 width:26px;height:26px;
                 border-radius:4px;
-                background:var(--surface);
-                color:var(--primary);
+                background:#fff;
+                color:${COLOR_PRIMARY};
                 display:flex;align-items:center;justify-content:center;
-                border:2px solid var(--primary);
+                border:2px solid ${COLOR_PRIMARY};
                 box-shadow:0 1px 4px rgba(0,0,0,0.2);
                 opacity:0.85;
-              "><span class="material-icons" style="font-size:16px">${locIcon}</span></div>`,
+              "></div>`,
               iconSize: [26, 26],
               iconAnchor: [13, 13],
             }),
-            zIndexOffset: -100, // Locations render below shipments
+            zIndexOffset: -100,
           });
 
           marker.bindPopup(`
-            <div style="min-width:200px;font-family:var(--font-family,Roboto,sans-serif)">
+            <div style="min-width:200px">
               <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
-                <span class="material-icons" style="font-size:16px;color:var(--primary)">${locIcon}</span>
                 <strong style="font-size:13px">${loc.name}</strong>
               </div>
-              <div style="font-size:11px;color:var(--primary);font-weight:600;margin-bottom:4px">${locLabel}</div>
-              <div style="font-size:12px;color:var(--on-surface-variant);line-height:1.5">
+              <div style="font-size:11px;color:${COLOR_PRIMARY};font-weight:600;margin-bottom:4px">${locLabel}</div>
+              <div style="font-size:12px;line-height:1.5">
                 <div>${loc.address1}</div>
                 <div>${loc.city}${loc.state ? `, ${loc.state}` : ''} ${loc.postalCode || ''}</div>
                 <div>${loc.country}</div>
               </div>
               <div style="display:flex;gap:12px;margin-top:6px">
-                <a href="/locations/${loc.id}/ops" style="font-size:12px;color:var(--primary);text-decoration:none;font-weight:600">
+                <a href="/locations/${loc.id}/ops" style="font-size:12px;color:${COLOR_PRIMARY};text-decoration:none;font-weight:600">
                   Operations &rarr;
                 </a>
-                <a href="/locations/${loc.id}/edit" style="font-size:12px;color:var(--on-surface-variant);text-decoration:none">
+                <a href="/locations/${loc.id}/edit" style="font-size:12px;color:${COLOR_MUTED};text-decoration:none">
                   Edit
                 </a>
               </div>
@@ -624,7 +608,6 @@ export default function VNextShipmentMap() {
     return () => { cancelled = true; };
   }, [showLocations]);
 
-  // Route arcs: draw straight lines from origin → current position → destination
   useEffect(() => {
     if (!routesLayer.current) return;
     routesLayer.current.clearLayers();
@@ -641,28 +624,24 @@ export default function VNextShipmentMap() {
 
       if (!oLat || !oLng || !dLat || !dLng) continue;
 
-      // Only show routes for active shipments
       if (!['in_transit', 'dispatched'].includes(props.status)) continue;
 
-      // Origin → current position (solid line, traveled portion)
       const traveledLine = L.polyline(
         [[oLat, oLng], [curLat, curLng]],
-        { color: 'var(--color-info)', weight: 2, opacity: 0.6 }
+        { color: COLOR_INFO, weight: 2, opacity: 0.6 },
       );
 
-      // Current position → destination (dashed line, remaining portion)
       const remainingLine = L.polyline(
         [[curLat, curLng], [dLat, dLng]],
-        { color: 'var(--color-info)', weight: 2, opacity: 0.4, dashArray: '6, 8' }
+        { color: COLOR_INFO, weight: 2, opacity: 0.4, dashArray: '6, 8' },
       );
 
-      // Small origin/destination markers
       const originDot = L.circleMarker([oLat, oLng], {
-        radius: 4, fillColor: 'var(--marker-origin)', fillOpacity: 0.8,
+        radius: 4, fillColor: COLOR_INFO, fillOpacity: 0.8,
         stroke: true, weight: 1, color: '#fff',
       });
       const destDot = L.circleMarker([dLat, dLng], {
-        radius: 4, fillColor: 'var(--marker-destination)', fillOpacity: 0.8,
+        radius: 4, fillColor: COLOR_SUCCESS, fillOpacity: 0.8,
         stroke: true, weight: 1, color: '#fff',
       });
 
@@ -676,35 +655,42 @@ export default function VNextShipmentMap() {
   const shipmentStatuses = ['draft', 'dispatched', 'in_transit', 'delivered', 'exception'];
 
   return (
-    <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', height: isFullscreen ? '100vh' : 'calc(100vh - 56px)', background: 'var(--surface)' }}>
+    <div
+      ref={containerRef}
+      className={cn(
+        'flex flex-col bg-background',
+        isFullscreen ? 'h-screen' : 'h-[calc(100vh-56px)]',
+      )}
+    >
       {/* Toolbar */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '12px',
-        padding: '8px 16px',
-        borderBottom: '1px solid var(--outline-variant)',
-        background: 'var(--surface)',
-        flexWrap: 'wrap',
-      }}>
+      <div className="flex flex-wrap items-center gap-3 border-b border-border bg-card p-2">
         {/* Entity type tabs */}
-        <div className="vn-tabs" style={{ margin: 0 }}>
-          {(['shipments', 'orders', 'units'] as EntityType[]).map((et) => (
-            <button
-              key={et}
-              className={`vn-tab${entityType === et ? ' active' : ''}`}
-              onClick={() => setEntityType(et)}
-              style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
-            >
-              <span className="material-icons" style={{ fontSize: '18px' }}>{getEntityIcon(et)}</span>
-              {et === 'units' ? 'Trackable Units' : et.charAt(0).toUpperCase() + et.slice(1)}
-            </button>
-          ))}
+        <div className="inline-flex rounded-md border border-border">
+          {(['shipments', 'orders', 'units'] as EntityType[]).map((et, i) => {
+            const Icon = getEntityIcon(et);
+            const active = entityType === et;
+            return (
+              <Button
+                key={et}
+                variant={active ? 'secondary' : 'ghost'}
+                size="sm"
+                onClick={() => setEntityType(et)}
+                className={cn(
+                  'rounded-none',
+                  i === 0 && 'rounded-l-md',
+                  i === 2 && 'rounded-r-md',
+                )}
+              >
+                <Icon className="h-4 w-4" />
+                {entityIconLabel(et)}
+              </Button>
+            );
+          })}
         </div>
 
         {/* Status filter for shipments */}
         {entityType === 'shipments' && (
-          <div style={{ display: 'flex', gap: '4px', marginLeft: '8px' }}>
+          <div className="ml-2 flex flex-wrap gap-1">
             {shipmentStatuses.map((s) => {
               const active = statusFilter.includes(s);
               return (
@@ -712,19 +698,13 @@ export default function VNextShipmentMap() {
                   key={s}
                   onClick={() => {
                     setStatusFilter((prev) =>
-                      active ? prev.filter((x) => x !== s) : [...prev, s]
+                      active ? prev.filter((x) => x !== s) : [...prev, s],
                     );
                   }}
-                  style={{
-                    padding: '2px 10px',
-                    fontSize: '12px',
-                    borderRadius: '12px',
-                    border: `1px solid ${active ? 'var(--primary)' : 'var(--outline-variant)'}`,
-                    background: active ? 'var(--primary)' : 'transparent',
-                    color: active ? 'var(--on-primary)' : 'var(--on-surface-variant)',
-                    cursor: 'pointer',
-                    textTransform: 'capitalize',
-                  }}
+                  className={cn(
+                    'rounded-full border px-3 py-0.5 text-xs capitalize transition-colors',
+                    active ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground hover:border-primary/40',
+                  )}
                 >
                   {s.replace(/_/g, ' ')}
                 </button>
@@ -733,15 +713,7 @@ export default function VNextShipmentMap() {
             {statusFilter.length > 0 && (
               <button
                 onClick={() => setStatusFilter([])}
-                style={{
-                  padding: '2px 8px',
-                  fontSize: '12px',
-                  borderRadius: '12px',
-                  border: 'none',
-                  background: 'transparent',
-                  color: 'var(--color-error)',
-                  cursor: 'pointer',
-                }}
+                className="rounded-full px-2 py-0.5 text-xs text-destructive"
               >
                 Clear
               </button>
@@ -751,209 +723,114 @@ export default function VNextShipmentMap() {
 
         {/* Routes overlay toggle */}
         {entityType === 'shipments' && (
-          <button
-            onClick={() => setShowRoutes((prev) => !prev)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              padding: '4px 12px',
-              fontSize: '12px',
-              fontWeight: 600,
-              borderRadius: '12px',
-              border: `1px solid ${showRoutes ? 'var(--color-info)' : 'var(--outline-variant)'}`,
-              background: showRoutes ? 'var(--color-info)' : 'transparent',
-              color: showRoutes ? '#fff' : 'var(--on-surface-variant)',
-              cursor: 'pointer',
-            }}
+          <Button
+            variant={showRoutes ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setShowRoutes(prev => !prev)}
           >
-            <span className="material-icons" style={{ fontSize: '16px' }}>route</span>
+            <Route className="h-4 w-4" />
             Routes
-          </button>
+          </Button>
         )}
 
         {/* Locations overlay toggle */}
-        <button
-          onClick={() => setShowLocations((prev) => !prev)}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px',
-            padding: '4px 12px',
-            fontSize: '12px',
-            fontWeight: 600,
-            borderRadius: '12px',
-            border: `1px solid ${showLocations ? 'var(--primary)' : 'var(--outline-variant)'}`,
-            background: showLocations ? 'var(--primary)' : 'transparent',
-            color: showLocations ? 'var(--on-primary)' : 'var(--on-surface-variant)',
-            cursor: 'pointer',
-          }}
+        <Button
+          variant={showLocations ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setShowLocations(prev => !prev)}
         >
-          <span className="material-icons" style={{ fontSize: '16px' }}>warehouse</span>
+          <Warehouse className="h-4 w-4" />
           Locations
-        </button>
+        </Button>
 
         {/* Issue/SLA overlay toggle */}
-        <button
-          onClick={() => setShowIssues((prev) => !prev)}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px',
-            padding: '4px 12px',
-            fontSize: '12px',
-            fontWeight: 600,
-            borderRadius: '12px',
-            border: `1px solid ${showIssues ? 'var(--color-error)' : 'var(--outline-variant)'}`,
-            background: showIssues ? 'var(--color-error)' : 'transparent',
-            color: showIssues ? '#fff' : 'var(--on-surface-variant)',
-            cursor: 'pointer',
-            marginLeft: entityType !== 'shipments' ? '8px' : '0',
-          }}
+        <Button
+          variant={showIssues ? 'destructive' : 'outline'}
+          size="sm"
+          onClick={() => setShowIssues(prev => !prev)}
         >
-          <span className="material-icons" style={{ fontSize: '16px' }}>
-            {showIssues ? 'notifications_active' : 'notifications_none'}
-          </span>
+          {showIssues ? <Bell className="h-4 w-4" /> : <BellOff className="h-4 w-4" />}
           Issues{issueCount > 0 && showIssues ? ` (${issueCount})` : ''}
-        </button>
+        </Button>
 
         {/* Right side: controls + stats */}
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--on-surface-variant)' }}>
-          {loading && (
-            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <span className="material-icons" style={{ fontSize: '16px', animation: 'spin 1s linear infinite' }}>sync</span>
-            </span>
-          )}
+        <div className="ml-auto flex items-center gap-2 text-sm text-muted-foreground">
+          {loading && <Loader2 className="h-4 w-4 animate-spin" />}
           {!loading && (
             <span>{total.toLocaleString()} {entityType}{truncated ? ' (limited)' : ''}</span>
           )}
           {lastRefresh && !loading && (
-            <span style={{ fontSize: '11px', opacity: 0.7 }}>
-              {lastRefresh.toLocaleTimeString()}
-            </span>
+            <span className="text-xs opacity-70">{lastRefresh.toLocaleTimeString()}</span>
           )}
           {error && (
-            <span style={{ color: 'var(--color-error)', fontSize: '12px' }}>
-              <span className="material-icons" style={{ fontSize: '16px', verticalAlign: 'middle' }}>error</span>
-            </span>
+            <AlertTriangle className="h-4 w-4 text-destructive" />
           )}
 
-          {/* Auto-refresh toggle */}
-          <button
-            onClick={() => setAutoRefresh((prev) => !prev)}
+          <Button
+            variant={autoRefresh ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setAutoRefresh(prev => !prev)}
             title={autoRefresh ? 'Stop auto-refresh (30s)' : 'Start auto-refresh (30s)'}
-            style={{
-              display: 'flex', alignItems: 'center', gap: '3px',
-              padding: '3px 8px', fontSize: '11px', fontWeight: 600,
-              borderRadius: '10px',
-              border: `1px solid ${autoRefresh ? 'var(--color-success)' : 'var(--outline-variant)'}`,
-              background: autoRefresh ? 'var(--color-success)' : 'transparent',
-              color: autoRefresh ? '#fff' : 'var(--on-surface-variant)',
-              cursor: 'pointer',
-            }}
           >
-            <span className="material-icons" style={{ fontSize: '14px' }}>
-              {autoRefresh ? 'pause' : 'play_arrow'}
-            </span>
+            {autoRefresh ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
             {autoRefresh ? 'Live' : 'Auto'}
-          </button>
+          </Button>
 
-          {/* Fullscreen toggle */}
-          <button
+          <Button
+            variant="outline"
+            size="icon"
             onClick={toggleFullscreen}
-            title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen (control centre mode)'}
-            style={{
-              display: 'flex', alignItems: 'center',
-              padding: '4px',
-              borderRadius: '6px',
-              border: '1px solid var(--outline-variant)',
-              background: 'transparent',
-              color: 'var(--on-surface-variant)',
-              cursor: 'pointer',
-            }}
+            title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
           >
-            <span className="material-icons" style={{ fontSize: '18px' }}>
-              {isFullscreen ? 'fullscreen_exit' : 'fullscreen'}
-            </span>
-          </button>
+            {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+          </Button>
         </div>
       </div>
 
-      {/* Map container — fills remaining space */}
-      <div ref={mapRef} style={{ flex: 1 }} />
+      {/* Map container */}
+      <div ref={mapRef} className="flex-1" />
 
       {/* Legend */}
       {entityType === 'shipments' && (
-        <div style={{
-          position: 'absolute',
-          bottom: '24px',
-          left: '24px',
-          zIndex: 1000,
-          background: 'var(--surface)',
-          border: '1px solid var(--outline-variant)',
-          borderRadius: '8px',
-          padding: '10px 14px',
-          fontSize: '12px',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-        }}>
-          <div style={{ fontWeight: 600, marginBottom: '6px', color: 'var(--on-surface)' }}>Legend</div>
-          {[
-            { label: 'In Transit', color: 'var(--color-info)', icon: 'local_shipping' },
-            { label: 'Delivered', color: 'var(--color-success)', icon: 'check_circle' },
-            { label: 'Exception', color: 'var(--color-error)', icon: 'error' },
-            { label: 'Draft / Other', color: 'var(--on-surface-variant)', icon: 'edit_note' },
-          ].map((item) => (
-            <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
-              <span className="material-icons" style={{ fontSize: '16px', color: item.color }}>{item.icon}</span>
-              <span style={{ color: 'var(--on-surface-variant)' }}>{item.label}</span>
-            </div>
-          ))}
+        <div className="absolute bottom-6 left-6 z-[1000] rounded-md border border-border bg-card/95 p-3 text-xs shadow-lg backdrop-blur">
+          <div className="mb-1.5 font-semibold">Legend</div>
+          <LegendItem color={COLOR_INFO} label="In Transit" Icon={Truck} />
+          <LegendItem color={COLOR_SUCCESS} label="Delivered" Icon={CheckCircle2} />
+          <LegendItem color={COLOR_DESTRUCTIVE} label="Exception" Icon={AlertTriangle} />
+          <LegendItem color={COLOR_MUTED} label="Draft / Other" Icon={Edit3} />
           {showRoutes && (
             <>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
-                <div style={{ width: '16px', height: '2px', background: 'var(--color-info)' }} />
-                <span style={{ color: 'var(--on-surface-variant)' }}>Traveled</span>
+              <div className="mt-1 flex items-center gap-1.5">
+                <div className="h-0.5 w-4 bg-info" />
+                <span className="text-muted-foreground">Traveled</span>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
-                <div style={{ width: '16px', height: '2px', background: 'var(--color-info)', opacity: 0.4, borderTop: '2px dashed var(--color-info)' }} />
-                <span style={{ color: 'var(--on-surface-variant)' }}>Remaining</span>
+              <div className="flex items-center gap-1.5">
+                <div className="h-0.5 w-4 border-t-2 border-dashed border-info opacity-60" />
+                <span className="text-muted-foreground">Remaining</span>
               </div>
             </>
           )}
-          {showLocations && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
-              <span className="material-icons" style={{ fontSize: '16px', color: 'var(--primary)' }}>warehouse</span>
-              <span style={{ color: 'var(--on-surface-variant)' }}>Location</span>
-            </div>
-          )}
+          {showLocations && <LegendItem color={COLOR_PRIMARY} label="Location" Icon={Warehouse} />}
           {showIssues && (
             <>
-              <div style={{ borderTop: '1px solid var(--outline-variant)', margin: '6px 0', paddingTop: '6px', fontWeight: 600, color: 'var(--on-surface)' }}>Issues / SLA</div>
-              {[
-                { label: 'SLA Breached', color: 'var(--color-error)', icon: 'timer_off' },
-                { label: 'SLA Warning', color: 'var(--color-warning)', icon: 'timer_off' },
-                { label: 'Open Issue', color: 'var(--color-info)', icon: 'bug_report' },
-              ].map((item) => (
-                <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
-                  <span className="material-icons" style={{ fontSize: '16px', color: item.color }}>{item.icon}</span>
-                  <span style={{ color: 'var(--on-surface-variant)' }}>{item.label}</span>
-                </div>
-              ))}
+              <div className="mt-1.5 border-t border-border pt-1.5 font-semibold">Issues / SLA</div>
+              <LegendItem color={COLOR_DESTRUCTIVE} label="SLA Breached" Icon={AlertTriangle} />
+              <LegendItem color={COLOR_WARNING} label="SLA Warning" Icon={AlertTriangle} />
+              <LegendItem color={COLOR_INFO} label="Open Issue" Icon={Bug} />
             </>
           )}
         </div>
       )}
 
-      {/* Spin keyframe */}
+      {/* Animation keyframes for issue pulses */}
       <style>{`
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         @keyframes pulse-breach {
-          0%, 100% { box-shadow: 0 0 0 0 rgba(244, 67, 54, 0.6); }
-          50% { box-shadow: 0 0 0 10px rgba(244, 67, 54, 0); }
+          0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6); }
+          50% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
         }
         @keyframes pulse-warning {
-          0%, 100% { box-shadow: 0 0 0 0 rgba(255, 152, 0, 0.5); }
-          50% { box-shadow: 0 0 0 8px rgba(255, 152, 0, 0); }
+          0%, 100% { box-shadow: 0 0 0 0 rgba(234, 179, 8, 0.5); }
+          50% { box-shadow: 0 0 0 8px rgba(234, 179, 8, 0); }
         }
         .issue-pulse-breach { animation: pulse-breach 2s ease-in-out infinite; }
         .issue-pulse-warning { animation: pulse-warning 2.5s ease-in-out infinite; }
@@ -966,6 +843,15 @@ export default function VNextShipmentMap() {
           border: none !important;
         }
       `}</style>
+    </div>
+  );
+}
+
+function LegendItem({ color, label, Icon }: { color: string; label: string; Icon: typeof Truck }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <Icon className="h-3.5 w-3.5" style={{ color }} />
+      <span className="text-muted-foreground">{label}</span>
     </div>
   );
 }

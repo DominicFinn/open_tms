@@ -1,6 +1,35 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, Link } from 'react-router-dom';
+import { ArrowLeft, ChevronRight, CircleAlert, Info, Loader2 } from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 interface RmaLine {
   id: string;
@@ -56,13 +85,15 @@ interface CarrierOption {
 const DISPOSITIONS = ['restock', 'refurb', 'scrap', 'recycle', 'donate', 'rtv', 'customer_keeps'];
 const INSPECTION_STATUSES = ['pass', 'fail', 'partial_damage'];
 
-function statusChip(s: string): string {
+type BadgeVariant = 'success' | 'info' | 'warning' | 'destructive' | 'muted' | 'secondary' | 'default';
+
+function statusVariant(s: string): BadgeVariant {
   switch (s) {
-    case 'requested': return 'vn-chip-info';
-    case 'authorized': case 'in_transit': case 'received': case 'inspecting': case 'dispositioning': return 'vn-chip-warning';
-    case 'completed': case 'pass': case 'restock': return 'vn-chip-success';
-    case 'rejected': case 'fail': case 'scrap': return 'vn-chip-error';
-    default: return 'vn-chip-secondary';
+    case 'requested': return 'info';
+    case 'authorized': case 'in_transit': case 'received': case 'inspecting': case 'dispositioning': return 'warning';
+    case 'completed': case 'pass': case 'restock': return 'success';
+    case 'rejected': case 'fail': case 'scrap': return 'destructive';
+    default: return 'secondary';
   }
 }
 
@@ -78,25 +109,21 @@ export default function VNextWmsReturnDetail() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState('');
 
-  // Line inspection state
   const [inspectingLineId, setInspectingLineId] = useState<string | null>(null);
   const [inspectionForm, setInspectionForm] = useState({ inspectionStatus: 'pass', disposition: '', inspectionNotes: '' });
 
-  // Line receiving state
   const [receivingLineId, setReceivingLineId] = useState<string | null>(null);
   const [receiveQty, setReceiveQty] = useState('');
 
-  // Refund state for completion
   const [showComplete, setShowComplete] = useState(false);
   const [actualRefund, setActualRefund] = useState('');
   const [refundNotes, setRefundNotes] = useState('');
 
-  // Return label + pickup state
   const [carriers, setCarriers] = useState<CarrierOption[]>([]);
   const [showLabelForm, setShowLabelForm] = useState(false);
   const [showPickupForm, setShowPickupForm] = useState(false);
   const [labelForm, setLabelForm] = useState({
-    carrierId: '', providerOverride: '', serviceLevel: '',
+    carrierId: '', providerOverride: 'default', serviceLevel: '',
     fromName: '', fromAddress1: '', fromCity: '', fromPostalCode: '', fromCountry: 'US',
     toName: '', toAddress1: '', toCity: '', toPostalCode: '', toCountry: 'US',
     weightKg: '1.0',
@@ -122,7 +149,7 @@ export default function VNextWmsReturnDetail() {
     fetch(`${API_URL}/api/v1/carriers`)
       .then(r => r.json())
       .then(res => { if (!res.error && Array.isArray(res.data)) setCarriers(res.data); })
-      .catch(() => { /* non-blocking */ });
+      .catch(() => { });
   }, []);
 
   const handleAuthorize = async () => {
@@ -211,7 +238,7 @@ export default function VNextWmsReturnDetail() {
     try {
       const body = {
         carrierId: labelForm.carrierId || undefined,
-        providerOverride: labelForm.providerOverride || undefined,
+        providerOverride: labelForm.providerOverride === 'default' ? undefined : labelForm.providerOverride,
         serviceLevel: labelForm.serviceLevel || undefined,
         from: {
           name: labelForm.fromName, address1: labelForm.fromAddress1,
@@ -273,8 +300,21 @@ export default function VNextWmsReturnDetail() {
     } finally { setBusy(''); }
   };
 
-  if (loading) return <div style={{ padding: '2rem', textAlign: 'center' }}><div className="vn-loading-spinner" /></div>;
-  if (!rma) return <div className="vn-alert vn-alert-error">{error || 'Not found'}</div>;
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+  if (!rma) {
+    return (
+      <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+        <CircleAlert className="h-5 w-5" />
+        {error || 'Not found'}
+      </div>
+    );
+  }
 
   const canAuthorize = rma.status === 'requested';
   const canReject = rma.status === 'requested' || rma.status === 'authorized';
@@ -284,323 +324,389 @@ export default function VNextWmsReturnDetail() {
   const allLinesInspected = rma.lines.every(l => l.disposition !== 'pending');
 
   return (
-    <div>
-      <div className="vn-page-header">
+    <div className="space-y-6">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Link to="/wms/returns" className="hover:text-foreground">
+          <ArrowLeft className="inline h-4 w-4" /> Returns
+        </Link>
+        <ChevronRight className="h-3 w-3" />
+        <span>{rma.rmaNumber}</span>
+      </div>
+
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1>{rma.rmaNumber}</h1>
-          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-            <span className={`vn-chip ${statusChip(rma.status)}`}>{formatStr(rma.status)}</span>
-            <span className="vn-chip vn-chip-secondary">{formatStr(rma.returnReason)}</span>
-            <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Via: {formatStr(rma.initiatedVia)}</span>
+          <h1 className="text-3xl font-bold tracking-tight">{rma.rmaNumber}</h1>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <Badge variant={statusVariant(rma.status)}>{formatStr(rma.status)}</Badge>
+            <Badge variant="secondary">{formatStr(rma.returnReason)}</Badge>
+            <span className="text-sm text-muted-foreground">Via: {formatStr(rma.initiatedVia)}</span>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          {canAuthorize && <button className="vn-btn vn-btn-primary" onClick={handleAuthorize} disabled={!!busy}>Authorize</button>}
-          {canReject && <button className="vn-btn vn-btn-outline" onClick={handleReject} disabled={!!busy} style={{ color: 'var(--color-error)' }}>Reject</button>}
-          {canComplete && <button className="vn-btn vn-btn-primary" onClick={() => { setActualRefund(String(rma.suggestedRefundCents / 100)); setShowComplete(true); }}>Complete & Refund</button>}
-        </div>
-      </div>
-
-      {error && <div className="vn-alert vn-alert-error" style={{ marginBottom: '1rem' }}>{error}</div>}
-
-      {/* Status timeline */}
-      <div className="vn-card" style={{ marginBottom: '1rem' }}>
-        <h3 style={{ margin: '0 0 0.75rem' }}>Timeline</h3>
-        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', fontSize: '0.85rem' }}>
-          <div><strong>Requested:</strong> {new Date(rma.requestedAt).toLocaleString()}</div>
-          {rma.authorizedAt && <div><strong>Authorized:</strong> {new Date(rma.authorizedAt).toLocaleString()}</div>}
-          {rma.receivedAt && <div><strong>Received:</strong> {new Date(rma.receivedAt).toLocaleString()}</div>}
-          {rma.completedAt && <div><strong>Completed:</strong> {new Date(rma.completedAt).toLocaleString()}</div>}
-        </div>
-        {rma.customerNotes && <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: 'var(--surface-secondary)', borderRadius: '6px', fontSize: '0.9rem' }}><strong>Customer notes:</strong> {rma.customerNotes}</div>}
-        {rma.rejectionNotes && <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: 'var(--surface-secondary)', borderRadius: '6px', fontSize: '0.9rem', color: 'var(--color-error)' }}><strong>Rejected:</strong> {rma.rejectionNotes}</div>}
-        {rma.refundAdjustmentNotes && <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: 'var(--surface-secondary)', borderRadius: '6px', fontSize: '0.9rem' }}><strong>Refund adjustment:</strong> {rma.refundAdjustmentNotes}</div>}
-      </div>
-
-      {/* Refund summary */}
-      <div className="vn-card" style={{ marginBottom: '1rem' }}>
-        <h3 style={{ margin: '0 0 0.75rem' }}>Refund</h3>
-        <div style={{ display: 'flex', gap: '2rem' }}>
-          <div>
-            <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Suggested</div>
-            <div style={{ fontSize: '1.5rem', fontWeight: 700 }}>${(rma.suggestedRefundCents / 100).toFixed(2)}</div>
-          </div>
-          <div>
-            <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Actual</div>
-            <div style={{ fontSize: '1.5rem', fontWeight: 700, color: rma.actualRefundCents != null ? 'var(--color-primary)' : 'var(--text-secondary)' }}>
-              {rma.actualRefundCents != null ? `$${(rma.actualRefundCents / 100).toFixed(2)}` : '--'}
-            </div>
-          </div>
-          {rma.creditNoteId && (
-            <div>
-              <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Credit Note</div>
-              <button className="vn-btn vn-btn-outline" style={{ fontSize: '0.8rem' }} onClick={() => navigate(`/finance/credit-notes/${rma.creditNoteId}`)}>View</button>
-            </div>
-          )}
+        <div className="flex gap-2">
+          {canAuthorize && <Button variant="gradient" onClick={handleAuthorize} disabled={!!busy}>Authorize</Button>}
+          {canReject && <Button variant="outline" className="text-destructive" onClick={handleReject} disabled={!!busy}>Reject</Button>}
+          {canComplete && <Button variant="gradient" onClick={() => { setActualRefund(String(rma.suggestedRefundCents / 100)); setShowComplete(true); }}>Complete &amp; Refund</Button>}
         </div>
       </div>
 
-      {/* Return Label + Pickup */}
-      {rma.status !== 'rejected' && rma.status !== 'completed' && (
-        <div className="vn-card" style={{ marginBottom: '1rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-            <h3 style={{ margin: 0 }}>Return Shipping</h3>
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
-              {!rma.returnLabelStorageKey && rma.status !== 'requested' && (
-                <button className="vn-btn vn-btn-primary" onClick={() => setShowLabelForm(v => !v)} disabled={!!busy}>Generate Label</button>
-              )}
-              {rma.returnLabelStorageKey && (
-                <a className="vn-btn vn-btn-outline" href={`${API_URL}/api/v1/rmas/${rma.id}/return-label/download`} target="_blank" rel="noreferrer">Download Label</a>
-              )}
-              {rma.returnTrackingNumber && !rma.returnPickupScheduledAt && !rma.returnPickupCancelledAt && (
-                <button className="vn-btn vn-btn-primary" onClick={() => setShowPickupForm(v => !v)} disabled={!!busy}>Schedule Pickup</button>
-              )}
-              {rma.returnPickupScheduledAt && !rma.returnPickupCancelledAt && (
-                <button className="vn-btn vn-btn-outline" style={{ color: 'var(--color-error)' }} onClick={handleCancelPickup} disabled={!!busy}>Cancel Pickup</button>
-              )}
-            </div>
-          </div>
-
-          {rma.returnTrackingNumber && (
-            <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap', fontSize: '0.85rem', marginBottom: '0.5rem' }}>
-              <div><strong>Provider:</strong> {rma.returnLabelProvider ?? '--'}</div>
-              <div><strong>Service:</strong> {rma.returnServiceLevel ?? '--'}</div>
-              <div><strong>Tracking:</strong> {rma.returnTrackingNumber}</div>
-              {rma.returnLabelGeneratedAt && <div><strong>Label issued:</strong> {new Date(rma.returnLabelGeneratedAt).toLocaleString()}</div>}
-            </div>
-          )}
-
-          {rma.returnPickupScheduledAt && (
-            <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap', fontSize: '0.85rem', padding: '0.5rem 0', borderTop: '1px solid var(--border-color)' }}>
-              <div><strong>Pickup:</strong> {new Date(rma.returnPickupScheduledAt).toLocaleString()}</div>
-              {rma.returnPickupWindow && <div><strong>Window:</strong> {rma.returnPickupWindow}</div>}
-              {rma.returnPickupConfirmationNumber && <div><strong>Confirmation:</strong> {rma.returnPickupConfirmationNumber}</div>}
-              {rma.returnPickupCancelledAt && <div style={{ color: 'var(--color-error)' }}><strong>Cancelled:</strong> {new Date(rma.returnPickupCancelledAt).toLocaleString()}</div>}
-            </div>
-          )}
-
-          {showLabelForm && (
-            <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: 'var(--surface-secondary)', borderRadius: '6px' }}>
-              <div className="vn-form-grid" style={{ gap: '0.5rem' }}>
-                <div className="vn-field">
-                  <label className="vn-field-label">Carrier</label>
-                  <select className="vn-input" value={labelForm.carrierId} onChange={e => {
-                    const c = carriers.find(c => c.id === e.target.value);
-                    setLabelForm(f => ({ ...f, carrierId: e.target.value, serviceLevel: c?.returnLabelDefaultService ?? f.serviceLevel }));
-                  }}>
-                    <option value="">Select carrier (optional)</option>
-                    {carriers.map(c => <option key={c.id} value={c.id}>{c.name}{c.returnLabelProvider ? ` (${c.returnLabelProvider})` : ''}</option>)}
-                  </select>
-                </div>
-                <div className="vn-field">
-                  <label className="vn-field-label">Provider Override</label>
-                  <select className="vn-input" value={labelForm.providerOverride} onChange={e => setLabelForm(f => ({ ...f, providerOverride: e.target.value }))}>
-                    <option value="">Use carrier default</option>
-                    <option value="manual">Manual</option>
-                    <option value="fedex">FedEx</option>
-                    <option value="ups">UPS</option>
-                    <option value="dhl">DHL</option>
-                  </select>
-                </div>
-                <div className="vn-field">
-                  <label className="vn-field-label">Service Level</label>
-                  <input className="vn-input" value={labelForm.serviceLevel} placeholder="ground" onChange={e => setLabelForm(f => ({ ...f, serviceLevel: e.target.value }))} />
-                </div>
-                <div className="vn-field">
-                  <label className="vn-field-label">Parcel Weight (kg)</label>
-                  <input className="vn-input" type="number" step="0.1" value={labelForm.weightKg} onChange={e => setLabelForm(f => ({ ...f, weightKg: e.target.value }))} />
-                </div>
-              </div>
-              <h4 style={{ margin: '0.75rem 0 0.25rem' }}>From (customer)</h4>
-              <div className="vn-form-grid" style={{ gap: '0.5rem' }}>
-                <input className="vn-input" placeholder="Name" value={labelForm.fromName} onChange={e => setLabelForm(f => ({ ...f, fromName: e.target.value }))} />
-                <input className="vn-input" placeholder="Address line 1" value={labelForm.fromAddress1} onChange={e => setLabelForm(f => ({ ...f, fromAddress1: e.target.value }))} />
-                <input className="vn-input" placeholder="City" value={labelForm.fromCity} onChange={e => setLabelForm(f => ({ ...f, fromCity: e.target.value }))} />
-                <input className="vn-input" placeholder="Postal code" value={labelForm.fromPostalCode} onChange={e => setLabelForm(f => ({ ...f, fromPostalCode: e.target.value }))} />
-                <input className="vn-input" placeholder="Country" value={labelForm.fromCountry} onChange={e => setLabelForm(f => ({ ...f, fromCountry: e.target.value }))} />
-              </div>
-              <h4 style={{ margin: '0.75rem 0 0.25rem' }}>To (receiving warehouse)</h4>
-              <div className="vn-form-grid" style={{ gap: '0.5rem' }}>
-                <input className="vn-input" placeholder="Name" value={labelForm.toName} onChange={e => setLabelForm(f => ({ ...f, toName: e.target.value }))} />
-                <input className="vn-input" placeholder="Address line 1" value={labelForm.toAddress1} onChange={e => setLabelForm(f => ({ ...f, toAddress1: e.target.value }))} />
-                <input className="vn-input" placeholder="City" value={labelForm.toCity} onChange={e => setLabelForm(f => ({ ...f, toCity: e.target.value }))} />
-                <input className="vn-input" placeholder="Postal code" value={labelForm.toPostalCode} onChange={e => setLabelForm(f => ({ ...f, toPostalCode: e.target.value }))} />
-                <input className="vn-input" placeholder="Country" value={labelForm.toCountry} onChange={e => setLabelForm(f => ({ ...f, toCountry: e.target.value }))} />
-              </div>
-              <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem' }}>
-                <button className="vn-btn vn-btn-primary" onClick={handleGenerateLabel} disabled={!!busy}>Generate</button>
-                <button className="vn-btn vn-btn-outline" onClick={() => setShowLabelForm(false)} disabled={!!busy}>Cancel</button>
-              </div>
-            </div>
-          )}
-
-          {showPickupForm && (
-            <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: 'var(--surface-secondary)', borderRadius: '6px' }}>
-              <div className="vn-form-grid" style={{ gap: '0.5rem' }}>
-                <div className="vn-field">
-                  <label className="vn-field-label">Pickup Date/Time</label>
-                  <input className="vn-input" type="datetime-local" value={pickupForm.pickupDate} onChange={e => setPickupForm(f => ({ ...f, pickupDate: e.target.value }))} />
-                </div>
-                <div className="vn-field">
-                  <label className="vn-field-label">Window (optional)</label>
-                  <input className="vn-input" placeholder="09:00-12:00" value={pickupForm.pickupWindow} onChange={e => setPickupForm(f => ({ ...f, pickupWindow: e.target.value }))} />
-                </div>
-              </div>
-              <h4 style={{ margin: '0.75rem 0 0.25rem' }}>Pickup address</h4>
-              <div className="vn-form-grid" style={{ gap: '0.5rem' }}>
-                <input className="vn-input" placeholder="Name" value={pickupForm.pickupName} onChange={e => setPickupForm(f => ({ ...f, pickupName: e.target.value }))} />
-                <input className="vn-input" placeholder="Address line 1" value={pickupForm.pickupAddress1} onChange={e => setPickupForm(f => ({ ...f, pickupAddress1: e.target.value }))} />
-                <input className="vn-input" placeholder="City" value={pickupForm.pickupCity} onChange={e => setPickupForm(f => ({ ...f, pickupCity: e.target.value }))} />
-                <input className="vn-input" placeholder="Postal code" value={pickupForm.pickupPostalCode} onChange={e => setPickupForm(f => ({ ...f, pickupPostalCode: e.target.value }))} />
-                <input className="vn-input" placeholder="Country" value={pickupForm.pickupCountry} onChange={e => setPickupForm(f => ({ ...f, pickupCountry: e.target.value }))} />
-              </div>
-              <div className="vn-field" style={{ marginTop: '0.5rem' }}>
-                <label className="vn-field-label">Notes (optional)</label>
-                <input className="vn-input" value={pickupForm.notes} onChange={e => setPickupForm(f => ({ ...f, notes: e.target.value }))} />
-              </div>
-              <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem' }}>
-                <button className="vn-btn vn-btn-primary" onClick={handleSchedulePickup} disabled={!!busy}>Schedule</button>
-                <button className="vn-btn vn-btn-outline" onClick={() => setShowPickupForm(false)} disabled={!!busy}>Cancel</button>
-              </div>
-            </div>
-          )}
-
-          {!rma.returnLabelStorageKey && rma.status === 'requested' && (
-            <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Authorize the RMA to enable label generation.</div>
-          )}
+      {error && (
+        <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+          <CircleAlert className="h-5 w-5" />
+          {error}
         </div>
       )}
 
-      {/* Lines */}
-      <div className="vn-card">
-        <h3 style={{ margin: '0 0 1rem' }}>Return Lines</h3>
-        <div className="vn-table-wrap">
-          <table className="vn-table">
-            <thead>
-              <tr>
-                <th>SKU</th>
-                <th>Requested</th>
-                <th>Received</th>
-                <th>Customer Wanted</th>
-                <th>Disposition</th>
-                <th>Inspection</th>
-                <th>Refund</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
+      <Card>
+        <CardHeader>
+          <CardTitle>Timeline</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex flex-wrap gap-4 text-sm">
+            <div><strong>Requested:</strong> {new Date(rma.requestedAt).toLocaleString()}</div>
+            {rma.authorizedAt && <div><strong>Authorized:</strong> {new Date(rma.authorizedAt).toLocaleString()}</div>}
+            {rma.receivedAt && <div><strong>Received:</strong> {new Date(rma.receivedAt).toLocaleString()}</div>}
+            {rma.completedAt && <div><strong>Completed:</strong> {new Date(rma.completedAt).toLocaleString()}</div>}
+          </div>
+          {rma.customerNotes && <div className="rounded-md bg-muted p-3 text-sm"><strong>Customer notes:</strong> {rma.customerNotes}</div>}
+          {rma.rejectionNotes && <div className="rounded-md bg-muted p-3 text-sm text-destructive"><strong>Rejected:</strong> {rma.rejectionNotes}</div>}
+          {rma.refundAdjustmentNotes && <div className="rounded-md bg-muted p-3 text-sm"><strong>Refund adjustment:</strong> {rma.refundAdjustmentNotes}</div>}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Refund</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap items-center gap-8">
+            <div>
+              <div className="text-xs text-muted-foreground">Suggested</div>
+              <div className="text-2xl font-bold">${(rma.suggestedRefundCents / 100).toFixed(2)}</div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">Actual</div>
+              <div className={`text-2xl font-bold ${rma.actualRefundCents != null ? 'text-primary' : 'text-muted-foreground'}`}>
+                {rma.actualRefundCents != null ? `$${(rma.actualRefundCents / 100).toFixed(2)}` : '-'}
+              </div>
+            </div>
+            {rma.creditNoteId && (
+              <div>
+                <div className="text-xs text-muted-foreground">Credit Note</div>
+                <Button variant="outline" size="sm" onClick={() => navigate(`/finance/credit-notes/${rma.creditNoteId}`)}>View</Button>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {rma.status !== 'rejected' && rma.status !== 'completed' && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>Return Shipping</CardTitle>
+            <div className="flex gap-2">
+              {!rma.returnLabelStorageKey && rma.status !== 'requested' && (
+                <Button variant="gradient" onClick={() => setShowLabelForm(v => !v)} disabled={!!busy}>Generate Label</Button>
+              )}
+              {rma.returnLabelStorageKey && (
+                <Button variant="outline" asChild>
+                  <a href={`${API_URL}/api/v1/rmas/${rma.id}/return-label/download`} target="_blank" rel="noreferrer">Download Label</a>
+                </Button>
+              )}
+              {rma.returnTrackingNumber && !rma.returnPickupScheduledAt && !rma.returnPickupCancelledAt && (
+                <Button variant="gradient" onClick={() => setShowPickupForm(v => !v)} disabled={!!busy}>Schedule Pickup</Button>
+              )}
+              {rma.returnPickupScheduledAt && !rma.returnPickupCancelledAt && (
+                <Button variant="outline" className="text-destructive" onClick={handleCancelPickup} disabled={!!busy}>Cancel Pickup</Button>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {rma.returnTrackingNumber && (
+              <div className="flex flex-wrap gap-6 text-sm">
+                <div><strong>Provider:</strong> {rma.returnLabelProvider ?? '-'}</div>
+                <div><strong>Service:</strong> {rma.returnServiceLevel ?? '-'}</div>
+                <div><strong>Tracking:</strong> {rma.returnTrackingNumber}</div>
+                {rma.returnLabelGeneratedAt && <div><strong>Label issued:</strong> {new Date(rma.returnLabelGeneratedAt).toLocaleString()}</div>}
+              </div>
+            )}
+
+            {rma.returnPickupScheduledAt && (
+              <div className="flex flex-wrap gap-6 border-t border-border pt-3 text-sm">
+                <div><strong>Pickup:</strong> {new Date(rma.returnPickupScheduledAt).toLocaleString()}</div>
+                {rma.returnPickupWindow && <div><strong>Window:</strong> {rma.returnPickupWindow}</div>}
+                {rma.returnPickupConfirmationNumber && <div><strong>Confirmation:</strong> {rma.returnPickupConfirmationNumber}</div>}
+                {rma.returnPickupCancelledAt && <div className="text-destructive"><strong>Cancelled:</strong> {new Date(rma.returnPickupCancelledAt).toLocaleString()}</div>}
+              </div>
+            )}
+
+            {showLabelForm && (
+              <div className="rounded-md bg-muted p-4">
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Carrier</Label>
+                    <Select
+                      value={labelForm.carrierId || 'none'}
+                      onValueChange={(v) => {
+                        const carrierId = v === 'none' ? '' : v;
+                        const c = carriers.find(c => c.id === carrierId);
+                        setLabelForm(f => ({ ...f, carrierId, serviceLevel: c?.returnLabelDefaultService ?? f.serviceLevel }));
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select carrier (optional)" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">None</SelectItem>
+                        {carriers.map(c => (
+                          <SelectItem key={c.id} value={c.id}>{c.name}{c.returnLabelProvider ? ` (${c.returnLabelProvider})` : ''}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Provider Override</Label>
+                    <Select value={labelForm.providerOverride} onValueChange={v => setLabelForm(f => ({ ...f, providerOverride: v }))}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="default">Use carrier default</SelectItem>
+                        <SelectItem value="manual">Manual</SelectItem>
+                        <SelectItem value="fedex">FedEx</SelectItem>
+                        <SelectItem value="ups">UPS</SelectItem>
+                        <SelectItem value="dhl">DHL</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Service Level</Label>
+                    <Input value={labelForm.serviceLevel} placeholder="ground" onChange={e => setLabelForm(f => ({ ...f, serviceLevel: e.target.value }))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Parcel Weight (kg)</Label>
+                    <Input type="number" step="0.1" value={labelForm.weightKg} onChange={e => setLabelForm(f => ({ ...f, weightKg: e.target.value }))} />
+                  </div>
+                </div>
+                <h4 className="mt-4 text-sm font-semibold">From (customer)</h4>
+                <div className="mt-2 grid gap-3 md:grid-cols-2">
+                  <Input placeholder="Name" value={labelForm.fromName} onChange={e => setLabelForm(f => ({ ...f, fromName: e.target.value }))} />
+                  <Input placeholder="Address line 1" value={labelForm.fromAddress1} onChange={e => setLabelForm(f => ({ ...f, fromAddress1: e.target.value }))} />
+                  <Input placeholder="City" value={labelForm.fromCity} onChange={e => setLabelForm(f => ({ ...f, fromCity: e.target.value }))} />
+                  <Input placeholder="Postal code" value={labelForm.fromPostalCode} onChange={e => setLabelForm(f => ({ ...f, fromPostalCode: e.target.value }))} />
+                  <Input placeholder="Country" value={labelForm.fromCountry} onChange={e => setLabelForm(f => ({ ...f, fromCountry: e.target.value }))} />
+                </div>
+                <h4 className="mt-4 text-sm font-semibold">To (receiving warehouse)</h4>
+                <div className="mt-2 grid gap-3 md:grid-cols-2">
+                  <Input placeholder="Name" value={labelForm.toName} onChange={e => setLabelForm(f => ({ ...f, toName: e.target.value }))} />
+                  <Input placeholder="Address line 1" value={labelForm.toAddress1} onChange={e => setLabelForm(f => ({ ...f, toAddress1: e.target.value }))} />
+                  <Input placeholder="City" value={labelForm.toCity} onChange={e => setLabelForm(f => ({ ...f, toCity: e.target.value }))} />
+                  <Input placeholder="Postal code" value={labelForm.toPostalCode} onChange={e => setLabelForm(f => ({ ...f, toPostalCode: e.target.value }))} />
+                  <Input placeholder="Country" value={labelForm.toCountry} onChange={e => setLabelForm(f => ({ ...f, toCountry: e.target.value }))} />
+                </div>
+                <div className="mt-4 flex gap-2">
+                  <Button variant="gradient" onClick={handleGenerateLabel} disabled={!!busy}>Generate</Button>
+                  <Button variant="outline" onClick={() => setShowLabelForm(false)} disabled={!!busy}>Cancel</Button>
+                </div>
+              </div>
+            )}
+
+            {showPickupForm && (
+              <div className="rounded-md bg-muted p-4">
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Pickup Date/Time</Label>
+                    <Input type="datetime-local" value={pickupForm.pickupDate} onChange={e => setPickupForm(f => ({ ...f, pickupDate: e.target.value }))} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Window (optional)</Label>
+                    <Input placeholder="09:00-12:00" value={pickupForm.pickupWindow} onChange={e => setPickupForm(f => ({ ...f, pickupWindow: e.target.value }))} />
+                  </div>
+                </div>
+                <h4 className="mt-4 text-sm font-semibold">Pickup address</h4>
+                <div className="mt-2 grid gap-3 md:grid-cols-2">
+                  <Input placeholder="Name" value={pickupForm.pickupName} onChange={e => setPickupForm(f => ({ ...f, pickupName: e.target.value }))} />
+                  <Input placeholder="Address line 1" value={pickupForm.pickupAddress1} onChange={e => setPickupForm(f => ({ ...f, pickupAddress1: e.target.value }))} />
+                  <Input placeholder="City" value={pickupForm.pickupCity} onChange={e => setPickupForm(f => ({ ...f, pickupCity: e.target.value }))} />
+                  <Input placeholder="Postal code" value={pickupForm.pickupPostalCode} onChange={e => setPickupForm(f => ({ ...f, pickupPostalCode: e.target.value }))} />
+                  <Input placeholder="Country" value={pickupForm.pickupCountry} onChange={e => setPickupForm(f => ({ ...f, pickupCountry: e.target.value }))} />
+                </div>
+                <div className="mt-3 space-y-2">
+                  <Label>Notes (optional)</Label>
+                  <Input value={pickupForm.notes} onChange={e => setPickupForm(f => ({ ...f, notes: e.target.value }))} />
+                </div>
+                <div className="mt-4 flex gap-2">
+                  <Button variant="gradient" onClick={handleSchedulePickup} disabled={!!busy}>Schedule</Button>
+                  <Button variant="outline" onClick={() => setShowPickupForm(false)} disabled={!!busy}>Cancel</Button>
+                </div>
+              </div>
+            )}
+
+            {!rma.returnLabelStorageKey && rma.status === 'requested' && (
+              <div className="text-sm text-muted-foreground">Authorize the RMA to enable label generation.</div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Return Lines</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>SKU</TableHead>
+                <TableHead>Requested</TableHead>
+                <TableHead>Received</TableHead>
+                <TableHead>Customer Wanted</TableHead>
+                <TableHead>Disposition</TableHead>
+                <TableHead>Inspection</TableHead>
+                <TableHead>Refund</TableHead>
+                <TableHead></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {rma.lines.map(line => (
                 <React.Fragment key={line.id}>
-                  <tr>
-                    <td><strong>{line.sku}</strong></td>
-                    <td>{line.requestedQuantity}</td>
-                    <td>{line.receivedQuantity}</td>
-                    <td>{line.requestedDisposition ? formatStr(line.requestedDisposition) : '--'}</td>
-                    <td>
+                  <TableRow>
+                    <TableCell className="font-mono text-sm font-semibold">{line.sku}</TableCell>
+                    <TableCell>{line.requestedQuantity}</TableCell>
+                    <TableCell>{line.receivedQuantity}</TableCell>
+                    <TableCell>{line.requestedDisposition ? formatStr(line.requestedDisposition) : '-'}</TableCell>
+                    <TableCell>
                       {line.disposition === 'pending'
-                        ? <span className="vn-chip vn-chip-secondary">Pending</span>
-                        : <span className={`vn-chip ${statusChip(line.disposition)}`}>{formatStr(line.disposition)}</span>}
-                    </td>
-                    <td><span className={`vn-chip ${statusChip(line.inspectionStatus)}`}>{formatStr(line.inspectionStatus)}</span></td>
-                    <td>${(line.refundAmountCents / 100).toFixed(2)}</td>
-                    <td>
-                      <div style={{ display: 'flex', gap: '0.25rem' }}>
+                        ? <Badge variant="secondary">Pending</Badge>
+                        : <Badge variant={statusVariant(line.disposition)}>{formatStr(line.disposition)}</Badge>}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={statusVariant(line.inspectionStatus)}>{formatStr(line.inspectionStatus)}</Badge>
+                    </TableCell>
+                    <TableCell>${(line.refundAmountCents / 100).toFixed(2)}</TableCell>
+                    <TableCell>
+                      <div className="flex gap-1">
                         {canReceive && line.receivedQuantity < line.requestedQuantity && (
-                          <button className="vn-btn vn-btn-outline" style={{ fontSize: '0.75rem', padding: '0.15rem 0.4rem' }} onClick={() => { setReceivingLineId(line.id); setReceiveQty(String(line.requestedQuantity - line.receivedQuantity)); }}>
+                          <Button variant="outline" size="sm" onClick={() => { setReceivingLineId(line.id); setReceiveQty(String(line.requestedQuantity - line.receivedQuantity)); }}>
                             Receive
-                          </button>
+                          </Button>
                         )}
                         {canInspect && line.disposition === 'pending' && line.receivedQuantity > 0 && (
-                          <button className="vn-btn vn-btn-outline" style={{ fontSize: '0.75rem', padding: '0.15rem 0.4rem' }} onClick={() => { setInspectingLineId(line.id); setInspectionForm({ inspectionStatus: 'pass', disposition: line.requestedDisposition || '', inspectionNotes: '' }); }}>
+                          <Button variant="outline" size="sm" onClick={() => { setInspectingLineId(line.id); setInspectionForm({ inspectionStatus: 'pass', disposition: line.requestedDisposition || '', inspectionNotes: '' }); }}>
                             Inspect
-                          </button>
+                          </Button>
                         )}
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                   {receivingLineId === line.id && (
-                    <tr>
-                      <td colSpan={8} style={{ background: 'var(--surface-secondary)', padding: '1rem' }}>
-                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end' }}>
-                          <div className="vn-field" style={{ marginBottom: 0 }}>
-                            <label className="vn-field-label">Received Quantity</label>
-                            <input className="vn-input" type="number" min="0" max={line.requestedQuantity} value={receiveQty} onChange={e => setReceiveQty(e.target.value)} style={{ width: '120px' }} />
+                    <TableRow>
+                      <TableCell colSpan={8} className="bg-muted">
+                        <div className="flex items-end gap-2">
+                          <div className="space-y-2">
+                            <Label>Received Quantity</Label>
+                            <Input type="number" min="0" max={line.requestedQuantity} value={receiveQty} onChange={e => setReceiveQty(e.target.value)} className="w-32" />
                           </div>
-                          <button className="vn-btn vn-btn-primary" onClick={handleReceive} disabled={!!busy}>Save</button>
-                          <button className="vn-btn vn-btn-outline" onClick={() => setReceivingLineId(null)}>Cancel</button>
+                          <Button variant="gradient" onClick={handleReceive} disabled={!!busy}>Save</Button>
+                          <Button variant="outline" onClick={() => setReceivingLineId(null)}>Cancel</Button>
                         </div>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   )}
                   {inspectingLineId === line.id && (
-                    <tr>
-                      <td colSpan={8} style={{ background: 'var(--surface-secondary)', padding: '1rem' }}>
-                        <div style={{ display: 'grid', gap: '0.75rem', gridTemplateColumns: '1fr 1fr', maxWidth: '600px' }}>
-                          <div className="vn-field">
-                            <label className="vn-field-label">Inspection Status *</label>
-                            <select className="vn-input" value={inspectionForm.inspectionStatus} onChange={e => setInspectionForm({ ...inspectionForm, inspectionStatus: e.target.value })}>
-                              {INSPECTION_STATUSES.map(s => <option key={s} value={s}>{formatStr(s)}</option>)}
-                            </select>
+                    <TableRow>
+                      <TableCell colSpan={8} className="bg-muted">
+                        <div className="grid max-w-2xl gap-3 md:grid-cols-2">
+                          <div className="space-y-2">
+                            <Label>Inspection Status *</Label>
+                            <Select value={inspectionForm.inspectionStatus} onValueChange={v => setInspectionForm({ ...inspectionForm, inspectionStatus: v })}>
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {INSPECTION_STATUSES.map(s => (
+                                  <SelectItem key={s} value={s}>{formatStr(s)}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                           </div>
-                          <div className="vn-field">
-                            <label className="vn-field-label">Disposition *</label>
-                            <select className="vn-input" value={inspectionForm.disposition} onChange={e => setInspectionForm({ ...inspectionForm, disposition: e.target.value })}>
-                              <option value="">Select...</option>
-                              {DISPOSITIONS.map(d => <option key={d} value={d}>{formatStr(d)}</option>)}
-                            </select>
+                          <div className="space-y-2">
+                            <Label>Disposition *</Label>
+                            <Select value={inspectionForm.disposition} onValueChange={v => setInspectionForm({ ...inspectionForm, disposition: v })}>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {DISPOSITIONS.map(d => (
+                                  <SelectItem key={d} value={d}>{formatStr(d)}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                           </div>
-                          <div className="vn-field" style={{ gridColumn: '1 / -1' }}>
-                            <label className="vn-field-label">Notes</label>
-                            <textarea className="vn-input" rows={2} value={inspectionForm.inspectionNotes} onChange={e => setInspectionForm({ ...inspectionForm, inspectionNotes: e.target.value })} />
+                          <div className="space-y-2 md:col-span-2">
+                            <Label>Notes</Label>
+                            <textarea
+                              rows={2}
+                              value={inspectionForm.inspectionNotes}
+                              onChange={e => setInspectionForm({ ...inspectionForm, inspectionNotes: e.target.value })}
+                              className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                            />
                           </div>
                         </div>
-                        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
-                          <button className="vn-btn vn-btn-primary" onClick={handleInspect} disabled={!!busy || !inspectionForm.disposition}>Save Disposition</button>
-                          <button className="vn-btn vn-btn-outline" onClick={() => setInspectingLineId(null)}>Cancel</button>
+                        <div className="mt-3 flex gap-2">
+                          <Button variant="gradient" onClick={handleInspect} disabled={!!busy || !inspectionForm.disposition}>Save Disposition</Button>
+                          <Button variant="outline" onClick={() => setInspectingLineId(null)}>Cancel</Button>
                         </div>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   )}
                 </React.Fragment>
               ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
 
       {canComplete && allLinesInspected && !showComplete && (
-        <div style={{ marginTop: '1rem' }}>
-          <div className="vn-alert vn-alert-info">All lines inspected. Click <strong>Complete & Refund</strong> to finalize and generate the credit note.</div>
+        <div className="flex items-center gap-3 rounded-md border border-info/30 bg-info/10 p-4 text-sm text-info">
+          <Info className="h-5 w-5" />
+          All lines inspected. Click <strong>Complete &amp; Refund</strong> to finalize and generate the credit note.
         </div>
       )}
 
-      {showComplete && (
-        <div className="vn-modal-backdrop" onClick={() => setShowComplete(false)}>
-          <div className="vn-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
-            <div className="vn-modal-header"><h3>Complete RMA & Issue Refund</h3><button onClick={() => setShowComplete(false)}><span className="material-icons">close</span></button></div>
-            <div className="vn-modal-body">
-              <div className="vn-alert vn-alert-info" style={{ marginBottom: '1rem' }}>
-                Suggested refund: <strong>${(rma.suggestedRefundCents / 100).toFixed(2)}</strong>
-              </div>
-              <div className="vn-field" style={{ marginBottom: '1rem' }}>
-                <label className="vn-field-label">Actual Refund Amount ($)</label>
-                <input className="vn-input" type="number" step="0.01" value={actualRefund} onChange={e => setActualRefund(e.target.value)} />
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Override the suggested amount if needed (restocking fee, partial shipping refund, etc.)</span>
-              </div>
-              {parseFloat(actualRefund) * 100 !== rma.suggestedRefundCents && (
-                <div className="vn-field">
-                  <label className="vn-field-label">Reason for Adjustment</label>
-                  <textarea className="vn-input" rows={2} value={refundNotes} onChange={e => setRefundNotes(e.target.value)} placeholder="e.g. Restocking fee applied, shipping not refunded..." />
-                </div>
-              )}
+      <Dialog open={showComplete} onOpenChange={setShowComplete}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Complete RMA &amp; Issue Refund</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 rounded-md border border-info/30 bg-info/10 p-3 text-sm text-info">
+              <Info className="h-4 w-4" />
+              Suggested refund: <strong>${(rma.suggestedRefundCents / 100).toFixed(2)}</strong>
             </div>
-            <div className="vn-modal-footer">
-              <button className="vn-btn vn-btn-outline" onClick={() => setShowComplete(false)}>Cancel</button>
-              <button className="vn-btn vn-btn-primary" onClick={handleComplete} disabled={!!busy}>{busy === 'complete' ? 'Processing...' : 'Complete & Refund'}</button>
+            <div className="space-y-2">
+              <Label>Actual Refund Amount ($)</Label>
+              <Input type="number" step="0.01" value={actualRefund} onChange={e => setActualRefund(e.target.value)} />
+              <p className="text-xs text-muted-foreground">Override the suggested amount if needed (restocking fee, partial shipping refund, etc.)</p>
             </div>
+            {parseFloat(actualRefund) * 100 !== rma.suggestedRefundCents && (
+              <div className="space-y-2">
+                <Label>Reason for Adjustment</Label>
+                <textarea
+                  rows={2}
+                  value={refundNotes}
+                  onChange={e => setRefundNotes(e.target.value)}
+                  placeholder="e.g. Restocking fee applied, shipping not refunded..."
+                  className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                />
+              </div>
+            )}
           </div>
-        </div>
-      )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowComplete(false)}>Cancel</Button>
+            <Button variant="gradient" onClick={handleComplete} disabled={!!busy}>{busy === 'complete' ? 'Processing...' : 'Complete & Refund'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

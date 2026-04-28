@@ -1,7 +1,29 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
+import {
+  ArrowLeft,
+  Activity,
+  Thermometer,
+  MapPin,
+  Loader2,
+  Link as LinkIcon,
+  AlertTriangle,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
 import { getDeviceImageUrl } from './deviceImages';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableHead,
+  TableRow,
+  TableCell,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 
 interface SensorReading {
   id: string;
@@ -55,7 +77,7 @@ interface Device {
 }
 
 function relativeTime(dateStr: string | null): string {
-  if (!dateStr) return '—';
+  if (!dateStr) return '-';
   const now = Date.now();
   const then = new Date(dateStr).getTime();
   const diffMs = now - then;
@@ -71,9 +93,9 @@ function TempChart({ readings }: { readings: SensorReading[] }) {
   const temps = readings.filter(r => r.temperature != null);
   if (temps.length < 2) {
     return (
-      <div className="vn-empty">
-        <span className="material-icons">thermostat</span>
-        <h3>Not enough data</h3>
+      <div className="flex flex-col items-center gap-2 py-8 text-muted-foreground">
+        <Thermometer className="h-8 w-8" />
+        <h3 className="text-sm font-medium">Not enough data</h3>
       </div>
     );
   }
@@ -92,27 +114,45 @@ function TempChart({ readings }: { readings: SensorReading[] }) {
   const line = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ');
 
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} style={{ width: '100%', height: 'auto' }}>
-      <text x={pad} y={pad - 10} fill="var(--on-surface-variant)" fontSize="11">{maxT.toFixed(1)}°</text>
-      <text x={pad} y={h - pad + 16} fill="var(--on-surface-variant)" fontSize="11">{minT.toFixed(1)}°</text>
-      <line x1={pad} y1={pad} x2={pad} y2={h - pad} stroke="var(--outline-variant)" strokeWidth="1" />
-      <line x1={pad} y1={h - pad} x2={w - pad} y2={h - pad} stroke="var(--outline-variant)" strokeWidth="1" />
-      <path d={line} fill="none" stroke="var(--primary)" strokeWidth="2" />
+    <svg viewBox={`0 0 ${w} ${h}`} className="h-auto w-full">
+      <text x={pad} y={pad - 10} className="fill-muted-foreground text-[11px]">{maxT.toFixed(1)}°</text>
+      <text x={pad} y={h - pad + 16} className="fill-muted-foreground text-[11px]">{minT.toFixed(1)}°</text>
+      <line x1={pad} y1={pad} x2={pad} y2={h - pad} className="stroke-border" strokeWidth="1" />
+      <line x1={pad} y1={h - pad} x2={w - pad} y2={h - pad} className="stroke-border" strokeWidth="1" />
+      <path d={line} fill="none" className="stroke-primary" strokeWidth="2" />
       {points.map((p, i) => (
-        <circle key={i} cx={p.x} cy={p.y} r={p.alert ? 5 : 3}
-          fill={p.alert ? 'var(--error)' : 'var(--primary)'} />
+        <circle
+          key={i}
+          cx={p.x}
+          cy={p.y}
+          r={p.alert ? 5 : 3}
+          className={p.alert ? 'fill-destructive' : 'fill-primary'}
+        />
       ))}
     </svg>
   );
 }
 
-function categoryChipColor(category: string): string {
+function categoryVariant(category: string): 'destructive' | 'warning' | 'info' | 'secondary' {
   switch (category) {
-    case 'alert': return 'error';
+    case 'alert': return 'destructive';
     case 'geofence': return 'warning';
     case 'status': return 'info';
     default: return 'secondary';
   }
+}
+
+function statusVariant(status: string): 'success' | 'warning' | 'secondary' {
+  if (status === 'active') return 'success';
+  if (status === 'inactive') return 'warning';
+  return 'secondary';
+}
+
+function batteryColorClass(level: number | null): string {
+  if (level == null) return 'text-muted-foreground';
+  if (level > 50) return 'text-success';
+  if (level >= 20) return 'text-warning';
+  return 'text-destructive';
 }
 
 export default function VNextDeviceDetail() {
@@ -147,27 +187,26 @@ export default function VNextDeviceDetail() {
 
   if (loading) {
     return (
-      <div className="vn-empty">
-        <span className="material-icons" style={{ animation: 'spin 1s linear infinite' }}>refresh</span>
-        <h3>Loading...</h3>
+      <div className="flex justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="vn-alert vn-alert-error">
-        <span className="material-icons">error</span>
-        <div className="vn-alert-content">{error}</div>
+      <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+        <AlertTriangle className="h-4 w-4 shrink-0" />
+        <span>{error}</span>
       </div>
     );
   }
 
   if (!device) {
     return (
-      <div className="vn-alert vn-alert-error">
-        <span className="material-icons">error</span>
-        <div className="vn-alert-content">Device not found</div>
+      <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+        <AlertTriangle className="h-4 w-4 shrink-0" />
+        <span>Device not found</span>
       </div>
     );
   }
@@ -176,266 +215,252 @@ export default function VNextDeviceDetail() {
   const events = device.deviceEvents || [];
   const assignments = device.assignments || [];
   const activeAssignment = assignments.find(a => a.active);
-  const statusChip = device.status === 'active' ? 'success' : device.status === 'inactive' ? 'warning' : 'secondary';
 
   return (
-    <>
-      {/* Breadcrumb */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-        <button className="vn-btn vn-btn-ghost vn-btn-sm" onClick={() => navigate('/devices')}>
-          <span className="material-icons">arrow_back</span>
+    <div className="space-y-6">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Button variant="ghost" size="sm" onClick={() => navigate('/devices')}>
+          <ArrowLeft className="h-4 w-4" />
           Devices
-        </button>
-        <span style={{ color: 'var(--on-surface-variant)' }}>/</span>
-        <span style={{ fontSize: 14, color: 'var(--on-surface)' }}>{device.name}</span>
+        </Button>
+        <span>/</span>
+        <span className="text-foreground">{device.name}</span>
       </div>
 
-      {/* Page Header */}
-      <div className="vn-page-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-          {(() => {
-            const imgUrl = getDeviceImageUrl(device.model);
-            return imgUrl ? (
-              <img src={imgUrl} alt={device.model} style={{ width: 48, height: 48, objectFit: 'contain' }} />
-            ) : (
-              <span className="material-icons" style={{ fontSize: 44, color: 'var(--on-surface-variant)' }}>sensors</span>
-            );
-          })()}
-          <div>
-            <h1>{device.name}</h1>
-            <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-              <span className={`vn-chip vn-chip-${statusChip}`}>{device.status}</span>
-              <span className="vn-chip vn-chip-secondary">{device.model}</span>
-            </div>
+      <div className="flex flex-wrap items-center gap-4">
+        {(() => {
+          const imgUrl = getDeviceImageUrl(device.model);
+          return imgUrl ? (
+            <img src={imgUrl} alt={device.model} className="h-12 w-12 object-contain" />
+          ) : (
+            <Activity className="h-11 w-11 text-muted-foreground" />
+          );
+        })()}
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">{device.name}</h1>
+          <div className="mt-1 flex gap-2">
+            <Badge variant={statusVariant(device.status)}>{device.status}</Badge>
+            <Badge variant="secondary">{device.model}</Badge>
           </div>
         </div>
       </div>
 
-      <div className="vn-detail-grid">
-        {/* Main Content */}
-        <div className="vn-detail-main">
-          {/* Sensor Readings Chart */}
-          <div className="vn-card" style={{ marginBottom: 24 }}>
-            <div className="vn-card-header">
-              <h2>Sensor Readings</h2>
-              <span style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>{readings.length} readings</span>
-            </div>
-            <div className="vn-card-body">
+      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+        <div className="space-y-6">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Sensor readings</CardTitle>
+              <span className="text-sm text-muted-foreground">{readings.length} readings</span>
+            </CardHeader>
+            <CardContent>
               <TempChart readings={readings} />
-            </div>
-            <div className="vn-card-body vn-card-flush">
-              <div className="vn-table-wrap">
-                <table className="vn-table">
-                  <thead>
-                    <tr>
-                      <th>Time</th>
-                      <th>Temp</th>
-                      <th>Humidity</th>
-                      <th>Battery</th>
-                      <th>Light</th>
-                      <th>Impact</th>
-                      <th>Location</th>
-                      <th>Alert</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {readings.slice(0, 20).map(r => (
-                      <tr key={r.id}>
-                        <td style={{ fontSize: 13 }}>{new Date(r.recordedAt).toLocaleString()}</td>
-                        <td>{r.temperature != null ? `${r.temperature}°` : '—'}</td>
-                        <td>{r.humidity != null ? `${r.humidity}%` : '—'}</td>
-                        <td>{r.batteryLevel != null ? `${r.batteryLevel}%` : '—'}</td>
-                        <td>{r.light != null ? r.light : '—'}</td>
-                        <td>{r.impact != null ? r.impact : '—'}</td>
-                        <td style={{ fontSize: 12 }}>
-                          {r.lat != null && r.lng != null ? `${r.lat.toFixed(4)}, ${r.lng.toFixed(4)}` : '—'}
-                        </td>
-                        <td>
-                          {r.isAlert ? (
-                            <span className="vn-chip vn-chip-error" style={{ fontSize: 11 }}>Alert</span>
-                          ) : (
-                            <span style={{ color: 'var(--on-surface-variant)', fontSize: 12 }}>—</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                    {readings.length === 0 && (
-                      <tr>
-                        <td colSpan={8} style={{ textAlign: 'center', color: 'var(--on-surface-variant)', padding: 24 }}>
-                          No sensor readings yet
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
+            </CardContent>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Time</TableHead>
+                    <TableHead>Temp</TableHead>
+                    <TableHead>Humidity</TableHead>
+                    <TableHead>Battery</TableHead>
+                    <TableHead>Light</TableHead>
+                    <TableHead>Impact</TableHead>
+                    <TableHead>Location</TableHead>
+                    <TableHead>Alert</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {readings.slice(0, 20).map(r => (
+                    <TableRow key={r.id}>
+                      <TableCell className="text-sm">{new Date(r.recordedAt).toLocaleString()}</TableCell>
+                      <TableCell>{r.temperature != null ? `${r.temperature}°` : '-'}</TableCell>
+                      <TableCell>{r.humidity != null ? `${r.humidity}%` : '-'}</TableCell>
+                      <TableCell>{r.batteryLevel != null ? `${r.batteryLevel}%` : '-'}</TableCell>
+                      <TableCell>{r.light != null ? r.light : '-'}</TableCell>
+                      <TableCell>{r.impact != null ? r.impact : '-'}</TableCell>
+                      <TableCell className="text-xs">
+                        {r.lat != null && r.lng != null ? `${r.lat.toFixed(4)}, ${r.lng.toFixed(4)}` : '-'}
+                      </TableCell>
+                      <TableCell>
+                        {r.isAlert ? (
+                          <Badge variant="destructive">Alert</Badge>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {readings.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={8} className="py-6 text-center text-sm text-muted-foreground">
+                        No sensor readings yet
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
 
-          {/* Events Timeline */}
-          <div className="vn-card">
-            <div className="vn-card-header">
-              <h2>Events</h2>
-              <span style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>{events.length} events</span>
-            </div>
-            <div className="vn-card-body">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Events</CardTitle>
+              <span className="text-sm text-muted-foreground">{events.length} events</span>
+            </CardHeader>
+            <CardContent>
               {events.length === 0 ? (
-                <p style={{ color: 'var(--on-surface-variant)', fontSize: 13 }}>No events recorded yet.</p>
+                <p className="text-sm text-muted-foreground">No events recorded yet.</p>
               ) : (
-                <div className="vn-timeline">
-                  {events.map((ev, i) => (
-                    <div className="vn-timeline-item" key={ev.id || i}>
-                      <div className={`vn-timeline-dot ${categoryChipColor(ev.category)}`} />
-                      <div className="vn-timeline-time">{new Date(ev.startTime).toLocaleString()}</div>
-                      <div className="vn-timeline-title">
+                <ul className="space-y-3">
+                  {events.map(ev => (
+                    <li key={ev.id} className="rounded-md border p-3">
+                      <div className="text-xs text-muted-foreground">{new Date(ev.startTime).toLocaleString()}</div>
+                      <div className="mt-1 flex items-center gap-2 font-medium">
                         {ev.eventType}
-                        <span className={`vn-chip vn-chip-${categoryChipColor(ev.category)}`} style={{ marginLeft: 8, fontSize: 11 }}>
-                          {ev.category}
-                        </span>
+                        <Badge variant={categoryVariant(ev.category)}>{ev.category}</Badge>
                       </div>
-                      {ev.message && <div className="vn-timeline-desc">{ev.message}</div>}
+                      {ev.message && <div className="mt-1 text-sm text-muted-foreground">{ev.message}</div>}
                       {ev.zoneName && (
-                        <div className="vn-timeline-location">
-                          <span className="material-icons">place</span>
+                        <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                          <MapPin className="h-3 w-3" />
                           {ev.zoneName}
                         </div>
                       )}
-                    </div>
+                    </li>
                   ))}
-                </div>
+                </ul>
               )}
-            </div>
-          </div>
+            </CardContent>
+          </Card>
         </div>
 
-        {/* Sidebar */}
-        <div className="vn-detail-sidebar">
-          {/* Device Image */}
-          {(() => {
-            const imgUrl = getDeviceImageUrl(device.model);
-            return (
-              <div className="vn-card">
-                <div className="vn-card-body" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px 20px' }}>
-                  {imgUrl ? (
-                    <img src={imgUrl} alt={device.model} style={{ width: 80, height: 80, objectFit: 'contain' }} />
-                  ) : (
-                    <span className="material-icons" style={{ fontSize: 64, color: 'var(--on-surface-variant)', opacity: 0.5 }}>sensors</span>
-                  )}
-                </div>
-              </div>
-            );
-          })()}
+        <div className="space-y-6">
+          <Card>
+            <CardContent className="flex items-center justify-center py-6">
+              {(() => {
+                const imgUrl = getDeviceImageUrl(device.model);
+                return imgUrl ? (
+                  <img src={imgUrl} alt={device.model} className="h-20 w-20 object-contain" />
+                ) : (
+                  <Activity className="h-16 w-16 text-muted-foreground opacity-50" />
+                );
+              })()}
+            </CardContent>
+          </Card>
 
-          {/* Device Info */}
-          <div className="vn-card">
-            <div className="vn-card-header"><h2>Device Info</h2></div>
-            <div className="vn-card-body">
-              <div className="vn-info-grid">
-                <div className="vn-info-item"><label>Name</label><span>{device.name}</span></div>
-                <div className="vn-info-item"><label>External ID</label><span>{device.externalId}</span></div>
-                <div className="vn-info-item"><label>Display ID</label><span>{device.displayId}</span></div>
-                <div className="vn-info-item"><label>Model</label><span>{device.model}</span></div>
-                <div className="vn-info-item"><label>Firmware</label><span>{device.firmware || '—'}</span></div>
-                <div className="vn-info-item"><label>Provider</label><span>{device.provider}</span></div>
-                <div className="vn-info-item"><label>Status</label><span className={`vn-chip vn-chip-${statusChip}`}>{device.status}</span></div>
-                <div className="vn-info-item">
-                  <label>Battery Level</label>
-                  <span style={{ color: device.batteryLevel != null ? (device.batteryLevel > 50 ? 'var(--success)' : device.batteryLevel >= 20 ? 'var(--warning)' : 'var(--error)') : 'var(--on-surface-variant)' }}>
-                    {device.batteryLevel != null ? `${device.batteryLevel}%` : '—'}
-                  </span>
+          <Card>
+            <CardHeader>
+              <CardTitle>Device info</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <dl className="space-y-2 text-sm">
+                <div className="flex justify-between"><dt className="text-muted-foreground">Name</dt><dd>{device.name}</dd></div>
+                <div className="flex justify-between"><dt className="text-muted-foreground">External ID</dt><dd className="text-right">{device.externalId}</dd></div>
+                <div className="flex justify-between"><dt className="text-muted-foreground">Display ID</dt><dd>{device.displayId}</dd></div>
+                <div className="flex justify-between"><dt className="text-muted-foreground">Model</dt><dd>{device.model}</dd></div>
+                <div className="flex justify-between"><dt className="text-muted-foreground">Firmware</dt><dd>{device.firmware || '-'}</dd></div>
+                <div className="flex justify-between"><dt className="text-muted-foreground">Provider</dt><dd>{device.provider}</dd></div>
+                <div className="flex justify-between"><dt className="text-muted-foreground">Status</dt><dd><Badge variant={statusVariant(device.status)}>{device.status}</Badge></dd></div>
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">Battery</dt>
+                  <dd className={cn(batteryColorClass(device.batteryLevel))}>
+                    {device.batteryLevel != null ? `${device.batteryLevel}%` : '-'}
+                  </dd>
                 </div>
-                <div className="vn-info-item"><label>Last Seen</label><span>{relativeTime(device.lastSeenAt)}</span></div>
-                <div className="vn-info-item">
-                  <label>Last Location</label>
-                  <span style={{ fontSize: 12 }}>
+                <div className="flex justify-between"><dt className="text-muted-foreground">Last seen</dt><dd>{relativeTime(device.lastSeenAt)}</dd></div>
+                <div className="flex justify-between">
+                  <dt className="text-muted-foreground">Last location</dt>
+                  <dd className="text-xs">
                     {device.lastLat != null && device.lastLng != null
                       ? `${device.lastLat.toFixed(4)}, ${device.lastLng.toFixed(4)}`
-                      : '—'}
-                  </span>
+                      : '-'}
+                  </dd>
                 </div>
-              </div>
-            </div>
-          </div>
+              </dl>
+            </CardContent>
+          </Card>
 
-          {/* Assignment */}
-          <div className="vn-card">
-            <div className="vn-card-header"><h2>Assignment</h2></div>
-            <div className="vn-card-body">
+          <Card>
+            <CardHeader>
+              <CardTitle>Assignment</CardTitle>
+            </CardHeader>
+            <CardContent>
               {activeAssignment ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <dl className="space-y-2 text-sm">
                   {activeAssignment.shipmentId && (
-                    <div className="vn-info-item">
-                      <label>Shipment</label>
-                      <Link to={`/shipments/${activeAssignment.shipmentId}`} style={{ color: 'var(--primary)', textDecoration: 'none', fontWeight: 500 }}>
-                        {activeAssignment.shipment?.reference || activeAssignment.shipmentId}
-                      </Link>
+                    <div className="flex justify-between">
+                      <dt className="text-muted-foreground">Shipment</dt>
+                      <dd>
+                        <Link to={`/shipments/${activeAssignment.shipmentId}`} className="font-medium text-primary hover:underline">
+                          {activeAssignment.shipment?.reference || activeAssignment.shipmentId}
+                        </Link>
+                      </dd>
                     </div>
                   )}
                   {activeAssignment.orderId && (
-                    <div className="vn-info-item">
-                      <label>Order</label>
-                      <Link to={`/orders/${activeAssignment.orderId}`} style={{ color: 'var(--primary)', textDecoration: 'none', fontWeight: 500 }}>
-                        {activeAssignment.order?.orderNumber || activeAssignment.orderId}
-                      </Link>
+                    <div className="flex justify-between">
+                      <dt className="text-muted-foreground">Order</dt>
+                      <dd>
+                        <Link to={`/orders/${activeAssignment.orderId}`} className="font-medium text-primary hover:underline">
+                          {activeAssignment.order?.orderNumber || activeAssignment.orderId}
+                        </Link>
+                      </dd>
                     </div>
                   )}
-                  <div className="vn-info-item">
-                    <label>Assigned</label>
-                    <span style={{ fontSize: 13 }}>{new Date(activeAssignment.assignedAt).toLocaleDateString()}</span>
+                  <div className="flex justify-between">
+                    <dt className="text-muted-foreground">Assigned</dt>
+                    <dd>{new Date(activeAssignment.assignedAt).toLocaleDateString()}</dd>
                   </div>
-                </div>
+                </dl>
               ) : (
-                <div style={{ textAlign: 'center', padding: '12px 0' }}>
-                  <p style={{ color: 'var(--on-surface-variant)', fontSize: 13, marginBottom: 12 }}>Unassigned</p>
-                  <button className="vn-btn vn-btn-outline vn-btn-sm">
-                    <span className="material-icons">link</span>
-                    Assign Device
-                  </button>
+                <div className="space-y-3 text-center">
+                  <p className="text-sm text-muted-foreground">Unassigned</p>
+                  <Button variant="outline" size="sm">
+                    <LinkIcon className="h-4 w-4" />
+                    Assign device
+                  </Button>
                 </div>
               )}
-            </div>
-          </div>
+            </CardContent>
+          </Card>
 
-          {/* Assignment History */}
-          <div className="vn-card">
-            <div className="vn-card-header"><h2>Assignment History</h2></div>
-            <div className="vn-card-body vn-card-flush">
+          <Card>
+            <CardHeader>
+              <CardTitle>Assignment history</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
               {assignments.length === 0 ? (
-                <p style={{ color: 'var(--on-surface-variant)', fontSize: 13, padding: 16 }}>No assignment history.</p>
+                <p className="p-4 text-sm text-muted-foreground">No assignment history.</p>
               ) : (
-                <div className="vn-table-wrap">
-                  <table className="vn-table">
-                    <thead>
-                      <tr>
-                        <th>Ref</th>
-                        <th>Status</th>
-                        <th>Assigned</th>
-                        <th>Removed</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {assignments.map(a => (
-                        <tr key={a.id}>
-                          <td style={{ fontSize: 13 }}>
-                            {a.shipment?.reference || a.order?.orderNumber || '—'}
-                          </td>
-                          <td>
-                            <span className={`vn-chip vn-chip-${a.active ? 'success' : 'secondary'}`} style={{ fontSize: 11 }}>
-                              {a.active ? 'Active' : 'Ended'}
-                            </span>
-                          </td>
-                          <td style={{ fontSize: 12 }}>{new Date(a.assignedAt).toLocaleDateString()}</td>
-                          <td style={{ fontSize: 12 }}>{a.unassignedAt ? new Date(a.unassignedAt).toLocaleDateString() : '—'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Ref</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Assigned</TableHead>
+                      <TableHead>Removed</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {assignments.map(a => (
+                      <TableRow key={a.id}>
+                        <TableCell className="text-sm">{a.shipment?.reference || a.order?.orderNumber || '-'}</TableCell>
+                        <TableCell>
+                          <Badge variant={a.active ? 'success' : 'secondary'}>
+                            {a.active ? 'Active' : 'Ended'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-xs">{new Date(a.assignedAt).toLocaleDateString()}</TableCell>
+                        <TableCell className="text-xs">{a.unassignedAt ? new Date(a.unassignedAt).toLocaleDateString() : '-'}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               )}
-            </div>
-          </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
-    </>
+    </div>
   );
 }

@@ -1,6 +1,20 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { Gavel, Inbox, Loader2, Receipt, ReceiptText, Trophy } from 'lucide-react';
+
 import { API_URL } from '../../api';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 
 function getCarrierToken() {
   return localStorage.getItem('carrier_token') || '';
@@ -52,6 +66,20 @@ interface Bid {
   tender: { id: string; reference: string; status: string };
 }
 
+type StatusVariant = 'success' | 'info' | 'warning' | 'destructive' | 'muted' | 'secondary';
+
+function bidStatusVariant(s: string): StatusVariant {
+  if (s === 'accepted') return 'success';
+  if (s === 'rejected') return 'destructive';
+  return 'info';
+}
+
+const STAT_TONES = {
+  primary: 'bg-primary/10 text-primary',
+  warning: 'bg-warning/15 text-warning',
+  success: 'bg-success/15 text-success',
+} as const;
+
 export default function CarrierDashboard() {
   const [offers, setOffers] = useState<TenderOffer[]>([]);
   const [bids, setBids] = useState<Bid[]>([]);
@@ -74,157 +102,148 @@ export default function CarrierDashboard() {
     });
   }, []);
 
-  if (loading) return <div className="vn-empty"><span className="material-icons" style={{animation:'spin 1s linear infinite'}}>refresh</span><h3>Loading...</h3></div>;
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <h3 className="text-lg font-medium">Loading...</h3>
+      </div>
+    );
+  }
 
   const activeOffers = offers.filter(o => ['sent', 'viewed'].includes(o.status));
   const submittedBids = bids.filter(b => b.status === 'submitted');
   const wonBids = bids.filter(b => b.status === 'accepted');
 
+  const stats = [
+    { tone: 'primary' as const, icon: Gavel, label: 'Active tenders', value: activeOffers.length },
+    { tone: 'warning' as const, icon: Receipt, label: 'Pending bids', value: submittedBids.length },
+    { tone: 'success' as const, icon: Trophy, label: 'Loads won', value: wonBids.length },
+  ];
+
   return (
-    <div>
-      <div className="vn-page-header">
-        <div>
-          <h1>Welcome, {user.name || 'Carrier'}</h1>
-          <p style={{ color: 'var(--on-surface-variant)', margin: 0 }}>{user.carrierName}</p>
-        </div>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Welcome, {user.name || 'Carrier'}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">{user.carrierName}</p>
       </div>
 
-      {/* Summary stats */}
-      <div className="vn-stats" style={{ marginBottom: 'var(--spacing-3)' }}>
-        <div className="vn-stat">
-          <div className="vn-stat-icon primary">
-            <span className="material-icons">gavel</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{activeOffers.length}</div>
-            <div className="vn-stat-label">Active Tenders</div>
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon warning">
-            <span className="material-icons">pending</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{submittedBids.length}</div>
-            <div className="vn-stat-label">Pending Bids</div>
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon success">
-            <span className="material-icons">emoji_events</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{wonBids.length}</div>
-            <div className="vn-stat-label">Loads Won</div>
-          </div>
-        </div>
+      <div className="grid gap-4 sm:grid-cols-3">
+        {stats.map(s => {
+          const Icon = s.icon;
+          return (
+            <Card key={s.label}>
+              <CardContent className="p-6">
+                <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', STAT_TONES[s.tone])}>
+                  <Icon className="h-5 w-5" />
+                </div>
+                <div className="mt-4 text-3xl font-bold tracking-tight">{s.value}</div>
+                <div className="mt-1 text-sm text-muted-foreground">{s.label}</div>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
-      {/* Active Tender Offers */}
-      <div className="vn-card" style={{ marginBottom: 'var(--spacing-3)' }}>
-        <div className="vn-card-header">
-          <h2>
-            <span className="material-icons" style={{ verticalAlign: 'middle', marginRight: '8px', color: 'var(--primary)' }}>gavel</span>
-            Active Tenders
-          </h2>
-        </div>
-        <div className="vn-card-body">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Gavel className="h-5 w-5 text-primary" />
+            Active tenders
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
           {activeOffers.length === 0 ? (
-            <div className="vn-empty">
-              <span className="material-icons">inbox</span>
-              <h3>No active tenders at this time</h3>
+            <div className="flex flex-col items-center gap-3 py-8 text-muted-foreground">
+              <Inbox className="h-8 w-8" />
+              <h3 className="text-base font-medium">No active tenders at this time</h3>
             </div>
           ) : (
-            <div style={{ display: 'grid', gap: 'var(--spacing-2)' }}>
+            <div className="grid gap-3">
               {activeOffers.map(offer => {
                 const t = offer.tender;
                 const timeLeft = offer.expiresAt
                   ? Math.max(0, Math.floor((new Date(offer.expiresAt).getTime() - Date.now()) / 60000))
                   : null;
                 return (
-                  <div key={offer.id} style={{
-                    border: '1px solid var(--outline-variant)', borderRadius: 'var(--radius-md)',
-                    padding: 'var(--spacing-2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  }}>
+                  <div
+                    key={offer.id}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border p-4"
+                  >
                     <div>
-                      <div style={{ fontWeight: 600, marginBottom: '4px' }}>{t.reference}</div>
-                      <div style={{ fontSize: '13px', color: 'var(--on-surface-variant)' }}>
+                      <div className="font-semibold">{t.reference}</div>
+                      <div className="mt-1 text-sm text-muted-foreground">
                         {t.shipment.origin.city}{t.shipment.origin.state ? `, ${t.shipment.origin.state}` : ''}
-                        {' → '}
+                        {' -> '}
                         {t.shipment.destination.city}{t.shipment.destination.state ? `, ${t.shipment.destination.state}` : ''}
                       </div>
-                      <div style={{ fontSize: '12px', color: 'var(--on-surface-variant)', marginTop: '2px' }}>
+                      <div className="mt-1 text-xs text-muted-foreground">
                         {t.equipmentType || 'No equipment specified'}
                         {t.targetRate ? ` | Target: $${t.targetRate.toLocaleString()}` : ''}
                       </div>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-2)' }}>
+                    <div className="flex items-center gap-3">
                       {timeLeft !== null && (
-                        <div style={{
-                          fontSize: '13px', fontWeight: 600,
-                          color: timeLeft < 30 ? 'var(--error)' : 'var(--on-surface-variant)',
-                        }}>
+                        <div
+                          className={cn(
+                            'text-sm font-semibold',
+                            timeLeft < 30 ? 'text-destructive' : 'text-muted-foreground',
+                          )}
+                        >
                           {timeLeft > 60 ? `${Math.floor(timeLeft / 60)}h ${timeLeft % 60}m` : `${timeLeft}m`} left
                         </div>
                       )}
-                      <Link to={`/carrier-portal/tenders/${t.id}`} className="vn-btn vn-btn-primary" style={{ fontSize: '13px', padding: '6px 16px' }}>
-                        View & Bid
-                      </Link>
+                      <Button variant="gradient" size="sm" asChild>
+                        <Link to={`/carrier-portal/tenders/${t.id}`}>View &amp; bid</Link>
+                      </Button>
                     </div>
                   </div>
                 );
               })}
             </div>
           )}
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
-      {/* Recent Bids */}
-      <div className="vn-card">
-        <div className="vn-card-header">
-          <h2>
-            <span className="material-icons" style={{ verticalAlign: 'middle', marginRight: '8px', color: 'var(--warning)' }}>receipt</span>
-            Recent Bids
-          </h2>
-        </div>
-        {bids.length === 0 ? (
-          <div className="vn-card-body">
-            <div className="vn-empty">
-              <span className="material-icons">receipt_long</span>
-              <h3>No bids submitted yet</h3>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <ReceiptText className="h-5 w-5 text-warning" />
+            Recent bids
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {bids.length === 0 ? (
+            <div className="flex flex-col items-center gap-3 py-8 text-muted-foreground">
+              <ReceiptText className="h-8 w-8" />
+              <h3 className="text-base font-medium">No bids submitted yet</h3>
             </div>
-          </div>
-        ) : (
-          <div className="vn-card-flush">
-            <div className="vn-table-wrap">
-              <table className="vn-table">
-                <thead>
-                  <tr>
-                    <th>Tender</th>
-                    <th>Rate</th>
-                    <th>Status</th>
-                    <th>Submitted</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {bids.slice(0, 10).map(b => (
-                    <tr key={b.id}>
-                      <td style={{ fontWeight: 500 }}>{b.tender.reference}</td>
-                      <td style={{ fontWeight: 700 }}>${b.rate.toLocaleString()}</td>
-                      <td>
-                        <span className={`vn-chip vn-chip-${b.status === 'accepted' ? 'success' : b.status === 'rejected' ? 'error' : 'info'}`}>
-                          {b.status}
-                        </span>
-                      </td>
-                      <td>{new Date(b.submittedAt).toLocaleString()}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-      </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Tender</TableHead>
+                  <TableHead>Rate</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Submitted</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {bids.slice(0, 10).map(b => (
+                  <TableRow key={b.id}>
+                    <TableCell className="font-semibold">{b.tender.reference}</TableCell>
+                    <TableCell className="font-bold">${b.rate.toLocaleString()}</TableCell>
+                    <TableCell>
+                      <Badge variant={bidStatusVariant(b.status)}>{b.status}</Badge>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{new Date(b.submittedAt).toLocaleString()}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

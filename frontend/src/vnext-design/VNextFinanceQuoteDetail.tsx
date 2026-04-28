@@ -1,7 +1,33 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import {
+  ArrowLeft,
+  Check,
+  CheckCircle2,
+  CircleAlert,
+  DollarSign,
+  Loader2,
+  Pencil,
+  Rocket,
+  TrendingUp,
+  Truck,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
 import { useOrgContext } from '../hooks/useOrgContext';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 
 interface QuoteLineItem {
   id: string;
@@ -41,13 +67,29 @@ function formatMoney(cents: number): string {
   return `$${(cents / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 function formatDate(d?: string): string {
-  if (!d) return '—';
+  if (!d) return '-';
   return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
-function statusChip(s: string): string {
-  const m: Record<string, string> = { draft: 'secondary', sent: 'info', accepted: 'success', declined: 'error', expired: 'warning', superseded: 'secondary' };
+
+type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning' | 'info' | 'muted';
+
+function statusVariant(s: string): BadgeVariant {
+  const m: Record<string, BadgeVariant> = {
+    draft: 'secondary',
+    sent: 'info',
+    accepted: 'success',
+    declined: 'destructive',
+    expired: 'warning',
+    superseded: 'secondary',
+  };
   return m[s] || 'secondary';
 }
+
+const TONES = {
+  primary: 'bg-primary/10 text-primary',
+  warning: 'bg-warning/15 text-warning',
+  success: 'bg-success/15 text-success',
+} as const;
 
 export default function VNextFinanceQuoteDetail() {
   const { id } = useParams();
@@ -93,128 +135,212 @@ export default function VNextFinanceQuoteDetail() {
     finally { setActionLoading(''); }
   };
 
-  if (loading) return <div className="vn-empty"><span className="material-icons" style={{ animation: 'spin 1s linear infinite' }}>refresh</span><h3>Loading...</h3></div>;
-  if (error || !quote) return <div className="vn-alert vn-alert-error">{error || 'Not found'}</div>;
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <h3 className="text-lg font-medium">Loading...</h3>
+      </div>
+    );
+  }
+  if (error || !quote) {
+    return (
+      <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+        <CircleAlert className="h-5 w-5" />
+        {error || 'Not found'}
+      </div>
+    );
+  }
 
   const q = quote;
   const isExpired = new Date(q.validUntil) < new Date() && !['accepted', 'expired', 'superseded'].includes(q.status);
 
   return (
-    <>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-        <button className="vn-btn vn-btn-ghost vn-btn-sm" onClick={() => navigate('/finance/quotes')}>
-          <span className="material-icons">arrow_back</span> Quotes
-        </button>
-        <span style={{ color: 'var(--on-surface-variant)', fontSize: 13 }}>/ {q.quoteNumber}</span>
+    <div className="space-y-6">
+      <div className="flex items-center gap-2 text-sm">
+        <Button variant="ghost" size="sm" onClick={() => navigate('/finance/quotes')}>
+          <ArrowLeft className="h-4 w-4" /> Quotes
+        </Button>
+        <span className="text-muted-foreground">/ {q.quoteNumber}</span>
       </div>
 
-      <div className="vn-page-header">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1>{q.quoteNumber}</h1>
-          <div className="vn-page-header-meta">
-            {q.version > 1 && <span className="vn-chip vn-chip-info">v{q.version}</span>}
-            <span className={`vn-chip vn-chip-${statusChip(q.status)}`}>{q.status}</span>
-            {isExpired && <span className="vn-chip vn-chip-error">EXPIRED</span>}
+          <h1 className="text-3xl font-bold tracking-tight">{q.quoteNumber}</h1>
+          <div className="mt-2 flex items-center gap-2">
+            {q.version > 1 && <Badge variant="info">v{q.version}</Badge>}
+            <Badge variant={statusVariant(q.status)}>{q.status}</Badge>
+            {isExpired && <Badge variant="destructive">EXPIRED</Badge>}
           </div>
         </div>
-        <div className="vn-page-actions">
+        <div className="flex flex-wrap gap-2">
           {['draft', 'sent'].includes(q.status) && !isExpired && (
             <>
               {isBroker && (
-                <button className="vn-btn vn-btn-primary vn-btn-sm" onClick={() => doAction('accept', { createShipment: true })} disabled={!!actionLoading}>
-                  <span className="material-icons">rocket_launch</span>
+                <Button size="sm" onClick={() => doAction('accept', { createShipment: true })} disabled={!!actionLoading}>
+                  <Rocket className="h-4 w-4" />
                   {actionLoading === 'accept' ? 'Booking...' : 'Accept & Book'}
-                </button>
+                </Button>
               )}
-              <button className="vn-btn vn-btn-success vn-btn-sm" onClick={() => doAction('accept')} disabled={!!actionLoading}>
-                <span className="material-icons">check</span>
+              <Button size="sm" variant="default" onClick={() => doAction('accept')} disabled={!!actionLoading}>
+                <Check className="h-4 w-4" />
                 {actionLoading === 'accept' ? 'Accepting...' : 'Accept'}
-              </button>
-              <button className="vn-btn vn-btn-outline vn-btn-sm" onClick={() => doAction('decline', { reason: 'Declined by user' })} disabled={!!actionLoading}>
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => doAction('decline', { reason: 'Declined by user' })} disabled={!!actionLoading}>
                 Decline
-              </button>
+              </Button>
             </>
           )}
           {!['accepted', 'expired'].includes(q.status) && (
-            <button className="vn-btn vn-btn-outline vn-btn-sm" onClick={() => navigate(`/finance/quotes/${q.id}/revise`)}>
-              <span className="material-icons">edit</span> Revise
-            </button>
+            <Button size="sm" variant="outline" onClick={() => navigate(`/finance/quotes/${q.id}/revise`)}>
+              <Pencil className="h-4 w-4" /> Revise
+            </Button>
           )}
         </div>
       </div>
 
-      {/* Margin summary */}
-      <div className="vn-stats">
-        <div className="vn-stat">
-          <div className="vn-stat-icon primary"><span className="material-icons">attach_money</span></div>
-          <div><div className="vn-stat-value">{formatMoney(q.totalRevenueCents)}</div><div className="vn-stat-label">Revenue (Customer Pays)</div></div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon warning"><span className="material-icons">local_shipping</span></div>
-          <div><div className="vn-stat-value">{formatMoney(q.totalCostCents)}</div><div className="vn-stat-label">Cost (Carrier)</div></div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon success"><span className="material-icons">trending_up</span></div>
-          <div><div className="vn-stat-value" style={{ color: q.marginCents >= 0 ? 'var(--success)' : 'var(--error)' }}>{formatMoney(q.marginCents)} ({q.marginPercent}%)</div><div className="vn-stat-label">Margin</div></div>
-        </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <Card>
+          <CardContent className="p-5">
+            <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', TONES.primary)}>
+              <DollarSign className="h-5 w-5" />
+            </div>
+            <div className="mt-3 text-2xl font-bold tracking-tight font-mono tabular-nums">{formatMoney(q.totalRevenueCents)}</div>
+            <div className="mt-1 text-sm text-muted-foreground">Revenue (Customer Pays)</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-5">
+            <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', TONES.warning)}>
+              <Truck className="h-5 w-5" />
+            </div>
+            <div className="mt-3 text-2xl font-bold tracking-tight font-mono tabular-nums">{formatMoney(q.totalCostCents)}</div>
+            <div className="mt-1 text-sm text-muted-foreground">Cost (Carrier)</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-5">
+            <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', TONES.success)}>
+              <TrendingUp className="h-5 w-5" />
+            </div>
+            <div className={cn('mt-3 text-2xl font-bold tracking-tight font-mono tabular-nums', q.marginCents >= 0 ? 'text-success' : 'text-destructive')}>
+              {formatMoney(q.marginCents)} ({q.marginPercent}%)
+            </div>
+            <div className="mt-1 text-sm text-muted-foreground">Margin</div>
+          </CardContent>
+        </Card>
       </div>
 
-      <div className="vn-detail-grid">
-        <div className="vn-detail-main">
-          {/* Line Items */}
-          <div className="vn-card" style={{ marginBottom: 24 }}>
-            <div className="vn-card-header"><h2>Line Items</h2></div>
-            <div className="vn-table-wrap">
-              <table className="vn-table">
-                <thead><tr><th>Description</th><th>Type</th><th style={{ textAlign: 'right' }}>Qty</th><th style={{ textAlign: 'right' }}>Amount</th></tr></thead>
-                <tbody>
-                  {q.lineItems.map(li => (
-                    <tr key={li.id}>
-                      <td>{li.description}{li.freightClass && <span className="vn-table-secondary"> (Class {li.freightClass})</span>}</td>
-                      <td><span className="vn-chip vn-chip-secondary">{li.chargeType.replace(/_/g, ' ')}</span></td>
-                      <td style={{ textAlign: 'right' }}>{li.quantity}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 500 }}>{formatMoney(li.amountCents * li.quantity)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr><td colSpan={3} style={{ textAlign: 'right', fontWeight: 700 }}>Total (Cost Basis)</td><td style={{ textAlign: 'right', fontWeight: 700 }}>{formatMoney(q.totalCostCents)}</td></tr>
-                </tfoot>
-              </table>
+      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+        <div className="space-y-6">
+          <Card>
+            <div className="p-5">
+              <h2 className="text-lg font-semibold">Line Items</h2>
             </div>
-          </div>
+            <Separator />
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Description</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead className="text-right">Qty</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {q.lineItems.map(li => (
+                  <TableRow key={li.id}>
+                    <TableCell>
+                      {li.description}
+                      {li.freightClass && <span className="ml-1 text-sm text-muted-foreground">(Class {li.freightClass})</span>}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="muted">{li.chargeType.replace(/_/g, ' ')}</Badge>
+                    </TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">{li.quantity}</TableCell>
+                    <TableCell className="text-right font-mono tabular-nums font-medium">{formatMoney(li.amountCents * li.quantity)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            <div className="border-t p-5">
+              <div className="flex justify-between text-sm font-bold">
+                <span>Total (Cost Basis)</span>
+                <span className="font-mono tabular-nums">{formatMoney(q.totalCostCents)}</span>
+              </div>
+            </div>
+          </Card>
 
-          {/* Revision history */}
           {q.parentQuote && (
-            <div className="vn-card" style={{ marginBottom: 24, padding: 20 }}>
-              <h3 style={{ margin: '0 0 12px' }}>Revision History</h3>
-              <p>This is a revision of <Link to={`/finance/quotes/${q.parentQuote.id}`} style={{ color: 'var(--primary)' }}>{q.parentQuote.quoteNumber}</Link> (v{q.parentQuote.version})</p>
-            </div>
+            <Card>
+              <CardContent className="p-5">
+                <h3 className="mb-2 text-base font-semibold">Revision History</h3>
+                <p className="text-sm">
+                  This is a revision of{' '}
+                  <Link to={`/finance/quotes/${q.parentQuote.id}`} className="text-primary hover:underline">
+                    {q.parentQuote.quoteNumber}
+                  </Link>{' '}
+                  (v{q.parentQuote.version})
+                </p>
+              </CardContent>
+            </Card>
           )}
 
           {q.orderId && (
-            <div className="vn-alert vn-alert-success" style={{ marginBottom: 24 }}>
-              <span className="material-icons">check_circle</span>
-              Quote accepted — <Link to={`/orders/${q.orderId}`} style={{ color: 'inherit', fontWeight: 600 }}>View Order</Link>
+            <div className="flex items-center gap-3 rounded-md border border-success/30 bg-success/10 p-4 text-sm text-success">
+              <CheckCircle2 className="h-5 w-5" />
+              <div>
+                Quote accepted -{' '}
+                <Link to={`/orders/${q.orderId}`} className="font-semibold hover:underline">
+                  View Order
+                </Link>
+              </div>
             </div>
           )}
         </div>
 
-        <div className="vn-detail-sidebar">
-          <div className="vn-card" style={{ padding: 20 }}>
-            <h3 style={{ margin: '0 0 16px' }}>Quote Details</h3>
-            <div className="vn-info-grid">
-              <div className="vn-info-item"><label>Customer</label><span>{q.customer.name}</span></div>
-              <div className="vn-info-item"><label>Service Level</label><span>{q.serviceLevel}</span></div>
-              {q.equipmentType && <div className="vn-info-item"><label>Equipment</label><span>{q.equipmentType}</span></div>}
-              <div className="vn-info-item"><label>Valid From</label><span>{formatDate(q.validFrom)}</span></div>
-              <div className="vn-info-item"><label>Valid Until</label><span style={{ color: isExpired ? 'var(--error)' : undefined }}>{formatDate(q.validUntil)}</span></div>
-              <div className="vn-info-item"><label>Created</label><span>{formatDate(q.createdAt)}</span></div>
-              {q.notes && <div className="vn-info-item"><label>Notes</label><span>{q.notes}</span></div>}
-            </div>
-          </div>
-        </div>
+        <aside className="space-y-6 lg:sticky lg:top-20 lg:self-start">
+          <Card>
+            <CardContent className="p-5">
+              <h3 className="mb-4 text-base font-semibold">Quote Details</h3>
+              <dl className="space-y-3 text-sm">
+                <div>
+                  <dt className="text-xs text-muted-foreground">Customer</dt>
+                  <dd>{q.customer.name}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">Service Level</dt>
+                  <dd>{q.serviceLevel}</dd>
+                </div>
+                {q.equipmentType && (
+                  <div>
+                    <dt className="text-xs text-muted-foreground">Equipment</dt>
+                    <dd>{q.equipmentType}</dd>
+                  </div>
+                )}
+                <div>
+                  <dt className="text-xs text-muted-foreground">Valid From</dt>
+                  <dd>{formatDate(q.validFrom)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">Valid Until</dt>
+                  <dd className={cn(isExpired && 'text-destructive')}>{formatDate(q.validUntil)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">Created</dt>
+                  <dd>{formatDate(q.createdAt)}</dd>
+                </div>
+                {q.notes && (
+                  <div>
+                    <dt className="text-xs text-muted-foreground">Notes</dt>
+                    <dd>{q.notes}</dd>
+                  </div>
+                )}
+              </dl>
+            </CardContent>
+          </Card>
+        </aside>
       </div>
-    </>
+    </div>
   );
 }

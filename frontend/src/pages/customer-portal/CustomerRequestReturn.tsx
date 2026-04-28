@@ -1,7 +1,28 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Loader2 } from 'lucide-react';
+
 import { API_URL } from '../../api';
 import { customerFetch } from './CustomerDashboard';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 interface OrderLineItem {
   id: string;
@@ -36,12 +57,15 @@ const RETURN_REASONS = [
 ];
 
 const DISPOSITIONS = [
-  { v: '', l: '(let us decide)' },
+  { v: '__none__', l: '(let us decide)' },
   { v: 'restock', l: 'Restock' },
   { v: 'refurb', l: 'Refurbish' },
   { v: 'scrap', l: 'Scrap' },
   { v: 'customer_keeps', l: 'Keep the item (refund only)' },
 ];
+
+const TEXTAREA_CLASS =
+  'flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
 
 export default function CustomerRequestReturn() {
   const navigate = useNavigate();
@@ -69,7 +93,7 @@ export default function CustomerRequestReturn() {
     setLines(current => {
       const existing = current.find(l => l.orderLineItemId === item.id);
       if (existing) return current.filter(l => l.orderLineItemId !== item.id);
-      return [...current, { orderLineItemId: item.id, sku: item.sku, requestedQuantity: 1, requestedDisposition: '' }];
+      return [...current, { orderLineItemId: item.id, sku: item.sku, requestedQuantity: 1, requestedDisposition: '__none__' }];
     });
   };
 
@@ -90,7 +114,9 @@ export default function CustomerRequestReturn() {
           orderLineItemId: l.orderLineItemId,
           sku: l.sku,
           requestedQuantity: l.requestedQuantity,
-          requestedDisposition: l.requestedDisposition || undefined,
+          requestedDisposition: l.requestedDisposition && l.requestedDisposition !== '__none__'
+            ? l.requestedDisposition
+            : undefined,
         })),
       };
       const res = await customerFetch(`${API_URL}/api/v1/customer-portal/rmas`, {
@@ -109,113 +135,150 @@ export default function CustomerRequestReturn() {
   };
 
   return (
-    <div>
-      <h1 style={{ fontSize: 24, fontWeight: 700, margin: '0 0 16px' }}>Request a Return</h1>
+    <div className="space-y-6">
+      <h1 className="text-3xl font-bold tracking-tight">Request a return</h1>
 
-      {error && <div className="vn-alert vn-alert-error" style={{ marginBottom: 16 }}>{error}</div>}
+      {error && (
+        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {error}
+        </div>
+      )}
 
-      <div className="vn-card" style={{ marginBottom: 16 }}>
-        <div style={{ padding: 16 }}>
-          <h3 style={{ margin: '0 0 12px' }}>1. Choose order</h3>
-          {loadingOrders && <div className="vn-loading-spinner" />}
+      <Card>
+        <CardHeader>
+          <CardTitle>1. Choose order</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {loadingOrders && <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />}
           {!loadingOrders && orders.length === 0 && (
-            <div style={{ color: 'var(--text-secondary)' }}>You have no delivered orders eligible for return.</div>
+            <div className="text-sm text-muted-foreground">You have no delivered orders eligible for return.</div>
           )}
           {!loadingOrders && orders.length > 0 && (
-            <select className="vn-input" value={selectedOrderId} onChange={e => { setSelectedOrderId(e.target.value); setLines([]); }}>
-              <option value="">Select an order...</option>
-              {orders.map(o => (
-                <option key={o.id} value={o.id}>
-                  {o.orderNumber} - {o.lineItems.length} line{o.lineItems.length === 1 ? '' : 's'} - delivered {new Date(o.createdAt).toLocaleDateString()}
-                </option>
-              ))}
-            </select>
+            <Select value={selectedOrderId} onValueChange={v => { setSelectedOrderId(v); setLines([]); }}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select an order..." />
+              </SelectTrigger>
+              <SelectContent>
+                {orders.map(o => (
+                  <SelectItem key={o.id} value={o.id}>
+                    {o.orderNumber} - {o.lineItems.length} line{o.lineItems.length === 1 ? '' : 's'} - delivered {new Date(o.createdAt).toLocaleDateString()}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           )}
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
       {selectedOrder && (
-        <div className="vn-card" style={{ marginBottom: 16 }}>
-          <div style={{ padding: 16 }}>
-            <h3 style={{ margin: '0 0 12px' }}>2. Select items to return</h3>
-            <div className="vn-table-wrap">
-              <table className="vn-table">
-                <thead>
-                  <tr>
-                    <th style={{ width: 40 }}></th>
-                    <th>SKU</th>
-                    <th>Description</th>
-                    <th>Ordered Qty</th>
-                    <th>Return Qty</th>
-                    <th>Preferred Outcome</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {selectedOrder.lineItems.map(item => {
-                    const selection = lines.find(l => l.orderLineItemId === item.id);
-                    const checked = !!selection;
-                    return (
-                      <tr key={item.id}>
-                        <td><input type="checkbox" checked={checked} onChange={() => toggleLine(item)} /></td>
-                        <td><strong>{item.sku}</strong></td>
-                        <td>{item.description ?? '--'}</td>
-                        <td>{item.quantity}</td>
-                        <td>
-                          {checked ? (
-                            <input
-                              className="vn-input"
-                              type="number" min={1} max={item.quantity}
-                              value={selection!.requestedQuantity}
-                              onChange={e => updateLine(item.id, { requestedQuantity: Math.min(parseInt(e.target.value) || 1, item.quantity) })}
-                              style={{ width: 80 }}
-                            />
-                          ) : <span className="vn-table-secondary">--</span>}
-                        </td>
-                        <td>
-                          {checked ? (
-                            <select
-                              className="vn-input"
-                              value={selection!.requestedDisposition}
-                              onChange={e => updateLine(item.id, { requestedDisposition: e.target.value })}
-                            >
-                              {DISPOSITIONS.map(d => <option key={d.v} value={d.v}>{d.l}</option>)}
-                            </select>
-                          ) : <span className="vn-table-secondary">--</span>}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>2. Select items to return</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-10"></TableHead>
+                  <TableHead>SKU</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead>Ordered qty</TableHead>
+                  <TableHead>Return qty</TableHead>
+                  <TableHead>Preferred outcome</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {selectedOrder.lineItems.map(item => {
+                  const selection = lines.find(l => l.orderLineItemId === item.id);
+                  const checked = !!selection;
+                  return (
+                    <TableRow key={item.id}>
+                      <TableCell>
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleLine(item)}
+                          className="h-4 w-4 rounded border border-input bg-background accent-primary"
+                        />
+                      </TableCell>
+                      <TableCell className="font-semibold">{item.sku}</TableCell>
+                      <TableCell className="text-sm">{item.description ?? '-'}</TableCell>
+                      <TableCell className="text-sm">{item.quantity}</TableCell>
+                      <TableCell>
+                        {checked ? (
+                          <Input
+                            type="number"
+                            min={1}
+                            max={item.quantity}
+                            value={selection!.requestedQuantity}
+                            onChange={e => updateLine(item.id, { requestedQuantity: Math.min(parseInt(e.target.value) || 1, item.quantity) })}
+                            className="w-24"
+                          />
+                        ) : <span className="text-sm text-muted-foreground">-</span>}
+                      </TableCell>
+                      <TableCell>
+                        {checked ? (
+                          <Select
+                            value={selection!.requestedDisposition || '__none__'}
+                            onValueChange={v => updateLine(item.id, { requestedDisposition: v })}
+                          >
+                            <SelectTrigger className="w-[220px]">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {DISPOSITIONS.map(d => <SelectItem key={d.v} value={d.v}>{d.l}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        ) : <span className="text-sm text-muted-foreground">-</span>}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
       )}
 
       {selectedOrder && lines.length > 0 && (
-        <div className="vn-card" style={{ marginBottom: 16 }}>
-          <div style={{ padding: 16 }}>
-            <h3 style={{ margin: '0 0 12px' }}>3. Reason</h3>
-            <div className="vn-field" style={{ marginBottom: 12 }}>
-              <label className="vn-field-label">Why are you returning?</label>
-              <select className="vn-input" value={returnReason} onChange={e => setReturnReason(e.target.value)}>
-                <option value="">Select a reason...</option>
-                {RETURN_REASONS.map(r => <option key={r.v} value={r.v}>{r.l}</option>)}
-              </select>
+        <Card>
+          <CardHeader>
+            <CardTitle>3. Reason</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="return-reason">Why are you returning?</Label>
+              <Select value={returnReason} onValueChange={setReturnReason}>
+                <SelectTrigger id="return-reason">
+                  <SelectValue placeholder="Select a reason..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {RETURN_REASONS.map(r => <SelectItem key={r.v} value={r.v}>{r.l}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
-            <div className="vn-field">
-              <label className="vn-field-label">Additional notes (optional)</label>
-              <textarea className="vn-input" rows={3} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Describe the issue so our team can help..." />
+            <div className="space-y-2">
+              <Label htmlFor="notes">Additional notes (optional)</Label>
+              <textarea
+                id="notes"
+                className={TEXTAREA_CLASS}
+                rows={3}
+                value={notes}
+                onChange={e => setNotes(e.target.value)}
+                placeholder="Describe the issue so our team can help..."
+              />
             </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       )}
 
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-        <button className="vn-btn vn-btn-outline" onClick={() => navigate('/customer-portal/returns')} disabled={submitting}>Cancel</button>
-        <button className="vn-btn vn-btn-primary" onClick={handleSubmit} disabled={!canSubmit || submitting}>
-          {submitting ? 'Submitting...' : 'Submit Return Request'}
-        </button>
+      <div className="flex justify-end gap-2">
+        <Button variant="outline" onClick={() => navigate('/customer-portal/returns')} disabled={submitting}>
+          Cancel
+        </Button>
+        <Button variant="gradient" onClick={handleSubmit} disabled={!canSubmit || submitting}>
+          {submitting ? 'Submitting...' : 'Submit return request'}
+        </Button>
       </div>
     </div>
   );

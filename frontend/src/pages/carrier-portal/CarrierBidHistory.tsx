@@ -1,7 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Loader2 } from 'lucide-react';
+
 import { API_URL } from '../../api';
 import { carrierFetch, getCarrierToken } from './CarrierDashboard';
+import { Badge } from '@/components/ui/badge';
+import { Card } from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 interface Bid {
   id: string;
@@ -15,9 +27,18 @@ interface Bid {
   tender: { id: string; reference: string; status: string };
 }
 
-const statusColors: Record<string, string> = {
-  submitted: 'info', accepted: 'success', rejected: 'error', withdrawn: 'warning', expired: 'error',
-};
+type StatusVariant = 'success' | 'info' | 'warning' | 'destructive' | 'muted' | 'secondary';
+
+function statusVariant(s: string): StatusVariant {
+  const m: Record<string, StatusVariant> = {
+    submitted: 'info',
+    accepted: 'success',
+    rejected: 'destructive',
+    withdrawn: 'warning',
+    expired: 'destructive',
+  };
+  return m[s] || 'secondary';
+}
 
 export default function CarrierBidHistory() {
   const [bids, setBids] = useState<Bid[]>([]);
@@ -37,54 +58,58 @@ export default function CarrierBidHistory() {
       });
   }, []);
 
-  if (loading) return <div className="vn-empty"><span className="material-icons" style={{animation:'spin 1s linear infinite'}}>refresh</span><h3>Loading...</h3></div>;
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <h3 className="text-lg font-medium">Loading...</h3>
+      </div>
+    );
+  }
 
   return (
-    <div>
-      <div className="vn-page-header">
-        <h1>Bid History</h1>
-      </div>
-
-      <div className="vn-card">
-        <div className="vn-card-flush">
-          <div className="vn-table-wrap">
-            <table className="vn-table">
-              <thead>
-                <tr>
-                  <th>Tender</th>
-                  <th>Rate</th>
-                  <th>Transit</th>
-                  <th>Equipment</th>
-                  <th>Source</th>
-                  <th>Status</th>
-                  <th>Tender Status</th>
-                  <th>Submitted</th>
-                </tr>
-              </thead>
-              <tbody>
-                {bids.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} style={{ textAlign: 'center', padding: '40px', color: 'var(--on-surface-variant)' }}>
-                      No bids submitted yet
-                    </td>
-                  </tr>
-                ) : bids.map(b => (
-                  <tr key={b.id}>
-                    <td style={{ fontWeight: 600 }}>{b.tender.reference}</td>
-                    <td style={{ fontWeight: 700 }}>${b.rate.toLocaleString()}</td>
-                    <td>{b.transitDays ? `${b.transitDays} days` : '--'}</td>
-                    <td>{b.equipmentType || '--'}</td>
-                    <td>{b.sourceType}</td>
-                    <td><span className={`vn-chip vn-chip-${statusColors[b.status] || 'secondary'}`}>{b.status}</span></td>
-                    <td><span className={`vn-chip vn-chip-${statusColors[b.tender.status] || 'secondary'}`}>{b.tender.status}</span></td>
-                    <td>{new Date(b.submittedAt).toLocaleString()}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
+    <div className="space-y-6">
+      <h1 className="text-3xl font-bold tracking-tight">Bid history</h1>
+      <Card>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Tender</TableHead>
+              <TableHead>Rate</TableHead>
+              <TableHead>Transit</TableHead>
+              <TableHead>Equipment</TableHead>
+              <TableHead>Source</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Tender status</TableHead>
+              <TableHead>Submitted</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {bids.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={8} className="py-10 text-center text-sm text-muted-foreground">
+                  No bids submitted yet
+                </TableCell>
+              </TableRow>
+            ) : bids.map(b => (
+              <TableRow key={b.id}>
+                <TableCell className="font-semibold">{b.tender.reference}</TableCell>
+                <TableCell className="font-bold">${b.rate.toLocaleString()}</TableCell>
+                <TableCell className="text-sm">{b.transitDays ? `${b.transitDays} days` : '-'}</TableCell>
+                <TableCell className="text-sm">{b.equipmentType || '-'}</TableCell>
+                <TableCell className="text-sm">{b.sourceType}</TableCell>
+                <TableCell>
+                  <Badge variant={statusVariant(b.status)}>{b.status}</Badge>
+                </TableCell>
+                <TableCell>
+                  <Badge variant={statusVariant(b.tender.status)}>{b.tender.status}</Badge>
+                </TableCell>
+                <TableCell className="text-sm text-muted-foreground">{new Date(b.submittedAt).toLocaleString()}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </Card>
     </div>
   );
 }

@@ -1,6 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { CircleAlert } from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 const BIN_TYPES = [
   { value: 'pallet', label: 'Pallet' }, { value: 'shelf', label: 'Shelf' },
@@ -8,7 +21,7 @@ const BIN_TYPES = [
   { value: 'staging', label: 'Staging' }, { value: 'pack_station', label: 'Pack Station' },
 ];
 const TEMP_ZONES = [
-  { value: '', label: 'Inherit from zone' }, { value: 'ambient', label: 'Ambient' },
+  { value: 'inherit', label: 'Inherit from zone' }, { value: 'ambient', label: 'Ambient' },
   { value: 'refrigerated', label: 'Refrigerated' }, { value: 'frozen', label: 'Frozen' },
 ];
 
@@ -27,7 +40,7 @@ export default function VNextWmsCreateBin() {
     locationId: presetLocation,
     label: '',
     binType: 'pallet',
-    temperatureZone: '',
+    temperatureZone: 'inherit',
     hazmatCertified: false,
     level: '',
     walkSequence: '0',
@@ -57,7 +70,7 @@ export default function VNextWmsCreateBin() {
           locationId: form.locationId,
           label: form.label.trim(),
           binType: form.binType,
-          temperatureZone: form.temperatureZone || null,
+          temperatureZone: form.temperatureZone === 'inherit' ? null : form.temperatureZone,
           hazmatCertified: form.hazmatCertified,
           level: form.level ? parseInt(form.level) : null,
           walkSequence: parseInt(form.walkSequence) || 0,
@@ -74,49 +87,108 @@ export default function VNextWmsCreateBin() {
   };
 
   return (
-    <div>
-      <div className="vn-page-header">
-        <div><h1>Create Bin</h1><p className="vn-page-subtitle">Add a single storage location</p></div>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Create Bin</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Add a single storage location</p>
       </div>
-      {error && <div className="vn-alert vn-alert-error" style={{ marginBottom: '1rem' }}>{error}</div>}
-      <form onSubmit={handleSubmit} className="vn-card" style={{ maxWidth: '700px' }}>
-        <div className="vn-form-grid">
-          <div className="vn-field">
-            <label className="vn-field-label">Zone *</label>
-            <select className="vn-input" value={form.zoneId} onChange={e => setForm({ ...form, zoneId: e.target.value })} required>
-              <option value="">Select zone...</option>
-              {zones.map(z => <option key={z.id} value={z.id}>{z.name}</option>)}
-            </select>
-          </div>
-          <div className="vn-field">
-            <label className="vn-field-label">Label *</label>
-            <input className="vn-input" value={form.label} onChange={e => setForm({ ...form, label: e.target.value })} placeholder="e.g. BULK-A-01-01" required />
-          </div>
-          <div className="vn-field">
-            <label className="vn-field-label">Bin Type *</label>
-            <select className="vn-input" value={form.binType} onChange={e => setForm({ ...form, binType: e.target.value })}>
-              {BIN_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-            </select>
-          </div>
-          <div className="vn-field">
-            <label className="vn-field-label">Temperature Zone</label>
-            <select className="vn-input" value={form.temperatureZone} onChange={e => setForm({ ...form, temperatureZone: e.target.value })}>
-              {TEMP_ZONES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-            </select>
-          </div>
-          <div className="vn-field"><label className="vn-field-label">Level</label><input className="vn-input" type="number" value={form.level} onChange={e => setForm({ ...form, level: e.target.value })} placeholder="Vertical position" /></div>
-          <div className="vn-field"><label className="vn-field-label">Walk Sequence</label><input className="vn-input" type="number" value={form.walkSequence} onChange={e => setForm({ ...form, walkSequence: e.target.value })} /></div>
-          <div className="vn-field"><label className="vn-field-label">Max Weight (kg)</label><input className="vn-input" type="number" step="0.1" value={form.maxWeightKg} onChange={e => setForm({ ...form, maxWeightKg: e.target.value })} /></div>
-          <div className="vn-field"><label className="vn-field-label">Max Pallet Positions</label><input className="vn-input" type="number" value={form.maxPalletPositions} onChange={e => setForm({ ...form, maxPalletPositions: e.target.value })} /></div>
-          <div className="vn-field" style={{ gridColumn: '1 / -1' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
-              <input type="checkbox" checked={form.hazmatCertified} onChange={e => setForm({ ...form, hazmatCertified: e.target.checked })} /> Hazmat Certified
-            </label>
-          </div>
+
+      {error && (
+        <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+          <CircleAlert className="h-5 w-5" />
+          {error}
         </div>
-        <div className="vn-form-actions" style={{ marginTop: '1.5rem' }}>
-          <button type="button" className="vn-btn vn-btn-outline" onClick={() => navigate(-1)}>Cancel</button>
-          <button type="submit" className="vn-btn vn-btn-primary" disabled={saving}>{saving ? 'Creating...' : 'Create Bin'}</button>
+      )}
+
+      <form onSubmit={handleSubmit}>
+        <Card className="max-w-3xl">
+          <CardContent className="grid gap-4 p-6 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Zone *</Label>
+              <Select value={form.zoneId} onValueChange={v => setForm({ ...form, zoneId: v })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select zone..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {zones.map(z => (
+                    <SelectItem key={z.id} value={z.id}>{z.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Label *</Label>
+              <Input
+                value={form.label}
+                onChange={e => setForm({ ...form, label: e.target.value })}
+                placeholder="e.g. BULK-A-01-01"
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Bin Type *</Label>
+              <Select value={form.binType} onValueChange={v => setForm({ ...form, binType: v })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {BIN_TYPES.map(t => (
+                    <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Temperature Zone</Label>
+              <Select value={form.temperatureZone} onValueChange={v => setForm({ ...form, temperatureZone: v })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {TEMP_ZONES.map(t => (
+                    <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Level</Label>
+              <Input type="number" value={form.level} onChange={e => setForm({ ...form, level: e.target.value })} placeholder="Vertical position" />
+            </div>
+            <div className="space-y-2">
+              <Label>Walk Sequence</Label>
+              <Input type="number" value={form.walkSequence} onChange={e => setForm({ ...form, walkSequence: e.target.value })} />
+            </div>
+            <div className="space-y-2">
+              <Label>Max Weight (kg)</Label>
+              <Input type="number" step="0.1" value={form.maxWeightKg} onChange={e => setForm({ ...form, maxWeightKg: e.target.value })} />
+            </div>
+            <div className="space-y-2">
+              <Label>Max Pallet Positions</Label>
+              <Input type="number" value={form.maxPalletPositions} onChange={e => setForm({ ...form, maxPalletPositions: e.target.value })} />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={form.hazmatCertified}
+                  onChange={e => setForm({ ...form, hazmatCertified: e.target.checked })}
+                  className="h-4 w-4 rounded border border-input bg-background accent-primary"
+                />
+                Hazmat Certified
+              </label>
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="mt-6 flex flex-wrap items-center justify-end gap-2">
+          <Button variant="outline" type="button" onClick={() => navigate(-1)}>Cancel</Button>
+          <Button variant="gradient" type="submit" disabled={saving}>{saving ? 'Creating...' : 'Create Bin'}</Button>
         </div>
       </form>
     </div>

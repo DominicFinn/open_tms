@@ -1,6 +1,36 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import {
+  ArrowLeft,
+  CircleAlert,
+  CreditCard,
+  Loader2,
+  Send,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 
 interface InvoiceLineItem {
   id: string;
@@ -48,11 +78,23 @@ function formatMoney(cents: number): string {
   return `$${(cents / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 function formatDate(d?: string): string {
-  if (!d) return '—';
+  if (!d) return '-';
   return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
-function statusChip(s: string): string {
-  const m: Record<string, string> = { draft: 'secondary', approved: 'info', sent: 'primary', partial_paid: 'warning', paid: 'success', overdue: 'error', void: 'secondary', disputed: 'error' };
+
+type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning' | 'info' | 'muted';
+
+function statusVariant(s: string): BadgeVariant {
+  const m: Record<string, BadgeVariant> = {
+    draft: 'secondary',
+    approved: 'info',
+    sent: 'default',
+    partial_paid: 'warning',
+    paid: 'success',
+    overdue: 'destructive',
+    void: 'secondary',
+    disputed: 'destructive',
+  };
   return m[s] || 'secondary';
 }
 
@@ -104,157 +146,269 @@ export default function VNextFinanceInvoiceDetail() {
     setPaymentRef('');
   };
 
-  if (loading) return <div className="vn-empty"><span className="material-icons" style={{ animation: 'spin 1s linear infinite' }}>refresh</span><h3>Loading...</h3></div>;
-  if (error || !invoice) return <div className="vn-alert vn-alert-error">{error || 'Invoice not found'}</div>;
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <h3 className="text-lg font-medium">Loading...</h3>
+      </div>
+    );
+  }
+  if (error || !invoice) {
+    return (
+      <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+        <CircleAlert className="h-5 w-5" />
+        {error || 'Invoice not found'}
+      </div>
+    );
+  }
 
   const i = invoice;
   const isPastDue = new Date(i.dueDate) < new Date() && !['paid', 'void'].includes(i.status);
 
   return (
-    <>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-        <button className="vn-btn vn-btn-ghost vn-btn-sm" onClick={() => navigate('/finance/invoices')}>
-          <span className="material-icons">arrow_back</span> Invoices
-        </button>
-        <span style={{ color: 'var(--on-surface-variant)', fontSize: 13 }}>/ {i.invoiceNumber}</span>
+    <div className="space-y-6">
+      <div className="flex items-center gap-2 text-sm">
+        <Button variant="ghost" size="sm" onClick={() => navigate('/finance/invoices')}>
+          <ArrowLeft className="h-4 w-4" /> Invoices
+        </Button>
+        <span className="text-muted-foreground">/ {i.invoiceNumber}</span>
       </div>
 
-      <div className="vn-page-header">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1>{i.invoiceNumber}</h1>
-          <div className="vn-page-header-meta">
-            <span className={`vn-chip vn-chip-${statusChip(i.status)}`}>{i.status.replace(/_/g, ' ')}</span>
-            {isPastDue && <span className="vn-chip vn-chip-error">OVERDUE</span>}
+          <h1 className="text-3xl font-bold tracking-tight">{i.invoiceNumber}</h1>
+          <div className="mt-2 flex items-center gap-2">
+            <Badge variant={statusVariant(i.status)}>{i.status.replace(/_/g, ' ')}</Badge>
+            {isPastDue && <Badge variant="destructive">OVERDUE</Badge>}
           </div>
         </div>
-        <div className="vn-page-actions">
+        <div className="flex flex-wrap gap-2">
           {i.status === 'draft' && (
-            <button className="vn-btn vn-btn-primary vn-btn-sm" onClick={() => doAction('approve')} disabled={!!actionLoading}>
+            <Button size="sm" onClick={() => doAction('approve')} disabled={!!actionLoading}>
               {actionLoading === 'approve' ? 'Approving...' : 'Approve'}
-            </button>
+            </Button>
           )}
           {['draft', 'approved'].includes(i.status) && (
-            <button className="vn-btn vn-btn-primary vn-btn-sm" onClick={() => doAction('send')} disabled={!!actionLoading}>
-              <span className="material-icons">send</span>
+            <Button size="sm" onClick={() => doAction('send')} disabled={!!actionLoading}>
+              <Send className="h-4 w-4" />
               {actionLoading === 'send' ? 'Sending...' : 'Send'}
-            </button>
+            </Button>
           )}
           {['sent', 'partial_paid', 'overdue'].includes(i.status) && (
-            <button className="vn-btn vn-btn-success vn-btn-sm" onClick={() => setShowPayment(!showPayment)}>
-              <span className="material-icons">payment</span> Record Payment
-            </button>
+            <Button size="sm" variant="default" onClick={() => setShowPayment(!showPayment)}>
+              <CreditCard className="h-4 w-4" /> Record Payment
+            </Button>
           )}
           {i.paidCents === 0 && !['void', 'paid'].includes(i.status) && (
-            <button className="vn-btn vn-btn-outline vn-btn-sm" onClick={() => { if (confirm('Void this invoice?')) doAction('void', { reason: 'Voided by user' }); }} disabled={!!actionLoading}>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => { if (confirm('Void this invoice?')) doAction('void', { reason: 'Voided by user' }); }}
+              disabled={!!actionLoading}
+            >
               Void
-            </button>
+            </Button>
           )}
         </div>
       </div>
 
-      {/* Payment form */}
       {showPayment && (
-        <div className="vn-card" style={{ marginBottom: 16, padding: 20 }}>
-          <h3 style={{ margin: '0 0 12px' }}>Record Payment</h3>
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'end' }}>
-            <div className="vn-field">
-              <label className="vn-field-label">Amount ($)</label>
-              <input className="vn-input" type="number" step="0.01" min="0.01" max={i.balanceCents / 100} value={paymentAmount} onChange={e => setPaymentAmount(e.target.value)} placeholder={`Max ${(i.balanceCents / 100).toFixed(2)}`} />
+        <Card>
+          <CardContent className="p-5">
+            <h3 className="mb-4 text-base font-semibold">Record Payment</h3>
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="payment-amount">Amount ($)</Label>
+                <Input
+                  id="payment-amount"
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  max={i.balanceCents / 100}
+                  value={paymentAmount}
+                  onChange={e => setPaymentAmount(e.target.value)}
+                  placeholder={`Max ${(i.balanceCents / 100).toFixed(2)}`}
+                  className="w-[180px]"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Method</Label>
+                <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                  <SelectTrigger className="w-[150px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ach">ACH</SelectItem>
+                    <SelectItem value="wire">Wire</SelectItem>
+                    <SelectItem value="check">Check</SelectItem>
+                    <SelectItem value="credit_card">Credit Card</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="payment-ref">Reference #</Label>
+                <Input
+                  id="payment-ref"
+                  value={paymentRef}
+                  onChange={e => setPaymentRef(e.target.value)}
+                  placeholder="Check #, ACH ref..."
+                  className="w-[200px]"
+                />
+              </div>
+              <Button onClick={recordPayment} disabled={!!actionLoading}>
+                {actionLoading === 'payments' ? 'Recording...' : 'Record'}
+              </Button>
+              <Button variant="ghost" onClick={() => setShowPayment(false)}>Cancel</Button>
             </div>
-            <div className="vn-field">
-              <label className="vn-field-label">Method</label>
-              <select className="vn-input" value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)}>
-                <option value="ach">ACH</option>
-                <option value="wire">Wire</option>
-                <option value="check">Check</option>
-                <option value="credit_card">Credit Card</option>
-              </select>
-            </div>
-            <div className="vn-field">
-              <label className="vn-field-label">Reference #</label>
-              <input className="vn-input" value={paymentRef} onChange={e => setPaymentRef(e.target.value)} placeholder="Check #, ACH ref..." />
-            </div>
-            <button className="vn-btn vn-btn-success" onClick={recordPayment} disabled={!!actionLoading}>
-              {actionLoading === 'payments' ? 'Recording...' : 'Record'}
-            </button>
-            <button className="vn-btn vn-btn-ghost" onClick={() => setShowPayment(false)}>Cancel</button>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       )}
 
-      <div className="vn-detail-grid">
-        <div className="vn-detail-main">
-          {/* Line Items */}
-          <div className="vn-card" style={{ marginBottom: 24 }}>
-            <div className="vn-card-header"><h2>Line Items</h2></div>
-            <div className="vn-table-wrap">
-              <table className="vn-table">
-                <thead>
-                  <tr><th>Description</th><th>Type</th><th style={{ textAlign: 'right' }}>Qty</th><th style={{ textAlign: 'right' }}>Unit Price</th><th style={{ textAlign: 'right' }}>Total</th></tr>
-                </thead>
-                <tbody>
-                  {i.lineItems.map(li => (
-                    <tr key={li.id}>
-                      <td>{li.description}{li.freightClass && <span className="vn-table-secondary"> (Class {li.freightClass})</span>}</td>
-                      <td><span className="vn-chip vn-chip-secondary">{li.chargeType.replace(/_/g, ' ')}</span></td>
-                      <td style={{ textAlign: 'right' }}>{li.quantity}</td>
-                      <td style={{ textAlign: 'right' }}>{formatMoney(li.unitPriceCents)}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 500 }}>{formatMoney(li.totalCents)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr><td colSpan={4} style={{ textAlign: 'right', fontWeight: 600 }}>Subtotal</td><td style={{ textAlign: 'right', fontWeight: 600 }}>{formatMoney(i.subtotalCents)}</td></tr>
-                  {i.taxCents > 0 && <tr><td colSpan={4} style={{ textAlign: 'right' }}>Tax</td><td style={{ textAlign: 'right' }}>{formatMoney(i.taxCents)}</td></tr>}
-                  <tr><td colSpan={4} style={{ textAlign: 'right', fontWeight: 700, fontSize: 16 }}>Total</td><td style={{ textAlign: 'right', fontWeight: 700, fontSize: 16 }}>{formatMoney(i.totalCents)}</td></tr>
-                  {i.paidCents > 0 && <tr><td colSpan={4} style={{ textAlign: 'right', color: 'var(--success)' }}>Paid</td><td style={{ textAlign: 'right', color: 'var(--success)' }}>-{formatMoney(i.paidCents)}</td></tr>}
-                  <tr><td colSpan={4} style={{ textAlign: 'right', fontWeight: 700, color: i.balanceCents > 0 ? 'var(--error)' : 'var(--success)' }}>Balance Due</td><td style={{ textAlign: 'right', fontWeight: 700, color: i.balanceCents > 0 ? 'var(--error)' : 'var(--success)' }}>{formatMoney(i.balanceCents)}</td></tr>
-                </tfoot>
-              </table>
+      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+        <div className="space-y-6">
+          <Card>
+            <div className="flex items-center justify-between p-5">
+              <h2 className="text-lg font-semibold">Line Items</h2>
             </div>
-          </div>
-
-          {/* Payments */}
-          {i.payments.length > 0 && (
-            <div className="vn-card" style={{ marginBottom: 24 }}>
-              <div className="vn-card-header"><h2>Payment History</h2></div>
-              <div className="vn-table-wrap">
-                <table className="vn-table">
-                  <thead><tr><th>Date</th><th>Method</th><th>Reference</th><th style={{ textAlign: 'right' }}>Amount</th><th>Notes</th></tr></thead>
-                  <tbody>
-                    {i.payments.map(p => (
-                      <tr key={p.id}>
-                        <td>{formatDate(p.receivedDate)}</td>
-                        <td>{p.paymentMethod ?? '—'}</td>
-                        <td className="vn-table-secondary">{p.referenceNumber ?? '—'}</td>
-                        <td style={{ textAlign: 'right', fontWeight: 500, color: 'var(--success)' }}>{formatMoney(p.amountCents)}</td>
-                        <td className="vn-table-secondary">{p.notes ?? ''}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            <Separator />
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Description</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead className="text-right">Qty</TableHead>
+                  <TableHead className="text-right">Unit Price</TableHead>
+                  <TableHead className="text-right">Total</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {i.lineItems.map(li => (
+                  <TableRow key={li.id}>
+                    <TableCell>
+                      {li.description}
+                      {li.freightClass && <span className="ml-1 text-sm text-muted-foreground">(Class {li.freightClass})</span>}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="muted">{li.chargeType.replace(/_/g, ' ')}</Badge>
+                    </TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">{li.quantity}</TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">{formatMoney(li.unitPriceCents)}</TableCell>
+                    <TableCell className="text-right font-mono tabular-nums font-medium">{formatMoney(li.totalCents)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            <div className="border-t p-5">
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="font-semibold">Subtotal</span>
+                  <span className="font-mono tabular-nums font-semibold">{formatMoney(i.subtotalCents)}</span>
+                </div>
+                {i.taxCents > 0 && (
+                  <div className="flex justify-between">
+                    <span>Tax</span>
+                    <span className="font-mono tabular-nums">{formatMoney(i.taxCents)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-base">
+                  <span className="font-bold">Total</span>
+                  <span className="font-mono tabular-nums font-bold">{formatMoney(i.totalCents)}</span>
+                </div>
+                {i.paidCents > 0 && (
+                  <div className="flex justify-between text-success">
+                    <span>Paid</span>
+                    <span className="font-mono tabular-nums">-{formatMoney(i.paidCents)}</span>
+                  </div>
+                )}
+                <div className={cn('flex justify-between font-bold', i.balanceCents > 0 ? 'text-destructive' : 'text-success')}>
+                  <span>Balance Due</span>
+                  <span className="font-mono tabular-nums">{formatMoney(i.balanceCents)}</span>
+                </div>
               </div>
             </div>
+          </Card>
+
+          {i.payments.length > 0 && (
+            <Card>
+              <div className="p-5">
+                <h2 className="text-lg font-semibold">Payment History</h2>
+              </div>
+              <Separator />
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Method</TableHead>
+                    <TableHead>Reference</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
+                    <TableHead>Notes</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {i.payments.map(p => (
+                    <TableRow key={p.id}>
+                      <TableCell>{formatDate(p.receivedDate)}</TableCell>
+                      <TableCell>{p.paymentMethod ?? '-'}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{p.referenceNumber ?? '-'}</TableCell>
+                      <TableCell className="text-right font-mono tabular-nums font-medium text-success">{formatMoney(p.amountCents)}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{p.notes ?? ''}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Card>
           )}
         </div>
 
-        {/* Sidebar */}
-        <div className="vn-detail-sidebar">
-          <div className="vn-card" style={{ padding: 20 }}>
-            <h3 style={{ margin: '0 0 16px' }}>Invoice Details</h3>
-            <div className="vn-info-grid">
-              <div className="vn-info-item"><label>Customer</label><span>{i.customer.name}</span></div>
-              <div className="vn-info-item"><label>Issue Date</label><span>{formatDate(i.issueDate)}</span></div>
-              <div className="vn-info-item"><label>Due Date</label><span style={{ color: isPastDue ? 'var(--error)' : undefined }}>{formatDate(i.dueDate)}</span></div>
-              <div className="vn-info-item"><label>Payment Terms</label><span>Net {i.paymentTermsDays}</span></div>
-              {i.sentAt && <div className="vn-info-item"><label>Sent</label><span>{formatDate(i.sentAt)}</span></div>}
-              {i.paidAt && <div className="vn-info-item"><label>Paid</label><span>{formatDate(i.paidAt)}</span></div>}
-              {i.notes && <div className="vn-info-item"><label>Notes</label><span>{i.notes}</span></div>}
-              {i.internalNotes && <div className="vn-info-item"><label>Internal Notes</label><span style={{ fontStyle: 'italic' }}>{i.internalNotes}</span></div>}
-            </div>
-          </div>
-        </div>
+        <aside className="space-y-6 lg:sticky lg:top-20 lg:self-start">
+          <Card>
+            <CardContent className="p-5">
+              <h3 className="mb-4 text-base font-semibold">Invoice Details</h3>
+              <dl className="space-y-3 text-sm">
+                <div>
+                  <dt className="text-xs text-muted-foreground">Customer</dt>
+                  <dd>{i.customer.name}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">Issue Date</dt>
+                  <dd>{formatDate(i.issueDate)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">Due Date</dt>
+                  <dd className={cn(isPastDue && 'text-destructive')}>{formatDate(i.dueDate)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">Payment Terms</dt>
+                  <dd>Net {i.paymentTermsDays}</dd>
+                </div>
+                {i.sentAt && (
+                  <div>
+                    <dt className="text-xs text-muted-foreground">Sent</dt>
+                    <dd>{formatDate(i.sentAt)}</dd>
+                  </div>
+                )}
+                {i.paidAt && (
+                  <div>
+                    <dt className="text-xs text-muted-foreground">Paid</dt>
+                    <dd>{formatDate(i.paidAt)}</dd>
+                  </div>
+                )}
+                {i.notes && (
+                  <div>
+                    <dt className="text-xs text-muted-foreground">Notes</dt>
+                    <dd>{i.notes}</dd>
+                  </div>
+                )}
+                {i.internalNotes && (
+                  <div>
+                    <dt className="text-xs text-muted-foreground">Internal Notes</dt>
+                    <dd className="italic">{i.internalNotes}</dd>
+                  </div>
+                )}
+              </dl>
+            </CardContent>
+          </Card>
+        </aside>
       </div>
-    </>
+    </div>
   );
 }

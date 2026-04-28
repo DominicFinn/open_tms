@@ -1,5 +1,19 @@
 import React, { useEffect, useState } from 'react';
+import { Loader2 } from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { cn } from '@/lib/utils';
 
 type ReportView = 'customer' | 'carrier' | 'lane' | 'time';
 
@@ -27,10 +41,10 @@ function formatCents(cents: number): string {
   return `$${(cents / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-function marginColor(pct: number): string {
-  if (pct >= 15) return 'var(--color-success)';
-  if (pct >= 5) return 'var(--color-warning)';
-  return 'var(--color-error)';
+function marginColorClass(pct: number): string {
+  if (pct >= 15) return 'text-success';
+  if (pct >= 5) return 'text-warning';
+  return 'text-destructive';
 }
 
 export default function VNextMarginReports() {
@@ -66,110 +80,142 @@ export default function VNextMarginReports() {
   const totalMarginPct = totals.revenue > 0 ? (totals.margin / totals.revenue) * 100 : 0;
 
   return (
-    <div style={{ padding: '24px 32px' }}>
-      <div className="vn-page-header">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700 }}>Margin Reports</h1>
-          <p style={{ margin: '4px 0 0', color: 'var(--on-surface-variant)', fontSize: 14 }}>
+          <h1 className="text-3xl font-bold tracking-tight">Margin Reports</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             Analyze profitability by customer, carrier, lane, or time period
           </p>
         </div>
       </div>
 
-      {/* Summary stats */}
-      <div className="vn-stats" style={{ marginBottom: 24 }}>
-        <div className="vn-stat">
-          <div className="vn-stat-label">Total Revenue</div>
-          <div className="vn-stat-value">{formatCents(totals.revenue)}</div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-label">Total Cost</div>
-          <div className="vn-stat-value">{formatCents(totals.cost)}</div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-label">Total Margin</div>
-          <div className="vn-stat-value" style={{ color: marginColor(totalMarginPct) }}>{formatCents(totals.margin)}</div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-label">Margin %</div>
-          <div className="vn-stat-value" style={{ color: marginColor(totalMarginPct) }}>{totalMarginPct.toFixed(1)}%</div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-label">Shipments</div>
-          <div className="vn-stat-value">{totals.count}</div>
-        </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <Card>
+          <CardContent className="p-5">
+            <div className="text-sm text-muted-foreground">Total Revenue</div>
+            <div className="mt-1 text-2xl font-bold tracking-tight font-mono tabular-nums">{formatCents(totals.revenue)}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-5">
+            <div className="text-sm text-muted-foreground">Total Cost</div>
+            <div className="mt-1 text-2xl font-bold tracking-tight font-mono tabular-nums">{formatCents(totals.cost)}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-5">
+            <div className="text-sm text-muted-foreground">Total Margin</div>
+            <div className={cn('mt-1 text-2xl font-bold tracking-tight font-mono tabular-nums', marginColorClass(totalMarginPct))}>
+              {formatCents(totals.margin)}
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-5">
+            <div className="text-sm text-muted-foreground">Margin %</div>
+            <div className={cn('mt-1 text-2xl font-bold tracking-tight font-mono tabular-nums', marginColorClass(totalMarginPct))}>
+              {totalMarginPct.toFixed(1)}%
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-5">
+            <div className="text-sm text-muted-foreground">Shipments</div>
+            <div className="mt-1 text-2xl font-bold tracking-tight font-mono tabular-nums">{totals.count}</div>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Filters */}
-      <div className="vn-card" style={{ marginBottom: 16 }}>
-        <div className="vn-filters" style={{ padding: '12px 16px' }}>
-          <div className="vn-tabs" style={{ flex: 1 }}>
-            {(['customer', 'carrier', 'lane', 'time'] as ReportView[]).map(v => (
-              <button key={v} className={`vn-tab ${view === v ? 'active' : ''}`} onClick={() => setView(v)}>
-                {v === 'customer' ? 'By Customer' : v === 'carrier' ? 'By Carrier' : v === 'lane' ? 'By Lane' : 'Over Time'}
-              </button>
-            ))}
+      <Card>
+        <div className="flex flex-wrap items-center gap-3 p-4">
+          <Tabs value={view} onValueChange={v => setView(v as ReportView)} className="flex-1">
+            <TabsList>
+              <TabsTrigger value="customer">By Customer</TabsTrigger>
+              <TabsTrigger value="carrier">By Carrier</TabsTrigger>
+              <TabsTrigger value="lane">By Lane</TabsTrigger>
+              <TabsTrigger value="time">Over Time</TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <Input
+            type="date"
+            value={dateFrom}
+            onChange={e => setDateFrom(e.target.value)}
+            className="w-[150px]"
+          />
+          <span className="text-sm text-muted-foreground">to</span>
+          <Input
+            type="date"
+            value={dateTo}
+            onChange={e => setDateTo(e.target.value)}
+            className="w-[150px]"
+          />
+        </div>
+      </Card>
+
+      <Card>
+        {loading ? (
+          <div className="flex flex-col items-center gap-3 py-12 text-muted-foreground">
+            <Loader2 className="h-8 w-8 animate-spin" />
+            <h3 className="text-base font-medium">Loading...</h3>
           </div>
-          <input type="date" className="vn-filter-input" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{ width: 140 }} />
-          <span style={{ color: 'var(--on-surface-variant)' }}>to</span>
-          <input type="date" className="vn-filter-input" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{ width: 140 }} />
-        </div>
-      </div>
-
-      {/* Table */}
-      <div className="vn-card">
-        <div className="vn-table-wrap">
-          {loading ? (
-            <div style={{ textAlign: 'center', padding: 40 }}><div className="loading-spinner" /></div>
-          ) : data.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: 40, color: 'var(--on-surface-variant)' }}>No data for the selected period</div>
-          ) : (
-            <table className="vn-table">
-              <thead>
-                <tr>
-                  <th>{view === 'customer' ? 'Customer' : view === 'carrier' ? 'Carrier' : view === 'lane' ? 'Lane' : 'Period'}</th>
-                  <th style={{ textAlign: 'right' }}>Shipments</th>
-                  <th style={{ textAlign: 'right' }}>Revenue</th>
-                  <th style={{ textAlign: 'right' }}>Cost</th>
-                  <th style={{ textAlign: 'right' }}>Margin</th>
-                  <th style={{ textAlign: 'right' }}>Margin %</th>
-                  {view === 'customer' && <th style={{ textAlign: 'right' }}>Target</th>}
-                  {view === 'customer' && <th style={{ textAlign: 'right' }}>Variance</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {data.map((r, i) => {
-                  const name = r.customerName || r.carrierName || r.laneName || r.period || '-';
-                  const revenue = r.totalRevenueCents || r.revenueCents || 0;
-                  const cost = r.totalCostCents || r.costCents || 0;
-                  const margin = r.totalMarginCents || r.marginCents || 0;
-                  const pct = r.marginPercent;
-                  return (
-                    <tr key={i}>
-                      <td style={{ fontWeight: 600 }}>{name}</td>
-                      <td style={{ textAlign: 'right' }}>{r.shipmentCount}</td>
-                      <td style={{ textAlign: 'right' }}>{formatCents(revenue)}</td>
-                      <td style={{ textAlign: 'right' }}>{formatCents(cost)}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 600, color: marginColor(pct) }}>{formatCents(margin)}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 600, color: marginColor(pct) }}>{pct.toFixed(1)}%</td>
-                      {view === 'customer' && (
-                        <td style={{ textAlign: 'right' }}>
-                          {r.targetMarginPercent != null ? `${r.targetMarginPercent}%` : '-'}
-                        </td>
-                      )}
-                      {view === 'customer' && (
-                        <td style={{ textAlign: 'right', fontWeight: 600, color: r.varianceFromTarget != null ? (r.varianceFromTarget >= 0 ? 'var(--color-success)' : 'var(--color-error)') : 'var(--on-surface-variant)' }}>
-                          {r.varianceFromTarget != null ? `${r.varianceFromTarget > 0 ? '+' : ''}${r.varianceFromTarget.toFixed(1)}%` : '-'}
-                        </td>
-                      )}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </div>
+        ) : data.length === 0 ? (
+          <div className="py-12 text-center text-sm text-muted-foreground">
+            No data for the selected period
+          </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{view === 'customer' ? 'Customer' : view === 'carrier' ? 'Carrier' : view === 'lane' ? 'Lane' : 'Period'}</TableHead>
+                <TableHead className="text-right">Shipments</TableHead>
+                <TableHead className="text-right">Revenue</TableHead>
+                <TableHead className="text-right">Cost</TableHead>
+                <TableHead className="text-right">Margin</TableHead>
+                <TableHead className="text-right">Margin %</TableHead>
+                {view === 'customer' && <TableHead className="text-right">Target</TableHead>}
+                {view === 'customer' && <TableHead className="text-right">Variance</TableHead>}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.map((r, i) => {
+                const name = r.customerName || r.carrierName || r.laneName || r.period || '-';
+                const revenue = r.totalRevenueCents || r.revenueCents || 0;
+                const cost = r.totalCostCents || r.costCents || 0;
+                const margin = r.totalMarginCents || r.marginCents || 0;
+                const pct = r.marginPercent;
+                return (
+                  <TableRow key={i}>
+                    <TableCell className="font-semibold">{name}</TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">{r.shipmentCount}</TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">{formatCents(revenue)}</TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">{formatCents(cost)}</TableCell>
+                    <TableCell className={cn('text-right font-mono tabular-nums font-semibold', marginColorClass(pct))}>{formatCents(margin)}</TableCell>
+                    <TableCell className={cn('text-right font-mono tabular-nums font-semibold', marginColorClass(pct))}>{pct.toFixed(1)}%</TableCell>
+                    {view === 'customer' && (
+                      <TableCell className="text-right font-mono tabular-nums">
+                        {r.targetMarginPercent != null ? `${r.targetMarginPercent}%` : '-'}
+                      </TableCell>
+                    )}
+                    {view === 'customer' && (
+                      <TableCell
+                        className={cn(
+                          'text-right font-mono tabular-nums font-semibold',
+                          r.varianceFromTarget != null
+                            ? (r.varianceFromTarget >= 0 ? 'text-success' : 'text-destructive')
+                            : 'text-muted-foreground',
+                        )}
+                      >
+                        {r.varianceFromTarget != null ? `${r.varianceFromTarget > 0 ? '+' : ''}${r.varianceFromTarget.toFixed(1)}%` : '-'}
+                      </TableCell>
+                    )}
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        )}
+      </Card>
     </div>
   );
 }

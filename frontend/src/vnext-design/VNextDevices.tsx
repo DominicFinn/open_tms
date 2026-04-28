@@ -1,7 +1,42 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import {
+  Activity,
+  CheckCircle2,
+  AlertTriangle,
+  Link as LinkIcon,
+  Plus,
+  Search,
+  Loader2,
+  Battery,
+  BatteryFull,
+  BatteryMedium,
+  BatteryLow,
+  BatteryWarning,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
 import { getDeviceImageUrl } from './deviceImages';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableHead,
+  TableRow,
+  TableCell,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 
 interface Device {
   id: string;
@@ -26,7 +61,7 @@ interface Device {
 }
 
 function relativeTime(dateStr: string | null): string {
-  if (!dateStr) return '—';
+  if (!dateStr) return '-';
   const now = Date.now();
   const then = new Date(dateStr).getTime();
   const diffMs = now - then;
@@ -38,18 +73,12 @@ function relativeTime(dateStr: string | null): string {
   return new Date(dateStr).toLocaleDateString();
 }
 
-function batteryIcon(level: number | null): string {
-  if (level == null) return 'battery_unknown';
-  if (level > 50) return 'battery_full';
-  if (level >= 20) return 'battery_3_bar';
-  return 'battery_1_bar';
-}
-
-function batteryColor(level: number | null): string {
-  if (level == null) return 'var(--on-surface-variant)';
-  if (level > 50) return 'var(--success)';
-  if (level >= 20) return 'var(--warning)';
-  return 'var(--error)';
+function batteryProps(level: number | null) {
+  if (level == null) return { Icon: BatteryWarning, color: 'text-muted-foreground' };
+  if (level > 75) return { Icon: BatteryFull, color: 'text-success' };
+  if (level > 50) return { Icon: BatteryMedium, color: 'text-success' };
+  if (level >= 20) return { Icon: Battery, color: 'text-warning' };
+  return { Icon: BatteryLow, color: 'text-destructive' };
 }
 
 function assignedLabel(device: Device): string {
@@ -58,6 +87,12 @@ function assignedLabel(device: Device): string {
   if (active.shipment?.reference) return active.shipment.reference;
   if (active.order?.orderNumber) return active.order.orderNumber;
   return 'Assigned';
+}
+
+function statusVariant(status: string): 'success' | 'warning' | 'secondary' {
+  if (status === 'active') return 'success';
+  if (status === 'inactive') return 'warning';
+  return 'secondary';
 }
 
 export default function VNextDevices() {
@@ -108,174 +143,154 @@ export default function VNextDevices() {
 
   if (loading) {
     return (
-      <div className="vn-empty">
-        <span className="material-icons" style={{ animation: 'spin 1s linear infinite' }}>refresh</span>
-        <h3>Loading...</h3>
+      <div className="flex justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="vn-alert vn-alert-error">
-        <span className="material-icons">error</span>
-        <div className="vn-alert-content">{error}</div>
+      <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+        {error}
       </div>
     );
   }
 
+  const stats = [
+    { label: 'Total devices', value: totalCount, icon: Activity, tone: 'bg-primary/10 text-primary' },
+    { label: 'Active', value: activeCount, icon: CheckCircle2, tone: 'bg-success/15 text-success' },
+    { label: 'Low battery', value: alertCount, icon: AlertTriangle, tone: 'bg-destructive/15 text-destructive' },
+    { label: 'Assigned', value: assignedCount, icon: LinkIcon, tone: 'bg-info/15 text-info' },
+  ];
+
   return (
-    <>
-      <div className="vn-page-header">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1>Devices</h1>
-          <p>{totalCount} devices registered</p>
+          <h1 className="text-3xl font-bold tracking-tight">Devices</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{totalCount} devices registered</p>
         </div>
-        <div className="vn-page-actions">
-          <button className="vn-btn vn-btn-primary">
-            <span className="material-icons">add</span>
-            Register Device
-          </button>
-        </div>
+        <Button variant="gradient">
+          <Plus className="h-4 w-4" />
+          Register device
+        </Button>
       </div>
 
-      {/* Stats */}
-      <div className="vn-stats">
-        <div className="vn-stat">
-          <div className="vn-stat-icon primary"><span className="material-icons">sensors</span></div>
-          <div>
-            <div className="vn-stat-value">{totalCount}</div>
-            <div className="vn-stat-label">Total Devices</div>
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon success"><span className="material-icons">check_circle</span></div>
-          <div>
-            <div className="vn-stat-value">{activeCount}</div>
-            <div className="vn-stat-label">Active</div>
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon error"><span className="material-icons">warning</span></div>
-          <div>
-            <div className="vn-stat-value">{alertCount}</div>
-            <div className="vn-stat-label">Low Battery</div>
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon info"><span className="material-icons">link</span></div>
-          <div>
-            <div className="vn-stat-value">{assignedCount}</div>
-            <div className="vn-stat-label">Assigned</div>
-          </div>
-        </div>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {stats.map(s => {
+          const Icon = s.icon;
+          return (
+            <Card key={s.label}>
+              <CardContent className="flex items-center gap-3 p-4">
+                <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${s.tone}`}>
+                  <Icon className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="text-2xl font-semibold">{s.value}</div>
+                  <div className="text-xs text-muted-foreground">{s.label}</div>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
-      <div className="vn-card">
-        <div className="vn-filters">
-          <div className="vn-filter-group" style={{ flex: 1 }}>
-            <span className="material-icons">search</span>
-            <input
-              className="vn-filter-input"
-              placeholder="Search devices by name, ID, or model..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              style={{ width: '100%' }}
-            />
+      <Card>
+        <CardContent className="p-0">
+          <div className="flex flex-wrap items-center gap-2 border-b p-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                className="pl-8"
+                placeholder="Search devices by name, ID, or model..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
+            </div>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="inactive">Inactive</SelectItem>
+                <SelectItem value="retired">Retired</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-          <select
-            className="vn-filter-select"
-            value={statusFilter}
-            onChange={e => setStatusFilter(e.target.value)}
-          >
-            <option value="all">All Statuses</option>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-            <option value="retired">Retired</option>
-          </select>
-        </div>
 
-        <div className="vn-table-wrap">
-          <table className="vn-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Model</th>
-                <th>Status</th>
-                <th>Battery</th>
-                <th>Last Seen</th>
-                <th>Assigned To</th>
-                <th>Readings</th>
-              </tr>
-            </thead>
-            <tbody>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Model</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Battery</TableHead>
+                <TableHead>Last seen</TableHead>
+                <TableHead>Assigned to</TableHead>
+                <TableHead>Readings</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {filtered.map(device => {
-                const statusChip =
-                  device.status === 'active' ? 'success' :
-                  device.status === 'inactive' ? 'warning' : 'secondary';
+                const { Icon: BIcon, color } = batteryProps(device.batteryLevel);
                 return (
-                  <tr
+                  <TableRow
                     key={device.id}
+                    className="cursor-pointer"
                     onClick={() => navigate(`/devices/${device.id}`)}
-                    style={{ cursor: 'pointer' }}
                   >
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <TableCell>
+                      <div className="flex items-center gap-3">
                         {(() => {
                           const imgUrl = getDeviceImageUrl(device.model);
                           return imgUrl ? (
-                            <img src={imgUrl} alt={device.model} style={{ width: 36, height: 36, objectFit: 'contain', flexShrink: 0 }} />
+                            <img src={imgUrl} alt={device.model} className="h-9 w-9 shrink-0 object-contain" />
                           ) : (
-                            <span className="material-icons" style={{ fontSize: 32, color: 'var(--on-surface-variant)', flexShrink: 0 }}>sensors</span>
+                            <Activity className="h-7 w-7 shrink-0 text-muted-foreground" />
                           );
                         })()}
                         <div>
-                          <div style={{ fontWeight: 600, color: 'var(--on-surface)' }}>{device.name}</div>
-                          <div style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>{device.displayId || device.externalId}</div>
+                          <div className="font-semibold">{device.name}</div>
+                          <div className="text-xs text-muted-foreground">{device.displayId || device.externalId}</div>
                         </div>
                       </div>
-                    </td>
-                    <td style={{ fontSize: 13 }}>{device.model || '—'}</td>
-                    <td>
-                      <span className={`vn-chip vn-chip-${statusChip}`}>{device.status}</span>
-                    </td>
-                    <td>
+                    </TableCell>
+                    <TableCell className="text-sm">{device.model || '-'}</TableCell>
+                    <TableCell>
+                      <Badge variant={statusVariant(device.status)}>{device.status}</Badge>
+                    </TableCell>
+                    <TableCell>
                       {device.batteryLevel != null ? (
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: batteryColor(device.batteryLevel) }}>
-                          <span className="material-icons" style={{ fontSize: 18 }}>{batteryIcon(device.batteryLevel)}</span>
+                        <span className={cn('inline-flex items-center gap-1', color)}>
+                          <BIcon className="h-4 w-4" />
                           {device.batteryLevel}%
                         </span>
                       ) : (
-                        <span style={{ color: 'var(--on-surface-variant)' }}>—</span>
+                        <span className="text-muted-foreground">-</span>
                       )}
-                    </td>
-                    <td style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>
-                      {relativeTime(device.lastSeenAt)}
-                    </td>
-                    <td style={{ fontSize: 13 }}>
-                      {assignedLabel(device)}
-                    </td>
-                    <td style={{ fontSize: 13 }}>
-                      {device._count?.sensorReadings ?? 0}
-                    </td>
-                  </tr>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{relativeTime(device.lastSeenAt)}</TableCell>
+                    <TableCell className="text-sm">{assignedLabel(device)}</TableCell>
+                    <TableCell className="text-sm">{device._count?.sensorReadings ?? 0}</TableCell>
+                  </TableRow>
                 );
               })}
               {filtered.length === 0 && (
-                <tr>
-                  <td colSpan={7}>
-                    <div className="vn-empty">
-                      <span className="material-icons">sensors</span>
-                      <h3>No devices found</h3>
-                      <p>Register a device to get started with IoT tracking.</p>
+                <TableRow>
+                  <TableCell colSpan={7}>
+                    <div className="flex flex-col items-center gap-2 py-12 text-center text-muted-foreground">
+                      <Activity className="h-8 w-8" />
+                      <h3 className="text-base font-medium">No devices found</h3>
+                      <p className="text-sm">Register a device to get started with IoT tracking.</p>
                     </div>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </>
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

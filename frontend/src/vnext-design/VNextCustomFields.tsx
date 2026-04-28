@@ -1,5 +1,41 @@
 import { useState, useEffect } from 'react';
+import {
+  Truck,
+  ScrollText,
+  Bus,
+  Users,
+  MapPin,
+  Plus,
+  Trash2,
+  CheckCircle2,
+  Save,
+  History,
+  Loader2,
+  Box,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableHead,
+  TableRow,
+  TableCell,
+} from '@/components/ui/table';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 interface CustomField {
   id?: string;
@@ -24,11 +60,11 @@ interface CustomFieldVersion {
 }
 
 const ENTITY_TYPES = [
-  { key: 'shipment', label: 'Shipment', icon: 'local_shipping' },
-  { key: 'order', label: 'Order', icon: 'receipt_long' },
-  { key: 'carrier', label: 'Carrier', icon: 'airport_shuttle' },
-  { key: 'customer', label: 'Customer', icon: 'people' },
-  { key: 'location', label: 'Location', icon: 'place' },
+  { key: 'shipment', label: 'Shipment', Icon: Truck },
+  { key: 'order', label: 'Order', Icon: ScrollText },
+  { key: 'carrier', label: 'Carrier', Icon: Bus },
+  { key: 'customer', label: 'Customer', Icon: Users },
+  { key: 'location', label: 'Location', Icon: MapPin },
 ];
 
 const FIELD_TYPES = [
@@ -51,6 +87,21 @@ const emptyField: CustomField = {
   config: null,
   displayOrder: 0,
 };
+
+function Banner({ variant, message, onClose }: { variant: 'success' | 'error'; message: string; onClose?: () => void }) {
+  const tone =
+    variant === 'success'
+      ? 'border-success/30 bg-success/10 text-success'
+      : 'border-destructive/30 bg-destructive/10 text-destructive';
+  return (
+    <div className={`flex items-start justify-between gap-3 rounded-md border p-3 text-sm ${tone}`}>
+      <span>{message}</span>
+      {onClose && (
+        <button onClick={onClose} className="text-xs underline opacity-70 hover:opacity-100">Dismiss</button>
+      )}
+    </div>
+  );
+}
 
 export default function VNextCustomFields() {
   const [activeTab, setActiveTab] = useState('shipment');
@@ -97,11 +148,11 @@ export default function VNextCustomFields() {
 
   function addField() {
     if (!newField.fieldKey.trim() || !newField.label.trim()) {
-      setError('Field Key and Label are required');
+      setError('Field key and label are required');
       return;
     }
     if (fields.some(f => f.fieldKey === newField.fieldKey.trim())) {
-      setError('Field Key must be unique');
+      setError('Field key must be unique');
       return;
     }
     setFields(prev => [
@@ -155,300 +206,215 @@ export default function VNextCustomFields() {
   }
 
   return (
-    <>
-      <div className="vn-page-header">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1>Custom Fields</h1>
-          <p>Define custom fields for each entity type</p>
+          <h1 className="text-3xl font-bold tracking-tight">Custom fields</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Define custom fields for each entity type</p>
         </div>
-        <div className="vn-page-actions">
-          <button className="vn-btn vn-btn-primary" onClick={saveVersion} disabled={saving}>
-            <span className="material-icons">save</span>
-            {saving ? 'Saving...' : 'Save Version'}
-          </button>
-        </div>
+        <Button variant="gradient" onClick={saveVersion} disabled={saving}>
+          <Save className="h-4 w-4" />
+          {saving ? 'Saving...' : 'Save version'}
+        </Button>
       </div>
 
-      {error && (
-        <div className="alert alert-error" style={{ marginBottom: 16 }}>
-          {error}
-          <button className="vn-btn-icon" style={{ marginLeft: 'auto' }} onClick={() => setError('')}>
-            <span className="material-icons" style={{ fontSize: 18 }}>close</span>
-          </button>
-        </div>
-      )}
+      {error && <Banner variant="error" message={error} onClose={() => setError('')} />}
+      {success && <Banner variant="success" message={success} onClose={() => setSuccess('')} />}
 
-      {success && (
-        <div className="alert alert-success" style={{ marginBottom: 16 }}>
-          {success}
-          <button className="vn-btn-icon" style={{ marginLeft: 'auto' }} onClick={() => setSuccess('')}>
-            <span className="material-icons" style={{ fontSize: 18 }}>close</span>
-          </button>
-        </div>
-      )}
-
-      {/* Entity Type Tabs */}
-      <div className="vn-tabs" style={{ marginBottom: 24 }}>
-        {ENTITY_TYPES.map(et => (
-          <button
-            key={et.key}
-            className={`vn-tab ${activeTab === et.key ? 'active' : ''}`}
-            onClick={() => setActiveTab(et.key)}
-          >
-            <span className="material-icons" style={{ fontSize: 18 }}>{et.icon}</span>
-            {et.label}
-          </button>
-        ))}
-      </div>
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList>
+          {ENTITY_TYPES.map(({ key, label, Icon }) => (
+            <TabsTrigger key={key} value={key}>
+              <Icon className="mr-1 h-4 w-4" />
+              {label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
 
       {loading ? (
-        <div style={{ display: 'flex', justifyContent: 'center', padding: '48px' }}>
-          <div className="loading-spinner" />
+        <div className="flex justify-center py-12">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
       ) : (
         <>
-          {/* Current Fields */}
-          <div className="vn-card" style={{ marginBottom: 24 }}>
-            <div className="vn-card-header">
-              <h2>
-                {ENTITY_TYPES.find(e => e.key === activeTab)?.label} Fields
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>
+                {ENTITY_TYPES.find(e => e.key === activeTab)?.label} fields
                 {currentVersion && (
-                  <span style={{ fontSize: 13, fontWeight: 400, color: 'var(--on-surface-variant)', marginLeft: 8 }}>
+                  <span className="ml-2 text-sm font-normal text-muted-foreground">
                     (Version {currentVersion.version})
                   </span>
                 )}
-              </h2>
-              <button className="vn-btn vn-btn-outline" onClick={() => { setShowAddField(true); setNewField({ ...emptyField, displayOrder: fields.length + 1 }); }}>
-                <span className="material-icons">add</span>
-                Add Field
-              </button>
-            </div>
-            <div className="vn-card-body" style={{ padding: 0 }}>
+              </CardTitle>
+              <Button variant="outline" onClick={() => { setShowAddField(true); setNewField({ ...emptyField, displayOrder: fields.length + 1 }); }}>
+                <Plus className="h-4 w-4" />
+                Add field
+              </Button>
+            </CardHeader>
+            <CardContent className="p-0">
               {fields.length === 0 ? (
-                <div className="vn-empty">
-                  <span className="material-icons">input</span>
-                  <h3>No custom fields defined</h3>
-                  <p>Add fields to extend this entity type.</p>
+                <div className="flex flex-col items-center gap-2 py-12 text-center text-muted-foreground">
+                  <Box className="h-8 w-8" />
+                  <h3 className="text-base font-medium">No custom fields defined</h3>
+                  <p className="text-sm">Add fields to extend this entity type.</p>
                 </div>
               ) : (
-                <div className="vn-table-wrap">
-                  <table className="vn-table">
-                    <thead>
-                      <tr>
-                        <th>Field Key</th>
-                        <th>Label</th>
-                        <th>Type</th>
-                        <th>Required</th>
-                        <th>Default Value</th>
-                        <th>Order</th>
-                        <th>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {fields.map((f, idx) => (
-                        <tr key={f.fieldKey + idx}>
-                          <td>
-                            <code style={{
-                              fontFamily: 'monospace',
-                              fontSize: 12,
-                              background: 'var(--surface-container)',
-                              padding: '2px 6px',
-                              borderRadius: 4,
-                            }}>
-                              {f.fieldKey}
-                            </code>
-                          </td>
-                          <td style={{ fontWeight: 500 }}>{f.label}</td>
-                          <td>
-                            <span className="vn-chip primary">
-                              {FIELD_TYPES.find(ft => ft.value === f.fieldType)?.label || f.fieldType}
-                            </span>
-                          </td>
-                          <td>
-                            {f.required && (
-                              <span className="material-icons" style={{ fontSize: 20, color: 'var(--primary)' }}>
-                                check_circle
-                              </span>
-                            )}
-                          </td>
-                          <td style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>
-                            {f.defaultValue || ''}
-                          </td>
-                          <td style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>
-                            {f.displayOrder}
-                          </td>
-                          <td>
-                            <button className="vn-btn-icon" title="Remove" onClick={() => removeField(idx)}>
-                              <span className="material-icons" style={{ fontSize: 18, color: 'var(--error)' }}>delete</span>
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Field key</TableHead>
+                      <TableHead>Label</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Required</TableHead>
+                      <TableHead>Default value</TableHead>
+                      <TableHead>Order</TableHead>
+                      <TableHead className="w-20">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {fields.map((f, idx) => (
+                      <TableRow key={f.fieldKey + idx}>
+                        <TableCell>
+                          <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{f.fieldKey}</code>
+                        </TableCell>
+                        <TableCell className="font-medium">{f.label}</TableCell>
+                        <TableCell>
+                          <Badge variant="info">
+                            {FIELD_TYPES.find(ft => ft.value === f.fieldType)?.label || f.fieldType}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {f.required && <CheckCircle2 className="h-4 w-4 text-primary" />}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{f.defaultValue || ''}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{f.displayOrder}</TableCell>
+                        <TableCell>
+                          <Button variant="ghost" size="icon" onClick={() => removeField(idx)}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               )}
-            </div>
-          </div>
+            </CardContent>
+          </Card>
 
-          {/* Add Field Form */}
           {showAddField && (
-            <div className="vn-card" style={{ marginBottom: 24 }}>
-              <div className="vn-card-header">
-                <h2>Add Field</h2>
-              </div>
-              <div className="vn-card-body">
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--on-surface)', marginBottom: 4 }}>
-                      Field Key *
-                    </label>
-                    <input
-                      className="vn-input"
-                      value={newField.fieldKey}
-                      onChange={e => setNewField(f => ({ ...f, fieldKey: e.target.value }))}
-                      placeholder="e.g. custom_weight"
-                      style={{ width: '100%' }}
-                    />
+            <Card>
+              <CardHeader>
+                <CardTitle>Add field</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div className="space-y-2">
+                    <Label>Field key *</Label>
+                    <Input value={newField.fieldKey} onChange={e => setNewField(f => ({ ...f, fieldKey: e.target.value }))} placeholder="e.g. custom_weight" />
                   </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--on-surface)', marginBottom: 4 }}>
-                      Label *
-                    </label>
-                    <input
-                      className="vn-input"
-                      value={newField.label}
-                      onChange={e => setNewField(f => ({ ...f, label: e.target.value }))}
-                      placeholder="e.g. Custom Weight"
-                      style={{ width: '100%' }}
-                    />
+                  <div className="space-y-2">
+                    <Label>Label *</Label>
+                    <Input value={newField.label} onChange={e => setNewField(f => ({ ...f, label: e.target.value }))} placeholder="e.g. Custom Weight" />
                   </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--on-surface)', marginBottom: 4 }}>
-                      Field Type
-                    </label>
-                    <select
-                      className="vn-input"
-                      value={newField.fieldType}
-                      onChange={e => setNewField(f => ({ ...f, fieldType: e.target.value }))}
-                      style={{ width: '100%' }}
-                    >
-                      {FIELD_TYPES.map(ft => (
-                        <option key={ft.value} value={ft.value}>{ft.label}</option>
-                      ))}
-                    </select>
+                  <div className="space-y-2">
+                    <Label>Field type</Label>
+                    <Select value={newField.fieldType} onValueChange={v => setNewField(f => ({ ...f, fieldType: v }))}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {FIELD_TYPES.map(ft => (
+                          <SelectItem key={ft.value} value={ft.value}>{ft.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--on-surface)', marginBottom: 4 }}>
-                      Description
-                    </label>
-                    <input
-                      className="vn-input"
-                      value={newField.description}
-                      onChange={e => setNewField(f => ({ ...f, description: e.target.value }))}
-                      placeholder="Field description"
-                      style={{ width: '100%' }}
-                    />
+                  <div className="space-y-2">
+                    <Label>Description</Label>
+                    <Input value={newField.description} onChange={e => setNewField(f => ({ ...f, description: e.target.value }))} placeholder="Field description" />
                   </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--on-surface)', marginBottom: 4 }}>
-                      Default Value
-                    </label>
-                    <input
-                      className="vn-input"
-                      value={newField.defaultValue}
-                      onChange={e => setNewField(f => ({ ...f, defaultValue: e.target.value }))}
-                      placeholder="Default value"
-                      style={{ width: '100%' }}
-                    />
+                  <div className="space-y-2">
+                    <Label>Default value</Label>
+                    <Input value={newField.defaultValue} onChange={e => setNewField(f => ({ ...f, defaultValue: e.target.value }))} placeholder="Default value" />
                   </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--on-surface)', marginBottom: 4 }}>
-                      Display Order
-                    </label>
-                    <input
-                      className="vn-input"
+                  <div className="space-y-2">
+                    <Label>Display order</Label>
+                    <Input
                       type="number"
                       value={newField.displayOrder}
                       onChange={e => setNewField(f => ({ ...f, displayOrder: parseInt(e.target.value) || 0 }))}
-                      style={{ width: '100%' }}
                     />
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center' }}>
-                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 14, color: 'var(--on-surface)', cursor: 'pointer', marginTop: 20 }}>
+                  <div className="flex items-end">
+                    <label className="flex cursor-pointer items-center gap-2 text-sm">
                       <input
                         type="checkbox"
                         checked={newField.required}
                         onChange={e => setNewField(f => ({ ...f, required: e.target.checked }))}
-                        style={{ accentColor: 'var(--primary)' }}
+                        className="h-4 w-4 rounded border border-input bg-background accent-primary"
                       />
                       Required
                     </label>
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 20 }}>
-                  <button className="vn-btn vn-btn-outline" onClick={() => setShowAddField(false)}>Cancel</button>
-                  <button className="vn-btn vn-btn-primary" onClick={addField}>
-                    <span className="material-icons">add</span>
-                    Add Field
-                  </button>
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => setShowAddField(false)}>Cancel</Button>
+                  <Button variant="gradient" onClick={addField}>
+                    <Plus className="h-4 w-4" />
+                    Add field
+                  </Button>
                 </div>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           )}
 
-          {/* Version History */}
-          <div className="vn-card">
-            <div className="vn-card-header">
-              <h2>Version History</h2>
-            </div>
-            <div className="vn-card-body" style={{ padding: 0 }}>
+          <Card>
+            <CardHeader>
+              <CardTitle>Version history</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
               {versions.length === 0 ? (
-                <div className="vn-empty">
-                  <span className="material-icons">history</span>
-                  <h3>No version history</h3>
-                  <p>Versions will appear here after saving custom fields.</p>
+                <div className="flex flex-col items-center gap-2 py-12 text-center text-muted-foreground">
+                  <History className="h-8 w-8" />
+                  <h3 className="text-base font-medium">No version history</h3>
+                  <p className="text-sm">Versions will appear here after saving custom fields.</p>
                 </div>
               ) : (
-                <div className="vn-table-wrap">
-                  <table className="vn-table">
-                    <thead>
-                      <tr>
-                        <th>Version</th>
-                        <th>Status</th>
-                        <th>Fields</th>
-                        <th>Description</th>
-                        <th>Created</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {versions.map(v => (
-                        <tr key={v.id}>
-                          <td style={{ fontWeight: 500 }}>v{v.version}</td>
-                          <td>
-                            <span className={`vn-chip ${v.active ? 'success' : 'secondary'}`}>
-                              {v.active ? 'Active' : 'Previous'}
-                            </span>
-                          </td>
-                          <td style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>
-                            {v.fields?.length || 0} fields
-                          </td>
-                          <td style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>
-                            {v.description || ''}
-                          </td>
-                          <td style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>
-                            {v.createdAt ? new Date(v.createdAt).toLocaleString() : ''}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Version</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Fields</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead>Created</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {versions.map(v => (
+                      <TableRow key={v.id}>
+                        <TableCell className="font-medium">v{v.version}</TableCell>
+                        <TableCell>
+                          <Badge variant={v.active ? 'success' : 'secondary'}>
+                            {v.active ? 'Active' : 'Previous'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{v.fields?.length || 0} fields</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{v.description || ''}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {v.createdAt ? new Date(v.createdAt).toLocaleString() : ''}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               )}
-            </div>
-          </div>
+            </CardContent>
+          </Card>
         </>
       )}
-    </>
+    </div>
   );
 }

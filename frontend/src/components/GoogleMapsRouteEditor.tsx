@@ -12,6 +12,8 @@
  */
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { AlertTriangle, Hand, Loader2, MapPinned, Route, Ruler, Timer } from 'lucide-react';
+
 import { useMapProvider } from '../MapProvider';
 
 interface LatLng {
@@ -41,17 +43,20 @@ interface RouteEditorProps {
   editable?: boolean;
 }
 
+// Google Maps polyline needs a real CSS color string, not a CSS variable.
+// Brand primary blue (matches `--shadcn-primary` in dark mode).
+const POLYLINE_COLOR = '#3b82f6';
+
 export default function GoogleMapsRouteEditor({
   origin,
   destination,
   stops = [],
-  existingPolyline,
-  corridorMeters = 5000,
+  corridorMeters: _corridorMeters = 5000,
   onRouteChange,
   height = 450,
   editable = true,
 }: RouteEditorProps) {
-  const { provider, isLoaded, apiKey } = useMapProvider();
+  const { provider, isLoaded } = useMapProvider();
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<google.maps.Map | null>(null);
   const directionsRendererRef = useRef<google.maps.DirectionsRenderer | null>(null);
@@ -63,58 +68,6 @@ export default function GoogleMapsRouteEditor({
   } | null>(null);
   const [error, setError] = useState<string>('');
   const [calculating, setCalculating] = useState(false);
-
-  // Initialize the map
-  useEffect(() => {
-    if (provider !== 'google' || !isLoaded || !mapRef.current) return;
-    if (mapInstanceRef.current) return; // Already initialized
-
-    const google = (window as any).google;
-    if (!google?.maps) return;
-
-    const map = new google.maps.Map(mapRef.current, {
-      zoom: 5,
-      center: origin || { lat: 39.8283, lng: -98.5795 }, // Center of US
-      mapTypeControl: false,
-      streetViewControl: false,
-      fullscreenControl: true,
-      zoomControl: true,
-      styles: [
-        {
-          featureType: 'poi',
-          elementType: 'labels',
-          stylers: [{ visibility: 'off' }],
-        },
-      ],
-    });
-
-    const directionsService = new google.maps.DirectionsService();
-    const directionsRenderer = new google.maps.DirectionsRenderer({
-      map,
-      draggable: editable,
-      suppressMarkers: false,
-      polylineOptions: {
-        strokeColor: 'var(--primary, #1976d2)',
-        strokeWeight: 5,
-        strokeOpacity: 0.8,
-      },
-      markerOptions: {
-        // Custom marker styling handled by Google defaults
-      },
-    });
-
-    // Listen for route changes (drag events)
-    directionsRenderer.addListener('directions_changed', () => {
-      const result = directionsRenderer.getDirections();
-      if (result) {
-        handleDirectionsResult(result);
-      }
-    });
-
-    mapInstanceRef.current = map;
-    directionsServiceRef.current = directionsService;
-    directionsRendererRef.current = directionsRenderer;
-  }, [provider, isLoaded, editable]);
 
   // Handle directions result (extract polyline, distance, duration)
   const handleDirectionsResult = useCallback((result: google.maps.DirectionsResult) => {
@@ -140,10 +93,8 @@ export default function GoogleMapsRouteEditor({
       summary: route.summary || '',
     });
 
-    // Extract the encoded polyline from the overview_polyline
-    const encodedPolyline = route.overview_polyline;
+    const encodedPolyline = route.overview_polyline as unknown as string;
 
-    // Decode to get waypoints
     const google = (window as any).google;
     const decodedPath = google.maps.geometry
       ? google.maps.geometry.encoding.decodePath(encodedPolyline)
@@ -165,6 +116,48 @@ export default function GoogleMapsRouteEditor({
     }
   }, [onRouteChange]);
 
+  // Initialize the map
+  useEffect(() => {
+    if (provider !== 'google' || !isLoaded || !mapRef.current) return;
+    if (mapInstanceRef.current) return;
+
+    const google = (window as any).google;
+    if (!google?.maps) return;
+
+    const map = new google.maps.Map(mapRef.current, {
+      zoom: 5,
+      center: origin || { lat: 39.8283, lng: -98.5795 },
+      mapTypeControl: false,
+      streetViewControl: false,
+      fullscreenControl: true,
+      zoomControl: true,
+      styles: [
+        { featureType: 'poi', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+      ],
+    });
+
+    const directionsService = new google.maps.DirectionsService();
+    const directionsRenderer = new google.maps.DirectionsRenderer({
+      map,
+      draggable: editable,
+      suppressMarkers: false,
+      polylineOptions: {
+        strokeColor: POLYLINE_COLOR,
+        strokeWeight: 5,
+        strokeOpacity: 0.8,
+      },
+    });
+
+    directionsRenderer.addListener('directions_changed', () => {
+      const result = directionsRenderer.getDirections();
+      if (result) handleDirectionsResult(result);
+    });
+
+    mapInstanceRef.current = map;
+    directionsServiceRef.current = directionsService;
+    directionsRendererRef.current = directionsRenderer;
+  }, [provider, isLoaded, editable, handleDirectionsResult, origin]);
+
   // Calculate route when origin/destination/stops change
   useEffect(() => {
     if (provider !== 'google' || !isLoaded) return;
@@ -177,10 +170,7 @@ export default function GoogleMapsRouteEditor({
     const google = (window as any).google;
     const waypoints = stops
       .filter(s => s.lat && s.lng)
-      .map(s => ({
-        location: new google.maps.LatLng(s.lat, s.lng),
-        stopover: true,
-      }));
+      .map(s => ({ location: new google.maps.LatLng(s.lat, s.lng), stopover: true }));
 
     directionsServiceRef.current.route(
       {
@@ -191,9 +181,8 @@ export default function GoogleMapsRouteEditor({
         optimizeWaypoints: false,
         provideRouteAlternatives: false,
       },
-      (result: google.maps.DirectionsResult | null, status: google.maps.DirectionsStatus) => {
+      (result, status) => {
         setCalculating(false);
-
         if (status === google.maps.DirectionsStatus.OK && result) {
           directionsRendererRef.current!.setDirections(result);
           handleDirectionsResult(result);
@@ -203,21 +192,18 @@ export default function GoogleMapsRouteEditor({
         }
       },
     );
-  }, [provider, isLoaded, origin?.lat, origin?.lng, destination?.lat, destination?.lng, stops.length]);
+  }, [provider, isLoaded, origin?.lat, origin?.lng, destination?.lat, destination?.lng, stops.length, handleDirectionsResult, destination, origin, stops]);
 
   // No Google Maps available
   if (provider !== 'google' || !isLoaded) {
     return (
-      <div
-        className="vn-alert vn-alert-warning"
-        style={{ marginBottom: 16 }}
-      >
-        <span className="material-icons" style={{ marginRight: 8 }}>warning</span>
+      <div className="mb-4 flex items-start gap-3 rounded-md border border-warning/30 bg-warning/10 p-4 text-sm text-warning">
+        <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
         <div>
-          <strong>Google Maps API key required</strong>
-          <p style={{ margin: '4px 0 0', fontSize: 13 }}>
+          <strong className="block">Google Maps API key required</strong>
+          <p className="mt-1 text-xs text-muted-foreground">
             Route planning requires a Google Maps API key with the Directions API enabled.
-            Go to <strong>Admin &gt; Map Settings</strong> to configure your API key.
+            Go to <strong>Admin &gt; Map settings</strong> to configure your API key.
           </p>
         </div>
       </div>
@@ -227,109 +213,62 @@ export default function GoogleMapsRouteEditor({
   // No origin/destination yet
   if (!origin || !destination) {
     return (
-      <div style={{
-        height: typeof height === 'number' ? height : undefined,
-        minHeight: 200,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'var(--surface-container)',
-        border: '1px solid var(--outline-variant)',
-        borderRadius: 'var(--border-radius, 8px)',
-      }}>
-        <div style={{ textAlign: 'center', color: 'var(--on-surface-variant)' }}>
-          <span className="material-icons" style={{ fontSize: 48, opacity: 0.4 }}>route</span>
-          <div style={{ fontSize: 14, marginTop: 8 }}>Select origin and destination to plan a route</div>
+      <div
+        className="flex items-center justify-center rounded-lg border border-border bg-card text-muted-foreground"
+        style={{
+          height: typeof height === 'number' ? height : undefined,
+          minHeight: 200,
+        }}
+      >
+        <div className="text-center">
+          <Route className="mx-auto h-12 w-12 opacity-40" />
+          <div className="mt-2 text-sm">Select origin and destination to plan a route</div>
         </div>
       </div>
     );
   }
 
   return (
-    <div style={{ position: 'relative' }}>
-      {/* Map container */}
+    <div className="relative">
       <div
         ref={mapRef}
-        style={{
-          width: '100%',
-          height: typeof height === 'number' ? `${height}px` : height,
-          borderRadius: 'var(--border-radius, 8px)',
-          border: '1px solid var(--outline-variant)',
-          overflow: 'hidden',
-        }}
+        className="w-full overflow-hidden rounded-lg border border-border"
+        style={{ height: typeof height === 'number' ? `${height}px` : height }}
       />
 
-      {/* Route info overlay */}
       {routeInfo && (
-        <div style={{
-          position: 'absolute',
-          top: 12,
-          left: 12,
-          background: 'var(--surface, #fff)',
-          borderRadius: 'var(--border-radius, 8px)',
-          padding: '10px 14px',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-          display: 'flex',
-          gap: 16,
-          alignItems: 'center',
-          fontSize: 13,
-          zIndex: 1,
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--on-surface)' }}>
-            <span className="material-icons" style={{ fontSize: 16, color: 'var(--primary)' }}>straighten</span>
+        <div className="absolute left-3 top-3 z-10 flex items-center gap-4 rounded-lg border border-border bg-card/90 px-4 py-2.5 text-sm shadow-lg backdrop-blur">
+          <div className="flex items-center gap-1.5 text-foreground">
+            <Ruler className="h-4 w-4 text-primary" />
             <strong>{routeInfo.distance}</strong>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--on-surface)' }}>
-            <span className="material-icons" style={{ fontSize: 16, color: 'var(--primary)' }}>schedule</span>
+          <div className="flex items-center gap-1.5 text-foreground">
+            <Timer className="h-4 w-4 text-primary" />
             <strong>{routeInfo.duration}</strong>
           </div>
           {routeInfo.summary && (
-            <div style={{ color: 'var(--on-surface-variant)', fontSize: 12 }}>
-              via {routeInfo.summary}
-            </div>
+            <div className="text-xs text-muted-foreground">via {routeInfo.summary}</div>
           )}
         </div>
       )}
 
-      {/* Calculating indicator */}
       {calculating && (
-        <div style={{
-          position: 'absolute',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          background: 'var(--surface, #fff)',
-          borderRadius: 'var(--border-radius, 8px)',
-          padding: '12px 20px',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          zIndex: 2,
-        }}>
-          <div className="loading-spinner" style={{ width: 20, height: 20 }} />
-          <span style={{ fontSize: 13, color: 'var(--on-surface)' }}>Calculating route...</span>
+        <div className="absolute left-1/2 top-1/2 z-20 flex -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-lg border border-border bg-card px-5 py-3 shadow-lg">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span className="text-sm">Calculating route...</span>
         </div>
       )}
 
-      {/* Error message */}
       {error && (
-        <div className="vn-alert vn-alert-error" style={{ marginTop: 8 }}>
+        <div className="mt-2 flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+          <AlertTriangle className="h-4 w-4" />
           {error}
         </div>
       )}
 
-      {/* Drag hint */}
       {editable && routeInfo && !calculating && (
-        <div style={{
-          marginTop: 8,
-          fontSize: 12,
-          color: 'var(--on-surface-variant)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 4,
-        }}>
-          <span className="material-icons" style={{ fontSize: 14 }}>touch_app</span>
+        <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Hand className="h-3.5 w-3.5" />
           Drag the route on the map to adjust the planned path
         </div>
       )}

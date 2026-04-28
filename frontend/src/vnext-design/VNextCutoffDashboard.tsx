@@ -1,6 +1,26 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Loader2 } from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 interface AtRiskShipment {
   id: string;
@@ -15,14 +35,14 @@ interface AtRiskShipment {
 
 export default function VNextCutoffDashboard() {
   const [shipments, setShipments] = useState<AtRiskShipment[]>([]);
-  const [severityFilter, setSeverityFilter] = useState('');
+  const [severityFilter, setSeverityFilter] = useState('all');
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
 
   const load = () => {
     setLoading(true);
     const params = new URLSearchParams();
-    if (severityFilter) params.set('severity', severityFilter);
+    if (severityFilter !== 'all') params.set('severity', severityFilter);
     fetch(`${API_URL}/api/v1/cutoff-monitor/at-risk?${params}`)
       .then(r => r.json())
       .then(json => setShipments(json.data || []))
@@ -47,85 +67,108 @@ export default function VNextCutoffDashboard() {
   const warning = shipments.filter(s => s.lastCutoffRiskSeverity === 'warning').length;
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>Cutoff At Risk</h1>
-          <p style={{ color: 'var(--text-secondary)', margin: 0 }}>
+          <h1 className="text-3xl font-bold tracking-tight">Cutoff At Risk</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             Shipments projected to miss a carrier cutoff. Warning and critical severities auto-raise triage issues.
           </p>
         </div>
-        <button className="vn-btn vn-btn-outline" onClick={handleRunNow} disabled={running}>
+        <Button variant="outline" onClick={handleRunNow} disabled={running}>
           {running ? 'Scanning...' : 'Run scan now'}
-        </button>
+        </Button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 16 }}>
-        <div className="vn-card" style={{ padding: 14 }}>
-          <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>At risk</div>
-          <div style={{ fontSize: 28, fontWeight: 700 }}>{shipments.length}</div>
-        </div>
-        <div className="vn-card" style={{ padding: 14 }}>
-          <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Critical</div>
-          <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--color-error)' }}>{critical}</div>
-        </div>
-        <div className="vn-card" style={{ padding: 14 }}>
-          <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Warning</div>
-          <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--color-warning)' }}>{warning}</div>
-        </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Card>
+          <CardContent className="p-5">
+            <div className="text-xs text-muted-foreground">At risk</div>
+            <div className="mt-1 text-3xl font-bold">{shipments.length}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-5">
+            <div className="text-xs text-muted-foreground">Critical</div>
+            <div className="mt-1 text-3xl font-bold text-destructive">{critical}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-5">
+            <div className="text-xs text-muted-foreground">Warning</div>
+            <div className="mt-1 text-3xl font-bold text-warning">{warning}</div>
+          </CardContent>
+        </Card>
       </div>
 
-      <div className="vn-card">
-        <div className="vn-filters" style={{ padding: '8px 16px' }}>
-          <select className="vn-filter-select" value={severityFilter} onChange={e => setSeverityFilter(e.target.value)}>
-            <option value="">All at-risk</option>
-            <option value="critical">Critical only</option>
-            <option value="warning">Warning only</option>
-          </select>
-        </div>
-        <div className="vn-table-wrap">
-          <table className="vn-table">
-            <thead>
-              <tr>
-                <th>Shipment</th>
-                <th>Status</th>
-                <th>Carrier</th>
-                <th>Customer</th>
-                <th>Severity</th>
-                <th>Flagged</th>
-                <th>Issue</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading && <tr><td colSpan={7} style={{ textAlign: 'center', padding: 24 }}><div className="vn-loading-spinner" /></td></tr>}
-              {!loading && shipments.length === 0 && (
-                <tr><td colSpan={7} style={{ textAlign: 'center', padding: 24, color: 'var(--text-secondary)' }}>
+      <Card>
+        <CardContent className="flex flex-wrap items-center gap-2 p-4">
+          <Select value={severityFilter} onValueChange={setSeverityFilter}>
+            <SelectTrigger className="w-[200px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All at-risk</SelectItem>
+              <SelectItem value="critical">Critical only</SelectItem>
+              <SelectItem value="warning">Warning only</SelectItem>
+            </SelectContent>
+          </Select>
+        </CardContent>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Shipment</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Carrier</TableHead>
+              <TableHead>Customer</TableHead>
+              <TableHead>Severity</TableHead>
+              <TableHead>Flagged</TableHead>
+              <TableHead>Issue</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading && (
+              <TableRow>
+                <TableCell colSpan={7} className="py-12 text-center">
+                  <Loader2 className="mx-auto h-6 w-6 animate-spin text-muted-foreground" />
+                </TableCell>
+              </TableRow>
+            )}
+            {!loading && shipments.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={7} className="py-12 text-center text-sm text-muted-foreground">
                   No shipments at risk. Scans run automatically every 5 minutes.
-                </td></tr>
-              )}
-              {shipments.map(s => (
-                <tr key={s.id}>
-                  <td><Link className="vn-table-id" to={`/shipments/${s.id}`}>{s.reference}</Link></td>
-                  <td>{s.status}</td>
-                  <td>{s.carrier?.name ?? '-'}</td>
-                  <td>{s.customer?.name ?? '-'}</td>
-                  <td>
-                    <span className={`vn-chip ${s.lastCutoffRiskSeverity === 'critical' ? 'vn-chip-error' : 'vn-chip-warning'}`}>
-                      {s.lastCutoffRiskSeverity}
-                    </span>
-                  </td>
-                  <td><span className="vn-table-secondary">{s.lastCutoffRiskAt ? new Date(s.lastCutoffRiskAt).toLocaleString() : '-'}</span></td>
-                  <td>
-                    {s.lastCutoffRiskIssueId
-                      ? <Link to={`/issues/${s.lastCutoffRiskIssueId}`} className="vn-table-id">View issue</Link>
-                      : <span className="vn-table-secondary">-</span>}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                </TableCell>
+              </TableRow>
+            )}
+            {shipments.map(s => (
+              <TableRow key={s.id}>
+                <TableCell>
+                  <Link to={`/shipments/${s.id}`} className="font-mono text-sm font-semibold text-primary hover:underline">
+                    {s.reference}
+                  </Link>
+                </TableCell>
+                <TableCell>{s.status}</TableCell>
+                <TableCell>{s.carrier?.name ?? '-'}</TableCell>
+                <TableCell>{s.customer?.name ?? '-'}</TableCell>
+                <TableCell>
+                  <Badge variant={s.lastCutoffRiskSeverity === 'critical' ? 'destructive' : 'warning'}>
+                    {s.lastCutoffRiskSeverity}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-sm text-muted-foreground">
+                  {s.lastCutoffRiskAt ? new Date(s.lastCutoffRiskAt).toLocaleString() : '-'}
+                </TableCell>
+                <TableCell>
+                  {s.lastCutoffRiskIssueId
+                    ? <Link to={`/issues/${s.lastCutoffRiskIssueId}`} className="font-mono text-sm text-primary hover:underline">View issue</Link>
+                    : <span className="text-muted-foreground">-</span>}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </Card>
     </div>
   );
 }

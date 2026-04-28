@@ -1,6 +1,34 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { CircleAlert, ClipboardCheck, Loader2, Plus } from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 interface CycleCount {
   id: string;
@@ -15,8 +43,16 @@ interface CycleCount {
   createdAt: string;
 }
 
-function statusChip(s: string): string {
-  switch (s) { case 'planned': return 'vn-chip-secondary'; case 'in_progress': return 'vn-chip-warning'; case 'completed': return 'vn-chip-success'; case 'cancelled': return 'vn-chip-error'; default: return 'vn-chip-secondary'; }
+type BadgeVariant = 'success' | 'info' | 'warning' | 'destructive' | 'muted' | 'secondary' | 'default';
+
+function statusVariant(s: string): BadgeVariant {
+  switch (s) {
+    case 'planned': return 'secondary';
+    case 'in_progress': return 'warning';
+    case 'completed': return 'success';
+    case 'cancelled': return 'destructive';
+    default: return 'secondary';
+  }
 }
 
 function formatStatus(s: string): string {
@@ -83,96 +119,135 @@ export default function VNextWmsCycleCounts() {
   };
 
   return (
-    <div>
-      <div className="vn-page-header">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1>Cycle Counts</h1>
-          <p className="vn-page-subtitle">Inventory accuracy verification</p>
+          <h1 className="text-3xl font-bold tracking-tight">Cycle Counts</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Inventory accuracy verification</p>
         </div>
-        <button className="vn-btn vn-btn-primary" onClick={() => setShowCreate(true)}>
-          <span className="material-icons" style={{ fontSize: '18px', marginRight: '0.5rem' }}>add</span>
+        <Button variant="gradient" onClick={() => setShowCreate(true)}>
+          <Plus className="h-4 w-4" />
           New Count
-        </button>
+        </Button>
       </div>
 
-      {error && <div className="vn-alert vn-alert-error" style={{ marginBottom: '1rem' }}>{error}</div>}
-
-      {/* Create modal */}
-      {showCreate && (
-        <div className="vn-modal-backdrop" onClick={() => setShowCreate(false)}>
-          <div className="vn-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '400px' }}>
-            <div className="vn-modal-header"><h3>New Cycle Count</h3><button onClick={() => setShowCreate(false)}><span className="material-icons">close</span></button></div>
-            <form onSubmit={handleCreate}>
-              <div className="vn-modal-body">
-                <div className="vn-field" style={{ marginBottom: '1rem' }}>
-                  <label className="vn-field-label">Count Type</label>
-                  <select className="vn-input" value={createForm.countType} onChange={e => setCreateForm({ ...createForm, countType: e.target.value })}>
-                    <option value="full">Full (all bins)</option>
-                    <option value="zone">Zone (specific zone)</option>
-                    <option value="random_sample">Random Sample (~20%)</option>
-                  </select>
-                </div>
-                {createForm.countType === 'zone' && (
-                  <div className="vn-field">
-                    <label className="vn-field-label">Zone</label>
-                    <select className="vn-input" value={createForm.zoneId} onChange={e => setCreateForm({ ...createForm, zoneId: e.target.value })} required>
-                      <option value="">Select zone...</option>
-                      {zones.map(z => <option key={z.id} value={z.id}>{z.name}</option>)}
-                    </select>
-                  </div>
-                )}
-              </div>
-              <div className="vn-modal-footer">
-                <button type="button" className="vn-btn vn-btn-outline" onClick={() => setShowCreate(false)}>Cancel</button>
-                <button type="submit" className="vn-btn vn-btn-primary" disabled={creating}>{creating ? 'Creating...' : 'Create'}</button>
-              </div>
-            </form>
-          </div>
+      {error && (
+        <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+          <CircleAlert className="h-5 w-5" />
+          {error}
         </div>
       )}
 
-      {/* Filters */}
-      <div className="vn-filters" style={{ marginBottom: '1rem' }}>
-        <select className="vn-filter-select" value={selectedLocation} onChange={e => setSelectedLocation(e.target.value)}>
-          {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-        </select>
+      <Dialog open={showCreate} onOpenChange={setShowCreate}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>New Cycle Count</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleCreate} className="space-y-4">
+            <div className="space-y-2">
+              <Label>Count Type</Label>
+              <Select value={createForm.countType} onValueChange={v => setCreateForm({ ...createForm, countType: v })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="full">Full (all bins)</SelectItem>
+                  <SelectItem value="zone">Zone (specific zone)</SelectItem>
+                  <SelectItem value="random_sample">Random Sample (~20%)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {createForm.countType === 'zone' && (
+              <div className="space-y-2">
+                <Label>Zone</Label>
+                <Select value={createForm.zoneId} onValueChange={v => setCreateForm({ ...createForm, zoneId: v })}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select zone..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {zones.map(z => (
+                      <SelectItem key={z.id} value={z.id}>{z.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" type="button" onClick={() => setShowCreate(false)}>Cancel</Button>
+              <Button variant="gradient" type="submit" disabled={creating}>{creating ? 'Creating...' : 'Create'}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Select value={selectedLocation} onValueChange={setSelectedLocation}>
+          <SelectTrigger className="w-[260px]">
+            <SelectValue placeholder="Select location" />
+          </SelectTrigger>
+          <SelectContent>
+            {locations.map(l => (
+              <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {loading ? (
-        <div style={{ padding: '2rem', textAlign: 'center' }}><div className="vn-loading-spinner" /></div>
+        <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+          <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
       ) : counts.length === 0 ? (
-        <div className="vn-card" style={{ textAlign: 'center', padding: '3rem' }}>
-          <span className="material-icons" style={{ fontSize: '48px', color: 'var(--text-secondary)', marginBottom: '1rem', display: 'block' }}>fact_check</span>
-          <h3>No cycle counts</h3>
-          <p style={{ color: 'var(--text-secondary)' }}>Create a cycle count to verify inventory accuracy.</p>
-        </div>
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+            <ClipboardCheck className="h-12 w-12 text-muted-foreground" />
+            <h3 className="text-base font-medium">No cycle counts</h3>
+            <p className="text-sm text-muted-foreground">Create a cycle count to verify inventory accuracy.</p>
+          </CardContent>
+        </Card>
       ) : (
-        <div className="vn-table-wrap">
-          <table className="vn-table">
-            <thead>
-              <tr><th>Type</th><th>Progress</th><th>Variances</th><th>Status</th><th>Created</th><th></th></tr>
-            </thead>
-            <tbody>
+        <Card>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Type</TableHead>
+                <TableHead>Progress</TableHead>
+                <TableHead>Variances</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Created</TableHead>
+                <TableHead></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {counts.map(c => (
-                <tr key={c.id}>
-                  <td><span className="vn-chip vn-chip-primary">{formatStatus(c.countType)}</span></td>
-                  <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <div style={{ flex: 1, height: '6px', background: 'var(--border)', borderRadius: '3px', overflow: 'hidden' }}>
-                        <div style={{ width: `${c.totalBins > 0 ? (c.countedBins / c.totalBins) * 100 : 0}%`, height: '100%', background: 'var(--color-success)', borderRadius: '3px' }} />
+                <TableRow key={c.id}>
+                  <TableCell>
+                    <Badge variant="default">{formatStatus(c.countType)}</Badge>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <div className="h-2 w-32 overflow-hidden rounded-full bg-muted">
+                        <div
+                          className="h-full rounded-full bg-success"
+                          style={{ width: `${c.totalBins > 0 ? (c.countedBins / c.totalBins) * 100 : 0}%` }}
+                        />
                       </div>
-                      <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{c.countedBins}/{c.totalBins}</span>
+                      <span className="text-xs text-muted-foreground">{c.countedBins}/{c.totalBins}</span>
                     </div>
-                  </td>
-                  <td>{c.varianceCount > 0 ? <span style={{ color: 'var(--color-error)', fontWeight: 600 }}>{c.varianceCount}</span> : '0'}</td>
-                  <td><span className={`vn-chip ${statusChip(c.status)}`}>{formatStatus(c.status)}</span></td>
-                  <td>{new Date(c.createdAt).toLocaleDateString()}</td>
-                  <td><button className="vn-btn vn-btn-outline" style={{ fontSize: '0.8rem', padding: '0.15rem 0.5rem' }} onClick={() => navigate(`/wms/cycle-counts/${c.id}`)}>View</button></td>
-                </tr>
+                  </TableCell>
+                  <TableCell>{c.varianceCount > 0 ? <span className="font-semibold text-destructive">{c.varianceCount}</span> : '0'}</TableCell>
+                  <TableCell>
+                    <Badge variant={statusVariant(c.status)}>{formatStatus(c.status)}</Badge>
+                  </TableCell>
+                  <TableCell>{new Date(c.createdAt).toLocaleDateString()}</TableCell>
+                  <TableCell>
+                    <Button variant="outline" size="sm" onClick={() => navigate(`/wms/cycle-counts/${c.id}`)}>View</Button>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </TableBody>
+          </Table>
+        </Card>
       )}
     </div>
   );

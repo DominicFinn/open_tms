@@ -6,7 +6,49 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
+import {
+  Activity,
+  ArrowLeft,
+  CalendarClock,
+  CheckCircle2,
+  CircleAlert,
+  Inbox,
+  Loader2,
+  Pause,
+  Pencil,
+  Plane,
+  Play,
+  RefreshCw,
+  Repeat,
+  Timer,
+  Trash2,
+  Truck,
+  Wifi,
+  X,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { cn } from '@/lib/utils';
 
 interface TrackingIntegration {
   id: string;
@@ -46,36 +88,37 @@ const PROVIDER_LABELS: Record<string, string> = {
   manual: 'Manual',
 };
 
-const PROVIDER_ICONS: Record<string, string> = {
-  fedex: 'local_shipping',
-  ups: 'inventory_2',
-  dhl: 'flight',
-  easypost: 'all_inbox',
-  edi_214: 'swap_horiz',
-  manual: 'edit_note',
-};
+function providerIcon(provider: string) {
+  if (provider === 'dhl') return Plane;
+  if (provider === 'edi_214') return Repeat;
+  if (provider === 'easypost') return Inbox;
+  if (provider === 'manual') return Pencil;
+  return Truck;
+}
 
-const STATUS_CHIP: Record<string, string> = {
-  active: 'vn-chip-success',
-  pending_setup: 'vn-chip-warning',
-  error: 'vn-chip-error',
-  disabled: 'vn-chip-secondary',
+type BadgeVariant = 'success' | 'warning' | 'destructive' | 'secondary' | 'muted' | 'info' | 'default';
+
+const STATUS_VARIANT: Record<string, BadgeVariant> = {
+  active: 'success',
+  pending_setup: 'warning',
+  error: 'destructive',
+  disabled: 'secondary',
 };
 
 const STATUS_LABELS: Record<string, string> = {
   active: 'Active',
-  pending_setup: 'Pending Setup',
+  pending_setup: 'Pending setup',
   error: 'Error',
   disabled: 'Disabled',
 };
 
-const EVENT_STATUS_CHIP: Record<string, string> = {
-  delivered: 'vn-chip-success',
-  in_transit: 'vn-chip-info',
-  out_for_delivery: 'vn-chip-primary',
-  exception: 'vn-chip-error',
-  pending: 'vn-chip-warning',
-  picked_up: 'vn-chip-info',
+const EVENT_STATUS_VARIANT: Record<string, BadgeVariant> = {
+  delivered: 'success',
+  in_transit: 'info',
+  out_for_delivery: 'default',
+  exception: 'destructive',
+  pending: 'warning',
+  picked_up: 'info',
 };
 
 function timeAgo(dateStr: string | null): string {
@@ -239,357 +282,281 @@ export default function VNextCarrierTrackingDetail() {
 
   if (loading) {
     return (
-      <div style={{ padding: '24px', textAlign: 'center' }}>
-        <div className="loading-spinner" />
+      <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <h3 className="text-lg font-medium">Loading...</h3>
       </div>
     );
   }
 
   if (error || !integration) {
     return (
-      <div style={{ padding: '24px' }}>
-        <div className="vn-alert vn-alert-error">{error || 'Integration not found'}</div>
-        <Link to="/integrations/carrier-tracking" style={{ color: 'var(--primary)', marginTop: '12px', display: 'inline-block' }}>
-          Back to list
-        </Link>
+      <div className="space-y-3">
+        <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+          <CircleAlert className="h-5 w-5" />
+          {error || 'Integration not found'}
+        </div>
+        <Button variant="link" asChild>
+          <Link to="/integrations/carrier-tracking">Back to list</Link>
+        </Button>
       </div>
     );
   }
 
+  const ProviderIcon = providerIcon(integration.providerType);
   const callsPercent = integration.dailyMax
     ? Math.min(100, Math.round(((integration.callsToday || 0) / integration.dailyMax) * 100))
     : 0;
 
   return (
-    <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
-      {/* Back link */}
-      <Link to="/integrations/carrier-tracking" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--primary)', textDecoration: 'none', fontSize: '14px', marginBottom: '16px' }}>
-        <span className="material-icons" style={{ fontSize: '18px' }}>arrow_back</span>
-        Back to Carrier Tracking
-      </Link>
+    <div className="space-y-6">
+      <Button variant="ghost" size="sm" asChild className="-ml-3 self-start">
+        <Link to="/integrations/carrier-tracking">
+          <ArrowLeft className="h-4 w-4" />
+          Back to carrier tracking
+        </Link>
+      </Button>
 
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px', flexWrap: 'wrap' }}>
-        <span className="material-icons" style={{ fontSize: '32px', color: 'var(--primary)' }}>
-          {PROVIDER_ICONS[integration.providerType] || 'local_shipping'}
-        </span>
-        <div style={{ flex: 1 }}>
-          <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 700, color: 'var(--on-surface)' }}>
-            {integration.carrierName}
-          </h1>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
-            <span className="vn-chip vn-chip-info">{PROVIDER_LABELS[integration.providerType] || integration.providerType}</span>
-            <span className={`vn-chip ${STATUS_CHIP[integration.status] || 'vn-chip-secondary'}`}>
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <ProviderIcon className="h-6 w-6" />
+        </div>
+        <div className="flex-1">
+          <h1 className="text-3xl font-bold tracking-tight">{integration.carrierName}</h1>
+          <div className="mt-1 flex items-center gap-2">
+            <Badge variant="info">{PROVIDER_LABELS[integration.providerType] || integration.providerType}</Badge>
+            <Badge variant={STATUS_VARIANT[integration.status] || 'muted'}>
               {STATUS_LABELS[integration.status] || integration.status}
-            </span>
+            </Badge>
           </div>
         </div>
       </div>
 
-      {/* Message */}
       {message && (
-        <div className={`vn-alert vn-alert-${message.type}`} style={{ marginBottom: '16px' }}>
-          {message.text}
-          <button onClick={() => setMessage(null)} style={{ float: 'right', background: 'none', border: 'none', cursor: 'pointer', color: 'inherit' }}>
-            <span className="material-icons" style={{ fontSize: '16px' }}>close</span>
-          </button>
+        <div className={cn(
+          'flex items-center gap-3 rounded-md border p-4 text-sm',
+          message.type === 'success'
+            ? 'border-success/30 bg-success/10 text-success'
+            : 'border-destructive/30 bg-destructive/10 text-destructive',
+        )}>
+          {message.type === 'success' ? <CheckCircle2 className="h-5 w-5" /> : <CircleAlert className="h-5 w-5" />}
+          <span className="flex-1">{message.text}</span>
+          <Button variant="ghost" size="icon" onClick={() => setMessage(null)}><X className="h-4 w-4" /></Button>
         </div>
       )}
 
-      {/* Two-column layout */}
-      <div className="vn-detail-grid">
-        {/* Main column */}
-        <div className="vn-detail-main">
-          {/* Connection status card */}
-          <div className="vn-card" style={{ padding: '20px', marginBottom: '16px' }}>
-            <h3 style={{ margin: '0 0 16px', fontSize: '16px', fontWeight: 600, color: 'var(--on-surface)' }}>
-              <span className="material-icons" style={{ fontSize: '20px', verticalAlign: 'text-bottom', marginRight: '6px', color: 'var(--primary)' }}>monitor_heart</span>
-              Connection Status
+      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+        <div className="space-y-4">
+          <Card className="space-y-4 p-5">
+            <h3 className="flex items-center gap-2 text-base font-semibold">
+              <Activity className="h-5 w-5 text-primary" />
+              Connection status
             </h3>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
+            <div className="grid gap-4 sm:grid-cols-3">
               <div>
-                <div style={{ fontSize: '12px', color: 'var(--on-surface-variant)', marginBottom: '4px' }}>Last Polled</div>
-                <div style={{ fontSize: '15px', fontWeight: 500, color: 'var(--on-surface)' }}>{timeAgo(integration.lastPolledAt)}</div>
+                <div className="text-xs text-muted-foreground">Last polled</div>
+                <div className="mt-1 text-sm font-medium">{timeAgo(integration.lastPolledAt)}</div>
               </div>
               <div>
-                <div style={{ fontSize: '12px', color: 'var(--on-surface-variant)', marginBottom: '4px' }}>Error Count</div>
-                <div style={{ fontSize: '15px', fontWeight: 500, color: integration.errorCount > 0 ? 'var(--color-error)' : 'var(--on-surface)' }}>
+                <div className="text-xs text-muted-foreground">Error count</div>
+                <div className={cn('mt-1 text-sm font-medium', integration.errorCount > 0 && 'text-destructive')}>
                   {integration.errorCount}
                 </div>
               </div>
               <div>
-                <div style={{ fontSize: '12px', color: 'var(--on-surface-variant)', marginBottom: '4px' }}>Created</div>
-                <div style={{ fontSize: '15px', fontWeight: 500, color: 'var(--on-surface)' }}>{formatDate(integration.createdAt)}</div>
+                <div className="text-xs text-muted-foreground">Created</div>
+                <div className="mt-1 text-sm font-medium">{formatDate(integration.createdAt)}</div>
               </div>
             </div>
 
-            {/* Last error */}
             {integration.lastError && (
-              <div className="vn-alert vn-alert-error" style={{ marginTop: '16px' }}>
-                <span className="material-icons" style={{ fontSize: '18px', verticalAlign: 'text-bottom', marginRight: '6px' }}>error</span>
+              <div className="flex items-start gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+                <CircleAlert className="mt-0.5 h-4 w-4" />
                 {integration.lastError}
               </div>
             )}
 
-            {/* Rate limit */}
             {integration.dailyMax && integration.dailyMax > 0 && (
-              <div style={{ marginTop: '16px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--on-surface-variant)', marginBottom: '6px' }}>
-                  <span>API Usage Today</span>
+              <div>
+                <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
+                  <span>API usage today</span>
                   <span>{integration.callsToday || 0} / {integration.dailyMax}</span>
                 </div>
-                <div style={{ height: '8px', borderRadius: '4px', background: 'var(--surface-container)', overflow: 'hidden' }}>
-                  <div style={{
-                    height: '100%',
-                    width: `${callsPercent}%`,
-                    borderRadius: '4px',
-                    background: callsPercent > 80 ? 'var(--color-error)' : callsPercent > 50 ? 'var(--color-warning)' : 'var(--color-success)',
-                    transition: 'width 0.3s ease',
-                  }} />
+                <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                  <div
+                    className={cn(
+                      'h-full transition-all',
+                      callsPercent > 80 ? 'bg-destructive' : callsPercent > 50 ? 'bg-warning' : 'bg-success',
+                    )}
+                    style={{ width: `${callsPercent}%` }}
+                  />
                 </div>
               </div>
             )}
 
-            {/* Manual poll button */}
-            <div style={{ marginTop: '16px' }}>
-              <button className="vn-btn" onClick={handlePoll} disabled={polling} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                {polling ? (
-                  <span className="material-icons" style={{ fontSize: '16px', animation: 'spin 1s linear infinite' }}>sync</span>
-                ) : (
-                  <span className="material-icons" style={{ fontSize: '18px' }}>refresh</span>
-                )}
-                {polling ? 'Polling...' : 'Poll Now'}
-              </button>
-            </div>
-          </div>
+            <Button onClick={handlePoll} disabled={polling}>
+              {polling ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              {polling ? 'Polling...' : 'Poll now'}
+            </Button>
+          </Card>
 
-          {/* Recent tracking events */}
-          <div className="vn-card" style={{ padding: '20px' }}>
-            <h3 style={{ margin: '0 0 16px', fontSize: '16px', fontWeight: 600, color: 'var(--on-surface)' }}>
-              <span className="material-icons" style={{ fontSize: '20px', verticalAlign: 'text-bottom', marginRight: '6px', color: 'var(--primary)' }}>timeline</span>
-              Recent Tracking Events
+          <Card className="space-y-4 p-5">
+            <h3 className="flex items-center gap-2 text-base font-semibold">
+              <CalendarClock className="h-5 w-5 text-primary" />
+              Recent tracking events
             </h3>
 
             {events.length === 0 ? (
-              <div style={{ padding: '24px', textAlign: 'center', color: 'var(--on-surface-variant)', border: '2px dashed var(--outline-variant)', borderRadius: '8px' }}>
-                <span className="material-icons" style={{ fontSize: '36px', display: 'block', marginBottom: '8px', opacity: 0.4 }}>event_note</span>
-                <p style={{ margin: 0 }}>No tracking events yet. Events will appear here once shipments are tracked.</p>
+              <div className="flex flex-col items-center gap-2 rounded-md border-2 border-dashed border-border p-8 text-center text-muted-foreground">
+                <CalendarClock className="h-8 w-8 opacity-40" />
+                <p className="text-sm">No tracking events yet. Events will appear here once shipments are tracked.</p>
               </div>
             ) : (
-              <div className="vn-table-wrap">
-                <table className="vn-table">
-                  <thead>
-                    <tr>
-                      <th>Tracking Number</th>
-                      <th>Status</th>
-                      <th>Location</th>
-                      <th>Occurred</th>
-                      <th>Source</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {events.map(event => (
-                      <tr key={event.id}>
-                        <td>
-                          <span className="vn-table-id">{event.trackingNumber}</span>
-                        </td>
-                        <td>
-                          <span className={`vn-chip ${EVENT_STATUS_CHIP[event.status] || 'vn-chip-secondary'}`}>
-                            {event.status.replace(/_/g, ' ')}
-                          </span>
-                        </td>
-                        <td>
-                          <span className="vn-table-secondary">{event.location || '-'}</span>
-                        </td>
-                        <td>
-                          <span className="vn-table-secondary">{formatDate(event.occurredAt)}</span>
-                        </td>
-                        <td>
-                          <span className="vn-table-secondary">{event.source}</span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Tracking number</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Location</TableHead>
+                    <TableHead>Occurred</TableHead>
+                    <TableHead>Source</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {events.map(event => (
+                    <TableRow key={event.id}>
+                      <TableCell><span className="font-mono text-sm">{event.trackingNumber}</span></TableCell>
+                      <TableCell>
+                        <Badge variant={EVENT_STATUS_VARIANT[event.status] || 'muted'}>
+                          {event.status.replace(/_/g, ' ')}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{event.location || '-'}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{formatDate(event.occurredAt)}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{event.source}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             )}
-          </div>
+          </Card>
         </div>
 
-        {/* Sidebar */}
-        <div className="vn-detail-sidebar">
-          {/* Config card */}
-          <div className="vn-card" style={{ padding: '16px', marginBottom: '12px' }}>
-            <h4 style={{ margin: '0 0 12px', fontSize: '14px', fontWeight: 600, color: 'var(--on-surface)' }}>Configuration</h4>
-            <div style={{ fontSize: '13px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--outline-variant)' }}>
-                <span style={{ color: 'var(--on-surface-variant)' }}>Provider</span>
-                <span style={{ fontWeight: 500, color: 'var(--on-surface)' }}>{PROVIDER_LABELS[integration.providerType] || integration.providerType}</span>
+        <div className="space-y-3">
+          <Card className="space-y-3 p-4">
+            <h4 className="text-sm font-semibold">Configuration</h4>
+            <div className="space-y-1 text-sm">
+              <div className="flex items-center justify-between border-b border-border py-2">
+                <span className="text-muted-foreground">Provider</span>
+                <span className="font-medium">{PROVIDER_LABELS[integration.providerType] || integration.providerType}</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid var(--outline-variant)' }}>
-                <span style={{ color: 'var(--on-surface-variant)' }}>Polling</span>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
+              <div className="flex items-center justify-between border-b border-border py-2">
+                <span className="text-muted-foreground">Polling</span>
+                <label className="flex items-center gap-2">
                   <input type="checkbox" checked={integration.pollingEnabled} onChange={handleTogglePolling} />
-                  <span style={{ fontWeight: 500, color: 'var(--on-surface)' }}>{integration.pollingEnabled ? 'Enabled' : 'Disabled'}</span>
+                  <span className="font-medium">{integration.pollingEnabled ? 'Enabled' : 'Disabled'}</span>
                 </label>
               </div>
               {integration.pollingEnabled && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--outline-variant)' }}>
-                  <span style={{ color: 'var(--on-surface-variant)' }}>Interval</span>
-                  <span style={{ fontWeight: 500, color: 'var(--on-surface)' }}>{integration.pollingIntervalMinutes} min</span>
+                <div className="flex items-center justify-between border-b border-border py-2">
+                  <span className="text-muted-foreground">Interval</span>
+                  <span className="font-medium">{integration.pollingIntervalMinutes} min</span>
                 </div>
               )}
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0' }}>
-                <span style={{ color: 'var(--on-surface-variant)' }}>Webhook</span>
-                <span style={{ fontWeight: 500, color: 'var(--on-surface)' }}>{integration.webhookEnabled ? 'Active' : 'Not configured'}</span>
+              <div className="flex items-center justify-between py-2">
+                <span className="text-muted-foreground">Webhook</span>
+                <span className="font-medium">{integration.webhookEnabled ? 'Active' : 'Not configured'}</span>
               </div>
             </div>
-          </div>
+          </Card>
 
-          {/* Credentials card */}
           {integration.credentials && Object.keys(integration.credentials).length > 0 && (
-            <div className="vn-card" style={{ padding: '16px', marginBottom: '12px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: 'var(--on-surface)' }}>Credentials</h4>
-                <button
-                  className="icon-btn"
-                  title="Edit credentials"
-                  onClick={() => setEditingCredentials(!editingCredentials)}
-                >
-                  <span className="material-icons" style={{ fontSize: '16px' }}>{editingCredentials ? 'close' : 'edit'}</span>
-                </button>
+            <Card className="space-y-3 p-4">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-semibold">Credentials</h4>
+                <Button variant="ghost" size="icon" title="Edit credentials" onClick={() => setEditingCredentials(!editingCredentials)}>
+                  {editingCredentials ? <X className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
+                </Button>
               </div>
-              <div style={{ fontSize: '13px' }}>
+              <div className="space-y-1 text-sm">
                 {Object.entries(integration.credentials).map(([key, value]) => (
-                  <div key={key} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--outline-variant)' }}>
-                    <span style={{ color: 'var(--on-surface-variant)' }}>{key}</span>
-                    <span style={{ fontFamily: 'monospace', fontSize: '12px', color: 'var(--on-surface)' }}>
-                      {editingCredentials ? value : maskCredential(value)}
-                    </span>
+                  <div key={key} className="flex items-center justify-between border-b border-border py-2">
+                    <span className="text-muted-foreground">{key}</span>
+                    <span className="font-mono text-xs">{editingCredentials ? value : maskCredential(value)}</span>
                   </div>
                 ))}
               </div>
-            </div>
+            </Card>
           )}
 
-          {/* Actions card */}
-          <div className="vn-card" style={{ padding: '16px', marginBottom: '12px' }}>
-            <h4 style={{ margin: '0 0 12px', fontSize: '14px', fontWeight: 600, color: 'var(--on-surface)' }}>Actions</h4>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <button className="vn-btn" onClick={handleTest} disabled={testing} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                {testing ? (
-                  <span className="material-icons" style={{ fontSize: '16px', animation: 'spin 1s linear infinite' }}>sync</span>
-                ) : (
-                  <span className="material-icons" style={{ fontSize: '18px' }}>wifi_tethering</span>
-                )}
-                {testing ? 'Testing...' : 'Test Connection'}
-              </button>
-
-              <button
-                className="vn-btn"
-                onClick={handleToggleStatus}
-                style={{
-                  width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-                  background: 'transparent', border: '1px solid var(--outline-variant)', color: 'var(--on-surface-variant)',
-                }}
-              >
-                <span className="material-icons" style={{ fontSize: '18px' }}>
-                  {integration.status === 'disabled' ? 'play_arrow' : 'pause'}
-                </span>
+          <Card className="space-y-3 p-4">
+            <h4 className="text-sm font-semibold">Actions</h4>
+            <div className="flex flex-col gap-2">
+              <Button onClick={handleTest} disabled={testing} className="w-full">
+                {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wifi className="h-4 w-4" />}
+                {testing ? 'Testing...' : 'Test connection'}
+              </Button>
+              <Button variant="outline" onClick={handleToggleStatus} className="w-full">
+                {integration.status === 'disabled' ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
                 {integration.status === 'disabled' ? 'Enable' : 'Disable'}
-              </button>
-
-              <button
-                onClick={() => setShowDeleteConfirm(true)}
-                style={{
-                  width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-                  padding: '8px 16px', borderRadius: '6px', fontSize: '14px', cursor: 'pointer',
-                  background: 'transparent', border: '1px solid var(--color-error)', color: 'var(--color-error)',
-                }}
-              >
-                <span className="material-icons" style={{ fontSize: '18px' }}>delete</span>
-                Delete Integration
-              </button>
+              </Button>
+              <Button variant="destructive" onClick={() => setShowDeleteConfirm(true)} className="w-full">
+                <Trash2 className="h-4 w-4" />
+                Delete integration
+              </Button>
             </div>
-          </div>
+          </Card>
 
-          {/* Notes card */}
-          <div className="vn-card" style={{ padding: '16px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-              <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: 'var(--on-surface)' }}>Notes</h4>
+          <Card className="space-y-3 p-4">
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-semibold">Notes</h4>
               {!editingNotes && (
-                <button className="icon-btn" title="Edit notes" onClick={() => setEditingNotes(true)}>
-                  <span className="material-icons" style={{ fontSize: '16px' }}>edit</span>
-                </button>
+                <Button variant="ghost" size="icon" title="Edit notes" onClick={() => setEditingNotes(true)}>
+                  <Pencil className="h-4 w-4" />
+                </Button>
               )}
             </div>
             {editingNotes ? (
-              <div>
+              <div className="space-y-2">
                 <textarea
-                  className="vn-input"
                   value={notes}
                   onChange={e => setNotes(e.target.value)}
                   rows={4}
                   placeholder="Add notes about this integration..."
-                  style={{ width: '100%', resize: 'vertical' }}
+                  className="w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 />
-                <div style={{ display: 'flex', gap: '6px', marginTop: '8px', justifyContent: 'flex-end' }}>
-                  <button
-                    className="vn-btn"
-                    onClick={() => { setEditingNotes(false); setNotes(integration.notes || ''); }}
-                    style={{ background: 'transparent', border: '1px solid var(--outline-variant)', color: 'var(--on-surface-variant)', fontSize: '13px', padding: '4px 12px' }}
-                  >
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" size="sm" onClick={() => { setEditingNotes(false); setNotes(integration.notes || ''); }}>
                     Cancel
-                  </button>
-                  <button className="vn-btn" onClick={handleSaveNotes} style={{ fontSize: '13px', padding: '4px 12px' }}>
-                    Save
-                  </button>
+                  </Button>
+                  <Button size="sm" onClick={handleSaveNotes}>Save</Button>
                 </div>
               </div>
             ) : (
-              <p style={{ margin: 0, fontSize: '13px', color: integration.notes ? 'var(--on-surface)' : 'var(--on-surface-variant)', whiteSpace: 'pre-wrap' }}>
+              <p className={cn('whitespace-pre-wrap text-sm', !integration.notes && 'text-muted-foreground')}>
                 {integration.notes || 'No notes.'}
               </p>
             )}
-          </div>
+          </Card>
         </div>
       </div>
 
-      {/* Delete confirmation modal */}
-      {showDeleteConfirm && (
-        <div className="vn-modal-backdrop" onClick={() => setShowDeleteConfirm(false)}>
-          <div className="vn-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '440px' }}>
-            <div className="vn-modal-header">
-              <h2 style={{ margin: 0, fontSize: '18px' }}>Delete Integration</h2>
-            </div>
-            <div className="vn-modal-body">
-              <p style={{ margin: 0, fontSize: '14px', color: 'var(--on-surface-variant)' }}>
-                Are you sure you want to delete the tracking integration for <strong>{integration.carrierName}</strong>?
-                This will stop all tracking updates from this carrier. This action cannot be undone.
-              </p>
-            </div>
-            <div className="vn-modal-footer">
-              <button
-                className="vn-btn"
-                style={{ background: 'transparent', border: '1px solid var(--outline-variant)', color: 'var(--on-surface-variant)' }}
-                onClick={() => setShowDeleteConfirm(false)}
-              >
-                Cancel
-              </button>
-              <button
-                className="vn-btn"
-                style={{ background: 'var(--color-error)', color: 'var(--on-primary)' }}
-                onClick={handleDelete}
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+      <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete integration</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete the tracking integration for <strong>{integration.carrierName}</strong>?
+              This will stop all tracking updates from this carrier. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDeleteConfirm(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleDelete}>Delete</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

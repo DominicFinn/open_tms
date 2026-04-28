@@ -1,6 +1,22 @@
 import { useEffect, useState } from 'react';
+import { Loader2, Plus } from 'lucide-react';
+
 import { API_URL } from '../../../api';
 import { customerFetch } from '../CustomerDashboard';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 
 interface Webhook {
   id: string;
@@ -123,126 +139,199 @@ export default function CustomerWebhooks() {
   };
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>Webhooks</h1>
-          <p style={{ color: 'var(--text-secondary)', margin: 0 }}>Subscribe to events from your orders, shipments, invoices, and returns.</p>
+          <h1 className="text-3xl font-bold tracking-tight">Webhooks</h1>
+          <p className="text-sm text-muted-foreground">
+            Subscribe to events from your orders, shipments, invoices, and returns.
+          </p>
         </div>
-        <button className="vn-btn vn-btn-primary" onClick={() => setShowCreate(v => !v)}>
-          <span className="material-icons">add</span> New Webhook
-        </button>
+        <Button variant="gradient" onClick={() => setShowCreate(v => !v)}>
+          <Plus className="h-4 w-4" />
+          New webhook
+        </Button>
       </div>
 
-      {error && <div className="vn-alert vn-alert-error" style={{ marginBottom: 16 }}>{error}</div>}
-
-      {showCreate && (
-        <div className="vn-card" style={{ padding: 16, marginBottom: 16 }}>
-          <h3 style={{ margin: '0 0 12px' }}>New webhook</h3>
-          <div className="vn-form-grid" style={{ gap: 12 }}>
-            <div className="vn-field">
-              <label className="vn-field-label">Name</label>
-              <input className="vn-input" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Shipment tracker" />
-            </div>
-            <div className="vn-field">
-              <label className="vn-field-label">Endpoint URL</label>
-              <input className="vn-input" value={form.url} onChange={e => setForm(f => ({ ...f, url: e.target.value }))} placeholder="https://yourdomain.com/webhooks/open-tms" />
-            </div>
-          </div>
-          <div className="vn-field" style={{ marginTop: 8 }}>
-            <label className="vn-field-label">Description</label>
-            <input className="vn-input" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Optional notes for your team" />
-          </div>
-          <div style={{ marginTop: 12 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Subscribed events</div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-              {events.map(ev => (
-                <button
-                  key={ev}
-                  onClick={() => toggleEvent(ev)}
-                  className={`vn-chip ${form.events.includes(ev) ? 'vn-chip-primary' : 'vn-chip-secondary'}`}
-                  style={{ cursor: 'pointer', border: 'none' }}
-                >
-                  {ev}
-                </button>
-              ))}
-            </div>
-            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 6 }}>
-              Use <code>*</code> for everything, <code>rma.*</code> for all RMA events, or exact patterns.
-            </div>
-          </div>
-          <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
-            <button className="vn-btn vn-btn-primary" onClick={handleCreate} disabled={busy === 'create'}>
-              {busy === 'create' ? 'Creating...' : 'Create'}
-            </button>
-            <button className="vn-btn vn-btn-outline" onClick={() => setShowCreate(false)}>Cancel</button>
-          </div>
+      {error && (
+        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {error}
         </div>
       )}
 
-      {loading ? <div className="vn-loading-spinner" /> : hooks.length === 0 ? (
-        <div className="vn-card" style={{ padding: 24, textAlign: 'center', color: 'var(--text-secondary)' }}>
-          No webhooks yet. Create one above to start receiving events.
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {hooks.map(h => (
-            <div key={h.id} className="vn-card">
-              <div style={{ padding: 16, display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                    <h3 style={{ margin: 0 }}>{h.name}</h3>
-                    <span className={`vn-chip ${h.enabled ? 'vn-chip-success' : 'vn-chip-secondary'}`}>{h.enabled ? 'Enabled' : 'Disabled'}</span>
-                  </div>
-                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis' }}>{h.url}</div>
-                  <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                    {h.events.map(e => <span key={e} className="vn-chip vn-chip-secondary" style={{ fontSize: 11 }}>{e}</span>)}
-                  </div>
-                  {h.description && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 6 }}>{h.description}</div>}
-                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 8 }}>
-                    {h.deliveryCount} deliveries &middot; {h.failureCount} failures
-                    {h.lastDeliveryAt && <> &middot; last at {new Date(h.lastDeliveryAt).toLocaleString()} (HTTP {h.lastStatusCode ?? '-'})</>}
-                  </div>
-                  <details style={{ marginTop: 8 }}>
-                    <summary style={{ cursor: 'pointer', fontSize: 12, color: 'var(--text-secondary)' }}>Reveal signing secret</summary>
-                    <code style={{ display: 'block', padding: 6, marginTop: 6, background: 'var(--surface-secondary)', borderRadius: 6, fontSize: 12, wordBreak: 'break-all' }}>{h.secret}</code>
-                  </details>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
-                  <button className="vn-btn vn-btn-outline vn-btn-sm" onClick={() => handleTest(h.id)} disabled={busy === h.id}>Send test</button>
-                  <button className="vn-btn vn-btn-outline vn-btn-sm" onClick={() => toggleExpanded(h.id)}>
-                    {expanded === h.id ? 'Hide log' : 'View log'}
-                  </button>
-                  <button className="vn-btn vn-btn-outline vn-btn-sm" onClick={() => handleToggle(h)} disabled={busy === h.id}>
-                    {h.enabled ? 'Disable' : 'Enable'}
-                  </button>
-                  <button className="vn-btn vn-btn-outline vn-btn-sm" onClick={() => handleRotate(h.id)} disabled={busy === h.id}>Rotate secret</button>
-                  <button className="vn-btn vn-btn-outline vn-btn-sm" style={{ color: 'var(--color-error)' }} onClick={() => handleDelete(h.id)}>Delete</button>
-                </div>
+      {showCreate && (
+        <Card>
+          <CardHeader>
+            <CardTitle>New webhook</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="hook-name">Name</Label>
+                <Input
+                  id="hook-name"
+                  value={form.name}
+                  onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                  placeholder="Shipment tracker"
+                />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="hook-url">Endpoint URL</Label>
+                <Input
+                  id="hook-url"
+                  value={form.url}
+                  onChange={e => setForm(f => ({ ...f, url: e.target.value }))}
+                  placeholder="https://yourdomain.com/webhooks/open-tms"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="hook-description">Description</Label>
+              <Input
+                id="hook-description"
+                value={form.description}
+                onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                placeholder="Optional notes for your team"
+              />
+            </div>
+            <div>
+              <div className="mb-2 text-sm font-semibold">Subscribed events</div>
+              <div className="flex flex-wrap gap-2">
+                {events.map(ev => {
+                  const active = form.events.includes(ev);
+                  return (
+                    <button
+                      key={ev}
+                      type="button"
+                      onClick={() => toggleEvent(ev)}
+                      className={cn(
+                        'inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                        active
+                          ? 'border-primary/40 bg-primary/10 text-primary'
+                          : 'border-border bg-muted text-muted-foreground hover:bg-muted/80',
+                      )}
+                    >
+                      {ev}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="mt-2 text-xs text-muted-foreground">
+                Use <code className="rounded bg-muted px-1">*</code> for everything,{' '}
+                <code className="rounded bg-muted px-1">rma.*</code> for all RMA events, or exact patterns.
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="gradient" onClick={handleCreate} disabled={busy === 'create'}>
+                {busy === 'create' ? 'Creating...' : 'Create'}
+              </Button>
+              <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
-              {expanded === h.id && (
-                <div style={{ padding: '0 16px 16px' }}>
-                  <div className="vn-table-wrap">
-                    <table className="vn-table">
-                      <thead><tr><th>Event</th><th>Status</th><th>HTTP</th><th>Time</th><th>Error</th></tr></thead>
-                      <tbody>
-                        {(deliveries[h.id] || []).length === 0 && <tr><td colSpan={5} style={{ textAlign: 'center', padding: 16, color: 'var(--text-secondary)' }}>No deliveries yet</td></tr>}
-                        {(deliveries[h.id] || []).map(d => (
-                          <tr key={d.id}>
-                            <td>{d.eventType}</td>
-                            <td><span className={`vn-chip ${d.status === 'delivered' ? 'vn-chip-success' : 'vn-chip-error'}`}>{d.status}</span></td>
-                            <td>{d.statusCode ?? '-'}</td>
-                            <td><span className="vn-table-secondary">{new Date(d.createdAt).toLocaleString()}</span></td>
-                            <td style={{ maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', fontSize: 12 }}>{d.errorMessage}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+      {loading ? (
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      ) : hooks.length === 0 ? (
+        <Card>
+          <CardContent className="p-8 text-center text-sm text-muted-foreground">
+            No webhooks yet. Create one above to start receiving events.
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-3">
+          {hooks.map(h => (
+            <Card key={h.id}>
+              <CardContent className="p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-base font-semibold">{h.name}</h3>
+                      <Badge variant={h.enabled ? 'success' : 'secondary'}>
+                        {h.enabled ? 'Enabled' : 'Disabled'}
+                      </Badge>
+                    </div>
+                    <div className="mt-1 truncate text-sm text-muted-foreground">{h.url}</div>
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {h.events.map(e => (
+                        <Badge key={e} variant="muted" className="text-[10px]">{e}</Badge>
+                      ))}
+                    </div>
+                    {h.description && (
+                      <div className="mt-2 text-xs text-muted-foreground">{h.description}</div>
+                    )}
+                    <div className="mt-2 text-xs text-muted-foreground">
+                      {h.deliveryCount} deliveries &middot; {h.failureCount} failures
+                      {h.lastDeliveryAt && (
+                        <> &middot; last at {new Date(h.lastDeliveryAt).toLocaleString()} (HTTP {h.lastStatusCode ?? '-'})</>
+                      )}
+                    </div>
+                    <details className="mt-2">
+                      <summary className="cursor-pointer text-xs text-muted-foreground">Reveal signing secret</summary>
+                      <code className="mt-1 block break-all rounded bg-muted px-2 py-1 text-xs">{h.secret}</code>
+                    </details>
+                  </div>
+                  <div className="flex shrink-0 flex-col gap-1.5">
+                    <Button variant="outline" size="sm" onClick={() => handleTest(h.id)} disabled={busy === h.id}>
+                      Send test
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => toggleExpanded(h.id)}>
+                      {expanded === h.id ? 'Hide log' : 'View log'}
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => handleToggle(h)} disabled={busy === h.id}>
+                      {h.enabled ? 'Disable' : 'Enable'}
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => handleRotate(h.id)} disabled={busy === h.id}>
+                      Rotate secret
+                    </Button>
+                    <Button variant="outline" size="sm" className="text-destructive" onClick={() => handleDelete(h.id)}>
+                      Delete
+                    </Button>
                   </div>
                 </div>
-              )}
-            </div>
+
+                {expanded === h.id && (
+                  <div className="mt-4 border-t border-border pt-4">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Event</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>HTTP</TableHead>
+                          <TableHead>Time</TableHead>
+                          <TableHead>Error</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {(deliveries[h.id] || []).length === 0 && (
+                          <TableRow>
+                            <TableCell colSpan={5} className="py-6 text-center text-sm text-muted-foreground">
+                              No deliveries yet
+                            </TableCell>
+                          </TableRow>
+                        )}
+                        {(deliveries[h.id] || []).map(d => (
+                          <TableRow key={d.id}>
+                            <TableCell className="text-sm">{d.eventType}</TableCell>
+                            <TableCell>
+                              <Badge variant={d.status === 'delivered' ? 'success' : 'destructive'}>
+                                {d.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-sm">{d.statusCode ?? '-'}</TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {new Date(d.createdAt).toLocaleString()}
+                            </TableCell>
+                            <TableCell className="max-w-xs truncate text-xs">{d.errorMessage}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           ))}
         </div>
       )}

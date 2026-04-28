@@ -1,8 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { API_URL } from '../api';
+import { Loader2, Truck } from 'lucide-react';
 
-/* ── Types ────────────────────────────────────────────────── */
+import { API_URL } from '../api';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 interface StagingAssignment {
   id: string;
@@ -14,23 +31,21 @@ interface StagingAssignment {
   packedAt: string;
 }
 
-/* ── Helpers ──────────────────────────────────────────────── */
+type BadgeVariant = 'success' | 'info' | 'warning' | 'destructive' | 'muted' | 'secondary' | 'default';
 
-function statusChip(status: string): string {
+function statusVariant(status: string): BadgeVariant {
   switch (status) {
-    case 'staged': return 'vn-chip-info';
-    case 'loading': return 'vn-chip-warning';
-    case 'loaded': return 'vn-chip-success';
-    case 'dispatched': return 'vn-chip-primary';
-    default: return 'vn-chip-secondary';
+    case 'staged': return 'info';
+    case 'loading': return 'warning';
+    case 'loaded': return 'success';
+    case 'dispatched': return 'default';
+    default: return 'secondary';
   }
 }
 
 function formatStatus(s: string): string {
   return s.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 }
-
-/* ── Component ────────────────────────────────────────────── */
 
 export default function VNextWmsLoading() {
   const navigate = useNavigate();
@@ -71,53 +86,68 @@ export default function VNextWmsLoading() {
   }, [selectedLocation]);
 
   return (
-    <div>
-      <div className="vn-page-header">
-        <div>
-          <h1>Loading</h1>
-          <p className="vn-page-subtitle">Staging and loading for outbound shipments</p>
-        </div>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Loading</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Staging and loading for outbound shipments</p>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Select value={selectedLocation} onValueChange={setSelectedLocation}>
+          <SelectTrigger className="w-[260px]">
+            <SelectValue placeholder="Select location" />
+          </SelectTrigger>
+          <SelectContent>
+            {locations.map(l => (
+              <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {loading ? (
-        <div style={{ padding: '2rem', textAlign: 'center' }}>
-          <div className="vn-loading-spinner" />
+        <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+          <Loader2 className="h-8 w-8 animate-spin" />
         </div>
       ) : assignments.length === 0 ? (
-        <div className="vn-card" style={{ textAlign: 'center', padding: '3rem' }}>
-          <span className="material-icons" style={{ fontSize: '48px', color: 'var(--text-secondary)', marginBottom: '1rem', display: 'block' }}>local_shipping</span>
-          <h3>No staged orders</h3>
-          <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-            Packed orders are staged in the shipping dock area before being loaded onto outbound vehicles. Orders appear here after packing is complete.
-          </p>
-        </div>
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+            <Truck className="h-12 w-12 text-muted-foreground" />
+            <h3 className="text-base font-medium">No staged orders</h3>
+            <p className="text-sm text-muted-foreground">
+              Packed orders are staged in the shipping dock area before being loaded onto outbound vehicles. Orders appear here after packing is complete.
+            </p>
+          </CardContent>
+        </Card>
       ) : (
-        <div className="vn-table-wrap">
-          <table className="vn-table">
-            <thead>
-              <tr>
-                <th>Order</th>
-                <th>Shipment</th>
-                <th>Staging Bin</th>
-                <th>Load Seq</th>
-                <th>Status</th>
-                <th>Packed At</th>
-              </tr>
-            </thead>
-            <tbody>
+        <Card>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Order</TableHead>
+                <TableHead>Shipment</TableHead>
+                <TableHead>Staging Bin</TableHead>
+                <TableHead>Load Seq</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Packed At</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {assignments.map(a => (
-                <tr key={a.id} style={{ cursor: 'pointer' }}>
-                  <td><strong>{a.orderRef}</strong></td>
-                  <td>{a.shipmentRef || 'Not assigned'}</td>
-                  <td>{a.stagingBinLabel}</td>
-                  <td>{a.loadSequence ?? '--'}</td>
-                  <td><span className={`vn-chip ${statusChip(a.status)}`}>{formatStatus(a.status)}</span></td>
-                  <td>{new Date(a.packedAt).toLocaleString()}</td>
-                </tr>
+                <TableRow key={a.id} className="cursor-pointer">
+                  <TableCell className="font-mono text-sm font-semibold">{a.orderRef}</TableCell>
+                  <TableCell>{a.shipmentRef || 'Not assigned'}</TableCell>
+                  <TableCell>{a.stagingBinLabel}</TableCell>
+                  <TableCell>{a.loadSequence ?? '-'}</TableCell>
+                  <TableCell>
+                    <Badge variant={statusVariant(a.status)}>{formatStatus(a.status)}</Badge>
+                  </TableCell>
+                  <TableCell>{new Date(a.packedAt).toLocaleString()}</TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </TableBody>
+          </Table>
+        </Card>
       )}
     </div>
   );

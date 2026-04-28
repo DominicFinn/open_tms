@@ -1,8 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { API_URL } from '../api';
+import { FileText, Loader2, Plus, Waves } from 'lucide-react';
 
-/* ── Types ────────────────────────────────────────────────── */
+import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 interface Wave {
   id: string;
@@ -16,16 +27,16 @@ interface Wave {
   createdAt: string;
 }
 
-/* ── Helpers ──────────────────────────────────────────────── */
+type BadgeVariant = 'success' | 'info' | 'warning' | 'destructive' | 'muted' | 'secondary' | 'default';
 
-function statusChip(status: string): string {
+function statusVariant(status: string): BadgeVariant {
   switch (status) {
-    case 'planning': return 'vn-chip-secondary';
-    case 'released': return 'vn-chip-info';
-    case 'in_progress': return 'vn-chip-warning';
-    case 'completed': return 'vn-chip-success';
-    case 'cancelled': return 'vn-chip-error';
-    default: return 'vn-chip-secondary';
+    case 'planning': return 'secondary';
+    case 'released': return 'info';
+    case 'in_progress': return 'warning';
+    case 'completed': return 'success';
+    case 'cancelled': return 'destructive';
+    default: return 'secondary';
   }
 }
 
@@ -42,8 +53,6 @@ function strategyLabel(s: string): string {
     default: return s;
   }
 }
-
-/* ── Component ────────────────────────────────────────────── */
 
 export default function VNextWmsWaves() {
   const navigate = useNavigate();
@@ -81,68 +90,74 @@ export default function VNextWmsWaves() {
   }, [selectedLocation]);
 
   return (
-    <div>
-      <div className="vn-page-header">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1>Waves</h1>
-          <p className="vn-page-subtitle">Group orders into pick waves for efficient fulfillment</p>
+          <h1 className="text-3xl font-bold tracking-tight">Waves</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Group orders into pick waves for efficient fulfillment</p>
         </div>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button className="vn-btn vn-btn-outline" onClick={() => navigate('/wms/waves/templates')}>
-            <span className="material-icons" style={{ fontSize: '18px', marginRight: '0.5rem' }}>description</span>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => navigate('/wms/waves/templates')}>
+            <FileText className="h-4 w-4" />
             Templates
-          </button>
-          <button className="vn-btn vn-btn-primary" onClick={() => navigate('/wms/waves/create')}>
-            <span className="material-icons" style={{ fontSize: '18px', marginRight: '0.5rem' }}>add</span>
+          </Button>
+          <Button variant="gradient" onClick={() => navigate('/wms/waves/create')}>
+            <Plus className="h-4 w-4" />
             Create Wave
-          </button>
+          </Button>
         </div>
       </div>
 
       {loading ? (
-        <div style={{ padding: '2rem', textAlign: 'center' }}>
-          <div className="vn-loading-spinner" />
+        <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+          <Loader2 className="h-8 w-8 animate-spin" />
         </div>
       ) : waves.length === 0 ? (
-        <div className="vn-card" style={{ textAlign: 'center', padding: '3rem' }}>
-          <span className="material-icons" style={{ fontSize: '48px', color: 'var(--text-secondary)', marginBottom: '1rem', display: 'block' }}>waves</span>
-          <h3>No waves created</h3>
-          <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-            Waves group orders for efficient picking. Create wave templates to automate grouping by carrier, cutoff time, or service level.
-          </p>
-          <button className="vn-btn vn-btn-primary" onClick={() => navigate('/wms/waves/create')}>
-            Create First Wave
-          </button>
-        </div>
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+            <Waves className="h-12 w-12 text-muted-foreground" />
+            <h3 className="text-base font-medium">No waves created</h3>
+            <p className="text-sm text-muted-foreground">
+              Waves group orders for efficient picking. Create wave templates to automate grouping by carrier, cutoff time, or service level.
+            </p>
+            <Button variant="gradient" onClick={() => navigate('/wms/waves/create')}>
+              Create First Wave
+            </Button>
+          </CardContent>
+        </Card>
       ) : (
-        <div className="vn-table-wrap">
-          <table className="vn-table">
-            <thead>
-              <tr>
-                <th>Wave #</th>
-                <th>Strategy</th>
-                <th>Orders</th>
-                <th>Lines</th>
-                <th>Cutoff</th>
-                <th>Status</th>
-                <th>Created</th>
-              </tr>
-            </thead>
-            <tbody>
+        <Card>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Wave #</TableHead>
+                <TableHead>Strategy</TableHead>
+                <TableHead>Orders</TableHead>
+                <TableHead>Lines</TableHead>
+                <TableHead>Cutoff</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Created</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {waves.map(w => (
-                <tr key={w.id} onClick={() => navigate(`/wms/waves/${w.id}`)} style={{ cursor: 'pointer' }}>
-                  <td><strong>{w.waveNumber}</strong></td>
-                  <td><span className="vn-chip vn-chip-primary">{strategyLabel(w.pickStrategy)}</span></td>
-                  <td>{w.orderCount}</td>
-                  <td>{w.lineCount}</td>
-                  <td>{w.cutoffAt ? new Date(w.cutoffAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--'}</td>
-                  <td><span className={`vn-chip ${statusChip(w.status)}`}>{formatStatus(w.status)}</span></td>
-                  <td>{new Date(w.createdAt).toLocaleDateString()}</td>
-                </tr>
+                <TableRow key={w.id} onClick={() => navigate(`/wms/waves/${w.id}`)} className="cursor-pointer">
+                  <TableCell className="font-mono text-sm font-semibold">{w.waveNumber}</TableCell>
+                  <TableCell>
+                    <Badge variant="default">{strategyLabel(w.pickStrategy)}</Badge>
+                  </TableCell>
+                  <TableCell>{w.orderCount}</TableCell>
+                  <TableCell>{w.lineCount}</TableCell>
+                  <TableCell>{w.cutoffAt ? new Date(w.cutoffAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}</TableCell>
+                  <TableCell>
+                    <Badge variant={statusVariant(w.status)}>{formatStatus(w.status)}</Badge>
+                  </TableCell>
+                  <TableCell>{new Date(w.createdAt).toLocaleDateString()}</TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </TableBody>
+          </Table>
+        </Card>
       )}
     </div>
   );

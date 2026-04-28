@@ -1,6 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { CircleAlert, Loader2 } from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 
 interface OrderOption {
   id: string;
@@ -19,7 +42,7 @@ export default function VNextWmsCreateWave() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<{ locationId: string; pickStrategy: string; cutoffAt: string; zonePickMode?: string }>({
     locationId: '',
     pickStrategy: 'discrete',
     cutoffAt: '',
@@ -38,7 +61,6 @@ export default function VNextWmsCreateWave() {
   }, []);
 
   useEffect(() => {
-    // Load orders that could be waved (accepted/ready status)
     setLoading(true);
     fetch(`${API_URL}/api/v1/orders`)
       .then(r => r.json())
@@ -49,7 +71,7 @@ export default function VNextWmsCreateWave() {
         setOrders(eligible.map((o: any) => ({
           id: o.id,
           orderNumber: o.orderNumber || o.id.slice(0, 8),
-          customerName: o.customerName || o.customer?.name || '--',
+          customerName: o.customerName || o.customer?.name || '-',
           status: o.status,
           lineItemCount: o.lineItemCount ?? o._count?.lineItems ?? 0,
         })));
@@ -96,98 +118,141 @@ export default function VNextWmsCreateWave() {
   };
 
   return (
-    <div>
-      <div className="vn-page-header">
-        <div>
-          <h1>Create Wave</h1>
-          <p className="vn-page-subtitle">Group orders into a pick wave for efficient fulfillment</p>
-        </div>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Create Wave</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Group orders into a pick wave for efficient fulfillment</p>
       </div>
 
-      {error && <div className="vn-alert vn-alert-error" style={{ marginBottom: '1rem' }}>{error}</div>}
+      {error && (
+        <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+          <CircleAlert className="h-5 w-5" />
+          {error}
+        </div>
+      )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: '1.5rem' }}>
-        {/* Config panel */}
-        <form onSubmit={handleSubmit} className="vn-card" style={{ alignSelf: 'start' }}>
-          <h3 style={{ margin: '0 0 1rem' }}>Wave Settings</h3>
-          <div className="vn-field" style={{ marginBottom: '1rem' }}>
-            <label className="vn-field-label">Location *</label>
-            <select className="vn-input" value={form.locationId} onChange={e => setForm({ ...form, locationId: e.target.value })} required>
-              <option value="">Select...</option>
-              {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-            </select>
-          </div>
-          <div className="vn-field" style={{ marginBottom: '1rem' }}>
-            <label className="vn-field-label">Pick Strategy *</label>
-            <select className="vn-input" value={form.pickStrategy} onChange={e => setForm({ ...form, pickStrategy: e.target.value })}>
-              <option value="discrete">Discrete (one picker per order)</option>
-              <option value="batch">Batch (combine all orders)</option>
-              <option value="zone">Zone (split by zone)</option>
-            </select>
-          </div>
-          {form.pickStrategy === 'zone' && (
-            <div className="vn-field" style={{ marginBottom: '1rem' }}>
-              <label className="vn-field-label">Zone Pick Mode *</label>
-              <select className="vn-input" value={(form as any).zonePickMode || 'parallel'} onChange={e => setForm({ ...form, zonePickMode: e.target.value } as any)}>
-                <option value="parallel">Parallel (all zones simultaneously)</option>
-                <option value="sequential">Sequential (pick-and-pass)</option>
-              </select>
-            </div>
-          )}
-          <div className="vn-field" style={{ marginBottom: '1.5rem' }}>
-            <label className="vn-field-label">Cutoff Time</label>
-            <input className="vn-input" type="datetime-local" value={form.cutoffAt} onChange={e => setForm({ ...form, cutoffAt: e.target.value })} />
-          </div>
+      <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
+        <form onSubmit={handleSubmit}>
+          <Card>
+            <CardHeader>
+              <CardTitle>Wave Settings</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label>Location *</Label>
+                <Select value={form.locationId} onValueChange={v => setForm({ ...form, locationId: v })}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {locations.map(l => (
+                      <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Pick Strategy *</Label>
+                <Select value={form.pickStrategy} onValueChange={v => setForm({ ...form, pickStrategy: v })}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="discrete">Discrete (one picker per order)</SelectItem>
+                    <SelectItem value="batch">Batch (combine all orders)</SelectItem>
+                    <SelectItem value="zone">Zone (split by zone)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {form.pickStrategy === 'zone' && (
+                <div className="space-y-2">
+                  <Label>Zone Pick Mode *</Label>
+                  <Select value={form.zonePickMode || 'parallel'} onValueChange={v => setForm({ ...form, zonePickMode: v })}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="parallel">Parallel (all zones simultaneously)</SelectItem>
+                      <SelectItem value="sequential">Sequential (pick-and-pass)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              <div className="space-y-2">
+                <Label>Cutoff Time</Label>
+                <Input type="datetime-local" value={form.cutoffAt} onChange={e => setForm({ ...form, cutoffAt: e.target.value })} />
+              </div>
 
-          <div style={{ padding: '0.75rem', background: 'var(--surface-secondary)', borderRadius: '6px', marginBottom: '1rem' }}>
-            <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Selected Orders</div>
-            <div style={{ fontSize: '1.5rem', fontWeight: 700 }}>{selectedOrders.size}</div>
-          </div>
+              <div className="rounded-md bg-muted p-3">
+                <div className="text-xs text-muted-foreground">Selected Orders</div>
+                <div className="text-2xl font-bold">{selectedOrders.size}</div>
+              </div>
 
-          <div className="vn-form-actions">
-            <button type="button" className="vn-btn vn-btn-outline" onClick={() => navigate('/wms/waves')}>Cancel</button>
-            <button type="submit" className="vn-btn vn-btn-primary" disabled={saving || selectedOrders.size === 0}>
-              {saving ? 'Creating...' : 'Create Wave'}
-            </button>
-          </div>
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <Button variant="outline" type="button" onClick={() => navigate('/wms/waves')}>Cancel</Button>
+                <Button variant="gradient" type="submit" disabled={saving || selectedOrders.size === 0}>
+                  {saving ? 'Creating...' : 'Create Wave'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </form>
 
-        {/* Order selection table */}
-        <div className="vn-card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-            <h3 style={{ margin: 0 }}>Select Orders</h3>
-            <button className="vn-btn vn-btn-outline" style={{ fontSize: '0.85rem' }} onClick={selectAll}>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>Select Orders</CardTitle>
+            <Button variant="outline" size="sm" onClick={selectAll}>
               {selectedOrders.size === orders.length ? 'Deselect All' : 'Select All'}
-            </button>
-          </div>
-
-          {loading ? (
-            <div style={{ padding: '2rem', textAlign: 'center' }}><div className="vn-loading-spinner" /></div>
-          ) : orders.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>
-              No eligible orders found. Orders must be in accepted/processing status.
-            </div>
-          ) : (
-            <div className="vn-table-wrap">
-              <table className="vn-table">
-                <thead>
-                  <tr><th style={{ width: '40px' }}></th><th>Order</th><th>Customer</th><th>Status</th><th>Lines</th></tr>
-                </thead>
-                <tbody>
+            </Button>
+          </CardHeader>
+          <CardContent className="p-0">
+            {loading ? (
+              <div className="flex flex-col items-center gap-3 py-12 text-muted-foreground">
+                <Loader2 className="h-8 w-8 animate-spin" />
+              </div>
+            ) : orders.length === 0 ? (
+              <div className="px-6 py-8 text-center text-sm text-muted-foreground">
+                No eligible orders found. Orders must be in accepted/processing status.
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-10"></TableHead>
+                    <TableHead>Order</TableHead>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Lines</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {orders.map(o => (
-                    <tr key={o.id} onClick={() => toggleOrder(o.id)} style={{ cursor: 'pointer', background: selectedOrders.has(o.id) ? 'var(--surface-secondary)' : undefined }}>
-                      <td><input type="checkbox" checked={selectedOrders.has(o.id)} onChange={() => toggleOrder(o.id)} /></td>
-                      <td><strong>{o.orderNumber}</strong></td>
-                      <td>{o.customerName}</td>
-                      <td><span className="vn-chip vn-chip-info">{o.status}</span></td>
-                      <td>{o.lineItemCount}</td>
-                    </tr>
+                    <TableRow
+                      key={o.id}
+                      onClick={() => toggleOrder(o.id)}
+                      className={cn('cursor-pointer', selectedOrders.has(o.id) && 'bg-muted')}
+                    >
+                      <TableCell>
+                        <input
+                          type="checkbox"
+                          checked={selectedOrders.has(o.id)}
+                          onChange={() => toggleOrder(o.id)}
+                          className="h-4 w-4 rounded border border-input bg-background accent-primary"
+                        />
+                      </TableCell>
+                      <TableCell className="font-mono text-sm font-semibold">{o.orderNumber}</TableCell>
+                      <TableCell>{o.customerName}</TableCell>
+                      <TableCell>
+                        <Badge variant="info">{o.status}</Badge>
+                      </TableCell>
+                      <TableCell>{o.lineItemCount}</TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

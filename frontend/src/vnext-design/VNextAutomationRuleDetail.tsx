@@ -1,7 +1,49 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import {
+  ArrowLeft,
+  Beaker,
+  Check,
+  CheckCircle2,
+  CircleAlert,
+  ExternalLink,
+  History,
+  Info,
+  Loader2,
+  Pencil,
+  Plus,
+  X,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
-import { VnPageHeader, VnChip, VnAlert, VnInfoGrid, VnModal } from './components';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { cn } from '@/lib/utils';
 
 interface AutomationRule {
   id: string;
@@ -60,6 +102,15 @@ function timeAgo(dateStr: string | null): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
+function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between border-b border-border py-2 text-sm last:border-b-0">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-medium">{value}</span>
+    </div>
+  );
+}
+
 export default function VNextAutomationRuleDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -69,7 +120,6 @@ export default function VNextAutomationRuleDetail() {
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
-  // Edit mode
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState('');
   const [editDescription, setEditDescription] = useState('');
@@ -78,7 +128,6 @@ export default function VNextAutomationRuleDetail() {
   const [editActionConfig, setEditActionConfig] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
-  // Test/dry-run
   const [showTest, setShowTest] = useState(false);
   const [testEventType, setTestEventType] = useState('');
   const [testPayload, setTestPayload] = useState('{}');
@@ -192,229 +241,315 @@ export default function VNextAutomationRuleDetail() {
 
   if (loading) {
     return (
-      <div className="vn-empty">
-        <span className="material-icons" style={{ animation: 'spin 1s linear infinite' }}>refresh</span>
-        <h3>Loading rule...</h3>
+      <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <h3 className="text-lg font-medium">Loading rule...</h3>
       </div>
     );
   }
 
   if (!rule) {
-    return <div className="vn-alert vn-alert-error"><span className="material-icons">error</span><div className="vn-alert-content">Rule not found</div></div>;
+    return (
+      <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+        <CircleAlert className="h-5 w-5" />
+        Rule not found
+      </div>
+    );
   }
 
   return (
-    <>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-        <button className="vn-btn vn-btn-ghost vn-btn-sm" onClick={() => navigate('/automation-rules')}>
-          <span className="material-icons">arrow_back</span>Rules
-        </button>
-        <span style={{ color: 'var(--on-surface-variant)', fontSize: 13 }}>/ {rule.name}</span>
+    <div className="space-y-6">
+      <div className="flex items-center gap-2">
+        <Button variant="ghost" size="sm" onClick={() => navigate('/automation-rules')}>
+          <ArrowLeft className="h-4 w-4" />
+          Rules
+        </Button>
+        <span className="text-sm text-muted-foreground">/ {rule.name}</span>
       </div>
 
-      {successMsg && <VnAlert variant="success" onClose={() => setSuccessMsg('')}>{successMsg}</VnAlert>}
-      {error && <VnAlert variant="error" onClose={() => setError('')}>{error}</VnAlert>}
+      {successMsg && (
+        <div className="flex items-center gap-3 rounded-md border border-success/30 bg-success/10 p-4 text-sm text-success">
+          <CheckCircle2 className="h-5 w-5" />
+          <span className="flex-1">{successMsg}</span>
+          <Button variant="ghost" size="icon" onClick={() => setSuccessMsg('')}><X className="h-4 w-4" /></Button>
+        </div>
+      )}
+      {error && (
+        <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+          <CircleAlert className="h-5 w-5" />
+          <span className="flex-1">{error}</span>
+          <Button variant="ghost" size="icon" onClick={() => setError('')}><X className="h-4 w-4" /></Button>
+        </div>
+      )}
 
-      <VnPageHeader title={rule.name}>
-        <button className="vn-btn vn-btn-outline vn-btn-sm" onClick={() => setShowTest(true)}>
-          <span className="material-icons">science</span>Test Rule
-        </button>
-        <button className="vn-btn vn-btn-outline vn-btn-sm" onClick={() => setEditing(!editing)}>
-          <span className="material-icons">{editing ? 'close' : 'edit'}</span>{editing ? 'Cancel' : 'Edit'}
-        </button>
-        <button className={`vn-btn vn-btn-sm ${rule.enabled ? 'vn-btn-outline' : 'vn-btn-success'}`} onClick={toggleRule}>
-          {rule.enabled ? 'Disable' : 'Enable'}
-        </button>
-      </VnPageHeader>
-
-      <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
-        <VnChip variant={rule.enabled ? 'success' : 'secondary'}>{rule.enabled ? 'Active' : 'Disabled'}</VnChip>
-        <VnChip variant="info">Priority {rule.priority}</VnChip>
-        <VnChip variant="secondary">{rule.executionCount} executions</VnChip>
-        {rule.sourceDecisionId && <VnChip variant="primary">Promoted from agent</VnChip>}
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <h1 className="text-3xl font-bold tracking-tight">{rule.name}</h1>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => setShowTest(true)}>
+            <Beaker className="h-4 w-4" />
+            Test rule
+          </Button>
+          <Button variant="outline" onClick={() => setEditing(!editing)}>
+            {editing ? <X className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
+            {editing ? 'Cancel' : 'Edit'}
+          </Button>
+          <Button variant={rule.enabled ? 'outline' : 'default'} onClick={toggleRule}>
+            {rule.enabled ? 'Disable' : 'Enable'}
+          </Button>
+        </div>
       </div>
 
-      <div className="vn-detail-grid">
-        <div className="vn-detail-main">
-          {/* Conditions */}
-          <div className="vn-card">
-            <div className="vn-card-header"><h2>When: {rule.eventPattern}</h2></div>
-            <div className="vn-card-body">
-              <h3 style={{ fontSize: 13, fontWeight: 600, color: 'var(--primary)', marginBottom: 12 }}>Given these conditions match:</h3>
+      <div className="flex flex-wrap gap-2">
+        <Badge variant={rule.enabled ? 'success' : 'secondary'}>{rule.enabled ? 'Active' : 'Disabled'}</Badge>
+        <Badge variant="info">Priority {rule.priority}</Badge>
+        <Badge variant="secondary">{rule.executionCount} executions</Badge>
+        {rule.sourceDecisionId && <Badge>Promoted from agent</Badge>}
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+        <div className="space-y-4">
+          <Card>
+            <CardHeader><CardTitle>When: {rule.eventPattern}</CardTitle></CardHeader>
+            <CardContent>
+              <h3 className="mb-3 text-xs font-semibold text-primary">Given these conditions match:</h3>
               {editing ? (
-                <>
+                <div className="space-y-2">
                   {editConditions.map((c, i) => (
-                    <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
-                      <input className="vn-input" style={{ flex: 2, fontFamily: 'monospace', fontSize: 13 }} value={c.field} onChange={(e) => { const arr = [...editConditions]; arr[i].field = e.target.value; setEditConditions(arr); }} />
-                      <select className="vn-input" style={{ flex: 1 }} value={c.operator} onChange={(e) => { const arr = [...editConditions]; arr[i].operator = e.target.value; setEditConditions(arr); }}>
-                        {OPERATORS.map((op) => <option key={op.value} value={op.value}>{op.label}</option>)}
-                      </select>
+                    <div key={i} className="flex items-center gap-2">
+                      <Input
+                        className="flex-[2] font-mono text-sm"
+                        value={c.field}
+                        onChange={e => {
+                          const arr = [...editConditions];
+                          arr[i].field = e.target.value;
+                          setEditConditions(arr);
+                        }}
+                      />
+                      <Select
+                        value={c.operator}
+                        onValueChange={v => {
+                          const arr = [...editConditions];
+                          arr[i].operator = v;
+                          setEditConditions(arr);
+                        }}
+                      >
+                        <SelectTrigger className="flex-1"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {OPERATORS.map(op => <SelectItem key={op.value} value={op.value}>{op.label}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
                       {c.operator !== 'exists' && c.operator !== 'notExists' && (
-                        <input className="vn-input" style={{ flex: 2, fontFamily: 'monospace', fontSize: 13 }} value={c.value} onChange={(e) => { const arr = [...editConditions]; arr[i].value = e.target.value; setEditConditions(arr); }} />
+                        <Input
+                          className="flex-[2] font-mono text-sm"
+                          value={c.value}
+                          onChange={e => {
+                            const arr = [...editConditions];
+                            arr[i].value = e.target.value;
+                            setEditConditions(arr);
+                          }}
+                        />
                       )}
-                      <button className="vn-btn-icon" onClick={() => setEditConditions(editConditions.filter((_, j) => j !== i))} disabled={editConditions.length === 1}>
-                        <span className="material-icons" style={{ fontSize: 18 }}>close</span>
-                      </button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setEditConditions(editConditions.filter((_, j) => j !== i))}
+                        disabled={editConditions.length === 1}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
                     </div>
                   ))}
-                  <button className="vn-btn vn-btn-ghost vn-btn-sm" onClick={() => setEditConditions([...editConditions, { field: '', operator: 'equals', value: '' }])}>
-                    <span className="material-icons">add</span>Add Condition
-                  </button>
-                </>
+                  <Button variant="ghost" size="sm" onClick={() => setEditConditions([...editConditions, { field: '', operator: 'equals', value: '' }])}>
+                    <Plus className="h-4 w-4" />
+                    Add condition
+                  </Button>
+                </div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div className="flex flex-col gap-2">
                   {rule.conditions.map((c, i) => (
-                    <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '8px 12px', background: 'var(--surface-container)', borderRadius: 8, fontFamily: 'monospace', fontSize: 13 }}>
-                      <span style={{ color: 'var(--primary)', fontWeight: 600 }}>{c.field}</span>
-                      <span style={{ color: 'var(--on-surface-variant)' }}>{OPERATORS.find((o) => o.value === c.operator)?.label || c.operator}</span>
+                    <div key={i} className="flex items-center gap-2 rounded-md bg-muted px-3 py-2 font-mono text-sm">
+                      <span className="font-semibold text-primary">{c.field}</span>
+                      <span className="text-muted-foreground">{OPERATORS.find(o => o.value === c.operator)?.label || c.operator}</span>
                       {c.value !== undefined && <span>{JSON.stringify(c.value)}</span>}
                     </div>
                   ))}
                 </div>
               )}
-            </div>
-          </div>
+            </CardContent>
+          </Card>
 
-          {/* Action */}
-          <div className="vn-card">
-            <div className="vn-card-header"><h2>Then: {rule.actionType.replace(/_/g, ' ')}</h2></div>
-            <div className="vn-card-body">
+          <Card>
+            <CardHeader><CardTitle>Then: {rule.actionType.replace(/_/g, ' ')}</CardTitle></CardHeader>
+            <CardContent>
               {editing ? (
-                <div className="vn-form-grid">
+                <div className="grid gap-3 md:grid-cols-2">
                   {Object.entries(editActionConfig).map(([key, value]) => (
-                    <div className="vn-field" key={key}>
-                      <label className="vn-field-label">{key.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase())}</label>
-                      <input className="vn-input" value={value} onChange={(e) => setEditActionConfig({ ...editActionConfig, [key]: e.target.value })} />
+                    <div key={key} className="space-y-2">
+                      <Label>{key.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase())}</Label>
+                      <Input value={value} onChange={e => setEditActionConfig({ ...editActionConfig, [key]: e.target.value })} />
                     </div>
                   ))}
                 </div>
               ) : (
-                <VnInfoGrid items={Object.entries(rule.actionConfig).map(([k, v]) => ({
-                  label: k.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase()),
-                  value: String(v),
-                }))} />
+                Object.entries(rule.actionConfig).map(([k, v]) => (
+                  <InfoRow key={k} label={k.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase())} value={String(v)} />
+                ))
               )}
-            </div>
-          </div>
+            </CardContent>
+          </Card>
 
           {editing && (
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button className="vn-btn vn-btn-outline vn-btn-sm" onClick={() => setEditing(false)}>Cancel</button>
-              <button className="vn-btn vn-btn-primary vn-btn-sm" onClick={saveEdit} disabled={saving}>{saving ? 'Saving...' : 'Save Changes'}</button>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setEditing(false)}>Cancel</Button>
+              <Button variant="gradient" onClick={saveEdit} disabled={saving}>
+                {saving ? 'Saving...' : 'Save changes'}
+              </Button>
             </div>
           )}
 
-          {/* Execution log */}
-          <div className="vn-card">
-            <div className="vn-card-header">
-              <h2>Execution Log</h2>
-              <span style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>{executions.length} recent</span>
-            </div>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Execution log</CardTitle>
+              <span className="text-sm text-muted-foreground">{executions.length} recent</span>
+            </CardHeader>
             {executions.length === 0 ? (
-              <div className="vn-empty" style={{ padding: 40 }}>
-                <span className="material-icons">history</span>
-                <h3>No executions yet</h3>
-                <p>This rule hasn't matched any events yet.</p>
+              <div className="flex flex-col items-center gap-3 py-12 text-muted-foreground">
+                <History className="h-10 w-10 opacity-40" />
+                <h3 className="text-base font-medium">No executions yet</h3>
+                <p className="text-sm">This rule has not matched any events yet.</p>
               </div>
             ) : (
-              <div className="vn-card-body vn-card-flush">
-                <div className="vn-table-wrap">
-                  <table className="vn-table">
-                    <thead><tr><th>Event</th><th>Entity</th><th>Result</th><th>Time</th><th>Speed</th></tr></thead>
-                    <tbody>
-                      {executions.map((ex) => (
-                        <tr key={ex.id}>
-                          <td><code style={{ fontSize: 12 }}>{ex.eventType}</code></td>
-                          <td style={{ fontSize: 13 }}>{ex.entityType}/{ex.entityId.slice(0, 8)}</td>
-                          <td>
-                            <VnChip variant={ex.conditionsMatched ? 'success' : 'secondary'}>
-                              {ex.conditionsMatched ? 'Matched' : 'No match'}
-                            </VnChip>
-                          </td>
-                          <td style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>{timeAgo(ex.createdAt)}</td>
-                          <td style={{ fontSize: 13 }}>{ex.evaluationMs !== null ? `${ex.evaluationMs}ms` : '-'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Event</TableHead>
+                    <TableHead>Entity</TableHead>
+                    <TableHead>Result</TableHead>
+                    <TableHead>Time</TableHead>
+                    <TableHead>Speed</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {executions.map(ex => (
+                    <TableRow key={ex.id}>
+                      <TableCell><code className="rounded bg-muted px-1.5 py-0.5 text-xs">{ex.eventType}</code></TableCell>
+                      <TableCell className="text-sm">{ex.entityType}/{ex.entityId.slice(0, 8)}</TableCell>
+                      <TableCell>
+                        <Badge variant={ex.conditionsMatched ? 'success' : 'secondary'}>
+                          {ex.conditionsMatched ? 'Matched' : 'No match'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{timeAgo(ex.createdAt)}</TableCell>
+                      <TableCell className="text-sm">{ex.evaluationMs !== null ? `${ex.evaluationMs}ms` : '-'}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             )}
-          </div>
+          </Card>
         </div>
 
-        {/* Sidebar */}
-        <div className="vn-detail-sidebar">
-          <div className="vn-card">
-            <div className="vn-card-header"><h2>Details</h2></div>
-            <div className="vn-card-body">
-              <VnInfoGrid items={[
-                { label: 'Event Pattern', value: <code style={{ fontSize: 13 }}>{rule.eventPattern}</code> },
-                { label: 'Priority', value: editing ? <input className="vn-input" type="number" min="1" max="100" value={editPriority} onChange={(e) => setEditPriority(parseInt(e.target.value, 10))} style={{ width: 80 }} /> : String(rule.priority) },
-                { label: 'Executions', value: String(rule.executionCount) },
-                { label: 'Last Run', value: timeAgo(rule.lastExecutedAt) },
-                { label: 'Created', value: new Date(rule.createdAt).toLocaleDateString() },
-              ]} />
-            </div>
-          </div>
+        <div className="space-y-3">
+          <Card>
+            <CardHeader><CardTitle>Details</CardTitle></CardHeader>
+            <CardContent>
+              <InfoRow label="Event pattern" value={<code className="rounded bg-muted px-1.5 py-0.5 text-xs">{rule.eventPattern}</code>} />
+              <InfoRow
+                label="Priority"
+                value={
+                  editing ? (
+                    <Input
+                      type="number"
+                      min="1"
+                      max="100"
+                      value={editPriority}
+                      onChange={e => setEditPriority(parseInt(e.target.value, 10))}
+                      className="w-20"
+                    />
+                  ) : String(rule.priority)
+                }
+              />
+              <InfoRow label="Executions" value={String(rule.executionCount)} />
+              <InfoRow label="Last run" value={timeAgo(rule.lastExecutedAt)} />
+              <InfoRow label="Created" value={new Date(rule.createdAt).toLocaleDateString()} />
+            </CardContent>
+          </Card>
 
           {rule.sourceDecisionId && (
-            <div className="vn-card">
-              <div className="vn-card-header"><h2>Source Decision</h2></div>
-              <div className="vn-card-body">
-                <button className="vn-btn vn-btn-outline vn-btn-sm" style={{ width: '100%' }} onClick={() => navigate(`/agent-decisions/${rule.sourceDecisionId}`)}>
-                  <span className="material-icons">open_in_new</span>View Decision
-                </button>
-              </div>
-            </div>
+            <Card>
+              <CardHeader><CardTitle>Source decision</CardTitle></CardHeader>
+              <CardContent>
+                <Button variant="outline" className="w-full" onClick={() => navigate(`/agent-decisions/${rule.sourceDecisionId}`)}>
+                  <ExternalLink className="h-4 w-4" />
+                  View decision
+                </Button>
+              </CardContent>
+            </Card>
           )}
         </div>
       </div>
 
-      {/* Test/dry-run modal */}
-      <VnModal open={showTest} onClose={() => { setShowTest(false); setTestResult(null); }} title="Test Rule (Dry Run)" size="lg"
-        footer={
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-            <button className="vn-btn vn-btn-outline vn-btn-sm" onClick={() => setShowTest(false)}>Close</button>
-            <button className="vn-btn vn-btn-primary vn-btn-sm" onClick={runTest} disabled={testing}>{testing ? 'Testing...' : 'Run Test'}</button>
-          </div>
-        }
-      >
-        <div className="vn-field" style={{ marginBottom: 16 }}>
-          <label className="vn-field-label">Event Type</label>
-          <input className="vn-input" value={testEventType} onChange={(e) => setTestEventType(e.target.value)} placeholder="shipment.exception" />
-        </div>
-        <div className="vn-field" style={{ marginBottom: 16 }}>
-          <label className="vn-field-label">Event Payload (JSON)</label>
-          <textarea className="vn-input" rows={6} value={testPayload} onChange={(e) => setTestPayload(e.target.value)} style={{ fontFamily: 'monospace', fontSize: 13 }} />
-        </div>
-
-        {testResult && (
-          <div style={{ marginTop: 16 }}>
-            <div className={`vn-alert vn-alert-${testResult.allConditionsMatched ? 'success' : 'warning'}`} style={{ marginBottom: 16 }}>
-              <span className="material-icons">{testResult.allConditionsMatched ? 'check_circle' : 'info'}</span>
-              <div className="vn-alert-content">
-                {testResult.allConditionsMatched ? 'Rule would fire and execute action' : 'Rule would NOT fire - conditions not met'}
-              </div>
+      <Dialog open={showTest} onOpenChange={open => { setShowTest(open); if (!open) setTestResult(null); }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Test rule (dry run)</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Event type</Label>
+              <Input value={testEventType} onChange={e => setTestEventType(e.target.value)} placeholder="shipment.exception" />
+            </div>
+            <div className="space-y-2">
+              <Label>Event payload (JSON)</Label>
+              <textarea
+                rows={6}
+                value={testPayload}
+                onChange={e => setTestPayload(e.target.value)}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
             </div>
 
-            <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Condition Results:</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {(testResult.conditionResults as Array<{ field: string; operator: string; expected: unknown; actual: unknown; matched: boolean }>)?.map((cr, i) => (
-                <div key={i} style={{
-                  display: 'flex', gap: 8, alignItems: 'center', padding: '8px 12px', borderRadius: 8, fontSize: 13, fontFamily: 'monospace',
-                  background: cr.matched ? 'var(--success-container)' : 'var(--error-container)',
-                  color: cr.matched ? 'var(--on-success-container)' : 'var(--on-error-container)',
-                }}>
-                  <span className="material-icons" style={{ fontSize: 16 }}>{cr.matched ? 'check' : 'close'}</span>
-                  <span>{cr.field} {cr.operator} {JSON.stringify(cr.expected)}</span>
-                  <span style={{ marginLeft: 'auto', opacity: 0.7 }}>actual: {JSON.stringify(cr.actual)}</span>
+            {testResult && (
+              <div className="space-y-3">
+                <div className={cn(
+                  'flex items-center gap-3 rounded-md border p-3 text-sm',
+                  testResult.allConditionsMatched
+                    ? 'border-success/30 bg-success/10 text-success'
+                    : 'border-warning/30 bg-warning/10 text-warning',
+                )}>
+                  {testResult.allConditionsMatched ? <CheckCircle2 className="h-4 w-4" /> : <Info className="h-4 w-4" />}
+                  {testResult.allConditionsMatched ? 'Rule would fire and execute action' : 'Rule would NOT fire - conditions not met'}
                 </div>
-              ))}
-            </div>
+
+                <h3 className="text-sm font-semibold">Condition results:</h3>
+                <div className="flex flex-col gap-1.5">
+                  {(testResult.conditionResults as Array<{ field: string; operator: string; expected: unknown; actual: unknown; matched: boolean }>)?.map((cr, i) => (
+                    <div
+                      key={i}
+                      className={cn(
+                        'flex items-center gap-2 rounded-md px-3 py-2 font-mono text-sm',
+                        cr.matched
+                          ? 'bg-success/15 text-success'
+                          : 'bg-destructive/15 text-destructive',
+                      )}
+                    >
+                      {cr.matched ? <Check className="h-4 w-4" /> : <X className="h-4 w-4" />}
+                      <span>{cr.field} {cr.operator} {JSON.stringify(cr.expected)}</span>
+                      <span className="ml-auto opacity-70">actual: {JSON.stringify(cr.actual)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
-        )}
-      </VnModal>
-    </>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowTest(false)}>Close</Button>
+            <Button variant="gradient" onClick={runTest} disabled={testing}>
+              {testing ? 'Testing...' : 'Run test'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }

@@ -1,6 +1,27 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import {
+  ArrowLeft,
+  CheckCircle2,
+  CircleAlert,
+  Info,
+  Loader2,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { cn } from '@/lib/utils';
 
 interface QueryData {
   id: string;
@@ -29,15 +50,32 @@ function formatMoney(cents: number): string {
   return `$${(cents / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 function formatDate(d?: string): string {
-  if (!d) return '—';
+  if (!d) return '-';
   return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
-function statusChip(s: string): string {
-  const m: Record<string, string> = { raised: 'warning', investigating: 'info', resolved_adjusted: 'success', resolved_upheld: 'secondary', closed: 'secondary' };
+
+type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning' | 'info' | 'muted';
+
+function statusVariant(s: string): BadgeVariant {
+  const m: Record<string, BadgeVariant> = {
+    raised: 'warning',
+    investigating: 'info',
+    resolved_adjusted: 'success',
+    resolved_upheld: 'secondary',
+    closed: 'secondary',
+  };
   return m[s] || 'secondary';
 }
 function reasonLabel(r: string): string {
-  const m: Record<string, string> = { overcharge: 'Overcharge', service_failure: 'Service Failure', missing_pod: 'Missing POD', wrong_rate: 'Wrong Rate', damage_claim: 'Damage Claim', missing_items: 'Missing Items', temperature_excursion: 'Temperature Excursion' };
+  const m: Record<string, string> = {
+    overcharge: 'Overcharge',
+    service_failure: 'Service Failure',
+    missing_pod: 'Missing POD',
+    wrong_rate: 'Wrong Rate',
+    damage_claim: 'Damage Claim',
+    missing_items: 'Missing Items',
+    temperature_excursion: 'Temperature Excursion',
+  };
   return m[r] || r;
 }
 
@@ -85,120 +123,204 @@ export default function VNextFinanceQueryDetail() {
     finally { setActionLoading(false); }
   };
 
-  if (loading) return <div className="vn-empty"><span className="material-icons" style={{ animation: 'spin 1s linear infinite' }}>refresh</span><h3>Loading...</h3></div>;
-  if (error || !query) return <div className="vn-alert vn-alert-error">{error || 'Not found'}</div>;
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <h3 className="text-lg font-medium">Loading...</h3>
+      </div>
+    );
+  }
+  if (error || !query) {
+    return (
+      <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+        <CircleAlert className="h-5 w-5" />
+        {error || 'Not found'}
+      </div>
+    );
+  }
 
   const q = query;
   const isOpen = ['raised', 'investigating'].includes(q.status);
+  const resolveTone = q.status === 'resolved_adjusted'
+    ? 'border-success/30 bg-success/10 text-success'
+    : 'border-info/30 bg-info/10 text-info';
 
   return (
-    <>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-        <button className="vn-btn vn-btn-ghost vn-btn-sm" onClick={() => navigate('/finance/queries')}>
-          <span className="material-icons">arrow_back</span> Queries
-        </button>
-        <span style={{ color: 'var(--on-surface-variant)', fontSize: 13 }}>/ {q.queryNumber}</span>
+    <div className="space-y-6">
+      <div className="flex items-center gap-2 text-sm">
+        <Button variant="ghost" size="sm" onClick={() => navigate('/finance/queries')}>
+          <ArrowLeft className="h-4 w-4" /> Queries
+        </Button>
+        <span className="text-muted-foreground">/ {q.queryNumber}</span>
       </div>
 
-      <div className="vn-page-header">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1>{q.queryNumber}</h1>
-          <div className="vn-page-header-meta">
-            <span className={`vn-chip vn-chip-${q.queryType === 'customer_dispute' ? 'primary' : 'warning'}`}>
+          <h1 className="text-3xl font-bold tracking-tight">{q.queryNumber}</h1>
+          <div className="mt-2 flex items-center gap-2">
+            <Badge variant={q.queryType === 'customer_dispute' ? 'default' : 'warning'}>
               {q.queryType === 'customer_dispute' ? 'Customer Dispute' : 'Carrier Dispute'}
-            </span>
-            <span className={`vn-chip vn-chip-${statusChip(q.status)}`}>{q.status.replace(/_/g, ' ')}</span>
+            </Badge>
+            <Badge variant={statusVariant(q.status)}>{q.status.replace(/_/g, ' ')}</Badge>
           </div>
         </div>
-        <div className="vn-page-actions">
+        <div className="flex gap-2">
           {isOpen && (
-            <button className="vn-btn vn-btn-primary vn-btn-sm" onClick={() => setShowResolve(!showResolve)}>
-              <span className="material-icons">check_circle</span> Resolve
-            </button>
+            <Button size="sm" onClick={() => setShowResolve(!showResolve)}>
+              <CheckCircle2 className="h-4 w-4" /> Resolve
+            </Button>
           )}
         </div>
       </div>
 
-      {/* Resolution form */}
       {showResolve && (
-        <div className="vn-card" style={{ marginBottom: 24, padding: 20 }}>
-          <h3 style={{ margin: '0 0 16px' }}>Resolve Query</h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div className="vn-field">
-              <label className="vn-field-label">Resolution</label>
-              <select className="vn-input" value={resolution} onChange={e => setResolution(e.target.value as any)}>
-                <option value="adjusted">Adjusted (issue credit/adjustment)</option>
-                <option value="upheld">Upheld (original charge is correct)</option>
-              </select>
+        <Card>
+          <CardContent className="p-5">
+            <h3 className="mb-4 text-base font-semibold">Resolve Query</h3>
+            <div className="flex flex-col gap-4">
+              <div className="space-y-1.5">
+                <Label>Resolution</Label>
+                <Select value={resolution} onValueChange={v => setResolution(v as 'adjusted' | 'upheld')}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="adjusted">Adjusted (issue credit/adjustment)</SelectItem>
+                    <SelectItem value="upheld">Upheld (original charge is correct)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {resolution === 'adjusted' && (
+                <>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="adjustment">Adjustment Amount ($)</Label>
+                    <Input
+                      id="adjustment"
+                      type="number"
+                      step="0.01"
+                      value={adjustmentAmount}
+                      onChange={e => setAdjustmentAmount(e.target.value)}
+                      placeholder={q.disputedAmountCents ? (q.disputedAmountCents / 100).toFixed(2) : '0.00'}
+                    />
+                  </div>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border border-input bg-background accent-primary"
+                      checked={createCreditNote}
+                      onChange={e => setCreateCreditNote(e.target.checked)}
+                    />
+                    Generate credit note automatically
+                  </label>
+                </>
+              )}
+              <div className="space-y-1.5">
+                <Label htmlFor="resolution-notes">Resolution Notes</Label>
+                <textarea
+                  id="resolution-notes"
+                  className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  rows={3}
+                  value={resolutionNotes}
+                  onChange={e => setResolutionNotes(e.target.value)}
+                  placeholder="Describe the resolution..."
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button onClick={resolve} disabled={actionLoading}>
+                  {actionLoading ? 'Resolving...' : 'Resolve Query'}
+                </Button>
+                <Button variant="ghost" onClick={() => setShowResolve(false)}>Cancel</Button>
+              </div>
             </div>
-            {resolution === 'adjusted' && (
-              <>
-                <div className="vn-field">
-                  <label className="vn-field-label">Adjustment Amount ($)</label>
-                  <input className="vn-input" type="number" step="0.01" value={adjustmentAmount} onChange={e => setAdjustmentAmount(e.target.value)}
-                    placeholder={q.disputedAmountCents ? (q.disputedAmountCents / 100).toFixed(2) : '0.00'} />
-                </div>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <input type="checkbox" checked={createCreditNote} onChange={e => setCreateCreditNote(e.target.checked)} />
-                  Generate credit note automatically
-                </label>
-              </>
-            )}
-            <div className="vn-field">
-              <label className="vn-field-label">Resolution Notes</label>
-              <textarea className="vn-input" rows={3} value={resolutionNotes} onChange={e => setResolutionNotes(e.target.value)} placeholder="Describe the resolution..." />
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button className="vn-btn vn-btn-primary" onClick={resolve} disabled={actionLoading}>
-                {actionLoading ? 'Resolving...' : 'Resolve Query'}
-              </button>
-              <button className="vn-btn vn-btn-ghost" onClick={() => setShowResolve(false)}>Cancel</button>
-            </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       )}
 
-      <div className="vn-detail-grid">
-        <div className="vn-detail-main">
-          <div className="vn-card" style={{ marginBottom: 24, padding: 20 }}>
-            <h3 style={{ margin: '0 0 12px' }}>Description</h3>
-            <p style={{ margin: 0, lineHeight: 1.6 }}>{q.description}</p>
-          </div>
+      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+        <div className="space-y-6">
+          <Card>
+            <CardContent className="p-5">
+              <h3 className="mb-3 text-base font-semibold">Description</h3>
+              <p className="text-sm leading-relaxed">{q.description}</p>
+            </CardContent>
+          </Card>
 
           {q.resolvedAt && (
-            <div className={`vn-alert vn-alert-${q.status === 'resolved_adjusted' ? 'success' : 'info'}`} style={{ marginBottom: 24 }}>
-              <span className="material-icons">{q.status === 'resolved_adjusted' ? 'check_circle' : 'info'}</span>
+            <div className={cn('flex items-start gap-3 rounded-md border p-4 text-sm', resolveTone)}>
+              {q.status === 'resolved_adjusted' ? <CheckCircle2 className="h-5 w-5 shrink-0" /> : <Info className="h-5 w-5 shrink-0" />}
               <div>
-                <strong>Resolved — {q.status === 'resolved_adjusted' ? 'Adjusted' : 'Upheld'}</strong>
-                {q.adjustmentCents != null && <span> — Adjustment: {formatMoney(q.adjustmentCents)}</span>}
-                {q.resolutionNotes && <p style={{ margin: '8px 0 0' }}>{q.resolutionNotes}</p>}
+                <strong>Resolved - {q.status === 'resolved_adjusted' ? 'Adjusted' : 'Upheld'}</strong>
+                {q.adjustmentCents != null && <span> - Adjustment: {formatMoney(q.adjustmentCents)}</span>}
+                {q.resolutionNotes && <p className="mt-2">{q.resolutionNotes}</p>}
               </div>
             </div>
           )}
 
           {q.creditNoteId && (
-            <div className="vn-card" style={{ marginBottom: 24, padding: 20 }}>
-              <h3 style={{ margin: '0 0 8px' }}>Credit Note</h3>
-              <Link to={`/finance/credit-notes/${q.creditNoteId}`} style={{ color: 'var(--primary)' }}>View Credit Note</Link>
-            </div>
+            <Card>
+              <CardContent className="p-5">
+                <h3 className="mb-2 text-base font-semibold">Credit Note</h3>
+                <Link to={`/finance/credit-notes/${q.creditNoteId}`} className="text-primary hover:underline">
+                  View Credit Note
+                </Link>
+              </CardContent>
+            </Card>
           )}
         </div>
 
-        <div className="vn-detail-sidebar">
-          <div className="vn-card" style={{ padding: 20 }}>
-            <h3 style={{ margin: '0 0 16px' }}>Query Details</h3>
-            <div className="vn-info-grid">
-              <div className="vn-info-item"><label>Reason</label><span>{reasonLabel(q.reason)}</span></div>
-              {q.disputedAmountCents != null && <div className="vn-info-item"><label>Disputed Amount</label><span style={{ fontWeight: 600 }}>{formatMoney(q.disputedAmountCents)}</span></div>}
-              <div className="vn-info-item"><label>Created</label><span>{formatDate(q.createdAt)}</span></div>
-              {q.resolvedAt && <div className="vn-info-item"><label>Resolved</label><span>{formatDate(q.resolvedAt)}</span></div>}
-              {q.shipmentId && <div className="vn-info-item"><label>Shipment</label><Link to={`/shipments/${q.shipmentId}`} style={{ color: 'var(--primary)' }}>View</Link></div>}
-              {q.invoiceId && <div className="vn-info-item"><label>Invoice</label><Link to={`/finance/invoices/${q.invoiceId}`} style={{ color: 'var(--primary)' }}>View</Link></div>}
-              {q.carrierInvoiceId && <div className="vn-info-item"><label>Carrier Invoice</label><Link to={`/finance/carrier-invoices/${q.carrierInvoiceId}`} style={{ color: 'var(--primary)' }}>View</Link></div>}
-            </div>
-          </div>
-        </div>
+        <aside className="space-y-6 lg:sticky lg:top-20 lg:self-start">
+          <Card>
+            <CardContent className="p-5">
+              <h3 className="mb-4 text-base font-semibold">Query Details</h3>
+              <dl className="space-y-3 text-sm">
+                <div>
+                  <dt className="text-xs text-muted-foreground">Reason</dt>
+                  <dd>{reasonLabel(q.reason)}</dd>
+                </div>
+                {q.disputedAmountCents != null && (
+                  <div>
+                    <dt className="text-xs text-muted-foreground">Disputed Amount</dt>
+                    <dd className="font-semibold font-mono tabular-nums">{formatMoney(q.disputedAmountCents)}</dd>
+                  </div>
+                )}
+                <div>
+                  <dt className="text-xs text-muted-foreground">Created</dt>
+                  <dd>{formatDate(q.createdAt)}</dd>
+                </div>
+                {q.resolvedAt && (
+                  <div>
+                    <dt className="text-xs text-muted-foreground">Resolved</dt>
+                    <dd>{formatDate(q.resolvedAt)}</dd>
+                  </div>
+                )}
+                {q.shipmentId && (
+                  <div>
+                    <dt className="text-xs text-muted-foreground">Shipment</dt>
+                    <dd>
+                      <Link to={`/shipments/${q.shipmentId}`} className="text-primary hover:underline">View</Link>
+                    </dd>
+                  </div>
+                )}
+                {q.invoiceId && (
+                  <div>
+                    <dt className="text-xs text-muted-foreground">Invoice</dt>
+                    <dd>
+                      <Link to={`/finance/invoices/${q.invoiceId}`} className="text-primary hover:underline">View</Link>
+                    </dd>
+                  </div>
+                )}
+                {q.carrierInvoiceId && (
+                  <div>
+                    <dt className="text-xs text-muted-foreground">Carrier Invoice</dt>
+                    <dd>
+                      <Link to={`/finance/carrier-invoices/${q.carrierInvoiceId}`} className="text-primary hover:underline">View</Link>
+                    </dd>
+                  </div>
+                )}
+              </dl>
+            </CardContent>
+          </Card>
+        </aside>
       </div>
-    </>
+    </div>
   );
 }

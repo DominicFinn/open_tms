@@ -1,6 +1,64 @@
 import { useEffect, useMemo, useState } from 'react';
+import {
+  Truck,
+  Snowflake,
+  AlertTriangle,
+  Package,
+  Plane,
+  Ship,
+  Train,
+  Stethoscope,
+  Siren,
+  Dog,
+  UtensilsCrossed,
+  FlaskConical,
+  Zap,
+  Leaf,
+  Flame,
+  Droplet,
+  Network,
+  Construction,
+  Plus,
+  Pencil,
+  Archive,
+  Save,
+  X,
+  Sparkles,
+  CheckSquare,
+  Loader2,
+  type LucideIcon,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
 import { SHIPMENT_FIELD_LABELS } from '../shared/shipmentTypeValidator';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableHead,
+  TableRow,
+  TableCell,
+} from '@/components/ui/table';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { cn } from '@/lib/utils';
 
 interface ShipmentType {
   id: string;
@@ -14,12 +72,28 @@ interface ShipmentType {
   archived: boolean;
 }
 
-// Curated set of Material Icons that are meaningful for shipping templates.
-const ICON_CHOICES = [
-  'local_shipping', 'ac_unit', 'warning', 'inventory_2', 'flight', 'directions_boat',
-  'train', 'medical_services', 'emergency', 'pets', 'restaurant', 'science',
-  'bolt', 'eco', 'local_fire_department', 'water_drop', 'hub', 'construction',
-];
+const ICON_MAP: Record<string, LucideIcon> = {
+  local_shipping: Truck,
+  ac_unit: Snowflake,
+  warning: AlertTriangle,
+  inventory_2: Package,
+  flight: Plane,
+  directions_boat: Ship,
+  train: Train,
+  medical_services: Stethoscope,
+  emergency: Siren,
+  pets: Dog,
+  restaurant: UtensilsCrossed,
+  science: FlaskConical,
+  bolt: Zap,
+  eco: Leaf,
+  local_fire_department: Flame,
+  water_drop: Droplet,
+  hub: Network,
+  construction: Construction,
+};
+
+const ICON_CHOICES = Object.keys(ICON_MAP);
 
 const COLOR_CHOICES = [
   '#6366F1', '#0EA5E9', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6',
@@ -35,6 +109,11 @@ const SELECTABLE_FIELDS = [
 ];
 
 interface Option { id: string; name: string; }
+
+function IconRender({ name, className, style }: { name: string; className?: string; style?: React.CSSProperties }) {
+  const Icon = ICON_MAP[name] || Truck;
+  return <Icon className={className} style={style} />;
+}
 
 export default function VNextShipmentTypes() {
   const [rows, setRows] = useState<ShipmentType[]>([]);
@@ -135,203 +214,230 @@ export default function VNextShipmentTypes() {
 
   const defaultsLabel = (d: Record<string, unknown>): string => {
     const keys = Object.keys(d || {});
-    if (keys.length === 0) return '—';
+    if (keys.length === 0) return '-';
     return keys.map(k => SHIPMENT_FIELD_LABELS[k] || k).join(', ');
   };
 
   const builtInCount = useMemo(() => rows.filter(r => r.isBuiltIn).length, [rows]);
 
   return (
-    <>
-      <div className="vn-page-header">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1>Shipment Types</h1>
-          <p>Templates that pre-decide required fields, default values, and icon. {rows.length} total · {builtInCount} built-in.</p>
+          <h1 className="text-3xl font-bold tracking-tight">Shipment types</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Templates that pre-decide required fields, default values, and icon. {rows.length} total - {builtInCount} built-in.
+          </p>
         </div>
-        <div className="vn-page-actions">
-          <button className="vn-btn vn-btn-primary" onClick={openCreate}>
-            <span className="material-icons">add</span>
-            New Type
-          </button>
-        </div>
+        <Button variant="gradient" onClick={openCreate}>
+          <Plus className="h-4 w-4" />
+          New type
+        </Button>
       </div>
 
       {loading ? (
-        <div className="vn-empty"><span className="material-icons" style={{ animation: 'spin 1s linear infinite' }}>refresh</span><h3>Loading...</h3></div>
+        <div className="flex justify-center py-12">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
       ) : (
-        <div className="vn-card">
-          <div className="vn-table-wrap">
-            <table className="vn-table">
-              <thead>
-                <tr>
-                  <th style={{ width: 60 }}>Icon</th>
-                  <th>Name</th>
-                  <th>Description</th>
-                  <th>Required fields</th>
-                  <th>Pre-filled defaults</th>
-                  <th style={{ width: 80 }}>Built-in</th>
-                  <th style={{ width: 120 }}></th>
-                </tr>
-              </thead>
-              <tbody>
+        <Card>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-16">Icon</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead>Required fields</TableHead>
+                  <TableHead>Pre-filled defaults</TableHead>
+                  <TableHead className="w-24">Built-in</TableHead>
+                  <TableHead className="w-28 text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {rows.length === 0 && (
-                  <tr><td colSpan={7} style={{ padding: 24, textAlign: 'center', color: 'var(--on-surface-variant)' }}>No shipment types yet.</td></tr>
+                  <TableRow>
+                    <TableCell colSpan={7} className="py-6 text-center text-sm text-muted-foreground">
+                      No shipment types yet.
+                    </TableCell>
+                  </TableRow>
                 )}
                 {rows.map(t => (
-                  <tr key={t.id}>
-                    <td>
-                      <span
-                        className="material-icons"
-                        style={{ color: t.color, fontSize: 28, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-                        title={t.icon}
-                      >{t.icon}</span>
-                    </td>
-                    <td><strong>{t.name}</strong></td>
-                    <td style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>{t.description || '—'}</td>
-                    <td style={{ fontSize: 13 }}>
-                      {t.requiredFields.length === 0 ? '—' : t.requiredFields.map(f => SHIPMENT_FIELD_LABELS[f] || f).join(', ')}
-                    </td>
-                    <td style={{ fontSize: 13 }}>{defaultsLabel(t.defaults || {})}</td>
-                    <td>{t.isBuiltIn ? <span className="vn-chip vn-chip-secondary">Built-in</span> : '—'}</td>
-                    <td>
-                      <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
-                        <button className="vn-btn vn-btn-ghost vn-btn-sm" onClick={() => openEdit(t)}>
-                          <span className="material-icons" style={{ fontSize: 18 }}>edit</span>
-                        </button>
+                  <TableRow key={t.id}>
+                    <TableCell>
+                      <IconRender name={t.icon} className="h-7 w-7" style={{ color: t.color }} />
+                    </TableCell>
+                    <TableCell><strong>{t.name}</strong></TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{t.description || '-'}</TableCell>
+                    <TableCell className="text-sm">
+                      {t.requiredFields.length === 0 ? '-' : t.requiredFields.map(f => SHIPMENT_FIELD_LABELS[f] || f).join(', ')}
+                    </TableCell>
+                    <TableCell className="text-sm">{defaultsLabel(t.defaults || {})}</TableCell>
+                    <TableCell>{t.isBuiltIn ? <Badge variant="secondary">Built-in</Badge> : '-'}</TableCell>
+                    <TableCell>
+                      <div className="flex justify-end gap-1">
+                        <Button variant="ghost" size="icon" onClick={() => openEdit(t)}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
                         {!t.isBuiltIn && (
-                          <button className="vn-btn vn-btn-ghost vn-btn-sm" onClick={() => handleDelete(t)}>
-                            <span className="material-icons" style={{ fontSize: 18 }}>archive</span>
-                          </button>
+                          <Button variant="ghost" size="icon" onClick={() => handleDelete(t)}>
+                            <Archive className="h-4 w-4" />
+                          </Button>
                         )}
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
       )}
 
-      {showForm && (
-        <div className="vn-modal-backdrop" onClick={() => setShowForm(false)}>
-          <div className="vn-modal" style={{ maxWidth: 720 }} onClick={e => e.stopPropagation()}>
-            <div className="vn-modal-header">
-              <h2>{editing ? 'Edit Shipment Type' : 'New Shipment Type'}</h2>
-              <button className="vn-btn-icon" onClick={() => setShowForm(false)}>
-                <span className="material-icons">close</span>
-              </button>
-            </div>
-            <div className="vn-modal-body">
-              {error && <div className="vn-alert vn-alert-error" style={{ marginBottom: 12 }}>{error}</div>}
+      <Dialog open={showForm} onOpenChange={setShowForm}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>{editing ? 'Edit shipment type' : 'New shipment type'}</DialogTitle>
+          </DialogHeader>
 
-              <div className="vn-form-section">
-                <div className="vn-form-grid">
-                  <div className="vn-field">
-                    <label className="vn-field-label">Name</label>
-                    <input className="vn-input" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Weekly Dallas Reefer" />
-                  </div>
-                  <div className="vn-field">
-                    <label className="vn-field-label">Description</label>
-                    <input className="vn-input" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Optional" />
-                  </div>
+          <div className="space-y-6">
+            {error && (
+              <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+                {error}
+              </div>
+            )}
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Name</Label>
+                <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Weekly Dallas Reefer" />
+              </div>
+              <div className="space-y-2">
+                <Label>Description</Label>
+                <Input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Optional" />
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold">Icon and color</h3>
+              <div className="flex flex-wrap gap-2">
+                {ICON_CHOICES.map(icon => (
+                  <button
+                    key={icon}
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, icon }))}
+                    title={icon}
+                    className={cn(
+                      'flex h-12 w-12 items-center justify-center rounded-md border-2',
+                      form.icon === icon ? 'border-primary' : 'border-border bg-background',
+                    )}
+                    style={{
+                      borderColor: form.icon === icon ? form.color : undefined,
+                      background: form.icon === icon ? `${form.color}20` : undefined,
+                    }}
+                  >
+                    <IconRender name={icon} className="h-6 w-6" style={{ color: form.icon === icon ? form.color : undefined }} />
+                  </button>
+                ))}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {COLOR_CHOICES.map(color => (
+                  <button
+                    key={color}
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, color }))}
+                    title={color}
+                    className={cn('h-8 w-8 rounded-full border-2', form.color === color ? 'border-foreground' : 'border-border')}
+                    style={{ background: color }}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <h3 className="flex items-center gap-2 text-sm font-semibold">
+                <Sparkles className="h-4 w-4" />
+                Default values
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                Pre-fill the new shipment form with these values. The user can still change them.
+              </p>
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className="space-y-2">
+                  <Label>Default customer</Label>
+                  <Select value={form.defaultCustomerId || 'none'} onValueChange={v => setForm(f => ({ ...f, defaultCustomerId: v === 'none' ? '' : v }))}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
+                      {customers.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Default origin</Label>
+                  <Select value={form.defaultOriginId || 'none'} onValueChange={v => setForm(f => ({ ...f, defaultOriginId: v === 'none' ? '' : v }))}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
+                      {locations.map(l => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Default destination</Label>
+                  <Select value={form.defaultDestinationId || 'none'} onValueChange={v => setForm(f => ({ ...f, defaultDestinationId: v === 'none' ? '' : v }))}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
+                      {locations.map(l => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
+            </div>
 
-              <div className="vn-form-section">
-                <h3 className="vn-form-section-title"><span className="material-icons">palette</span>Icon &amp; Color</h3>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
-                  {ICON_CHOICES.map(icon => (
-                    <button
-                      key={icon}
-                      onClick={() => setForm(f => ({ ...f, icon }))}
-                      title={icon}
-                      style={{
-                        width: 48, height: 48, borderRadius: 8,
-                        border: `2px solid ${form.icon === icon ? form.color : 'var(--outline-variant)'}`,
-                        background: form.icon === icon ? `${form.color}20` : 'var(--surface-container-lowest)',
-                        cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      }}
-                    >
-                      <span className="material-icons" style={{ color: form.icon === icon ? form.color : 'var(--on-surface-variant)' }}>{icon}</span>
-                    </button>
-                  ))}
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                  {COLOR_CHOICES.map(color => (
-                    <button
-                      key={color}
-                      onClick={() => setForm(f => ({ ...f, color }))}
-                      title={color}
-                      style={{
-                        width: 32, height: 32, borderRadius: '50%', background: color,
-                        border: form.color === color ? '3px solid var(--on-surface)' : '2px solid var(--outline-variant)',
-                        cursor: 'pointer',
-                      }}
+            <div className="space-y-3">
+              <h3 className="flex items-center gap-2 text-sm font-semibold">
+                <CheckSquare className="h-4 w-4" />
+                Required fields
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                These must be filled for a shipment of this type to leave draft. Users can still save drafts with missing fields.
+              </p>
+              <div className="flex flex-wrap gap-3">
+                {SELECTABLE_FIELDS.map(field => (
+                  <label key={field} className="flex cursor-pointer items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={form.requiredFields.includes(field)}
+                      onChange={() => toggleRequired(field)}
+                      className="h-4 w-4 rounded border border-input bg-background accent-primary"
                     />
-                  ))}
-                </div>
+                    {SHIPMENT_FIELD_LABELS[field] || field}
+                  </label>
+                ))}
               </div>
-
-              <div className="vn-form-section">
-                <h3 className="vn-form-section-title"><span className="material-icons">auto_awesome</span>Default values</h3>
-                <p style={{ fontSize: 13, color: 'var(--on-surface-variant)', marginTop: 0 }}>
-                  Pre-fill the new shipment form with these values. The user can still change them.
-                </p>
-                <div className="vn-form-grid">
-                  <div className="vn-field">
-                    <label className="vn-field-label">Default customer</label>
-                    <select className="vn-select" value={form.defaultCustomerId} onChange={e => setForm(f => ({ ...f, defaultCustomerId: e.target.value }))}>
-                      <option value="">— none —</option>
-                      {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                    </select>
-                  </div>
-                  <div className="vn-field">
-                    <label className="vn-field-label">Default origin</label>
-                    <select className="vn-select" value={form.defaultOriginId} onChange={e => setForm(f => ({ ...f, defaultOriginId: e.target.value }))}>
-                      <option value="">— none —</option>
-                      {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-                    </select>
-                  </div>
-                  <div className="vn-field">
-                    <label className="vn-field-label">Default destination</label>
-                    <select className="vn-select" value={form.defaultDestinationId} onChange={e => setForm(f => ({ ...f, defaultDestinationId: e.target.value }))}>
-                      <option value="">— none —</option>
-                      {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              <div className="vn-form-section">
-                <h3 className="vn-form-section-title"><span className="material-icons">rule</span>Required fields</h3>
-                <p style={{ fontSize: 13, color: 'var(--on-surface-variant)', marginTop: 0 }}>
-                  These must be filled for a shipment of this type to leave draft. Users can still save drafts with missing fields.
-                </p>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
-                  {SELECTABLE_FIELDS.map(field => (
-                    <label key={field} className="vn-checkbox" style={{ flex: '0 0 auto' }}>
-                      <input
-                        type="checkbox"
-                        checked={form.requiredFields.includes(field)}
-                        onChange={() => toggleRequired(field)}
-                      />
-                      {SHIPMENT_FIELD_LABELS[field] || field}
-                    </label>
-                  ))}
-                </div>
-              </div>
-            </div>
-            <div className="vn-modal-footer">
-              <button className="vn-btn vn-btn-outline" onClick={() => setShowForm(false)}>Cancel</button>
-              <button className="vn-btn vn-btn-primary" onClick={handleSave}>
-                <span className="material-icons">save</span>
-                {editing ? 'Save changes' : 'Create type'}
-              </button>
             </div>
           </div>
-        </div>
-      )}
-    </>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowForm(false)}>
+              <X className="h-4 w-4" />
+              Cancel
+            </Button>
+            <Button variant="gradient" onClick={handleSave}>
+              <Save className="h-4 w-4" />
+              {editing ? 'Save changes' : 'Create type'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }

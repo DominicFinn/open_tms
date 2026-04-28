@@ -1,5 +1,44 @@
 import React, { useState, useEffect } from 'react';
+import {
+  KeyRound,
+  CheckCircle2,
+  Plus,
+  Copy,
+  X,
+  ToggleLeft,
+  ToggleRight,
+  Trash2,
+  Loader2,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableHead,
+  TableRow,
+  TableCell,
+} from '@/components/ui/table';
+
+function Banner({ variant, children, onClose }: { variant: 'success' | 'error'; children: React.ReactNode; onClose?: () => void }) {
+  const tone =
+    variant === 'success'
+      ? 'border-success/30 bg-success/10 text-success'
+      : 'border-destructive/30 bg-destructive/10 text-destructive';
+  return (
+    <div className={`flex items-start justify-between gap-3 rounded-md border p-3 text-sm ${tone}`}>
+      <div className="flex-1">{children}</div>
+      {onClose && (
+        <button onClick={onClose} className="text-xs underline opacity-70 hover:opacity-100">Dismiss</button>
+      )}
+    </div>
+  );
+}
 
 export default function VNextApiKeys() {
   const [keys, setKeys] = useState<any[]>([]);
@@ -43,9 +82,7 @@ export default function VNextApiKeys() {
       if (!res.ok) throw new Error('Failed to create API key');
       const json = await res.json();
       const created = json.data;
-      if (created?.key) {
-        setCreatedKey(created.key);
-      }
+      if (created?.key) setCreatedKey(created.key);
       setNewKeyName('');
       setShowCreate(false);
       await loadKeys();
@@ -83,256 +120,192 @@ export default function VNextApiKeys() {
     }
   }
 
-  const filtered = keys.filter(k => {
-    if (!search) return true;
-    return k.name?.toLowerCase().includes(search.toLowerCase());
-  });
-
+  const filtered = keys.filter(k => !search || k.name?.toLowerCase().includes(search.toLowerCase()));
   const activeCount = keys.filter(k => k.active !== false).length;
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', padding: '48px' }}>
-        <div className="loading-spinner" />
+      <div className="flex justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
   return (
-    <>
-      <div className="vn-page-header">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1>API Keys</h1>
+          <h1 className="text-3xl font-bold tracking-tight">API keys</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Manage API keys for webhook ingestion and external integrations</p>
         </div>
-        <div className="vn-page-actions">
-          <button className="vn-btn vn-btn-primary" onClick={() => setShowCreate(true)}>
-            <span className="material-icons">add</span>
-            Create API Key
-          </button>
-        </div>
+        <Button variant="gradient" onClick={() => setShowCreate(true)}>
+          <Plus className="h-4 w-4" />
+          Create API key
+        </Button>
       </div>
 
-      {error && (
-        <div className="alert alert-error" style={{ marginBottom: 16 }}>
-          {error}
-        </div>
-      )}
+      {error && <Banner variant="error" onClose={() => setError('')}>{error}</Banner>}
 
       {createdKey && (
-        <div className="alert alert-success" style={{ marginBottom: 16 }}>
-          <div style={{ marginBottom: 8 }}>
-            <strong>API Key Created!</strong> Copy it now — it will not be shown again.
+        <Banner variant="success">
+          <div className="space-y-2">
+            <div><strong>API key created!</strong> Copy it now - it will not be shown again.</div>
+            <div className="flex flex-wrap items-center gap-2">
+              <code className="flex-1 break-all rounded bg-muted px-3 py-2 font-mono text-sm">{createdKey}</code>
+              <Button variant="outline" size="sm" onClick={() => navigator.clipboard?.writeText(createdKey)}>
+                <Copy className="h-4 w-4" />
+                Copy
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setCreatedKey('')}>
+                <X className="h-4 w-4" />
+                Dismiss
+              </Button>
+            </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <code style={{
-              fontFamily: 'monospace',
-              fontSize: 14,
-              background: 'var(--surface-container)',
-              padding: '8px 12px',
-              borderRadius: 4,
-              flex: 1,
-              wordBreak: 'break-all',
-            }}>
-              {createdKey}
-            </code>
-            <button
-              className="vn-btn vn-btn-outline"
-              onClick={() => {
-                navigator.clipboard?.writeText(createdKey);
-              }}
-            >
-              <span className="material-icons" style={{ fontSize: 18 }}>content_copy</span>
-              Copy
-            </button>
-            <button
-              className="vn-btn vn-btn-outline"
-              onClick={() => setCreatedKey('')}
-            >
-              Dismiss
-            </button>
-          </div>
-        </div>
+        </Banner>
       )}
 
       {showCreate && (
-        <div className="vn-card" style={{ marginBottom: 16 }}>
-          <div className="vn-card-header">
-            <h2>Create New API Key</h2>
-          </div>
-          <div className="vn-card-body">
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <input
-                className="vn-input"
-                placeholder="Key name (e.g. Production Webhook)"
+        <Card>
+          <CardHeader>
+            <CardTitle>Create new API key</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap items-center gap-2">
+              <Input
                 value={newKeyName}
                 onChange={e => setNewKeyName(e.target.value)}
-                style={{ flex: 1 }}
+                placeholder="Key name (e.g. Production Webhook)"
+                className="flex-1"
                 onKeyDown={e => e.key === 'Enter' && createKey()}
               />
-              <button
-                className="vn-btn vn-btn-primary"
-                onClick={createKey}
-                disabled={creating || !newKeyName.trim()}
-              >
+              <Button variant="gradient" onClick={createKey} disabled={creating || !newKeyName.trim()}>
                 {creating ? 'Creating...' : 'Create'}
-              </button>
-              <button className="vn-btn vn-btn-outline" onClick={() => { setShowCreate(false); setNewKeyName(''); }}>
-                Cancel
-              </button>
+              </Button>
+              <Button variant="outline" onClick={() => { setShowCreate(false); setNewKeyName(''); }}>Cancel</Button>
             </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       )}
 
-      {/* Stats */}
-      <div className="vn-stats">
-        <div className="vn-stat">
-          <div className="vn-stat-icon primary">
-            <span className="material-icons">vpn_key</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{keys.length}</div>
-            <div className="vn-stat-label">Total Keys</div>
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon success">
-            <span className="material-icons">check_circle</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{activeCount}</div>
-            <div className="vn-stat-label">Active</div>
-          </div>
-        </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Card>
+          <CardContent className="flex items-center gap-3 p-4">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <KeyRound className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="text-2xl font-semibold">{keys.length}</div>
+              <div className="text-xs text-muted-foreground">Total keys</div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="flex items-center gap-3 p-4">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-success/15 text-success">
+              <CheckCircle2 className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="text-2xl font-semibold">{activeCount}</div>
+              <div className="text-xs text-muted-foreground">Active</div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Webhook Endpoint */}
-      <div className="vn-card">
-        <div className="vn-card-header">
-          <h2>Webhook Endpoint</h2>
-        </div>
-        <div className="vn-card-body">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-            <div style={{
-              flex: 1,
-              fontFamily: 'monospace',
-              fontSize: 13,
-              background: 'var(--surface-container)',
-              border: '1px solid var(--outline-variant)',
-              borderRadius: 'var(--border-radius-sm)',
-              padding: '10px 14px',
-              color: 'var(--on-surface)',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}>
+      <Card>
+        <CardHeader>
+          <CardTitle>Webhook endpoint</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <code className="flex-1 truncate rounded-md border bg-muted px-3 py-2 font-mono text-sm">
               {API_URL}/api/v1/webhooks/inbound
-            </div>
-            <button
-              className="vn-btn vn-btn-outline"
-              onClick={() => navigator.clipboard?.writeText(`${API_URL}/api/v1/webhooks/inbound`)}
-            >
-              <span className="material-icons" style={{ fontSize: 18 }}>content_copy</span>
+            </code>
+            <Button variant="outline" onClick={() => navigator.clipboard?.writeText(`${API_URL}/api/v1/webhooks/inbound`)}>
+              <Copy className="h-4 w-4" />
               Copy
-            </button>
+            </Button>
           </div>
-          <div style={{ display: 'flex', gap: '24px', fontSize: 13, color: 'var(--on-surface-variant)' }}>
+          <div className="flex flex-wrap gap-6 text-sm text-muted-foreground">
             <div>
               <strong>Header:</strong>{' '}
-              <code style={{ background: 'var(--surface-container)', padding: '2px 6px', borderRadius: 4 }}>X-API-Key: &lt;your-key&gt;</code>
+              <code className="rounded bg-muted px-1.5 py-0.5">X-API-Key: &lt;your-key&gt;</code>
             </div>
             <div>
               <strong>Or:</strong>{' '}
-              <code style={{ background: 'var(--surface-container)', padding: '2px 6px', borderRadius: 4 }}>Authorization: Bearer &lt;your-key&gt;</code>
+              <code className="rounded bg-muted px-1.5 py-0.5">Authorization: Bearer &lt;your-key&gt;</code>
             </div>
           </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
-      {/* Keys Table */}
-      <div className="vn-card">
-        <div className="vn-card-header">
-          <h2>API Keys</h2>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <input
-              className="vn-input"
-              placeholder="Search keys..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              style={{ width: 200 }}
-            />
-          </div>
-        </div>
-        <div className="vn-card-body" style={{ padding: 0 }}>
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between gap-2">
+          <CardTitle>API keys</CardTitle>
+          <Input
+            placeholder="Search keys..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="w-56"
+          />
+        </CardHeader>
+        <CardContent className="p-0">
           {filtered.length === 0 ? (
-            <div className="vn-empty">
-              <span className="material-icons">vpn_key</span>
-              <h3>No API keys found</h3>
-              <p>Create an API key to get started with integrations.</p>
+            <div className="flex flex-col items-center gap-2 py-12 text-center text-muted-foreground">
+              <KeyRound className="h-8 w-8" />
+              <h3 className="text-base font-medium">No API keys found</h3>
+              <p className="text-sm">Create an API key to get started with integrations.</p>
             </div>
           ) : (
-            <div className="vn-table-wrap">
-              <table className="vn-table">
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Key</th>
-                    <th>Status</th>
-                    <th>Last Used</th>
-                    <th>Created</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map(k => (
-                    <tr key={k.id}>
-                      <td style={{ fontWeight: 500 }}>{k.name}</td>
-                      <td>
-                        <code style={{
-                          fontFamily: 'monospace',
-                          fontSize: 12,
-                          background: 'var(--surface-container)',
-                          padding: '2px 6px',
-                          borderRadius: 4,
-                        }}>
-                          {k.prefix || k.key?.slice(0, 12) || '****'}...
-                        </code>
-                      </td>
-                      <td>
-                        <span className={`vn-chip ${k.active !== false ? 'success' : 'error'}`}>
-                          {k.active !== false ? 'Active' : 'Inactive'}
-                        </span>
-                      </td>
-                      <td style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>
-                        {k.lastUsedAt ? new Date(k.lastUsedAt).toLocaleString() : 'Never'}
-                      </td>
-                      <td style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>
-                        {k.createdAt ? new Date(k.createdAt).toLocaleDateString() : '—'}
-                      </td>
-                      <td>
-                        <div style={{ display: 'flex', gap: '4px' }}>
-                          <button
-                            className="vn-btn-icon"
-                            title={k.active !== false ? 'Deactivate' : 'Activate'}
-                            onClick={() => toggleKey(k)}
-                          >
-                            <span className="material-icons" style={{ fontSize: 18 }}>
-                              {k.active !== false ? 'toggle_on' : 'toggle_off'}
-                            </span>
-                          </button>
-                          <button className="vn-btn-icon" title="Delete" onClick={() => deleteKey(k.id)}>
-                            <span className="material-icons" style={{ fontSize: 18, color: 'var(--error)' }}>delete</span>
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Key</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Last used</TableHead>
+                  <TableHead>Created</TableHead>
+                  <TableHead className="w-24">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filtered.map(k => (
+                  <TableRow key={k.id}>
+                    <TableCell className="font-medium">{k.name}</TableCell>
+                    <TableCell>
+                      <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
+                        {k.prefix || k.key?.slice(0, 12) || '****'}...
+                      </code>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={k.active !== false ? 'success' : 'destructive'}>
+                        {k.active !== false ? 'Active' : 'Inactive'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {k.lastUsedAt ? new Date(k.lastUsedAt).toLocaleString() : 'Never'}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {k.createdAt ? new Date(k.createdAt).toLocaleDateString() : '-'}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex gap-1">
+                        <Button variant="ghost" size="icon" title={k.active !== false ? 'Deactivate' : 'Activate'} onClick={() => toggleKey(k)}>
+                          {k.active !== false ? <ToggleRight className="h-4 w-4" /> : <ToggleLeft className="h-4 w-4" />}
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => deleteKey(k.id)}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           )}
-        </div>
-      </div>
-    </>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

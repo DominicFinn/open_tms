@@ -1,6 +1,29 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { ArrowLeft, Check, ChevronRight, CircleAlert, Loader2 } from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 
 interface PickLineDetail {
   id: string;
@@ -29,8 +52,18 @@ interface PickTaskDetail {
   createdAt: string;
 }
 
-function statusChip(s: string): string {
-  switch (s) { case 'pending': return 'vn-chip-secondary'; case 'assigned': return 'vn-chip-info'; case 'in_progress': return 'vn-chip-warning'; case 'picked': case 'completed': return 'vn-chip-success'; case 'short': case 'short_pick': return 'vn-chip-error'; case 'skipped': return 'vn-chip-secondary'; default: return 'vn-chip-secondary'; }
+type BadgeVariant = 'success' | 'info' | 'warning' | 'destructive' | 'muted' | 'secondary' | 'default';
+
+function statusVariant(s: string): BadgeVariant {
+  switch (s) {
+    case 'pending': return 'secondary';
+    case 'assigned': return 'info';
+    case 'in_progress': return 'warning';
+    case 'picked': case 'completed': return 'success';
+    case 'short': case 'short_pick': return 'destructive';
+    case 'skipped': return 'secondary';
+    default: return 'secondary';
+  }
 }
 
 function formatStatus(s: string): string {
@@ -44,7 +77,6 @@ export default function VNextWmsPickTaskDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Inline pick form
   const [pickingLineId, setPickingLineId] = useState<string | null>(null);
   const [pickForm, setPickForm] = useState({ pickedQuantity: '', shortPickAction: 'backorder' });
   const [picking, setPicking] = useState(false);
@@ -92,132 +124,195 @@ export default function VNextWmsPickTaskDetail() {
     finally { setPicking(false); }
   };
 
-  if (loading) return <div style={{ padding: '2rem', textAlign: 'center' }}><div className="vn-loading-spinner" /></div>;
-  if (!task) return <div className="vn-alert vn-alert-error">{error || 'Not found'}</div>;
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+  if (!task) {
+    return (
+      <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+        <CircleAlert className="h-5 w-5" />
+        {error || 'Not found'}
+      </div>
+    );
+  }
 
   const isActive = task.status !== 'completed' && task.status !== 'cancelled' && task.status !== 'short_pick';
   const nextLine = task.pickLines.find(l => l.status === 'pending');
 
   return (
-    <div>
-      <div className="vn-page-header">
-        <div>
-          <h1>Pick Task</h1>
-          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-            <span className="vn-table-id">{task.id.slice(0, 8)}</span>
-            <span className={`vn-chip ${statusChip(task.status)}`}>{formatStatus(task.status)}</span>
-            <span className="vn-chip vn-chip-primary">{formatStatus(task.pickType)}</span>
-            {task.wave && <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Wave: {task.wave.waveNumber}</span>}
+    <div className="space-y-6">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Link to="/wms/picking" className="hover:text-foreground">
+          <ArrowLeft className="inline h-4 w-4" /> Picking
+        </Link>
+        <ChevronRight className="h-3 w-3" />
+        <span>{task.id.slice(0, 8)}</span>
+      </div>
+
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Pick Task</h1>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <span className="font-mono text-sm font-semibold">{task.id.slice(0, 8)}</span>
+          <Badge variant={statusVariant(task.status)}>{formatStatus(task.status)}</Badge>
+          <Badge variant="default">{formatStatus(task.pickType)}</Badge>
+          {task.wave && <span className="text-sm text-muted-foreground">Wave: {task.wave.waveNumber}</span>}
+        </div>
+      </div>
+
+      {error && (
+        <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+          <CircleAlert className="h-5 w-5" />
+          {error}
+        </div>
+      )}
+
+      <Card>
+        <CardContent className="p-5">
+          <div className="mb-2 flex justify-between text-sm">
+            <span className="font-semibold">Progress</span>
+            <span className="text-muted-foreground">{task.completedLines}/{task.totalLines} lines</span>
           </div>
-        </div>
-      </div>
+          <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full rounded-full bg-success transition-all"
+              style={{ width: `${task.totalLines > 0 ? (task.completedLines / task.totalLines) * 100 : 0}%` }}
+            />
+          </div>
+        </CardContent>
+      </Card>
 
-      {error && <div className="vn-alert vn-alert-error" style={{ marginBottom: '1rem' }}>{error}</div>}
-
-      {/* Progress bar */}
-      <div className="vn-card" style={{ marginBottom: '1.5rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-          <span style={{ fontWeight: 600 }}>Progress</span>
-          <span style={{ color: 'var(--text-secondary)' }}>{task.completedLines}/{task.totalLines} lines</span>
-        </div>
-        <div style={{ height: '8px', background: 'var(--border)', borderRadius: '4px', overflow: 'hidden' }}>
-          <div style={{ width: `${task.totalLines > 0 ? (task.completedLines / task.totalLines) * 100 : 0}%`, height: '100%', background: 'var(--color-success)', borderRadius: '4px', transition: 'width 0.3s' }} />
-        </div>
-      </div>
-
-      {/* Next pick highlight */}
       {isActive && nextLine && (
-        <div className="vn-card" style={{ marginBottom: '1.5rem', borderLeft: '3px solid var(--color-primary)' }}>
-          <h3 style={{ margin: '0 0 0.5rem' }}>Next Pick</h3>
-          <div style={{ display: 'flex', gap: '2rem', alignItems: 'center', flexWrap: 'wrap' }}>
-            <div>
-              <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Bin</div>
-              <div style={{ fontSize: '1.3rem', fontWeight: 700, color: 'var(--color-primary)' }}>{nextLine.bin.label}</div>
-              <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{nextLine.bin.zone.name}</div>
-            </div>
-            <div>
-              <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>SKU</div>
-              <div style={{ fontSize: '1.1rem', fontWeight: 600 }}>{nextLine.sku}</div>
-            </div>
-            <div>
-              <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Qty</div>
-              <div style={{ fontSize: '1.1rem', fontWeight: 600 }}>{nextLine.requestedQuantity} {nextLine.uomCode}</div>
-            </div>
-            {nextLine.lotNumber && (
+        <Card className="border-l-4 border-l-primary">
+          <CardHeader>
+            <CardTitle>Next Pick</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap items-center gap-8">
               <div>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Lot</div>
-                <div>{nextLine.lotNumber}</div>
+                <div className="text-xs text-muted-foreground">Bin</div>
+                <div className="text-2xl font-bold text-primary">{nextLine.bin.label}</div>
+                <div className="text-xs text-muted-foreground">{nextLine.bin.zone.name}</div>
               </div>
-            )}
-            <button className="vn-btn vn-btn-primary" onClick={() => startPick(nextLine)}>
-              <span className="material-icons" style={{ fontSize: '18px', marginRight: '0.5rem' }}>check</span>
-              Confirm Pick
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Inline pick form */}
-      {pickingLineId && (
-        <div className="vn-card" style={{ marginBottom: '1rem', borderLeft: '3px solid var(--color-success)' }}>
-          <h3 style={{ margin: '0 0 0.75rem' }}>Record Pick</h3>
-          <form onSubmit={handlePick} style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
-            <div className="vn-field" style={{ flex: '0 0 120px' }}>
-              <label className="vn-field-label">Picked Qty</label>
-              <input className="vn-input" type="number" min="0" value={pickForm.pickedQuantity}
-                onChange={e => setPickForm({ ...pickForm, pickedQuantity: e.target.value })} autoFocus required />
+              <div>
+                <div className="text-xs text-muted-foreground">SKU</div>
+                <div className="text-lg font-semibold">{nextLine.sku}</div>
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">Qty</div>
+                <div className="text-lg font-semibold">{nextLine.requestedQuantity} {nextLine.uomCode}</div>
+              </div>
+              {nextLine.lotNumber && (
+                <div>
+                  <div className="text-xs text-muted-foreground">Lot</div>
+                  <div>{nextLine.lotNumber}</div>
+                </div>
+              )}
+              <Button variant="gradient" onClick={() => startPick(nextLine)}>
+                <Check className="h-4 w-4" />
+                Confirm Pick
+              </Button>
             </div>
-            {parseInt(pickForm.pickedQuantity) < (task.pickLines.find(l => l.id === pickingLineId)?.requestedQuantity ?? 0) && (
-              <div className="vn-field" style={{ flex: '0 0 150px' }}>
-                <label className="vn-field-label">Short Pick Action</label>
-                <select className="vn-input" value={pickForm.shortPickAction} onChange={e => setPickForm({ ...pickForm, shortPickAction: e.target.value })}>
-                  <option value="backorder">Backorder</option>
-                  <option value="cancel_line">Cancel Line</option>
-                </select>
-              </div>
-            )}
-            <button type="submit" className="vn-btn vn-btn-primary" disabled={picking}>{picking ? 'Saving...' : 'Confirm'}</button>
-            <button type="button" className="vn-btn vn-btn-outline" onClick={() => setPickingLineId(null)}>Cancel</button>
-          </form>
-        </div>
+          </CardContent>
+        </Card>
       )}
 
-      {/* Pick lines table */}
-      <div className="vn-card">
-        <h3 style={{ margin: '0 0 1rem' }}>Pick Lines (walk order)</h3>
-        <div className="vn-table-wrap">
-          <table className="vn-table">
-            <thead>
-              <tr><th>Seq</th><th>Bin</th><th>Zone</th><th>SKU</th><th>Requested</th><th>Picked</th><th>Lot</th><th>Status</th>{isActive && <th></th>}</tr>
-            </thead>
-            <tbody>
+      {pickingLineId && (
+        <Card className="border-l-4 border-l-success">
+          <CardHeader>
+            <CardTitle>Record Pick</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handlePick} className="flex flex-wrap items-end gap-3">
+              <div className="w-32 space-y-2">
+                <Label>Picked Qty</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={pickForm.pickedQuantity}
+                  onChange={e => setPickForm({ ...pickForm, pickedQuantity: e.target.value })}
+                  autoFocus
+                  required
+                />
+              </div>
+              {parseInt(pickForm.pickedQuantity) < (task.pickLines.find(l => l.id === pickingLineId)?.requestedQuantity ?? 0) && (
+                <div className="w-44 space-y-2">
+                  <Label>Short Pick Action</Label>
+                  <Select value={pickForm.shortPickAction} onValueChange={v => setPickForm({ ...pickForm, shortPickAction: v })}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="backorder">Backorder</SelectItem>
+                      <SelectItem value="cancel_line">Cancel Line</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              <Button variant="gradient" type="submit" disabled={picking}>{picking ? 'Saving...' : 'Confirm'}</Button>
+              <Button variant="outline" type="button" onClick={() => setPickingLineId(null)}>Cancel</Button>
+            </form>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Pick Lines (walk order)</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Seq</TableHead>
+                <TableHead>Bin</TableHead>
+                <TableHead>Zone</TableHead>
+                <TableHead>SKU</TableHead>
+                <TableHead>Requested</TableHead>
+                <TableHead>Picked</TableHead>
+                <TableHead>Lot</TableHead>
+                <TableHead>Status</TableHead>
+                {isActive && <TableHead></TableHead>}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {task.pickLines.map(line => (
-                <tr key={line.id} style={{ background: line.id === pickingLineId ? 'var(--surface-secondary)' : undefined }}>
-                  <td>{line.walkSequence}</td>
-                  <td><strong>{line.bin.label}</strong></td>
-                  <td style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{line.bin.zone.name}</td>
-                  <td>{line.sku}</td>
-                  <td>{line.requestedQuantity}</td>
-                  <td style={{ fontWeight: 600, color: line.pickedQuantity > 0 ? (line.pickedQuantity < line.requestedQuantity ? 'var(--color-warning)' : 'var(--color-success)') : undefined }}>
+                <TableRow key={line.id} className={cn(line.id === pickingLineId && 'bg-muted')}>
+                  <TableCell>{line.walkSequence}</TableCell>
+                  <TableCell className="font-mono text-sm font-semibold">{line.bin.label}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{line.bin.zone.name}</TableCell>
+                  <TableCell>{line.sku}</TableCell>
+                  <TableCell>{line.requestedQuantity}</TableCell>
+                  <TableCell
+                    className={cn(
+                      'font-semibold',
+                      line.pickedQuantity > 0 && (line.pickedQuantity < line.requestedQuantity ? 'text-warning' : 'text-success')
+                    )}
+                  >
                     {line.pickedQuantity}
-                  </td>
-                  <td>{line.lotNumber || '--'}</td>
-                  <td><span className={`vn-chip ${statusChip(line.status)}`}>{formatStatus(line.status)}</span></td>
+                  </TableCell>
+                  <TableCell>{line.lotNumber || '-'}</TableCell>
+                  <TableCell>
+                    <Badge variant={statusVariant(line.status)}>{formatStatus(line.status)}</Badge>
+                  </TableCell>
                   {isActive && (
-                    <td>
+                    <TableCell>
                       {line.status === 'pending' && (
-                        <button className="vn-btn vn-btn-outline" style={{ fontSize: '0.8rem', padding: '0.15rem 0.5rem' }} onClick={() => startPick(line)}>
+                        <Button variant="outline" size="sm" onClick={() => startPick(line)}>
                           Pick
-                        </button>
+                        </Button>
                       )}
-                    </td>
+                    </TableCell>
                   )}
-                </tr>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
     </div>
   );
 }

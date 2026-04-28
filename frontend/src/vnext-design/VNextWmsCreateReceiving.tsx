@@ -1,6 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { CircleAlert, Plus, X } from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 interface LocationOption { id: string; name: string; }
 interface BinOption { id: string; label: string; binType: string; }
@@ -15,7 +36,7 @@ export default function VNextWmsCreateReceiving() {
   const [form, setForm] = useState({
     locationId: '',
     receivingType: 'blind' as 'asn' | 'blind',
-    dockBinId: '',
+    dockBinId: 'none',
     crossDock: false,
     inboundShipmentId: '',
     carrierName: '',
@@ -23,7 +44,6 @@ export default function VNextWmsCreateReceiving() {
     sealNumber: '',
   });
 
-  // Blind receiving lines (added before task creation)
   const [lines, setLines] = useState<Array<{ sku: string; expectedQuantity: string; lotNumber: string }>>([]);
 
   useEffect(() => {
@@ -39,7 +59,6 @@ export default function VNextWmsCreateReceiving() {
       .catch(() => {});
   }, []);
 
-  // Load dock bins when location changes
   useEffect(() => {
     if (!form.locationId) { setDockBins([]); return; }
     fetch(`${API_URL}/api/v1/warehouse/bins?locationId=${form.locationId}`)
@@ -71,12 +90,11 @@ export default function VNextWmsCreateReceiving() {
     const payload: Record<string, unknown> = {
       locationId: form.locationId,
       receivingType: form.receivingType,
-      dockBinId: form.dockBinId || null,
+      dockBinId: form.dockBinId === 'none' ? null : form.dockBinId,
       crossDock: form.crossDock,
       inboundShipmentId: form.inboundShipmentId || null,
     };
 
-    // Include expected lines for ASN mode
     if (form.receivingType === 'asn' && lines.length > 0) {
       payload.expectedLines = lines
         .filter(l => l.sku.trim())
@@ -107,104 +125,148 @@ export default function VNextWmsCreateReceiving() {
   };
 
   return (
-    <div>
-      <div className="vn-page-header">
-        <div>
-          <h1>New Receiving Task</h1>
-          <p className="vn-page-subtitle">Receive inbound goods at a warehouse dock</p>
-        </div>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">New Receiving Task</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Receive inbound goods at a warehouse dock</p>
       </div>
 
-      {error && <div className="vn-alert vn-alert-error" style={{ marginBottom: '1rem' }}>{error}</div>}
-
-      <form onSubmit={handleSubmit} className="vn-card" style={{ maxWidth: '800px' }}>
-        <div className="vn-form-grid">
-          <div className="vn-field">
-            <label className="vn-field-label">Location *</label>
-            <select className="vn-input" value={form.locationId} onChange={e => setForm({ ...form, locationId: e.target.value })} required>
-              <option value="">Select warehouse...</option>
-              {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-            </select>
-          </div>
-
-          <div className="vn-field">
-            <label className="vn-field-label">Receiving Type *</label>
-            <select className="vn-input" value={form.receivingType} onChange={e => setForm({ ...form, receivingType: e.target.value as 'asn' | 'blind' })}>
-              <option value="blind">Blind Receiving</option>
-              <option value="asn">ASN-Based (Expected Items)</option>
-            </select>
-          </div>
-
-          <div className="vn-field">
-            <label className="vn-field-label">Dock Door</label>
-            <select className="vn-input" value={form.dockBinId} onChange={e => setForm({ ...form, dockBinId: e.target.value })}>
-              <option value="">No dock assigned</option>
-              {dockBins.map(b => <option key={b.id} value={b.id}>{b.label}</option>)}
-            </select>
-          </div>
-
-          <div className="vn-field">
-            <label className="vn-field-label">Inbound Shipment ID</label>
-            <input className="vn-input" value={form.inboundShipmentId} onChange={e => setForm({ ...form, inboundShipmentId: e.target.value })} placeholder="Optional" />
-          </div>
-
-          <div className="vn-field">
-            <label className="vn-field-label">Carrier Name</label>
-            <input className="vn-input" value={form.carrierName} onChange={e => setForm({ ...form, carrierName: e.target.value })} placeholder="Optional" />
-          </div>
-
-          <div className="vn-field">
-            <label className="vn-field-label">Trailer #</label>
-            <input className="vn-input" value={form.trailerNumber} onChange={e => setForm({ ...form, trailerNumber: e.target.value })} placeholder="Optional" />
-          </div>
-
-          <div className="vn-field" style={{ gridColumn: '1 / -1' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
-              <input type="checkbox" checked={form.crossDock} onChange={e => setForm({ ...form, crossDock: e.target.checked })} />
-              Cross-Dock (skip putaway to storage)
-            </label>
-          </div>
+      {error && (
+        <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+          <CircleAlert className="h-5 w-5" />
+          {error}
         </div>
+      )}
 
-        {/* Expected lines for ASN mode */}
-        {form.receivingType === 'asn' && (
-          <div style={{ marginTop: '1.5rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-              <h3 style={{ margin: 0 }}>Expected Items</h3>
-              <button type="button" className="vn-btn vn-btn-outline" onClick={addLine} style={{ fontSize: '0.85rem' }}>
-                <span className="material-icons" style={{ fontSize: '16px', marginRight: '0.3rem' }}>add</span>
-                Add Line
-              </button>
+      <form onSubmit={handleSubmit}>
+        <Card className="max-w-4xl">
+          <CardContent className="grid gap-4 p-6 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Location *</Label>
+              <Select value={form.locationId} onValueChange={v => setForm({ ...form, locationId: v })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select warehouse..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {locations.map(l => (
+                    <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-            {lines.length === 0 ? (
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>No expected items. Add lines to pre-populate what you expect to receive.</p>
-            ) : (
-              <div className="vn-table-wrap">
-                <table className="vn-table">
-                  <thead>
-                    <tr><th>SKU</th><th>Expected Qty</th><th>Lot #</th><th></th></tr>
-                  </thead>
-                  <tbody>
+
+            <div className="space-y-2">
+              <Label>Receiving Type *</Label>
+              <Select value={form.receivingType} onValueChange={v => setForm({ ...form, receivingType: v as 'asn' | 'blind' })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="blind">Blind Receiving</SelectItem>
+                  <SelectItem value="asn">ASN-Based (Expected Items)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Dock Door</Label>
+              <Select value={form.dockBinId} onValueChange={v => setForm({ ...form, dockBinId: v })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No dock assigned</SelectItem>
+                  {dockBins.map(b => (
+                    <SelectItem key={b.id} value={b.id}>{b.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Inbound Shipment ID</Label>
+              <Input value={form.inboundShipmentId} onChange={e => setForm({ ...form, inboundShipmentId: e.target.value })} placeholder="Optional" />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Carrier Name</Label>
+              <Input value={form.carrierName} onChange={e => setForm({ ...form, carrierName: e.target.value })} placeholder="Optional" />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Trailer #</Label>
+              <Input value={form.trailerNumber} onChange={e => setForm({ ...form, trailerNumber: e.target.value })} placeholder="Optional" />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={form.crossDock}
+                  onChange={e => setForm({ ...form, crossDock: e.target.checked })}
+                  className="h-4 w-4 rounded border border-input bg-background accent-primary"
+                />
+                Cross-Dock (skip putaway to storage)
+              </label>
+            </div>
+          </CardContent>
+        </Card>
+
+        {form.receivingType === 'asn' && (
+          <Card className="mt-6 max-w-4xl">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Expected Items</CardTitle>
+              <Button type="button" variant="outline" size="sm" onClick={addLine}>
+                <Plus className="h-4 w-4" />
+                Add Line
+              </Button>
+            </CardHeader>
+            <CardContent className="p-0">
+              {lines.length === 0 ? (
+                <p className="px-6 py-4 text-sm text-muted-foreground">
+                  No expected items. Add lines to pre-populate what you expect to receive.
+                </p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>SKU</TableHead>
+                      <TableHead>Expected Qty</TableHead>
+                      <TableHead>Lot #</TableHead>
+                      <TableHead></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {lines.map((line, i) => (
-                      <tr key={i}>
-                        <td><input className="vn-input" value={line.sku} onChange={e => updateLine(i, 'sku', e.target.value)} placeholder="SKU" style={{ minWidth: '120px' }} /></td>
-                        <td><input className="vn-input" type="number" min="1" value={line.expectedQuantity} onChange={e => updateLine(i, 'expectedQuantity', e.target.value)} style={{ width: '80px' }} /></td>
-                        <td><input className="vn-input" value={line.lotNumber} onChange={e => updateLine(i, 'lotNumber', e.target.value)} placeholder="Optional" /></td>
-                        <td><button type="button" className="vn-btn vn-btn-outline" onClick={() => removeLine(i)} style={{ padding: '0.25rem 0.5rem' }}><span className="material-icons" style={{ fontSize: '16px' }}>close</span></button></td>
-                      </tr>
+                      <TableRow key={i}>
+                        <TableCell>
+                          <Input value={line.sku} onChange={e => updateLine(i, 'sku', e.target.value)} placeholder="SKU" />
+                        </TableCell>
+                        <TableCell>
+                          <Input type="number" min="1" value={line.expectedQuantity} onChange={e => updateLine(i, 'expectedQuantity', e.target.value)} className="w-24" />
+                        </TableCell>
+                        <TableCell>
+                          <Input value={line.lotNumber} onChange={e => updateLine(i, 'lotNumber', e.target.value)} placeholder="Optional" />
+                        </TableCell>
+                        <TableCell>
+                          <Button type="button" variant="ghost" size="icon" onClick={() => removeLine(i)}>
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
         )}
 
-        <div className="vn-form-actions" style={{ marginTop: '1.5rem' }}>
-          <button type="button" className="vn-btn vn-btn-outline" onClick={() => navigate('/wms/receiving')}>Cancel</button>
-          <button type="submit" className="vn-btn vn-btn-primary" disabled={saving}>
+        <div className="mt-6 flex flex-wrap items-center justify-end gap-2">
+          <Button variant="outline" type="button" onClick={() => navigate('/wms/receiving')}>Cancel</Button>
+          <Button variant="gradient" type="submit" disabled={saving}>
             {saving ? 'Creating...' : 'Create Task'}
-          </button>
+          </Button>
         </div>
       </form>
     </div>

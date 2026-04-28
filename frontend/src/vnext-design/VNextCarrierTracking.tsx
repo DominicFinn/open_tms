@@ -5,7 +5,41 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import {
+  CircleAlert,
+  Eye,
+  Inbox,
+  Loader2,
+  MapPin,
+  Plane,
+  Plus,
+  Repeat,
+  Trash2,
+  Truck,
+  Wifi,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 
 interface CarrierTrackingIntegration {
   id: string;
@@ -31,25 +65,25 @@ const PROVIDER_LABELS: Record<string, string> = {
   manual: 'Manual',
 };
 
-const PROVIDER_ICONS: Record<string, string> = {
-  fedex: 'local_shipping',
-  ups: 'inventory_2',
-  dhl: 'flight',
-  easypost: 'all_inbox',
-  edi_214: 'swap_horiz',
-  manual: 'edit_note',
-};
+function providerIcon(provider: string) {
+  if (provider === 'dhl') return Plane;
+  if (provider === 'edi_214') return Repeat;
+  if (provider === 'easypost') return Inbox;
+  return Truck;
+}
 
-const STATUS_CHIP: Record<string, string> = {
-  active: 'vn-chip-success',
-  pending_setup: 'vn-chip-warning',
-  error: 'vn-chip-error',
-  disabled: 'vn-chip-secondary',
+type BadgeVariant = 'success' | 'warning' | 'destructive' | 'secondary' | 'muted';
+
+const STATUS_VARIANT: Record<string, BadgeVariant> = {
+  active: 'success',
+  pending_setup: 'warning',
+  error: 'destructive',
+  disabled: 'secondary',
 };
 
 const STATUS_LABELS: Record<string, string> = {
   active: 'Active',
-  pending_setup: 'Pending Setup',
+  pending_setup: 'Pending setup',
   error: 'Error',
   disabled: 'Disabled',
 };
@@ -70,8 +104,8 @@ export default function VNextCarrierTracking() {
   const [integrations, setIntegrations] = useState<CarrierTrackingIntegration[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [providerFilter, setProviderFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  const [providerFilter, setProviderFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [deleting, setDeleting] = useState<string | null>(null);
 
   const fetchIntegrations = useCallback(async () => {
@@ -119,165 +153,159 @@ export default function VNextCarrierTracking() {
   };
 
   const filtered = (integrations || []).filter(i => {
-    if (providerFilter && i.providerType !== providerFilter) return false;
-    if (statusFilter && i.status !== statusFilter) return false;
+    if (providerFilter !== 'all' && i.providerType !== providerFilter) return false;
+    if (statusFilter !== 'all' && i.status !== statusFilter) return false;
     return true;
   });
 
   if (loading) {
     return (
-      <div style={{ padding: '24px', textAlign: 'center' }}>
-        <div className="loading-spinner" />
+      <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <h3 className="text-lg font-medium">Loading...</h3>
       </div>
     );
   }
 
   return (
-    <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 700, color: 'var(--on-surface)' }}>
-            Carrier Tracking Integrations
-          </h1>
-          <p style={{ margin: '4px 0 0', fontSize: '14px', color: 'var(--on-surface-variant)' }}>
+          <h1 className="text-3xl font-bold tracking-tight">Carrier tracking integrations</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             {integrations.length} integration{integrations.length !== 1 ? 's' : ''} configured
           </p>
         </div>
-        <Link to="/integrations/carrier-tracking/setup" className="vn-btn" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <span className="material-icons" style={{ fontSize: '18px' }}>add</span>
-          Add Integration
-        </Link>
+        <Button variant="gradient" asChild>
+          <Link to="/integrations/carrier-tracking/setup">
+            <Plus className="h-4 w-4" />
+            Add integration
+          </Link>
+        </Button>
       </div>
 
-      {/* Error */}
       {error && (
-        <div className="vn-alert vn-alert-error" style={{ marginBottom: '16px' }}>
-          {error}
-          <button onClick={() => setError(null)} style={{ float: 'right', background: 'none', border: 'none', cursor: 'pointer', color: 'inherit' }}>
-            <span className="material-icons" style={{ fontSize: '16px' }}>close</span>
-          </button>
+        <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+          <CircleAlert className="h-5 w-5" />
+          <span className="flex-1">{error}</span>
+          <Button variant="ghost" size="sm" onClick={() => setError(null)}>Dismiss</Button>
         </div>
       )}
 
-      {/* Filters */}
-      <div className="vn-filters" style={{ marginBottom: '16px' }}>
-        <select
-          className="vn-filter-select"
-          value={providerFilter}
-          onChange={e => setProviderFilter(e.target.value)}
-        >
-          <option value="">All Providers</option>
-          {Object.entries(PROVIDER_LABELS).map(([val, label]) => (
-            <option key={val} value={val}>{label}</option>
-          ))}
-        </select>
-        <select
-          className="vn-filter-select"
-          value={statusFilter}
-          onChange={e => setStatusFilter(e.target.value)}
-        >
-          <option value="">All Statuses</option>
-          {Object.entries(STATUS_LABELS).map(([val, label]) => (
-            <option key={val} value={val}>{label}</option>
-          ))}
-        </select>
-      </div>
-
-      {/* Table */}
-      {filtered.length === 0 ? (
-        <div style={{ padding: '48px', textAlign: 'center', color: 'var(--on-surface-variant)', border: '2px dashed var(--outline-variant)', borderRadius: '8px' }}>
-          <span className="material-icons" style={{ fontSize: '48px', display: 'block', marginBottom: '8px', opacity: 0.4 }}>gps_off</span>
-          {integrations.length === 0 ? (
-            <>
-              <p style={{ margin: '0 0 12px', fontSize: '16px', fontWeight: 500 }}>No tracking integrations yet</p>
-              <p style={{ margin: 0, fontSize: '14px' }}>Set up a carrier tracking integration to start receiving real-time shipment updates.</p>
-              <Link to="/integrations/carrier-tracking/setup" className="vn-btn" style={{ marginTop: '16px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                <span className="material-icons" style={{ fontSize: '18px' }}>add</span>
-                Add Integration
-              </Link>
-            </>
-          ) : (
-            <p style={{ margin: 0 }}>No integrations match the current filters.</p>
-          )}
-        </div>
-      ) : (
-        <div className="vn-table-wrap">
-          <table className="vn-table">
-            <thead>
-              <tr>
-                <th>Carrier</th>
-                <th>Provider</th>
-                <th>Status</th>
-                <th>Last Polled</th>
-                <th>Errors</th>
-                <th style={{ width: '140px' }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(integration => (
-                <tr key={integration.id}>
-                  <td>
-                    <Link to={`/integrations/carrier-tracking/${integration.id}`} style={{ color: 'var(--primary)', textDecoration: 'none', fontWeight: 500 }}>
-                      {integration.carrierName}
-                    </Link>
-                  </td>
-                  <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span className="material-icons" style={{ fontSize: '18px', color: 'var(--primary)' }}>
-                        {PROVIDER_ICONS[integration.providerType] || 'local_shipping'}
-                      </span>
-                      <span>{PROVIDER_LABELS[integration.providerType] || integration.providerType}</span>
-                    </div>
-                  </td>
-                  <td>
-                    <span className={`vn-chip ${STATUS_CHIP[integration.status] || 'vn-chip-secondary'}`}>
-                      {STATUS_LABELS[integration.status] || integration.status}
-                    </span>
-                  </td>
-                  <td>
-                    <span className="vn-table-secondary">{timeAgo(integration.lastPolledAt)}</span>
-                  </td>
-                  <td>
-                    {integration.errorCount > 0 ? (
-                      <span style={{ color: 'var(--color-error)', fontWeight: 500 }}>{integration.errorCount}</span>
-                    ) : (
-                      <span className="vn-table-secondary">0</span>
-                    )}
-                  </td>
-                  <td>
-                    <div style={{ display: 'flex', gap: '4px' }}>
-                      <Link
-                        to={`/integrations/carrier-tracking/${integration.id}`}
-                        className="icon-btn"
-                        title="View details"
-                      >
-                        <span className="material-icons" style={{ fontSize: '18px' }}>visibility</span>
-                      </Link>
-                      <button
-                        className="icon-btn"
-                        title="Test connection"
-                        onClick={() => handleTest(integration.id)}
-                      >
-                        <span className="material-icons" style={{ fontSize: '18px' }}>wifi_tethering</span>
-                      </button>
-                      <button
-                        className="icon-btn"
-                        title="Delete"
-                        onClick={() => handleDelete(integration.id, integration.carrierName)}
-                        disabled={deleting === integration.id}
-                        style={{ color: 'var(--color-error)' }}
-                      >
-                        <span className="material-icons" style={{ fontSize: '18px' }}>delete</span>
-                      </button>
-                    </div>
-                  </td>
-                </tr>
+      <Card>
+        <div className="flex flex-wrap items-center gap-3 p-4">
+          <Select value={providerFilter} onValueChange={setProviderFilter}>
+            <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All providers</SelectItem>
+              {Object.entries(PROVIDER_LABELS).map(([val, label]) => (
+                <SelectItem key={val} value={val}>{label}</SelectItem>
               ))}
-            </tbody>
-          </table>
+            </SelectContent>
+          </Select>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All statuses</SelectItem>
+              {Object.entries(STATUS_LABELS).map(([val, label]) => (
+                <SelectItem key={val} value={val}>{label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
-      )}
+
+        <Separator />
+
+        {filtered.length === 0 ? (
+          <div className="flex flex-col items-center gap-3 py-12 text-muted-foreground">
+            <MapPin className="h-10 w-10 opacity-40" />
+            {integrations.length === 0 ? (
+              <>
+                <h3 className="text-base font-semibold">No tracking integrations yet</h3>
+                <p className="text-sm">Set up a carrier tracking integration to start receiving real-time shipment updates.</p>
+                <Button variant="gradient" asChild>
+                  <Link to="/integrations/carrier-tracking/setup">
+                    <Plus className="h-4 w-4" />
+                    Add integration
+                  </Link>
+                </Button>
+              </>
+            ) : (
+              <p className="text-sm">No integrations match the current filters.</p>
+            )}
+          </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Carrier</TableHead>
+                <TableHead>Provider</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Last polled</TableHead>
+                <TableHead>Errors</TableHead>
+                <TableHead className="w-[140px]">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filtered.map(integration => {
+                const Icon = providerIcon(integration.providerType);
+                return (
+                  <TableRow key={integration.id}>
+                    <TableCell>
+                      <Link to={`/integrations/carrier-tracking/${integration.id}`} className="font-medium text-primary hover:underline">
+                        {integration.carrierName}
+                      </Link>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Icon className="h-4 w-4 text-primary" />
+                        <span>{PROVIDER_LABELS[integration.providerType] || integration.providerType}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={STATUS_VARIANT[integration.status] || 'muted'}>
+                        {STATUS_LABELS[integration.status] || integration.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {timeAgo(integration.lastPolledAt)}
+                    </TableCell>
+                    <TableCell>
+                      {integration.errorCount > 0 ? (
+                        <span className="font-medium text-destructive">{integration.errorCount}</span>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">0</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex gap-1">
+                        <Button variant="ghost" size="icon" asChild title="View details">
+                          <Link to={`/integrations/carrier-tracking/${integration.id}`}>
+                            <Eye className="h-4 w-4" />
+                          </Link>
+                        </Button>
+                        <Button variant="ghost" size="icon" title="Test connection" onClick={() => handleTest(integration.id)}>
+                          <Wifi className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          title="Delete"
+                          onClick={() => handleDelete(integration.id, integration.carrierName)}
+                          disabled={deleting === integration.id}
+                          className={cn('text-destructive hover:text-destructive')}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        )}
+      </Card>
     </div>
   );
 }

@@ -1,29 +1,37 @@
 import React, { useState, useEffect } from 'react';
 import {
-  VnPageHeader,
-  VnTabs,
-  VnCard,
-  VnButton,
-  VnAlert,
-  VnField,
-  VnInput,
-  VnSelect,
-  VnFormGrid,
-  VnFormSection,
-  VnFormActions,
-} from './components';
+  Building2,
+  Briefcase,
+  Warehouse,
+  Bell,
+  Plug,
+  Palette,
+  Save,
+  Ruler,
+  Gavel,
+  MapPin,
+  Thermometer,
+  History,
+  QrCode,
+  Loader2,
+  Printer,
+  Copy,
+  ExternalLink,
+} from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
 import { API_URL } from '../api';
-
-const tabs = [
-  { key: 'general', label: 'General', icon: 'settings' },
-  { key: 'brokerage', label: 'Brokerage', icon: 'handshake' },
-  { key: 'warehouse', label: 'Warehouse', icon: 'warehouse' },
-  { key: 'notifications', label: 'Notifications', icon: 'notifications' },
-  { key: 'integrations', label: 'Integrations', icon: 'extension' },
-  { key: 'theme', label: 'Theme', icon: 'palette' },
-];
-
-/* ── Switch helper ──────────────────────────────────────── */
 
 function Switch({
   label,
@@ -35,19 +43,17 @@ function Switch({
   onChange: (v: boolean) => void;
 }) {
   return (
-    <label className="vn-switch">
+    <label className="inline-flex cursor-pointer items-center gap-2 text-sm">
       <input
         type="checkbox"
         checked={checked}
         onChange={e => onChange(e.target.checked)}
+        className="h-4 w-4 rounded border border-input bg-background accent-primary"
       />
-      <span className="vn-switch-track" />
       {label}
     </label>
   );
 }
-
-/* ── Radio helper ───────────────────────────────────────── */
 
 function RadioGroup({
   label,
@@ -63,37 +69,51 @@ function RadioGroup({
   onChange: (v: string) => void;
 }) {
   return (
-    <VnField label={label}>
-      <div style={{ display: 'flex', gap: '16px', marginTop: '4px' }}>
+    <div className="space-y-2">
+      <Label>{label}</Label>
+      <div className="flex flex-wrap gap-4">
         {options.map(opt => (
-          <label
-            key={opt.value}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              fontSize: '14px',
-              color: 'var(--on-surface)',
-              cursor: 'pointer',
-            }}
-          >
+          <label key={opt.value} className="inline-flex cursor-pointer items-center gap-2 text-sm">
             <input
               type="radio"
               name={name}
               value={opt.value}
               checked={value === opt.value}
               onChange={() => onChange(opt.value)}
-              style={{ accentColor: 'var(--primary)' }}
+              className="h-4 w-4 border border-input bg-background accent-primary"
             />
             {opt.label}
           </label>
         ))}
       </div>
-    </VnField>
+    </div>
   );
 }
 
-/* ── Tab Content ────────────────────────────────────────── */
+function Banner({
+  variant,
+  message,
+  onClose,
+}: {
+  variant: 'success' | 'error';
+  message: string;
+  onClose?: () => void;
+}) {
+  const tone =
+    variant === 'success'
+      ? 'border-success/30 bg-success/10 text-success'
+      : 'border-destructive/30 bg-destructive/10 text-destructive';
+  return (
+    <div className={`flex items-start justify-between gap-3 rounded-md border p-3 text-sm ${tone}`}>
+      <span>{message}</span>
+      {onClose && (
+        <button onClick={onClose} className="text-xs underline opacity-70 hover:opacity-100">
+          Dismiss
+        </button>
+      )}
+    </div>
+  );
+}
 
 function GeneralTab() {
   const [orgName, setOrgName] = useState('');
@@ -156,52 +176,85 @@ function GeneralTab() {
   };
 
   if (loading) {
-    return <div className="loading-spinner" style={{ margin: '40px auto' }} />;
+    return (
+      <div className="flex justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
   }
 
   return (
-    <>
+    <div className="space-y-6">
       {saveMessage && (
-        <VnAlert variant={saveMessage.variant} onClose={() => setSaveMessage(null)}>
-          {saveMessage.text}
-        </VnAlert>
+        <Banner variant={saveMessage.variant} message={saveMessage.text} onClose={() => setSaveMessage(null)} />
       )}
 
-      <VnFormSection title="Organization" icon="business">
-        <VnFormGrid>
-          <VnField label="Company Name" required>
-            <VnInput value={orgName} onChange={e => setOrgName(e.target.value)} />
-          </VnField>
-          <VnField label="Industry">
-            <VnSelect>
-              <option value="logistics">Logistics</option>
-              <option value="manufacturing">Manufacturing</option>
-              <option value="retail">Retail</option>
-            </VnSelect>
-          </VnField>
-          <VnField label="Timezone">
-            <VnSelect>
-              <option value="America/New_York">America / New York (ET)</option>
-              <option value="America/Chicago">America / Chicago (CT)</option>
-              <option value="America/Denver">America / Denver (MT)</option>
-              <option value="America/Los_Angeles">America / Los Angeles (PT)</option>
-              <option value="Europe/London">Europe / London (GMT)</option>
-              <option value="Europe/Berlin">Europe / Berlin (CET)</option>
-            </VnSelect>
-          </VnField>
-          <VnField label="Default Currency">
-            <VnSelect>
-              <option value="USD">USD</option>
-              <option value="EUR">EUR</option>
-              <option value="GBP">GBP</option>
-              <option value="CAD">CAD</option>
-            </VnSelect>
-          </VnField>
-        </VnFormGrid>
-      </VnFormSection>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Building2 className="h-4 w-4 text-primary" />
+            Organization
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label>Company name</Label>
+            <Input value={orgName} onChange={e => setOrgName(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>Industry</Label>
+            <Select defaultValue="logistics">
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="logistics">Logistics</SelectItem>
+                <SelectItem value="manufacturing">Manufacturing</SelectItem>
+                <SelectItem value="retail">Retail</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Timezone</Label>
+            <Select defaultValue="America/New_York">
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="America/New_York">America / New York (ET)</SelectItem>
+                <SelectItem value="America/Chicago">America / Chicago (CT)</SelectItem>
+                <SelectItem value="America/Denver">America / Denver (MT)</SelectItem>
+                <SelectItem value="America/Los_Angeles">America / Los Angeles (PT)</SelectItem>
+                <SelectItem value="Europe/London">Europe / London (GMT)</SelectItem>
+                <SelectItem value="Europe/Berlin">Europe / Berlin (CET)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Default currency</Label>
+            <Select defaultValue="USD">
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="USD">USD</SelectItem>
+                <SelectItem value="EUR">EUR</SelectItem>
+                <SelectItem value="GBP">GBP</SelectItem>
+                <SelectItem value="CAD">CAD</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
 
-      <VnFormSection title="Units of Measure" icon="straighten">
-        <VnFormGrid>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Ruler className="h-4 w-4 text-primary" />
+            Units of measure
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
           <RadioGroup
             label="Weight"
             name="weight"
@@ -228,8 +281,8 @@ function GeneralTab() {
             value={temperature}
             onChange={setTemperature}
             options={[
-              { value: 'C', label: 'Celsius (\u00B0C)' },
-              { value: 'F', label: 'Fahrenheit (\u00B0F)' },
+              { value: 'C', label: 'Celsius (°C)' },
+              { value: 'F', label: 'Fahrenheit (°F)' },
             ]}
           />
           <RadioGroup
@@ -242,63 +295,77 @@ function GeneralTab() {
               { value: 'mi', label: 'Miles (mi)' },
             ]}
           />
-        </VnFormGrid>
-      </VnFormSection>
+        </CardContent>
+      </Card>
 
-      <VnFormSection title="Carrier Tendering" icon="gavel">
-        <VnFormGrid>
-          <div className="vn-col-span-2">
-            <Switch
-              label="Auto-tender for laneless shipments"
-              checked={autoTenderEnabled}
-              onChange={setAutoTenderEnabled}
-            />
-            <p style={{ fontSize: '12px', color: 'var(--on-surface-variant)', marginTop: '4px', marginLeft: '28px' }}>
-              When enabled, a broadcast tender is automatically created for all carriers when a shipment is created without a lane or carrier assignment.
-            </p>
-          </div>
-        </VnFormGrid>
-      </VnFormSection>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Gavel className="h-4 w-4 text-primary" />
+            Carrier tendering
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <Switch
+            label="Auto-tender for laneless shipments"
+            checked={autoTenderEnabled}
+            onChange={setAutoTenderEnabled}
+          />
+          <p className="ml-6 text-xs text-muted-foreground">
+            When enabled, a broadcast tender is automatically created for all carriers when a shipment is created without a lane or carrier assignment.
+          </p>
+        </CardContent>
+      </Card>
 
-      <VnFormSection title="Location & Geofencing" icon="location_on">
-        <VnFormGrid>
-          <VnField label="Default Geofence Radius (meters)">
-            <VnInput
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <MapPin className="h-4 w-4 text-primary" />
+            Location and geofencing
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label>Default geofence radius (meters)</Label>
+            <Input
               type="number"
               value={String(defaultGeofenceRadius)}
               onChange={e => setDefaultGeofenceRadius(Number(e.target.value) || 200)}
             />
-          </VnField>
-          <div>
-            <p style={{ fontSize: '12px', color: 'var(--on-surface-variant)', marginTop: '8px' }}>
-              Default radius for geofence arrival criteria when new locations are auto-created. Applies to all new locations created via order/shipment ingestion.
-            </p>
           </div>
-        </VnFormGrid>
-      </VnFormSection>
+          <p className="self-end text-xs text-muted-foreground">
+            Default radius for geofence arrival criteria when new locations are auto-created.
+          </p>
+        </CardContent>
+      </Card>
 
-      <VnFormSection title="Cold Chain & Compliance" icon="thermostat">
-        <VnFormGrid>
-          <div className="vn-col-span-2">
-            <Switch
-              label="Auto-deliver shipment documents to customers on completion"
-              checked={autoDeliverDocs}
-              onChange={setAutoDeliverDocs}
-            />
-            <p style={{ fontSize: '12px', color: 'var(--on-surface-variant)', marginTop: '4px', marginLeft: '28px' }}>
-              When enabled, cold chain compliance reports and other shipment documents will be automatically sent to the customer when a shipment is delivered.
-            </p>
-          </div>
-        </VnFormGrid>
-      </VnFormSection>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Thermometer className="h-4 w-4 text-primary" />
+            Cold chain and compliance
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <Switch
+            label="Auto-deliver shipment documents to customers on completion"
+            checked={autoDeliverDocs}
+            onChange={setAutoDeliverDocs}
+          />
+          <p className="ml-6 text-xs text-muted-foreground">
+            When enabled, cold chain compliance reports and other shipment documents will be automatically sent to the customer when a shipment is delivered.
+          </p>
+        </CardContent>
+      </Card>
 
-      <VnFormActions>
-        <VnButton variant="outline">Cancel</VnButton>
-        <VnButton variant="primary" icon="save" onClick={handleSave} disabled={saving}>
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <Button variant="outline">Cancel</Button>
+        <Button variant="gradient" onClick={handleSave} disabled={saving}>
+          <Save className="h-4 w-4" />
           {saving ? 'Saving...' : 'Save'}
-        </VnButton>
-      </VnFormActions>
-    </>
+        </Button>
+      </div>
+    </div>
   );
 }
 
@@ -309,7 +376,6 @@ function NotificationsTab() {
     exceptionAlerts: true,
     dailyReport: false,
   });
-
   const [appPrefs, setAppPrefs] = useState({
     shipmentStatus: true,
     deliveryConfirmations: false,
@@ -317,108 +383,51 @@ function NotificationsTab() {
     dailyReport: false,
   });
 
-  const toggleEmail = (key: keyof typeof emailPrefs) =>
-    setEmailPrefs(p => ({ ...p, [key]: !p[key] }));
-
-  const toggleApp = (key: keyof typeof appPrefs) =>
-    setAppPrefs(p => ({ ...p, [key]: !p[key] }));
+  const toggleEmail = (key: keyof typeof emailPrefs) => setEmailPrefs(p => ({ ...p, [key]: !p[key] }));
+  const toggleApp = (key: keyof typeof appPrefs) => setAppPrefs(p => ({ ...p, [key]: !p[key] }));
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      <VnCard title="Email Notifications">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <Switch
-            label="Shipment status changes"
-            checked={emailPrefs.shipmentStatus}
-            onChange={() => toggleEmail('shipmentStatus')}
-          />
-          <Switch
-            label="Delivery confirmations"
-            checked={emailPrefs.deliveryConfirmations}
-            onChange={() => toggleEmail('deliveryConfirmations')}
-          />
-          <Switch
-            label="Exception alerts"
-            checked={emailPrefs.exceptionAlerts}
-            onChange={() => toggleEmail('exceptionAlerts')}
-          />
-          <Switch
-            label="Daily report"
-            checked={emailPrefs.dailyReport}
-            onChange={() => toggleEmail('dailyReport')}
-          />
-        </div>
-      </VnCard>
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Email notifications</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Switch label="Shipment status changes" checked={emailPrefs.shipmentStatus} onChange={() => toggleEmail('shipmentStatus')} />
+          <Switch label="Delivery confirmations" checked={emailPrefs.deliveryConfirmations} onChange={() => toggleEmail('deliveryConfirmations')} />
+          <Switch label="Exception alerts" checked={emailPrefs.exceptionAlerts} onChange={() => toggleEmail('exceptionAlerts')} />
+          <Switch label="Daily report" checked={emailPrefs.dailyReport} onChange={() => toggleEmail('dailyReport')} />
+        </CardContent>
+      </Card>
 
-      <VnCard title="In-App Notifications">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <Switch
-            label="Shipment status changes"
-            checked={appPrefs.shipmentStatus}
-            onChange={() => toggleApp('shipmentStatus')}
-          />
-          <Switch
-            label="Delivery confirmations"
-            checked={appPrefs.deliveryConfirmations}
-            onChange={() => toggleApp('deliveryConfirmations')}
-          />
-          <Switch
-            label="Exception alerts"
-            checked={appPrefs.exceptionAlerts}
-            onChange={() => toggleApp('exceptionAlerts')}
-          />
-          <Switch
-            label="Daily report"
-            checked={appPrefs.dailyReport}
-            onChange={() => toggleApp('dailyReport')}
-          />
-        </div>
-      </VnCard>
+      <Card>
+        <CardHeader>
+          <CardTitle>In-app notifications</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Switch label="Shipment status changes" checked={appPrefs.shipmentStatus} onChange={() => toggleApp('shipmentStatus')} />
+          <Switch label="Delivery confirmations" checked={appPrefs.deliveryConfirmations} onChange={() => toggleApp('deliveryConfirmations')} />
+          <Switch label="Exception alerts" checked={appPrefs.exceptionAlerts} onChange={() => toggleApp('exceptionAlerts')} />
+          <Switch label="Daily report" checked={appPrefs.dailyReport} onChange={() => toggleApp('dailyReport')} />
+        </CardContent>
+      </Card>
     </div>
   );
 }
 
 function IntegrationsTab() {
   return (
-    <VnCard>
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: '16px',
-          padding: '40px 20px',
-          textAlign: 'center',
-        }}
-      >
-        <span
-          className="material-icons"
-          style={{
-            fontSize: '48px',
-            color: 'var(--primary)',
-            background: 'var(--primary-container)',
-            borderRadius: '12px',
-            padding: '12px',
-          }}
-        >
-          extension
-        </span>
-        <span style={{ fontSize: '16px', fontWeight: 600, color: 'var(--on-surface)' }}>
-          Integrations are managed from the Integrations app
-        </span>
-        <a
-          href="/integrations"
-          style={{
-            color: 'var(--primary)',
-            fontSize: '14px',
-            fontWeight: 500,
-            textDecoration: 'none',
-          }}
-        >
-          Go to Integrations &rarr;
+    <Card>
+      <CardContent className="flex flex-col items-center gap-4 py-12 text-center">
+        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <Plug className="h-6 w-6" />
+        </div>
+        <p className="text-base font-semibold">Integrations are managed from the Integrations app</p>
+        <a href="/integrations" className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline">
+          Go to Integrations <ExternalLink className="h-3 w-3" />
         </a>
-      </div>
-    </VnCard>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -426,173 +435,51 @@ function ThemeTab() {
   const [primaryColor, setPrimaryColor] = useState('#1976d2');
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      <VnFormSection title="Branding" icon="brush">
-        <VnFormGrid>
-          <VnField label="System Name">
-            <VnInput defaultValue="Open TMS" />
-          </VnField>
-          <VnField label="Primary Color">
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Palette className="h-4 w-4 text-primary" />
+            Branding
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label>System name</Label>
+            <Input defaultValue="Open TMS" />
+          </div>
+          <div className="space-y-2">
+            <Label>Primary color</Label>
+            <div className="flex items-center gap-2">
               <input
                 type="color"
                 value={primaryColor}
                 onChange={e => setPrimaryColor(e.target.value)}
-                style={{
-                  width: '40px',
-                  height: '40px',
-                  border: '1px solid var(--outline-variant)',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  padding: '2px',
-                  background: 'var(--surface-container-lowest)',
-                }}
+                className="h-10 w-12 cursor-pointer rounded-md border border-input bg-background p-1"
               />
-              <VnInput
-                value={primaryColor}
-                onChange={e => setPrimaryColor(e.target.value)}
-                style={{ flex: 1 }}
-              />
+              <Input value={primaryColor} onChange={e => setPrimaryColor(e.target.value)} className="flex-1" />
             </div>
-          </VnField>
-          <VnField label="Logo" className="vn-col-span-2">
-            <div
-              style={{
-                border: '2px dashed var(--outline-variant)',
-                borderRadius: '12px',
-                padding: '32px',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: '8px',
-                color: 'var(--on-surface-variant)',
-                cursor: 'pointer',
-                transition: 'border-color 0.2s',
-              }}
-            >
-              <span className="material-icons" style={{ fontSize: '36px' }}>
-                cloud_upload
-              </span>
-              <span style={{ fontSize: '14px', fontWeight: 500 }}>
-                Click to upload or drag and drop
-              </span>
-              <span style={{ fontSize: '12px' }}>SVG, PNG, or JPG (max 2MB)</span>
+          </div>
+          <div className="space-y-2 md:col-span-2">
+            <Label>Logo</Label>
+            <div className="flex flex-col items-center gap-2 rounded-md border-2 border-dashed border-input bg-background py-8 text-center text-sm text-muted-foreground">
+              <span className="font-medium">Click to upload or drag and drop</span>
+              <span className="text-xs">SVG, PNG, or JPG (max 2MB)</span>
             </div>
-          </VnField>
-        </VnFormGrid>
-      </VnFormSection>
+          </div>
+        </CardContent>
+      </Card>
 
-      <VnCard title="Preview">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span style={{ fontSize: '14px', color: 'var(--on-surface-variant)' }}>
-              Primary color:
-            </span>
-            <div
-              style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: '8px',
-                background: primaryColor,
-              }}
-            />
-            <span
-              style={{
-                fontSize: '13px',
-                fontFamily: 'monospace',
-                color: 'var(--on-surface-variant)',
-              }}
-            >
-              {primaryColor}
-            </span>
-          </div>
-          <div
-            style={{
-              display: 'flex',
-              gap: '12px',
-              flexWrap: 'wrap',
-            }}
-          >
-            <button
-              style={{
-                background: primaryColor,
-                color: 'var(--on-primary)',
-                border: 'none',
-                borderRadius: '8px',
-                padding: '8px 20px',
-                fontSize: '14px',
-                fontWeight: 500,
-                cursor: 'pointer',
-              }}
-            >
-              Primary Button
-            </button>
-            <button
-              style={{
-                background: 'transparent',
-                color: primaryColor,
-                border: `1px solid ${primaryColor}`,
-                borderRadius: '8px',
-                padding: '8px 20px',
-                fontSize: '14px',
-                fontWeight: 500,
-                cursor: 'pointer',
-              }}
-            >
-              Outline Button
-            </button>
-          </div>
-          <div
-            style={{
-              background: 'var(--surface-container-low)',
-              borderRadius: '12px',
-              padding: '16px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-            }}
-          >
-            <div
-              style={{
-                width: '8px',
-                height: '40px',
-                borderRadius: '4px',
-                background: primaryColor,
-              }}
-            />
-            <div>
-              <div
-                style={{
-                  fontSize: '14px',
-                  fontWeight: 600,
-                  color: 'var(--on-surface)',
-                }}
-              >
-                Sample Navigation Item
-              </div>
-              <div
-                style={{
-                  fontSize: '12px',
-                  color: 'var(--on-surface-variant)',
-                  marginTop: '2px',
-                }}
-              >
-                This shows how the primary color appears in the sidebar
-              </div>
-            </div>
-          </div>
-        </div>
-      </VnCard>
-
-      <VnFormActions>
-        <VnButton variant="outline">Cancel</VnButton>
-        <VnButton variant="primary" icon="save">Save Theme</VnButton>
-      </VnFormActions>
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <Button variant="outline">Cancel</Button>
+        <Button variant="gradient">
+          <Save className="h-4 w-4" />
+          Save theme
+        </Button>
+      </div>
     </div>
   );
 }
-
-/* ── Brokerage Tab ────────────────────────────────────── */
 
 function BrokerageTab() {
   const [orgType, setOrgType] = useState('shipper');
@@ -651,61 +538,91 @@ function BrokerageTab() {
     }
   };
 
-  if (loading) return <div className="loading-spinner" style={{ margin: '40px auto' }} />;
+  if (loading) {
+    return (
+      <div className="flex justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   const isBroker = orgType === 'broker' || orgType === '3pl';
 
   return (
-    <VnCard>
-      <VnFormSection title="Organization Type">
-        <VnFormGrid>
-          <VnField label="Organization Type">
-            <VnSelect value={orgType} onChange={e => setOrgType(e.target.value)}>
-              <option value="shipper">Shipper</option>
-              <option value="broker">Broker</option>
-              <option value="carrier">Carrier</option>
-              <option value="3pl">3PL</option>
-            </VnSelect>
-          </VnField>
-        </VnFormGrid>
-        <p style={{ fontSize: 13, color: 'var(--on-surface-variant)', marginTop: 8 }}>
-          This determines the default UI experience and available features. Brokers and 3PLs get the load board,
-          margin tracking, and broker-specific workflows.
-        </p>
-      </VnFormSection>
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Organization type</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="space-y-2 md:max-w-sm">
+            <Label>Organization type</Label>
+            <Select value={orgType} onValueChange={setOrgType}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="shipper">Shipper</SelectItem>
+                <SelectItem value="broker">Broker</SelectItem>
+                <SelectItem value="carrier">Carrier</SelectItem>
+                <SelectItem value="3pl">3PL</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            This determines the default UI experience and available features. Brokers and 3PLs get the load board, margin tracking, and broker-specific workflows.
+          </p>
+        </CardContent>
+      </Card>
 
       {isBroker && (
         <>
-          <VnFormSection title="Authority & Compliance">
-            <VnFormGrid>
-              <VnField label="MC Number">
-                <VnInput value={mcNumber} onChange={e => setMcNumber(e.target.value)} placeholder="e.g. 123456" />
-              </VnField>
-              <VnField label="Operating Authority Status">
-                <VnSelect value={authorityStatus} onChange={e => setAuthorityStatus(e.target.value)}>
-                  <option value="active">Active</option>
-                  <option value="pending">Pending</option>
-                  <option value="revoked">Revoked</option>
-                </VnSelect>
-              </VnField>
-              <VnField label="Bond Amount ($)">
-                <VnInput type="number" step="0.01" value={bondAmount} onChange={e => setBondAmount(e.target.value)} placeholder="0.00" />
-              </VnField>
-              <VnField label="Bond Expiration">
-                <VnInput type="date" value={bondExpiration} onChange={e => setBondExpiration(e.target.value)} />
-              </VnField>
-            </VnFormGrid>
-          </VnFormSection>
+          <Card>
+            <CardHeader>
+              <CardTitle>Authority and compliance</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>MC number</Label>
+                <Input value={mcNumber} onChange={e => setMcNumber(e.target.value)} placeholder="e.g. 123456" />
+              </div>
+              <div className="space-y-2">
+                <Label>Operating authority status</Label>
+                <Select value={authorityStatus} onValueChange={setAuthorityStatus}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="revoked">Revoked</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Bond amount ($)</Label>
+                <Input type="number" step="0.01" value={bondAmount} onChange={e => setBondAmount(e.target.value)} placeholder="0.00" />
+              </div>
+              <div className="space-y-2">
+                <Label>Bond expiration</Label>
+                <Input type="date" value={bondExpiration} onChange={e => setBondExpiration(e.target.value)} />
+              </div>
+            </CardContent>
+          </Card>
 
-          <VnFormSection title="Margin Alerts">
-            <Switch label="Enable margin alerts" checked={marginAlertEnabled} onChange={setMarginAlertEnabled} />
-            <p style={{ fontSize: 13, color: 'var(--on-surface-variant)', margin: '8px 0 12px' }}>
-              When enabled, an issue is automatically created when a shipment's margin drops below the threshold.
-            </p>
-            {marginAlertEnabled && (
-              <VnFormGrid>
-                <VnField label="Minimum Margin (%)">
-                  <VnInput
+          <Card>
+            <CardHeader>
+              <CardTitle>Margin alerts</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Switch label="Enable margin alerts" checked={marginAlertEnabled} onChange={setMarginAlertEnabled} />
+              <p className="text-xs text-muted-foreground">
+                When enabled, an issue is automatically created when a shipment's margin drops below the threshold.
+              </p>
+              {marginAlertEnabled && (
+                <div className="space-y-2 md:max-w-xs">
+                  <Label>Minimum margin (%)</Label>
+                  <Input
                     type="number"
                     step="0.1"
                     min="0"
@@ -714,24 +631,26 @@ function BrokerageTab() {
                     onChange={e => setMinMarginPercent(e.target.value)}
                     placeholder="e.g. 10"
                   />
-                </VnField>
-              </VnFormGrid>
-            )}
-          </VnFormSection>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </>
       )}
 
-      {saveMessage && <VnAlert variant={saveMessage.variant}>{saveMessage.text}</VnAlert>}
-      <VnFormActions>
-        <VnButton onClick={handleSave} disabled={saving}>
-          {saving ? 'Saving...' : 'Save Brokerage Settings'}
-        </VnButton>
-      </VnFormActions>
-    </VnCard>
+      {saveMessage && (
+        <Banner variant={saveMessage.variant} message={saveMessage.text} onClose={() => setSaveMessage(null)} />
+      )}
+
+      <div className="flex justify-end">
+        <Button variant="gradient" onClick={handleSave} disabled={saving}>
+          <Save className="h-4 w-4" />
+          {saving ? 'Saving...' : 'Save brokerage settings'}
+        </Button>
+      </div>
+    </div>
   );
 }
-
-/* ── Warehouse Tab ─────────────────────────────────────── */
 
 function WarehouseTab() {
   const [magicLinksEnabled, setMagicLinksEnabled] = useState(true);
@@ -739,7 +658,6 @@ function WarehouseTab() {
   const [users, setUsers] = useState<any[]>([]);
   const [selectedUserId, setSelectedUserId] = useState('');
   const [generatedLink, setGeneratedLink] = useState('');
-  const [qrSvg, setQrSvg] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -749,13 +667,15 @@ function WarehouseTab() {
     Promise.all([
       fetch(`${API_URL}/api/v1/warehouse/settings`).then(r => r.json()),
       fetch(`${API_URL}/api/v1/organization/users`).then(r => r.json()).catch(() => ({ data: [] })),
-    ]).then(([settings, usersRes]) => {
-      if (settings.data) {
-        setMagicLinksEnabled(settings.data.magicLinksEnabled ?? true);
-        setScanMode(settings.data.warehouseScanMode || 'hid');
-      }
-      setUsers(usersRes.data || []);
-    }).finally(() => setLoading(false));
+    ])
+      .then(([settings, usersRes]) => {
+        if (settings.data) {
+          setMagicLinksEnabled(settings.data.magicLinksEnabled ?? true);
+          setScanMode(settings.data.warehouseScanMode || 'hid');
+        }
+        setUsers(usersRes.data || []);
+      })
+      .finally(() => setLoading(false));
   }, []);
 
   const handleSave = async () => {
@@ -780,7 +700,6 @@ function WarehouseTab() {
     if (!selectedUserId) return;
     setGenerating(true);
     setGeneratedLink('');
-    setQrSvg('');
     try {
       const res = await fetch(`${API_URL}/api/v1/warehouse/auth/magic-link/generate`, {
         method: 'POST',
@@ -789,10 +708,7 @@ function WarehouseTab() {
       });
       const json = await res.json();
       if (json.data?.token) {
-        const link = `${window.location.origin}/warehouse/login?token=${json.data.token}`;
-        setGeneratedLink(link);
-        // Generate QR code SVG inline (simple QR using a data URL approach)
-        setQrSvg(link);
+        setGeneratedLink(`${window.location.origin}/warehouse/login?token=${json.data.token}`);
       } else {
         setSaveMessage({ text: json.error || 'Failed to generate', variant: 'error' });
       }
@@ -832,103 +748,127 @@ function WarehouseTab() {
     printWindow.document.close();
   };
 
-  if (loading) return <div className="loading-spinner" style={{ margin: '40px auto' }} />;
+  if (loading) {
+    return (
+      <div className="flex justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
-    <>
+    <div className="space-y-6">
       {saveMessage && (
-        <VnAlert variant={saveMessage.variant} onClose={() => setSaveMessage(null)}>
-          {saveMessage.text}
-        </VnAlert>
+        <Banner variant={saveMessage.variant} message={saveMessage.text} onClose={() => setSaveMessage(null)} />
       )}
 
-      <VnFormSection title="Warehouse App Settings" icon="warehouse">
-        <VnFormGrid>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Warehouse className="h-4 w-4 text-primary" />
+            Warehouse app settings
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
           <div>
             <Switch
-              label="Magic Link Login (QR Codes)"
+              label="Magic link login (QR codes)"
               checked={magicLinksEnabled}
               onChange={setMagicLinksEnabled}
             />
-            <div style={{ fontSize: '12px', color: 'var(--on-surface-variant)', marginTop: '4px', marginLeft: '40px' }}>
+            <p className="ml-6 mt-1 text-xs text-muted-foreground">
               When enabled, admins can generate printable QR codes for warehouse users to log in without typing credentials.
-              Disable this if security concerns require password-only access.
-            </div>
+            </p>
           </div>
           <RadioGroup
-            label="Default Scanner Mode"
+            label="Default scanner mode"
             name="scanMode"
             options={[
-              { value: 'hid', label: 'Built-in Scanner (HID)' },
+              { value: 'hid', label: 'Built-in scanner (HID)' },
               { value: 'camera', label: 'Camera' },
             ]}
             value={scanMode}
             onChange={setScanMode}
           />
-        </VnFormGrid>
-      </VnFormSection>
+        </CardContent>
+      </Card>
 
-      <VnFormActions>
-        <VnButton variant="outline" onClick={() => window.location.reload()}>Reset</VnButton>
-        <VnButton variant="primary" icon="save" onClick={handleSave} disabled={saving}>
-          {saving ? 'Saving...' : 'Save Settings'}
-        </VnButton>
-      </VnFormActions>
+      <div className="flex justify-end gap-2">
+        <Button variant="outline" onClick={() => window.location.reload()}>Reset</Button>
+        <Button variant="gradient" onClick={handleSave} disabled={saving}>
+          <Save className="h-4 w-4" />
+          {saving ? 'Saving...' : 'Save settings'}
+        </Button>
+      </div>
 
       {magicLinksEnabled && (
-        <VnFormSection title="Generate Login QR Code" icon="qr_code">
-          <VnFormGrid>
-            <VnField label="Select User">
-              <VnSelect value={selectedUserId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedUserId(e.target.value)}>
-                <option value="">Choose a user...</option>
-                {users.map((u: any) => (
-                  <option key={u.id} value={u.id}>{u.firstName} {u.lastName} ({u.email})</option>
-                ))}
-              </VnSelect>
-            </VnField>
-            <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-              <VnButton
-                variant="primary"
-                icon="qr_code"
-                onClick={generateMagicLink}
-                disabled={!selectedUserId || generating}
-              >
-                {generating ? 'Generating...' : 'Generate QR Code'}
-              </VnButton>
-            </div>
-          </VnFormGrid>
-
-          {generatedLink && (
-            <VnCard className="vn-mt-3">
-              <div style={{ padding: '24px', textAlign: 'center' }}>
-                <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(generatedLink)}`}
-                  alt="Login QR Code"
-                  width={200}
-                  height={200}
-                  style={{ display: 'block', margin: '0 auto 16px' }}
-                />
-                <p style={{ fontSize: '12px', color: 'var(--on-surface-variant)', wordBreak: 'break-all', maxWidth: '400px', margin: '0 auto 16px' }}>
-                  {generatedLink}
-                </p>
-                <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
-                  <VnButton variant="outline" icon="content_copy" onClick={() => navigator.clipboard.writeText(generatedLink)}>
-                    Copy Link
-                  </VnButton>
-                  <VnButton variant="primary" icon="print" onClick={printQrCode}>
-                    Print QR Code
-                  </VnButton>
-                </div>
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <QrCode className="h-4 w-4 text-primary" />
+              Generate login QR code
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
+              <div className="space-y-2">
+                <Label>Select user</Label>
+                <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose a user..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {users.map((u: any) => (
+                      <SelectItem key={u.id} value={u.id}>{u.firstName} {u.lastName} ({u.email})</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-            </VnCard>
-          )}
-        </VnFormSection>
+              <Button variant="gradient" onClick={generateMagicLink} disabled={!selectedUserId || generating}>
+                <QrCode className="h-4 w-4" />
+                {generating ? 'Generating...' : 'Generate QR code'}
+              </Button>
+            </div>
+
+            {generatedLink && (
+              <Card>
+                <CardContent className="flex flex-col items-center gap-3 py-6">
+                  <img
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(generatedLink)}`}
+                    alt="Login QR Code"
+                    width={200}
+                    height={200}
+                  />
+                  <p className="max-w-md break-all text-center text-xs text-muted-foreground">{generatedLink}</p>
+                  <div className="flex gap-2">
+                    <Button variant="outline" onClick={() => navigator.clipboard.writeText(generatedLink)}>
+                      <Copy className="h-4 w-4" />
+                      Copy link
+                    </Button>
+                    <Button variant="gradient" onClick={printQrCode}>
+                      <Printer className="h-4 w-4" />
+                      Print QR code
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </CardContent>
+        </Card>
       )}
 
-      <VnFormSection title="Login Audit Log" icon="history">
-        <LoginAuditPreview />
-      </VnFormSection>
-    </>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <History className="h-4 w-4 text-primary" />
+            Login audit log
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <LoginAuditPreview />
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
@@ -944,43 +884,42 @@ function LoginAuditPreview() {
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <div className="loading-spinner" style={{ margin: '20px auto' }} />;
+  if (loading) {
+    return (
+      <div className="flex justify-center py-6">
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   if (logs.length === 0) {
-    return <p style={{ color: 'var(--on-surface-variant)', fontSize: '14px' }}>No login activity yet.</p>;
+    return <p className="text-sm text-muted-foreground">No login activity yet.</p>;
   }
 
   return (
-    <div className="vn-table-wrap" style={{ maxHeight: '300px', overflow: 'auto' }}>
-      <table className="vn-table">
-        <thead>
+    <div className="max-h-72 overflow-auto rounded-md border">
+      <table className="w-full text-sm">
+        <thead className="bg-muted text-xs uppercase tracking-wide text-muted-foreground">
           <tr>
-            <th>User</th>
-            <th>Method</th>
-            <th>Status</th>
-            <th>Time</th>
+            <th className="px-3 py-2 text-left">User</th>
+            <th className="px-3 py-2 text-left">Method</th>
+            <th className="px-3 py-2 text-left">Status</th>
+            <th className="px-3 py-2 text-left">Time</th>
           </tr>
         </thead>
         <tbody>
           {logs.map((log: any) => (
-            <tr key={log.id}>
-              <td>{log.user?.firstName} {log.user?.lastName}</td>
-              <td>
-                <span style={{
-                  display: 'inline-flex', alignItems: 'center', gap: '4px',
-                  fontSize: '12px', padding: '2px 8px', borderRadius: '12px',
-                  background: log.method === 'magic_link' ? 'var(--primary-container)' : 'var(--surface-container)',
-                  color: log.method === 'magic_link' ? 'var(--on-primary-container)' : 'var(--on-surface)',
-                }}>
+            <tr key={log.id} className="border-t">
+              <td className="px-3 py-2">{log.user?.firstName} {log.user?.lastName}</td>
+              <td className="px-3 py-2">
+                <Badge variant={log.method === 'magic_link' ? 'info' : 'secondary'}>
                   {log.method === 'magic_link' ? 'QR / Magic Link' : log.method === 'password' ? 'Password' : log.method}
-                </span>
+                </Badge>
               </td>
-              <td>
-                <span style={{ color: log.success ? 'var(--color-success)' : 'var(--error)' }}>
-                  {log.success ? 'Success' : `Failed (${log.failReason})`}
-                </span>
+              <td className={`px-3 py-2 ${log.success ? 'text-success' : 'text-destructive'}`}>
+                {log.success ? 'Success' : `Failed (${log.failReason})`}
               </td>
-              <td style={{ fontSize: '12px', color: 'var(--on-surface-variant)' }}>
+              <td className="px-3 py-2 text-xs text-muted-foreground">
                 {new Date(log.createdAt).toLocaleString()}
               </td>
             </tr>
@@ -991,25 +930,34 @@ function LoginAuditPreview() {
   );
 }
 
-/* ── Main Page ──────────────────────────────────────────── */
-
 export default function VNextSettings() {
-  const [activeTab, setActiveTab] = useState('general');
-
   return (
-    <div className="vn-page">
-      <VnPageHeader title="Settings" subtitle="Manage your organization preferences and integrations" />
-
-      <VnTabs tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} />
-
-      <div style={{ marginTop: '24px' }}>
-        {activeTab === 'general' && <GeneralTab />}
-        {activeTab === 'brokerage' && <BrokerageTab />}
-        {activeTab === 'warehouse' && <WarehouseTab />}
-        {activeTab === 'notifications' && <NotificationsTab />}
-        {activeTab === 'integrations' && <IntegrationsTab />}
-        {activeTab === 'theme' && <ThemeTab />}
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Manage your organization preferences and integrations
+          </p>
+        </div>
       </div>
+
+      <Tabs defaultValue="general">
+        <TabsList>
+          <TabsTrigger value="general"><Building2 className="mr-1 h-4 w-4" />General</TabsTrigger>
+          <TabsTrigger value="brokerage"><Briefcase className="mr-1 h-4 w-4" />Brokerage</TabsTrigger>
+          <TabsTrigger value="warehouse"><Warehouse className="mr-1 h-4 w-4" />Warehouse</TabsTrigger>
+          <TabsTrigger value="notifications"><Bell className="mr-1 h-4 w-4" />Notifications</TabsTrigger>
+          <TabsTrigger value="integrations"><Plug className="mr-1 h-4 w-4" />Integrations</TabsTrigger>
+          <TabsTrigger value="theme"><Palette className="mr-1 h-4 w-4" />Theme</TabsTrigger>
+        </TabsList>
+        <TabsContent value="general" className="mt-6"><GeneralTab /></TabsContent>
+        <TabsContent value="brokerage" className="mt-6"><BrokerageTab /></TabsContent>
+        <TabsContent value="warehouse" className="mt-6"><WarehouseTab /></TabsContent>
+        <TabsContent value="notifications" className="mt-6"><NotificationsTab /></TabsContent>
+        <TabsContent value="integrations" className="mt-6"><IntegrationsTab /></TabsContent>
+        <TabsContent value="theme" className="mt-6"><ThemeTab /></TabsContent>
+      </Tabs>
     </div>
   );
 }

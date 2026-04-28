@@ -1,5 +1,27 @@
 import { useEffect, useState } from 'react';
+import { CircleAlert, Loader2, Plus } from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 interface Appointment {
   id: string;
@@ -18,12 +40,14 @@ interface Appointment {
 interface LocationLite { id: string; name: string; }
 interface BinLite { id: string; label: string; binType: string; }
 
-function statusChip(s: string): string {
-  const m: Record<string, string> = {
+type BadgeVariant = 'success' | 'info' | 'warning' | 'destructive' | 'muted' | 'secondary' | 'default';
+
+function statusVariant(s: string): BadgeVariant {
+  const m: Record<string, BadgeVariant> = {
     scheduled: 'info', checked_in: 'warning', receiving: 'warning',
-    completed: 'success', no_show: 'error', cancelled: 'secondary',
+    completed: 'success', no_show: 'destructive', cancelled: 'secondary',
   };
-  return `vn-chip-${m[s] || 'secondary'}`;
+  return m[s] || 'secondary';
 }
 
 export default function VNextWmsReceivingAppointments() {
@@ -40,7 +64,7 @@ export default function VNextWmsReceivingAppointments() {
   const empty = {
     scheduledAt: '', scheduledEndAt: '',
     carrierName: '', trailerNumber: '', sealNumber: '', asnReference: '',
-    dockBinId: '',
+    dockBinId: 'unassigned',
   };
   const [form, setForm] = useState(empty);
 
@@ -90,7 +114,7 @@ export default function VNextWmsReceivingAppointments() {
           trailerNumber: form.trailerNumber || undefined,
           sealNumber: form.sealNumber || undefined,
           asnReference: form.asnReference || undefined,
-          dockBinId: form.dockBinId || undefined,
+          dockBinId: form.dockBinId === 'unassigned' ? undefined : form.dockBinId,
         }),
       });
       const data = await res.json();
@@ -116,126 +140,159 @@ export default function VNextWmsReceivingAppointments() {
   };
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>Receiving Appointments</h1>
-          <p style={{ color: 'var(--text-secondary)', margin: 0 }}>Dock scheduling for inbound carriers with check-in workflow.</p>
+          <h1 className="text-3xl font-bold tracking-tight">Receiving Appointments</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Dock scheduling for inbound carriers with check-in workflow.</p>
         </div>
-        <button className="vn-btn vn-btn-primary" onClick={() => setShowCreate(v => !v)}>
-          <span className="material-icons">add</span> Schedule Appointment
-        </button>
+        <Button variant="gradient" onClick={() => setShowCreate(v => !v)}>
+          <Plus className="h-4 w-4" />
+          Schedule Appointment
+        </Button>
       </div>
 
-      {error && <div className="vn-alert vn-alert-error" style={{ marginBottom: 16 }}>{error}</div>}
-
-      <div className="vn-card" style={{ marginBottom: 16 }}>
-        <div className="vn-filters" style={{ padding: '8px 16px' }}>
-          <select className="vn-filter-select" value={selectedLocation} onChange={e => setSelectedLocation(e.target.value)}>
-            {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-          </select>
-          <input className="vn-filter-input" type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)} />
-        </div>
-      </div>
-
-      {showCreate && (
-        <div className="vn-card" style={{ padding: 16, marginBottom: 16 }}>
-          <h3 style={{ margin: '0 0 12px' }}>New Appointment</h3>
-          <div className="vn-form-grid" style={{ gap: 8 }}>
-            <div className="vn-field">
-              <label className="vn-field-label">Scheduled start *</label>
-              <input className="vn-input" type="datetime-local" value={form.scheduledAt} onChange={e => setForm(f => ({ ...f, scheduledAt: e.target.value }))} />
-            </div>
-            <div className="vn-field">
-              <label className="vn-field-label">Scheduled end *</label>
-              <input className="vn-input" type="datetime-local" value={form.scheduledEndAt} onChange={e => setForm(f => ({ ...f, scheduledEndAt: e.target.value }))} />
-            </div>
-            <div className="vn-field">
-              <label className="vn-field-label">Dock bin</label>
-              <select className="vn-input" value={form.dockBinId} onChange={e => setForm(f => ({ ...f, dockBinId: e.target.value }))}>
-                <option value="">-- unassigned --</option>
-                {bins.map(b => <option key={b.id} value={b.id}>{b.label}</option>)}
-              </select>
-            </div>
-            <div className="vn-field">
-              <label className="vn-field-label">Carrier name</label>
-              <input className="vn-input" value={form.carrierName} onChange={e => setForm(f => ({ ...f, carrierName: e.target.value }))} />
-            </div>
-            <div className="vn-field">
-              <label className="vn-field-label">Trailer number</label>
-              <input className="vn-input" value={form.trailerNumber} onChange={e => setForm(f => ({ ...f, trailerNumber: e.target.value }))} />
-            </div>
-            <div className="vn-field">
-              <label className="vn-field-label">Seal number</label>
-              <input className="vn-input" value={form.sealNumber} onChange={e => setForm(f => ({ ...f, sealNumber: e.target.value }))} />
-            </div>
-            <div className="vn-field" style={{ gridColumn: '1 / -1' }}>
-              <label className="vn-field-label">ASN reference</label>
-              <input className="vn-input" value={form.asnReference} onChange={e => setForm(f => ({ ...f, asnReference: e.target.value }))} placeholder="PO / BOL / ASN id" />
-            </div>
-          </div>
-          <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
-            <button className="vn-btn vn-btn-primary" onClick={handleCreate} disabled={busy === 'create'}>
-              {busy === 'create' ? 'Scheduling...' : 'Schedule'}
-            </button>
-            <button className="vn-btn vn-btn-outline" onClick={() => setShowCreate(false)}>Cancel</button>
-          </div>
+      {error && (
+        <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+          <CircleAlert className="h-5 w-5" />
+          {error}
         </div>
       )}
 
-      <div className="vn-card">
-        <div className="vn-table-wrap">
-          <table className="vn-table">
-            <thead>
-              <tr>
-                <th>Scheduled</th>
-                <th>Status</th>
-                <th>Dock</th>
-                <th>Carrier</th>
-                <th>Trailer / Seal</th>
-                <th>ASN Ref</th>
-                <th style={{ textAlign: 'right' }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading && <tr><td colSpan={7} style={{ textAlign: 'center', padding: 24 }}><div className="vn-loading-spinner" /></td></tr>}
-              {!loading && appointments.length === 0 && (
-                <tr><td colSpan={7} style={{ textAlign: 'center', padding: 24, color: 'var(--text-secondary)' }}>
-                  No appointments for this day.
-                </td></tr>
-              )}
-              {appointments.map(a => (
-                <tr key={a.id}>
-                  <td>
-                    <div style={{ fontWeight: 600 }}>{new Date(a.scheduledAt).toLocaleString()}</div>
-                    <div className="vn-table-secondary">to {new Date(a.scheduledEndAt).toLocaleTimeString()}</div>
-                  </td>
-                  <td><span className={`vn-chip ${statusChip(a.status)}`}>{a.status.replace('_', ' ')}</span></td>
-                  <td>{a.dockBin?.label ?? <span className="vn-table-secondary">-</span>}</td>
-                  <td>{a.carrierName ?? <span className="vn-table-secondary">-</span>}</td>
-                  <td>
-                    {a.trailerNumber ?? <span className="vn-table-secondary">-</span>}
-                    {a.sealNumber && <div className="vn-table-secondary" style={{ fontSize: 11 }}>seal {a.sealNumber}</div>}
-                  </td>
-                  <td>{a.asnReference ?? <span className="vn-table-secondary">-</span>}</td>
-                  <td style={{ textAlign: 'right' }}>
-                    {a.status === 'scheduled' && (
-                      <>
-                        <button className="vn-btn vn-btn-outline vn-btn-sm" onClick={() => handleCheckIn(a.id)} disabled={busy === a.id}>Check in</button>
-                        {' '}
-                        <button className="vn-btn vn-btn-outline vn-btn-sm" style={{ color: 'var(--color-error)' }} onClick={() => handleCancel(a.id)} disabled={busy === a.id}>Cancel</button>
-                      </>
-                    )}
-                    {a.status === 'checked_in' && (
-                      <span className="vn-chip vn-chip-warning">ready to receive</span>
-                    )}
-                  </td>
-                </tr>
+      <Card>
+        <CardContent className="flex flex-wrap items-center gap-2 p-4">
+          <Select value={selectedLocation} onValueChange={setSelectedLocation}>
+            <SelectTrigger className="w-[260px]">
+              <SelectValue placeholder="Select location" />
+            </SelectTrigger>
+            <SelectContent>
+              {locations.map(l => (
+                <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
               ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+            </SelectContent>
+          </Select>
+          <Input type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)} className="w-auto" />
+        </CardContent>
+      </Card>
+
+      {showCreate && (
+        <Card>
+          <CardHeader>
+            <CardTitle>New Appointment</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Scheduled start *</Label>
+              <Input type="datetime-local" value={form.scheduledAt} onChange={e => setForm(f => ({ ...f, scheduledAt: e.target.value }))} />
+            </div>
+            <div className="space-y-2">
+              <Label>Scheduled end *</Label>
+              <Input type="datetime-local" value={form.scheduledEndAt} onChange={e => setForm(f => ({ ...f, scheduledEndAt: e.target.value }))} />
+            </div>
+            <div className="space-y-2">
+              <Label>Dock bin</Label>
+              <Select value={form.dockBinId} onValueChange={v => setForm(f => ({ ...f, dockBinId: v }))}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="unassigned">-- unassigned --</SelectItem>
+                  {bins.map(b => (
+                    <SelectItem key={b.id} value={b.id}>{b.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Carrier name</Label>
+              <Input value={form.carrierName} onChange={e => setForm(f => ({ ...f, carrierName: e.target.value }))} />
+            </div>
+            <div className="space-y-2">
+              <Label>Trailer number</Label>
+              <Input value={form.trailerNumber} onChange={e => setForm(f => ({ ...f, trailerNumber: e.target.value }))} />
+            </div>
+            <div className="space-y-2">
+              <Label>Seal number</Label>
+              <Input value={form.sealNumber} onChange={e => setForm(f => ({ ...f, sealNumber: e.target.value }))} />
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <Label>ASN reference</Label>
+              <Input value={form.asnReference} onChange={e => setForm(f => ({ ...f, asnReference: e.target.value }))} placeholder="PO / BOL / ASN id" />
+            </div>
+            <div className="flex gap-2 md:col-span-2">
+              <Button variant="gradient" onClick={handleCreate} disabled={busy === 'create'}>
+                {busy === 'create' ? 'Scheduling...' : 'Schedule'}
+              </Button>
+              <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Scheduled</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Dock</TableHead>
+              <TableHead>Carrier</TableHead>
+              <TableHead>Trailer / Seal</TableHead>
+              <TableHead>ASN Ref</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading && (
+              <TableRow>
+                <TableCell colSpan={7} className="py-12 text-center">
+                  <Loader2 className="mx-auto h-6 w-6 animate-spin text-muted-foreground" />
+                </TableCell>
+              </TableRow>
+            )}
+            {!loading && appointments.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={7} className="py-12 text-center text-sm text-muted-foreground">
+                  No appointments for this day.
+                </TableCell>
+              </TableRow>
+            )}
+            {appointments.map(a => (
+              <TableRow key={a.id}>
+                <TableCell>
+                  <div className="font-semibold">{new Date(a.scheduledAt).toLocaleString()}</div>
+                  <div className="text-xs text-muted-foreground">to {new Date(a.scheduledEndAt).toLocaleTimeString()}</div>
+                </TableCell>
+                <TableCell>
+                  <Badge variant={statusVariant(a.status)}>{a.status.replace('_', ' ')}</Badge>
+                </TableCell>
+                <TableCell>{a.dockBin?.label ?? <span className="text-muted-foreground">-</span>}</TableCell>
+                <TableCell>{a.carrierName ?? <span className="text-muted-foreground">-</span>}</TableCell>
+                <TableCell>
+                  {a.trailerNumber ?? <span className="text-muted-foreground">-</span>}
+                  {a.sealNumber && <div className="text-xs text-muted-foreground">seal {a.sealNumber}</div>}
+                </TableCell>
+                <TableCell>{a.asnReference ?? <span className="text-muted-foreground">-</span>}</TableCell>
+                <TableCell className="text-right">
+                  {a.status === 'scheduled' && (
+                    <div className="inline-flex gap-2">
+                      <Button variant="outline" size="sm" onClick={() => handleCheckIn(a.id)} disabled={busy === a.id}>
+                        Check in
+                      </Button>
+                      <Button variant="outline" size="sm" className="text-destructive" onClick={() => handleCancel(a.id)} disabled={busy === a.id}>
+                        Cancel
+                      </Button>
+                    </div>
+                  )}
+                  {a.status === 'checked_in' && (
+                    <Badge variant="warning">ready to receive</Badge>
+                  )}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </Card>
     </div>
   );
 }

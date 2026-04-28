@@ -1,6 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { ArrowRight, CheckCircle2, Clock, Loader2, MapPin, SearchX, Truck } from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Logo } from '@/components/brand/Logo';
 
 interface TrackingData {
   reference: string;
@@ -27,13 +32,27 @@ interface TrackingData {
   currentLocation?: { lat: number; lng: number; asOf: string } | null;
 }
 
-function statusColor(s: string): string {
-  const m: Record<string, string> = { in_transit: 'var(--color-info)', delivered: 'var(--color-success)', booked: 'var(--color-warning)', exception: 'var(--color-error)', at_pickup: 'var(--color-warning)', at_delivery: 'var(--color-warning)' };
-  return m[s] || 'var(--on-surface-variant)';
+type StatusVariant = 'success' | 'info' | 'warning' | 'destructive' | 'muted';
+
+function statusVariant(s: string): StatusVariant {
+  const m: Record<string, StatusVariant> = {
+    in_transit: 'info',
+    delivered: 'success',
+    booked: 'warning',
+    exception: 'destructive',
+    at_pickup: 'warning',
+    at_delivery: 'warning',
+  };
+  return m[s] || 'muted';
 }
 
 function statusLabel(s: string): string {
   return s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function formatDate(d?: string): string {
+  if (!d) return '';
+  return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 export default function PublicTracking() {
@@ -54,118 +73,155 @@ export default function PublicTracking() {
       .finally(() => setLoading(false));
   }, [token]);
 
-  if (loading) return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--surface)' }}>
-      <div className="loading-spinner" />
-    </div>
-  );
-
-  if (error || !data) return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--surface)' }}>
-      <div style={{ textAlign: 'center', padding: 40 }}>
-        <span className="material-icons" style={{ fontSize: 64, color: 'var(--on-surface-variant)' }}>search_off</span>
-        <h2 style={{ margin: '16px 0 8px' }}>Tracking Not Found</h2>
-        <p style={{ color: 'var(--on-surface-variant)' }}>{error || 'This tracking link is invalid or has expired.'}</p>
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
-    </div>
-  );
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background bg-shell-gradient px-4">
+        <Card className="max-w-md border-border/50 bg-card/80 backdrop-blur-xl">
+          <CardContent className="flex flex-col items-center gap-3 p-8 text-center">
+            <SearchX className="h-16 w-16 text-muted-foreground" />
+            <h2 className="text-xl font-semibold">Tracking Not Found</h2>
+            <p className="text-sm text-muted-foreground">{error || 'This tracking link is invalid or has expired.'}</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--surface)' }}>
+    <div className="min-h-screen bg-background bg-shell-gradient">
       {/* Header */}
-      <div style={{ background: 'var(--surface-container)', borderBottom: '1px solid var(--outline-variant)', padding: '16px 0' }}>
-        <div style={{ maxWidth: 800, margin: '0 auto', padding: '0 24px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span className="material-icons" style={{ color: 'var(--primary)', fontSize: 28 }}>local_shipping</span>
-            <span style={{ fontWeight: 700, fontSize: 18 }}>Shipment Tracking</span>
-          </div>
+      <div className="border-b border-border bg-card/50 backdrop-blur-sm">
+        <div className="mx-auto flex max-w-3xl items-center gap-3 px-6 py-4">
+          <Logo size="md" showWordmark={false} />
+          <span className="text-lg font-bold">Shipment Tracking</span>
         </div>
       </div>
 
-      <div style={{ maxWidth: 800, margin: '0 auto', padding: 24 }}>
+      <div className="mx-auto max-w-3xl space-y-6 p-6">
         {/* Status banner */}
-        <div style={{
-          background: 'var(--surface-container)', borderRadius: 12, padding: 24, marginBottom: 24,
-          borderLeft: `4px solid ${statusColor(data.status)}`,
-          boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
-            <div>
-              <div style={{ fontSize: 13, color: 'var(--on-surface-variant)', marginBottom: 4 }}>Shipment Reference</div>
-              <div style={{ fontSize: 24, fontWeight: 700 }}>{data.reference}</div>
-              {data.proNumber && <div style={{ fontSize: 13, color: 'var(--on-surface-variant)', marginTop: 4 }}>PRO: {data.proNumber}</div>}
+        <Card className="border-l-4 border-l-info">
+          <CardContent className="p-6">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <div className="text-xs uppercase tracking-wider text-muted-foreground">Shipment Reference</div>
+                <div className="mt-1 text-2xl font-bold tracking-tight">{data.reference}</div>
+                {data.proNumber && (
+                  <div className="mt-1 text-sm text-muted-foreground">PRO: {data.proNumber}</div>
+                )}
+              </div>
+              <Badge variant={statusVariant(data.status)} className="text-sm">
+                {statusLabel(data.status)}
+              </Badge>
             </div>
-            <div style={{
-              padding: '8px 20px', borderRadius: 24,
-              background: 'var(--surface-container)',
-              color: statusColor(data.status),
-              fontWeight: 700, fontSize: 16,
-            }}>
-              {statusLabel(data.status)}
-            </div>
-          </div>
 
-          {/* Route */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 20 }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>Origin</div>
-              <div style={{ fontWeight: 600, fontSize: 16 }}>
-                {data.origin ? `${data.origin.city}, ${data.origin.state}` : '-'}
+            {/* Route */}
+            <div className="mt-6 flex items-center gap-4">
+              <div className="flex-1">
+                <div className="text-xs uppercase tracking-wider text-muted-foreground">Origin</div>
+                <div className="mt-0.5 text-base font-semibold">
+                  {data.origin ? `${data.origin.city}, ${data.origin.state}` : '-'}
+                </div>
+                {data.pickupDate && (
+                  <div className="text-xs text-muted-foreground">{formatDate(data.pickupDate)}</div>
+                )}
               </div>
-              {data.pickupDate && <div style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>{new Date(data.pickupDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div>}
-            </div>
-            <span className="material-icons" style={{ fontSize: 28, color: 'var(--on-surface-variant)' }}>east</span>
-            <div style={{ flex: 1, textAlign: 'right' }}>
-              <div style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>Destination</div>
-              <div style={{ fontWeight: 600, fontSize: 16 }}>
-                {data.destination ? `${data.destination.city}, ${data.destination.state}` : '-'}
+              <ArrowRight className="h-6 w-6 text-muted-foreground" />
+              <div className="flex-1 text-right">
+                <div className="text-xs uppercase tracking-wider text-muted-foreground">Destination</div>
+                <div className="mt-0.5 text-base font-semibold">
+                  {data.destination ? `${data.destination.city}, ${data.destination.state}` : '-'}
+                </div>
+                {data.deliveryDate && (
+                  <div className="text-xs text-muted-foreground">{formatDate(data.deliveryDate)}</div>
+                )}
               </div>
-              {data.deliveryDate && <div style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>{new Date(data.deliveryDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div>}
             </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
 
         {/* Stops timeline */}
         {data.stops.length > 0 && (
-          <div style={{ background: 'var(--surface-container)', borderRadius: 12, padding: 24, marginBottom: 24, boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
-            <h3 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 600 }}>Stops</h3>
-            {data.stops.map((stop, i) => (
-              <div key={i} style={{ display: 'flex', gap: 16, padding: '12px 0', borderBottom: i < data.stops.length - 1 ? '1px solid var(--outline-variant)' : 'none' }}>
-                <div style={{
-                  width: 32, height: 32, borderRadius: '50%',
-                  background: stop.status === 'completed' ? 'var(--color-success)' : stop.status === 'arrived' ? 'var(--primary)' : 'var(--outline-variant)',
-                  color: stop.status !== 'pending' ? 'var(--surface-container)' : 'var(--on-surface-variant)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 14, fontWeight: 700, flexShrink: 0,
-                }}>
-                  {stop.status === 'completed' ? <span className="material-icons" style={{ fontSize: 18 }}>check</span> : stop.sequenceNumber}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Stops</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {data.stops.map((stop, i) => (
+                <div
+                  key={i}
+                  className={`flex gap-4 px-6 py-3 ${i < data.stops.length - 1 ? 'border-b border-border' : ''}`}
+                >
+                  <div
+                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                      stop.status === 'completed'
+                        ? 'bg-success text-background'
+                        : stop.status === 'arrived'
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-muted text-muted-foreground'
+                    }`}
+                  >
+                    {stop.status === 'completed' ? <CheckCircle2 className="h-4 w-4" /> : stop.sequenceNumber}
+                  </div>
+                  <div className="flex-1">
+                    <div className="text-sm font-semibold">{stop.location?.name || `Stop ${stop.sequenceNumber}`}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {stop.location?.city}, {stop.location?.state} - {stop.stopType}
+                    </div>
+                    {stop.arrivedAt && (
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        Arrived: {new Date(stop.arrivedAt).toLocaleString()}
+                      </div>
+                    )}
+                    {stop.completedAt && (
+                      <div className="text-xs text-success">
+                        Completed: {new Date(stop.completedAt).toLocaleString()}
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 600, fontSize: 14 }}>{stop.location?.name || 'Stop ' + stop.sequenceNumber}</div>
-                  <div style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>{stop.location?.city}, {stop.location?.state} - {stop.stopType}</div>
-                  {stop.arrivedAt && <div style={{ fontSize: 11, color: 'var(--on-surface-variant)', marginTop: 2 }}>Arrived: {new Date(stop.arrivedAt).toLocaleString()}</div>}
-                  {stop.completedAt && <div style={{ fontSize: 11, color: 'var(--color-success)', marginTop: 1 }}>Completed: {new Date(stop.completedAt).toLocaleString()}</div>}
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </CardContent>
+          </Card>
         )}
 
         {/* Tracking events */}
         {data.events.length > 0 && (
-          <div style={{ background: 'var(--surface-container)', borderRadius: 12, padding: 24, boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
-            <h3 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 600 }}>Tracking Events</h3>
-            {data.events.map((evt, i) => (
-              <div key={i} style={{ display: 'flex', gap: 12, padding: '10px 0', borderBottom: i < data.events.length - 1 ? '1px solid var(--surface)' : 'none' }}>
-                <span className="material-icons" style={{ fontSize: 18, color: 'var(--on-surface-variant)', marginTop: 1 }}>schedule</span>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 500 }}>{evt.description || evt.eventType}</div>
-                  <div style={{ fontSize: 11, color: 'var(--on-surface-variant)' }}>{new Date(evt.createdAt).toLocaleString()}</div>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Tracking Events</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {data.events.map((evt, i) => (
+                <div
+                  key={i}
+                  className={`flex gap-3 px-6 py-3 ${i < data.events.length - 1 ? 'border-b border-border' : ''}`}
+                >
+                  <Clock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                  <div className="flex-1">
+                    <div className="text-sm font-medium">{evt.description || evt.eventType}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {new Date(evt.createdAt).toLocaleString()}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </CardContent>
+          </Card>
         )}
+
+        {/* Footer */}
+        <div className="flex items-center justify-center gap-2 pt-4 text-xs text-muted-foreground">
+          <Truck className="h-3.5 w-3.5" />
+          Powered by Open TMS
+        </div>
       </div>
     </div>
   );

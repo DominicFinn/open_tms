@@ -1,6 +1,35 @@
 import React, { useState, useEffect } from 'react';
+import {
+  Plus,
+  Pencil,
+  X,
+  Loader2,
+  Wrench,
+  CheckCircle2,
+  type LucideIcon,
+  AlertCircle,
+  Mail,
+  Webhook,
+  MessageSquare,
+  Phone,
+  ClipboardList,
+  ArrowUp,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
-import { VnPageHeader, VnAlert, VnModal, VnChip } from './components';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { cn } from '@/lib/utils';
 
 interface SkillDefinition {
   type: string;
@@ -22,6 +51,46 @@ interface SkillConfig {
   createdAt: string;
 }
 
+const ICON_MAP: Record<string, LucideIcon> = {
+  email: Mail,
+  mail: Mail,
+  send: Mail,
+  webhook: Webhook,
+  link: Webhook,
+  comment: MessageSquare,
+  message: MessageSquare,
+  phone: Phone,
+  call: Phone,
+  driver: Phone,
+  assignment: ClipboardList,
+  issue: ClipboardList,
+  escalate: ArrowUp,
+  arrow_upward: ArrowUp,
+};
+
+function getSkillIcon(name: string): LucideIcon {
+  const key = name.toLowerCase();
+  for (const k in ICON_MAP) {
+    if (key.includes(k)) return ICON_MAP[k];
+  }
+  return Wrench;
+}
+
+function Banner({ variant, message, onClose }: { variant: 'success' | 'error'; message: string; onClose?: () => void }) {
+  const tone =
+    variant === 'success'
+      ? 'border-success/30 bg-success/10 text-success'
+      : 'border-destructive/30 bg-destructive/10 text-destructive';
+  return (
+    <div className={`flex items-start justify-between gap-3 rounded-md border p-3 text-sm ${tone}`}>
+      <span>{message}</span>
+      {onClose && (
+        <button onClick={onClose} className="text-xs underline opacity-70 hover:opacity-100">Dismiss</button>
+      )}
+    </div>
+  );
+}
+
 export default function VNextSkillsConfig() {
   const [definitions, setDefinitions] = useState<SkillDefinition[]>([]);
   const [configs, setConfigs] = useState<SkillConfig[]>([]);
@@ -29,7 +98,6 @@ export default function VNextSkillsConfig() {
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
-  // Config form
   const [showConfigForm, setShowConfigForm] = useState(false);
   const [configSkillType, setConfigSkillType] = useState('');
   const [configName, setConfigName] = useState('');
@@ -57,7 +125,7 @@ export default function VNextSkillsConfig() {
   useEffect(() => { loadData(); }, []);
 
   function openConfigForm(skillType: string) {
-    const def = definitions.find((d) => d.type === skillType);
+    const def = definitions.find(d => d.type === skillType);
     setConfigSkillType(skillType);
     setConfigName(def?.name || skillType);
     setConfigValues({});
@@ -73,15 +141,10 @@ export default function VNextSkillsConfig() {
         ? `${API_URL}/api/v1/skill-configs/${editingConfigId}`
         : `${API_URL}/api/v1/skill-configs`;
       const method = editingConfigId ? 'PUT' : 'POST';
-
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          skillType: configSkillType,
-          name: configName,
-          config: configValues,
-        }),
+        body: JSON.stringify({ skillType: configSkillType, name: configName, config: configValues }),
       });
       const json = await res.json();
       if (json.error) throw new Error(json.error);
@@ -114,75 +177,70 @@ export default function VNextSkillsConfig() {
     setShowConfigForm(true);
   }
 
-  const configuredTypes = new Set(configs.map((c) => c.skillType));
+  const configuredTypes = new Set(configs.map(c => c.skillType));
 
   if (loading) {
     return (
-      <div className="vn-empty">
-        <span className="material-icons" style={{ animation: 'spin 1s linear infinite' }}>refresh</span>
-        <h3>Loading skills...</h3>
+      <div className="flex justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
-  const selectedDef = definitions.find((d) => d.type === configSkillType);
+  const selectedDef = definitions.find(d => d.type === configSkillType);
 
   return (
-    <>
-      <VnPageHeader title="Skills Configuration" subtitle="Configure available skills for automation rules and chains" />
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Skills configuration</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Configure available skills for automation rules and chains</p>
+        </div>
+      </div>
 
-      {successMsg && <VnAlert variant="success" onClose={() => setSuccessMsg('')}>{successMsg}</VnAlert>}
-      {error && <VnAlert variant="error" onClose={() => setError('')}>{error}</VnAlert>}
+      {successMsg && <Banner variant="success" message={successMsg} onClose={() => setSuccessMsg('')} />}
+      {error && <Banner variant="error" message={error} onClose={() => setError('')} />}
 
-      {/* Available skills */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16 }}>
-        {definitions.map((def) => {
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {definitions.map(def => {
           const isConfigured = !def.requiresConfig || configuredTypes.has(def.type);
-          const skillConfigs = configs.filter((c) => c.skillType === def.type);
+          const skillConfigs = configs.filter(c => c.skillType === def.type);
+          const Icon = getSkillIcon(def.icon || def.name);
 
           return (
-            <div key={def.type} className="vn-card">
-              <div className="vn-card-body">
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 12 }}>
-                  <div style={{
-                    width: 40, height: 40, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    background: isConfigured ? 'var(--success-container)' : 'var(--surface-container-high)',
-                    color: isConfigured ? 'var(--on-success-container)' : 'var(--on-surface-variant)',
-                  }}>
-                    <span className="material-icons">{def.icon}</span>
+            <Card key={def.type}>
+              <CardContent className="p-4">
+                <div className="mb-3 flex items-start gap-3">
+                  <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', isConfigured ? 'bg-success/15 text-success' : 'bg-muted text-muted-foreground')}>
+                    <Icon className="h-5 w-5" />
                   </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <h3 style={{ margin: 0, fontSize: 15 }}>{def.name}</h3>
-                      <VnChip variant={isConfigured ? 'success' : 'secondary'}>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-base font-semibold">{def.name}</h3>
+                      <Badge variant={isConfigured ? 'success' : 'secondary'}>
                         {isConfigured ? 'Ready' : 'Needs setup'}
-                      </VnChip>
+                      </Badge>
                     </div>
-                    <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--on-surface-variant)' }}>{def.description}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{def.description}</p>
                   </div>
                 </div>
 
-                {/* Fields preview */}
-                <div style={{ fontSize: 12, color: 'var(--on-surface-variant)', marginBottom: 12 }}>
-                  <strong>Fields:</strong> {def.fields.map((f) => f.label).join(', ') || 'None'}
+                <div className="mb-3 text-xs text-muted-foreground">
+                  <strong>Fields:</strong> {def.fields.map(f => f.label).join(', ') || 'None'}
                 </div>
 
-                {/* Existing configs */}
                 {skillConfigs.length > 0 && (
-                  <div style={{ marginBottom: 12 }}>
-                    {skillConfigs.map((sc) => (
-                      <div key={sc.id} style={{
-                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                        padding: '6px 10px', background: 'var(--surface-container)', borderRadius: 6, marginBottom: 4, fontSize: 13,
-                      }}>
+                  <div className="mb-3 space-y-1">
+                    {skillConfigs.map(sc => (
+                      <div key={sc.id} className="flex items-center justify-between rounded-md bg-muted px-3 py-1.5 text-sm">
                         <span>{sc.name}</span>
-                        <div style={{ display: 'flex', gap: 4 }}>
-                          <button className="vn-btn-icon" onClick={(e) => { e.stopPropagation(); editConfig(sc); }} title="Edit">
-                            <span className="material-icons" style={{ fontSize: 16 }}>edit</span>
-                          </button>
-                          <button className="vn-btn-icon" onClick={(e) => { e.stopPropagation(); deleteConfig(sc.id); }} title="Delete">
-                            <span className="material-icons" style={{ fontSize: 16 }}>close</span>
-                          </button>
+                        <div className="flex gap-1">
+                          <Button variant="ghost" size="icon" onClick={e => { e.stopPropagation(); editConfig(sc); }}>
+                            <Pencil className="h-3 w-3" />
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={e => { e.stopPropagation(); deleteConfig(sc.id); }}>
+                            <X className="h-3 w-3" />
+                          </Button>
                         </div>
                       </div>
                     ))}
@@ -190,49 +248,48 @@ export default function VNextSkillsConfig() {
                 )}
 
                 {def.requiresConfig && (
-                  <button className="vn-btn vn-btn-outline vn-btn-sm" style={{ width: '100%' }} onClick={() => openConfigForm(def.type)}>
-                    <span className="material-icons">add</span>
-                    {skillConfigs.length > 0 ? 'Add Another Config' : 'Configure'}
-                  </button>
+                  <Button variant="outline" size="sm" className="w-full" onClick={() => openConfigForm(def.type)}>
+                    <Plus className="h-4 w-4" />
+                    {skillConfigs.length > 0 ? 'Add another config' : 'Configure'}
+                  </Button>
                 )}
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           );
         })}
       </div>
 
-      {/* Config form modal */}
-      <VnModal
-        open={showConfigForm}
-        onClose={() => setShowConfigForm(false)}
-        title={`Configure ${selectedDef?.name || configSkillType}`}
-        footer={
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-            <button className="vn-btn vn-btn-outline vn-btn-sm" onClick={() => setShowConfigForm(false)}>Cancel</button>
-            <button className="vn-btn vn-btn-primary vn-btn-sm" onClick={saveConfig} disabled={saving}>
-              {saving ? 'Saving...' : 'Save Configuration'}
-            </button>
-          </div>
-        }
-      >
-        <div className="vn-field" style={{ marginBottom: 16 }}>
-          <label className="vn-field-label">Configuration Name</label>
-          <input className="vn-input" value={configName} onChange={(e) => setConfigName(e.target.value)} placeholder="e.g. Ops Webhook" />
-        </div>
+      <Dialog open={showConfigForm} onOpenChange={setShowConfigForm}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Configure {selectedDef?.name || configSkillType}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Configuration name</Label>
+              <Input value={configName} onChange={e => setConfigName(e.target.value)} placeholder="e.g. Ops Webhook" />
+            </div>
 
-        {selectedDef?.configSchema.map((field) => (
-          <div key={field.key} className="vn-field" style={{ marginBottom: 16 }}>
-            <label className="vn-field-label">{field.label} {field.required && '*'}</label>
-            <input
-              className="vn-input"
-              type={field.type === 'password' ? 'password' : field.type === 'url' ? 'url' : 'text'}
-              placeholder={field.placeholder}
-              value={configValues[field.key] || ''}
-              onChange={(e) => setConfigValues({ ...configValues, [field.key]: e.target.value })}
-            />
+            {selectedDef?.configSchema.map(field => (
+              <div key={field.key} className="space-y-2">
+                <Label>{field.label} {field.required && '*'}</Label>
+                <Input
+                  type={field.type === 'password' ? 'password' : field.type === 'url' ? 'url' : 'text'}
+                  placeholder={field.placeholder}
+                  value={configValues[field.key] || ''}
+                  onChange={e => setConfigValues({ ...configValues, [field.key]: e.target.value })}
+                />
+              </div>
+            ))}
           </div>
-        ))}
-      </VnModal>
-    </>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowConfigForm(false)}>Cancel</Button>
+            <Button variant="gradient" onClick={saveConfig} disabled={saving}>
+              {saving ? 'Saving...' : 'Save configuration'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }

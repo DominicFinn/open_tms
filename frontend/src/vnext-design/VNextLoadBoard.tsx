@@ -1,6 +1,27 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import {
+  ArrowRight,
+  Inbox,
+  Search,
+  UserX,
+  X,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
 
 interface FinancialSummary {
   expectedRevenueCents?: number;
@@ -64,10 +85,10 @@ function daysUntilPickup(d?: string): string {
   return `${days} days`;
 }
 
-function pickupUrgency(d?: string): string {
-  if (!d) return '';
+function pickupUrgencyVariant(d?: string): 'destructive' | 'warning' | 'info' {
+  if (!d) return 'info';
   const days = Math.ceil((new Date(d).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-  if (days < 0) return 'error';
+  if (days < 0) return 'destructive';
   if (days <= 1) return 'warning';
   return 'info';
 }
@@ -82,7 +103,6 @@ export default function VNextLoadBoard() {
   const [carriersLoading, setCarriersLoading] = useState(false);
   const [search, setSearch] = useState('');
 
-  // Assign modal
   const [assignModal, setAssignModal] = useState<{ shipmentId: string; carrier: MatchingCarrier } | null>(null);
   const [assignRate, setAssignRate] = useState('');
   const [assignNotes, setAssignNotes] = useState('');
@@ -107,7 +127,6 @@ export default function VNextLoadBoard() {
     return () => { cancelled = true; };
   }, []);
 
-  // Load matching carriers when a shipment is selected
   useEffect(() => {
     if (!selectedId) { setCarriers([]); return; }
     let cancelled = false;
@@ -163,7 +182,6 @@ export default function VNextLoadBoard() {
         const json = await res.json();
         throw new Error(json.error || 'Assignment failed');
       }
-      // Remove from list
       setShipments(prev => prev.filter(s => s.id !== assignModal.shipmentId));
       setSelectedId(null);
       setAssignModal(null);
@@ -177,99 +195,91 @@ export default function VNextLoadBoard() {
   }
 
   return (
-    <div style={{ padding: '24px 32px' }}>
-      {/* Header */}
-      <div className="vn-page-header">
-        <div>
-          <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700 }}>Load Board</h1>
-          <p style={{ margin: '4px 0 0', color: 'var(--on-surface-variant)', fontSize: 14 }}>
-            {shipments.length} shipment{shipments.length !== 1 ? 's' : ''} awaiting carrier assignment
-          </p>
-        </div>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Load Board</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {shipments.length} shipment{shipments.length !== 1 ? 's' : ''} awaiting carrier assignment
+        </p>
       </div>
 
-      {error && <div className="vn-alert vn-alert-error" style={{ marginBottom: 16 }}>{error}</div>}
+      {error && (
+        <div className="rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+          {error}
+        </div>
+      )}
 
-      {/* Split pane */}
-      <div style={{ display: 'grid', gridTemplateColumns: selectedId ? '1fr 400px' : '1fr', gap: 24 }}>
+      <div className={cn('grid gap-6', selectedId ? 'lg:grid-cols-[1fr_400px]' : 'grid-cols-1')}>
         {/* Left: Shipment cards */}
-        <div>
-          <div className="vn-filters" style={{ marginBottom: 16 }}>
-            <div className="vn-filter-group" style={{ flex: 1 }}>
-              <span className="material-icons">search</span>
-              <input
-                className="vn-filter-input"
-                placeholder="Search by reference, customer, city..."
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                style={{ width: '100%' }}
-              />
-            </div>
+        <div className="space-y-4">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search by reference, customer, city..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="pl-9"
+            />
           </div>
 
           {loading ? (
-            <div style={{ textAlign: 'center', padding: 40 }}>
-              <div className="loading-spinner" />
-            </div>
+            <div className="py-12 text-center text-muted-foreground">Loading...</div>
           ) : filtered.length === 0 ? (
-            <div className="vn-card" style={{ textAlign: 'center', padding: 40 }}>
-              <span className="material-icons" style={{ fontSize: 48, color: 'var(--on-surface-variant)' }}>inventory_2</span>
-              <h3 style={{ margin: '12px 0 4px' }}>No loads available</h3>
-              <p style={{ color: 'var(--on-surface-variant)' }}>All shipments have carriers assigned</p>
-            </div>
+            <Card>
+              <CardContent className="flex flex-col items-center gap-3 py-12 text-muted-foreground">
+                <Inbox className="h-10 w-10" />
+                <h3 className="text-base font-medium">No loads available</h3>
+                <p className="text-sm">All shipments have carriers assigned</p>
+              </CardContent>
+            </Card>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div className="space-y-2">
               {filtered.map(s => (
-                <div
+                <Card
                   key={s.id}
-                  className="vn-card"
                   onClick={() => setSelectedId(s.id === selectedId ? null : s.id)}
-                  style={{
-                    cursor: 'pointer',
-                    padding: '16px 20px',
-                    border: s.id === selectedId ? '2px solid var(--primary)' : '1px solid var(--outline-variant)',
-                    transition: 'border-color 0.15s',
-                  }}
+                  className={cn(
+                    'cursor-pointer transition-colors',
+                    s.id === selectedId ? 'border-primary' : 'hover:border-primary/40',
+                  )}
                 >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                        <span style={{ fontWeight: 600, fontSize: 15 }}>{s.reference || s.id.slice(0, 8)}</span>
-                        <span className="vn-chip vn-chip-secondary" style={{ fontSize: 11 }}>{s.status}</span>
-                        {s.tenders && s.tenders.length > 0 && (
-                          <span className="vn-chip vn-chip-info" style={{ fontSize: 11 }}>
-                            Tender {s.tenders[0].status}
-                          </span>
+                  <CardContent className="p-5">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1">
+                        <div className="mb-1.5 flex items-center gap-2">
+                          <span className="font-mono text-sm font-semibold">{s.reference || s.id.slice(0, 8)}</span>
+                          <Badge variant="muted">{s.status}</Badge>
+                          {s.tenders && s.tenders.length > 0 && (
+                            <Badge variant="info">Tender {s.tenders[0].status}</Badge>
+                          )}
+                        </div>
+                        <div className="mb-1 text-sm text-muted-foreground">
+                          {s.customer?.name || 'Unknown customer'}
+                        </div>
+                        <div className="flex items-center gap-2 text-sm">
+                          <span>{s.origin ? `${s.origin.city}, ${s.origin.state}` : '-'}</span>
+                          <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                          <span>{s.destination ? `${s.destination.city}, ${s.destination.state}` : '-'}</span>
+                        </div>
+                      </div>
+                      <div className="min-w-[100px] text-right">
+                        {s.pickupDate && (
+                          <div className="mb-1">
+                            <Badge variant={pickupUrgencyVariant(s.pickupDate)}>
+                              {daysUntilPickup(s.pickupDate)}
+                            </Badge>
+                          </div>
+                        )}
+                        <div className="text-xs text-muted-foreground">PU: {formatDate(s.pickupDate)}</div>
+                        {s.shipmentFinancialSummary?.expectedRevenueCents != null && (
+                          <div className="mt-1 text-sm font-semibold text-primary">
+                            {formatCents(s.shipmentFinancialSummary.expectedRevenueCents)}
+                          </div>
                         )}
                       </div>
-                      <div style={{ fontSize: 13, color: 'var(--on-surface-variant)', marginBottom: 4 }}>
-                        {s.customer?.name || 'Unknown customer'}
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
-                        <span>{s.origin ? `${s.origin.city}, ${s.origin.state}` : '-'}</span>
-                        <span className="material-icons" style={{ fontSize: 16 }}>east</span>
-                        <span>{s.destination ? `${s.destination.city}, ${s.destination.state}` : '-'}</span>
-                      </div>
                     </div>
-                    <div style={{ textAlign: 'right', minWidth: 100 }}>
-                      {s.pickupDate && (
-                        <div style={{ marginBottom: 4 }}>
-                          <span className={`vn-chip vn-chip-${pickupUrgency(s.pickupDate)}`} style={{ fontSize: 11 }}>
-                            {daysUntilPickup(s.pickupDate)}
-                          </span>
-                        </div>
-                      )}
-                      <div style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>
-                        PU: {formatDate(s.pickupDate)}
-                      </div>
-                      {s.shipmentFinancialSummary?.expectedRevenueCents != null && (
-                        <div style={{ fontSize: 13, fontWeight: 600, marginTop: 4, color: 'var(--primary)' }}>
-                          {formatCents(s.shipmentFinancialSummary.expectedRevenueCents)}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
+                  </CardContent>
+                </Card>
               ))}
             </div>
           )}
@@ -278,77 +288,70 @@ export default function VNextLoadBoard() {
         {/* Right: Carrier search panel */}
         {selectedId && (
           <div>
-            <div className="vn-card" style={{ position: 'sticky', top: 80 }}>
-              <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--outline-variant)' }}>
-                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>
-                  Matching Carriers
-                </h3>
-                <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--on-surface-variant)' }}>
+            <Card className="lg:sticky lg:top-20">
+              <div className="border-b border-border p-5">
+                <h3 className="text-base font-semibold">Matching Carriers</h3>
+                <p className="mt-1 text-xs text-muted-foreground">
                   {selectedShipment?.reference} - {selectedShipment?.origin?.city} to {selectedShipment?.destination?.city}
                 </p>
               </div>
 
               {carriersLoading ? (
-                <div style={{ padding: 24, textAlign: 'center' }}>
-                  <div className="loading-spinner" />
-                </div>
+                <div className="p-6 text-center text-muted-foreground">Loading...</div>
               ) : carriers.length === 0 ? (
-                <div style={{ padding: 24, textAlign: 'center' }}>
-                  <span className="material-icons" style={{ fontSize: 36, color: 'var(--on-surface-variant)' }}>group_off</span>
-                  <p style={{ color: 'var(--on-surface-variant)', fontSize: 13, margin: '8px 0' }}>
+                <div className="p-6 text-center">
+                  <UserX className="mx-auto h-10 w-10 text-muted-foreground" />
+                  <p className="mt-2 text-sm text-muted-foreground">
                     No matching carriers found for this lane
                   </p>
-                  <button
-                    className="vn-btn vn-btn-outline vn-btn-sm"
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-3"
                     onClick={() => navigate(`/carrier-bidding`)}
                   >
                     Create Tender
-                  </button>
+                  </Button>
                 </div>
               ) : (
-                <div style={{ maxHeight: 'calc(100vh - 240px)', overflowY: 'auto' }}>
+                <div className="max-h-[calc(100vh-240px)] overflow-y-auto">
                   {carriers.map(c => (
-                    <div
-                      key={c.id}
-                      style={{
-                        padding: '12px 20px',
-                        borderBottom: '1px solid var(--outline-variant)',
-                      }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div key={c.id} className="border-b border-border p-4 last:border-b-0">
+                      <div className="flex items-start justify-between">
                         <div>
-                          <div style={{ fontWeight: 600, fontSize: 14 }}>{c.name}</div>
-                          <div style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>
+                          <div className="text-sm font-semibold">{c.name}</div>
+                          <div className="text-xs text-muted-foreground">
                             {c.mcNumber ? `MC-${c.mcNumber}` : ''}{c.scacCode ? ` / ${c.scacCode}` : ''}
                           </div>
                           {c.contactName && (
-                            <div style={{ fontSize: 12, color: 'var(--on-surface-variant)', marginTop: 2 }}>
+                            <div className="mt-0.5 text-xs text-muted-foreground">
                               {c.contactName}{c.contactPhone ? ` - ${c.contactPhone}` : ''}
                             </div>
                           )}
                         </div>
-                        <div style={{ textAlign: 'right' }}>
+                        <div className="text-right">
                           {c.laneRate?.priceCents != null && (
-                            <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--primary)' }}>
+                            <div className="flex items-center gap-1 text-sm font-semibold text-primary">
                               {formatCents(c.laneRate.priceCents)}
                               {c.laneRate.isContractRate && (
-                                <span className="vn-chip vn-chip-success" style={{ fontSize: 10, marginLeft: 4 }}>Contract</span>
+                                <Badge variant="success" className="text-[10px]">Contract</Badge>
                               )}
                             </div>
                           )}
-                          <span className={`vn-chip vn-chip-${c.matchSource === 'lane_rate' ? 'primary' : 'secondary'}`} style={{ fontSize: 10 }}>
+                          <Badge variant={c.matchSource === 'lane_rate' ? 'info' : 'muted'} className="text-[10px]">
                             {c.matchSource === 'lane_rate' ? 'Lane Rate' : 'Historical'}
-                          </span>
+                          </Badge>
                         </div>
                       </div>
                       {c.tenderStats && c.tenderStats.totalBids > 0 && (
-                        <div style={{ fontSize: 11, color: 'var(--on-surface-variant)', marginTop: 4 }}>
+                        <div className="mt-1 text-xs text-muted-foreground">
                           Acceptance: {c.tenderStats.acceptanceRate ?? 0}% ({c.tenderStats.acceptedBids}/{c.tenderStats.totalBids} bids)
                         </div>
                       )}
-                      <div style={{ marginTop: 8 }}>
-                        <button
-                          className="vn-btn vn-btn-primary vn-btn-sm"
+                      <div className="mt-2">
+                        <Button
+                          variant="default"
+                          size="sm"
                           onClick={() => {
                             setAssignModal({ shipmentId: selectedId!, carrier: c });
                             setAssignRate(c.laneRate?.priceCents ? (c.laneRate.priceCents / 100).toFixed(2) : '');
@@ -357,57 +360,55 @@ export default function VNextLoadBoard() {
                           }}
                         >
                           Assign
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   ))}
                 </div>
               )}
 
-              <div style={{ padding: '12px 20px', borderTop: '1px solid var(--outline-variant)', display: 'flex', gap: 8 }}>
-                <button
-                  className="vn-btn vn-btn-outline vn-btn-sm"
+              <div className="flex gap-2 border-t border-border p-3">
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => navigate(`/shipments/${selectedId}`)}
                 >
                   View Shipment
-                </button>
-                <button
-                  className="vn-btn vn-btn-outline vn-btn-sm"
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => navigate(`/carrier-bidding`)}
                 >
                   Create Tender
-                </button>
+                </Button>
               </div>
-            </div>
+            </Card>
           </div>
         )}
       </div>
 
       {/* Assign Modal */}
-      {assignModal && (
-        <div className="vn-modal-backdrop" onClick={() => setAssignModal(null)}>
-          <div className="vn-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 420 }}>
-            <div className="vn-modal-header">
-              <h3>Assign Carrier</h3>
-              <button className="vn-btn-icon" onClick={() => setAssignModal(null)}>
-                <span className="material-icons">close</span>
-              </button>
-            </div>
-            <div className="vn-modal-body">
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 13, color: 'var(--on-surface-variant)', marginBottom: 4 }}>Shipment</div>
-                <div style={{ fontWeight: 600 }}>
+      <Dialog open={!!assignModal} onOpenChange={open => !open && setAssignModal(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Assign Carrier</DialogTitle>
+          </DialogHeader>
+          {assignModal && (
+            <div className="space-y-4">
+              <div>
+                <div className="text-xs text-muted-foreground">Shipment</div>
+                <div className="font-semibold">
                   {shipments.find(s => s.id === assignModal.shipmentId)?.reference || assignModal.shipmentId.slice(0, 8)}
                 </div>
               </div>
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 13, color: 'var(--on-surface-variant)', marginBottom: 4 }}>Carrier</div>
-                <div style={{ fontWeight: 600 }}>{assignModal.carrier.name}</div>
+              <div>
+                <div className="text-xs text-muted-foreground">Carrier</div>
+                <div className="font-semibold">{assignModal.carrier.name}</div>
               </div>
-              <div className="vn-field" style={{ marginBottom: 16 }}>
-                <label className="vn-field-label">Cost Rate ($)</label>
-                <input
-                  className="vn-input"
+              <div className="space-y-2">
+                <Label>Cost Rate ($)</Label>
+                <Input
                   type="number"
                   step="0.01"
                   min="0"
@@ -417,63 +418,61 @@ export default function VNextLoadBoard() {
                 />
               </div>
               {assignModal.carrier.laneRate?.priceCents != null && (
-                <div style={{ fontSize: 12, color: 'var(--on-surface-variant)', marginBottom: 12 }}>
+                <div className="text-xs text-muted-foreground">
                   Lane rate: {formatCents(assignModal.carrier.laneRate.priceCents)}
                   {assignModal.carrier.laneRate.isContractRate ? ' (contract)' : ''}
                 </div>
               )}
               {selectedShipment?.shipmentFinancialSummary?.expectedRevenueCents != null && assignRate && (
-                <div style={{
-                  padding: '8px 12px',
-                  borderRadius: 'var(--border-radius-sm)',
-                  background: 'var(--surface-container)',
-                  marginBottom: 12,
-                  fontSize: 13,
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <div className="rounded-md bg-muted/30 p-3 text-sm">
+                  <div className="flex justify-between">
                     <span>Sell rate:</span>
-                    <span style={{ fontWeight: 600 }}>{formatCents(selectedShipment.shipmentFinancialSummary.expectedRevenueCents)}</span>
+                    <span className="font-semibold">{formatCents(selectedShipment.shipmentFinancialSummary.expectedRevenueCents)}</span>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <div className="flex justify-between">
                     <span>Buy rate:</span>
-                    <span style={{ fontWeight: 600 }}>{formatCents(Math.round(parseFloat(assignRate) * 100))}</span>
+                    <span className="font-semibold">{formatCents(Math.round(parseFloat(assignRate) * 100))}</span>
                   </div>
-                  <div style={{
-                    display: 'flex', justifyContent: 'space-between',
-                    borderTop: '1px solid var(--outline-variant)', paddingTop: 4, marginTop: 4,
-                  }}>
+                  <div className="mt-1 flex justify-between border-t border-border pt-1">
                     <span>Margin:</span>
-                    <span style={{
-                      fontWeight: 700,
-                      color: (selectedShipment.shipmentFinancialSummary.expectedRevenueCents - Math.round(parseFloat(assignRate) * 100)) > 0
-                        ? 'var(--color-success)' : 'var(--color-error)',
-                    }}>
+                    <span
+                      className={cn(
+                        'font-bold',
+                        (selectedShipment.shipmentFinancialSummary.expectedRevenueCents - Math.round(parseFloat(assignRate) * 100)) > 0
+                          ? 'text-success'
+                          : 'text-destructive',
+                      )}
+                    >
                       {formatCents(selectedShipment.shipmentFinancialSummary.expectedRevenueCents - Math.round(parseFloat(assignRate) * 100))}
                     </span>
                   </div>
                 </div>
               )}
-              <div className="vn-field">
-                <label className="vn-field-label">Notes (optional)</label>
+              <div className="space-y-2">
+                <Label>Notes (optional)</Label>
                 <textarea
-                  className="vn-input"
+                  className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   rows={2}
                   value={assignNotes}
                   onChange={e => setAssignNotes(e.target.value)}
                   placeholder="Internal notes..."
                 />
               </div>
-              {assignError && <div className="vn-alert vn-alert-error" style={{ marginTop: 12 }}>{assignError}</div>}
+              {assignError && (
+                <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+                  {assignError}
+                </div>
+              )}
             </div>
-            <div className="vn-modal-footer">
-              <button className="vn-btn vn-btn-outline" onClick={() => setAssignModal(null)}>Cancel</button>
-              <button className="vn-btn vn-btn-primary" onClick={handleAssign} disabled={assigning}>
-                {assigning ? 'Assigning...' : 'Assign Carrier'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAssignModal(null)}>Cancel</Button>
+            <Button variant="gradient" onClick={handleAssign} disabled={assigning}>
+              {assigning ? 'Assigning...' : 'Assign Carrier'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

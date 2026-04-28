@@ -1,8 +1,34 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { API_URL } from '../api';
+import {
+  AlertTriangle,
+  BarChart3,
+  Bug,
+  CheckCircle2,
+  CircleAlert,
+  ClipboardList,
+  FileCheck,
+  ListChecks,
+  Loader2,
+  Route,
+  Truck,
+  XCircle,
+} from 'lucide-react';
 
-/* ── Type definitions ──────────────────────────────────────── */
+import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 
 interface DashboardData {
   issues: {
@@ -55,17 +81,17 @@ interface DimensionSummary {
 
 type Period = '7d' | '30d' | '90d';
 
-/* ── Helpers ───────────────────────────────────────────────── */
+type BadgeVariant = 'success' | 'destructive' | 'warning' | 'info' | 'secondary' | 'muted' | 'default';
 
-function categoryChipClass(category: string): string {
+function categoryVariant(category: string): BadgeVariant {
   switch (category) {
-    case 'damage': return 'vn-chip-error';
-    case 'delay': return 'vn-chip-warning';
-    case 'exception': return 'vn-chip-info';
-    case 'compliance': return 'vn-chip-primary';
-    case 'temperature': return 'vn-chip-error';
-    case 'security': return 'vn-chip-warning';
-    default: return 'vn-chip-secondary';
+    case 'damage': return 'destructive';
+    case 'delay': return 'warning';
+    case 'exception': return 'info';
+    case 'compliance': return 'default';
+    case 'temperature': return 'destructive';
+    case 'security': return 'warning';
+    default: return 'secondary';
   }
 }
 
@@ -85,8 +111,6 @@ function formatDate(dateStr: string | null): string {
   return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-/* ── Component ─────────────────────────────────────────────── */
-
 export default function VNextQualityDashboard() {
   const navigate = useNavigate();
 
@@ -98,7 +122,6 @@ export default function VNextQualityDashboard() {
   const [error, setError] = useState('');
   const [period, setPeriod] = useState<Period>('30d');
 
-  /* Fetch dashboard + summaries on mount */
   useEffect(() => {
     let cancelled = false;
     async function load() {
@@ -130,7 +153,6 @@ export default function VNextQualityDashboard() {
     return () => { cancelled = true; };
   }, []);
 
-  /* Fetch trends when period changes */
   useEffect(() => {
     let cancelled = false;
     async function loadTrends() {
@@ -141,465 +163,316 @@ export default function VNextQualityDashboard() {
           if (!cancelled) setTrends(json.data || null);
         }
       } catch {
-        // Non-critical — chart just stays empty
+        // non-critical
       }
     }
     loadTrends();
     return () => { cancelled = true; };
   }, [period]);
 
-  /* ── Loading state ─────────────────────────────────────── */
   if (loading) {
     return (
-      <div className="vn-empty">
-        <span className="material-icons" style={{ animation: 'spin 1s linear infinite' }}>refresh</span>
-        <h3>Loading...</h3>
+      <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <h3 className="text-lg font-medium">Loading...</h3>
       </div>
     );
   }
 
-  /* ── Error state ───────────────────────────────────────── */
   if (error) {
-    return <div className="vn-alert vn-alert-error">{error}</div>;
+    return (
+      <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+        <CircleAlert className="h-5 w-5" />
+        {error}
+      </div>
+    );
   }
 
   const d = dashboard!;
 
-  /* ── Chart rendering (inline SVG bar chart) ────────────── */
   const renderTrendsChart = () => {
     const data = trends?.trends || [];
     if (data.length === 0) {
       return (
-        <div style={{ padding: '32px', textAlign: 'center', color: 'var(--on-surface-variant)' }}>
-          <span className="material-icons" style={{ fontSize: 40, display: 'block', marginBottom: 8, opacity: 0.5 }}>bar_chart</span>
+        <div className="flex flex-col items-center gap-2 py-8 text-muted-foreground">
+          <BarChart3 className="h-10 w-10 opacity-50" />
           No trend data available
         </div>
       );
     }
 
     const maxVal = Math.max(...data.map(t => t.total), 1);
-    const chartWidth = 800;
-    const chartHeight = 200;
-    const barPadding = 2;
-    const barWidth = Math.max(4, (chartWidth / data.length) - barPadding);
-    const labelInterval = Math.max(1, Math.floor(data.length / 8));
-
     return (
-      <div style={{ overflowX: 'auto' }}>
-        <svg
-          viewBox={`0 0 ${chartWidth} ${chartHeight + 30}`}
-          style={{ width: '100%', minWidth: 400, height: 'auto', maxHeight: 260 }}
-          preserveAspectRatio="xMidYMid meet"
-        >
-          {/* Grid lines */}
-          {[0, 0.25, 0.5, 0.75, 1].map(frac => {
-            const y = chartHeight - (frac * chartHeight);
-            return (
-              <g key={frac}>
-                <line
-                  x1={0} y1={y} x2={chartWidth} y2={y}
-                  stroke="var(--outline-variant)" strokeWidth={0.5} strokeDasharray={frac === 0 ? '' : '4,4'}
-                />
-                <text x={0} y={y - 4} fontSize={10} fill="var(--on-surface-variant)">
-                  {Math.round(maxVal * frac)}
-                </text>
-              </g>
-            );
-          })}
-
-          {/* Bars */}
-          {data.map((day, i) => {
-            const barHeight = (day.total / maxVal) * chartHeight;
-            const x = i * (barWidth + barPadding);
-            const y = chartHeight - barHeight;
-            return (
-              <g key={day.date}>
-                <rect
-                  x={x}
-                  y={y}
-                  width={barWidth}
-                  height={Math.max(barHeight, 1)}
-                  rx={2}
-                  fill="var(--primary)"
-                  opacity={0.85}
-                >
-                  <title>{`${day.date}: ${day.total} issues`}</title>
-                </rect>
-                {i % labelInterval === 0 && (
-                  <text
-                    x={x + barWidth / 2}
-                    y={chartHeight + 16}
-                    textAnchor="middle"
-                    fontSize={10}
-                    fill="var(--on-surface-variant)"
-                  >
-                    {new Date(day.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                  </text>
-                )}
-              </g>
-            );
-          })}
-        </svg>
+      <div className="flex h-48 items-end gap-0.5">
+        {data.map(day => {
+          const heightPct = Math.max(2, (day.total / maxVal) * 100);
+          return (
+            <div
+              key={day.date}
+              className="min-w-[4px] flex-1 rounded-t bg-primary/85"
+              style={{ height: `${heightPct}%` }}
+              title={`${day.date}: ${day.total} issues`}
+            />
+          );
+        })}
       </div>
     );
   };
 
-  /* ── Render ─────────────────────────────────────────────── */
+  const issueStats = [
+    { label: 'Open issues', value: d.issues.open, icon: AlertTriangle, tone: 'bg-warning/15 text-warning', onClick: () => navigate('/issues') },
+    { label: 'Critical issues', value: d.issues.critical, icon: CircleAlert, tone: 'bg-destructive/10 text-destructive', onClick: () => navigate('/issues') },
+    { label: 'CAPA reports open', value: d.capa.open, icon: ClipboardList, tone: 'bg-primary/10 text-primary', onClick: () => navigate('/quality/capa') },
+    { label: 'Overdue follow-ups', value: d.capa.overdueFollowUps, icon: AlertTriangle, tone: 'bg-destructive/10 text-destructive', onClick: () => navigate('/quality/capa') },
+  ];
+
+  const sopStats = [
+    { label: 'Active checklists', value: d.sop.activeChecklists, icon: ListChecks, tone: 'bg-success/15 text-success' },
+    { label: 'Overdue checklists', value: d.sop.overdueChecklists, icon: AlertTriangle, tone: 'bg-warning/15 text-warning' },
+    { label: 'Recent audits', value: d.sop.recentAudits, icon: FileCheck, tone: 'bg-info/15 text-info' },
+    { label: 'Failed audits', value: d.sop.failedAudits, icon: XCircle, tone: 'bg-destructive/10 text-destructive' },
+  ];
+
   return (
-    <>
-      {/* Page Header */}
-      <div className="vn-page-header">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1>Quality Centre</h1>
-          <p>Quality management, CAPA tracking, and GDP compliance</p>
+          <h1 className="text-3xl font-bold tracking-tight">Quality centre</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Quality management, CAPA tracking, and GDP compliance</p>
         </div>
-        <div className="vn-page-actions">
-          <button
-            className="vn-btn vn-btn-outline"
-            onClick={() => navigate('/quality/summaries')}
-          >
-            <span className="material-icons">analytics</span>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => navigate('/quality/summaries')}>
+            <BarChart3 className="h-4 w-4" />
             Summaries
-          </button>
-          <button
-            className="vn-btn vn-btn-primary"
-            onClick={() => navigate('/issues')}
-          >
-            <span className="material-icons">bug_report</span>
-            View Issues
-          </button>
+          </Button>
+          <Button variant="gradient" onClick={() => navigate('/issues')}>
+            <Bug className="h-4 w-4" />
+            View issues
+          </Button>
         </div>
       </div>
 
-      {/* Stat Cards */}
-      <div className="vn-stats">
-        <div className="vn-stat" style={{ cursor: 'pointer' }} onClick={() => navigate('/issues')}>
-          <div className="vn-stat-icon warning">
-            <span className="material-icons">report_problem</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{d.issues.open}</div>
-            <div className="vn-stat-label">Open Issues</div>
-          </div>
-        </div>
-        <div className="vn-stat" style={{ cursor: 'pointer' }} onClick={() => navigate('/issues')}>
-          <div className="vn-stat-icon error">
-            <span className="material-icons">error</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{d.issues.critical}</div>
-            <div className="vn-stat-label">Critical Issues</div>
-          </div>
-        </div>
-        <div className="vn-stat" style={{ cursor: 'pointer' }} onClick={() => navigate('/quality/capa')}>
-          <div className="vn-stat-icon primary">
-            <span className="material-icons">assignment</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{d.capa.open}</div>
-            <div className="vn-stat-label">CAPA Reports Open</div>
-          </div>
-        </div>
-        <div className="vn-stat" style={{ cursor: 'pointer' }} onClick={() => navigate('/quality/capa')}>
-          <div className="vn-stat-icon error">
-            <span className="material-icons">schedule</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{d.capa.overdueFollowUps}</div>
-            <div className="vn-stat-label">Overdue Follow-Ups</div>
-          </div>
-        </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {issueStats.map(stat => {
+          const Icon = stat.icon;
+          return (
+            <Card key={stat.label} className="cursor-pointer transition-colors hover:border-primary/40">
+              <button type="button" onClick={stat.onClick} className="block w-full p-5 text-left">
+                <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', stat.tone)}>
+                  <Icon className="h-5 w-5" />
+                </div>
+                <div className="mt-3 text-2xl font-bold tracking-tight">{stat.value}</div>
+                <div className="mt-1 text-sm text-muted-foreground">{stat.label}</div>
+              </button>
+            </Card>
+          );
+        })}
       </div>
 
-      {/* Category Breakdown Chips */}
       {d.issues.byCategory.length > 0 && (
-        <div className="vn-card" style={{ padding: 20, marginTop: 24 }}>
-          <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 600, color: 'var(--on-surface)' }}>
-            Issues by Category
-          </h3>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        <Card className="p-5">
+          <h3 className="mb-3 text-base font-semibold">Issues by category</h3>
+          <div className="flex flex-wrap gap-2">
             {d.issues.byCategory.map(({ category, count }) => (
-              <span key={category} className={`vn-chip ${categoryChipClass(category)}`}>
+              <Badge key={category} variant={categoryVariant(category)}>
                 {formatCategory(category)}: {count}
-              </span>
+              </Badge>
             ))}
           </div>
-        </div>
+        </Card>
       )}
 
-      {/* SOP Compliance Summary */}
-      <h3 style={{ margin: '24px 0 12px', color: 'var(--on-surface-variant)', fontSize: 14, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-        SOP Compliance
-      </h3>
-      <div className="vn-stats">
-        <div className="vn-stat" style={{ cursor: 'pointer' }} onClick={() => navigate('/quality/sop-audits')}>
-          <div className="vn-stat-icon success">
-            <span className="material-icons">checklist</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{d.sop.activeChecklists}</div>
-            <div className="vn-stat-label">Active Checklists</div>
-          </div>
-        </div>
-        <div className="vn-stat" style={{ cursor: 'pointer' }} onClick={() => navigate('/quality/sop-audits')}>
-          <div className="vn-stat-icon warning">
-            <span className="material-icons">pending_actions</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{d.sop.overdueChecklists}</div>
-            <div className="vn-stat-label">Overdue Checklists</div>
-          </div>
-        </div>
-        <div className="vn-stat" style={{ cursor: 'pointer' }} onClick={() => navigate('/quality/sop-audits')}>
-          <div className="vn-stat-icon info">
-            <span className="material-icons">fact_check</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{d.sop.recentAudits}</div>
-            <div className="vn-stat-label">Recent Audits</div>
-          </div>
-        </div>
-        <div className="vn-stat" style={{ cursor: 'pointer' }} onClick={() => navigate('/quality/sop-audits')}>
-          <div className="vn-stat-icon error">
-            <span className="material-icons">cancel</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{d.sop.failedAudits}</div>
-            <div className="vn-stat-label">Failed Audits</div>
-          </div>
+      <div>
+        <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">SOP compliance</h3>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {sopStats.map(stat => {
+            const Icon = stat.icon;
+            return (
+              <Card key={stat.label} className="cursor-pointer transition-colors hover:border-primary/40" onClick={() => navigate('/quality/sop-audits')}>
+                <div className="p-5">
+                  <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', stat.tone)}>
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <div className="mt-3 text-2xl font-bold tracking-tight">{stat.value}</div>
+                  <div className="mt-1 text-sm text-muted-foreground">{stat.label}</div>
+                </div>
+              </Card>
+            );
+          })}
         </div>
       </div>
 
-      {/* Trends Chart */}
-      <div className="vn-card" style={{ padding: 0, overflow: 'hidden', marginTop: 24 }}>
-        <div style={{
-          padding: '16px 20px',
-          borderBottom: '1px solid var(--outline-variant)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span className="material-icons" style={{ color: 'var(--primary)', fontSize: 20 }}>trending_up</span>
-            <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>Issues Over Time</h2>
+      <Card>
+        <div className="flex items-center justify-between p-4">
+          <div className="flex items-center gap-2">
+            <BarChart3 className="h-5 w-5 text-primary" />
+            <h2 className="text-base font-semibold">Issues over time</h2>
           </div>
-          <div style={{ display: 'flex', gap: 4 }}>
+          <div className="flex gap-1">
             {(['7d', '30d', '90d'] as Period[]).map(p => (
-              <button
+              <Button
                 key={p}
+                size="sm"
+                variant={p === period ? 'default' : 'ghost'}
                 onClick={() => setPeriod(p)}
-                className={`vn-btn vn-btn-sm ${p === period ? 'vn-btn-primary' : 'vn-btn-ghost'}`}
               >
                 {p}
-              </button>
+              </Button>
             ))}
           </div>
         </div>
-        <div style={{ padding: '16px 20px' }}>
-          {renderTrendsChart()}
-        </div>
-      </div>
+        <Separator />
+        <div className="p-5">{renderTrendsChart()}</div>
+      </Card>
 
-      {/* Two side-by-side tables */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginTop: 24 }}>
-        {/* Top Problem Carriers */}
-        <div className="vn-card" style={{ padding: 0, overflow: 'hidden' }}>
-          <div style={{
-            padding: '16px 20px',
-            borderBottom: '1px solid var(--outline-variant)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-          }}>
-            <span className="material-icons" style={{ color: 'var(--color-error)', fontSize: 20 }}>local_shipping</span>
-            <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>Top Problem Carriers</h2>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <div className="flex items-center gap-2 p-4">
+            <Truck className="h-5 w-5 text-destructive" />
+            <h2 className="text-base font-semibold">Top problem carriers</h2>
           </div>
+          <Separator />
           {topCarriers.length === 0 ? (
-            <div style={{ padding: 32, textAlign: 'center', color: 'var(--on-surface-variant)' }}>
-              <span className="material-icons" style={{ fontSize: 40, display: 'block', marginBottom: 8, opacity: 0.5 }}>check_circle</span>
+            <div className="flex flex-col items-center gap-2 py-8 text-muted-foreground">
+              <CheckCircle2 className="h-10 w-10 opacity-50" />
               No carrier issues found
             </div>
           ) : (
-            <div className="vn-table-wrap">
-              <table className="vn-table">
-                <thead>
-                  <tr>
-                    <th>Carrier</th>
-                    <th style={{ textAlign: 'right' }}>Issues</th>
-                    <th style={{ textAlign: 'right' }}>Critical</th>
-                    <th style={{ textAlign: 'right' }}>Avg Resolution</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {topCarriers.map(c => (
-                    <tr key={c.dimensionId} onClick={() => navigate(`/carriers/${c.dimensionId}`)} style={{ cursor: 'pointer' }}>
-                      <td>
-                        <div className="vn-table-id">{c.dimensionName}</div>
-                        <div className="vn-table-secondary">Last issue: {formatDate(c.lastIssueAt)}</div>
-                      </td>
-                      <td style={{ textAlign: 'right', fontWeight: 600 }}>{c.totalIssues}</td>
-                      <td style={{ textAlign: 'right' }}>
-                        {c.criticalCount > 0 ? (
-                          <span className="vn-chip vn-chip-error">{c.criticalCount}</span>
-                        ) : (
-                          <span style={{ color: 'var(--on-surface-variant)' }}>0</span>
-                        )}
-                      </td>
-                      <td style={{ textAlign: 'right', color: 'var(--on-surface-variant)' }}>
-                        {formatHours(c.avgResolutionHours)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Carrier</TableHead>
+                  <TableHead className="text-right">Issues</TableHead>
+                  <TableHead className="text-right">Critical</TableHead>
+                  <TableHead className="text-right">Avg resolution</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {topCarriers.map(c => (
+                  <TableRow key={c.dimensionId} onClick={() => navigate(`/carriers/${c.dimensionId}`)} className="cursor-pointer">
+                    <TableCell>
+                      <div className="font-medium">{c.dimensionName}</div>
+                      <div className="text-xs text-muted-foreground">Last issue: {formatDate(c.lastIssueAt)}</div>
+                    </TableCell>
+                    <TableCell className="text-right font-semibold">{c.totalIssues}</TableCell>
+                    <TableCell className="text-right">
+                      {c.criticalCount > 0 ? (
+                        <Badge variant="destructive">{c.criticalCount}</Badge>
+                      ) : (
+                        <span className="text-muted-foreground">0</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right text-muted-foreground">{formatHours(c.avgResolutionHours)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           )}
-        </div>
+        </Card>
 
-        {/* Top Problem Lanes */}
-        <div className="vn-card" style={{ padding: 0, overflow: 'hidden' }}>
-          <div style={{
-            padding: '16px 20px',
-            borderBottom: '1px solid var(--outline-variant)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-          }}>
-            <span className="material-icons" style={{ color: 'var(--color-warning)', fontSize: 20 }}>route</span>
-            <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>Top Problem Lanes</h2>
+        <Card>
+          <div className="flex items-center gap-2 p-4">
+            <Route className="h-5 w-5 text-warning" />
+            <h2 className="text-base font-semibold">Top problem lanes</h2>
           </div>
+          <Separator />
           {topLanes.length === 0 ? (
-            <div style={{ padding: 32, textAlign: 'center', color: 'var(--on-surface-variant)' }}>
-              <span className="material-icons" style={{ fontSize: 40, display: 'block', marginBottom: 8, opacity: 0.5 }}>check_circle</span>
+            <div className="flex flex-col items-center gap-2 py-8 text-muted-foreground">
+              <CheckCircle2 className="h-10 w-10 opacity-50" />
               No lane issues found
             </div>
           ) : (
-            <div className="vn-table-wrap">
-              <table className="vn-table">
-                <thead>
-                  <tr>
-                    <th>Lane</th>
-                    <th style={{ textAlign: 'right' }}>Issues</th>
-                    <th style={{ textAlign: 'right' }}>Critical</th>
-                    <th style={{ textAlign: 'right' }}>Avg Resolution</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {topLanes.map(l => (
-                    <tr key={l.dimensionId} onClick={() => navigate(`/lanes/${l.dimensionId}`)} style={{ cursor: 'pointer' }}>
-                      <td>
-                        <div className="vn-table-id">{l.dimensionName}</div>
-                        <div className="vn-table-secondary">Last issue: {formatDate(l.lastIssueAt)}</div>
-                      </td>
-                      <td style={{ textAlign: 'right', fontWeight: 600 }}>{l.totalIssues}</td>
-                      <td style={{ textAlign: 'right' }}>
-                        {l.criticalCount > 0 ? (
-                          <span className="vn-chip vn-chip-error">{l.criticalCount}</span>
-                        ) : (
-                          <span style={{ color: 'var(--on-surface-variant)' }}>0</span>
-                        )}
-                      </td>
-                      <td style={{ textAlign: 'right', color: 'var(--on-surface-variant)' }}>
-                        {formatHours(l.avgResolutionHours)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Lane</TableHead>
+                  <TableHead className="text-right">Issues</TableHead>
+                  <TableHead className="text-right">Critical</TableHead>
+                  <TableHead className="text-right">Avg resolution</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {topLanes.map(l => (
+                  <TableRow key={l.dimensionId} onClick={() => navigate(`/lanes/${l.dimensionId}`)} className="cursor-pointer">
+                    <TableCell>
+                      <div className="font-medium">{l.dimensionName}</div>
+                      <div className="text-xs text-muted-foreground">Last issue: {formatDate(l.lastIssueAt)}</div>
+                    </TableCell>
+                    <TableCell className="text-right font-semibold">{l.totalIssues}</TableCell>
+                    <TableCell className="text-right">
+                      {l.criticalCount > 0 ? (
+                        <Badge variant="destructive">{l.criticalCount}</Badge>
+                      ) : (
+                        <span className="text-muted-foreground">0</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right text-muted-foreground">{formatHours(l.avgResolutionHours)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           )}
-        </div>
+        </Card>
       </div>
 
-      {/* Quick Links */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16, marginTop: 24 }}>
-        <div
-          className="vn-card"
-          style={{ padding: 20, cursor: 'pointer' }}
-          onClick={() => navigate('/quality/capa')}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
-            <span className="material-icons" style={{ fontSize: 28, color: 'var(--primary)' }}>assignment</span>
-            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>CAPA Reports</h3>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <Card className="cursor-pointer p-5 transition-colors hover:border-primary/40" onClick={() => navigate('/quality/capa')}>
+          <div className="flex items-center gap-3">
+            <ClipboardList className="h-7 w-7 text-primary" />
+            <h3 className="text-base font-semibold">CAPA reports</h3>
           </div>
-          <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--on-surface-variant)' }}>
-            Corrective and Preventive Action reports for quality events.
-          </p>
-          <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
+          <p className="mt-2 text-sm text-muted-foreground">Corrective and Preventive Action reports for quality events.</p>
+          <div className="mt-3 flex gap-6">
             <div>
-              <span style={{ fontWeight: 600, fontSize: 20 }}>{d.capa.total}</span>
-              <br />
-              <small style={{ color: 'var(--on-surface-variant)' }}>Total</small>
+              <div className="text-xl font-bold">{d.capa.total}</div>
+              <div className="text-xs text-muted-foreground">Total</div>
             </div>
             <div>
-              <span style={{ fontWeight: 600, fontSize: 20 }}>{d.capa.open}</span>
-              <br />
-              <small style={{ color: 'var(--on-surface-variant)' }}>Open</small>
+              <div className="text-xl font-bold">{d.capa.open}</div>
+              <div className="text-xs text-muted-foreground">Open</div>
             </div>
           </div>
-          <span className="vn-btn vn-btn-secondary" style={{ width: '100%', justifyContent: 'center', textDecoration: 'none' }}>
-            View CAPA Reports
-          </span>
-        </div>
+          <Button variant="secondary" className="mt-4 w-full">View CAPA reports</Button>
+        </Card>
 
-        <div
-          className="vn-card"
-          style={{ padding: 20, cursor: 'pointer' }}
-          onClick={() => navigate('/quality/sop-audits')}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
-            <span className="material-icons" style={{ fontSize: 28, color: 'var(--primary)' }}>fact_check</span>
-            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>SOP Audits</h3>
+        <Card className="cursor-pointer p-5 transition-colors hover:border-primary/40" onClick={() => navigate('/quality/sop-audits')}>
+          <div className="flex items-center gap-3">
+            <FileCheck className="h-7 w-7 text-primary" />
+            <h3 className="text-base font-semibold">SOP audits</h3>
           </div>
-          <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--on-surface-variant)' }}>
-            Standard Operating Procedure checklists and audit records.
-          </p>
-          <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
+          <p className="mt-2 text-sm text-muted-foreground">Standard operating procedure checklists and audit records.</p>
+          <div className="mt-3 flex gap-6">
             <div>
-              <span style={{ fontWeight: 600, fontSize: 20 }}>{d.sop.recentAudits}</span>
-              <br />
-              <small style={{ color: 'var(--on-surface-variant)' }}>Recent</small>
+              <div className="text-xl font-bold">{d.sop.recentAudits}</div>
+              <div className="text-xs text-muted-foreground">Recent</div>
             </div>
             <div>
-              <span style={{ fontWeight: 600, fontSize: 20 }}>{d.sop.failedAudits}</span>
-              <br />
-              <small style={{ color: 'var(--on-surface-variant)' }}>Failed</small>
+              <div className="text-xl font-bold">{d.sop.failedAudits}</div>
+              <div className="text-xs text-muted-foreground">Failed</div>
             </div>
           </div>
-          <span className="vn-btn vn-btn-secondary" style={{ width: '100%', justifyContent: 'center', textDecoration: 'none' }}>
-            View SOP Audits
-          </span>
-        </div>
+          <Button variant="secondary" className="mt-4 w-full">View SOP audits</Button>
+        </Card>
 
-        <div
-          className="vn-card"
-          style={{ padding: 20, cursor: 'pointer' }}
-          onClick={() => navigate('/quality/summaries')}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
-            <span className="material-icons" style={{ fontSize: 28, color: 'var(--primary)' }}>analytics</span>
-            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>Issue Summaries</h3>
+        <Card className="cursor-pointer p-5 transition-colors hover:border-primary/40" onClick={() => navigate('/quality/summaries')}>
+          <div className="flex items-center gap-3">
+            <BarChart3 className="h-7 w-7 text-primary" />
+            <h3 className="text-base font-semibold">Issue summaries</h3>
           </div>
-          <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--on-surface-variant)' }}>
-            Aggregated quality metrics by carrier, lane, and customer.
-          </p>
-          <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
+          <p className="mt-2 text-sm text-muted-foreground">Aggregated quality metrics by carrier, lane, and customer.</p>
+          <div className="mt-3 flex gap-6">
             <div>
-              <span style={{ fontWeight: 600, fontSize: 20 }}>{d.issues.total}</span>
-              <br />
-              <small style={{ color: 'var(--on-surface-variant)' }}>Total Issues</small>
+              <div className="text-xl font-bold">{d.issues.total}</div>
+              <div className="text-xs text-muted-foreground">Total issues</div>
             </div>
             <div>
-              <span style={{ fontWeight: 600, fontSize: 20 }}>{d.issues.needsCapa}</span>
-              <br />
-              <small style={{ color: 'var(--on-surface-variant)' }}>Needs CAPA</small>
+              <div className="text-xl font-bold">{d.issues.needsCapa}</div>
+              <div className="text-xs text-muted-foreground">Needs CAPA</div>
             </div>
           </div>
-          <span className="vn-btn vn-btn-secondary" style={{ width: '100%', justifyContent: 'center', textDecoration: 'none' }}>
-            View Summaries
-          </span>
-        </div>
+          <Button variant="secondary" className="mt-4 w-full">View summaries</Button>
+        </Card>
       </div>
-    </>
+    </div>
   );
 }

@@ -1,8 +1,25 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { API_URL } from '../api';
-import { VnPageHeader, VnChip } from './components';
+import {
+  AlertTriangle,
+  ArrowDown,
+  ArrowUp,
+  CircleAlert,
+  Loader2,
+  Truck,
+} from 'lucide-react';
 
-/* ── Types ────────────────────────────────────────────────── */
+import { API_URL } from '../api';
+import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 
 interface CarrierScore {
   dimensionName: string;
@@ -34,8 +51,6 @@ type SortField =
 
 type SortOrder = 'asc' | 'desc';
 
-/* ── Helpers ──────────────────────────────────────────────── */
-
 function formatHours(hours: number | null): string {
   if (hours === null || hours === undefined) return '--';
   if (hours < 1) return `${Math.round(hours * 60)}m`;
@@ -53,11 +68,9 @@ function getSortValue(row: CarrierScore, field: SortField): number | string {
     case 'dimensionName': return row.dimensionName.toLowerCase();
     case 'capaRate': return capaRate(row);
     case 'avgResolutionHours': return row.avgResolutionHours ?? -1;
-    default: return (row as Record<string, unknown>)[field] as number;
+    default: return (row as unknown as Record<string, unknown>)[field] as number;
   }
 }
-
-/* ── Component ────────────────────────────────────────────── */
 
 export default function VNextQualityCarrierScorecard() {
   const [data, setData] = useState<CarrierScore[]>([]);
@@ -106,168 +119,124 @@ export default function VNextQualityCarrierScorecard() {
     }
   }
 
-  function sortIndicator(field: SortField) {
+  function SortIndicator({ field }: { field: SortField }) {
     if (sortBy !== field) return null;
-    return (
-      <span className="material-icons" style={{ fontSize: 16, verticalAlign: 'middle', marginLeft: 2 }}>
-        {sortOrder === 'asc' ? 'arrow_upward' : 'arrow_downward'}
-      </span>
-    );
+    return sortOrder === 'asc' ? <ArrowUp className="ml-1 inline h-3 w-3" /> : <ArrowDown className="ml-1 inline h-3 w-3" />;
   }
 
-  /* ── Loading ────────────────────────────────────────────── */
   if (loading) {
     return (
-      <div className="vn-empty">
-        <span className="material-icons" style={{ animation: 'spin 1s linear infinite' }}>refresh</span>
-        <h3>Loading...</h3>
+      <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <h3 className="text-lg font-medium">Loading...</h3>
       </div>
     );
   }
 
-  /* ── Error ──────────────────────────────────────────────── */
   if (error) {
     return (
-      <div className="vn-alert vn-alert-error">
-        <span className="material-icons">error</span>
-        <div className="vn-alert-content">{error}</div>
+      <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+        <CircleAlert className="h-5 w-5" />
+        {error}
       </div>
     );
   }
 
-  /* ── Summary stats ──────────────────────────────────────── */
   const totalCarriers = data.length;
   const totalIssuesAll = data.reduce((s, r) => s + r.totalIssues, 0);
   const carriersWithCritical = data.filter(r => r.criticalCount > 0).length;
 
-  const thStyle: React.CSSProperties = { cursor: 'pointer', textAlign: 'right' };
+  const stats = [
+    { label: 'Carriers', value: totalCarriers, icon: Truck, tone: 'bg-primary/10 text-primary' },
+    { label: 'Total issues', value: totalIssuesAll, icon: AlertTriangle, tone: 'bg-warning/15 text-warning' },
+    { label: 'Carriers with critical', value: carriersWithCritical, icon: CircleAlert, tone: 'bg-destructive/10 text-destructive' },
+  ];
 
   return (
-    <>
-      <VnPageHeader
-        title="Carrier Quality Scorecard"
-        subtitle="Quality performance metrics across all carriers"
-      />
-
-      {/* Stats row */}
-      <div className="vn-stats">
-        <div className="vn-stat">
-          <div className="vn-stat-icon primary">
-            <span className="material-icons">local_shipping</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{totalCarriers}</div>
-            <div className="vn-stat-label">Carriers</div>
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon warning">
-            <span className="material-icons">report_problem</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{totalIssuesAll}</div>
-            <div className="vn-stat-label">Total Issues</div>
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon error">
-            <span className="material-icons">error</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{carriersWithCritical}</div>
-            <div className="vn-stat-label">Carriers with Critical</div>
-          </div>
-        </div>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Carrier quality scorecard</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Quality performance metrics across all carriers</p>
       </div>
 
-      {/* Table */}
-      <div className="vn-card" style={{ marginTop: 24 }}>
+      <div className="grid gap-3 sm:grid-cols-3">
+        {stats.map(stat => {
+          const Icon = stat.icon;
+          return (
+            <Card key={stat.label}>
+              <div className="p-5">
+                <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', stat.tone)}>
+                  <Icon className="h-5 w-5" />
+                </div>
+                <div className="mt-3 text-2xl font-bold tracking-tight">{stat.value}</div>
+                <div className="mt-1 text-sm text-muted-foreground">{stat.label}</div>
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+
+      <Card>
         {sorted.length === 0 ? (
-          <div className="vn-empty">
-            <span className="material-icons">local_shipping</span>
-            <h3>No carrier data</h3>
-            <p>No carrier quality data is available yet.</p>
+          <div className="flex flex-col items-center gap-3 py-12 text-muted-foreground">
+            <Truck className="h-10 w-10 opacity-40" />
+            <h3 className="text-base font-medium">No carrier data</h3>
+            <p className="text-sm">No carrier quality data is available yet.</p>
           </div>
         ) : (
-          <div className="vn-table-wrap">
-            <table className="vn-table">
-              <thead>
-                <tr>
-                  <th style={{ cursor: 'pointer' }} onClick={() => handleSort('dimensionName')}>
-                    Carrier Name {sortIndicator('dimensionName')}
-                  </th>
-                  <th style={thStyle} onClick={() => handleSort('totalIssues')}>
-                    Total Issues {sortIndicator('totalIssues')}
-                  </th>
-                  <th style={{ ...thStyle, textAlign: 'center' }} onClick={() => handleSort('criticalCount')}>
-                    Critical {sortIndicator('criticalCount')}
-                  </th>
-                  <th style={{ ...thStyle, textAlign: 'center' }} onClick={() => handleSort('highCount')}>
-                    High {sortIndicator('highCount')}
-                  </th>
-                  <th style={thStyle} onClick={() => handleSort('exceptionCount')}>
-                    Exceptions {sortIndicator('exceptionCount')}
-                  </th>
-                  <th style={thStyle} onClick={() => handleSort('delayCount')}>
-                    Delays {sortIndicator('delayCount')}
-                  </th>
-                  <th style={thStyle} onClick={() => handleSort('damageCount')}>
-                    Damage {sortIndicator('damageCount')}
-                  </th>
-                  <th style={thStyle} onClick={() => handleSort('capaRate')}>
-                    CAPA Rate {sortIndicator('capaRate')}
-                  </th>
-                  <th style={thStyle} onClick={() => handleSort('avgResolutionHours')}>
-                    Avg Resolution {sortIndicator('avgResolutionHours')}
-                  </th>
-                  <th style={thStyle} onClick={() => handleSort('openCount')}>
-                    Open Issues {sortIndicator('openCount')}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {sorted.map((row, idx) => (
-                  <tr key={idx}>
-                    <td>
-                      <div className="vn-table-id">{row.dimensionName}</div>
-                      <div className="vn-table-secondary">
-                        {row.closedCount} closed
-                      </div>
-                    </td>
-                    <td style={{ textAlign: 'right', fontWeight: 600 }}>{row.totalIssues}</td>
-                    <td style={{ textAlign: 'center' }}>
-                      {row.criticalCount > 0
-                        ? <VnChip variant="error">{row.criticalCount}</VnChip>
-                        : <span style={{ color: 'var(--on-surface-variant)', fontSize: 13 }}>0</span>}
-                    </td>
-                    <td style={{ textAlign: 'center' }}>
-                      {row.highCount > 3
-                        ? <VnChip variant="warning">{row.highCount}</VnChip>
-                        : <span style={{ color: 'var(--on-surface-variant)', fontSize: 13 }}>{row.highCount}</span>}
-                    </td>
-                    <td style={{ textAlign: 'right', fontSize: 13 }}>{row.exceptionCount}</td>
-                    <td style={{ textAlign: 'right', fontSize: 13 }}>{row.delayCount}</td>
-                    <td style={{ textAlign: 'right', fontSize: 13 }}>{row.damageCount}</td>
-                    <td style={{ textAlign: 'right', fontSize: 13 }}>
-                      {row.totalIssues > 0
-                        ? `${capaRate(row).toFixed(1)}%`
-                        : '--'}
-                    </td>
-                    <td style={{ textAlign: 'right', fontSize: 13, color: 'var(--on-surface-variant)' }}>
-                      {formatHours(row.avgResolutionHours)}
-                    </td>
-                    <td style={{ textAlign: 'right', fontSize: 13 }}>
-                      {row.openCount > 0
-                        ? <span style={{ fontWeight: 600, color: 'var(--error)' }}>{row.openCount}</span>
-                        : <span style={{ color: 'var(--on-surface-variant)' }}>0</span>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="cursor-pointer" onClick={() => handleSort('dimensionName')}>Carrier name<SortIndicator field="dimensionName" /></TableHead>
+                <TableHead className="cursor-pointer text-right" onClick={() => handleSort('totalIssues')}>Total<SortIndicator field="totalIssues" /></TableHead>
+                <TableHead className="cursor-pointer text-center" onClick={() => handleSort('criticalCount')}>Critical<SortIndicator field="criticalCount" /></TableHead>
+                <TableHead className="cursor-pointer text-center" onClick={() => handleSort('highCount')}>High<SortIndicator field="highCount" /></TableHead>
+                <TableHead className="cursor-pointer text-right" onClick={() => handleSort('exceptionCount')}>Exceptions<SortIndicator field="exceptionCount" /></TableHead>
+                <TableHead className="cursor-pointer text-right" onClick={() => handleSort('delayCount')}>Delays<SortIndicator field="delayCount" /></TableHead>
+                <TableHead className="cursor-pointer text-right" onClick={() => handleSort('damageCount')}>Damage<SortIndicator field="damageCount" /></TableHead>
+                <TableHead className="cursor-pointer text-right" onClick={() => handleSort('capaRate')}>CAPA rate<SortIndicator field="capaRate" /></TableHead>
+                <TableHead className="cursor-pointer text-right" onClick={() => handleSort('avgResolutionHours')}>Avg res.<SortIndicator field="avgResolutionHours" /></TableHead>
+                <TableHead className="cursor-pointer text-right" onClick={() => handleSort('openCount')}>Open<SortIndicator field="openCount" /></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {sorted.map((row, idx) => (
+                <TableRow key={idx}>
+                  <TableCell>
+                    <div className="font-semibold">{row.dimensionName}</div>
+                    <div className="text-xs text-muted-foreground">{row.closedCount} closed</div>
+                  </TableCell>
+                  <TableCell className="text-right font-semibold">{row.totalIssues}</TableCell>
+                  <TableCell className="text-center">
+                    {row.criticalCount > 0
+                      ? <Badge variant="destructive">{row.criticalCount}</Badge>
+                      : <span className="text-sm text-muted-foreground">0</span>}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    {row.highCount > 3
+                      ? <Badge variant="warning">{row.highCount}</Badge>
+                      : <span className="text-sm text-muted-foreground">{row.highCount}</span>}
+                  </TableCell>
+                  <TableCell className="text-right text-sm">{row.exceptionCount}</TableCell>
+                  <TableCell className="text-right text-sm">{row.delayCount}</TableCell>
+                  <TableCell className="text-right text-sm">{row.damageCount}</TableCell>
+                  <TableCell className="text-right text-sm">
+                    {row.totalIssues > 0 ? `${capaRate(row).toFixed(1)}%` : '--'}
+                  </TableCell>
+                  <TableCell className="text-right text-sm text-muted-foreground">
+                    {formatHours(row.avgResolutionHours)}
+                  </TableCell>
+                  <TableCell className="text-right text-sm">
+                    {row.openCount > 0
+                      ? <span className="font-semibold text-destructive">{row.openCount}</span>
+                      : <span className="text-muted-foreground">0</span>}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         )}
-      </div>
-    </>
+      </Card>
+    </div>
   );
 }

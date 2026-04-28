@@ -1,7 +1,20 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ArrowLeft, Plus, Send, X } from 'lucide-react';
+
 import { API_URL } from '../../api';
 import { customerFetch } from './CustomerDashboard';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface LineItem {
   description: string;
@@ -9,6 +22,9 @@ interface LineItem {
   weightKg: string;
   sku: string;
 }
+
+const TEXTAREA_CLASS =
+  'flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
 
 export default function CustomerCreateOrder() {
   const navigate = useNavigate();
@@ -68,108 +84,168 @@ export default function CustomerCreateOrder() {
   };
 
   return (
-    <div>
-      <button className="vn-btn vn-btn-ghost vn-btn-sm" onClick={() => navigate('/customer-portal/orders')} style={{ marginBottom: 16 }}>
-        <span className="material-icons">arrow_back</span> Orders
-      </button>
-      <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 24 }}>Create Order</h1>
+    <div className="space-y-6">
+      <div>
+        <Button variant="ghost" size="sm" onClick={() => navigate('/customer-portal/orders')}>
+          <ArrowLeft className="h-4 w-4" />
+          Orders
+        </Button>
+      </div>
+      <h1 className="text-3xl font-bold tracking-tight">Create order</h1>
 
-      <form onSubmit={handleSubmit}>
-        {error && <div className="vn-alert vn-alert-error" style={{ marginBottom: 16 }}>{error}</div>}
-
-        <div className="vn-card" style={{ padding: 20, marginBottom: 24 }}>
-          <h3 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 600 }}>Order Details</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            <div className="vn-field">
-              <label className="vn-field-label">PO Number *</label>
-              <input className="vn-input" value={poNumber} onChange={e => setPoNumber(e.target.value)} required />
-            </div>
-            <div className="vn-field">
-              <label className="vn-field-label">Service Level</label>
-              <select className="vn-input" value={serviceLevel} onChange={e => setServiceLevel(e.target.value)}>
-                <option value="FTL">Full Truckload (FTL)</option>
-                <option value="LTL">Less Than Truckload (LTL)</option>
-              </select>
-            </div>
-            <div className="vn-field">
-              <label className="vn-field-label">Requested Delivery Date</label>
-              <input className="vn-input" type="date" value={requestedDeliveryDate} onChange={e => setRequestedDeliveryDate(e.target.value)} />
-            </div>
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {error && (
+          <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {error}
           </div>
+        )}
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Order details</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="po-number">PO number *</Label>
+                <Input id="po-number" value={poNumber} onChange={e => setPoNumber(e.target.value)} required />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="service-level">Service level</Label>
+                <Select value={serviceLevel} onValueChange={setServiceLevel}>
+                  <SelectTrigger id="service-level">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="FTL">Full Truckload (FTL)</SelectItem>
+                    <SelectItem value="LTL">Less Than Truckload (LTL)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="delivery-date">Requested delivery date</Label>
+                <Input id="delivery-date" type="date" value={requestedDeliveryDate} onChange={e => setRequestedDeliveryDate(e.target.value)} />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="grid gap-6 sm:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle>Origin</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="origin-city">City</Label>
+                <Input id="origin-city" value={originCity} onChange={e => setOriginCity(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="origin-state">State</Label>
+                <Input id="origin-state" value={originState} onChange={e => setOriginState(e.target.value)} />
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Destination</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="dest-city">City</Label>
+                <Input id="dest-city" value={destCity} onChange={e => setDestCity(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="dest-state">State</Label>
+                <Input id="dest-state" value={destState} onChange={e => setDestState(e.target.value)} />
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 24 }}>
-          <div className="vn-card" style={{ padding: 20 }}>
-            <h3 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 600 }}>Origin</h3>
-            <div className="vn-field" style={{ marginBottom: 12 }}>
-              <label className="vn-field-label">City</label>
-              <input className="vn-input" value={originCity} onChange={e => setOriginCity(e.target.value)} />
-            </div>
-            <div className="vn-field">
-              <label className="vn-field-label">State</label>
-              <input className="vn-input" value={originState} onChange={e => setOriginState(e.target.value)} />
-            </div>
-          </div>
-          <div className="vn-card" style={{ padding: 20 }}>
-            <h3 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 600 }}>Destination</h3>
-            <div className="vn-field" style={{ marginBottom: 12 }}>
-              <label className="vn-field-label">City</label>
-              <input className="vn-input" value={destCity} onChange={e => setDestCity(e.target.value)} />
-            </div>
-            <div className="vn-field">
-              <label className="vn-field-label">State</label>
-              <input className="vn-input" value={destState} onChange={e => setDestState(e.target.value)} />
-            </div>
-          </div>
-        </div>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>Line items</CardTitle>
+            <Button type="button" variant="outline" size="sm" onClick={addItem}>
+              <Plus className="h-4 w-4" />
+              Add item
+            </Button>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {lineItems.map((item, i) => (
+              <div key={i} className="grid grid-cols-[2fr_1fr_1fr_1fr_auto] items-end gap-2">
+                <div className="space-y-1">
+                  {i === 0 && <Label className="text-xs">Description</Label>}
+                  <Input
+                    value={item.description}
+                    onChange={e => updateItem(i, 'description', e.target.value)}
+                    placeholder="Item description"
+                  />
+                </div>
+                <div className="space-y-1">
+                  {i === 0 && <Label className="text-xs">Qty</Label>}
+                  <Input
+                    type="number"
+                    min={1}
+                    value={item.quantity}
+                    onChange={e => updateItem(i, 'quantity', parseInt(e.target.value) || 1)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  {i === 0 && <Label className="text-xs">Weight (kg)</Label>}
+                  <Input
+                    type="number"
+                    step="0.1"
+                    value={item.weightKg}
+                    onChange={e => updateItem(i, 'weightKg', e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  {i === 0 && <Label className="text-xs">SKU</Label>}
+                  <Input value={item.sku} onChange={e => updateItem(i, 'sku', e.target.value)} />
+                </div>
+                {lineItems.length > 1 ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removeItem(i)}
+                    className="text-destructive"
+                    aria-label="Remove item"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                ) : (
+                  <div />
+                )}
+              </div>
+            ))}
+          </CardContent>
+        </Card>
 
-        <div className="vn-card" style={{ padding: 20, marginBottom: 24 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>Line Items</h3>
-            <button type="button" className="vn-btn vn-btn-outline vn-btn-sm" onClick={addItem}>
-              <span className="material-icons" style={{ fontSize: 16 }}>add</span> Add Item
-            </button>
-          </div>
-          {lineItems.map((item, i) => (
-            <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr auto', gap: 8, marginBottom: 8, alignItems: 'end' }}>
-              <div className="vn-field">
-                {i === 0 && <label className="vn-field-label">Description</label>}
-                <input className="vn-input" value={item.description} onChange={e => updateItem(i, 'description', e.target.value)} placeholder="Item description" />
-              </div>
-              <div className="vn-field">
-                {i === 0 && <label className="vn-field-label">Qty</label>}
-                <input className="vn-input" type="number" min="1" value={item.quantity} onChange={e => updateItem(i, 'quantity', parseInt(e.target.value) || 1)} />
-              </div>
-              <div className="vn-field">
-                {i === 0 && <label className="vn-field-label">Weight (kg)</label>}
-                <input className="vn-input" type="number" step="0.1" value={item.weightKg} onChange={e => updateItem(i, 'weightKg', e.target.value)} />
-              </div>
-              <div className="vn-field">
-                {i === 0 && <label className="vn-field-label">SKU</label>}
-                <input className="vn-input" value={item.sku} onChange={e => updateItem(i, 'sku', e.target.value)} />
-              </div>
-              {lineItems.length > 1 && (
-                <button type="button" className="vn-btn-icon" onClick={() => removeItem(i)} style={{ marginBottom: 2 }}>
-                  <span className="material-icons" style={{ fontSize: 18, color: 'var(--color-error)' }}>close</span>
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Special instructions</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <textarea
+              className={TEXTAREA_CLASS}
+              rows={3}
+              value={specialInstructions}
+              onChange={e => setSpecialInstructions(e.target.value)}
+              placeholder="Any special requirements..."
+            />
+          </CardContent>
+        </Card>
 
-        <div className="vn-card" style={{ padding: 20, marginBottom: 24 }}>
-          <div className="vn-field">
-            <label className="vn-field-label">Special Instructions</label>
-            <textarea className="vn-input" rows={3} value={specialInstructions} onChange={e => setSpecialInstructions(e.target.value)} placeholder="Any special requirements..." />
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-          <button type="button" className="vn-btn vn-btn-outline" onClick={() => navigate('/customer-portal/orders')}>Cancel</button>
-          <button type="submit" className="vn-btn vn-btn-primary" disabled={submitting}>
-            <span className="material-icons">send</span>
-            {submitting ? 'Submitting...' : 'Submit Order'}
-          </button>
+        <div className="flex justify-end gap-3">
+          <Button type="button" variant="outline" onClick={() => navigate('/customer-portal/orders')}>
+            Cancel
+          </Button>
+          <Button type="submit" variant="gradient" disabled={submitting}>
+            <Send className="h-4 w-4" />
+            {submitting ? 'Submitting...' : 'Submit order'}
+          </Button>
         </div>
       </form>
     </div>

@@ -1,10 +1,42 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import {
+  BadgeCheck,
+  Bot,
+  CircleAlert,
+  Clock,
+  Coins,
+  Gauge,
+  Loader2,
+  Search,
+  Sparkles,
+  Target,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
-import { VnPageHeader, VnStatCard, VnFilterBar, VnDataTable, VnChip } from './components';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 
 interface Decision {
-  [key: string]: unknown;
   id: string;
   agentType: string;
   modelProvider: string | null;
@@ -56,31 +88,33 @@ function timeAgo(dateStr: string): string {
   return `${days}d ago`;
 }
 
-function outcomeChip(status: string | null) {
-  if (!status || status === 'pending') return <VnChip variant="secondary">Pending review</VnChip>;
-  if (status === 'correct') return <VnChip variant="success">Correct</VnChip>;
-  if (status === 'incorrect') return <VnChip variant="error">Incorrect</VnChip>;
-  if (status === 'partially_correct') return <VnChip variant="warning">Partial</VnChip>;
-  return <VnChip variant="secondary">{status}</VnChip>;
+function outcomeBadge(status: string | null) {
+  if (!status || status === 'pending') return <Badge variant="secondary">Pending review</Badge>;
+  if (status === 'correct') return <Badge variant="success">Correct</Badge>;
+  if (status === 'incorrect') return <Badge variant="destructive">Incorrect</Badge>;
+  if (status === 'partially_correct') return <Badge variant="warning">Partial</Badge>;
+  return <Badge variant="secondary">{status}</Badge>;
 }
 
-function actionChip(actionType: string) {
-  if (actionType === 'create_issue') return <VnChip variant="info">Created issue</VnChip>;
-  if (actionType === 'escalate_issue') return <VnChip variant="warning">Escalated</VnChip>;
-  if (actionType === 'no_action') return <VnChip variant="secondary">No action</VnChip>;
-  return <VnChip variant="secondary">{actionType}</VnChip>;
+function actionBadge(actionType: string) {
+  if (actionType === 'create_issue') return <Badge variant="info">Created issue</Badge>;
+  if (actionType === 'escalate_issue') return <Badge variant="warning">Escalated</Badge>;
+  if (actionType === 'no_action') return <Badge variant="secondary">No action</Badge>;
+  return <Badge variant="secondary">{actionType}</Badge>;
 }
 
-function confidenceBar(confidence: number | null) {
-  if (confidence === null || confidence === undefined) return <span style={{ color: 'var(--on-surface-variant)', fontSize: 13 }}>-</span>;
+function ConfidenceBar({ confidence }: { confidence: number | null }) {
+  if (confidence === null || confidence === undefined) {
+    return <span className="text-sm text-muted-foreground">-</span>;
+  }
   const pct = Math.round(confidence * 100);
-  const color = pct >= 80 ? 'var(--success)' : pct >= 50 ? 'var(--warning)' : 'var(--error)';
+  const color = pct >= 80 ? 'bg-success' : pct >= 50 ? 'bg-warning' : 'bg-destructive';
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <div style={{ width: 48, height: 6, borderRadius: 3, background: 'var(--surface-container-high)' }}>
-        <div style={{ width: `${pct}%`, height: '100%', borderRadius: 3, background: color }} />
+    <div className="flex items-center gap-2">
+      <div className="h-1.5 w-12 overflow-hidden rounded-full bg-muted">
+        <div className={cn('h-full', color)} style={{ width: `${pct}%` }} />
       </div>
-      <span style={{ fontSize: 13, fontWeight: 500 }}>{pct}%</span>
+      <span className="text-sm font-medium">{pct}%</span>
     </div>
   );
 }
@@ -150,58 +184,71 @@ export default function VNextAgentDecisions() {
 
   if (loading) {
     return (
-      <div className="vn-empty">
-        <span className="material-icons" style={{ animation: 'spin 1s linear infinite' }}>refresh</span>
-        <h3>Loading decisions...</h3>
+      <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <h3 className="text-lg font-medium">Loading decisions...</h3>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="vn-alert vn-alert-error">
-        <span className="material-icons">error</span>
-        <div className="vn-alert-content">{error}</div>
+      <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+        <CircleAlert className="h-5 w-5" />
+        {error}
       </div>
     );
   }
 
-  return (
-    <>
-      <VnPageHeader title="Agent Decisions" subtitle={`${total} decisions logged`} />
+  const statTiles = [
+    { label: 'Total decisions', value: stats?.totalDecisions ?? 0, icon: Bot, tone: 'bg-primary/10 text-primary' },
+    { label: 'Pending review', value: stats?.pendingReviewCount ?? 0, icon: Clock, tone: 'bg-warning/15 text-warning' },
+    { label: 'Accuracy rate', value: accuracyPct !== null ? `${accuracyPct}%` : '-', icon: BadgeCheck, tone: 'bg-success/15 text-success' },
+    {
+      label: 'Avg confidence',
+      value: stats?.averageConfidence !== null ? `${Math.round((stats?.averageConfidence ?? 0) * 100)}%` : '-',
+      icon: Gauge,
+      tone: 'bg-info/15 text-info',
+    },
+    { label: 'Promoted', value: stats?.promotedCount ?? 0, icon: Sparkles, tone: 'bg-primary/10 text-primary' },
+    { label: 'Total tokens', value: stats?.totalTokens ? stats.totalTokens.toLocaleString() : '0', icon: Coins, tone: 'bg-destructive/10 text-destructive' },
+  ];
 
-      {/* Stats row */}
-      <div className="vn-stats">
-        <VnStatCard icon="smart_toy" iconVariant="primary" value={stats?.totalDecisions ?? 0} label="Total Decisions" />
-        <VnStatCard icon="rate_review" iconVariant="warning" value={stats?.pendingReviewCount ?? 0} label="Pending Review" />
-        <VnStatCard icon="check_circle" iconVariant="success" value={accuracyPct !== null ? `${accuracyPct}%` : '-'} label="Accuracy Rate" />
-        <VnStatCard
-          icon="avg_pace"
-          iconVariant="info"
-          value={stats?.averageConfidence !== null ? `${Math.round((stats?.averageConfidence ?? 0) * 100)}%` : '-'}
-          label="Avg Confidence"
-        />
-        <VnStatCard icon="auto_fix_high" iconVariant="primary" value={stats?.promotedCount ?? 0} label="Promoted" />
-        <VnStatCard
-          icon="token"
-          iconVariant="error"
-          value={stats?.totalTokens ? stats.totalTokens.toLocaleString() : '0'}
-          label="Total Tokens"
-        />
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Agent decisions</h1>
+        <p className="mt-1 text-sm text-muted-foreground">{total} decisions logged</p>
       </div>
 
-      {/* Daily usage chart */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+        {statTiles.map(tile => {
+          const Icon = tile.icon;
+          return (
+            <Card key={tile.label}>
+              <div className="p-5">
+                <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', tile.tone)}>
+                  <Icon className="h-5 w-5" />
+                </div>
+                <div className="mt-3 text-2xl font-bold tracking-tight">{tile.value}</div>
+                <div className="mt-1 text-sm text-muted-foreground">{tile.label}</div>
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+
       {dailyUsage.length > 0 && (
-        <div className="vn-card" style={{ marginTop: 24 }}>
-          <div className="vn-card-header">
-            <h2>Usage (Last 30 Days)</h2>
-            <span style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>Usage (last 30 days)</CardTitle>
+            <span className="text-sm text-muted-foreground">
               {stats?.totalInputTokens?.toLocaleString() ?? 0} input + {stats?.totalOutputTokens?.toLocaleString() ?? 0} output tokens
             </span>
-          </div>
-          <div className="vn-card-body">
-            <div style={{ display: 'flex', gap: 2, alignItems: 'flex-end', height: 120 }}>
-              {dailyUsage.map((d) => {
+          </CardHeader>
+          <CardContent>
+            <div className="flex h-32 items-end gap-0.5">
+              {dailyUsage.map(d => {
                 const maxInvocations = Math.max(...dailyUsage.map(x => x.invocations), 1);
                 const height = Math.max(4, (d.invocations / maxInvocations) * 100);
                 const totalTokens = d.inputTokens + d.outputTokens;
@@ -209,97 +256,102 @@ export default function VNextAgentDecisions() {
                   <div
                     key={d.date}
                     title={`${d.date}: ${d.invocations} invocations, ${totalTokens.toLocaleString()} tokens`}
-                    style={{
-                      flex: 1,
-                      height: `${height}%`,
-                      background: 'var(--primary)',
-                      borderRadius: '4px 4px 0 0',
-                      opacity: 0.8,
-                      minWidth: 4,
-                      cursor: 'default',
-                    }}
+                    className="min-w-[4px] flex-1 rounded-t bg-primary/80"
+                    style={{ height: `${height}%` }}
                   />
                 );
               })}
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 11, color: 'var(--on-surface-variant)' }}>
+            <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
               <span>{dailyUsage[0]?.date}</span>
               <span>Invocations per day</span>
               <span>{dailyUsage[dailyUsage.length - 1]?.date}</span>
             </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       )}
 
-      {/* Filters + table */}
-      <div className="vn-card" style={{ marginTop: 24 }}>
-        <VnFilterBar searchPlaceholder="Search decisions..." searchValue={search} onSearchChange={setSearch}>
-          <select className="vn-filter-select" value={outcomeFilter} onChange={e => setOutcomeFilter(e.target.value)}>
-            <option value="all">All Outcomes</option>
-            <option value="pending">Pending Review</option>
-            <option value="correct">Correct</option>
-            <option value="incorrect">Incorrect</option>
-            <option value="partially_correct">Partially Correct</option>
-          </select>
-          <select className="vn-filter-select" value={actionFilter} onChange={e => setActionFilter(e.target.value)}>
-            <option value="all">All Actions</option>
-            <option value="create_issue">Created Issue</option>
-            <option value="escalate_issue">Escalated</option>
-            <option value="no_action">No Action</option>
-          </select>
-          <select className="vn-filter-select" value={agentTypeFilter} onChange={e => setAgentTypeFilter(e.target.value)}>
-            <option value="all">All Agents</option>
-            <option value="triage">Triage</option>
-            <option value="quality_analysis">Quality Analysis</option>
-            <option value="route_optimization">Route Optimization</option>
-          </select>
-        </VnFilterBar>
+      <Card>
+        <div className="flex flex-wrap items-center gap-3 p-4">
+          <div className="relative min-w-[240px] flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search decisions..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+          <Select value={outcomeFilter} onValueChange={setOutcomeFilter}>
+            <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All outcomes</SelectItem>
+              <SelectItem value="pending">Pending review</SelectItem>
+              <SelectItem value="correct">Correct</SelectItem>
+              <SelectItem value="incorrect">Incorrect</SelectItem>
+              <SelectItem value="partially_correct">Partially correct</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={actionFilter} onValueChange={setActionFilter}>
+            <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All actions</SelectItem>
+              <SelectItem value="create_issue">Created issue</SelectItem>
+              <SelectItem value="escalate_issue">Escalated</SelectItem>
+              <SelectItem value="no_action">No action</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={agentTypeFilter} onValueChange={setAgentTypeFilter}>
+            <SelectTrigger className="w-[200px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All agents</SelectItem>
+              <SelectItem value="triage">Triage</SelectItem>
+              <SelectItem value="quality_analysis">Quality analysis</SelectItem>
+              <SelectItem value="route_optimization">Route optimization</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
 
-        <VnDataTable
-          columns={[
-            {
-              key: 'summary', label: 'Decision',
-              render: (d) => (
-                <div>
-                  <span className="vn-table-id">{d.summary}</span>
-                  <div className="vn-table-secondary">
-                    {d.triggerEventType || d.triggerType} {d.entityType ? `on ${d.entityType}` : ''}
-                  </div>
-                </div>
-              ),
-            },
-            {
-              key: 'agentType', label: 'Agent',
-              render: (d) => (
-                <span style={{ textTransform: 'capitalize', fontSize: 13 }}>{d.agentType.replace(/_/g, ' ')}</span>
-              ),
-            },
-            {
-              key: 'actionType', label: 'Action',
-              render: (d) => actionChip(d.actionType),
-            },
-            {
-              key: 'confidence', label: 'Confidence',
-              render: (d) => confidenceBar(d.confidence),
-            },
-            {
-              key: 'outcomeStatus', label: 'Outcome',
-              render: (d) => outcomeChip(d.outcomeStatus),
-            },
-            {
-              key: 'createdAt', label: 'When',
-              render: (d) => (
-                <span style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>{timeAgo(d.createdAt)}</span>
-              ),
-            },
-          ]}
-          data={filtered}
-          onRowClick={(d) => navigate(`/agent-decisions/${d.id}`)}
-          emptyIcon="smart_toy"
-          emptyTitle="No decisions yet"
-          emptyMessage="Agent decisions will appear here when the triage agent processes events."
-        />
-      </div>
-    </>
+        <Separator />
+
+        {filtered.length === 0 ? (
+          <div className="flex flex-col items-center gap-3 py-12 text-muted-foreground">
+            <Bot className="h-10 w-10 opacity-40" />
+            <h3 className="text-base font-medium">No decisions yet</h3>
+            <p className="text-sm">Agent decisions will appear here when the triage agent processes events.</p>
+          </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Decision</TableHead>
+                <TableHead>Agent</TableHead>
+                <TableHead>Action</TableHead>
+                <TableHead>Confidence</TableHead>
+                <TableHead>Outcome</TableHead>
+                <TableHead>When</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filtered.map(d => (
+                <TableRow key={d.id} onClick={() => navigate(`/agent-decisions/${d.id}`)} className="cursor-pointer">
+                  <TableCell>
+                    <div className="font-medium">{d.summary}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {d.triggerEventType || d.triggerType} {d.entityType ? `on ${d.entityType}` : ''}
+                    </div>
+                  </TableCell>
+                  <TableCell><span className="text-sm capitalize">{d.agentType.replace(/_/g, ' ')}</span></TableCell>
+                  <TableCell>{actionBadge(d.actionType)}</TableCell>
+                  <TableCell><ConfidenceBar confidence={d.confidence} /></TableCell>
+                  <TableCell>{outcomeBadge(d.outcomeStatus)}</TableCell>
+                  <TableCell><span className="text-sm text-muted-foreground">{timeAgo(d.createdAt)}</span></TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </Card>
+    </div>
   );
 }

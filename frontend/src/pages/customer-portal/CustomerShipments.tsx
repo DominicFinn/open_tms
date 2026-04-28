@@ -1,7 +1,27 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Loader2 } from 'lucide-react';
+
 import { API_URL } from '../../api';
 import { customerFetch } from './CustomerDashboard';
+import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 interface Shipment {
   id: string; reference: string; status: string;
@@ -9,20 +29,29 @@ interface Shipment {
   carrierName?: string; pickupDate?: string; deliveryDate?: string; updatedAt: string;
 }
 
-function statusChip(s: string): string {
-  const m: Record<string, string> = { in_transit: 'info', delivered: 'success', booked: 'warning', exception: 'error', at_pickup: 'warning', at_delivery: 'warning' };
+type StatusVariant = 'success' | 'info' | 'warning' | 'destructive' | 'muted' | 'secondary';
+
+function statusVariant(s: string): StatusVariant {
+  const m: Record<string, StatusVariant> = {
+    in_transit: 'info',
+    delivered: 'success',
+    booked: 'warning',
+    exception: 'destructive',
+    at_pickup: 'warning',
+    at_delivery: 'warning',
+  };
   return m[s] || 'secondary';
 }
 
 export default function CustomerShipments() {
   const [shipments, setShipments] = useState<Shipment[]>([]);
-  const [statusFilter, setStatusFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
     const params = new URLSearchParams();
-    if (statusFilter) params.set('status', statusFilter);
+    if (statusFilter !== 'all') params.set('status', statusFilter);
     customerFetch(`${API_URL}/api/v1/customer-portal/shipments?${params}`)
       .then(r => r.json())
       .then(json => setShipments(json.data || []))
@@ -31,42 +60,78 @@ export default function CustomerShipments() {
   }, [statusFilter]);
 
   return (
-    <div>
-      <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 16 }}>Shipments</h1>
-      <div className="vn-card">
-        <div className="vn-filters" style={{ padding: '8px 16px' }}>
-          <select className="vn-filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-            <option value="">All Statuses</option>
-            <option value="booked">Booked</option>
-            <option value="in_transit">In Transit</option>
-            <option value="at_pickup">At Pickup</option>
-            <option value="at_delivery">At Delivery</option>
-            <option value="delivered">Delivered</option>
-            <option value="exception">Exception</option>
-          </select>
+    <div className="space-y-6">
+      <h1 className="text-3xl font-bold tracking-tight">Shipments</h1>
+      <Card>
+        <div className="flex flex-wrap items-center gap-3 p-4">
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-[200px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All statuses</SelectItem>
+              <SelectItem value="booked">Booked</SelectItem>
+              <SelectItem value="in_transit">In transit</SelectItem>
+              <SelectItem value="at_pickup">At pickup</SelectItem>
+              <SelectItem value="at_delivery">At delivery</SelectItem>
+              <SelectItem value="delivered">Delivered</SelectItem>
+              <SelectItem value="exception">Exception</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
-        <div className="vn-table-wrap">
-          {loading ? <div style={{ textAlign: 'center', padding: 40 }}><div className="loading-spinner" /></div> : (
-            <table className="vn-table">
-              <thead><tr><th>Reference</th><th>Origin</th><th>Destination</th><th>Carrier</th><th>Pickup</th><th>Delivery</th><th>Status</th></tr></thead>
-              <tbody>
-                {shipments.map(s => (
-                  <tr key={s.id}>
-                    <td><Link to={`/customer-portal/shipments/${s.id}`} style={{ fontWeight: 600, color: 'var(--primary)' }}>{s.reference}</Link></td>
-                    <td style={{ fontSize: 13 }}>{s.originCity ? `${s.originCity}, ${s.originState}` : '-'}</td>
-                    <td style={{ fontSize: 13 }}>{s.destinationCity ? `${s.destinationCity}, ${s.destinationState}` : '-'}</td>
-                    <td style={{ fontSize: 13 }}>{s.carrierName || '-'}</td>
-                    <td style={{ fontSize: 13 }}>{s.pickupDate ? new Date(s.pickupDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '-'}</td>
-                    <td style={{ fontSize: 13 }}>{s.deliveryDate ? new Date(s.deliveryDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '-'}</td>
-                    <td><span className={`vn-chip vn-chip-${statusChip(s.status)}`}>{s.status}</span></td>
-                  </tr>
-                ))}
-                {shipments.length === 0 && <tr><td colSpan={7} style={{ textAlign: 'center', padding: 32, color: 'var(--on-surface-variant)' }}>No shipments found</td></tr>}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </div>
+        <Separator />
+
+        {loading ? (
+          <div className="flex flex-col items-center gap-3 py-12 text-muted-foreground">
+            <Loader2 className="h-6 w-6 animate-spin" />
+            <span className="text-sm">Loading shipments...</span>
+          </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Reference</TableHead>
+                <TableHead>Origin</TableHead>
+                <TableHead>Destination</TableHead>
+                <TableHead>Carrier</TableHead>
+                <TableHead>Pickup</TableHead>
+                <TableHead>Delivery</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {shipments.map(s => (
+                <TableRow key={s.id}>
+                  <TableCell>
+                    <Link to={`/customer-portal/shipments/${s.id}`} className="font-semibold text-primary hover:underline">
+                      {s.reference}
+                    </Link>
+                  </TableCell>
+                  <TableCell className="text-sm">{s.originCity ? `${s.originCity}, ${s.originState}` : '-'}</TableCell>
+                  <TableCell className="text-sm">{s.destinationCity ? `${s.destinationCity}, ${s.destinationState}` : '-'}</TableCell>
+                  <TableCell className="text-sm">{s.carrierName || '-'}</TableCell>
+                  <TableCell className="text-sm">
+                    {s.pickupDate ? new Date(s.pickupDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '-'}
+                  </TableCell>
+                  <TableCell className="text-sm">
+                    {s.deliveryDate ? new Date(s.deliveryDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '-'}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={statusVariant(s.status)}>{s.status}</Badge>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {shipments.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={7} className="py-8 text-center text-sm text-muted-foreground">
+                    No shipments found
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        )}
+      </Card>
     </div>
   );
 }

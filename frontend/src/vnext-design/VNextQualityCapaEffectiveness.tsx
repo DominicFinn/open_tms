@@ -1,8 +1,26 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { API_URL } from '../api';
-import { VnPageHeader, VnChip } from './components';
+import {
+  ArrowDown,
+  ArrowUp,
+  CheckCircle2,
+  CircleAlert,
+  ClipboardList,
+  Clock,
+  Loader2,
+} from 'lucide-react';
 
-/* ── Types ────────────────────────────────────────────────── */
+import { API_URL } from '../api';
+import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 
 interface CapaRow {
   id: string;
@@ -37,21 +55,21 @@ type SortField =
 
 type SortOrder = 'asc' | 'desc';
 
-/* ── Helpers ──────────────────────────────────────────────── */
+type BadgeVariant = 'success' | 'destructive' | 'warning' | 'info' | 'secondary' | 'muted' | 'default';
 
-function statusChipVariant(status: string): 'success' | 'warning' | 'error' | 'info' | 'primary' | 'secondary' {
+function statusVariant(status: string): BadgeVariant {
   switch (status) {
     case 'closed': return 'success';
     case 'open': return 'info';
-    case 'in_progress': return 'primary';
+    case 'in_progress': return 'default';
     case 'draft': return 'secondary';
     default: return 'secondary';
   }
 }
 
-function priorityChipVariant(priority: string): 'success' | 'warning' | 'error' | 'info' | 'primary' | 'secondary' {
+function priorityVariant(priority: string): BadgeVariant {
   switch (priority) {
-    case 'critical': return 'error';
+    case 'critical': return 'destructive';
     case 'high': return 'warning';
     case 'medium': return 'info';
     case 'low': return 'secondary';
@@ -87,8 +105,6 @@ function getSortValue(row: CapaRow, field: SortField): number | string {
     default: return 0;
   }
 }
-
-/* ── Component ────────────────────────────────────────────── */
 
 export default function VNextQualityCapaEffectiveness() {
   const [data, setData] = useState<CapaRow[]>([]);
@@ -137,207 +153,146 @@ export default function VNextQualityCapaEffectiveness() {
     }
   }
 
-  function sortIndicator(field: SortField) {
+  function SortIndicator({ field }: { field: SortField }) {
     if (sortBy !== field) return null;
-    return (
-      <span className="material-icons" style={{ fontSize: 16, verticalAlign: 'middle', marginLeft: 2 }}>
-        {sortOrder === 'asc' ? 'arrow_upward' : 'arrow_downward'}
-      </span>
-    );
+    return sortOrder === 'asc' ? <ArrowUp className="ml-1 inline h-3 w-3" /> : <ArrowDown className="ml-1 inline h-3 w-3" />;
   }
 
-  /* ── Loading ────────────────────────────────────────────── */
   if (loading) {
     return (
-      <div className="vn-empty">
-        <span className="material-icons" style={{ animation: 'spin 1s linear infinite' }}>refresh</span>
-        <h3>Loading...</h3>
+      <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <h3 className="text-lg font-medium">Loading...</h3>
       </div>
     );
   }
 
-  /* ── Error ──────────────────────────────────────────────── */
   if (error) {
     return (
-      <div className="vn-alert vn-alert-error">
-        <span className="material-icons">error</span>
-        <div className="vn-alert-content">{error}</div>
+      <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+        <CircleAlert className="h-5 w-5" />
+        {error}
       </div>
     );
   }
 
-  /* ── Aggregate stats ────────────────────────────────────── */
   const totalCapas = data.length;
   const avgCompletionRate = totalCapas > 0
     ? data.reduce((s, r) => s + r.followUpStats.completionRate, 0) / totalCapas
     : 0;
   const totalOverdue = data.reduce((s, r) => s + r.followUpStats.overdue, 0);
 
-  const thStyle: React.CSSProperties = { cursor: 'pointer', textAlign: 'right' };
+  const stats = [
+    { label: 'Total CAPAs', value: totalCapas, icon: ClipboardList, tone: 'bg-primary/10 text-primary' },
+    { label: 'Avg completion rate', value: `${avgCompletionRate.toFixed(0)}%`, icon: CheckCircle2, tone: 'bg-success/15 text-success' },
+    { label: 'Overdue follow-ups', value: totalOverdue, icon: Clock, tone: 'bg-destructive/10 text-destructive' },
+  ];
 
   return (
-    <>
-      <VnPageHeader
-        title="CAPA Effectiveness Report"
-        subtitle="Corrective and preventive action completion and effectiveness tracking"
-      />
-
-      {/* Stats row */}
-      <div className="vn-stats">
-        <div className="vn-stat">
-          <div className="vn-stat-icon primary">
-            <span className="material-icons">assignment</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{totalCapas}</div>
-            <div className="vn-stat-label">Total CAPAs</div>
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon success">
-            <span className="material-icons">check_circle</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{avgCompletionRate.toFixed(0)}%</div>
-            <div className="vn-stat-label">Avg Completion Rate</div>
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon error">
-            <span className="material-icons">schedule</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{totalOverdue}</div>
-            <div className="vn-stat-label">Overdue Follow-Ups</div>
-          </div>
-        </div>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">CAPA effectiveness report</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Corrective and preventive action completion and effectiveness tracking</p>
       </div>
 
-      {/* Table */}
-      <div className="vn-card" style={{ marginTop: 24 }}>
+      <div className="grid gap-3 sm:grid-cols-3">
+        {stats.map(stat => {
+          const Icon = stat.icon;
+          return (
+            <Card key={stat.label}>
+              <div className="p-5">
+                <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', stat.tone)}>
+                  <Icon className="h-5 w-5" />
+                </div>
+                <div className="mt-3 text-2xl font-bold tracking-tight">{stat.value}</div>
+                <div className="mt-1 text-sm text-muted-foreground">{stat.label}</div>
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+
+      <Card>
         {sorted.length === 0 ? (
-          <div className="vn-empty">
-            <span className="material-icons">assignment</span>
-            <h3>No CAPA data</h3>
-            <p>No CAPA reports are available yet.</p>
+          <div className="flex flex-col items-center gap-3 py-12 text-muted-foreground">
+            <ClipboardList className="h-10 w-10 opacity-40" />
+            <h3 className="text-base font-medium">No CAPA data</h3>
+            <p className="text-sm">No CAPA reports are available yet.</p>
           </div>
         ) : (
-          <div className="vn-table-wrap">
-            <table className="vn-table">
-              <thead>
-                <tr>
-                  <th style={{ cursor: 'pointer' }} onClick={() => handleSort('reportNumber')}>
-                    Report # {sortIndicator('reportNumber')}
-                  </th>
-                  <th style={{ cursor: 'pointer' }} onClick={() => handleSort('title')}>
-                    Title {sortIndicator('title')}
-                  </th>
-                  <th style={{ cursor: 'pointer', textAlign: 'center' }} onClick={() => handleSort('status')}>
-                    Status {sortIndicator('status')}
-                  </th>
-                  <th style={{ cursor: 'pointer', textAlign: 'center' }} onClick={() => handleSort('priority')}>
-                    Priority {sortIndicator('priority')}
-                  </th>
-                  <th>Root Cause</th>
-                  <th>Issue Category</th>
-                  <th style={thStyle}>Follow-Ups</th>
-                  <th style={{ ...thStyle, cursor: 'pointer', minWidth: 140 }} onClick={() => handleSort('completionRate')}>
-                    Completion Rate {sortIndicator('completionRate')}
-                  </th>
-                  <th style={{ ...thStyle, cursor: 'pointer' }} onClick={() => handleSort('overdue')}>
-                    Overdue {sortIndicator('overdue')}
-                  </th>
-                  <th style={{ ...thStyle, cursor: 'pointer' }} onClick={() => handleSort('createdAt')}>
-                    Created {sortIndicator('createdAt')}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {sorted.map(row => {
-                  const hasOverdue = row.followUpStats.overdue > 0;
-                  const lowCompletion = row.followUpStats.completionRate < 50;
-                  const rowWarning = hasOverdue || lowCompletion;
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="cursor-pointer" onClick={() => handleSort('reportNumber')}>Report #<SortIndicator field="reportNumber" /></TableHead>
+                <TableHead className="cursor-pointer" onClick={() => handleSort('title')}>Title<SortIndicator field="title" /></TableHead>
+                <TableHead className="cursor-pointer text-center" onClick={() => handleSort('status')}>Status<SortIndicator field="status" /></TableHead>
+                <TableHead className="cursor-pointer text-center" onClick={() => handleSort('priority')}>Priority<SortIndicator field="priority" /></TableHead>
+                <TableHead>Root cause</TableHead>
+                <TableHead>Issue category</TableHead>
+                <TableHead className="text-right">Follow-ups</TableHead>
+                <TableHead className="cursor-pointer text-right" onClick={() => handleSort('completionRate')}>Completion rate<SortIndicator field="completionRate" /></TableHead>
+                <TableHead className="cursor-pointer text-right" onClick={() => handleSort('overdue')}>Overdue<SortIndicator field="overdue" /></TableHead>
+                <TableHead className="cursor-pointer text-right" onClick={() => handleSort('createdAt')}>Created<SortIndicator field="createdAt" /></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {sorted.map(row => {
+                const hasOverdue = row.followUpStats.overdue > 0;
+                const lowCompletion = row.followUpStats.completionRate < 50;
+                const rowWarning = hasOverdue || lowCompletion;
+                const completionTone = row.followUpStats.completionRate >= 80
+                  ? 'bg-success'
+                  : row.followUpStats.completionRate >= 50
+                    ? 'bg-warning'
+                    : 'bg-destructive';
 
-                  return (
-                    <tr
-                      key={row.id}
-                      style={rowWarning ? { background: 'var(--warning-container, var(--surface-container))' } : undefined}
-                    >
-                      <td>
-                        <div className="vn-table-id">{row.reportNumber}</div>
-                      </td>
-                      <td>
-                        <span style={{ fontWeight: 500, color: 'var(--on-surface)' }}>{row.title}</span>
-                      </td>
-                      <td style={{ textAlign: 'center' }}>
-                        <VnChip variant={statusChipVariant(row.status)}>
-                          {formatLabel(row.status)}
-                        </VnChip>
-                      </td>
-                      <td style={{ textAlign: 'center' }}>
-                        <VnChip variant={priorityChipVariant(row.priority)}>
-                          {formatLabel(row.priority)}
-                        </VnChip>
-                      </td>
-                      <td style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>
-                        {formatLabel(row.rootCauseCategory)}
-                      </td>
-                      <td style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>
-                        {row.issue ? formatLabel(row.issue.category) : '--'}
-                      </td>
-                      <td style={{ textAlign: 'right', fontSize: 13 }}>
-                        <span style={{ fontWeight: 600 }}>{row.followUpStats.completed}</span>
-                        <span style={{ color: 'var(--on-surface-variant)' }}> / {row.followUpStats.total}</span>
-                      </td>
-                      <td style={{ textAlign: 'right' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
-                          <div style={{
-                            width: 60,
-                            height: 6,
-                            borderRadius: 3,
-                            background: 'var(--outline-variant)',
-                            overflow: 'hidden',
-                          }}>
-                            <div style={{
-                              width: `${Math.min(row.followUpStats.completionRate, 100)}%`,
-                              height: '100%',
-                              borderRadius: 3,
-                              background: row.followUpStats.completionRate >= 80
-                                ? 'var(--success)'
-                                : row.followUpStats.completionRate >= 50
-                                  ? 'var(--warning)'
-                                  : 'var(--error)',
-                            }} />
-                          </div>
-                          <span style={{
-                            fontSize: 13,
-                            fontWeight: 600,
-                            color: row.followUpStats.completionRate < 50
-                              ? 'var(--error)'
-                              : 'var(--on-surface)',
-                            minWidth: 36,
-                            textAlign: 'right',
-                          }}>
-                            {row.followUpStats.completionRate.toFixed(0)}%
-                          </span>
+                return (
+                  <TableRow key={row.id} className={cn(rowWarning && 'bg-warning/5')}>
+                    <TableCell><span className="font-mono text-sm font-semibold">{row.reportNumber}</span></TableCell>
+                    <TableCell><span className="font-medium">{row.title}</span></TableCell>
+                    <TableCell className="text-center">
+                      <Badge variant={statusVariant(row.status)}>{formatLabel(row.status)}</Badge>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Badge variant={priorityVariant(row.priority)}>{formatLabel(row.priority)}</Badge>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{formatLabel(row.rootCauseCategory)}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{row.issue ? formatLabel(row.issue.category) : '--'}</TableCell>
+                    <TableCell className="text-right text-sm">
+                      <span className="font-semibold">{row.followUpStats.completed}</span>
+                      <span className="text-muted-foreground"> / {row.followUpStats.total}</span>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <div className="h-1.5 w-14 overflow-hidden rounded-full bg-muted">
+                          <div
+                            className={cn('h-full rounded-full', completionTone)}
+                            style={{ width: `${Math.min(row.followUpStats.completionRate, 100)}%` }}
+                          />
                         </div>
-                      </td>
-                      <td style={{ textAlign: 'right', fontSize: 13 }}>
-                        {row.followUpStats.overdue > 0
-                          ? <VnChip variant="warning">{row.followUpStats.overdue}</VnChip>
-                          : <span style={{ color: 'var(--on-surface-variant)' }}>0</span>}
-                      </td>
-                      <td style={{ textAlign: 'right', fontSize: 13, color: 'var(--on-surface-variant)' }}>
-                        {formatDate(row.createdAt)}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                        <span className={cn(
+                          'min-w-[36px] text-right text-sm font-semibold',
+                          row.followUpStats.completionRate < 50 && 'text-destructive',
+                        )}>
+                          {row.followUpStats.completionRate.toFixed(0)}%
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {row.followUpStats.overdue > 0
+                        ? <Badge variant="warning">{row.followUpStats.overdue}</Badge>
+                        : <span className="text-sm text-muted-foreground">0</span>}
+                    </TableCell>
+                    <TableCell className="text-right text-sm text-muted-foreground">
+                      {formatDate(row.createdAt)}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
         )}
-      </div>
-    </>
+      </Card>
+    </div>
   );
 }

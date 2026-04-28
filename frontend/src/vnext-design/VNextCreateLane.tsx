@@ -1,7 +1,32 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import {
+  ArrowLeft,
+  ChevronRight,
+  CircleAlert,
+  Info,
+  Loader2,
+  Map as MapIcon,
+  MapPin,
+  Plus,
+  Route,
+  Save,
+  Trash2,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
 import GoogleMapsRouteEditor from '../components/GoogleMapsRouteEditor';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface Stop {
   id: number;
@@ -39,7 +64,6 @@ export default function VNextCreateLane() {
   const [submitError, setSubmitError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  // Route planning state
   const [routeData, setRouteData] = useState<RouteData | null>(null);
   const [corridorMeters, setCorridorMeters] = useState(5000);
   const [existingRoute, setExistingRoute] = useState<any>(null);
@@ -100,7 +124,6 @@ export default function VNextCreateLane() {
       if (json.error) throw new Error(json.error);
       const savedLaneId = json.data?.id || id;
 
-      // Save route if we have route data
       if (routeData && savedLaneId) {
         setSavingRoute(true);
         try {
@@ -117,7 +140,6 @@ export default function VNextCreateLane() {
             }),
           });
         } catch {
-          // Route save is best-effort; lane was already saved
           console.warn('Failed to save route data');
         }
         setSavingRoute(false);
@@ -131,9 +153,14 @@ export default function VNextCreateLane() {
     }
   };
 
-  if (loading) return <div className="loading-spinner" style={{ margin: '2rem auto' }} />;
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
 
-  // Resolve location LatLngs for the route editor
   const originLoc = apiLocations.find(l => l.id === origin);
   const destLoc = apiLocations.find(l => l.id === destination);
   const originLabel = originLoc?.name || '';
@@ -146,7 +173,6 @@ export default function VNextCreateLane() {
     ? { lat: destLoc.lat, lng: destLoc.lng }
     : null;
 
-  // Resolve stop LatLngs for waypoints
   const stopLatLngs = stops
     .filter(s => s.location)
     .map(s => {
@@ -160,250 +186,304 @@ export default function VNextCreateLane() {
     setStops(prev => [...prev, { id: stopIdCounter, location: '', order: prev.length + 1 }]);
   };
 
-  const updateStop = (id: number, field: keyof Stop, value: string | number) => {
-    setStops(prev => prev.map(s => s.id === id ? { ...s, [field]: value } : s));
+  const updateStop = (sid: number, field: keyof Stop, value: string | number) => {
+    setStops(prev => prev.map(s => s.id === sid ? { ...s, [field]: value } : s));
   };
 
-  const removeStop = (id: number) => {
-    setStops(prev => prev.filter(s => s.id !== id).map((s, i) => ({ ...s, order: i + 1 })));
+  const removeStop = (sid: number) => {
+    setStops(prev => prev.filter(s => s.id !== sid).map((s, i) => ({ ...s, order: i + 1 })));
   };
 
   const handleRouteChange = (route: RouteData) => {
     setRouteData(route);
-    // Auto-update distance from the route
     const distanceMiles = (route.distanceMeters / 1609.34).toFixed(1);
     setDistance(distanceMiles);
     setDistanceUnit('mi');
   };
 
   return (
-    <>
-      <div className="vn-page-header">
-        <div>
-          <div style={{ fontSize: 13, color: 'var(--on-surface-variant)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
-            <Link to="/lanes" style={{ color: 'var(--primary)', textDecoration: 'none' }}>Lanes</Link>
-            <span className="material-icons" style={{ fontSize: 16 }}>chevron_right</span>
-            <span>{isEdit ? 'Edit Lane' : 'New Lane'}</span>
-          </div>
-          <h1>{isEdit ? 'Edit Lane' : 'New Lane'}</h1>
-        </div>
+    <div className="space-y-6">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Link to="/lanes" className="hover:text-foreground">
+          <ArrowLeft className="inline h-4 w-4" /> Lanes
+        </Link>
+        <ChevronRight className="h-3 w-3" />
+        <span>{isEdit ? 'Edit lane' : 'New lane'}</span>
       </div>
 
-      <div className="vn-card">
-        <div className="vn-card-body" style={{ padding: 0 }}>
+      <h1 className="text-3xl font-bold tracking-tight">{isEdit ? 'Edit lane' : 'New lane'}</h1>
 
-          {/* Route */}
-          <div className="vn-form-section">
-            <div className="vn-form-section-title">
-              <span className="material-icons">route</span>
-              Route
-            </div>
-            <div className="vn-form-grid">
-              <div className="vn-field">
-                <label className="vn-field-label">Origin Location</label>
-                <select className="vn-select" value={origin} onChange={e => setOrigin(e.target.value)}>
-                  <option value="">Select origin...</option>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Route className="h-4 w-4 text-primary" />
+            Route
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Origin location</Label>
+              <Select value={origin} onValueChange={setOrigin}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select origin..." />
+                </SelectTrigger>
+                <SelectContent>
                   {apiLocations.map((loc: any) => (
-                    <option key={loc.id} value={loc.id}>{loc.name} - {loc.city}, {loc.state}</option>
+                    <SelectItem key={loc.id} value={loc.id}>{loc.name} - {loc.city}, {loc.state}</SelectItem>
                   ))}
-                </select>
-              </div>
-              <div className="vn-field">
-                <label className="vn-field-label">Destination Location</label>
-                <select className="vn-select" value={destination} onChange={e => setDestination(e.target.value)}>
-                  <option value="">Select destination...</option>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Destination location</Label>
+              <Select value={destination} onValueChange={setDestination}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select destination..." />
+                </SelectTrigger>
+                <SelectContent>
                   {apiLocations.map((loc: any) => (
-                    <option key={loc.id} value={loc.id}>{loc.name} - {loc.city}, {loc.state}</option>
+                    <SelectItem key={loc.id} value={loc.id}>{loc.name} - {loc.city}, {loc.state}</SelectItem>
                   ))}
-                </select>
-              </div>
-            </div>
-
-            {/* Route Visualization */}
-            {(origin || destination) && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 0 8px', marginTop: 8 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span className="vn-route-dot" style={{ backgroundColor: 'var(--success)' }} />
-                  <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--on-surface)' }}>{originLabel || 'Origin'}</span>
-                </div>
-                <div className="vn-route-line" style={{ flex: 1, height: 2, backgroundColor: 'var(--outline-variant)' }} />
-                {stops.length > 0 && stops.map((stop, i) => {
-                  const stopLabel = apiLocations.find(l => l.id === stop.location)?.name || `Stop ${i + 1}`;
-                  return (
-                    <React.Fragment key={stop.id}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span className="vn-route-dot" style={{ backgroundColor: 'var(--warning)' }} />
-                        <span style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>{stopLabel}</span>
-                      </div>
-                      <div className="vn-route-line" style={{ flex: 1, height: 2, backgroundColor: 'var(--outline-variant)' }} />
-                    </React.Fragment>
-                  );
-                })}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span className="vn-route-dot" style={{ backgroundColor: 'var(--error)' }} />
-                  <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--on-surface)' }}>{destLabel || 'Destination'}</span>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Route Map Editor */}
-          <div className="vn-form-section">
-            <div className="vn-form-section-title">
-              <span className="material-icons">map</span>
-              Planned Route
-            </div>
-            <p style={{ fontSize: 13, color: 'var(--on-surface-variant)', margin: '0 0 12px' }}>
-              The planned route is used for deviation detection. Select origin and destination locations with coordinates to auto-calculate the route.
-              {originLatLng && destLatLng && ' Drag the blue route line on the map to adjust the planned path.'}
-            </p>
-
-            <GoogleMapsRouteEditor
-              origin={originLatLng}
-              destination={destLatLng}
-              stops={stopLatLngs}
-              existingPolyline={existingRoute?.encodedPolyline}
-              corridorMeters={corridorMeters}
-              onRouteChange={handleRouteChange}
-              height={400}
-              editable={true}
-            />
-
-            {/* Corridor setting */}
-            {(routeData || existingRoute) && (
-              <div style={{ marginTop: 16 }}>
-                <div className="vn-field" style={{ maxWidth: 300 }}>
-                  <label className="vn-field-label">Deviation Corridor (meters)</label>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <input
-                      className="vn-input"
-                      type="number"
-                      min={100}
-                      max={50000}
-                      step={500}
-                      value={corridorMeters}
-                      onChange={e => setCorridorMeters(parseInt(e.target.value) || 5000)}
-                    />
-                    <span style={{ fontSize: 12, color: 'var(--on-surface-variant)', whiteSpace: 'nowrap' }}>
-                      ({(corridorMeters / 1000).toFixed(1)} km / {(corridorMeters / 1609.34).toFixed(1)} mi)
-                    </span>
-                  </div>
-                  <span style={{ fontSize: 11, color: 'var(--on-surface-variant)', marginTop: 4, display: 'block' }}>
-                    Alerts trigger when a shipment moves further than this distance from the planned route
-                  </span>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Details */}
-          <div className="vn-form-section">
-            <div className="vn-form-section-title">
-              <span className="material-icons">info</span>
-              Details
-            </div>
-            <div className="vn-form-grid">
-              <div className="vn-field">
-                <label className="vn-field-label">Distance</label>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <input className="vn-input" type="number" placeholder="0" value={distance} onChange={e => setDistance(e.target.value)} style={{ flex: 1 }} />
-                  <select className="vn-select" value={distanceUnit} onChange={e => setDistanceUnit(e.target.value)} style={{ width: 80 }}>
-                    <option value="mi">mi</option>
-                    <option value="km">km</option>
-                  </select>
-                </div>
-                {routeData && (
-                  <span style={{ fontSize: 11, color: 'var(--success)', marginTop: 4, display: 'block' }}>
-                    Auto-calculated from route
-                  </span>
-                )}
-              </div>
-              <div className="vn-field">
-                <label className="vn-field-label">Target Rate</label>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <input className="vn-input" type="number" placeholder="0.00" value={targetRate} onChange={e => setTargetRate(e.target.value)} style={{ flex: 1 }} />
-                  <select className="vn-select" value={rateCurrency} onChange={e => setRateCurrency(e.target.value)} style={{ width: 80 }}>
-                    <option value="USD">USD</option>
-                    <option value="EUR">EUR</option>
-                    <option value="GBP">GBP</option>
-                  </select>
-                </div>
-              </div>
-              <div className="vn-field">
-                <label className="vn-field-label">Service Level</label>
-                <select className="vn-select" value={serviceLevel} onChange={e => setServiceLevel(e.target.value)}>
-                  <option value="FTL">FTL</option>
-                  <option value="LTL">LTL</option>
-                  <option value="Both">Both</option>
-                </select>
-              </div>
-              <div className="vn-field vn-col-span-2">
-                <label className="vn-field-label">Notes</label>
-                <textarea className="vn-textarea" rows={3} placeholder="Additional lane notes..." value={notes} onChange={e => setNotes(e.target.value)} />
-              </div>
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
-          {/* Stops */}
-          <div className="vn-form-section">
-            <div className="vn-form-section-title">
-              <span className="material-icons">pin_drop</span>
-              Stops (Hub &amp; Spoke)
+          {(origin || destination) && (
+            <div className="flex flex-wrap items-center gap-3 pt-2">
+              <div className="flex items-center gap-2">
+                <span className="h-2.5 w-2.5 rounded-full bg-success" />
+                <span className="text-sm font-medium">{originLabel || 'Origin'}</span>
+              </div>
+              <div className="h-px flex-1 bg-border" />
+              {stops.length > 0 && stops.map((stop, i) => {
+                const stopLabel = apiLocations.find(l => l.id === stop.location)?.name || `Stop ${i + 1}`;
+                return (
+                  <React.Fragment key={stop.id}>
+                    <div className="flex items-center gap-2">
+                      <span className="h-2.5 w-2.5 rounded-full bg-warning" />
+                      <span className="text-xs text-muted-foreground">{stopLabel}</span>
+                    </div>
+                    <div className="h-px flex-1 bg-border" />
+                  </React.Fragment>
+                );
+              })}
+              <div className="flex items-center gap-2">
+                <span className="h-2.5 w-2.5 rounded-full bg-destructive" />
+                <span className="text-sm font-medium">{destLabel || 'Destination'}</span>
+              </div>
             </div>
-            <p style={{ fontSize: 13, color: 'var(--on-surface-variant)', margin: '0 0 12px' }}>
-              Add intermediate stops for hub-and-spoke routing. These become waypoints in the planned route.
-            </p>
+          )}
+        </CardContent>
+      </Card>
 
-            {stops.length === 0 && (
-              <p style={{ color: 'var(--on-surface-variant)', fontSize: 13, margin: '0 0 12px' }}>
-                No intermediate stops added. Click below to add one.
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <MapIcon className="h-4 w-4 text-primary" />
+            Planned route
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            The planned route is used for deviation detection. Select origin and destination locations with coordinates to auto-calculate the route.
+            {originLatLng && destLatLng && ' Drag the blue route line on the map to adjust the planned path.'}
+          </p>
+
+          <GoogleMapsRouteEditor
+            origin={originLatLng}
+            destination={destLatLng}
+            stops={stopLatLngs}
+            existingPolyline={existingRoute?.encodedPolyline}
+            corridorMeters={corridorMeters}
+            onRouteChange={handleRouteChange}
+            height={400}
+            editable={true}
+          />
+
+          {(routeData || existingRoute) && (
+            <div className="max-w-md space-y-2">
+              <Label>Deviation corridor (meters)</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  min={100}
+                  max={50000}
+                  step={500}
+                  value={corridorMeters}
+                  onChange={e => setCorridorMeters(parseInt(e.target.value) || 5000)}
+                />
+                <span className="whitespace-nowrap text-xs text-muted-foreground">
+                  ({(corridorMeters / 1000).toFixed(1)} km / {(corridorMeters / 1609.34).toFixed(1)} mi)
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Alerts trigger when a shipment moves further than this distance from the planned route
               </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Info className="h-4 w-4 text-primary" />
+            Details
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label>Distance</Label>
+            <div className="flex gap-2">
+              <Input
+                type="number"
+                placeholder="0"
+                value={distance}
+                onChange={e => setDistance(e.target.value)}
+                className="flex-1"
+              />
+              <Select value={distanceUnit} onValueChange={setDistanceUnit}>
+                <SelectTrigger className="w-[80px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="mi">mi</SelectItem>
+                  <SelectItem value="km">km</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {routeData && (
+              <p className="text-xs text-success">Auto-calculated from route</p>
             )}
-
-            {stops.map((stop) => (
-              <div key={stop.id} style={{ display: 'flex', gap: 12, alignItems: 'flex-end', marginBottom: 12 }}>
-                <div className="vn-field" style={{ flex: 1 }}>
-                  <label className="vn-field-label">Location</label>
-                  <select className="vn-select" value={stop.location} onChange={e => updateStop(stop.id, 'location', e.target.value)}>
-                    <option value="">Select location...</option>
-                    {apiLocations.map((loc: any) => (
-                      <option key={loc.id} value={loc.id}>{loc.name} - {loc.city}, {loc.state}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="vn-field" style={{ width: 100 }}>
-                  <label className="vn-field-label">Order</label>
-                  <input className="vn-input" type="number" min={1} value={stop.order} onChange={e => updateStop(stop.id, 'order', parseInt(e.target.value) || 1)} />
-                </div>
-                <button
-                  className="vn-btn vn-btn-outline"
-                  style={{ color: 'var(--error)', borderColor: 'var(--error)', marginBottom: 0 }}
-                  onClick={() => removeStop(stop.id)}
-                >
-                  <span className="material-icons">delete</span>
-                </button>
-              </div>
-            ))}
-
-            <button className="vn-btn vn-btn-outline" onClick={addStop}>
-              <span className="material-icons">add</span>
-              Add Stop
-            </button>
           </div>
+          <div className="space-y-2">
+            <Label>Target rate</Label>
+            <div className="flex gap-2">
+              <Input
+                type="number"
+                placeholder="0.00"
+                value={targetRate}
+                onChange={e => setTargetRate(e.target.value)}
+                className="flex-1"
+              />
+              <Select value={rateCurrency} onValueChange={setRateCurrency}>
+                <SelectTrigger className="w-[90px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="USD">USD</SelectItem>
+                  <SelectItem value="EUR">EUR</SelectItem>
+                  <SelectItem value="GBP">GBP</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label>Service level</Label>
+            <Select value={serviceLevel} onValueChange={setServiceLevel}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="FTL">FTL</SelectItem>
+                <SelectItem value="LTL">LTL</SelectItem>
+                <SelectItem value="Both">Both</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2 md:col-span-2">
+            <Label>Notes</Label>
+            <textarea
+              rows={3}
+              placeholder="Additional lane notes..."
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+              className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            />
+          </div>
+        </CardContent>
+      </Card>
 
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <MapPin className="h-4 w-4 text-primary" />
+            Stops (hub &amp; spoke)
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Add intermediate stops for hub-and-spoke routing. These become waypoints in the planned route.
+          </p>
+
+          {stops.length === 0 && (
+            <p className="text-sm text-muted-foreground">
+              No intermediate stops added. Click below to add one.
+            </p>
+          )}
+
+          {stops.map((stop) => (
+            <div key={stop.id} className="flex items-end gap-3">
+              <div className="flex-1 space-y-2">
+                <Label>Location</Label>
+                <Select value={stop.location} onValueChange={v => updateStop(stop.id, 'location', v)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select location..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {apiLocations.map((loc: any) => (
+                      <SelectItem key={loc.id} value={loc.id}>{loc.name} - {loc.city}, {loc.state}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="w-24 space-y-2">
+                <Label>Order</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={stop.order}
+                  onChange={e => updateStop(stop.id, 'order', parseInt(e.target.value) || 1)}
+                />
+              </div>
+              <Button
+                variant="outline"
+                size="icon"
+                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                onClick={() => removeStop(stop.id)}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          ))}
+
+          <div>
+            <Button variant="outline" onClick={addStop}>
+              <Plus className="h-4 w-4" />
+              Add stop
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {submitError && (
+        <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+          <CircleAlert className="h-5 w-5" />
+          {submitError}
         </div>
-      </div>
+      )}
 
-      {submitError && <div className="vn-alert vn-alert-error" style={{ marginBottom: 16 }}>{submitError}</div>}
-
-      {/* Form Actions */}
-      <div className="vn-form-actions">
-        <Link to="/lanes" className="vn-btn vn-btn-outline">Cancel</Link>
-        <button className="vn-btn vn-btn-primary" onClick={handleSubmit} disabled={submitting || savingRoute}>
-          <span className="material-icons">save</span>
-          {submitting || savingRoute ? 'Saving...' : isEdit ? 'Update Lane' : 'Create Lane'}
-        </button>
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <Button variant="outline" asChild>
+          <Link to="/lanes">Cancel</Link>
+        </Button>
+        <Button variant="gradient" onClick={handleSubmit} disabled={submitting || savingRoute}>
+          <Save className="h-4 w-4" />
+          {submitting || savingRoute ? 'Saving...' : isEdit ? 'Update lane' : 'Create lane'}
+        </Button>
       </div>
-    </>
+    </div>
   );
 }

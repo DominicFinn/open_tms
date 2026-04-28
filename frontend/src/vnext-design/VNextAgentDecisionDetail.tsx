@@ -1,7 +1,34 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import {
+  ArrowLeft,
+  Bot,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  CircleAlert,
+  ExternalLink,
+  Loader2,
+  MinusCircle,
+  Sparkles,
+  Star,
+  X,
+  XCircle,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
-import { VnPageHeader, VnChip, VnInfoGrid, VnModal, VnAlert } from './components';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { cn } from '@/lib/utils';
 
 interface Decision {
   id: string;
@@ -39,23 +66,32 @@ interface Decision {
   updatedAt: string;
 }
 
-function outcomeChip(status: string | null) {
-  if (!status || status === 'pending') return <VnChip variant="secondary">Pending review</VnChip>;
-  if (status === 'correct') return <VnChip variant="success">Correct</VnChip>;
-  if (status === 'incorrect') return <VnChip variant="error">Incorrect</VnChip>;
-  if (status === 'partially_correct') return <VnChip variant="warning">Partially correct</VnChip>;
-  return <VnChip variant="secondary">{status}</VnChip>;
+function outcomeBadge(status: string | null) {
+  if (!status || status === 'pending') return <Badge variant="secondary">Pending review</Badge>;
+  if (status === 'correct') return <Badge variant="success">Correct</Badge>;
+  if (status === 'incorrect') return <Badge variant="destructive">Incorrect</Badge>;
+  if (status === 'partially_correct') return <Badge variant="warning">Partially correct</Badge>;
+  return <Badge variant="secondary">{status}</Badge>;
 }
 
-function actionChip(actionType: string) {
-  if (actionType === 'create_issue') return <VnChip variant="info">Created issue</VnChip>;
-  if (actionType === 'escalate_issue') return <VnChip variant="warning">Escalated issue</VnChip>;
-  if (actionType === 'no_action') return <VnChip variant="secondary">No action</VnChip>;
-  return <VnChip variant="secondary">{actionType}</VnChip>;
+function actionBadge(actionType: string) {
+  if (actionType === 'create_issue') return <Badge variant="info">Created issue</Badge>;
+  if (actionType === 'escalate_issue') return <Badge variant="warning">Escalated issue</Badge>;
+  if (actionType === 'no_action') return <Badge variant="secondary">No action</Badge>;
+  return <Badge variant="secondary">{actionType}</Badge>;
 }
 
 function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleString();
+}
+
+function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between border-b border-border py-2 text-sm last:border-b-0">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-medium">{value}</span>
+    </div>
+  );
 }
 
 export default function VNextAgentDecisionDetail() {
@@ -65,7 +101,6 @@ export default function VNextAgentDecisionDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Outcome recording
   const [showOutcomeModal, setShowOutcomeModal] = useState(false);
   const [outcomeStatus, setOutcomeStatus] = useState('correct');
   const [outcomeNotes, setOutcomeNotes] = useState('');
@@ -73,7 +108,6 @@ export default function VNextAgentDecisionDetail() {
   const [saveError, setSaveError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
-  // Context/conversation toggle
   const [showContext, setShowContext] = useState(false);
   const [showConversation, setShowConversation] = useState(false);
 
@@ -125,7 +159,6 @@ export default function VNextAgentDecisionDetail() {
 
   async function promoteDecision() {
     try {
-      // Create automation rule from this decision's matched conditions
       const res = await fetch(`${API_URL}/api/v1/automation-rules/from-decision/${id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -135,8 +168,6 @@ export default function VNextAgentDecisionDetail() {
         const json = await res.json();
         throw new Error(json.error || 'Failed to promote');
       }
-
-      // Refresh decision
       const refreshRes = await fetch(`${API_URL}/api/v1/agent-decisions/${id}`);
       const refreshJson = await refreshRes.json();
       setDecision(refreshJson.data);
@@ -150,18 +181,18 @@ export default function VNextAgentDecisionDetail() {
 
   if (loading) {
     return (
-      <div className="vn-empty">
-        <span className="material-icons" style={{ animation: 'spin 1s linear infinite' }}>refresh</span>
-        <h3>Loading decision...</h3>
+      <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <h3 className="text-lg font-medium">Loading decision...</h3>
       </div>
     );
   }
 
   if (error || !decision) {
     return (
-      <div className="vn-alert vn-alert-error">
-        <span className="material-icons">error</span>
-        <div className="vn-alert-content">{error || 'Decision not found'}</div>
+      <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+        <CircleAlert className="h-5 w-5" />
+        {error || 'Decision not found'}
       </div>
     );
   }
@@ -169,281 +200,265 @@ export default function VNextAgentDecisionDetail() {
   const confidencePct = decision.confidence !== null ? Math.round(decision.confidence * 100) : null;
 
   return (
-    <>
-      {/* Breadcrumb */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-        <button className="vn-btn vn-btn-ghost vn-btn-sm" onClick={() => navigate('/agent-decisions')}>
-          <span className="material-icons">arrow_back</span>Decisions
-        </button>
-        <span style={{ color: 'var(--on-surface-variant)', fontSize: 13 }}>/ {decision.id.slice(0, 8)}</span>
+    <div className="space-y-6">
+      <div className="flex items-center gap-2">
+        <Button variant="ghost" size="sm" onClick={() => navigate('/agent-decisions')}>
+          <ArrowLeft className="h-4 w-4" />
+          Decisions
+        </Button>
+        <span className="text-sm text-muted-foreground">/ {decision.id.slice(0, 8)}</span>
       </div>
 
       {successMsg && (
-        <VnAlert variant="success" onClose={() => setSuccessMsg('')}>{successMsg}</VnAlert>
+        <div className="flex items-center gap-3 rounded-md border border-success/30 bg-success/10 p-4 text-sm text-success">
+          <CheckCircle2 className="h-5 w-5" />
+          <span className="flex-1">{successMsg}</span>
+          <Button variant="ghost" size="icon" onClick={() => setSuccessMsg('')}><X className="h-4 w-4" /></Button>
+        </div>
       )}
 
-      {/* Header */}
-      <VnPageHeader title={decision.summary}>
-        {decision.outcomeStatus === 'pending' && (
-          <button className="vn-btn vn-btn-primary vn-btn-sm" onClick={() => setShowOutcomeModal(true)}>
-            <span className="material-icons">rate_review</span>Record Outcome
-          </button>
-        )}
-        {decision.outcomeStatus === 'correct' && !decision.promotedToAutomation && (
-          <button className="vn-btn vn-btn-outline vn-btn-sm" onClick={promoteDecision}>
-            <span className="material-icons">auto_fix_high</span>Promote to Automation
-          </button>
-        )}
-      </VnPageHeader>
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">{decision.summary}</h1>
+        </div>
+        <div className="flex gap-2">
+          {decision.outcomeStatus === 'pending' && (
+            <Button variant="gradient" onClick={() => setShowOutcomeModal(true)}>
+              <Star className="h-4 w-4" />
+              Record outcome
+            </Button>
+          )}
+          {decision.outcomeStatus === 'correct' && !decision.promotedToAutomation && (
+            <Button variant="outline" onClick={promoteDecision}>
+              <Sparkles className="h-4 w-4" />
+              Promote to automation
+            </Button>
+          )}
+        </div>
+      </div>
 
-      {/* Status chips */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap' }}>
-        {actionChip(decision.actionType)}
-        {outcomeChip(decision.outcomeStatus)}
-        {decision.promotedToAutomation && <VnChip variant="primary">Promoted</VnChip>}
-        <VnChip variant="secondary" icon="smart_toy">{decision.agentType}</VnChip>
+      <div className="flex flex-wrap gap-2">
+        {actionBadge(decision.actionType)}
+        {outcomeBadge(decision.outcomeStatus)}
+        {decision.promotedToAutomation && <Badge>Promoted</Badge>}
+        <Badge variant="secondary"><Bot className="h-3 w-3" />{decision.agentType}</Badge>
         {confidencePct !== null && (
-          <VnChip variant={confidencePct >= 80 ? 'success' : confidencePct >= 50 ? 'warning' : 'error'}>
+          <Badge variant={confidencePct >= 80 ? 'success' : confidencePct >= 50 ? 'warning' : 'destructive'}>
             {confidencePct}% confidence
-          </VnChip>
+          </Badge>
         )}
       </div>
 
-      {/* Detail grid */}
-      <div className="vn-detail-grid">
-        {/* Main content */}
-        <div className="vn-detail-main">
-          {/* Reasoning card */}
-          <div className="vn-card">
-            <div className="vn-card-header"><h2>Agent Reasoning</h2></div>
-            <div className="vn-card-body">
-              <p style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6, margin: 0 }}>{decision.reasoning}</p>
-            </div>
-          </div>
+      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+        <div className="space-y-4">
+          <Card>
+            <CardHeader><CardTitle>Agent reasoning</CardTitle></CardHeader>
+            <CardContent>
+              <p className="whitespace-pre-wrap leading-relaxed">{decision.reasoning}</p>
+            </CardContent>
+          </Card>
 
-          {/* Matched conditions (for automation promotion) */}
           {decision.matchedConditions && decision.matchedConditions.length > 0 && (
-            <div className="vn-card">
-              <div className="vn-card-header">
-                <h2>Matched Conditions</h2>
-                <span style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>Used for automation rule promotion</span>
-              </div>
-              <div className="vn-card-body">
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle>Matched conditions</CardTitle>
+                <span className="text-xs text-muted-foreground">Used for automation rule promotion</span>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-col gap-2">
                   {decision.matchedConditions.map((c, i) => (
-                    <div key={i} style={{
-                      display: 'flex', gap: 8, alignItems: 'center', padding: '8px 12px',
-                      background: 'var(--surface-container)', borderRadius: 8, fontFamily: 'monospace', fontSize: 13,
-                    }}>
-                      <span style={{ color: 'var(--primary)', fontWeight: 600 }}>{c.field}</span>
-                      <span style={{ color: 'var(--on-surface-variant)' }}>{c.operator}</span>
+                    <div key={i} className="flex items-center gap-2 rounded-md bg-muted px-3 py-2 font-mono text-sm">
+                      <span className="font-semibold text-primary">{c.field}</span>
+                      <span className="text-muted-foreground">{c.operator}</span>
                       {c.value !== undefined && (
-                        <span style={{ color: 'var(--on-surface)' }}>{JSON.stringify(c.value)}</span>
+                        <span>{JSON.stringify(c.value)}</span>
                       )}
                     </div>
                   ))}
                 </div>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           )}
 
-          {/* Action details */}
           {decision.actionPayload && Object.keys(decision.actionPayload).length > 0 && (
-            <div className="vn-card">
-              <div className="vn-card-header"><h2>Action Details</h2></div>
-              <div className="vn-card-body">
-                <VnInfoGrid items={Object.entries(decision.actionPayload).map(([k, v]) => ({
-                  label: k.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase()),
-                  value: String(v),
-                }))} />
-              </div>
-            </div>
+            <Card>
+              <CardHeader><CardTitle>Action details</CardTitle></CardHeader>
+              <CardContent>
+                {Object.entries(decision.actionPayload).map(([k, v]) => (
+                  <InfoRow
+                    key={k}
+                    label={k.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase())}
+                    value={String(v)}
+                  />
+                ))}
+              </CardContent>
+            </Card>
           )}
 
-          {/* Context snapshot (collapsible) */}
-          <div className="vn-card">
-            <div className="vn-card-header" style={{ cursor: 'pointer' }} onClick={() => setShowContext(!showContext)}>
-              <h2>Context Snapshot</h2>
-              <span className="material-icons" style={{ color: 'var(--on-surface-variant)' }}>
-                {showContext ? 'expand_less' : 'expand_more'}
-              </span>
-            </div>
+          <Card>
+            <CardHeader className="cursor-pointer" onClick={() => setShowContext(!showContext)}>
+              <div className="flex items-center justify-between">
+                <CardTitle>Context snapshot</CardTitle>
+                {showContext ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+              </div>
+            </CardHeader>
             {showContext && (
-              <div className="vn-card-body">
-                <pre style={{
-                  background: 'var(--surface-container)',
-                  padding: 16,
-                  borderRadius: 8,
-                  overflow: 'auto',
-                  fontSize: 12,
-                  lineHeight: 1.5,
-                  maxHeight: 400,
-                  margin: 0,
-                }}>{JSON.stringify(decision.context, null, 2)}</pre>
-              </div>
+              <CardContent>
+                <pre className="max-h-[400px] overflow-auto rounded-md bg-muted p-4 text-xs leading-relaxed">
+                  {JSON.stringify(decision.context, null, 2)}
+                </pre>
+              </CardContent>
             )}
-          </div>
+          </Card>
 
-          {/* Conversation log (collapsible) */}
           {decision.conversationLog && decision.conversationLog.length > 0 && (
-            <div className="vn-card">
-              <div className="vn-card-header" style={{ cursor: 'pointer' }} onClick={() => setShowConversation(!showConversation)}>
-                <h2>LLM Conversation</h2>
-                <span className="material-icons" style={{ color: 'var(--on-surface-variant)' }}>
-                  {showConversation ? 'expand_less' : 'expand_more'}
-                </span>
-              </div>
-              {showConversation && (
-                <div className="vn-card-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  {decision.conversationLog.map((msg, i) => (
-                    <div key={i} style={{
-                      padding: 12,
-                      borderRadius: 8,
-                      background: msg.role === 'system'
-                        ? 'var(--surface-container-high)'
-                        : msg.role === 'assistant'
-                          ? 'var(--primary-container)'
-                          : 'var(--surface-container)',
-                    }}>
-                      <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', marginBottom: 6, color: 'var(--on-surface-variant)' }}>
-                        {msg.role}
-                      </div>
-                      <pre style={{ whiteSpace: 'pre-wrap', fontSize: 13, lineHeight: 1.5, margin: 0 }}>{msg.content}</pre>
-                    </div>
-                  ))}
+            <Card>
+              <CardHeader className="cursor-pointer" onClick={() => setShowConversation(!showConversation)}>
+                <div className="flex items-center justify-between">
+                  <CardTitle>LLM conversation</CardTitle>
+                  {showConversation ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
                 </div>
+              </CardHeader>
+              {showConversation && (
+                <CardContent>
+                  <div className="flex flex-col gap-3">
+                    {decision.conversationLog.map((msg, i) => (
+                      <div key={i} className={cn(
+                        'rounded-md p-3',
+                        msg.role === 'system' && 'bg-muted',
+                        msg.role === 'assistant' && 'bg-primary/10',
+                        msg.role === 'user' && 'bg-card border border-border',
+                      )}>
+                        <div className="mb-1 text-[10px] font-semibold uppercase text-muted-foreground">{msg.role}</div>
+                        <pre className="whitespace-pre-wrap text-sm leading-relaxed">{msg.content}</pre>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
               )}
-            </div>
+            </Card>
           )}
 
-          {/* Outcome details (if recorded) */}
           {decision.outcomeStatus && decision.outcomeStatus !== 'pending' && (
-            <div className="vn-card">
-              <div className="vn-card-header"><h2>Outcome Review</h2></div>
-              <div className="vn-card-body">
-                <VnInfoGrid items={[
-                  { label: 'Verdict', value: outcomeChip(decision.outcomeStatus) },
-                  { label: 'Reviewed At', value: decision.outcomeRecordedAt ? formatDate(decision.outcomeRecordedAt) : '-' },
-                  { label: 'Reviewed By', value: decision.outcomeRecordedBy || 'System' },
-                  ...(decision.outcomeNotes ? [{ label: 'Notes', value: decision.outcomeNotes }] : []),
-                ]} />
-              </div>
-            </div>
+            <Card>
+              <CardHeader><CardTitle>Outcome review</CardTitle></CardHeader>
+              <CardContent>
+                <InfoRow label="Verdict" value={outcomeBadge(decision.outcomeStatus)} />
+                <InfoRow label="Reviewed at" value={decision.outcomeRecordedAt ? formatDate(decision.outcomeRecordedAt) : '-'} />
+                <InfoRow label="Reviewed by" value={decision.outcomeRecordedBy || 'System'} />
+                {decision.outcomeNotes && <InfoRow label="Notes" value={decision.outcomeNotes} />}
+              </CardContent>
+            </Card>
           )}
         </div>
 
-        {/* Sidebar */}
-        <div className="vn-detail-sidebar">
-          <div className="vn-card">
-            <div className="vn-card-header"><h2>Details</h2></div>
-            <div className="vn-card-body">
-              <VnInfoGrid items={[
-                { label: 'Agent Type', value: <span style={{ textTransform: 'capitalize' }}>{decision.agentType.replace(/_/g, ' ')}</span> },
-                { label: 'Trigger', value: decision.triggerEventType || decision.triggerType },
-                { label: 'Entity', value: decision.entityType ? `${decision.entityType} / ${decision.entityId?.slice(0, 8)}...` : '-' },
-                { label: 'Model', value: decision.modelId || '-' },
-                { label: 'Provider', value: decision.modelProvider || '-' },
-                { label: 'Created', value: formatDate(decision.createdAt) },
-              ]} />
-            </div>
-          </div>
+        <div className="space-y-3">
+          <Card>
+            <CardHeader><CardTitle>Details</CardTitle></CardHeader>
+            <CardContent>
+              <InfoRow label="Agent type" value={<span className="capitalize">{decision.agentType.replace(/_/g, ' ')}</span>} />
+              <InfoRow label="Trigger" value={decision.triggerEventType || decision.triggerType} />
+              <InfoRow
+                label="Entity"
+                value={decision.entityType ? `${decision.entityType} / ${decision.entityId?.slice(0, 8)}...` : '-'}
+              />
+              <InfoRow label="Model" value={decision.modelId || '-'} />
+              <InfoRow label="Provider" value={decision.modelProvider || '-'} />
+              <InfoRow label="Created" value={formatDate(decision.createdAt)} />
+            </CardContent>
+          </Card>
 
-          {/* Token usage card */}
           {(decision.inputTokens || decision.outputTokens || decision.durationMs) && (
-            <div className="vn-card">
-              <div className="vn-card-header"><h2>Token Usage</h2></div>
-              <div className="vn-card-body">
-                <VnInfoGrid items={[
-                  { label: 'Input Tokens', value: decision.inputTokens?.toLocaleString() ?? '-' },
-                  { label: 'Output Tokens', value: decision.outputTokens?.toLocaleString() ?? '-' },
-                  { label: 'Total Tokens', value: ((decision.inputTokens || 0) + (decision.outputTokens || 0)).toLocaleString() },
-                  { label: 'Duration', value: decision.durationMs ? `${(decision.durationMs / 1000).toFixed(1)}s` : '-' },
-                ]} />
-              </div>
-            </div>
+            <Card>
+              <CardHeader><CardTitle>Token usage</CardTitle></CardHeader>
+              <CardContent>
+                <InfoRow label="Input tokens" value={decision.inputTokens?.toLocaleString() ?? '-'} />
+                <InfoRow label="Output tokens" value={decision.outputTokens?.toLocaleString() ?? '-'} />
+                <InfoRow label="Total tokens" value={((decision.inputTokens || 0) + (decision.outputTokens || 0)).toLocaleString()} />
+                <InfoRow label="Duration" value={decision.durationMs ? `${(decision.durationMs / 1000).toFixed(1)}s` : '-'} />
+              </CardContent>
+            </Card>
           )}
 
           {decision.actionEntityType && decision.actionEntityId && (
-            <div className="vn-card">
-              <div className="vn-card-header"><h2>Created Entity</h2></div>
-              <div className="vn-card-body">
-                <VnInfoGrid items={[
-                  { label: 'Type', value: <span style={{ textTransform: 'capitalize' }}>{decision.actionEntityType}</span> },
-                  { label: 'ID', value: decision.actionEntityId.slice(0, 8) + '...' },
-                ]} />
+            <Card>
+              <CardHeader><CardTitle>Created entity</CardTitle></CardHeader>
+              <CardContent className="space-y-3">
+                <InfoRow label="Type" value={<span className="capitalize">{decision.actionEntityType}</span>} />
+                <InfoRow label="ID" value={decision.actionEntityId.slice(0, 8) + '...'} />
                 {decision.actionEntityType === 'issue' && (
-                  <button
-                    className="vn-btn vn-btn-outline vn-btn-sm"
-                    style={{ marginTop: 12, width: '100%' }}
-                    onClick={() => navigate('/issues')}
-                  >
-                    <span className="material-icons">open_in_new</span>View Issues
-                  </button>
+                  <Button variant="outline" size="sm" className="w-full" onClick={() => navigate('/issues')}>
+                    <ExternalLink className="h-4 w-4" />
+                    View issues
+                  </Button>
                 )}
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           )}
 
           {decision.triggerEventId && (
-            <div className="vn-card">
-              <div className="vn-card-header"><h2>Trigger Event</h2></div>
-              <div className="vn-card-body">
-                <VnInfoGrid items={[
-                  { label: 'Event Type', value: decision.triggerEventType || '-' },
-                  { label: 'Event ID', value: decision.triggerEventId.slice(0, 8) + '...' },
-                ]} />
-              </div>
-            </div>
+            <Card>
+              <CardHeader><CardTitle>Trigger event</CardTitle></CardHeader>
+              <CardContent>
+                <InfoRow label="Event type" value={decision.triggerEventType || '-'} />
+                <InfoRow label="Event ID" value={decision.triggerEventId.slice(0, 8) + '...'} />
+              </CardContent>
+            </Card>
           )}
         </div>
       </div>
 
-      {/* Outcome recording modal */}
-      <VnModal
-        open={showOutcomeModal}
-        onClose={() => setShowOutcomeModal(false)}
-        title="Record Decision Outcome"
-        footer={
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-            <button className="vn-btn vn-btn-outline vn-btn-sm" onClick={() => setShowOutcomeModal(false)}>Cancel</button>
-            <button className="vn-btn vn-btn-primary vn-btn-sm" onClick={recordOutcome} disabled={saving}>
-              {saving ? 'Saving...' : 'Save Outcome'}
-            </button>
+      <Dialog open={showOutcomeModal} onOpenChange={setShowOutcomeModal}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Record decision outcome</DialogTitle>
+          </DialogHeader>
+          {saveError && (
+            <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+              <CircleAlert className="h-4 w-4" />
+              {saveError}
+            </div>
+          )}
+          <div className="space-y-4">
+            <div>
+              <p className="mb-2 text-sm font-medium">Was this decision correct?</p>
+              <div className="flex flex-wrap gap-2">
+                {(['correct', 'partially_correct', 'incorrect'] as const).map(status => (
+                  <Button
+                    key={status}
+                    variant={outcomeStatus === status ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setOutcomeStatus(status)}
+                    className="capitalize"
+                  >
+                    {status === 'correct' && <CheckCircle2 className="h-4 w-4" />}
+                    {status === 'partially_correct' && <MinusCircle className="h-4 w-4" />}
+                    {status === 'incorrect' && <XCircle className="h-4 w-4" />}
+                    {status.replace(/_/g, ' ')}
+                  </Button>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="outcome-notes">Notes (optional)</Label>
+              <textarea
+                id="outcome-notes"
+                rows={3}
+                placeholder="Why was this decision correct/incorrect?"
+                value={outcomeNotes}
+                onChange={e => setOutcomeNotes(e.target.value)}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+            </div>
           </div>
-        }
-      >
-        {saveError && (
-          <VnAlert variant="error">{saveError}</VnAlert>
-        )}
-        <div style={{ marginBottom: 16 }}>
-          <p style={{ margin: '0 0 8px', fontWeight: 500 }}>Was this decision correct?</p>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {(['correct', 'partially_correct', 'incorrect'] as const).map(status => (
-              <button
-                key={status}
-                className={`vn-btn vn-btn-sm ${outcomeStatus === status ? 'vn-btn-primary' : 'vn-btn-outline'}`}
-                onClick={() => setOutcomeStatus(status)}
-                style={{ textTransform: 'capitalize' }}
-              >
-                {status === 'correct' && <span className="material-icons">check_circle</span>}
-                {status === 'partially_correct' && <span className="material-icons">remove_circle</span>}
-                {status === 'incorrect' && <span className="material-icons">cancel</span>}
-                {status.replace(/_/g, ' ')}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="vn-field">
-          <label className="vn-field-label">Notes (optional)</label>
-          <textarea
-            className="vn-input"
-            rows={3}
-            placeholder="Why was this decision correct/incorrect?"
-            value={outcomeNotes}
-            onChange={e => setOutcomeNotes(e.target.value)}
-          />
-        </div>
-      </VnModal>
-    </>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowOutcomeModal(false)}>Cancel</Button>
+            <Button variant="gradient" onClick={recordOutcome} disabled={saving}>
+              {saving ? 'Saving...' : 'Save outcome'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }

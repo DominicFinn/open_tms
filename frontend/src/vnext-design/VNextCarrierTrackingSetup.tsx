@@ -6,7 +6,38 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import {
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  CheckCircle2,
+  CircleAlert,
+  Eye,
+  Inbox,
+  Info,
+  List as ListIcon,
+  Loader2,
+  Plane,
+  Repeat,
+  Truck,
+  Wifi,
+  Pencil,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { cn } from '@/lib/utils';
 
 interface Carrier {
   id: string;
@@ -20,18 +51,6 @@ interface ExistingIntegration {
   carrierId: string;
 }
 
-interface ProviderDef {
-  key: string;
-  name: string;
-  icon: string;
-  description: string;
-  supportsWebhook: boolean;
-  supportsPolling: boolean;
-  fields: ProviderField[];
-  infoUrl?: string;
-  infoText?: string;
-}
-
 interface ProviderField {
   key: string;
   label: string;
@@ -40,18 +59,30 @@ interface ProviderField {
   placeholder?: string;
 }
 
+interface ProviderDef {
+  key: string;
+  name: string;
+  icon: React.ComponentType<{ className?: string }>;
+  description: string;
+  supportsWebhook: boolean;
+  supportsPolling: boolean;
+  fields: ProviderField[];
+  infoUrl?: string;
+  infoText?: string;
+}
+
 const PROVIDERS: ProviderDef[] = [
   {
     key: 'fedex',
     name: 'FedEx',
-    icon: 'local_shipping',
+    icon: Truck,
     description: 'Track shipments via the FedEx Track API with full status and proof of delivery.',
     supportsWebhook: true,
     supportsPolling: true,
     fields: [
       { key: 'clientId', label: 'Client ID', type: 'text', required: true, placeholder: 'Your FedEx API client ID' },
-      { key: 'clientSecret', label: 'Client Secret', type: 'password', required: true, placeholder: 'Your FedEx API client secret' },
-      { key: 'accountNumber', label: 'Account Number', type: 'text', required: false, placeholder: 'Optional - FedEx account number' },
+      { key: 'clientSecret', label: 'Client secret', type: 'password', required: true, placeholder: 'Your FedEx API client secret' },
+      { key: 'accountNumber', label: 'Account number', type: 'text', required: false, placeholder: 'Optional - FedEx account number' },
     ],
     infoUrl: 'https://developer.fedex.com',
     infoText: 'Get your credentials at developer.fedex.com',
@@ -59,13 +90,13 @@ const PROVIDERS: ProviderDef[] = [
   {
     key: 'ups',
     name: 'UPS',
-    icon: 'inventory_2',
+    icon: Inbox,
     description: 'Track packages through the UPS Tracking API with detailed milestone events.',
     supportsWebhook: true,
     supportsPolling: true,
     fields: [
       { key: 'clientId', label: 'Client ID', type: 'text', required: true, placeholder: 'Your UPS API client ID' },
-      { key: 'clientSecret', label: 'Client Secret', type: 'password', required: true, placeholder: 'Your UPS API client secret' },
+      { key: 'clientSecret', label: 'Client secret', type: 'password', required: true, placeholder: 'Your UPS API client secret' },
     ],
     infoUrl: 'https://developer.ups.com',
     infoText: 'Get your credentials at developer.ups.com',
@@ -73,12 +104,12 @@ const PROVIDERS: ProviderDef[] = [
   {
     key: 'dhl',
     name: 'DHL',
-    icon: 'flight',
+    icon: Plane,
     description: 'Track DHL Express, eCommerce, and Freight shipments via the Unified Tracking API.',
     supportsWebhook: false,
     supportsPolling: true,
     fields: [
-      { key: 'apiKey', label: 'API Key', type: 'password', required: true, placeholder: 'Your DHL API key' },
+      { key: 'apiKey', label: 'API key', type: 'password', required: true, placeholder: 'Your DHL API key' },
     ],
     infoUrl: 'https://developer.dhl.com',
     infoText: 'Get your API key at developer.dhl.com',
@@ -86,12 +117,12 @@ const PROVIDERS: ProviderDef[] = [
   {
     key: 'easypost',
     name: 'EasyPost',
-    icon: 'all_inbox',
+    icon: Inbox,
     description: 'Multi-carrier tracking through EasyPost. Supports 100+ carriers with a single integration.',
     supportsWebhook: true,
     supportsPolling: true,
     fields: [
-      { key: 'apiKey', label: 'API Key', type: 'password', required: true, placeholder: 'Your EasyPost API key' },
+      { key: 'apiKey', label: 'API key', type: 'password', required: true, placeholder: 'Your EasyPost API key' },
     ],
     infoUrl: 'https://easypost.com/account',
     infoText: 'Get your API key at easypost.com/account',
@@ -99,7 +130,7 @@ const PROVIDERS: ProviderDef[] = [
   {
     key: 'edi_214',
     name: 'EDI 214',
-    icon: 'swap_horiz',
+    icon: Repeat,
     description: 'Receive tracking updates via EDI 214 Shipment Status messages from trading partners.',
     supportsWebhook: false,
     supportsPolling: false,
@@ -109,7 +140,7 @@ const PROVIDERS: ProviderDef[] = [
   {
     key: 'manual',
     name: 'Manual',
-    icon: 'edit_note',
+    icon: Pencil,
     description: 'Manually update tracking status through the UI or API. No external provider needed.',
     supportsWebhook: false,
     supportsPolling: false,
@@ -124,7 +155,7 @@ const POLLING_INTERVALS = [
   { value: 60, label: 'Every hour' },
 ];
 
-const STEPS = ['Select Carrier', 'Select Provider', 'Configure', 'Test Connection', 'Done'];
+const STEPS = ['Select carrier', 'Select provider', 'Configure', 'Test connection', 'Done'];
 
 export default function VNextCarrierTrackingSetup() {
   const navigate = useNavigate();
@@ -134,19 +165,13 @@ export default function VNextCarrierTrackingSetup() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Step 1 state
   const [selectedCarrierId, setSelectedCarrierId] = useState('');
-
-  // Step 2 state
   const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
-
-  // Step 3 state
   const [credentials, setCredentials] = useState<Record<string, string>>({});
   const [pollingEnabled, setPollingEnabled] = useState(true);
   const [pollingInterval, setPollingInterval] = useState(15);
   const [saving, setSaving] = useState(false);
 
-  // Step 4 state
   const [createdId, setCreatedId] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [testing, setTesting] = useState(false);
@@ -230,51 +255,43 @@ export default function VNextCarrierTrackingSetup() {
 
   if (loading) {
     return (
-      <div style={{ padding: '24px', textAlign: 'center' }}>
-        <div className="loading-spinner" />
+      <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <h3 className="text-lg font-medium">Loading...</h3>
       </div>
     );
   }
 
   return (
-    <div style={{ padding: '24px', maxWidth: '800px', margin: '0 auto' }}>
-      {/* Back link */}
-      <Link to="/integrations/carrier-tracking" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--primary)', textDecoration: 'none', fontSize: '14px', marginBottom: '16px' }}>
-        <span className="material-icons" style={{ fontSize: '18px' }}>arrow_back</span>
-        Back to Carrier Tracking
-      </Link>
+    <div className="mx-auto max-w-3xl space-y-6">
+      <Button variant="ghost" size="sm" asChild className="-ml-3 self-start">
+        <Link to="/integrations/carrier-tracking">
+          <ArrowLeft className="h-4 w-4" />
+          Back to carrier tracking
+        </Link>
+      </Button>
 
-      <h1 style={{ margin: '0 0 8px', fontSize: '24px', fontWeight: 700, color: 'var(--on-surface)' }}>
-        Set Up Carrier Tracking
-      </h1>
-      <p style={{ margin: '0 0 24px', fontSize: '14px', color: 'var(--on-surface-variant)' }}>
-        Connect a carrier to receive automatic shipment tracking updates.
-      </p>
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Set up carrier tracking</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Connect a carrier to receive automatic shipment tracking updates.
+        </p>
+      </div>
 
-      {/* Step indicator */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '32px', overflowX: 'auto' }}>
+      <div className="flex flex-wrap items-center gap-1 overflow-x-auto pb-1">
         {STEPS.map((label, idx) => (
           <React.Fragment key={label}>
             {idx > 0 && (
-              <div style={{ flex: '0 0 24px', height: '2px', background: idx <= step ? 'var(--primary)' : 'var(--outline-variant)' }} />
+              <div className={cn('h-0.5 w-6 flex-shrink-0', idx <= step ? 'bg-primary' : 'bg-border')} />
             )}
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0,
-              opacity: idx <= step ? 1 : 0.5,
-            }}>
-              <div style={{
-                width: '28px', height: '28px', borderRadius: '50%', display: 'flex',
-                alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: 600,
-                background: idx < step ? 'var(--color-success)' : idx === step ? 'var(--primary)' : 'var(--surface-container)',
-                color: idx <= step ? 'var(--on-primary)' : 'var(--on-surface-variant)',
-              }}>
-                {idx < step ? (
-                  <span className="material-icons" style={{ fontSize: '16px' }}>check</span>
-                ) : (
-                  idx + 1
-                )}
+            <div className={cn('flex flex-shrink-0 items-center gap-2', idx > step && 'opacity-50')}>
+              <div className={cn(
+                'flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold',
+                idx < step ? 'bg-success text-white' : idx === step ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground',
+              )}>
+                {idx < step ? <Check className="h-4 w-4" /> : idx + 1}
               </div>
-              <span style={{ fontSize: '13px', fontWeight: idx === step ? 600 : 400, color: 'var(--on-surface)', whiteSpace: 'nowrap' }}>
+              <span className={cn('whitespace-nowrap text-sm', idx === step && 'font-semibold')}>
                 {label}
               </span>
             </div>
@@ -282,139 +299,121 @@ export default function VNextCarrierTrackingSetup() {
         ))}
       </div>
 
-      {/* Error */}
       {error && (
-        <div className="vn-alert vn-alert-error" style={{ marginBottom: '16px' }}>
-          {error}
-          <button onClick={() => setError(null)} style={{ float: 'right', background: 'none', border: 'none', cursor: 'pointer', color: 'inherit' }}>
-            <span className="material-icons" style={{ fontSize: '16px' }}>close</span>
-          </button>
+        <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+          <CircleAlert className="h-5 w-5" />
+          <span className="flex-1">{error}</span>
+          <Button variant="ghost" size="sm" onClick={() => setError(null)}>Dismiss</Button>
         </div>
       )}
 
-      {/* Step 0: Select Carrier */}
       {step === 0 && (
-        <div className="vn-card" style={{ padding: '24px' }}>
-          <h2 style={{ margin: '0 0 8px', fontSize: '18px', fontWeight: 600, color: 'var(--on-surface)' }}>Select Carrier</h2>
-          <p style={{ margin: '0 0 16px', fontSize: '14px', color: 'var(--on-surface-variant)' }}>
-            Choose the carrier you want to set up tracking for. Only carriers without an existing integration are shown.
-          </p>
+        <Card className="space-y-4 p-6">
+          <div>
+            <h2 className="text-lg font-semibold">Select carrier</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Choose the carrier you want to set up tracking for. Only carriers without an existing integration are shown.
+            </p>
+          </div>
 
           {availableCarriers.length === 0 ? (
-            <div style={{ padding: '32px', textAlign: 'center', color: 'var(--on-surface-variant)', border: '2px dashed var(--outline-variant)', borderRadius: '8px' }}>
-              <span className="material-icons" style={{ fontSize: '40px', display: 'block', marginBottom: '8px', opacity: 0.4 }}>airport_shuttle</span>
-              <p style={{ margin: 0 }}>All carriers already have tracking integrations, or no carriers exist yet.</p>
+            <div className="flex flex-col items-center gap-2 rounded-md border-2 border-dashed border-border p-8 text-center text-muted-foreground">
+              <Truck className="h-10 w-10 opacity-40" />
+              <p>All carriers already have tracking integrations, or no carriers exist yet.</p>
             </div>
           ) : (
-            <div className="vn-field">
-              <label className="vn-field-label">Carrier</label>
-              <select className="vn-input" value={selectedCarrierId} onChange={e => setSelectedCarrierId(e.target.value)}>
-                <option value="">Select a carrier...</option>
-                {availableCarriers.map(c => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}{c.mcNumber ? ` (MC-${c.mcNumber})` : ''}
-                  </option>
-                ))}
-              </select>
+            <div className="space-y-2">
+              <Label>Carrier</Label>
+              <Select value={selectedCarrierId} onValueChange={setSelectedCarrierId}>
+                <SelectTrigger><SelectValue placeholder="Select a carrier..." /></SelectTrigger>
+                <SelectContent>
+                  {availableCarriers.map(c => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}{c.mcNumber ? ` (MC-${c.mcNumber})` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           )}
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
-            <button className="vn-btn" disabled={!canProceedStep0} onClick={() => setStep(1)}>
+          <div className="flex justify-end">
+            <Button variant="gradient" disabled={!canProceedStep0} onClick={() => setStep(1)}>
               Next
-              <span className="material-icons" style={{ fontSize: '18px', marginLeft: '4px' }}>arrow_forward</span>
-            </button>
+              <ArrowRight className="h-4 w-4" />
+            </Button>
           </div>
-        </div>
+        </Card>
       )}
 
-      {/* Step 1: Select Provider */}
       {step === 1 && (
-        <div className="vn-card" style={{ padding: '24px' }}>
-          <h2 style={{ margin: '0 0 8px', fontSize: '18px', fontWeight: 600, color: 'var(--on-surface)' }}>Select Provider</h2>
-          <p style={{ margin: '0 0 16px', fontSize: '14px', color: 'var(--on-surface-variant)' }}>
-            Choose how you want to receive tracking updates for {selectedCarrier?.name || 'this carrier'}.
-          </p>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '12px' }}>
-            {PROVIDERS.map(provider => (
-              <button
-                key={provider.key}
-                onClick={() => setSelectedProvider(provider.key)}
-                style={{
-                  padding: '16px',
-                  borderRadius: '8px',
-                  border: selectedProvider === provider.key
-                    ? '2px solid var(--primary)'
-                    : '1px solid var(--outline-variant)',
-                  background: selectedProvider === provider.key
-                    ? 'var(--primary-container)'
-                    : 'var(--surface)',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  transition: 'all 0.15s ease',
-                }}
-              >
-                <span className="material-icons" style={{
-                  fontSize: '28px', display: 'block', marginBottom: '8px',
-                  color: selectedProvider === provider.key ? 'var(--primary)' : 'var(--on-surface-variant)',
-                }}>
-                  {provider.icon}
-                </span>
-                <div style={{ fontWeight: 600, fontSize: '15px', color: 'var(--on-surface)', marginBottom: '4px' }}>
-                  {provider.name}
-                </div>
-                <div style={{ fontSize: '12px', color: 'var(--on-surface-variant)', marginBottom: '8px', lineHeight: 1.4 }}>
-                  {provider.description}
-                </div>
-                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                  {provider.supportsPolling && (
-                    <span className="vn-chip vn-chip-info" style={{ fontSize: '11px' }}>Polling</span>
-                  )}
-                  {provider.supportsWebhook && (
-                    <span className="vn-chip vn-chip-info" style={{ fontSize: '11px' }}>Webhook</span>
-                  )}
-                </div>
-              </button>
-            ))}
+        <Card className="space-y-4 p-6">
+          <div>
+            <h2 className="text-lg font-semibold">Select provider</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Choose how you want to receive tracking updates for {selectedCarrier?.name || 'this carrier'}.
+            </p>
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '20px' }}>
-            <button className="vn-btn" onClick={() => setStep(0)} style={{ background: 'transparent', border: '1px solid var(--outline-variant)', color: 'var(--on-surface-variant)' }}>
-              <span className="material-icons" style={{ fontSize: '18px', marginRight: '4px' }}>arrow_back</span>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {PROVIDERS.map(provider => {
+              const Icon = provider.icon;
+              const isActive = selectedProvider === provider.key;
+              return (
+                <button
+                  key={provider.key}
+                  type="button"
+                  onClick={() => setSelectedProvider(provider.key)}
+                  className={cn(
+                    'rounded-lg border p-4 text-left transition-colors',
+                    isActive ? 'border-primary bg-primary/5' : 'border-border bg-card hover:border-primary/40',
+                  )}
+                >
+                  <Icon className={cn('mb-2 h-7 w-7', isActive ? 'text-primary' : 'text-muted-foreground')} />
+                  <div className="text-sm font-semibold">{provider.name}</div>
+                  <div className="mt-1 text-xs leading-relaxed text-muted-foreground">{provider.description}</div>
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {provider.supportsPolling && <Badge variant="info">Polling</Badge>}
+                    {provider.supportsWebhook && <Badge variant="info">Webhook</Badge>}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex justify-between">
+            <Button variant="outline" onClick={() => setStep(0)}>
+              <ArrowLeft className="h-4 w-4" />
               Back
-            </button>
-            <button className="vn-btn" disabled={!canProceedStep1} onClick={() => setStep(2)}>
+            </Button>
+            <Button variant="gradient" disabled={!canProceedStep1} onClick={() => setStep(2)}>
               Next
-              <span className="material-icons" style={{ fontSize: '18px', marginLeft: '4px' }}>arrow_forward</span>
-            </button>
+              <ArrowRight className="h-4 w-4" />
+            </Button>
           </div>
-        </div>
+        </Card>
       )}
 
-      {/* Step 2: Configure */}
       {step === 2 && providerDef && (
-        <div className="vn-card" style={{ padding: '24px' }}>
-          <h2 style={{ margin: '0 0 8px', fontSize: '18px', fontWeight: 600, color: 'var(--on-surface)' }}>
-            Configure {providerDef.name}
-          </h2>
-          <p style={{ margin: '0 0 16px', fontSize: '14px', color: 'var(--on-surface-variant)' }}>
-            {providerDef.fields.length > 0
-              ? `Enter your ${providerDef.name} API credentials to enable tracking.`
-              : `No additional configuration needed for ${providerDef.name}.`}
-          </p>
+        <Card className="space-y-4 p-6">
+          <div>
+            <h2 className="text-lg font-semibold">Configure {providerDef.name}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {providerDef.fields.length > 0
+                ? `Enter your ${providerDef.name} API credentials to enable tracking.`
+                : `No additional configuration needed for ${providerDef.name}.`}
+            </p>
+          </div>
 
-          {/* Credential fields */}
           {providerDef.fields.length > 0 && (
-            <div className="vn-form-grid" style={{ marginBottom: '20px' }}>
+            <div className="grid gap-3 md:grid-cols-2">
               {providerDef.fields.map(field => (
-                <div key={field.key} className="vn-field">
-                  <label className="vn-field-label">
+                <div key={field.key} className="space-y-2">
+                  <Label>
                     {field.label}
-                    {field.required && <span style={{ color: 'var(--color-error)' }}> *</span>}
-                  </label>
-                  <input
-                    className="vn-input"
+                    {field.required && <span className="text-destructive"> *</span>}
+                  </Label>
+                  <Input
                     type={field.type}
                     value={credentials[field.key] || ''}
                     onChange={e => setCredentials(prev => ({ ...prev, [field.key]: e.target.value }))}
@@ -425,12 +424,11 @@ export default function VNextCarrierTrackingSetup() {
             </div>
           )}
 
-          {/* Info box */}
           {providerDef.infoText && (
-            <div className="vn-alert vn-alert-info" style={{ marginBottom: '20px' }}>
-              <span className="material-icons" style={{ fontSize: '18px', verticalAlign: 'text-bottom', marginRight: '6px' }}>info</span>
+            <div className="flex items-start gap-3 rounded-md border border-info/30 bg-info/10 p-3 text-sm text-info">
+              <Info className="mt-0.5 h-4 w-4" />
               {providerDef.infoUrl ? (
-                <a href={providerDef.infoUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit' }}>
+                <a href={providerDef.infoUrl} target="_blank" rel="noopener noreferrer" className="underline">
                   {providerDef.infoText}
                 </a>
               ) : (
@@ -439,122 +437,114 @@ export default function VNextCarrierTrackingSetup() {
             </div>
           )}
 
-          {/* Polling config */}
           {providerDef.supportsPolling && (
-            <div className="vn-form-section" style={{ marginBottom: '20px' }}>
-              <h3 style={{ margin: '0 0 12px', fontSize: '15px', fontWeight: 600, color: 'var(--on-surface)' }}>Polling Configuration</h3>
-              <div className="vn-form-grid">
-                <div className="vn-field">
-                  <label className="vn-field-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <input
-                      type="checkbox"
-                      checked={pollingEnabled}
-                      onChange={e => setPollingEnabled(e.target.checked)}
-                    />
-                    Enable automatic polling
-                  </label>
-                </div>
-                {pollingEnabled && (
-                  <div className="vn-field">
-                    <label className="vn-field-label">Polling Interval</label>
-                    <select className="vn-input" value={pollingInterval} onChange={e => setPollingInterval(Number(e.target.value))}>
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold">Polling configuration</h3>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={pollingEnabled}
+                  onChange={e => setPollingEnabled(e.target.checked)}
+                />
+                Enable automatic polling
+              </label>
+              {pollingEnabled && (
+                <div className="space-y-2">
+                  <Label>Polling interval</Label>
+                  <Select value={String(pollingInterval)} onValueChange={v => setPollingInterval(Number(v))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
                       {POLLING_INTERVALS.map(opt => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        <SelectItem key={opt.value} value={String(opt.value)}>{opt.label}</SelectItem>
                       ))}
-                    </select>
-                  </div>
-                )}
-              </div>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
           )}
 
-          {/* Issue link */}
-          <div style={{ marginBottom: '20px', fontSize: '13px' }}>
+          <div className="text-xs">
             <a
               href="https://github.com/dominicfinn/open_tms/issues/new?title=Carrier+Tracking+Setup+Issue"
               target="_blank"
               rel="noopener noreferrer"
-              style={{ color: 'var(--on-surface-variant)', textDecoration: 'underline' }}
+              className="text-muted-foreground underline"
             >
               Instructions did not work? Create an issue
             </a>
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <button className="vn-btn" onClick={() => setStep(1)} style={{ background: 'transparent', border: '1px solid var(--outline-variant)', color: 'var(--on-surface-variant)' }}>
-              <span className="material-icons" style={{ fontSize: '18px', marginRight: '4px' }}>arrow_back</span>
+          <div className="flex justify-between">
+            <Button variant="outline" onClick={() => setStep(1)}>
+              <ArrowLeft className="h-4 w-4" />
               Back
-            </button>
-            <button className="vn-btn" disabled={!canProceedStep2 || saving} onClick={handleCreateIntegration}>
-              {saving && <span className="material-icons" style={{ fontSize: '16px', animation: 'spin 1s linear infinite', marginRight: '4px' }}>sync</span>}
-              {saving ? 'Creating...' : 'Create Integration'}
-            </button>
+            </Button>
+            <Button variant="gradient" disabled={!canProceedStep2 || saving} onClick={handleCreateIntegration}>
+              {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+              {saving ? 'Creating...' : 'Create integration'}
+            </Button>
           </div>
-        </div>
+        </Card>
       )}
 
-      {/* Step 3: Test Connection */}
       {step === 3 && (
-        <div className="vn-card" style={{ padding: '24px', textAlign: 'center' }}>
-          <h2 style={{ margin: '0 0 8px', fontSize: '18px', fontWeight: 600, color: 'var(--on-surface)' }}>Test Connection</h2>
-          <p style={{ margin: '0 0 24px', fontSize: '14px', color: 'var(--on-surface-variant)' }}>
+        <Card className="space-y-4 p-6 text-center">
+          <h2 className="text-lg font-semibold">Test connection</h2>
+          <p className="text-sm text-muted-foreground">
             Integration created successfully. Test the connection to make sure everything is working.
           </p>
 
           {testResult && (
-            <div
-              className={`vn-alert ${testResult.success ? 'vn-alert-success' : 'vn-alert-error'}`}
-              style={{ marginBottom: '20px', textAlign: 'left' }}
-            >
-              <span className="material-icons" style={{ fontSize: '18px', verticalAlign: 'text-bottom', marginRight: '6px' }}>
-                {testResult.success ? 'check_circle' : 'error'}
-              </span>
+            <div className={cn(
+              'flex items-start gap-3 rounded-md border p-3 text-sm text-left',
+              testResult.success
+                ? 'border-success/30 bg-success/10 text-success'
+                : 'border-destructive/30 bg-destructive/10 text-destructive',
+            )}>
+              {testResult.success ? <CheckCircle2 className="mt-0.5 h-4 w-4" /> : <CircleAlert className="mt-0.5 h-4 w-4" />}
               {testResult.message}
             </div>
           )}
 
-          <div style={{ display: 'flex', justifyContent: 'center', gap: '12px' }}>
-            <button className="vn-btn" onClick={handleTest} disabled={testing}>
-              {testing && <span className="material-icons" style={{ fontSize: '16px', animation: 'spin 1s linear infinite', marginRight: '4px' }}>sync</span>}
-              <span className="material-icons" style={{ fontSize: '18px', marginRight: '4px' }}>wifi_tethering</span>
-              {testing ? 'Testing...' : testResult ? 'Retry Test' : 'Test Connection'}
-            </button>
-            <button className="vn-btn" onClick={() => setStep(4)} style={{ background: 'transparent', border: '1px solid var(--outline-variant)', color: 'var(--on-surface-variant)' }}>
+          <div className="flex justify-center gap-3">
+            <Button variant="gradient" onClick={handleTest} disabled={testing}>
+              {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wifi className="h-4 w-4" />}
+              {testing ? 'Testing...' : testResult ? 'Retry test' : 'Test connection'}
+            </Button>
+            <Button variant="outline" onClick={() => setStep(4)}>
               {testResult?.success ? 'Continue' : 'Skip'}
-              <span className="material-icons" style={{ fontSize: '18px', marginLeft: '4px' }}>arrow_forward</span>
-            </button>
+              <ArrowRight className="h-4 w-4" />
+            </Button>
           </div>
-        </div>
+        </Card>
       )}
 
-      {/* Step 4: Done */}
       {step === 4 && (
-        <div className="vn-card" style={{ padding: '40px', textAlign: 'center' }}>
-          <span className="material-icons" style={{ fontSize: '56px', color: 'var(--color-success)', display: 'block', marginBottom: '16px' }}>check_circle</span>
-          <h2 style={{ margin: '0 0 8px', fontSize: '20px', fontWeight: 600, color: 'var(--on-surface)' }}>All Set!</h2>
-          <p style={{ margin: '0 0 24px', fontSize: '14px', color: 'var(--on-surface-variant)' }}>
+        <Card className="space-y-4 p-10 text-center">
+          <CheckCircle2 className="mx-auto h-14 w-14 text-success" />
+          <h2 className="text-xl font-semibold">All set</h2>
+          <p className="text-sm text-muted-foreground">
             Carrier tracking integration for {selectedCarrier?.name} with {providerDef?.name} has been configured.
           </p>
-          <div style={{ display: 'flex', justifyContent: 'center', gap: '12px' }}>
+          <div className="flex justify-center gap-3">
             {createdId && (
-              <Link to={`/integrations/carrier-tracking/${createdId}`} className="vn-btn" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                <span className="material-icons" style={{ fontSize: '18px' }}>visibility</span>
-                View Integration
-              </Link>
+              <Button variant="gradient" asChild>
+                <Link to={`/integrations/carrier-tracking/${createdId}`}>
+                  <Eye className="h-4 w-4" />
+                  View integration
+                </Link>
+              </Button>
             )}
-            <Link
-              to="/integrations/carrier-tracking"
-              className="vn-btn"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'transparent', border: '1px solid var(--outline-variant)', color: 'var(--on-surface-variant)' }}
-            >
-              <span className="material-icons" style={{ fontSize: '18px' }}>list</span>
-              Back to List
-            </Link>
+            <Button variant="outline" asChild>
+              <Link to="/integrations/carrier-tracking">
+                <ListIcon className="h-4 w-4" />
+                Back to list
+              </Link>
+            </Button>
           </div>
-        </div>
+        </Card>
       )}
-
-      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }

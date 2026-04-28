@@ -1,8 +1,28 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { API_URL } from '../api';
+import { useNavigate, useParams, Link } from 'react-router-dom';
+import {
+  ArrowLeft,
+  Boxes,
+  ChevronRight,
+  CircleAlert,
+  Edit,
+  ListPlus,
+  Loader2,
+  Plus,
+} from 'lucide-react';
 
-/* ── Types ────────────────────────────────────────────────── */
+import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 interface ZoneDetail {
   id: string;
@@ -38,25 +58,23 @@ interface Aisle {
   sortOrder: number;
 }
 
-/* ── Helpers ──────────────────────────────────────────────── */
-
 function formatZoneType(t: string): string {
   return t.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 }
 
-function binTypeChip(t: string): string {
+type BadgeVariant = 'success' | 'info' | 'warning' | 'destructive' | 'muted' | 'secondary' | 'default';
+
+function binTypeVariant(t: string): BadgeVariant {
   switch (t) {
-    case 'pallet': return 'vn-chip-primary';
-    case 'shelf': return 'vn-chip-info';
-    case 'floor': return 'vn-chip-secondary';
-    case 'dock_door': return 'vn-chip-warning';
-    case 'staging': return 'vn-chip-info';
-    case 'pack_station': return 'vn-chip-success';
-    default: return 'vn-chip-secondary';
+    case 'pallet': return 'default';
+    case 'shelf': return 'info';
+    case 'floor': return 'secondary';
+    case 'dock_door': return 'warning';
+    case 'staging': return 'info';
+    case 'pack_station': return 'success';
+    default: return 'secondary';
   }
 }
-
-/* ── Component ────────────────────────────────────────────── */
 
 export default function VNextWmsZoneDetail() {
   const { id } = useParams<{ id: string }>();
@@ -79,154 +97,166 @@ export default function VNextWmsZoneDetail() {
 
   if (loading) {
     return (
-      <div style={{ padding: '2rem', textAlign: 'center' }}>
-        <div className="vn-loading-spinner" />
+      <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
       </div>
     );
   }
 
   if (error || !zone) {
     return (
-      <div className="vn-alert vn-alert-error">
+      <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+        <CircleAlert className="h-5 w-5" />
         {error || 'Zone not found'}
       </div>
     );
   }
 
   return (
-    <div>
-      <div className="vn-page-header">
+    <div className="space-y-6">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Link to="/wms/zones" className="hover:text-foreground">
+          <ArrowLeft className="inline h-4 w-4" /> Zones
+        </Link>
+        <ChevronRight className="h-3 w-3" />
+        <span>{zone.name}</span>
+      </div>
+
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1>{zone.name}</h1>
-          <p className="vn-page-subtitle">{formatZoneType(zone.zoneType)} zone</p>
+          <h1 className="text-3xl font-bold tracking-tight">{zone.name}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{formatZoneType(zone.zoneType)} zone</p>
         </div>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button className="vn-btn vn-btn-outline" onClick={() => navigate(`/wms/zones/${id}/edit`)}>
-            <span className="material-icons" style={{ fontSize: '18px', marginRight: '0.5rem' }}>edit</span>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => navigate(`/wms/zones/${id}/edit`)}>
+            <Edit className="h-4 w-4" />
             Edit
-          </button>
-          <button className="vn-btn vn-btn-primary" onClick={() => navigate(`/wms/zones/${id}/bins/create`)}>
-            <span className="material-icons" style={{ fontSize: '18px', marginRight: '0.5rem' }}>add</span>
+          </Button>
+          <Button variant="gradient" onClick={() => navigate(`/wms/zones/${id}/bins/create`)}>
+            <Plus className="h-4 w-4" />
             Add Bins
-          </button>
+          </Button>
         </div>
       </div>
 
-      {/* Zone info cards */}
-      <div className="vn-detail-grid">
-        <div className="vn-detail-main">
-          {/* Bin list */}
-          <div className="vn-card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-              <h3 style={{ margin: 0 }}>Bins ({zone.bins.length})</h3>
-              <button className="vn-btn vn-btn-outline" style={{ fontSize: '0.85rem' }} onClick={() => navigate(`/wms/zones/${id}/bins/bulk`)}>
-                <span className="material-icons" style={{ fontSize: '16px', marginRight: '0.4rem' }}>playlist_add</span>
+      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+        <div className="space-y-6">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Bins ({zone.bins.length})</CardTitle>
+              <Button variant="outline" size="sm" onClick={() => navigate(`/wms/zones/${id}/bins/bulk`)}>
+                <ListPlus className="h-4 w-4" />
                 Bulk Create
-              </button>
-            </div>
-
-            {zone.bins.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>
-                <span className="material-icons" style={{ fontSize: '36px', display: 'block', marginBottom: '0.5rem' }}>inventory_2</span>
-                No bins in this zone yet. Add bins individually or use bulk create.
-              </div>
-            ) : (
-              <div className="vn-table-wrap">
-                <table className="vn-table">
-                  <thead>
-                    <tr>
-                      <th>Label</th>
-                      <th>Type</th>
-                      <th>Level</th>
-                      <th>Walk Seq</th>
-                      <th>Utilization</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+              </Button>
+            </CardHeader>
+            <CardContent className="p-0">
+              {zone.bins.length === 0 ? (
+                <div className="flex flex-col items-center gap-3 py-12 text-center text-muted-foreground">
+                  <Boxes className="h-10 w-10" />
+                  <p className="text-sm">No bins in this zone yet. Add bins individually or use bulk create.</p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Label</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Level</TableHead>
+                      <TableHead>Walk Seq</TableHead>
+                      <TableHead>Utilization</TableHead>
+                      <TableHead>Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {zone.bins.map(bin => (
-                      <tr key={bin.id}>
-                        <td><strong>{bin.label}</strong></td>
-                        <td><span className={`vn-chip ${binTypeChip(bin.binType)}`}>{formatZoneType(bin.binType)}</span></td>
-                        <td>{bin.level ?? '--'}</td>
-                        <td>{bin.walkSequence}</td>
-                        <td>
+                      <TableRow key={bin.id}>
+                        <TableCell className="font-mono text-sm font-semibold">{bin.label}</TableCell>
+                        <TableCell>
+                          <Badge variant={binTypeVariant(bin.binType)}>{formatZoneType(bin.binType)}</Badge>
+                        </TableCell>
+                        <TableCell>{bin.level ?? '-'}</TableCell>
+                        <TableCell>{bin.walkSequence}</TableCell>
+                        <TableCell>
                           {bin.maxPalletPositions
                             ? `${bin.currentPalletCount}/${bin.maxPalletPositions}`
                             : bin.maxWeightKg
                               ? `${bin.currentWeightKg.toFixed(0)}/${bin.maxWeightKg}kg`
-                              : '--'}
-                        </td>
-                        <td>
-                          <span className={`vn-chip ${bin.active ? 'vn-chip-success' : 'vn-chip-secondary'}`}>
+                              : '-'}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={bin.active ? 'success' : 'muted'}>
                             {bin.active ? 'Active' : 'Inactive'}
-                          </span>
-                        </td>
-                      </tr>
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
         </div>
 
-        <div className="vn-detail-sidebar">
-          {/* Zone properties */}
-          <div className="vn-card">
-            <h3 style={{ margin: '0 0 1rem' }}>Properties</h3>
-            <dl style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem 1rem', margin: 0 }}>
-              <div>
-                <dt style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Type</dt>
-                <dd style={{ margin: 0, fontWeight: 500 }}>{formatZoneType(zone.zoneType)}</dd>
-              </div>
-              <div>
-                <dt style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Temperature</dt>
-                <dd style={{ margin: 0 }}>{zone.temperatureZone ? formatZoneType(zone.temperatureZone) : 'None'}</dd>
-              </div>
-              <div>
-                <dt style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Hazmat</dt>
-                <dd style={{ margin: 0 }}>{zone.hazmatCertified ? 'Yes' : 'No'}</dd>
-              </div>
-              <div>
-                <dt style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Sort Order</dt>
-                <dd style={{ margin: 0 }}>{zone.sortOrder}</dd>
-              </div>
-              <div>
-                <dt style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Max Weight</dt>
-                <dd style={{ margin: 0 }}>{zone.maxWeightKg != null ? `${zone.maxWeightKg} kg` : '--'}</dd>
-              </div>
-              <div>
-                <dt style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Max Volume</dt>
-                <dd style={{ margin: 0 }}>{zone.maxVolumeCbm != null ? `${zone.maxVolumeCbm} cbm` : '--'}</dd>
-              </div>
-              <div>
-                <dt style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Status</dt>
-                <dd style={{ margin: 0 }}>
-                  <span className={`vn-chip ${zone.active ? 'vn-chip-success' : 'vn-chip-error'}`}>
-                    {zone.active ? 'Active' : 'Inactive'}
-                  </span>
-                </dd>
-              </div>
-              <div>
-                <dt style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Bins</dt>
-                <dd style={{ margin: 0, fontWeight: 600 }}>{zone.bins.length}</dd>
-              </div>
-            </dl>
-          </div>
+        <aside className="space-y-6 lg:sticky lg:top-20 lg:self-start">
+          <Card>
+            <CardHeader>
+              <CardTitle>Properties</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <dl className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <dt className="text-xs text-muted-foreground">Type</dt>
+                  <dd className="mt-0.5 font-medium">{formatZoneType(zone.zoneType)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">Temperature</dt>
+                  <dd className="mt-0.5">{zone.temperatureZone ? formatZoneType(zone.temperatureZone) : 'None'}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">Hazmat</dt>
+                  <dd className="mt-0.5">{zone.hazmatCertified ? 'Yes' : 'No'}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">Sort Order</dt>
+                  <dd className="mt-0.5">{zone.sortOrder}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">Max Weight</dt>
+                  <dd className="mt-0.5">{zone.maxWeightKg != null ? `${zone.maxWeightKg} kg` : '-'}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">Max Volume</dt>
+                  <dd className="mt-0.5">{zone.maxVolumeCbm != null ? `${zone.maxVolumeCbm} cbm` : '-'}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">Status</dt>
+                  <dd className="mt-0.5">
+                    <Badge variant={zone.active ? 'success' : 'destructive'}>
+                      {zone.active ? 'Active' : 'Inactive'}
+                    </Badge>
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">Bins</dt>
+                  <dd className="mt-0.5 font-semibold">{zone.bins.length}</dd>
+                </div>
+              </dl>
+            </CardContent>
+          </Card>
 
-          {/* Aisles */}
           {zone.aisles.length > 0 && (
-            <div className="vn-card">
-              <h3 style={{ margin: '0 0 0.75rem' }}>Aisles</h3>
-              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <Card>
+              <CardHeader>
+                <CardTitle>Aisles</CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-wrap gap-2">
                 {zone.aisles.map(a => (
-                  <span key={a.id} className="vn-chip vn-chip-secondary">{a.name}</span>
+                  <Badge key={a.id} variant="secondary">{a.name}</Badge>
                 ))}
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           )}
-        </div>
+        </aside>
       </div>
     </div>
   );

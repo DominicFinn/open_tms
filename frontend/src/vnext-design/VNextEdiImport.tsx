@@ -1,5 +1,18 @@
 import React, { useState, useRef } from 'react';
+import { CheckCircle2, CircleAlert, Upload } from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 export default function VNextEdiImport() {
   const [content, setContent] = useState('');
@@ -91,80 +104,92 @@ export default function VNextEdiImport() {
   };
 
   return (
-    <div style={{ padding: '1.5rem', maxWidth: '800px' }}>
-      <h1 style={{ fontSize: '1.5rem', fontWeight: 600, marginBottom: '1.5rem' }}>Import EDI Document</h1>
-      <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
-        Upload or paste any X12 EDI document. The system will auto-detect the transaction type and process it.
-      </p>
+    <div className="mx-auto max-w-3xl space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Import EDI document</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Upload or paste any X12 EDI document. The system will auto-detect the transaction type and process it.
+        </p>
+      </div>
 
-      {error && <div className="vn-alert vn-alert-error" style={{ marginBottom: '1rem' }}>{error}</div>}
+      {error && (
+        <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+          <CircleAlert className="h-5 w-5" />
+          {error}
+        </div>
+      )}
       {result && !error && (
-        <div className="vn-alert vn-alert-success" style={{ marginBottom: '1rem' }}>
-          Processed successfully! Type: {result.transactionType}, Action: {result.action || 'processed'}
-          {result.ack997Sent && ' (997 acknowledgment sent)'}
-          {result.logId && <span style={{ marginLeft: '0.5rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Log: {result.logId.slice(0, 8)}...</span>}
+        <div className="flex items-center gap-3 rounded-md border border-success/30 bg-success/10 p-4 text-sm text-success">
+          <CheckCircle2 className="h-5 w-5" />
+          <div>
+            Processed successfully. Type: {result.transactionType}, Action: {result.action || 'processed'}
+            {result.ack997Sent && ' (997 acknowledgment sent)'}
+            {result.logId && <span className="ml-2 text-xs text-muted-foreground">Log: {result.logId.slice(0, 8)}...</span>}
+          </div>
         </div>
       )}
 
-      {/* File upload */}
-      <div className="vn-card" style={{ padding: '1.5rem', marginBottom: '1rem' }}>
-        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '1rem' }}>
-          <button className="vn-btn vn-btn-primary" onClick={() => fileInputRef.current?.click()}>
-            Upload File
-          </button>
-          <input ref={fileInputRef} type="file" accept=".edi,.x12,.txt,.850,.856,.214,.210,.997,.990,.810,.820" style={{ display: 'none' }} onChange={handleFileUpload} />
-          <span style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
-            {fileName || 'No file selected'}
-          </span>
+      <Card className="space-y-4 p-6">
+        <div className="flex flex-wrap items-center gap-3">
+          <Button onClick={() => fileInputRef.current?.click()}>
+            <Upload className="h-4 w-4" />
+            Upload file
+          </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".edi,.x12,.txt,.850,.856,.214,.210,.997,.990,.810,.820"
+            className="hidden"
+            onChange={handleFileUpload}
+          />
+          <span className="text-sm text-muted-foreground">{fileName || 'No file selected'}</span>
           {detectedType && (
-            <span className="vn-chip vn-chip-info">
+            <Badge variant="info">
               Detected: {detectedType} ({TYPE_NAMES[detectedType] || 'Unknown'})
-            </span>
+            </Badge>
           )}
         </div>
 
-        <div className="vn-field">
-          <label className="vn-field-label">Or paste EDI content</label>
+        <div className="space-y-2">
+          <Label htmlFor="edi-content">Or paste EDI content</Label>
           <textarea
-            className="vn-input"
+            id="edi-content"
             rows={10}
             value={content}
             onChange={e => handlePaste(e.target.value)}
             placeholder="ISA*00*          *00*          *ZZ*SENDER         *ZZ*RECEIVER       *..."
-            style={{ fontFamily: 'monospace', fontSize: '0.75rem' }}
+            className="w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           />
         </div>
 
-        <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem', alignItems: 'flex-end' }}>
-          <div className="vn-field" style={{ flex: 1 }}>
-            <label className="vn-field-label">Trading Partner (optional)</label>
-            <select className="vn-input" value={partnerId} onChange={e => setPartnerId(e.target.value)} onFocus={loadPartners}>
-              <option value="">None - manual import</option>
-              {partners.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="flex-1 min-w-[240px] space-y-2">
+            <Label htmlFor="edi-partner">Trading partner (optional)</Label>
+            <Select value={partnerId} onValueChange={setPartnerId} onOpenChange={open => { if (open) loadPartners(); }}>
+              <SelectTrigger id="edi-partner">
+                <SelectValue placeholder="None - manual import" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">None - manual import</SelectItem>
+                {partners.map(p => (
+                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-          <button className="vn-btn vn-btn-primary" onClick={submit} disabled={loading || !content.trim()}>
+          <Button variant="gradient" onClick={submit} disabled={loading || !content.trim()}>
             {loading ? 'Processing...' : 'Import'}
-          </button>
+          </Button>
         </div>
-      </div>
+      </Card>
 
-      {/* Result details */}
       {result?.details && (
-        <div className="vn-card" style={{ padding: '1rem' }}>
-          <h3 style={{ marginBottom: '0.75rem', fontSize: '1rem' }}>Processing Result</h3>
-          <pre style={{
-            background: 'var(--surface-secondary)',
-            padding: '0.75rem',
-            borderRadius: '4px',
-            overflow: 'auto',
-            maxHeight: '300px',
-            fontSize: '0.75rem',
-            fontFamily: 'monospace',
-          }}>
+        <Card className="p-4">
+          <h3 className="mb-3 text-base font-semibold">Processing result</h3>
+          <pre className="max-h-[300px] overflow-auto rounded-md bg-muted p-3 font-mono text-xs">
             {JSON.stringify(result.details, null, 2)}
           </pre>
-        </div>
+        </Card>
       )}
     </div>
   );

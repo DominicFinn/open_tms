@@ -1,7 +1,67 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import {
+  ArrowLeft,
+  ArrowRightLeft,
+  Building,
+  ChevronRight,
+  CircleAlert,
+  Crosshair,
+  Factory,
+  Loader2,
+  Map as MapIcon,
+  MapPin,
+  Network,
+  Save,
+  ShieldCheck,
+  Ship,
+  Store,
+  Tag,
+  Train,
+  User,
+  Warehouse,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
-import { LOCATION_TYPE_META, getLocationTypeMeta } from './locationTypesMeta';
+import { LOCATION_TYPE_META } from './locationTypesMeta';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+
+type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning' | 'info' | 'muted';
+
+const LOCATION_TYPE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+  warehouse: Warehouse,
+  distribution_centre: Network,
+  cross_dock: ArrowRightLeft,
+  terminal: Building,
+  port: Ship,
+  rail_yard: Train,
+  customer: Store,
+  store: Store,
+  manufacturing: Factory,
+};
+
+const LOCATION_TYPE_VARIANT: Record<string, BadgeVariant> = {
+  warehouse: 'default',
+  distribution_centre: 'info',
+  cross_dock: 'warning',
+  terminal: 'secondary',
+  port: 'info',
+  rail_yard: 'secondary',
+  customer: 'success',
+  store: 'success',
+  manufacturing: 'destructive',
+};
 
 export default function VNextCreateLocation() {
   const { id } = useParams();
@@ -23,13 +83,11 @@ export default function VNextCreateLocation() {
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
 
-  // Location metadata
   const [locationType, setLocationType] = useState('');
   const [appointmentRequired, setAppointmentRequired] = useState(false);
   const [dockCount, setDockCount] = useState('');
   const [maxTrailerLengthFt, setMaxTrailerLengthFt] = useState('');
 
-  // Facility capabilities
   const [crossDockCapable, setCrossDockCapable] = useState(false);
   const [hasColdStorage, setHasColdStorage] = useState(false);
   const [hasHazmatCert, setHasHazmatCert] = useState(false);
@@ -112,210 +170,248 @@ export default function VNextCreateLocation() {
     }
   };
 
-  if (loading) return <div className="loading-spinner" style={{ margin: '2rem auto' }} />;
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+
+  const selectedTypeMeta = locationType ? LOCATION_TYPE_META[locationType] : null;
+  const SelectedTypeIcon = locationType ? (LOCATION_TYPE_ICONS[locationType] || MapPin) : null;
+  const selectedTypeVariant: BadgeVariant = locationType ? (LOCATION_TYPE_VARIANT[locationType] || 'secondary') : 'secondary';
 
   return (
-    <>
-      <div className="vn-page-header">
-        <div>
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>
-            <Link to="/locations" style={{ color: 'var(--color-primary)', textDecoration: 'none' }}>Locations</Link>
-            {' '}&gt; {isEdit ? 'Edit Location' : 'New Location'}
-          </p>
-          <h1>{isEdit ? 'Edit Location' : 'New Location'}</h1>
-        </div>
+    <div className="space-y-6">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Link to="/locations" className="hover:text-foreground">
+          <ArrowLeft className="inline h-4 w-4" /> Locations
+        </Link>
+        <ChevronRight className="h-3 w-3" />
+        <span>{isEdit ? 'Edit location' : 'New location'}</span>
       </div>
 
-      <div className="vn-card">
-        <div className="vn-card-body" style={{ padding: '2rem' }}>
+      <h1 className="text-3xl font-bold tracking-tight">{isEdit ? 'Edit location' : 'New location'}</h1>
 
-          {/* Location Details */}
-          <div className="vn-form-section">
-            <h3 className="vn-form-section-title">
-              <span className="material-icons">location_on</span>
-              Location Details
-            </h3>
-            <div className="vn-form-grid">
-              <div className="vn-field">
-                <label className="vn-field-label">Name</label>
-                <input className="vn-input" type="text" placeholder="Location name" value={name} onChange={e => setName(e.target.value)} />
-              </div>
-              <div className="vn-field vn-col-span-2">
-                <label className="vn-field-label">Address Line 1</label>
-                <input className="vn-input" type="text" placeholder="Street address" value={address1} onChange={e => setAddress1(e.target.value)} />
-              </div>
-              <div className="vn-field vn-col-span-2">
-                <label className="vn-field-label">Address Line 2</label>
-                <input className="vn-input" type="text" placeholder="Suite, unit, floor, etc." value={address2} onChange={e => setAddress2(e.target.value)} />
-              </div>
-              <div className="vn-field">
-                <label className="vn-field-label">City</label>
-                <input className="vn-input" type="text" placeholder="City" value={city} onChange={e => setCity(e.target.value)} />
-              </div>
-              <div className="vn-field">
-                <label className="vn-field-label">State</label>
-                <input className="vn-input" type="text" placeholder="State / Province" value={state} onChange={e => setState(e.target.value)} />
-              </div>
-              <div className="vn-field">
-                <label className="vn-field-label">Postal Code</label>
-                <input className="vn-input" type="text" placeholder="ZIP / Postal code" value={postalCode} onChange={e => setPostalCode(e.target.value)} />
-              </div>
-              <div className="vn-field">
-                <label className="vn-field-label">Country</label>
-                <select className="vn-select" value={country} onChange={e => setCountry(e.target.value)}>
-                  <option value="">Select country...</option>
-                  <option value="US">United States</option>
-                  <option value="CA">Canada</option>
-                  <option value="MX">Mexico</option>
-                  <option value="UK">United Kingdom</option>
-                  <option value="DE">Germany</option>
-                  <option value="FR">France</option>
-                  <option value="AU">Australia</option>
-                </select>
-              </div>
-            </div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <MapPin className="h-4 w-4 text-primary" />
+            Location details
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label>Name</Label>
+            <Input type="text" placeholder="Location name" value={name} onChange={e => setName(e.target.value)} />
           </div>
+          <div className="space-y-2 md:col-span-2">
+            <Label>Address line 1</Label>
+            <Input type="text" placeholder="Street address" value={address1} onChange={e => setAddress1(e.target.value)} />
+          </div>
+          <div className="space-y-2 md:col-span-2">
+            <Label>Address line 2</Label>
+            <Input type="text" placeholder="Suite, unit, floor, etc." value={address2} onChange={e => setAddress2(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>City</Label>
+            <Input type="text" placeholder="City" value={city} onChange={e => setCity(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>State</Label>
+            <Input type="text" placeholder="State / Province" value={state} onChange={e => setState(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>Postal code</Label>
+            <Input type="text" placeholder="ZIP / Postal code" value={postalCode} onChange={e => setPostalCode(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>Country</Label>
+            <Select value={country} onValueChange={setCountry}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select country..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="US">United States</SelectItem>
+                <SelectItem value="CA">Canada</SelectItem>
+                <SelectItem value="MX">Mexico</SelectItem>
+                <SelectItem value="UK">United Kingdom</SelectItem>
+                <SelectItem value="DE">Germany</SelectItem>
+                <SelectItem value="FR">France</SelectItem>
+                <SelectItem value="AU">Australia</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
 
-          {/* Classification & Facility */}
-          <div className="vn-form-section">
-            <h3 className="vn-form-section-title">
-              <span className="material-icons">category</span>
-              Classification &amp; Facility
-            </h3>
-            <div className="vn-form-grid">
-              <div className="vn-field">
-                <label className="vn-field-label">Location Type</label>
-                <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-                  <select className="vn-select" style={{ flex: 1 }} value={locationType} onChange={e => setLocationType(e.target.value)}>
-                    <option value="">Select type...</option>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Tag className="h-4 w-4 text-primary" />
+            Classification &amp; facility
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label>Location type</Label>
+            <div className="flex items-center gap-3">
+              <div className="flex-1">
+                <Select value={locationType} onValueChange={setLocationType}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select type..." />
+                  </SelectTrigger>
+                  <SelectContent>
                     {Object.entries(LOCATION_TYPE_META).map(([value, meta]) => (
-                      <option key={value} value={value}>{meta.label}</option>
+                      <SelectItem key={value} value={value}>{meta.label}</SelectItem>
                     ))}
-                  </select>
-                  {(() => {
-                    const meta = getLocationTypeMeta(locationType);
-                    return meta ? (
-                      <span className={`vn-chip ${meta.chip}`} style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
-                        <span className="material-icons" style={{ fontSize: 16 }}>{meta.icon}</span>
-                        {meta.label}
-                      </span>
-                    ) : null;
-                  })()}
-                </div>
+                  </SelectContent>
+                </Select>
               </div>
-              <div className="vn-field">
-                <label className="vn-field-label">Dock Count</label>
-                <input className="vn-input" type="number" min="0" step="1" placeholder="Number of docks" value={dockCount} onChange={e => setDockCount(e.target.value)} />
-              </div>
-              <div className="vn-field">
-                <label className="vn-field-label">Max Trailer Length (ft)</label>
-                <input className="vn-input" type="number" min="0" step="1" placeholder="e.g. 53" value={maxTrailerLengthFt} onChange={e => setMaxTrailerLengthFt(e.target.value)} />
-              </div>
-              <div className="vn-field" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', paddingTop: '1.5rem' }}>
-                <input type="checkbox" id="appointmentRequired" checked={appointmentRequired} onChange={e => setAppointmentRequired(e.target.checked)} />
-                <label htmlFor="appointmentRequired" style={{ cursor: 'pointer', color: 'var(--text-primary)' }}>Appointment Required</label>
-              </div>
+              {selectedTypeMeta && SelectedTypeIcon && (
+                <Badge variant={selectedTypeVariant} className="whitespace-nowrap">
+                  <SelectedTypeIcon className="mr-1 h-3.5 w-3.5" />
+                  {selectedTypeMeta.label}
+                </Badge>
+              )}
             </div>
           </div>
+          <div className="space-y-2">
+            <Label>Dock count</Label>
+            <Input type="number" min="0" step="1" placeholder="Number of docks" value={dockCount} onChange={e => setDockCount(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>Max trailer length (ft)</Label>
+            <Input type="number" min="0" step="1" placeholder="e.g. 53" value={maxTrailerLengthFt} onChange={e => setMaxTrailerLengthFt(e.target.value)} />
+          </div>
+          <div className="flex items-end">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={appointmentRequired}
+                onChange={e => setAppointmentRequired(e.target.checked)}
+                className="h-4 w-4 rounded border border-input bg-background accent-primary"
+              />
+              Appointment required
+            </label>
+          </div>
+        </CardContent>
+      </Card>
 
-          {/* Facility Capabilities */}
-          <div className="vn-form-section">
-            <h3 className="vn-form-section-title">
-              <span className="material-icons">verified</span>
-              Facility Capabilities
-            </h3>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.5rem' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', color: 'var(--text-primary)' }}>
-                <input type="checkbox" checked={crossDockCapable} onChange={e => setCrossDockCapable(e.target.checked)} />
-                Cross-Dock Capable
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', color: 'var(--text-primary)' }}>
-                <input type="checkbox" checked={hasColdStorage} onChange={e => setHasColdStorage(e.target.checked)} />
-                Cold Storage
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', color: 'var(--text-primary)' }}>
-                <input type="checkbox" checked={hasHazmatCert} onChange={e => setHasHazmatCert(e.target.checked)} />
-                Hazmat Certified
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', color: 'var(--text-primary)' }}>
-                <input type="checkbox" checked={hasBondedStorage} onChange={e => setHasBondedStorage(e.target.checked)} />
-                Bonded Storage
-              </label>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-primary" />
+            Facility capabilities
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap gap-6">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={crossDockCapable}
+                onChange={e => setCrossDockCapable(e.target.checked)}
+                className="h-4 w-4 rounded border border-input bg-background accent-primary"
+              />
+              Cross-dock capable
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={hasColdStorage}
+                onChange={e => setHasColdStorage(e.target.checked)}
+                className="h-4 w-4 rounded border border-input bg-background accent-primary"
+              />
+              Cold storage
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={hasHazmatCert}
+                onChange={e => setHasHazmatCert(e.target.checked)}
+                className="h-4 w-4 rounded border border-input bg-background accent-primary"
+              />
+              Hazmat certified
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={hasBondedStorage}
+                onChange={e => setHasBondedStorage(e.target.checked)}
+                className="h-4 w-4 rounded border border-input bg-background accent-primary"
+              />
+              Bonded storage
+            </label>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Crosshair className="h-4 w-4 text-primary" />
+            Coordinates
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label>Latitude</Label>
+            <Input type="number" step="any" placeholder="e.g. 41.8827" value={latitude} onChange={e => setLatitude(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>Longitude</Label>
+            <Input type="number" step="any" placeholder="e.g. -87.6588" value={longitude} onChange={e => setLongitude(e.target.value)} />
+          </div>
+          <div className="md:col-span-2">
+            <div className="flex h-[200px] items-center justify-center gap-2 rounded-md border border-dashed border-border bg-muted/40 text-muted-foreground">
+              <MapIcon className="h-8 w-8 opacity-50" />
+              <span className="text-sm">Map preview will appear here</span>
             </div>
           </div>
+        </CardContent>
+      </Card>
 
-          {/* Coordinates */}
-          <div className="vn-form-section">
-            <h3 className="vn-form-section-title">
-              <span className="material-icons">my_location</span>
-              Coordinates
-            </h3>
-            <div className="vn-form-grid">
-              <div className="vn-field">
-                <label className="vn-field-label">Latitude</label>
-                <input className="vn-input" type="number" step="any" placeholder="e.g. 41.8827" value={latitude} onChange={e => setLatitude(e.target.value)} />
-              </div>
-              <div className="vn-field">
-                <label className="vn-field-label">Longitude</label>
-                <input className="vn-input" type="number" step="any" placeholder="e.g. -87.6588" value={longitude} onChange={e => setLongitude(e.target.value)} />
-              </div>
-              <div className="vn-col-span-2">
-                <div
-                  className="vn-map"
-                  style={{
-                    height: '200px',
-                    borderRadius: '0.5rem',
-                    background: 'var(--bg-secondary)',
-                    border: '1px dashed var(--border-color)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: 'var(--text-secondary)',
-                    gap: '0.5rem',
-                  }}
-                >
-                  <span className="material-icons" style={{ fontSize: '2rem', opacity: 0.5 }}>map</span>
-                  <span>Map preview will appear here</span>
-                </div>
-              </div>
-            </div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <User className="h-4 w-4 text-primary" />
+            Contact
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-3">
+          <div className="space-y-2">
+            <Label>Contact name</Label>
+            <Input type="text" placeholder="Full name" value={contactName} onChange={e => setContactName(e.target.value)} />
           </div>
-
-          {/* Contact */}
-          <div className="vn-form-section">
-            <h3 className="vn-form-section-title">
-              <span className="material-icons">person</span>
-              Contact
-            </h3>
-            <div className="vn-form-grid">
-              <div className="vn-field">
-                <label className="vn-field-label">Contact Name</label>
-                <input className="vn-input" type="text" placeholder="Full name" value={contactName} onChange={e => setContactName(e.target.value)} />
-              </div>
-              <div className="vn-field">
-                <label className="vn-field-label">Phone</label>
-                <input className="vn-input" type="tel" placeholder="(555) 123-4567" value={phone} onChange={e => setPhone(e.target.value)} />
-              </div>
-              <div className="vn-field">
-                <label className="vn-field-label">Email</label>
-                <input className="vn-input" type="email" placeholder="email@example.com" value={email} onChange={e => setEmail(e.target.value)} />
-              </div>
-            </div>
+          <div className="space-y-2">
+            <Label>Phone</Label>
+            <Input type="tel" placeholder="(555) 123-4567" value={phone} onChange={e => setPhone(e.target.value)} />
           </div>
-
-          {submitError && <div className="vn-alert vn-alert-error" style={{ marginBottom: 16 }}>{submitError}</div>}
-
-          {/* Form Actions */}
-          <div className="vn-form-actions">
-            <Link to="/locations" className="vn-btn vn-btn-outline">Cancel</Link>
-            <button className="vn-btn vn-btn-primary" onClick={handleSubmit} disabled={submitting}>
-              <span className="material-icons">save</span>
-              {submitting ? 'Saving...' : isEdit ? 'Update Location' : 'Save Location'}
-            </button>
+          <div className="space-y-2">
+            <Label>Email</Label>
+            <Input type="email" placeholder="email@example.com" value={email} onChange={e => setEmail(e.target.value)} />
           </div>
+        </CardContent>
+      </Card>
 
+      {submitError && (
+        <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+          <CircleAlert className="h-5 w-5" />
+          {submitError}
         </div>
+      )}
+
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <Button variant="outline" asChild>
+          <Link to="/locations">Cancel</Link>
+        </Button>
+        <Button variant="gradient" onClick={handleSubmit} disabled={submitting}>
+          <Save className="h-4 w-4" />
+          {submitting ? 'Saving...' : isEdit ? 'Update location' : 'Save location'}
+        </Button>
       </div>
-    </>
+    </div>
   );
 }

@@ -1,9 +1,43 @@
 import { useState, useEffect } from 'react';
+import {
+  Map as MapIcon,
+  Globe,
+  KeyRound,
+  CheckCircle2,
+  AlertTriangle,
+  XCircle,
+  Pencil,
+  Save,
+  FlaskConical,
+  Loader2,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
 interface MapsSettings {
   hasKey: boolean;
   maskedKey: string | null;
+}
+
+function Banner({ variant, message, onClose }: { variant: 'success' | 'error'; message: string; onClose?: () => void }) {
+  const tone =
+    variant === 'success'
+      ? 'border-success/30 bg-success/10 text-success'
+      : 'border-destructive/30 bg-destructive/10 text-destructive';
+  return (
+    <div className={`flex items-start justify-between gap-3 rounded-md border p-3 text-sm ${tone}`}>
+      <span>{message}</span>
+      {onClose && (
+        <button onClick={onClose} className="text-xs underline opacity-70 hover:opacity-100">Dismiss</button>
+      )}
+    </div>
+  );
 }
 
 export default function VNextMapsSettings() {
@@ -71,9 +105,7 @@ export default function VNextMapsSettings() {
     setTestResult(null);
     setError('');
     try {
-      const res = await fetch(`${API_URL}/api/v1/maps/test`, {
-        method: 'POST',
-      });
+      const res = await fetch(`${API_URL}/api/v1/maps/test`, { method: 'POST' });
       const json = await res.json();
       if (!res.ok) {
         setTestResult({ ok: false, message: json.error || 'Connection test failed' });
@@ -89,8 +121,8 @@ export default function VNextMapsSettings() {
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', padding: '48px' }}>
-        <div className="loading-spinner" />
+      <div className="flex justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     );
   }
@@ -99,185 +131,141 @@ export default function VNextMapsSettings() {
   const provider = hasKey ? 'Google Maps' : 'OpenStreetMap (Nominatim)';
 
   return (
-    <>
-      <div className="vn-page-header">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1>Maps Settings</h1>
-          <p>Configure geocoding and mapping provider</p>
+          <h1 className="text-3xl font-bold tracking-tight">Maps settings</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Configure geocoding and mapping provider</p>
         </div>
       </div>
 
-      {error && (
-        <div className="alert alert-error" style={{ marginBottom: 16 }}>
-          {error}
-          <button className="vn-btn-icon" style={{ marginLeft: 'auto' }} onClick={() => setError('')}>
-            <span className="material-icons" style={{ fontSize: 18 }}>close</span>
-          </button>
-        </div>
-      )}
+      {error && <Banner variant="error" message={error} onClose={() => setError('')} />}
+      {success && <Banner variant="success" message={success} onClose={() => setSuccess('')} />}
 
-      {success && (
-        <div className="alert alert-success" style={{ marginBottom: 16 }}>
-          {success}
-          <button className="vn-btn-icon" style={{ marginLeft: 'auto' }} onClick={() => setSuccess('')}>
-            <span className="material-icons" style={{ fontSize: 18 }}>close</span>
-          </button>
-        </div>
-      )}
-
-      {/* Stats */}
-      <div className="vn-stats">
-        <div className="vn-stat">
-          <div className={`vn-stat-icon ${hasKey ? 'success' : 'warning'}`}>
-            <span className="material-icons">map</span>
-          </div>
-          <div>
-            <div className="vn-stat-value" style={{ fontSize: 20 }}>{provider}</div>
-            <div className="vn-stat-label">Active Provider</div>
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className={`vn-stat-icon ${hasKey ? 'success' : 'error'}`}>
-            <span className="material-icons">vpn_key</span>
-          </div>
-          <div>
-            <div className="vn-stat-value" style={{ fontSize: 20 }}>{hasKey ? 'Configured' : 'Not Set'}</div>
-            <div className="vn-stat-label">API Key Status</div>
-          </div>
-        </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Card>
+          <CardContent className="flex items-center gap-3 p-4">
+            <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', hasKey ? 'bg-success/15 text-success' : 'bg-warning/15 text-warning')}>
+              <MapIcon className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="text-lg font-semibold">{provider}</div>
+              <div className="text-xs text-muted-foreground">Active provider</div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="flex items-center gap-3 p-4">
+            <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', hasKey ? 'bg-success/15 text-success' : 'bg-destructive/15 text-destructive')}>
+              <KeyRound className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="text-lg font-semibold">{hasKey ? 'Configured' : 'Not set'}</div>
+              <div className="text-xs text-muted-foreground">API key status</div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 24 }}>
-        {/* API Key Card */}
-        <div className="vn-card">
-          <div className="vn-card-header">
-            <h2>Google Maps API Key</h2>
-          </div>
-          <div className="vn-card-body">
+      <div className="grid gap-6 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Google Maps API key</CardTitle>
+          </CardHeader>
+          <CardContent>
             {hasKey && !showKeyInput ? (
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-                  <span className="material-icons" style={{ fontSize: 20, color: 'var(--success)' }}>check_circle</span>
-                  <span style={{ fontSize: 14, color: 'var(--on-surface)' }}>API key is configured</span>
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-sm">
+                  <CheckCircle2 className="h-5 w-5 text-success" />
+                  <span>API key is configured</span>
                 </div>
-                <div style={{
-                  fontFamily: 'monospace',
-                  fontSize: 13,
-                  background: 'var(--surface-container)',
-                  border: '1px solid var(--outline-variant)',
-                  borderRadius: 'var(--border-radius-sm)',
-                  padding: '10px 14px',
-                  color: 'var(--on-surface-variant)',
-                  marginBottom: 16,
-                }}>
+                <div className="rounded-md border bg-muted px-3 py-2 font-mono text-sm text-muted-foreground">
                   {settings?.maskedKey || '****...****'}
                 </div>
-                <button className="vn-btn vn-btn-outline" onClick={() => setShowKeyInput(true)}>
-                  <span className="material-icons">edit</span>
-                  Update Key
-                </button>
+                <Button variant="outline" onClick={() => setShowKeyInput(true)}>
+                  <Pencil className="h-4 w-4" />
+                  Update key
+                </Button>
               </div>
             ) : (
-              <div>
+              <div className="space-y-3">
                 {!hasKey && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-                    <span className="material-icons" style={{ fontSize: 20, color: 'var(--warning)' }}>warning</span>
-                    <span style={{ fontSize: 14, color: 'var(--on-surface-variant)' }}>
-                      No API key configured. Using OpenStreetMap (Nominatim) as fallback.
-                    </span>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <AlertTriangle className="h-5 w-5 text-warning" />
+                    <span>No API key configured. Using OpenStreetMap (Nominatim) as fallback.</span>
                   </div>
                 )}
-                <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--on-surface)', marginBottom: 4 }}>
-                  API Key
-                </label>
-                <input
-                  className="vn-input"
-                  type="password"
-                  value={newKey}
-                  onChange={e => setNewKey(e.target.value)}
-                  placeholder="Enter your Google Maps API key"
-                  style={{ width: '100%', marginBottom: 12 }}
-                  onKeyDown={e => e.key === 'Enter' && saveKey()}
-                />
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button className="vn-btn vn-btn-primary" onClick={saveKey} disabled={savingKey || !newKey.trim()}>
-                    <span className="material-icons">save</span>
-                    {savingKey ? 'Saving...' : 'Save Key'}
-                  </button>
+                <div className="space-y-2">
+                  <Label>API key</Label>
+                  <Input
+                    type="password"
+                    value={newKey}
+                    onChange={e => setNewKey(e.target.value)}
+                    placeholder="Enter your Google Maps API key"
+                    onKeyDown={e => e.key === 'Enter' && saveKey()}
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="gradient" onClick={saveKey} disabled={savingKey || !newKey.trim()}>
+                    <Save className="h-4 w-4" />
+                    {savingKey ? 'Saving...' : 'Save key'}
+                  </Button>
                   {showKeyInput && (
-                    <button className="vn-btn vn-btn-outline" onClick={() => { setShowKeyInput(false); setNewKey(''); }}>
+                    <Button variant="outline" onClick={() => { setShowKeyInput(false); setNewKey(''); }}>
                       Cancel
-                    </button>
+                    </Button>
                   )}
                 </div>
               </div>
             )}
-          </div>
-        </div>
+          </CardContent>
+        </Card>
 
-        {/* Test Connection Card */}
-        <div className="vn-card">
-          <div className="vn-card-header">
-            <h2>Test Connection</h2>
-          </div>
-          <div className="vn-card-body">
-            <p style={{ fontSize: 14, color: 'var(--on-surface-variant)', marginBottom: 16 }}>
+        <Card>
+          <CardHeader>
+            <CardTitle>Test connection</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">
               Verify that the Google Maps API key is valid and the geocoding service is reachable.
             </p>
-            <button
-              className="vn-btn vn-btn-outline"
-              onClick={testConnection}
-              disabled={testing}
-              style={{ marginBottom: 16 }}
-            >
-              <span className="material-icons">{testing ? 'hourglass_empty' : 'science'}</span>
-              {testing ? 'Testing...' : 'Run Test'}
-            </button>
+            <Button variant="outline" onClick={testConnection} disabled={testing}>
+              {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : <FlaskConical className="h-4 w-4" />}
+              {testing ? 'Testing...' : 'Run test'}
+            </Button>
             {testResult && (
-              <div className={`alert ${testResult.ok ? 'alert-success' : 'alert-error'}`}>
-                <span className="material-icons" style={{ fontSize: 20 }}>
-                  {testResult.ok ? 'check_circle' : 'error'}
-                </span>
-                {testResult.message}
+              <div
+                className={cn(
+                  'flex items-start gap-2 rounded-md border p-3 text-sm',
+                  testResult.ok ? 'border-success/30 bg-success/10 text-success' : 'border-destructive/30 bg-destructive/10 text-destructive',
+                )}
+              >
+                {testResult.ok ? <CheckCircle2 className="h-5 w-5" /> : <XCircle className="h-5 w-5" />}
+                <span>{testResult.message}</span>
               </div>
             )}
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Current Provider Card */}
-      <div className="vn-card">
-        <div className="vn-card-header">
-          <h2>Current Provider</h2>
-        </div>
-        <div className="vn-card-body">
-          <div style={{ display: 'flex', gap: 24 }}>
-            {/* Google Maps */}
-            <div style={{
-              flex: 1,
-              border: `2px solid ${hasKey ? 'var(--primary)' : 'var(--outline-variant)'}`,
-              borderRadius: 'var(--border-radius-md)',
-              padding: 20,
-              position: 'relative',
-            }}>
+      <Card>
+        <CardHeader>
+          <CardTitle>Current provider</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className={cn('relative rounded-md border-2 p-5', hasKey ? 'border-primary' : 'border-border')}>
               {hasKey && (
-                <span className="vn-chip success" style={{ position: 'absolute', top: 12, right: 12 }}>
-                  Active
-                </span>
+                <Badge variant="success" className="absolute right-3 top-3">Active</Badge>
               )}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-                <span className="material-icons" style={{
-                  fontSize: 32,
-                  color: hasKey ? 'var(--primary)' : 'var(--on-surface-variant)',
-                }}>
-                  map
-                </span>
+              <div className="mb-3 flex items-center gap-3">
+                <MapIcon className={cn('h-8 w-8', hasKey ? 'text-primary' : 'text-muted-foreground')} />
                 <div>
-                  <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--on-surface)' }}>Google Maps</div>
-                  <div style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>Premium geocoding and maps</div>
+                  <div className="text-base font-semibold">Google Maps</div>
+                  <div className="text-xs text-muted-foreground">Premium geocoding and maps</div>
                 </div>
               </div>
-              <ul style={{ fontSize: 13, color: 'var(--on-surface-variant)', margin: 0, paddingLeft: 20, lineHeight: 1.8 }}>
+              <ul className="ml-4 list-disc space-y-1 text-sm text-muted-foreground">
                 <li>High-accuracy geocoding</li>
                 <li>Interactive map tiles</li>
                 <li>Route optimization</li>
@@ -285,32 +273,18 @@ export default function VNextMapsSettings() {
               </ul>
             </div>
 
-            {/* OpenStreetMap */}
-            <div style={{
-              flex: 1,
-              border: `2px solid ${!hasKey ? 'var(--primary)' : 'var(--outline-variant)'}`,
-              borderRadius: 'var(--border-radius-md)',
-              padding: 20,
-              position: 'relative',
-            }}>
+            <div className={cn('relative rounded-md border-2 p-5', !hasKey ? 'border-primary' : 'border-border')}>
               {!hasKey && (
-                <span className="vn-chip warning" style={{ position: 'absolute', top: 12, right: 12 }}>
-                  Fallback
-                </span>
+                <Badge variant="warning" className="absolute right-3 top-3">Fallback</Badge>
               )}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-                <span className="material-icons" style={{
-                  fontSize: 32,
-                  color: !hasKey ? 'var(--primary)' : 'var(--on-surface-variant)',
-                }}>
-                  public
-                </span>
+              <div className="mb-3 flex items-center gap-3">
+                <Globe className={cn('h-8 w-8', !hasKey ? 'text-primary' : 'text-muted-foreground')} />
                 <div>
-                  <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--on-surface)' }}>OpenStreetMap (Nominatim)</div>
-                  <div style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>Free geocoding fallback</div>
+                  <div className="text-base font-semibold">OpenStreetMap (Nominatim)</div>
+                  <div className="text-xs text-muted-foreground">Free geocoding fallback</div>
                 </div>
               </div>
-              <ul style={{ fontSize: 13, color: 'var(--on-surface-variant)', margin: 0, paddingLeft: 20, lineHeight: 1.8 }}>
+              <ul className="ml-4 list-disc space-y-1 text-sm text-muted-foreground">
                 <li>Free to use</li>
                 <li>Basic geocoding</li>
                 <li>Rate-limited</li>
@@ -318,8 +292,8 @@ export default function VNextMapsSettings() {
               </ul>
             </div>
           </div>
-        </div>
-      </div>
-    </>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

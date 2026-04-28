@@ -1,11 +1,71 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { DndContext, DragOverlay, closestCorners, PointerSensor, KeyboardSensor, useSensor, useSensors, DragStartEvent, DragEndEvent, useDroppable } from '@dnd-kit/core';
-import { useDraggable } from '@dnd-kit/core';
-import { API_URL } from '../api';
-import { VnModal } from './components/VnModal';
+import {
+  DndContext,
+  DragOverlay,
+  closestCorners,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  DragStartEvent,
+  DragEndEvent,
+  useDroppable,
+  useDraggable,
+} from '@dnd-kit/core';
+import {
+  AlertOctagon,
+  AlertTriangle,
+  Building2,
+  CheckCircle2,
+  ClipboardList,
+  CircleAlert,
+  FilePlus,
+  Inbox,
+  LayoutList,
+  Loader2,
+  MessageSquare,
+  Package,
+  Plus,
+  Search,
+  Tags,
+  Timer,
+  Truck,
+  Users,
+  X,
+  XCircle,
+} from 'lucide-react';
 
-// ─── Types ──────────────────────────────────────────────────────────────────
+import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { cn } from '@/lib/utils';
 
 interface Issue {
   id: string;
@@ -29,10 +89,7 @@ interface Issue {
   _sla?: { status: string; ruleName: string; slaDueAt: string | null } | null;
 }
 
-interface IssueLabel { id: string; name: string; color: string; }
 interface KanbanViewDef { id: string; name: string; filters: any; groupBy: string; sortBy: string; isDefault: boolean; }
-
-// ─── Helpers ────────────────────────────────────────────────────────────────
 
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -48,30 +105,50 @@ function getInitials(name: string | null): string {
   return name.split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2);
 }
 
-const COLUMNS: { key: Issue['status']; label: string; cssClass: string }[] = [
-  { key: 'open', label: 'Open', cssClass: 'col-new' },
-  { key: 'in_progress', label: 'In Progress', cssClass: 'col-investigating' },
-  { key: 'resolved', label: 'Resolved', cssClass: 'col-escalated' },
-  { key: 'closed', label: 'Closed', cssClass: 'col-resolved' },
+const COLUMNS: { key: Issue['status']; label: string }[] = [
+  { key: 'open', label: 'Open' },
+  { key: 'in_progress', label: 'In progress' },
+  { key: 'resolved', label: 'Resolved' },
+  { key: 'closed', label: 'Closed' },
 ];
 
-function SeverityChip({ priority }: { priority: Issue['priority'] }) {
-  const map = { critical: 'error', high: 'error', medium: 'warning', low: 'secondary' } as const;
-  return <span className={`vn-chip vn-chip-${map[priority]}`} style={{ textTransform: 'capitalize' }}>{priority}</span>;
+type BadgeVariant = 'success' | 'destructive' | 'warning' | 'info' | 'secondary' | 'muted' | 'default';
+
+function priorityVariant(priority: Issue['priority']): BadgeVariant {
+  if (priority === 'critical' || priority === 'high') return 'destructive';
+  if (priority === 'medium') return 'warning';
+  return 'secondary';
 }
 
-// ─── Draggable Card ─────────────────────────────────────────────────────────
+function statusVariant(status: Issue['status']): BadgeVariant {
+  if (status === 'open') return 'info';
+  if (status === 'in_progress') return 'warning';
+  if (status === 'resolved') return 'success';
+  return 'secondary';
+}
+
+function entityIcon(entityType: string | null) {
+  if (entityType === 'order') return Package;
+  if (entityType === 'carrier') return Building2;
+  return Truck;
+}
 
 function DraggableIssueCard({ issue, onClick }: { issue: Issue; onClick: () => void }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: issue.id });
   const style: React.CSSProperties = {
     opacity: isDragging ? 0.4 : 1,
     transform: transform ? `translate(${transform.x}px, ${transform.y}px)` : undefined,
-    cursor: 'grab',
   };
 
   return (
-    <div ref={setNodeRef} style={style} {...listeners} {...attributes} className="vn-kanban-card" onClick={(e) => { e.stopPropagation(); onClick(); }}>
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...listeners}
+      {...attributes}
+      className="cursor-grab rounded-md border border-border bg-card p-3 shadow-sm transition-colors hover:border-primary/40 active:cursor-grabbing"
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
+    >
       <IssueCardContent issue={issue} />
     </div>
   );
@@ -79,44 +156,51 @@ function DraggableIssueCard({ issue, onClick }: { issue: Issue; onClick: () => v
 
 function IssueCardContent({ issue }: { issue: Issue }) {
   const isSnoozed = issue.snoozedUntil && new Date(issue.snoozedUntil) > new Date();
+  const SourceIcon = entityIcon(issue.sourceEntityType);
   return (
     <>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
-        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--on-surface-variant)' }}>{issue.id.slice(0, 8)}</span>
-        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-          {issue.needsCapa && <span className="material-icons" style={{ fontSize: 14, color: 'var(--color-warning)' }} title="Needs CAPA">assignment_late</span>}
-          {isSnoozed && <span className="material-icons" style={{ fontSize: 14, color: 'var(--on-surface-variant)' }} title={`Snoozed until ${new Date(issue.snoozedUntil!).toLocaleString()}`}>alarm</span>}
-          <SeverityChip priority={issue.priority} />
+      <div className="mb-1.5 flex items-start justify-between gap-2">
+        <span className="font-mono text-xs font-semibold text-muted-foreground">{issue.id.slice(0, 8)}</span>
+        <div className="flex items-center gap-1">
+          {issue.needsCapa && (
+            <ClipboardList className="h-3.5 w-3.5 text-warning" />
+          )}
+          {isSnoozed && (
+            <Timer className="h-3.5 w-3.5 text-muted-foreground" />
+          )}
+          <Badge variant={priorityVariant(issue.priority)} className="capitalize">{issue.priority}</Badge>
         </div>
       </div>
-      <div className="vn-kanban-card-title">{issue.title}</div>
+      <div className="text-sm font-medium">{issue.title}</div>
       {issue.sourceEntityId && (
-        <div className="vn-kanban-card-meta">
-          <span className="material-icons">{issue.sourceEntityType === 'order' ? 'receipt_long' : 'local_shipping'}</span>
+        <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+          <SourceIcon className="h-3 w-3" />
           {issue.sourceEntityId.slice(0, 8)}
         </div>
       )}
-      <div className="vn-kanban-card-meta">
-        <span className="material-icons">category</span>
+      <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+        <Tags className="h-3 w-3" />
         {issue.category}
       </div>
-      {/* Labels */}
       {issue.labels && issue.labels.length > 0 && (
-        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 6 }}>
+        <div className="mt-1.5 flex flex-wrap gap-1">
           {issue.labels.map(l => (
-            <span key={l.id} style={{ fontSize: 10, padding: '1px 6px', borderRadius: 8, background: l.color, color: '#fff', fontWeight: 600 }}>{l.name}</span>
+            <span
+              key={l.id}
+              className="rounded px-1.5 py-0.5 text-[10px] font-semibold text-white"
+              style={{ background: l.color }}
+            >
+              {l.name}
+            </span>
           ))}
         </div>
       )}
-      {/* SLA badge */}
       {issue._sla && (
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: '4px',
-          padding: '3px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600, marginBottom: '6px',
-          background: issue._sla.status === 'breached' ? 'var(--color-error)' : issue._sla.status === 'warning' ? 'var(--color-warning)' : 'var(--color-info)',
-          color: '#fff',
-        }}>
-          <span className="material-icons" style={{ fontSize: '13px' }}>timer</span>
+        <div className={cn(
+          'mt-1.5 inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] font-semibold text-white',
+          issue._sla.status === 'breached' ? 'bg-destructive' : issue._sla.status === 'warning' ? 'bg-warning' : 'bg-info',
+        )}>
+          <Timer className="h-3 w-3" />
           {issue._sla.ruleName} - {issue._sla.status}
           {issue._sla.slaDueAt && issue._sla.status !== 'breached' && (() => {
             const mins = Math.round((new Date(issue._sla!.slaDueAt!).getTime() - Date.now()) / 60_000);
@@ -124,51 +208,54 @@ function IssueCardContent({ issue }: { issue: Issue }) {
           })()}
         </div>
       )}
-      <div className="vn-kanban-card-footer">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <div className="vn-kanban-card-assignee">{getInitials(issue.assigneeName)}</div>
-          <span style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>{issue.assigneeName || 'Unassigned'}</span>
+      <div className="mt-2 flex items-center justify-between">
+        <div className="flex items-center gap-1.5">
+          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/15 text-[10px] font-semibold text-primary">
+            {getInitials(issue.assigneeName)}
+          </div>
+          <span className="text-xs text-muted-foreground">{issue.assigneeName || 'Unassigned'}</span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div className="flex items-center gap-2">
           {issue.commentCount > 0 && (
-            <span style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: 11, color: 'var(--on-surface-variant)' }}>
-              <span className="material-icons" style={{ fontSize: 13 }}>comment</span>{issue.commentCount}
+            <span className="flex items-center gap-0.5 text-[11px] text-muted-foreground">
+              <MessageSquare className="h-3 w-3" />
+              {issue.commentCount}
             </span>
           )}
-          <span style={{ fontSize: 11, color: 'var(--on-surface-variant)' }}>{timeAgo(issue.createdAt)}</span>
+          <span className="text-[11px] text-muted-foreground">{timeAgo(issue.createdAt)}</span>
         </div>
       </div>
     </>
   );
 }
 
-// ─── Droppable Column ───────────────────────────────────────────────────────
-
-function DroppableColumn({ colKey, label, cssClass, issues, onCardClick }: {
-  colKey: string; label: string; cssClass: string; issues: Issue[]; onCardClick: (id: string) => void;
+function DroppableColumn({ colKey, label, issues, onCardClick }: {
+  colKey: string; label: string; issues: Issue[]; onCardClick: (id: string) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: colKey });
   return (
-    <div ref={setNodeRef} className={`vn-kanban-col ${cssClass}`} style={{ background: isOver ? 'var(--surface-container-highest)' : undefined, transition: 'background 0.2s' }}>
-      <div className="vn-kanban-col-header">
-        <span>{label}</span>
-        <span className="vn-count">{issues.length}</span>
+    <div
+      ref={setNodeRef}
+      className={cn(
+        'flex h-full min-w-[280px] flex-1 flex-col rounded-lg border border-border bg-card transition-colors',
+        isOver && 'bg-muted',
+      )}
+    >
+      <div className="flex items-center justify-between border-b border-border p-3">
+        <h3 className="text-sm font-semibold">{label}</h3>
+        <Badge variant="muted">{issues.length}</Badge>
       </div>
-      <div className="vn-kanban-cards">
+      <div className="flex-1 space-y-2 overflow-y-auto p-3">
         {issues.map(issue => (
           <DraggableIssueCard key={issue.id} issue={issue} onClick={() => onCardClick(issue.id)} />
         ))}
         {issues.length === 0 && (
-          <div style={{ textAlign: 'center', padding: 24, color: 'var(--on-surface-variant)', fontSize: 13 }}>No issues</div>
+          <div className="py-6 text-center text-sm text-muted-foreground">No issues</div>
         )}
       </div>
     </div>
   );
 }
-
-// ─── Create Issue Modal ─────────────────────────────────────────────────────
-
-// ─── Entity Search Dropdown ─────────────────────────────────────────────────
 
 function EntitySearchField({ entityType, value, onSelect }: {
   entityType: string;
@@ -183,7 +270,6 @@ function EntitySearchField({ entityType, value, onSelect }: {
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
-  // Close dropdown on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) setShowDropdown(false);
@@ -192,7 +278,6 @@ function EntitySearchField({ entityType, value, onSelect }: {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  // Reset when entity type changes
   useEffect(() => {
     setQuery('');
     setResults([]);
@@ -202,7 +287,6 @@ function EntitySearchField({ entityType, value, onSelect }: {
   const search = useCallback((q: string) => {
     if (!entityType || q.length < 1) { setResults([]); return; }
     setLoading(true);
-
     const endpoint = entityType === 'shipment' ? 'shipments' : entityType === 'order' ? 'orders' : 'carriers';
     fetch(`${API_URL}/api/v1/${endpoint}`)
       .then(r => r.json())
@@ -225,7 +309,6 @@ function EntitySearchField({ entityType, value, onSelect }: {
                 sub: `${item.status || ''} - ${item.customer?.name || ''}`.trim(),
               };
             }
-            // carrier
             return {
               id: item.id,
               label: item.name || item.id.slice(0, 8),
@@ -260,30 +343,28 @@ function EntitySearchField({ entityType, value, onSelect }: {
 
   if (!entityType) {
     return (
-      <div>
-        <input className="vn-input" disabled placeholder="Select an entity type first" />
-        <span className="vn-field-hint">Select an entity type first</span>
+      <div className="space-y-1">
+        <Input disabled placeholder="Select an entity type first" />
+        <span className="text-xs text-muted-foreground">Select an entity type first</span>
       </div>
     );
   }
 
+  const Icon = entityIcon(entityType);
+
   return (
-    <div ref={wrapperRef} style={{ position: 'relative' }}>
+    <div ref={wrapperRef} className="relative">
       {value && selectedLabel ? (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', border: '1px solid var(--outline-variant)', borderRadius: 'var(--border-radius-sm)', background: 'var(--surface-container)' }}>
-          <span className="material-icons" style={{ fontSize: 16, color: 'var(--primary)' }}>
-            {entityType === 'shipment' ? 'local_shipping' : entityType === 'order' ? 'receipt_long' : 'business'}
-          </span>
-          <span style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>{selectedLabel}</span>
-          <span style={{ fontSize: 11, color: 'var(--on-surface-variant)' }}>{value.slice(0, 8)}</span>
-          <button type="button" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--on-surface-variant)' }}
-            onClick={() => { onSelect('', ''); setSelectedLabel(''); }}>
-            <span className="material-icons" style={{ fontSize: 16 }}>close</span>
-          </button>
+        <div className="flex items-center gap-2 rounded-md border border-input bg-muted px-3 py-2">
+          <Icon className="h-4 w-4 text-primary" />
+          <span className="flex-1 text-sm font-semibold">{selectedLabel}</span>
+          <span className="text-xs text-muted-foreground">{value.slice(0, 8)}</span>
+          <Button variant="ghost" size="icon" type="button" onClick={() => { onSelect('', ''); setSelectedLabel(''); }}>
+            <X className="h-3 w-3" />
+          </Button>
         </div>
       ) : (
-        <input
-          className="vn-input"
+        <Input
           placeholder={`Search ${entityType}s by reference, name, or ID...`}
           value={query}
           onChange={e => handleInputChange(e.target.value)}
@@ -291,38 +372,31 @@ function EntitySearchField({ entityType, value, onSelect }: {
         />
       )}
       {showDropdown && (query.length >= 1 || results.length > 0) && (
-        <div style={{
-          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 20,
-          background: 'var(--surface)', border: '1px solid var(--outline-variant)',
-          borderRadius: 'var(--border-radius-sm)', boxShadow: 'var(--modal-shadow)',
-          maxHeight: 240, overflowY: 'auto', marginTop: 4,
-        }}>
-          {loading && <div style={{ padding: 12, textAlign: 'center', fontSize: 12, color: 'var(--on-surface-variant)' }}>Searching...</div>}
+        <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-60 overflow-y-auto rounded-md border border-border bg-popover shadow-lg">
+          {loading && <div className="p-3 text-center text-xs text-muted-foreground">Searching...</div>}
           {!loading && results.length === 0 && query.length >= 1 && (
-            <div style={{ padding: 12, textAlign: 'center', fontSize: 12, color: 'var(--on-surface-variant)' }}>No results found</div>
+            <div className="p-3 text-center text-xs text-muted-foreground">No results found</div>
           )}
           {results.map(r => (
-            <div key={r.id} onClick={() => handleSelect(r)}
-              style={{ padding: '8px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid var(--outline-variant)' }}
-              onMouseOver={e => (e.currentTarget.style.background = 'var(--surface-container)')}
-              onMouseOut={e => (e.currentTarget.style.background = 'transparent')}>
-              <span className="material-icons" style={{ fontSize: 16, color: 'var(--on-surface-variant)' }}>
-                {entityType === 'shipment' ? 'local_shipping' : entityType === 'order' ? 'receipt_long' : 'business'}
-              </span>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>{r.label}</div>
-                {r.sub && <div style={{ fontSize: 11, color: 'var(--on-surface-variant)' }}>{r.sub}</div>}
+            <button
+              key={r.id}
+              type="button"
+              onClick={() => handleSelect(r)}
+              className="flex w-full items-center gap-2 border-b border-border px-3 py-2 text-left transition-colors last:border-b-0 hover:bg-muted"
+            >
+              <Icon className="h-4 w-4 text-muted-foreground" />
+              <div className="flex-1">
+                <div className="text-sm font-semibold">{r.label}</div>
+                {r.sub && <div className="text-xs text-muted-foreground">{r.sub}</div>}
               </div>
-              <span style={{ fontSize: 10, color: 'var(--on-surface-variant)', fontFamily: 'monospace' }}>{r.id.slice(0, 8)}</span>
-            </div>
+              <span className="font-mono text-[10px] text-muted-foreground">{r.id.slice(0, 8)}</span>
+            </button>
           ))}
         </div>
       )}
     </div>
   );
 }
-
-// ─── Create Issue Modal ─────────────────────────────────────────────────────
 
 function CreateIssueModal({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: () => void }) {
   const navigate = useNavigate();
@@ -372,7 +446,6 @@ function CreateIssueModal({ open, onClose, onCreated }: { open: boolean; onClose
         return;
       }
 
-      // Success - navigate to the new issue
       const newId = json.data?.id;
       onClose();
       onCreated();
@@ -383,7 +456,6 @@ function CreateIssueModal({ open, onClose, onCreated }: { open: boolean; onClose
     setSubmitting(false);
   };
 
-  // Reset form on open
   useEffect(() => {
     if (open) {
       setForm({ title: '', description: '', priority: 'medium', category: 'exception', sourceEntityType: '', sourceEntityId: '', sourceEntityLabel: '', assigneeName: '' });
@@ -392,80 +464,103 @@ function CreateIssueModal({ open, onClose, onCreated }: { open: boolean; onClose
   }, [open]);
 
   return (
-    <VnModal open={open} onClose={onClose} title="Report Issue" size="lg" footer={
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-        <button className="vn-btn" onClick={onClose} disabled={submitting}>Cancel</button>
-        <button className="vn-btn vn-btn-primary" onClick={handleSubmit} disabled={submitting}>
-          {submitting ? 'Creating...' : 'Create Issue'}
-        </button>
-      </div>
-    }>
-      {error && <div className="vn-alert vn-alert-error" style={{ marginBottom: 16 }}>{error}</div>}
+    <Dialog open={open} onOpenChange={open => { if (!open) onClose(); }}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-auto">
+        <DialogHeader>
+          <DialogTitle>Report issue</DialogTitle>
+        </DialogHeader>
 
-      <div className="vn-form-grid">
-        <div className="vn-field" style={{ gridColumn: '1 / -1' }}>
-          <label className="vn-field-label">Title *</label>
-          <input className="vn-input" placeholder="Brief description of the issue" value={form.title}
-            onChange={e => update('title', e.target.value)} autoFocus />
+        {error && (
+          <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+            <CircleAlert className="h-4 w-4" />
+            {error}
+          </div>
+        )}
+
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="md:col-span-2 space-y-2">
+            <Label>Title *</Label>
+            <Input placeholder="Brief description of the issue" value={form.title} onChange={e => update('title', e.target.value)} autoFocus />
+          </div>
+          <div className="md:col-span-2 space-y-2">
+            <Label>Description</Label>
+            <textarea
+              rows={3}
+              placeholder="Detailed description, context, impact..."
+              value={form.description}
+              onChange={e => update('description', e.target.value)}
+              className="w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Priority</Label>
+            <Select value={form.priority} onValueChange={v => update('priority', v)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="low">Low</SelectItem>
+                <SelectItem value="medium">Medium</SelectItem>
+                <SelectItem value="high">High</SelectItem>
+                <SelectItem value="critical">Critical</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Category</Label>
+            <Select value={form.category} onValueChange={v => update('category', v)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="exception">Exception</SelectItem>
+                <SelectItem value="delay">Delay</SelectItem>
+                <SelectItem value="damage">Damage</SelectItem>
+                <SelectItem value="compliance">Compliance</SelectItem>
+                <SelectItem value="other">Other</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Linked entity type</Label>
+            <Select
+              value={form.sourceEntityType || 'none'}
+              onValueChange={v => {
+                const next = v === 'none' ? '' : v;
+                update('sourceEntityType', next);
+                update('sourceEntityId', '');
+                update('sourceEntityLabel', '');
+              }}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None</SelectItem>
+                <SelectItem value="shipment">Shipment</SelectItem>
+                <SelectItem value="order">Order</SelectItem>
+                <SelectItem value="carrier">Carrier</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Linked {form.sourceEntityType ? form.sourceEntityType.charAt(0).toUpperCase() + form.sourceEntityType.slice(1) : 'entity'}</Label>
+            <EntitySearchField
+              entityType={form.sourceEntityType}
+              value={form.sourceEntityId}
+              onSelect={(id, label) => { update('sourceEntityId', id); update('sourceEntityLabel', label); }}
+            />
+          </div>
+          <div className="md:col-span-2 space-y-2">
+            <Label>Assign to</Label>
+            <Input placeholder="Assignee name (optional)" value={form.assigneeName} onChange={e => update('assigneeName', e.target.value)} />
+          </div>
         </div>
 
-        <div className="vn-field" style={{ gridColumn: '1 / -1' }}>
-          <label className="vn-field-label">Description</label>
-          <textarea className="vn-input" placeholder="Detailed description, context, impact..." rows={3}
-            value={form.description} onChange={e => update('description', e.target.value)} style={{ resize: 'vertical' }} />
-        </div>
-
-        <div className="vn-field">
-          <label className="vn-field-label">Priority</label>
-          <select className="vn-input" value={form.priority} onChange={e => update('priority', e.target.value)}>
-            <option value="low">Low</option>
-            <option value="medium">Medium</option>
-            <option value="high">High</option>
-            <option value="critical">Critical</option>
-          </select>
-        </div>
-
-        <div className="vn-field">
-          <label className="vn-field-label">Category</label>
-          <select className="vn-input" value={form.category} onChange={e => update('category', e.target.value)}>
-            <option value="exception">Exception</option>
-            <option value="delay">Delay</option>
-            <option value="damage">Damage</option>
-            <option value="compliance">Compliance</option>
-            <option value="other">Other</option>
-          </select>
-        </div>
-
-        <div className="vn-field">
-          <label className="vn-field-label">Linked Entity Type</label>
-          <select className="vn-input" value={form.sourceEntityType} onChange={e => { update('sourceEntityType', e.target.value); update('sourceEntityId', ''); update('sourceEntityLabel', ''); }}>
-            <option value="">None</option>
-            <option value="shipment">Shipment</option>
-            <option value="order">Order</option>
-            <option value="carrier">Carrier</option>
-          </select>
-        </div>
-
-        <div className="vn-field">
-          <label className="vn-field-label">Linked {form.sourceEntityType ? form.sourceEntityType.charAt(0).toUpperCase() + form.sourceEntityType.slice(1) : 'Entity'}</label>
-          <EntitySearchField
-            entityType={form.sourceEntityType}
-            value={form.sourceEntityId}
-            onSelect={(id, label) => { update('sourceEntityId', id); update('sourceEntityLabel', label); }}
-          />
-        </div>
-
-        <div className="vn-field" style={{ gridColumn: '1 / -1' }}>
-          <label className="vn-field-label">Assign To</label>
-          <input className="vn-input" placeholder="Assignee name (optional)" value={form.assigneeName}
-            onChange={e => update('assigneeName', e.target.value)} />
-        </div>
-      </div>
-    </VnModal>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={submitting}>Cancel</Button>
+          <Button variant="gradient" onClick={handleSubmit} disabled={submitting}>
+            {submitting ? 'Creating...' : 'Create issue'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
-
-// ─── Main Component ─────────────────────────────────────────────────────────
 
 export default function VNextIssueKanban() {
   const navigate = useNavigate();
@@ -475,17 +570,14 @@ export default function VNextIssueKanban() {
   const [draggingIssue, setDraggingIssue] = useState<Issue | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
 
-  // Filters
   const [filterPriority, setFilterPriority] = useState('all');
   const [filterCategory, setFilterCategory] = useState('all');
   const [filterSearch, setFilterSearch] = useState('');
   const [filterNeedsCapa, setFilterNeedsCapa] = useState(false);
 
-  // Saved views
   const [views, setViews] = useState<KanbanViewDef[]>([]);
-  const [activeView, setActiveView] = useState('');
+  const [activeView, setActiveView] = useState('all');
 
-  // Auto-refresh
   const refreshRef = useRef<NodeJS.Timeout | null>(null);
 
   const sensors = useSensors(
@@ -522,17 +614,14 @@ export default function VNextIssueKanban() {
 
   useEffect(() => {
     loadData();
-    // Load saved views
     fetch(`${API_URL}/api/v1/kanban-views`).then(r => r.json()).then(json => setViews(json.data || [])).catch(() => {});
-    // Auto-refresh
     refreshRef.current = setInterval(loadData, 30000);
     return () => { if (refreshRef.current) clearInterval(refreshRef.current); };
   }, [loadData]);
 
-  // Apply view filters
   const applyViewFilters = (viewId: string) => {
     setActiveView(viewId);
-    if (!viewId) { setFilterPriority('all'); setFilterCategory('all'); setFilterSearch(''); setFilterNeedsCapa(false); return; }
+    if (viewId === 'all') { setFilterPriority('all'); setFilterCategory('all'); setFilterSearch(''); setFilterNeedsCapa(false); return; }
     const view = views.find(v => v.id === viewId);
     if (!view) return;
     const f = view.filters || {};
@@ -542,7 +631,6 @@ export default function VNextIssueKanban() {
     if (f.needsCapa) setFilterNeedsCapa(true);
   };
 
-  // Filter issues
   const filtered = issues.filter(issue => {
     if (filterPriority !== 'all' && issue.priority !== filterPriority) return false;
     if (filterCategory !== 'all' && issue.category !== filterCategory) return false;
@@ -551,7 +639,6 @@ export default function VNextIssueKanban() {
     return true;
   });
 
-  // DnD handlers
   const handleDragStart = (event: DragStartEvent) => {
     const issue = issues.find(i => i.id === event.active.id);
     setDraggingIssue(issue || null);
@@ -566,7 +653,6 @@ export default function VNextIssueKanban() {
     const issue = issues.find(i => i.id === issueId);
     if (!issue || issue.status === newStatus) return;
 
-    // Optimistic update
     setIssues(prev => prev.map(i => i.id === issueId ? { ...i, status: newStatus as Issue['status'] } : i));
 
     try {
@@ -577,7 +663,6 @@ export default function VNextIssueKanban() {
       });
       if (!res.ok) throw new Error('Failed');
     } catch {
-      // Revert on error
       setIssues(prev => prev.map(i => i.id === issueId ? { ...i, status: issue.status } : i));
     }
   };
@@ -591,90 +676,131 @@ export default function VNextIssueKanban() {
     needsCapa: issues.filter(i => i.needsCapa).length,
   };
 
+  const statTiles = [
+    { label: 'Open', value: stats.open, icon: Inbox, tone: 'bg-info/15 text-info' },
+    { label: 'In progress', value: stats.inProgress, icon: Search, tone: 'bg-warning/15 text-warning' },
+    { label: 'Resolved', value: stats.resolved, icon: CheckCircle2, tone: 'bg-success/15 text-success' },
+    { label: 'Closed', value: stats.closed, icon: XCircle, tone: 'bg-muted text-muted-foreground' },
+    ...(stats.critical > 0 ? [{ label: 'Critical', value: stats.critical, icon: AlertOctagon, tone: 'bg-destructive/10 text-destructive' }] : []),
+    ...(stats.needsCapa > 0 ? [{ label: 'Needs CAPA', value: stats.needsCapa, icon: ClipboardList, tone: 'bg-warning/15 text-warning' }] : []),
+  ];
+
   return (
-    <>
-      <div className="vn-page-header">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1>Triage Centre</h1>
-          <p>{stats.open + stats.inProgress} open issues{stats.critical > 0 ? ` (${stats.critical} critical)` : ''}</p>
+          <h1 className="text-3xl font-bold tracking-tight">Triage centre</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {stats.open + stats.inProgress} open issues{stats.critical > 0 ? ` (${stats.critical} critical)` : ''}
+          </p>
         </div>
-        <div className="vn-page-actions">
-          {/* View selector */}
+        <div className="flex flex-wrap items-center gap-2">
           {views.length > 0 && (
-            <select className="vn-filter-select" value={activeView} onChange={e => applyViewFilters(e.target.value)}>
-              <option value="">All Issues</option>
-              {views.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-            </select>
+            <Select value={activeView} onValueChange={applyViewFilters}>
+              <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All issues</SelectItem>
+                {views.map(v => <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
           )}
-          {/* View mode toggle */}
-          <div style={{ display: 'flex', border: '1px solid var(--outline-variant)', borderRadius: 'var(--border-radius-sm)', overflow: 'hidden' }}>
-            <button className="vn-btn-icon" style={{ borderRadius: 0, background: viewMode === 'kanban' ? 'var(--surface-container)' : 'transparent' }} onClick={() => setViewMode('kanban')}>
-              <span className="material-icons" style={{ fontSize: 20 }}>view_kanban</span>
-            </button>
-            <button className="vn-btn-icon" style={{ borderRadius: 0, background: viewMode === 'list' ? 'var(--surface-container)' : 'transparent' }} onClick={() => setViewMode('list')}>
-              <span className="material-icons" style={{ fontSize: 20 }}>view_list</span>
-            </button>
+          <div className="inline-flex rounded-md border border-input">
+            <Button
+              size="sm"
+              variant={viewMode === 'kanban' ? 'secondary' : 'ghost'}
+              className="rounded-r-none"
+              onClick={() => setViewMode('kanban')}
+            >
+              <LayoutList className="h-4 w-4" />
+              Kanban
+            </Button>
+            <Separator orientation="vertical" />
+            <Button
+              size="sm"
+              variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+              className="rounded-l-none"
+              onClick={() => setViewMode('list')}
+            >
+              <FilePlus className="h-4 w-4" />
+              List
+            </Button>
           </div>
-          <button className="vn-btn vn-btn-primary" onClick={() => setShowCreateModal(true)}>
-            <span className="material-icons">add</span> Report Issue
-          </button>
+          <Button variant="gradient" onClick={() => setShowCreateModal(true)}>
+            <Plus className="h-4 w-4" />
+            Report issue
+          </Button>
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="vn-stats">
-        <div className="vn-stat"><div className="vn-stat-icon info"><span className="material-icons">fiber_new</span></div><div><div className="vn-stat-value">{stats.open}</div><div className="vn-stat-label">Open</div></div></div>
-        <div className="vn-stat"><div className="vn-stat-icon warning"><span className="material-icons">search</span></div><div><div className="vn-stat-value">{stats.inProgress}</div><div className="vn-stat-label">In Progress</div></div></div>
-        <div className="vn-stat"><div className="vn-stat-icon success"><span className="material-icons">check_circle</span></div><div><div className="vn-stat-value">{stats.resolved}</div><div className="vn-stat-label">Resolved</div></div></div>
-        <div className="vn-stat"><div className="vn-stat-icon error"><span className="material-icons">cancel</span></div><div><div className="vn-stat-value">{stats.closed}</div><div className="vn-stat-label">Closed</div></div></div>
-        {stats.critical > 0 && <div className="vn-stat"><div className="vn-stat-icon error"><span className="material-icons">priority_high</span></div><div><div className="vn-stat-value">{stats.critical}</div><div className="vn-stat-label">Critical</div></div></div>}
-        {stats.needsCapa > 0 && <div className="vn-stat"><div className="vn-stat-icon warning"><span className="material-icons">assignment_late</span></div><div><div className="vn-stat-value">{stats.needsCapa}</div><div className="vn-stat-label">Needs CAPA</div></div></div>}
+      <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+        {statTiles.map(stat => {
+          const Icon = stat.icon;
+          return (
+            <Card key={stat.label}>
+              <div className="p-5">
+                <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', stat.tone)}>
+                  <Icon className="h-5 w-5" />
+                </div>
+                <div className="mt-3 text-2xl font-bold tracking-tight">{stat.value}</div>
+                <div className="mt-1 text-sm text-muted-foreground">{stat.label}</div>
+              </div>
+            </Card>
+          );
+        })}
       </div>
 
-      {/* Filters */}
-      <div className="vn-filters">
-        <div className="vn-filter-group" style={{ flex: 1, minWidth: 240 }}>
-          <span className="material-icons">search</span>
-          <input
-            className="vn-filter-input"
-            placeholder="Search issues by title, description, or assignee..."
-            value={filterSearch}
-            onChange={e => setFilterSearch(e.target.value)}
-            style={{ width: '100%' }}
-          />
+      <Card>
+        <div className="flex flex-wrap items-center gap-3 p-4">
+          <div className="relative min-w-[240px] flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search issues by title, description, or assignee..."
+              value={filterSearch}
+              onChange={e => setFilterSearch(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+          <Select value={filterPriority} onValueChange={setFilterPriority}>
+            <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All priorities</SelectItem>
+              <SelectItem value="critical">Critical</SelectItem>
+              <SelectItem value="high">High</SelectItem>
+              <SelectItem value="medium">Medium</SelectItem>
+              <SelectItem value="low">Low</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={filterCategory} onValueChange={setFilterCategory}>
+            <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All categories</SelectItem>
+              <SelectItem value="exception">Exception</SelectItem>
+              <SelectItem value="delay">Delay</SelectItem>
+              <SelectItem value="damage">Damage</SelectItem>
+              <SelectItem value="compliance">Compliance</SelectItem>
+              <SelectItem value="other">Other</SelectItem>
+            </SelectContent>
+          </Select>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={filterNeedsCapa} onChange={e => setFilterNeedsCapa(e.target.checked)} />
+            Needs CAPA
+          </label>
         </div>
-        <select className="vn-filter-select" value={filterPriority} onChange={e => setFilterPriority(e.target.value)}>
-          <option value="all">All Priorities</option>
-          <option value="critical">Critical</option>
-          <option value="high">High</option>
-          <option value="medium">Medium</option>
-          <option value="low">Low</option>
-        </select>
-        <select className="vn-filter-select" value={filterCategory} onChange={e => setFilterCategory(e.target.value)}>
-          <option value="all">All Categories</option>
-          <option value="exception">Exception</option>
-          <option value="delay">Delay</option>
-          <option value="damage">Damage</option>
-          <option value="compliance">Compliance</option>
-          <option value="other">Other</option>
-        </select>
-        <label>
-          <input type="checkbox" checked={filterNeedsCapa} onChange={e => setFilterNeedsCapa(e.target.checked)} />
-          Needs CAPA
-        </label>
-      </div>
+      </Card>
 
       {loading ? (
-        <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}><div className="loading-spinner" /></div>
+        <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+          <Loader2 className="h-8 w-8 animate-spin" />
+          <h3 className="text-lg font-medium">Loading...</h3>
+        </div>
       ) : viewMode === 'kanban' ? (
         <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-          <div className="vn-kanban">
+          <div className="flex gap-4 overflow-x-auto">
             {COLUMNS.map(col => (
               <DroppableColumn
                 key={col.key}
                 colKey={col.key}
                 label={col.label}
-                cssClass={col.cssClass}
                 issues={filtered.filter(i => i.status === col.key)}
                 onCardClick={(id) => navigate(`/issues/${id}`)}
               />
@@ -682,73 +808,75 @@ export default function VNextIssueKanban() {
           </div>
           <DragOverlay>
             {draggingIssue ? (
-              <div className="vn-kanban-card" style={{ boxShadow: 'var(--modal-shadow)', transform: 'rotate(3deg)', width: 280 }}>
+              <div className="w-72 rotate-3 rounded-md border border-border bg-card p-3 shadow-xl">
                 <IssueCardContent issue={draggingIssue} />
               </div>
             ) : null}
           </DragOverlay>
         </DndContext>
       ) : (
-        /* List view */
-        <div className="vn-card">
-          <div className="vn-table-wrap">
-            <table className="vn-table">
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>Issue</th>
-                  <th>Reference</th>
-                  <th>Category</th>
-                  <th>Priority</th>
-                  <th>Labels</th>
-                  <th>Assignee</th>
-                  <th>Status</th>
-                  <th>CAPA</th>
-                  <th>Created</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map(issue => (
-                  <tr key={issue.id} onClick={() => navigate(`/issues/${issue.id}`)} style={{ cursor: 'pointer' }}>
-                    <td><span className="vn-table-id">{issue.id.slice(0, 8)}</span></td>
-                    <td style={{ maxWidth: 280 }}>{issue.title}</td>
-                    <td><span className="vn-table-id">{issue.sourceEntityId?.slice(0, 8) || '-'}</span></td>
-                    <td>{issue.category}</td>
-                    <td><SeverityChip priority={issue.priority} /></td>
-                    <td>
-                      <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
-                        {(issue.labels || []).map(l => (
-                          <span key={l.id} style={{ fontSize: 10, padding: '1px 5px', borderRadius: 8, background: l.color, color: '#fff' }}>{l.name}</span>
-                        ))}
+        <Card>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>ID</TableHead>
+                <TableHead>Issue</TableHead>
+                <TableHead>Reference</TableHead>
+                <TableHead>Category</TableHead>
+                <TableHead>Priority</TableHead>
+                <TableHead>Labels</TableHead>
+                <TableHead>Assignee</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>CAPA</TableHead>
+                <TableHead>Created</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filtered.map(issue => (
+                <TableRow key={issue.id} onClick={() => navigate(`/issues/${issue.id}`)} className="cursor-pointer">
+                  <TableCell><span className="font-mono text-sm font-semibold">{issue.id.slice(0, 8)}</span></TableCell>
+                  <TableCell className="max-w-[280px]">{issue.title}</TableCell>
+                  <TableCell><span className="font-mono text-sm">{issue.sourceEntityId?.slice(0, 8) || '-'}</span></TableCell>
+                  <TableCell>{issue.category}</TableCell>
+                  <TableCell><Badge variant={priorityVariant(issue.priority)} className="capitalize">{issue.priority}</Badge></TableCell>
+                  <TableCell>
+                    <div className="flex flex-wrap gap-1">
+                      {(issue.labels || []).map(l => (
+                        <span
+                          key={l.id}
+                          className="rounded px-1.5 py-0.5 text-[10px] font-semibold text-white"
+                          style={{ background: l.color }}
+                        >
+                          {l.name}
+                        </span>
+                      ))}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/15 text-[10px] font-semibold text-primary">
+                        {getInitials(issue.assigneeName)}
                       </div>
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <div className="vn-kanban-card-assignee">{getInitials(issue.assigneeName)}</div>
-                        {issue.assigneeName || 'Unassigned'}
-                      </div>
-                    </td>
-                    <td>
-                      <span className={`vn-chip vn-chip-${issue.status === 'open' ? 'info' : issue.status === 'in_progress' ? 'warning' : issue.status === 'resolved' ? 'success' : 'secondary'}`} style={{ textTransform: 'capitalize' }}>
-                        {issue.status.replace('_', ' ')}
-                      </span>
-                    </td>
-                    <td>{issue.needsCapa ? <span className="material-icons" style={{ fontSize: 16, color: 'var(--color-warning)' }}>assignment_late</span> : '-'}</td>
-                    <td style={{ fontSize: 13, whiteSpace: 'nowrap' }}>{timeAgo(issue.createdAt)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+                      <span className="text-sm">{issue.assigneeName || 'Unassigned'}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={statusVariant(issue.status)} className="capitalize">{issue.status.replace('_', ' ')}</Badge>
+                  </TableCell>
+                  <TableCell>{issue.needsCapa ? <ClipboardList className="h-4 w-4 text-warning" /> : '-'}</TableCell>
+                  <TableCell className="whitespace-nowrap text-sm">{timeAgo(issue.createdAt)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
       )}
 
-      {/* Create Issue Modal */}
       <CreateIssueModal
         open={showCreateModal}
         onClose={() => setShowCreateModal(false)}
         onCreated={loadData}
       />
-    </>
+    </div>
   );
 }

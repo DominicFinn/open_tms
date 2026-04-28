@@ -1,6 +1,48 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import {
+  BadgeCheck,
+  Calendar,
+  CalendarClock,
+  Check,
+  CheckCircle2,
+  ClipboardList,
+  Hourglass,
+  Info,
+  Plus,
+  X,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { cn } from '@/lib/utils';
 
 interface CAPAReport {
   id: string;
@@ -28,21 +70,23 @@ interface FollowUp {
   completedByName: string | null;
 }
 
-const STATUS_CHIPS: Record<string, string> = {
-  draft: 'vn-chip-secondary',
-  investigation: 'vn-chip-info',
-  root_cause_identified: 'vn-chip-warning',
-  action_plan: 'vn-chip-primary',
-  implementation: 'vn-chip-info',
-  verification: 'vn-chip-warning',
-  closed: 'vn-chip-success',
+type BadgeVariant = 'success' | 'destructive' | 'warning' | 'info' | 'secondary' | 'muted' | 'default';
+
+const STATUS_VARIANT: Record<string, BadgeVariant> = {
+  draft: 'secondary',
+  investigation: 'info',
+  root_cause_identified: 'warning',
+  action_plan: 'default',
+  implementation: 'info',
+  verification: 'warning',
+  closed: 'success',
 };
 
-const PRIORITY_CHIPS: Record<string, string> = {
-  critical: 'vn-chip-error',
-  high: 'vn-chip-warning',
-  medium: 'vn-chip-primary',
-  low: 'vn-chip-secondary',
+const PRIORITY_VARIANT: Record<string, BadgeVariant> = {
+  critical: 'destructive',
+  high: 'warning',
+  medium: 'default',
+  low: 'secondary',
 };
 
 const FOLLOW_UP_LABELS: Record<string, string> = {
@@ -68,27 +112,23 @@ export default function VNextQualityCapa() {
 
   const [capas, setCapas] = useState<CAPAReport[]>([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState('');
-  const [priorityFilter, setPriorityFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [priorityFilter, setPriorityFilter] = useState('all');
   const [search, setSearch] = useState('');
 
-  // Detail / follow-ups
   const [selectedCapa, setSelectedCapa] = useState<CAPAReport | null>(null);
   const [followUps, setFollowUps] = useState<FollowUp[]>([]);
   const [loadingFollowUps, setLoadingFollowUps] = useState(false);
 
-  // Complete follow-up modal
   const [completingFollowUp, setCompletingFollowUp] = useState<FollowUp | null>(null);
   const [completeOutcome, setCompleteOutcome] = useState('on_track');
   const [completeNotes, setCompleteNotes] = useState('');
 
-  // Add follow-up modal
   const [showAddFollowUp, setShowAddFollowUp] = useState(false);
   const [newFollowUpType, setNewFollowUpType] = useState('ad_hoc');
   const [newFollowUpDue, setNewFollowUpDue] = useState('');
   const [newFollowUpNotes, setNewFollowUpNotes] = useState('');
 
-  // Create CAPA modal
   const [showCreateCapa, setShowCreateCapa] = useState(!!createFromIssue);
   const [createIssueId, setCreateIssueId] = useState(createFromIssue || '');
   const [createTitle, setCreateTitle] = useState('');
@@ -99,7 +139,7 @@ export default function VNextQualityCapa() {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (statusFilter) params.set('status', statusFilter);
+      if (statusFilter !== 'all') params.set('status', statusFilter);
       const res = await fetch(`${API_URL}/api/v1/cold-chain/capa?${params}`);
       const json = await res.json();
       setCapas(json.data || []);
@@ -185,7 +225,7 @@ export default function VNextQualityCapa() {
   };
 
   const filtered = capas.filter(c => {
-    if (priorityFilter && c.priority !== priorityFilter) return false;
+    if (priorityFilter !== 'all' && c.priority !== priorityFilter) return false;
     if (search && !c.title.toLowerCase().includes(search.toLowerCase()) && !c.reportNumber.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
@@ -200,246 +240,310 @@ export default function VNextQualityCapa() {
   const isOverdue = (fu: FollowUp) => fu.status === 'pending' && new Date(fu.dueDate) < new Date();
   const formatDate = (d: string) => new Date(d).toLocaleDateString();
 
+  const statTiles = [
+    { label: 'Total CAPAs', value: stats.total, icon: ClipboardList, tone: 'bg-primary/10 text-primary' },
+    { label: 'Open', value: stats.open, icon: Hourglass, tone: 'bg-warning/15 text-warning' },
+    { label: 'In verification', value: stats.verification, icon: BadgeCheck, tone: 'bg-info/15 text-info' },
+    { label: 'Closed', value: stats.closed, icon: CheckCircle2, tone: 'bg-success/15 text-success' },
+  ];
+
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>CAPA Management</h1>
-          <p style={{ color: 'var(--text-secondary)', margin: '4px 0 0', fontSize: 14 }}>Corrective and Preventive Action reports with follow-up tracking</p>
+          <h1 className="text-3xl font-bold tracking-tight">CAPA management</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Corrective and preventive action reports with follow-up tracking</p>
         </div>
-        <button className="vn-btn vn-btn-primary" onClick={() => setShowCreateCapa(true)}>
-          <span className="material-icons" style={{ fontSize: 18 }}>add</span> Create CAPA
-        </button>
+        <Button variant="gradient" onClick={() => setShowCreateCapa(true)}>
+          <Plus className="h-4 w-4" />
+          Create CAPA
+        </Button>
       </div>
 
-      {/* Stats */}
-      <div className="vn-stats" style={{ marginBottom: 24 }}>
-        <div className="vn-stat"><div className="vn-stat-icon primary"><span className="material-icons">assignment</span></div><div><div className="vn-stat-value">{stats.total}</div><div className="vn-stat-label">Total CAPAs</div></div></div>
-        <div className="vn-stat"><div className="vn-stat-icon warning"><span className="material-icons">pending_actions</span></div><div><div className="vn-stat-value">{stats.open}</div><div className="vn-stat-label">Open</div></div></div>
-        <div className="vn-stat"><div className="vn-stat-icon info"><span className="material-icons">verified</span></div><div><div className="vn-stat-value">{stats.verification}</div><div className="vn-stat-label">In Verification</div></div></div>
-        <div className="vn-stat"><div className="vn-stat-icon success"><span className="material-icons">check_circle</span></div><div><div className="vn-stat-value">{stats.closed}</div><div className="vn-stat-label">Closed</div></div></div>
-      </div>
-
-      {/* Filters */}
-      <div className="vn-filters" style={{ marginBottom: 16 }}>
-        <input className="vn-filter-input" placeholder="Search by title or report number..." value={search} onChange={e => setSearch(e.target.value)} />
-        <select className="vn-filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-          <option value="">All Statuses</option>
-          {Object.keys(STATUS_CHIPS).map(s => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
-        </select>
-        <select className="vn-filter-select" value={priorityFilter} onChange={e => setPriorityFilter(e.target.value)}>
-          <option value="">All Priorities</option>
-          <option value="critical">Critical</option>
-          <option value="high">High</option>
-          <option value="medium">Medium</option>
-          <option value="low">Low</option>
-        </select>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: selectedCapa ? '1fr 1fr' : '1fr', gap: 24 }}>
-        {/* CAPA List */}
-        <div className="vn-table-wrap">
-          {loading ? (
-            <div style={{ padding: 40, textAlign: 'center' }}><div className="loading-spinner" /></div>
-          ) : filtered.length === 0 ? (
-            <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-secondary)' }}>No CAPA reports found</div>
-          ) : (
-            <table className="vn-table">
-              <thead><tr>
-                <th>Report #</th><th>Title</th><th>Status</th><th>Priority</th><th>Root Cause</th><th>Created</th>
-              </tr></thead>
-              <tbody>
-                {filtered.map(c => (
-                  <tr key={c.id} onClick={() => selectCapa(c)} style={{ cursor: 'pointer', background: selectedCapa?.id === c.id ? 'var(--bg-hover)' : undefined }}>
-                    <td><span className="vn-table-id">{c.reportNumber}</span></td>
-                    <td>{c.title}</td>
-                    <td><span className={`vn-chip ${STATUS_CHIPS[c.status] || ''}`}>{c.status.replace(/_/g, ' ')}</span></td>
-                    <td><span className={`vn-chip ${PRIORITY_CHIPS[c.priority] || ''}`}>{c.priority}</span></td>
-                    <td><span className="vn-table-secondary">{c.rootCauseCategory || '-'}</span></td>
-                    <td><span className="vn-table-secondary">{formatDate(c.createdAt)}</span></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-
-        {/* Follow-Up Panel */}
-        {selectedCapa && (
-          <div className="vn-card" style={{ padding: 20 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: 16 }}>
-              <div>
-                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: 'var(--text-primary)' }}>{selectedCapa.reportNumber}</h3>
-                <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--text-secondary)' }}>{selectedCapa.title}</p>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {statTiles.map(stat => {
+          const Icon = stat.icon;
+          return (
+            <Card key={stat.label}>
+              <div className="p-5">
+                <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', stat.tone)}>
+                  <Icon className="h-5 w-5" />
+                </div>
+                <div className="mt-3 text-2xl font-bold tracking-tight">{stat.value}</div>
+                <div className="mt-1 text-sm text-muted-foreground">{stat.label}</div>
               </div>
-              <button onClick={() => setSelectedCapa(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}>
-                <span className="material-icons">close</span>
-              </button>
+            </Card>
+          );
+        })}
+      </div>
+
+      <Card>
+        <div className="flex flex-wrap items-center gap-3 p-4">
+          <div className="min-w-[240px] flex-1">
+            <Input placeholder="Search by title or report number..." value={search} onChange={e => setSearch(e.target.value)} />
+          </div>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-[200px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All statuses</SelectItem>
+              {Object.keys(STATUS_VARIANT).map(s => <SelectItem key={s} value={s}>{s.replace(/_/g, ' ')}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+            <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All priorities</SelectItem>
+              <SelectItem value="critical">Critical</SelectItem>
+              <SelectItem value="high">High</SelectItem>
+              <SelectItem value="medium">Medium</SelectItem>
+              <SelectItem value="low">Low</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <Separator />
+      </Card>
+
+      <div className={cn('grid gap-6', selectedCapa ? 'lg:grid-cols-2' : 'grid-cols-1')}>
+        <Card>
+          {loading ? (
+            <div className="py-12 text-center text-muted-foreground">Loading...</div>
+          ) : filtered.length === 0 ? (
+            <div className="py-12 text-center text-muted-foreground">No CAPA reports found</div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Report #</TableHead>
+                  <TableHead>Title</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Priority</TableHead>
+                  <TableHead>Root cause</TableHead>
+                  <TableHead>Created</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filtered.map(c => (
+                  <TableRow
+                    key={c.id}
+                    onClick={() => selectCapa(c)}
+                    className={cn('cursor-pointer', selectedCapa?.id === c.id && 'bg-muted')}
+                  >
+                    <TableCell><span className="font-mono text-sm font-semibold">{c.reportNumber}</span></TableCell>
+                    <TableCell>{c.title}</TableCell>
+                    <TableCell><Badge variant={STATUS_VARIANT[c.status] || 'muted'}>{c.status.replace(/_/g, ' ')}</Badge></TableCell>
+                    <TableCell><Badge variant={PRIORITY_VARIANT[c.priority] || 'muted'}>{c.priority}</Badge></TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{c.rootCauseCategory || '-'}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{formatDate(c.createdAt)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </Card>
+
+        {selectedCapa && (
+          <Card className="p-5">
+            <div className="mb-4 flex items-start justify-between">
+              <div>
+                <h3 className="text-base font-semibold">{selectedCapa.reportNumber}</h3>
+                <p className="mt-1 text-sm text-muted-foreground">{selectedCapa.title}</p>
+              </div>
+              <Button variant="ghost" size="icon" onClick={() => setSelectedCapa(null)}>
+                <X className="h-4 w-4" />
+              </Button>
             </div>
 
-            <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-              <span className={`vn-chip ${STATUS_CHIPS[selectedCapa.status] || ''}`}>{selectedCapa.status.replace(/_/g, ' ')}</span>
-              <span className={`vn-chip ${PRIORITY_CHIPS[selectedCapa.priority] || ''}`}>{selectedCapa.priority}</span>
+            <div className="mb-4 flex gap-2">
+              <Badge variant={STATUS_VARIANT[selectedCapa.status] || 'muted'}>{selectedCapa.status.replace(/_/g, ' ')}</Badge>
+              <Badge variant={PRIORITY_VARIANT[selectedCapa.priority] || 'muted'}>{selectedCapa.priority}</Badge>
             </div>
 
-            <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-              <button className="vn-btn vn-btn-primary" style={{ fontSize: 12 }} onClick={schedule30_60_90}>
-                <span className="material-icons" style={{ fontSize: 14 }}>schedule</span> Schedule 30/60/90
-              </button>
-              <button className="vn-btn" style={{ fontSize: 12 }} onClick={() => setShowAddFollowUp(true)}>
-                <span className="material-icons" style={{ fontSize: 14 }}>add</span> Add Follow-Up
-              </button>
+            <div className="mb-4 flex flex-wrap gap-2">
+              <Button size="sm" variant="default" onClick={schedule30_60_90}>
+                <CalendarClock className="h-4 w-4" />
+                Schedule 30/60/90
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setShowAddFollowUp(true)}>
+                <Plus className="h-4 w-4" />
+                Add follow-up
+              </Button>
             </div>
 
-            <h4 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Follow-Up Timeline</h4>
+            <h4 className="mb-3 text-sm font-semibold">Follow-up timeline</h4>
 
             {loadingFollowUps ? (
-              <div style={{ padding: 20, textAlign: 'center' }}><div className="loading-spinner" /></div>
+              <div className="py-6 text-center text-muted-foreground">Loading...</div>
             ) : followUps.length === 0 ? (
-              <div className="vn-alert vn-alert-info" style={{ fontSize: 13 }}>
+              <div className="flex items-start gap-3 rounded-md border border-info/30 bg-info/10 p-3 text-sm text-info">
+                <Info className="mt-0.5 h-4 w-4" />
                 No follow-ups scheduled yet. Click "Schedule 30/60/90" to create automatic review checkpoints.
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {followUps.map(fu => (
-                  <div key={fu.id} style={{
-                    padding: 12,
-                    borderRadius: 8,
-                    border: `1px solid ${isOverdue(fu) ? 'var(--color-warning)' : 'var(--border-color)'}`,
-                    background: isOverdue(fu) ? 'color-mix(in srgb, var(--color-warning) 5%, transparent)' : 'var(--bg-secondary)',
-                  }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                        <span className="vn-chip vn-chip-primary" style={{ fontSize: 10 }}>{FOLLOW_UP_LABELS[fu.followUpType] || fu.followUpType}</span>
-                        {fu.status === 'completed' && <span className="vn-chip vn-chip-success" style={{ fontSize: 10 }}>Completed</span>}
-                        {isOverdue(fu) && <span className="vn-chip vn-chip-error" style={{ fontSize: 10 }}>Overdue</span>}
-                        {fu.status === 'pending' && !isOverdue(fu) && <span className="vn-chip vn-chip-secondary" style={{ fontSize: 10 }}>Pending</span>}
+              <div className="flex flex-col gap-3">
+                {followUps.map(fu => {
+                  const overdue = isOverdue(fu);
+                  return (
+                    <div
+                      key={fu.id}
+                      className={cn(
+                        'rounded-md border p-3',
+                        overdue ? 'border-warning/40 bg-warning/5' : 'border-border bg-muted/30',
+                      )}
+                    >
+                      <div className="mb-2 flex items-center justify-between">
+                        <div className="flex flex-wrap gap-1">
+                          <Badge variant="default">{FOLLOW_UP_LABELS[fu.followUpType] || fu.followUpType}</Badge>
+                          {fu.status === 'completed' && <Badge variant="success">Completed</Badge>}
+                          {overdue && <Badge variant="destructive">Overdue</Badge>}
+                          {fu.status === 'pending' && !overdue && <Badge variant="secondary">Pending</Badge>}
+                        </div>
+                        <span className="text-xs text-muted-foreground">Due: {formatDate(fu.dueDate)}</span>
                       </div>
-                      <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Due: {formatDate(fu.dueDate)}</span>
+
+                      {fu.notes && <p className="my-1 text-xs text-muted-foreground">{fu.notes}</p>}
+                      {fu.outcome && <p className="my-1 text-xs">Outcome: <strong>{OUTCOME_LABELS[fu.outcome] || fu.outcome}</strong></p>}
+                      {fu.actionItems && <p className="my-1 text-xs text-muted-foreground">Actions: {fu.actionItems}</p>}
+                      {fu.completedAt && (
+                        <p className="my-1 text-[11px] text-muted-foreground">
+                          Completed: {formatDate(fu.completedAt)}{fu.completedByName ? ` by ${fu.completedByName}` : ''}
+                        </p>
+                      )}
+
+                      {fu.status === 'pending' && (
+                        <Button
+                          size="sm"
+                          variant="default"
+                          className="mt-2"
+                          onClick={() => {
+                            setCompletingFollowUp(fu);
+                            setCompleteOutcome('on_track');
+                            setCompleteNotes('');
+                          }}
+                        >
+                          <Check className="h-3 w-3" />
+                          Complete review
+                        </Button>
+                      )}
                     </div>
-
-                    {fu.notes && <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '4px 0' }}>{fu.notes}</p>}
-                    {fu.outcome && <p style={{ fontSize: 12, color: 'var(--text-primary)', margin: '4px 0' }}>Outcome: <strong>{OUTCOME_LABELS[fu.outcome] || fu.outcome}</strong></p>}
-                    {fu.actionItems && <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '4px 0' }}>Actions: {fu.actionItems}</p>}
-                    {fu.completedAt && <p style={{ fontSize: 11, color: 'var(--text-secondary)', margin: '4px 0' }}>Completed: {formatDate(fu.completedAt)}{fu.completedByName ? ` by ${fu.completedByName}` : ''}</p>}
-
-                    {fu.status === 'pending' && (
-                      <button className="vn-btn vn-btn-success" style={{ fontSize: 11, marginTop: 8 }} onClick={() => {
-                        setCompletingFollowUp(fu);
-                        setCompleteOutcome('on_track');
-                        setCompleteNotes('');
-                      }}>
-                        <span className="material-icons" style={{ fontSize: 14 }}>check</span> Complete Review
-                      </button>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
-          </div>
+          </Card>
         )}
       </div>
 
-      {/* Complete Follow-Up Modal */}
-      {completingFollowUp && (
-        <div className="vn-modal-backdrop" onClick={() => setCompletingFollowUp(null)}>
-          <div className="vn-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
-            <div className="vn-modal-header">
-              <h3>Complete Follow-Up</h3>
-              <button onClick={() => setCompletingFollowUp(null)}><span className="material-icons">close</span></button>
+      <Dialog open={!!completingFollowUp} onOpenChange={open => { if (!open) setCompletingFollowUp(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Complete follow-up</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <Label>Outcome</Label>
+              <Select value={completeOutcome} onValueChange={setCompleteOutcome}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {Object.entries(OUTCOME_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
-            <div className="vn-modal-body">
-              <div className="vn-field">
-                <label className="vn-field-label">Outcome</label>
-                <select className="vn-input" value={completeOutcome} onChange={e => setCompleteOutcome(e.target.value)}>
-                  {Object.entries(OUTCOME_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                </select>
-              </div>
-              <div className="vn-field" style={{ marginTop: 12 }}>
-                <label className="vn-field-label">Notes</label>
-                <textarea className="vn-input" rows={3} value={completeNotes} onChange={e => setCompleteNotes(e.target.value)} placeholder="Review notes..." />
-              </div>
-            </div>
-            <div className="vn-modal-footer">
-              <button className="vn-btn" onClick={() => setCompletingFollowUp(null)}>Cancel</button>
-              <button className="vn-btn vn-btn-success" onClick={completeFollowUp}>Complete</button>
+            <div className="space-y-2">
+              <Label>Notes</Label>
+              <textarea
+                rows={3}
+                value={completeNotes}
+                onChange={e => setCompleteNotes(e.target.value)}
+                placeholder="Review notes..."
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
             </div>
           </div>
-        </div>
-      )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCompletingFollowUp(null)}>Cancel</Button>
+            <Button onClick={completeFollowUp}>Complete</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-      {/* Add Follow-Up Modal */}
-      {showAddFollowUp && (
-        <div className="vn-modal-backdrop" onClick={() => setShowAddFollowUp(false)}>
-          <div className="vn-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
-            <div className="vn-modal-header">
-              <h3>Add Follow-Up</h3>
-              <button onClick={() => setShowAddFollowUp(false)}><span className="material-icons">close</span></button>
+      <Dialog open={showAddFollowUp} onOpenChange={setShowAddFollowUp}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Add follow-up</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <Label>Type</Label>
+              <Select value={newFollowUpType} onValueChange={setNewFollowUpType}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {Object.entries(FOLLOW_UP_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
-            <div className="vn-modal-body">
-              <div className="vn-field">
-                <label className="vn-field-label">Type</label>
-                <select className="vn-input" value={newFollowUpType} onChange={e => setNewFollowUpType(e.target.value)}>
-                  {Object.entries(FOLLOW_UP_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                </select>
-              </div>
-              <div className="vn-field" style={{ marginTop: 12 }}>
-                <label className="vn-field-label">Due Date</label>
-                <input className="vn-input" type="date" value={newFollowUpDue} onChange={e => setNewFollowUpDue(e.target.value)} />
-              </div>
-              <div className="vn-field" style={{ marginTop: 12 }}>
-                <label className="vn-field-label">Notes</label>
-                <textarea className="vn-input" rows={3} value={newFollowUpNotes} onChange={e => setNewFollowUpNotes(e.target.value)} placeholder="Optional notes..." />
-              </div>
+            <div className="space-y-2">
+              <Label>Due date</Label>
+              <Input type="date" value={newFollowUpDue} onChange={e => setNewFollowUpDue(e.target.value)} />
             </div>
-            <div className="vn-modal-footer">
-              <button className="vn-btn" onClick={() => setShowAddFollowUp(false)}>Cancel</button>
-              <button className="vn-btn vn-btn-primary" onClick={addFollowUp}>Add Follow-Up</button>
+            <div className="space-y-2">
+              <Label>Notes</Label>
+              <textarea
+                rows={3}
+                value={newFollowUpNotes}
+                onChange={e => setNewFollowUpNotes(e.target.value)}
+                placeholder="Optional notes..."
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
             </div>
           </div>
-        </div>
-      )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAddFollowUp(false)}>Cancel</Button>
+            <Button variant="gradient" onClick={addFollowUp}>Add follow-up</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-      {/* Create CAPA Modal */}
-      {showCreateCapa && (
-        <div className="vn-modal-backdrop" onClick={() => setShowCreateCapa(false)}>
-          <div className="vn-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 520 }}>
-            <div className="vn-modal-header">
-              <h3>Create CAPA Report</h3>
-              <button onClick={() => setShowCreateCapa(false)}><span className="material-icons">close</span></button>
-            </div>
-            <div className="vn-modal-body">
-              <div className="vn-form-grid">
-                <div className="vn-field">
-                  <label className="vn-field-label">Issue ID *</label>
-                  <input className="vn-input" value={createIssueId} onChange={e => setCreateIssueId(e.target.value)} placeholder="Issue ID" />
-                </div>
-                <div className="vn-field">
-                  <label className="vn-field-label">Priority</label>
-                  <select className="vn-input" value={createPriority} onChange={e => setCreatePriority(e.target.value)}>
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                    <option value="critical">Critical</option>
-                  </select>
-                </div>
+      <Dialog open={showCreateCapa} onOpenChange={setShowCreateCapa}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>Create CAPA report</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Issue ID *</Label>
+                <Input value={createIssueId} onChange={e => setCreateIssueId(e.target.value)} placeholder="Issue ID" />
               </div>
-              <div className="vn-field" style={{ marginTop: 12 }}>
-                <label className="vn-field-label">Title *</label>
-                <input className="vn-input" value={createTitle} onChange={e => setCreateTitle(e.target.value)} placeholder="CAPA report title" />
-              </div>
-              <div className="vn-field" style={{ marginTop: 12 }}>
-                <label className="vn-field-label">Description *</label>
-                <textarea className="vn-input" rows={4} value={createDescription} onChange={e => setCreateDescription(e.target.value)} placeholder="Describe the issue..." />
+              <div className="space-y-2">
+                <Label>Priority</Label>
+                <Select value={createPriority} onValueChange={setCreatePriority}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="critical">Critical</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
-            <div className="vn-modal-footer">
-              <button className="vn-btn" onClick={() => setShowCreateCapa(false)}>Cancel</button>
-              <button className="vn-btn vn-btn-primary" onClick={createCapa} disabled={!createIssueId || !createTitle || !createDescription}>Create CAPA</button>
+            <div className="space-y-2">
+              <Label>Title *</Label>
+              <Input value={createTitle} onChange={e => setCreateTitle(e.target.value)} placeholder="CAPA report title" />
+            </div>
+            <div className="space-y-2">
+              <Label>Description *</Label>
+              <textarea
+                rows={4}
+                value={createDescription}
+                onChange={e => setCreateDescription(e.target.value)}
+                placeholder="Describe the issue..."
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
             </div>
           </div>
-        </div>
-      )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCreateCapa(false)}>Cancel</Button>
+            <Button variant="gradient" onClick={createCapa} disabled={!createIssueId || !createTitle || !createDescription}>
+              Create CAPA
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

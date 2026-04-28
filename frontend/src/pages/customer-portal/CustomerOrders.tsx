@@ -1,7 +1,29 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Loader2, Plus, Search } from 'lucide-react';
+
 import { API_URL } from '../../api';
 import { customerFetch } from './CustomerDashboard';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 interface Order {
   id: string; orderNumber: string; poNumber?: string; status: string;
@@ -10,8 +32,16 @@ interface Order {
   trackableUnitCount: number; lineItemCount: number; createdAt: string;
 }
 
-function statusChip(s: string): string {
-  const m: Record<string, string> = { validated: 'info', assigned: 'primary', in_transit: 'info', delivered: 'success', exception: 'error' };
+type StatusVariant = 'success' | 'info' | 'warning' | 'destructive' | 'muted' | 'default' | 'secondary';
+
+function statusVariant(s: string): StatusVariant {
+  const m: Record<string, StatusVariant> = {
+    validated: 'info',
+    assigned: 'default',
+    in_transit: 'info',
+    delivered: 'success',
+    exception: 'destructive',
+  };
   return m[s] || 'secondary';
 }
 
@@ -19,14 +49,14 @@ export default function CustomerOrders() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
     const params = new URLSearchParams();
     if (search) params.set('search', search);
-    if (statusFilter) params.set('status', statusFilter);
+    if (statusFilter !== 'all') params.set('status', statusFilter);
     customerFetch(`${API_URL}/api/v1/customer-portal/orders?${params}`)
       .then(r => r.json())
       .then(json => { setOrders(json.data?.orders || []); setTotal(json.data?.total || 0); })
@@ -35,51 +65,100 @@ export default function CustomerOrders() {
   }, [search, statusFilter]);
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>Orders</h1>
-        <Link to="/customer-portal/orders/create" className="vn-btn vn-btn-primary vn-btn-sm">
-          <span className="material-icons">add</span> New Order
-        </Link>
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-3xl font-bold tracking-tight">Orders</h1>
+        <Button variant="gradient" asChild>
+          <Link to="/customer-portal/orders/create">
+            <Plus className="h-4 w-4" />
+            New order
+          </Link>
+        </Button>
       </div>
-      <div className="vn-card">
-        <div className="vn-filters" style={{ padding: '8px 16px' }}>
-          <div className="vn-filter-group" style={{ flex: 1 }}>
-            <span className="material-icons">search</span>
-            <input className="vn-filter-input" placeholder="Search by order or PO number..." value={search} onChange={e => setSearch(e.target.value)} style={{ width: '100%' }} />
+
+      <Card>
+        <div className="flex flex-wrap items-center gap-3 p-4">
+          <div className="relative min-w-[280px] flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search by order or PO number..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="pl-9"
+            />
           </div>
-          <select className="vn-filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-            <option value="">All Statuses</option>
-            <option value="pending">Pending</option>
-            <option value="validated">Validated</option>
-            <option value="assigned">Assigned</option>
-            <option value="delivered">Delivered</option>
-            <option value="exception">Exception</option>
-          </select>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-[200px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All statuses</SelectItem>
+              <SelectItem value="pending">Pending</SelectItem>
+              <SelectItem value="validated">Validated</SelectItem>
+              <SelectItem value="assigned">Assigned</SelectItem>
+              <SelectItem value="delivered">Delivered</SelectItem>
+              <SelectItem value="exception">Exception</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
-        <div className="vn-table-wrap">
-          {loading ? <div style={{ textAlign: 'center', padding: 40 }}><div className="loading-spinner" /></div> : (
-            <table className="vn-table">
-              <thead><tr><th>Order</th><th>PO</th><th>Route</th><th>Service</th><th>Items</th><th>Status</th><th>Delivery</th></tr></thead>
-              <tbody>
-                {orders.map(o => (
-                  <tr key={o.id}>
-                    <td><span className="vn-table-id">{o.orderNumber}</span></td>
-                    <td style={{ fontSize: 13 }}>{o.poNumber || '-'}</td>
-                    <td style={{ fontSize: 13 }}>{o.originCity ? `${o.originCity}, ${o.originState}` : '-'} - {o.destinationCity ? `${o.destinationCity}, ${o.destinationState}` : '-'}</td>
-                    <td><span className="vn-chip vn-chip-secondary">{o.serviceLevel || '-'}</span></td>
-                    <td style={{ fontSize: 13 }}>{o.lineItemCount} items</td>
-                    <td><span className={`vn-chip vn-chip-${statusChip(o.status)}`}>{o.status}</span></td>
-                    <td><span className={`vn-chip vn-chip-${statusChip(o.deliveryStatus)}`}>{o.deliveryStatus}</span></td>
-                  </tr>
-                ))}
-                {orders.length === 0 && <tr><td colSpan={7} style={{ textAlign: 'center', padding: 32, color: 'var(--on-surface-variant)' }}>No orders found</td></tr>}
-              </tbody>
-            </table>
-          )}
-        </div>
-        {total > 0 && <div style={{ padding: '8px 16px', fontSize: 13, color: 'var(--on-surface-variant)' }}>{total} total orders</div>}
-      </div>
+
+        <Separator />
+
+        {loading ? (
+          <div className="flex flex-col items-center gap-3 py-12 text-muted-foreground">
+            <Loader2 className="h-6 w-6 animate-spin" />
+            <span className="text-sm">Loading orders...</span>
+          </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Order</TableHead>
+                <TableHead>PO</TableHead>
+                <TableHead>Route</TableHead>
+                <TableHead>Service</TableHead>
+                <TableHead>Items</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Delivery</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {orders.map(o => (
+                <TableRow key={o.id}>
+                  <TableCell className="font-mono text-sm font-semibold">{o.orderNumber}</TableCell>
+                  <TableCell className="text-sm">{o.poNumber || '-'}</TableCell>
+                  <TableCell className="text-sm">
+                    {o.originCity ? `${o.originCity}, ${o.originState}` : '-'} - {o.destinationCity ? `${o.destinationCity}, ${o.destinationState}` : '-'}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="muted">{o.serviceLevel || '-'}</Badge>
+                  </TableCell>
+                  <TableCell className="text-sm">{o.lineItemCount} items</TableCell>
+                  <TableCell>
+                    <Badge variant={statusVariant(o.status)}>{o.status}</Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={statusVariant(o.deliveryStatus)}>{o.deliveryStatus}</Badge>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {orders.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={7} className="py-8 text-center text-sm text-muted-foreground">
+                    No orders found
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        )}
+
+        {total > 0 && (
+          <div className="border-t border-border px-4 py-2 text-xs text-muted-foreground">
+            {total} total orders
+          </div>
+        )}
+      </Card>
     </div>
   );
 }

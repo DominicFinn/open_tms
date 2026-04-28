@@ -1,20 +1,34 @@
 import React, { useState, useEffect } from 'react';
+import { Loader2, Plus, Mail, Pencil, Trash2, Eye, Save } from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 import {
-  VnPageHeader,
-  VnCard,
-  VnButton,
-  VnChip,
-  VnField,
-  VnInput,
-  VnSelect,
-  VnTextarea,
-  VnFormGrid,
-  VnFormActions,
-  VnDataTable,
-  VnModal,
-  VnAlert,
-} from './components';
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableHead,
+  TableRow,
+  TableCell,
+} from '@/components/ui/table';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
 
 interface EmailTemplate {
   id: string;
@@ -48,25 +62,32 @@ const EMPTY_FORM: TemplateFormData = {
   description: '',
 };
 
-function Switch({
-  label,
-  checked,
-  onChange,
-}: {
-  label: string;
-  checked: boolean;
-  onChange: (v: boolean) => void;
-}) {
+function Switch({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
   return (
-    <label className="vn-switch">
+    <label className="inline-flex cursor-pointer items-center gap-2 text-sm">
       <input
         type="checkbox"
         checked={checked}
         onChange={e => onChange(e.target.checked)}
+        className="h-4 w-4 rounded border border-input bg-background accent-primary"
       />
-      <span className="vn-switch-track" />
       {label}
     </label>
+  );
+}
+
+function Banner({ variant, message, onClose }: { variant: 'success' | 'error'; message: string; onClose?: () => void }) {
+  const tone =
+    variant === 'success'
+      ? 'border-success/30 bg-success/10 text-success'
+      : 'border-destructive/30 bg-destructive/10 text-destructive';
+  return (
+    <div className={`flex items-start justify-between gap-3 rounded-md border p-3 text-sm ${tone}`}>
+      <span>{message}</span>
+      {onClose && (
+        <button onClick={onClose} className="text-xs underline opacity-70 hover:opacity-100">Dismiss</button>
+      )}
+    </div>
   );
 }
 
@@ -138,9 +159,7 @@ export default function VNextEmailTemplates() {
     setSaving(true);
     setAlert(null);
     try {
-      const url = editingId
-        ? `${API_URL}/api/v1/email/templates/${editingId}`
-        : `${API_URL}/api/v1/email/templates`;
+      const url = editingId ? `${API_URL}/api/v1/email/templates/${editingId}` : `${API_URL}/api/v1/email/templates`;
       const method = editingId ? 'PUT' : 'POST';
       const res = await fetch(url, {
         method,
@@ -197,183 +216,169 @@ export default function VNextEmailTemplates() {
     }
   }
 
-  const columns: { key: string; label: string; render?: (row: any) => React.ReactNode }[] = [
-    { key: 'name', label: 'Name' },
-    { key: 'eventType', label: 'Event Type' },
-    {
-      key: 'subject',
-      label: 'Subject',
-      render: (row: EmailTemplate) => (
-        <span style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block' }}>
-          {row.subject}
-        </span>
-      ),
-    },
-    {
-      key: 'active',
-      label: 'Active',
-      render: (row: EmailTemplate) => (
-        <VnChip variant={row.active ? 'success' : 'secondary'}>
-          {row.active ? 'Active' : 'Inactive'}
-        </VnChip>
-      ),
-    },
-    {
-      key: 'isDefault',
-      label: 'Default',
-      render: (row: EmailTemplate) => (
-        row.isDefault ? <VnChip variant="primary">Default</VnChip> : <span style={{ color: 'var(--on-surface-variant)' }}>--</span>
-      ),
-    },
-    {
-      key: 'actions',
-      label: 'Actions',
-      render: (row: EmailTemplate) => (
-        <div style={{ display: 'flex', gap: '4px' }}>
-          <VnButton variant="ghost" size="sm" icon="edit" iconOnly onClick={() => openEdit(row)} />
-          <VnButton variant="ghost" size="sm" icon="delete" iconOnly onClick={() => handleDelete(row.id)} />
-        </div>
-      ),
-    },
-  ];
-
   if (loading) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', padding: '48px' }}>
-        <div className="loading-spinner" />
+      <div className="flex justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
   return (
-    <div className="vn-page">
-      <VnPageHeader title="Email Templates" subtitle="Manage email templates for system notifications">
-        <VnButton variant="primary" icon="add" onClick={openCreate}>
-          New Template
-        </VnButton>
-      </VnPageHeader>
-
-      {alert && (
-        <div style={{ marginBottom: '16px' }}>
-          <VnAlert variant={alert.type} onClose={() => setAlert(null)}>
-            {alert.message}
-          </VnAlert>
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Email templates</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Manage email templates for system notifications</p>
         </div>
-      )}
+        <Button variant="gradient" onClick={openCreate}>
+          <Plus className="h-4 w-4" />
+          New template
+        </Button>
+      </div>
 
-      <VnCard>
-        <VnDataTable
-          columns={columns}
-          data={templates as any}
-          emptyIcon="mail"
-          emptyTitle="No email templates"
-          emptyMessage="Create your first email template to get started."
-        />
-      </VnCard>
+      {alert && <Banner variant={alert.type} message={alert.message} onClose={() => setAlert(null)} />}
 
-      <VnModal
-        open={showModal}
-        onClose={closeModal}
-        title={editingId ? 'Edit Template' : 'New Template'}
-        size="lg"
-        footer={
-          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', width: '100%' }}>
-            <VnButton variant="outline" icon="visibility" onClick={handlePreview} disabled={previewing || !form.htmlBody}>
-              {previewing ? 'Loading...' : 'Preview'}
-            </VnButton>
-            <VnButton variant="outline" onClick={closeModal}>Cancel</VnButton>
-            <VnButton variant="primary" icon="save" onClick={handleSave} disabled={saving}>
-              {saving ? 'Saving...' : editingId ? 'Update' : 'Create'}
-            </VnButton>
-          </div>
-        }
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <VnFormGrid>
-            <VnField label="Name" required>
-              <VnInput
-                value={form.name}
-                onChange={e => handleFormChange('name', e.target.value)}
-                placeholder="e.g. Shipment Confirmation"
-              />
-            </VnField>
-            <VnField label="Event Type" required>
-              <VnSelect
-                value={form.eventType}
-                onChange={e => handleFormChange('eventType', e.target.value)}
-              >
-                <option value="">Select event type...</option>
-                {supportedEventTypes.map(et => (
-                  <option key={et} value={et}>{et}</option>
+      <Card>
+        <CardContent className="p-0">
+          {templates.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 py-12 text-center text-muted-foreground">
+              <Mail className="h-8 w-8" />
+              <h3 className="text-base font-medium">No email templates</h3>
+              <p className="text-sm">Create your first email template to get started.</p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Event type</TableHead>
+                  <TableHead>Subject</TableHead>
+                  <TableHead>Active</TableHead>
+                  <TableHead>Default</TableHead>
+                  <TableHead className="w-32">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {templates.map(t => (
+                  <TableRow key={t.id}>
+                    <TableCell className="font-medium">{t.name}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{t.eventType}</TableCell>
+                    <TableCell className="max-w-[200px] truncate text-sm">{t.subject}</TableCell>
+                    <TableCell>
+                      <Badge variant={t.active ? 'success' : 'secondary'}>{t.active ? 'Active' : 'Inactive'}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      {t.isDefault ? <Badge variant="info">Default</Badge> : <span className="text-muted-foreground">--</span>}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex gap-1">
+                        <Button variant="ghost" size="icon" onClick={() => openEdit(t)}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => handleDelete(t.id)}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </VnSelect>
-            </VnField>
-          </VnFormGrid>
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
 
-          <VnField label="Description">
-            <VnInput
-              value={form.description}
-              onChange={e => handleFormChange('description', e.target.value)}
-              placeholder="Brief description of when this template is used"
-            />
-          </VnField>
+      <Dialog open={showModal} onOpenChange={open => !open && closeModal()}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>{editingId ? 'Edit template' : 'New template'}</DialogTitle>
+          </DialogHeader>
 
-          <VnField label="Subject" required>
-            <VnInput
-              value={form.subject}
-              onChange={e => handleFormChange('subject', e.target.value)}
-              placeholder="Email subject line"
-            />
-          </VnField>
+          <div className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Name</Label>
+                <Input value={form.name} onChange={e => handleFormChange('name', e.target.value)} placeholder="e.g. Shipment Confirmation" />
+              </div>
+              <div className="space-y-2">
+                <Label>Event type</Label>
+                <Select value={form.eventType} onValueChange={v => handleFormChange('eventType', v)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select event type..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {supportedEventTypes.map(et => (
+                      <SelectItem key={et} value={et}>{et}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
 
-          <VnField label="HTML Body">
-            <VnTextarea
-              value={form.htmlBody}
-              onChange={e => handleFormChange('htmlBody', e.target.value)}
-              placeholder="<html>...</html>"
-              rows={10}
-              style={{ fontFamily: 'monospace', fontSize: '13px' }}
-            />
-          </VnField>
+            <div className="space-y-2">
+              <Label>Description</Label>
+              <Input value={form.description} onChange={e => handleFormChange('description', e.target.value)} placeholder="Brief description of when this template is used" />
+            </div>
 
-          <VnField label="Text Body">
-            <VnTextarea
-              value={form.textBody}
-              onChange={e => handleFormChange('textBody', e.target.value)}
-              placeholder="Plain text version of the email"
-              rows={5}
-            />
-          </VnField>
+            <div className="space-y-2">
+              <Label>Subject</Label>
+              <Input value={form.subject} onChange={e => handleFormChange('subject', e.target.value)} placeholder="Email subject line" />
+            </div>
 
-          <VnField label="Status">
-            <div style={{ marginTop: '4px' }}>
-              <Switch
-                label="Template is active"
-                checked={form.active}
-                onChange={v => handleFormChange('active', v)}
+            <div className="space-y-2">
+              <Label>HTML body</Label>
+              <textarea
+                value={form.htmlBody}
+                onChange={e => handleFormChange('htmlBody', e.target.value)}
+                placeholder="<html>...</html>"
+                rows={10}
+                className="flex w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               />
             </div>
-          </VnField>
-        </div>
-      </VnModal>
 
-      <VnModal
-        open={showPreview}
-        onClose={() => setShowPreview(false)}
-        title="Email Preview"
-        size="xl"
-      >
-        <div
-          style={{
-            border: '1px solid var(--outline-variant)',
-            borderRadius: '8px',
-            padding: '16px',
-            background: 'var(--surface-container-lowest)',
-            minHeight: '300px',
-          }}
-          dangerouslySetInnerHTML={{ __html: previewHtml }}
-        />
-      </VnModal>
+            <div className="space-y-2">
+              <Label>Text body</Label>
+              <textarea
+                value={form.textBody}
+                onChange={e => handleFormChange('textBody', e.target.value)}
+                placeholder="Plain text version of the email"
+                rows={5}
+                className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Status</Label>
+              <Switch label="Template is active" checked={form.active} onChange={v => handleFormChange('active', v)} />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={handlePreview} disabled={previewing || !form.htmlBody}>
+              <Eye className="h-4 w-4" />
+              {previewing ? 'Loading...' : 'Preview'}
+            </Button>
+            <Button variant="outline" onClick={closeModal}>Cancel</Button>
+            <Button variant="gradient" onClick={handleSave} disabled={saving}>
+              <Save className="h-4 w-4" />
+              {saving ? 'Saving...' : editingId ? 'Update' : 'Create'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showPreview} onOpenChange={setShowPreview}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Email preview</DialogTitle>
+          </DialogHeader>
+          <div
+            className="min-h-[300px] rounded-md border bg-background p-4"
+            dangerouslySetInnerHTML={{ __html: previewHtml }}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

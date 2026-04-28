@@ -1,7 +1,30 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import {
+  ArrowLeft,
+  Building2,
+  ChevronRight,
+  CircleAlert,
+  CreditCard,
+  Loader2,
+  Save,
+  Settings2,
+  User,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
 import CustomerUserManagement from '../components/CustomerUserManagement';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 export default function VNextCreateCustomer() {
   const { id } = useParams();
@@ -81,166 +104,211 @@ export default function VNextCreateCustomer() {
     }
   };
 
-  if (loading) return <div className="loading-spinner" style={{ margin: '2rem auto' }} />;
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
 
   return (
-    <>
-      <div className="vn-page-header">
-        <div>
-          <div style={{ fontSize: 13, color: 'var(--on-surface-variant)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
-            <Link to="/customers" style={{ color: 'var(--primary)', textDecoration: 'none' }}>Customers</Link>
-            <span className="material-icons" style={{ fontSize: 16 }}>chevron_right</span>
-            <span>{isEdit ? 'Edit Customer' : 'New Customer'}</span>
-          </div>
-          <h1>{isEdit ? 'Edit Customer' : 'New Customer'}</h1>
-        </div>
+    <div className="space-y-6">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Link to="/customers" className="hover:text-foreground">
+          <ArrowLeft className="inline h-4 w-4" /> Customers
+        </Link>
+        <ChevronRight className="h-3 w-3" />
+        <span>{isEdit ? 'Edit customer' : 'New customer'}</span>
       </div>
 
-      <div className="vn-card">
-        <div className="vn-card-body" style={{ padding: 0 }}>
+      <h1 className="text-3xl font-bold tracking-tight">{isEdit ? 'Edit customer' : 'New customer'}</h1>
 
-          {/* Company Information */}
-          <div className="vn-form-section">
-            <div className="vn-form-section-title">
-              <span className="material-icons">business</span>
-              Company Information
-            </div>
-            <div className="vn-form-grid">
-              <div className="vn-field">
-                <label className="vn-field-label">Company Name</label>
-                <input className="vn-input" type="text" placeholder="Company name" value={companyName} onChange={e => setCompanyName(e.target.value)} />
-              </div>
-              <div className="vn-field">
-                <label className="vn-field-label">Industry</label>
-                <select className="vn-select" value={industry} onChange={e => setIndustry(e.target.value)}>
-                  <option value="">Select industry...</option>
-                  <option value="Manufacturing">Manufacturing</option>
-                  <option value="Retail">Retail</option>
-                  <option value="Logistics">Logistics</option>
-                  <option value="Food & Beverage">Food &amp; Beverage</option>
-                  <option value="Other">Other</option>
-                </select>
-              </div>
-            </div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Building2 className="h-4 w-4 text-primary" />
+            Company information
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label>Company name</Label>
+            <Input type="text" placeholder="Company name" value={companyName} onChange={e => setCompanyName(e.target.value)} />
           </div>
-
-          {/* Primary Contact */}
-          <div className="vn-form-section">
-            <div className="vn-form-section-title">
-              <span className="material-icons">person</span>
-              Primary Contact
-            </div>
-            <div className="vn-form-grid">
-              <div className="vn-field">
-                <label className="vn-field-label">Contact Name</label>
-                <input className="vn-input" type="text" placeholder="Full name" value={contactName} onChange={e => setContactName(e.target.value)} />
-              </div>
-              <div className="vn-field">
-                <label className="vn-field-label">Email</label>
-                <input className="vn-input" type="email" placeholder="email@example.com" value={email} onChange={e => setEmail(e.target.value)} />
-              </div>
-              <div className="vn-field">
-                <label className="vn-field-label">Phone</label>
-                <input className="vn-input" type="tel" placeholder="(555) 000-0000" value={phone} onChange={e => setPhone(e.target.value)} />
-              </div>
-            </div>
+          <div className="space-y-2">
+            <Label>Industry</Label>
+            <Select value={industry} onValueChange={setIndustry}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select industry..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Manufacturing">Manufacturing</SelectItem>
+                <SelectItem value="Retail">Retail</SelectItem>
+                <SelectItem value="Logistics">Logistics</SelectItem>
+                <SelectItem value="Food &amp; Beverage">Food &amp; Beverage</SelectItem>
+                <SelectItem value="Other">Other</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
+        </CardContent>
+      </Card>
 
-          {/* Billing */}
-          <div className="vn-form-section">
-            <div className="vn-form-section-title">
-              <span className="material-icons">payments</span>
-              Billing
-            </div>
-            <div className="vn-form-grid">
-              <div className="vn-field">
-                <label className="vn-field-label">Payment Terms</label>
-                <select className="vn-select" value={paymentTerms} onChange={e => setPaymentTerms(e.target.value)}>
-                  <option value="Net 30">Net 30</option>
-                  <option value="Net 60">Net 60</option>
-                  <option value="Net 90">Net 90</option>
-                  <option value="Prepaid">Prepaid</option>
-                </select>
-              </div>
-              <div className="vn-field">
-                <label className="vn-field-label">Billing Email</label>
-                <input className="vn-input" type="email" placeholder="billing@example.com" value={billingEmail} onChange={e => setBillingEmail(e.target.value)} />
-              </div>
-              <div className="vn-field">
-                <label className="vn-field-label">Currency</label>
-                <select className="vn-select" value={currency} onChange={e => setCurrency(e.target.value)}>
-                  <option value="USD">USD</option>
-                  <option value="EUR">EUR</option>
-                  <option value="GBP">GBP</option>
-                  <option value="CAD">CAD</option>
-                </select>
-              </div>
-              <div className="vn-field">
-                <label className="vn-field-label">Credit Limit ($)</label>
-                <input className="vn-input" type="number" min="0" step="100" placeholder="No limit" value={creditLimit} onChange={e => setCreditLimit(e.target.value)} />
-              </div>
-              <div className="vn-field">
-                <label className="vn-field-label">Invoice Consolidation</label>
-                <select className="vn-select" value={invoiceConsolidation} onChange={e => setInvoiceConsolidation(e.target.value)}>
-                  <option value="per_shipment">Per Shipment</option>
-                  <option value="weekly">Weekly</option>
-                  <option value="monthly">Monthly</option>
-                </select>
-              </div>
-              <div className="vn-field">
-                <label className="vn-field-label">Tax ID (VAT/EIN)</label>
-                <input className="vn-input" type="text" placeholder="e.g. 12-3456789" value={taxId} onChange={e => setTaxId(e.target.value)} />
-              </div>
-              <div className="vn-field">
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                  <input type="checkbox" checked={autoInvoice} onChange={e => setAutoInvoice(e.target.checked)} />
-                  <span className="vn-field-label" style={{ margin: 0 }}>Auto-generate draft invoices on delivery</span>
-                </label>
-              </div>
-            </div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <User className="h-4 w-4 text-primary" />
+            Primary contact
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-3">
+          <div className="space-y-2">
+            <Label>Contact name</Label>
+            <Input type="text" placeholder="Full name" value={contactName} onChange={e => setContactName(e.target.value)} />
           </div>
-
-          {/* Preferences */}
-          <div className="vn-form-section">
-            <div className="vn-form-section-title">
-              <span className="material-icons">tune</span>
-              Preferences
-            </div>
-            <div className="vn-form-grid">
-              <div className="vn-field">
-                <label className="vn-field-label">Default Mode</label>
-                <select className="vn-select" value={defaultMode} onChange={e => setDefaultMode(e.target.value)}>
-                  <option value="FTL">FTL</option>
-                  <option value="LTL">LTL</option>
-                </select>
-              </div>
-              <div className="vn-field vn-col-span-2">
-                <label className="vn-field-label">Notes</label>
-                <textarea className="vn-textarea" rows={3} placeholder="Additional notes about this customer..." value={notes} onChange={e => setNotes(e.target.value)} />
-              </div>
-            </div>
+          <div className="space-y-2">
+            <Label>Email</Label>
+            <Input type="email" placeholder="email@example.com" value={email} onChange={e => setEmail(e.target.value)} />
           </div>
+          <div className="space-y-2">
+            <Label>Phone</Label>
+            <Input type="tel" placeholder="(555) 000-0000" value={phone} onChange={e => setPhone(e.target.value)} />
+          </div>
+        </CardContent>
+      </Card>
 
-        </div>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <CreditCard className="h-4 w-4 text-primary" />
+            Billing
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label>Payment terms</Label>
+            <Select value={paymentTerms} onValueChange={setPaymentTerms}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Net 30">Net 30</SelectItem>
+                <SelectItem value="Net 60">Net 60</SelectItem>
+                <SelectItem value="Net 90">Net 90</SelectItem>
+                <SelectItem value="Prepaid">Prepaid</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Billing email</Label>
+            <Input type="email" placeholder="billing@example.com" value={billingEmail} onChange={e => setBillingEmail(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>Currency</Label>
+            <Select value={currency} onValueChange={setCurrency}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="USD">USD</SelectItem>
+                <SelectItem value="EUR">EUR</SelectItem>
+                <SelectItem value="GBP">GBP</SelectItem>
+                <SelectItem value="CAD">CAD</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Credit limit ($)</Label>
+            <Input type="number" min="0" step="100" placeholder="No limit" value={creditLimit} onChange={e => setCreditLimit(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>Invoice consolidation</Label>
+            <Select value={invoiceConsolidation} onValueChange={setInvoiceConsolidation}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="per_shipment">Per shipment</SelectItem>
+                <SelectItem value="weekly">Weekly</SelectItem>
+                <SelectItem value="monthly">Monthly</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Tax ID (VAT/EIN)</Label>
+            <Input type="text" placeholder="e.g. 12-3456789" value={taxId} onChange={e => setTaxId(e.target.value)} />
+          </div>
+          <div className="flex items-end">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={autoInvoice}
+                onChange={e => setAutoInvoice(e.target.checked)}
+                className="h-4 w-4 rounded border border-input bg-background accent-primary"
+              />
+              Auto-generate draft invoices on delivery
+            </label>
+          </div>
+        </CardContent>
+      </Card>
 
-      {submitError && <div className="vn-alert vn-alert-error" style={{ marginBottom: 16 }}>{submitError}</div>}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Settings2 className="h-4 w-4 text-primary" />
+            Preferences
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label>Default mode</Label>
+            <Select value={defaultMode} onValueChange={setDefaultMode}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="FTL">FTL</SelectItem>
+                <SelectItem value="LTL">LTL</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2 md:col-span-2">
+            <Label>Notes</Label>
+            <textarea
+              rows={3}
+              placeholder="Additional notes about this customer..."
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+              className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            />
+          </div>
+        </CardContent>
+      </Card>
 
-      {/* Form Actions */}
-      <div className="vn-form-actions">
-        <Link to="/customers" className="vn-btn vn-btn-outline">Cancel</Link>
-        <button className="vn-btn vn-btn-primary" onClick={handleSubmit} disabled={submitting}>
-          <span className="material-icons">save</span>
-          {submitting ? 'Saving...' : isEdit ? 'Update Customer' : 'Create Customer'}
-        </button>
-      </div>
-
-      {/* Customer Portal User Management (edit mode only) */}
-      {isEdit && id && (
-        <div className="vn-card" style={{ marginTop: 24, padding: 20 }}>
-          <CustomerUserManagement customerId={id} customerName={companyName} />
+      {submitError && (
+        <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+          <CircleAlert className="h-5 w-5" />
+          {submitError}
         </div>
       )}
-    </>
+
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <Button variant="outline" asChild>
+          <Link to="/customers">Cancel</Link>
+        </Button>
+        <Button variant="gradient" onClick={handleSubmit} disabled={submitting}>
+          <Save className="h-4 w-4" />
+          {submitting ? 'Saving...' : isEdit ? 'Update customer' : 'Create customer'}
+        </Button>
+      </div>
+
+      {isEdit && id && (
+        <Card>
+          <CardContent className="p-5">
+            <CustomerUserManagement customerId={id} customerName={companyName} />
+          </CardContent>
+        </Card>
+      )}
+    </div>
   );
 }

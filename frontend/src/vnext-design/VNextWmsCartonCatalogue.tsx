@@ -1,5 +1,35 @@
 import React, { useState, useEffect } from 'react';
+import { Archive, ArchiveRestore, CircleAlert, Edit, Info, Loader2, Package, Plus, Trash2 } from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 
 interface Carton {
   id: string; name: string;
@@ -200,183 +230,237 @@ export default function VNextWmsCartonCatalogue() {
   const volumeLitres = (c: Carton) => ((c.lengthMm * c.widthMm * c.heightMm) / 1e6).toFixed(1);
 
   return (
-    <div>
-      <div className="vn-page-header">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1>Carton Catalogue</h1>
-          <p className="vn-page-subtitle">Available carton sizes for packing recommendations</p>
+          <h1 className="text-3xl font-bold tracking-tight">Carton Catalogue</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Available carton sizes for packing recommendations</p>
         </div>
-        <div className="vn-page-actions">
-          <button className="vn-btn vn-btn-primary" onClick={openCreate}>
-            <span className="material-icons" style={{ fontSize: '18px', marginRight: '0.5rem' }}>add</span>Add Carton
-          </button>
-        </div>
+        <Button variant="gradient" onClick={openCreate}>
+          <Plus className="h-4 w-4" />
+          Add Carton
+        </Button>
       </div>
 
-      {error && <div className="vn-alert vn-alert-error" style={{ marginBottom: '1rem' }}>{error}</div>}
-      {notice && <div className="vn-alert vn-alert-info" style={{ marginBottom: '1rem' }}>{notice}</div>}
-
-      {showModal && (
-        <div className="vn-modal-backdrop" onClick={() => setShowModal(false)}>
-          <div className="vn-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
-            <div className="vn-modal-header">
-              <h3>{editingId ? 'Edit Carton' : 'Add Carton Size'}</h3>
-              <button onClick={() => setShowModal(false)}><span className="material-icons">close</span></button>
-            </div>
-            <form onSubmit={handleSave}>
-              <div className="vn-modal-body">
-                <div className="vn-form-grid">
-                  <div className="vn-field" style={{ gridColumn: '1 / -1' }}><label className="vn-field-label">Name *</label><input className="vn-input" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder='e.g. "Small Mailer", "Medium Box"' required /></div>
-                  <div className="vn-field"><label className="vn-field-label">Length (mm) *</label><input className="vn-input" type="number" min="1" value={form.lengthMm} onChange={e => setForm({ ...form, lengthMm: e.target.value })} required /></div>
-                  <div className="vn-field"><label className="vn-field-label">Width (mm) *</label><input className="vn-input" type="number" min="1" value={form.widthMm} onChange={e => setForm({ ...form, widthMm: e.target.value })} required /></div>
-                  <div className="vn-field"><label className="vn-field-label">Height (mm) *</label><input className="vn-input" type="number" min="1" value={form.heightMm} onChange={e => setForm({ ...form, heightMm: e.target.value })} required /></div>
-                  <div className="vn-field"><label className="vn-field-label">Max Weight (g) *</label><input className="vn-input" type="number" min="1" value={form.maxWeightGrams} onChange={e => setForm({ ...form, maxWeightGrams: e.target.value })} required /></div>
-                  <div className="vn-field" style={{ gridColumn: '1 / -1' }}><label className="vn-field-label">Unit Cost (cents)</label><input className="vn-input" type="number" min="0" value={form.unitCostCents} onChange={e => setForm({ ...form, unitCostCents: e.target.value })} placeholder="Optional" /></div>
-                </div>
-
-                <h4 style={{ margin: '16px 0 8px', fontSize: 13, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Container intelligence</h4>
-                <div className="vn-form-grid">
-                  <div className="vn-field">
-                    <label className="vn-field-label">Temperature zone</label>
-                    <select className="vn-input" value={form.temperatureZone} onChange={e => setForm({ ...form, temperatureZone: e.target.value })}>
-                      <option value="any">Any (ambient)</option>
-                      <option value="ambient">Ambient</option>
-                      <option value="refrigerated">Refrigerated</option>
-                      <option value="frozen">Frozen</option>
-                      <option value="dry_ice">Dry ice</option>
-                    </select>
-                  </div>
-                  <div className="vn-field">
-                    <label className="vn-field-label">Value class</label>
-                    <select className="vn-input" value={form.valueClass} onChange={e => setForm({ ...form, valueClass: e.target.value })}>
-                      <option value="any">Any</option>
-                      <option value="standard">Standard</option>
-                      <option value="high_value">High-value</option>
-                    </select>
-                  </div>
-                  <div className="vn-field">
-                    <label className="vn-field-label">Material</label>
-                    <select className="vn-input" value={form.materialType} onChange={e => setForm({ ...form, materialType: e.target.value })}>
-                      <option value="corrugated">Corrugated</option>
-                      <option value="plastic">Plastic</option>
-                      <option value="metal">Metal</option>
-                      <option value="foam">Foam</option>
-                      <option value="composite">Composite</option>
-                    </select>
-                  </div>
-                  <div className="vn-field">
-                    <label className="vn-field-label">Insulation hours (optional)</label>
-                    <input className="vn-input" type="number" min="0" value={form.insulationHours} onChange={e => setForm({ ...form, insulationHours: e.target.value })} placeholder="e.g. 24" />
-                  </div>
-                  <div className="vn-field" style={{ gridColumn: '1 / -1' }}>
-                    <label className="vn-field-label">Hazmat UN classes (comma-separated, e.g. "3, 5.1")</label>
-                    <input className="vn-input" value={form.hazmatClasses} onChange={e => setForm({ ...form, hazmatClasses: e.target.value })} placeholder="Leave blank for non-hazmat" />
-                  </div>
-                </div>
-                <div style={{ marginTop: 8, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <input type="checkbox" checked={form.insulated} onChange={e => setForm({ ...form, insulated: e.target.checked })} /> Insulated
-                  </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <input type="checkbox" checked={form.tamperEvident} onChange={e => setForm({ ...form, tamperEvident: e.target.checked })} /> Tamper-evident
-                  </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <input type="checkbox" checked={form.hazmatRated} onChange={e => setForm({ ...form, hazmatRated: e.target.checked })} /> Hazmat-rated
-                  </label>
-                </div>
-              </div>
-              <div className="vn-modal-footer">
-                <button type="button" className="vn-btn vn-btn-outline" onClick={() => setShowModal(false)}>Cancel</button>
-                <button type="submit" className="vn-btn vn-btn-primary" disabled={busy}>{busy ? 'Saving...' : editingId ? 'Save changes' : 'Create carton'}</button>
-              </div>
-            </form>
-          </div>
+      {error && (
+        <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+          <CircleAlert className="h-5 w-5" />
+          {error}
+        </div>
+      )}
+      {notice && (
+        <div className="flex items-center gap-3 rounded-md border border-info/30 bg-info/10 p-4 text-sm text-info">
+          <Info className="h-5 w-5" />
+          {notice}
         </div>
       )}
 
-      <div className="vn-filters" style={{ marginBottom: '1rem' }}>
-        <select className="vn-filter-select" value={selectedLocation} onChange={e => setSelectedLocation(e.target.value)}>
-          {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-        </select>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto', fontSize: 13 }}>
-          <input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} />
+      <Dialog open={showModal} onOpenChange={setShowModal}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{editingId ? 'Edit Carton' : 'Add Carton Size'}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSave} className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2 md:col-span-2">
+                <Label>Name *</Label>
+                <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder='e.g. "Small Mailer", "Medium Box"' required />
+              </div>
+              <div className="space-y-2">
+                <Label>Length (mm) *</Label>
+                <Input type="number" min="1" value={form.lengthMm} onChange={e => setForm({ ...form, lengthMm: e.target.value })} required />
+              </div>
+              <div className="space-y-2">
+                <Label>Width (mm) *</Label>
+                <Input type="number" min="1" value={form.widthMm} onChange={e => setForm({ ...form, widthMm: e.target.value })} required />
+              </div>
+              <div className="space-y-2">
+                <Label>Height (mm) *</Label>
+                <Input type="number" min="1" value={form.heightMm} onChange={e => setForm({ ...form, heightMm: e.target.value })} required />
+              </div>
+              <div className="space-y-2">
+                <Label>Max Weight (g) *</Label>
+                <Input type="number" min="1" value={form.maxWeightGrams} onChange={e => setForm({ ...form, maxWeightGrams: e.target.value })} required />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label>Unit Cost (cents)</Label>
+                <Input type="number" min="0" value={form.unitCostCents} onChange={e => setForm({ ...form, unitCostCents: e.target.value })} placeholder="Optional" />
+              </div>
+            </div>
+
+            <h4 className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Container intelligence</h4>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Temperature zone</Label>
+                <Select value={form.temperatureZone} onValueChange={v => setForm({ ...form, temperatureZone: v })}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="any">Any (ambient)</SelectItem>
+                    <SelectItem value="ambient">Ambient</SelectItem>
+                    <SelectItem value="refrigerated">Refrigerated</SelectItem>
+                    <SelectItem value="frozen">Frozen</SelectItem>
+                    <SelectItem value="dry_ice">Dry ice</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Value class</Label>
+                <Select value={form.valueClass} onValueChange={v => setForm({ ...form, valueClass: v })}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="any">Any</SelectItem>
+                    <SelectItem value="standard">Standard</SelectItem>
+                    <SelectItem value="high_value">High-value</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Material</Label>
+                <Select value={form.materialType} onValueChange={v => setForm({ ...form, materialType: v })}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="corrugated">Corrugated</SelectItem>
+                    <SelectItem value="plastic">Plastic</SelectItem>
+                    <SelectItem value="metal">Metal</SelectItem>
+                    <SelectItem value="foam">Foam</SelectItem>
+                    <SelectItem value="composite">Composite</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Insulation hours (optional)</Label>
+                <Input type="number" min="0" value={form.insulationHours} onChange={e => setForm({ ...form, insulationHours: e.target.value })} placeholder="e.g. 24" />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label>Hazmat UN classes (comma-separated, e.g. "3, 5.1")</Label>
+                <Input value={form.hazmatClasses} onChange={e => setForm({ ...form, hazmatClasses: e.target.value })} placeholder="Leave blank for non-hazmat" />
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={form.insulated} onChange={e => setForm({ ...form, insulated: e.target.checked })} className="h-4 w-4 rounded border border-input bg-background accent-primary" /> Insulated
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={form.tamperEvident} onChange={e => setForm({ ...form, tamperEvident: e.target.checked })} className="h-4 w-4 rounded border border-input bg-background accent-primary" /> Tamper-evident
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={form.hazmatRated} onChange={e => setForm({ ...form, hazmatRated: e.target.checked })} className="h-4 w-4 rounded border border-input bg-background accent-primary" /> Hazmat-rated
+              </label>
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" type="button" onClick={() => setShowModal(false)}>Cancel</Button>
+              <Button variant="gradient" type="submit" disabled={busy}>{busy ? 'Saving...' : editingId ? 'Save changes' : 'Create carton'}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Select value={selectedLocation} onValueChange={setSelectedLocation}>
+          <SelectTrigger className="w-[260px]">
+            <SelectValue placeholder="Select location" />
+          </SelectTrigger>
+          <SelectContent>
+            {locations.map(l => (
+              <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <label className="ml-auto flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={showArchived}
+            onChange={e => setShowArchived(e.target.checked)}
+            className="h-4 w-4 rounded border border-input bg-background accent-primary"
+          />
           Show archived
         </label>
       </div>
 
       {loading ? (
-        <div style={{ padding: '2rem', textAlign: 'center' }}><div className="vn-loading-spinner" /></div>
-      ) : cartons.length === 0 ? (
-        <div className="vn-card" style={{ textAlign: 'center', padding: '3rem' }}>
-          <span className="material-icons" style={{ fontSize: '48px', color: 'var(--text-secondary)', marginBottom: '1rem', display: 'block' }}>inventory_2</span>
-          <h3>No carton sizes defined</h3>
-          <p style={{ color: 'var(--text-secondary)' }}>Add your available box sizes to enable automatic carton recommendations at packing.</p>
+        <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+          <Loader2 className="h-8 w-8 animate-spin" />
         </div>
+      ) : cartons.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+            <Package className="h-12 w-12 text-muted-foreground" />
+            <h3 className="text-base font-medium">No carton sizes defined</h3>
+            <p className="text-sm text-muted-foreground">Add your available box sizes to enable automatic carton recommendations at packing.</p>
+          </CardContent>
+        </Card>
       ) : (
-        <div className="vn-table-wrap">
-          <table className="vn-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>L x W x H (mm)</th>
-                <th>Volume (L)</th>
-                <th>Max Weight (g)</th>
-                <th>Temp</th>
-                <th>Value</th>
-                <th>Hazmat</th>
-                <th>Material</th>
-                <th>Cost</th>
-                <th style={{ textAlign: 'right' }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
+        <Card>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>L x W x H (mm)</TableHead>
+                <TableHead>Volume (L)</TableHead>
+                <TableHead>Max Weight (g)</TableHead>
+                <TableHead>Temp</TableHead>
+                <TableHead>Value</TableHead>
+                <TableHead>Hazmat</TableHead>
+                <TableHead>Material</TableHead>
+                <TableHead>Cost</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {cartons.map(c => (
-                <tr key={c.id} style={{ opacity: c.active ? 1 : 0.55 }}>
-                  <td>
-                    <strong>{c.name}</strong>
-                    {!c.active && <span className="vn-chip vn-chip-secondary" style={{ marginLeft: 6, fontSize: 10 }}>archived</span>}
-                    {c.insulated && <span className="vn-chip vn-chip-info" style={{ marginLeft: 6, fontSize: 10 }}>insulated{c.insulationHours ? ` ${c.insulationHours}h` : ''}</span>}
-                    {c.tamperEvident && <span className="vn-chip vn-chip-warning" style={{ marginLeft: 6, fontSize: 10 }}>tamper-evident</span>}
-                  </td>
-                  <td>{c.lengthMm} x {c.widthMm} x {c.heightMm}</td>
-                  <td>{volumeLitres(c)}</td>
-                  <td>{c.maxWeightGrams.toLocaleString()}</td>
-                  <td><span className="vn-chip vn-chip-secondary" style={{ fontSize: 11 }}>{c.temperatureZone}</span></td>
-                  <td><span className="vn-chip vn-chip-secondary" style={{ fontSize: 11 }}>{c.valueClass}</span></td>
-                  <td>
+                <TableRow key={c.id} className={cn(!c.active && 'opacity-55')}>
+                  <TableCell>
+                    <span className="font-semibold">{c.name}</span>
+                    {!c.active && <Badge variant="muted" className="ml-2">archived</Badge>}
+                    {c.insulated && <Badge variant="info" className="ml-2">insulated{c.insulationHours ? ` ${c.insulationHours}h` : ''}</Badge>}
+                    {c.tamperEvident && <Badge variant="warning" className="ml-2">tamper-evident</Badge>}
+                  </TableCell>
+                  <TableCell>{c.lengthMm} x {c.widthMm} x {c.heightMm}</TableCell>
+                  <TableCell>{volumeLitres(c)}</TableCell>
+                  <TableCell>{c.maxWeightGrams.toLocaleString()}</TableCell>
+                  <TableCell><Badge variant="secondary">{c.temperatureZone}</Badge></TableCell>
+                  <TableCell><Badge variant="secondary">{c.valueClass}</Badge></TableCell>
+                  <TableCell>
                     {c.hazmatRated
-                      ? <span className="vn-chip vn-chip-error" style={{ fontSize: 11 }}>{(c.hazmatClasses ?? []).join(', ') || 'yes'}</span>
-                      : <span className="vn-table-secondary">-</span>}
-                  </td>
-                  <td>{c.materialType}</td>
-                  <td>{c.unitCostCents != null ? `$${(c.unitCostCents / 100).toFixed(2)}` : '--'}</td>
-                  <td>
-                    <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+                      ? <Badge variant="destructive">{(c.hazmatClasses ?? []).join(', ') || 'yes'}</Badge>
+                      : <span className="text-muted-foreground">-</span>}
+                  </TableCell>
+                  <TableCell>{c.materialType}</TableCell>
+                  <TableCell>{c.unitCostCents != null ? `$${(c.unitCostCents / 100).toFixed(2)}` : '-'}</TableCell>
+                  <TableCell className="text-right">
+                    <div className="inline-flex justify-end gap-1">
                       {c.active ? (
                         <>
-                          <button className="vn-btn-icon" onClick={() => openEdit(c)} title="Edit">
-                            <span className="material-icons" style={{ fontSize: 18 }}>edit</span>
-                          </button>
-                          <button className="vn-btn-icon" onClick={() => handleArchive(c)} title="Archive">
-                            <span className="material-icons" style={{ fontSize: 18 }}>archive</span>
-                          </button>
-                          <button className="vn-btn-icon" onClick={() => handleDelete(c)} title="Delete">
-                            <span className="material-icons" style={{ fontSize: 18, color: 'var(--error)' }}>delete_outline</span>
-                          </button>
+                          <Button variant="ghost" size="icon" onClick={() => openEdit(c)} title="Edit">
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={() => handleArchive(c)} title="Archive">
+                            <Archive className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={() => handleDelete(c)} title="Delete">
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
                         </>
                       ) : (
-                        <button className="vn-btn vn-btn-sm vn-btn-outline" onClick={() => handleRestore(c)} title="Restore">
-                          <span className="material-icons" style={{ fontSize: 16 }}>unarchive</span>
+                        <Button variant="outline" size="sm" onClick={() => handleRestore(c)} title="Restore">
+                          <ArchiveRestore className="h-4 w-4" />
                           Restore
-                        </button>
+                        </Button>
                       )}
                     </div>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </TableBody>
+          </Table>
+        </Card>
       )}
     </div>
   );

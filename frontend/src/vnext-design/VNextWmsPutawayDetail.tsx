@@ -1,8 +1,32 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { API_URL } from '../api';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import {
+  AlertTriangle,
+  ArrowLeft,
+  ArrowRight,
+  CheckCircle2,
+  ChevronRight,
+  CircleAlert,
+  FlaskConical,
+  Loader2,
+  Snowflake,
+  Thermometer,
+} from 'lucide-react';
 
-/* ── Types ────────────────────────────────────────────────── */
+import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 interface PutawayTaskDetail {
   id: string;
@@ -40,24 +64,22 @@ interface PutawayTaskDetail {
   createdAt: string;
 }
 
-/* ── Helpers ──────────────────────────────────────────────── */
+type BadgeVariant = 'success' | 'info' | 'warning' | 'destructive' | 'muted' | 'secondary' | 'default';
 
-function statusChip(s: string): string {
+function statusVariant(s: string): BadgeVariant {
   switch (s) {
-    case 'pending': return 'vn-chip-secondary';
-    case 'assigned': return 'vn-chip-info';
-    case 'in_progress': return 'vn-chip-warning';
-    case 'completed': return 'vn-chip-success';
-    case 'cancelled': return 'vn-chip-error';
-    default: return 'vn-chip-secondary';
+    case 'pending': return 'secondary';
+    case 'assigned': return 'info';
+    case 'in_progress': return 'warning';
+    case 'completed': return 'success';
+    case 'cancelled': return 'destructive';
+    default: return 'secondary';
   }
 }
 
 function formatStatus(s: string): string {
   return s.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 }
-
-/* ── Component ────────────────────────────────────────────── */
 
 export default function VNextWmsPutawayDetail() {
   const { id } = useParams<{ id: string }>();
@@ -66,7 +88,6 @@ export default function VNextWmsPutawayDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Scan-to-confirm state
   const [scannedBinLabel, setScannedBinLabel] = useState('');
   const [completing, setCompleting] = useState(false);
   const [completionResult, setCompletionResult] = useState<any>(null);
@@ -113,10 +134,19 @@ export default function VNextWmsPutawayDetail() {
   };
 
   if (loading) {
-    return <div style={{ padding: '2rem', textAlign: 'center' }}><div className="vn-loading-spinner" /></div>;
+    return (
+      <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
   }
   if (error && !task) {
-    return <div className="vn-alert vn-alert-error">{error}</div>;
+    return (
+      <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+        <CircleAlert className="h-5 w-5" />
+        {error}
+      </div>
+    );
   }
   if (!task) return null;
 
@@ -126,235 +156,260 @@ export default function VNextWmsPutawayDetail() {
   const hasHazmat = unit.lineItems.some(li => li.hazmat);
 
   return (
-    <div>
-      <div className="vn-page-header">
+    <div className="space-y-6">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Link to="/wms/putaway" className="hover:text-foreground">
+          <ArrowLeft className="inline h-4 w-4" /> Putaway
+        </Link>
+        <ChevronRight className="h-3 w-3" />
+        <span>{task.id.slice(0, 8)}</span>
+      </div>
+
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1>Putaway Task</h1>
-          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-            <span className="vn-table-id">{task.id.slice(0, 8)}</span>
-            <span className={`vn-chip ${statusChip(task.status)}`}>{formatStatus(task.status)}</span>
-            <span className="vn-chip vn-chip-secondary">{formatStatus(task.putawayType)}</span>
+          <h1 className="text-3xl font-bold tracking-tight">Putaway Task</h1>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <span className="font-mono text-sm font-semibold">{task.id.slice(0, 8)}</span>
+            <Badge variant={statusVariant(task.status)}>{formatStatus(task.status)}</Badge>
+            <Badge variant="secondary">{formatStatus(task.putawayType)}</Badge>
           </div>
         </div>
       </div>
 
-      {error && <div className="vn-alert vn-alert-error" style={{ marginBottom: '1rem' }}>{error}</div>}
+      {error && (
+        <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+          <CircleAlert className="h-5 w-5" />
+          {error}
+        </div>
+      )}
 
-      {/* Completion result feedback */}
       {completionResult && (
-        <div style={{ marginBottom: '1rem' }}>
+        <div className="space-y-2">
           {completionResult.deviation && (
-            <div className="vn-alert vn-alert-warning" style={{ marginBottom: '0.5rem' }}>
-              <strong>Deviation recorded:</strong> {completionResult.deviationReason}
+            <div className="flex items-start gap-3 rounded-md border border-warning/30 bg-warning/10 p-4 text-sm text-warning">
+              <AlertTriangle className="h-5 w-5" />
+              <div>
+                <strong>Deviation recorded:</strong> {completionResult.deviationReason}
+              </div>
             </div>
           )}
           {completionResult.constraintWarnings?.length > 0 && (
-            <div className="vn-alert vn-alert-warning" style={{ marginBottom: '0.5rem' }}>
-              <strong>Constraint warnings:</strong>
-              <ul style={{ margin: '0.5rem 0 0', paddingLeft: '1.2rem' }}>
-                {completionResult.constraintWarnings.map((w: string, i: number) => (
-                  <li key={i}>{w}</li>
-                ))}
-              </ul>
+            <div className="flex items-start gap-3 rounded-md border border-warning/30 bg-warning/10 p-4 text-sm text-warning">
+              <AlertTriangle className="h-5 w-5" />
+              <div>
+                <strong>Constraint warnings:</strong>
+                <ul className="ml-5 mt-1 list-disc">
+                  {completionResult.constraintWarnings.map((w: string, i: number) => (
+                    <li key={i}>{w}</li>
+                  ))}
+                </ul>
+              </div>
             </div>
           )}
           {!completionResult.deviation && completionResult.constraintWarnings?.length === 0 && (
-            <div className="vn-alert vn-alert-success">
+            <div className="flex items-center gap-3 rounded-md border border-success/30 bg-success/10 p-4 text-sm text-success">
+              <CheckCircle2 className="h-5 w-5" />
               Putaway completed successfully at <strong>{completionResult.actualBinLabel}</strong>
             </div>
           )}
         </div>
       )}
 
-      <div className="vn-detail-grid">
-        <div className="vn-detail-main">
-          {/* Direction card */}
-          <div className="vn-card" style={{ marginBottom: '1.5rem' }}>
-            <h3 style={{ margin: '0 0 1rem' }}>Direction</h3>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', fontSize: '1.1rem' }}>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>From</div>
-                <div style={{ fontWeight: 600, fontSize: '1.2rem' }}>
-                  {task.sourceBin?.label || 'Dock'}
+      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Direction</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-6">
+                <div className="text-center">
+                  <div className="text-xs text-muted-foreground">From</div>
+                  <div className="mt-1 text-lg font-semibold">{task.sourceBin?.label || 'Dock'}</div>
+                </div>
+                <ArrowRight className="h-8 w-8 text-primary" />
+                <div className="text-center">
+                  <div className="text-xs text-muted-foreground">To</div>
+                  <div className="mt-1 text-lg font-semibold text-primary">{task.targetBin.label}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {task.targetBin.zone.name} ({formatStatus(task.targetBin.zone.zoneType)})
+                  </div>
                 </div>
               </div>
-              <span className="material-icons" style={{ fontSize: '32px', color: 'var(--color-primary)' }}>arrow_forward</span>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>To</div>
-                <div style={{ fontWeight: 600, fontSize: '1.2rem', color: 'var(--color-primary)' }}>
-                  {task.targetBin.label}
-                </div>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                  {task.targetBin.zone.name} ({formatStatus(task.targetBin.zone.zoneType)})
-                </div>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                {task.targetBin.temperatureZone && (
+                  <Badge variant="info" className="gap-1">
+                    <Thermometer className="h-3 w-3" />
+                    {formatStatus(task.targetBin.temperatureZone)}
+                  </Badge>
+                )}
+                {task.targetBin.hazmatCertified && (
+                  <Badge variant="warning" className="gap-1">
+                    <AlertTriangle className="h-3 w-3" />
+                    Hazmat Certified
+                  </Badge>
+                )}
+                {hasTemp && (
+                  <Badge variant="destructive" className="gap-1">
+                    <Snowflake className="h-3 w-3" />
+                    Temp Sensitive
+                  </Badge>
+                )}
+                {hasHazmat && (
+                  <Badge variant="destructive" className="gap-1">
+                    <FlaskConical className="h-3 w-3" />
+                    Hazmat
+                  </Badge>
+                )}
               </div>
-            </div>
+            </CardContent>
+          </Card>
 
-            {/* Constraint indicators */}
-            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem', flexWrap: 'wrap' }}>
-              {task.targetBin.temperatureZone && (
-                <span className="vn-chip vn-chip-info">
-                  <span className="material-icons" style={{ fontSize: '14px', marginRight: '0.3rem' }}>thermostat</span>
-                  {formatStatus(task.targetBin.temperatureZone)}
-                </span>
-              )}
-              {task.targetBin.hazmatCertified && (
-                <span className="vn-chip vn-chip-warning">
-                  <span className="material-icons" style={{ fontSize: '14px', marginRight: '0.3rem' }}>warning</span>
-                  Hazmat Certified
-                </span>
-              )}
-              {hasTemp && (
-                <span className="vn-chip vn-chip-error">
-                  <span className="material-icons" style={{ fontSize: '14px', marginRight: '0.3rem' }}>ac_unit</span>
-                  Temp Sensitive
-                </span>
-              )}
-              {hasHazmat && (
-                <span className="vn-chip vn-chip-error">
-                  <span className="material-icons" style={{ fontSize: '14px', marginRight: '0.3rem' }}>science</span>
-                  Hazmat
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Scan to confirm */}
           {isActive && (
-            <div className="vn-card" style={{ marginBottom: '1.5rem', borderLeft: '3px solid var(--color-primary)' }}>
-              <h3 style={{ margin: '0 0 0.75rem' }}>Scan to Confirm</h3>
-              <p style={{ color: 'var(--text-secondary)', margin: '0 0 1rem', fontSize: '0.9rem' }}>
-                Scan the bin barcode where you placed the unit. If different from the directed bin, a deviation will be recorded.
-              </p>
-              <form onSubmit={handleComplete} style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-end' }}>
-                <div className="vn-field" style={{ flex: 1 }}>
-                  <label className="vn-field-label">Bin Label</label>
-                  <input
-                    className="vn-input"
-                    value={scannedBinLabel}
-                    onChange={e => setScannedBinLabel(e.target.value)}
-                    placeholder={`Expected: ${task.targetBin.label}`}
-                    autoFocus
-                    required
-                  />
-                </div>
-                <button type="submit" className="vn-btn vn-btn-primary" disabled={completing} style={{ whiteSpace: 'nowrap' }}>
-                  {completing ? 'Confirming...' : 'Confirm Putaway'}
-                </button>
-              </form>
-            </div>
+            <Card className="border-l-4 border-l-primary">
+              <CardHeader>
+                <CardTitle>Scan to Confirm</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="mb-4 text-sm text-muted-foreground">
+                  Scan the bin barcode where you placed the unit. If different from the directed bin, a deviation will be recorded.
+                </p>
+                <form onSubmit={handleComplete} className="flex items-end gap-3">
+                  <div className="flex-1 space-y-2">
+                    <Label>Bin Label</Label>
+                    <Input
+                      value={scannedBinLabel}
+                      onChange={e => setScannedBinLabel(e.target.value)}
+                      placeholder={`Expected: ${task.targetBin.label}`}
+                      autoFocus
+                      required
+                    />
+                  </div>
+                  <Button variant="gradient" type="submit" disabled={completing}>
+                    {completing ? 'Confirming...' : 'Confirm Putaway'}
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
           )}
 
-          {/* Unit contents */}
-          <div className="vn-card">
-            <h3 style={{ margin: '0 0 1rem' }}>Unit Contents</h3>
-            {unit.lineItems.length === 0 ? (
-              <p style={{ color: 'var(--text-secondary)' }}>No line items</p>
-            ) : (
-              <div className="vn-table-wrap">
-                <table className="vn-table">
-                  <thead>
-                    <tr>
-                      <th>SKU</th>
-                      <th>Description</th>
-                      <th>Qty</th>
-                      <th>Weight</th>
-                      <th>Temp</th>
-                      <th>Hazmat</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+          <Card>
+            <CardHeader>
+              <CardTitle>Unit Contents</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {unit.lineItems.length === 0 ? (
+                <p className="px-6 py-4 text-sm text-muted-foreground">No line items</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>SKU</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead>Qty</TableHead>
+                      <TableHead>Weight</TableHead>
+                      <TableHead>Temp</TableHead>
+                      <TableHead>Hazmat</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {unit.lineItems.map((li, i) => (
-                      <tr key={i}>
-                        <td><strong>{li.sku}</strong></td>
-                        <td>{li.description || '--'}</td>
-                        <td>{li.quantity}</td>
-                        <td>{li.weight != null ? `${li.weight} kg` : '--'}</td>
-                        <td>{li.temperature || 'ambient'}</td>
-                        <td>{li.hazmat ? <span className="vn-chip vn-chip-error">Yes</span> : 'No'}</td>
-                      </tr>
+                      <TableRow key={i}>
+                        <TableCell className="font-mono text-sm font-semibold">{li.sku}</TableCell>
+                        <TableCell>{li.description || '-'}</TableCell>
+                        <TableCell>{li.quantity}</TableCell>
+                        <TableCell>{li.weight != null ? `${li.weight} kg` : '-'}</TableCell>
+                        <TableCell>{li.temperature || 'ambient'}</TableCell>
+                        <TableCell>{li.hazmat ? <Badge variant="destructive">Yes</Badge> : 'No'}</TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
         </div>
 
-        <div className="vn-detail-sidebar">
-          {/* Unit info */}
-          <div className="vn-card">
-            <h3 style={{ margin: '0 0 0.75rem' }}>Unit</h3>
-            <dl style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem 1rem', margin: 0 }}>
-              <div>
-                <dt style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Identifier</dt>
-                <dd style={{ margin: 0, fontWeight: 500 }}>{unit.identifier}</dd>
-              </div>
-              <div>
-                <dt style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Type</dt>
-                <dd style={{ margin: 0 }}>{formatStatus(unit.unitType)}</dd>
-              </div>
-              {unit.barcode && (
+        <aside className="space-y-6 lg:sticky lg:top-20 lg:self-start">
+          <Card>
+            <CardHeader>
+              <CardTitle>Unit</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <dl className="grid grid-cols-2 gap-3 text-sm">
                 <div>
-                  <dt style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Barcode</dt>
-                  <dd style={{ margin: 0, fontFamily: 'monospace', fontSize: '0.85rem' }}>{unit.barcode}</dd>
+                  <dt className="text-xs text-muted-foreground">Identifier</dt>
+                  <dd className="mt-0.5 font-medium">{unit.identifier}</dd>
                 </div>
-              )}
-              {unit.lotNumber && (
                 <div>
-                  <dt style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Lot</dt>
-                  <dd style={{ margin: 0 }}>{unit.lotNumber}</dd>
+                  <dt className="text-xs text-muted-foreground">Type</dt>
+                  <dd className="mt-0.5">{formatStatus(unit.unitType)}</dd>
                 </div>
-              )}
-              {unit.expiryDate && (
+                {unit.barcode && (
+                  <div>
+                    <dt className="text-xs text-muted-foreground">Barcode</dt>
+                    <dd className="mt-0.5 font-mono text-xs">{unit.barcode}</dd>
+                  </div>
+                )}
+                {unit.lotNumber && (
+                  <div>
+                    <dt className="text-xs text-muted-foreground">Lot</dt>
+                    <dd className="mt-0.5">{unit.lotNumber}</dd>
+                  </div>
+                )}
+                {unit.expiryDate && (
+                  <div>
+                    <dt className="text-xs text-muted-foreground">Expiry</dt>
+                    <dd className="mt-0.5">{new Date(unit.expiryDate).toLocaleDateString()}</dd>
+                  </div>
+                )}
                 <div>
-                  <dt style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Expiry</dt>
-                  <dd style={{ margin: 0 }}>{new Date(unit.expiryDate).toLocaleDateString()}</dd>
-                </div>
-              )}
-              <div>
-                <dt style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Quality</dt>
-                <dd style={{ margin: 0 }}>
-                  <span className={`vn-chip ${unit.qualityStatus === 'available' ? 'vn-chip-success' : 'vn-chip-warning'}`}>
-                    {formatStatus(unit.qualityStatus)}
-                  </span>
-                </dd>
-              </div>
-            </dl>
-          </div>
-
-          {/* Task info */}
-          <div className="vn-card">
-            <h3 style={{ margin: '0 0 0.75rem' }}>Task Info</h3>
-            <dl style={{ display: 'grid', gap: '0.5rem', margin: 0 }}>
-              <div>
-                <dt style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Type</dt>
-                <dd style={{ margin: 0 }}>{formatStatus(task.putawayType)}</dd>
-              </div>
-              {task.assignedToUserId && (
-                <div>
-                  <dt style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Assigned To</dt>
-                  <dd style={{ margin: 0 }}>{task.assignedToUserId}</dd>
-                </div>
-              )}
-              {task.receivingTask && (
-                <div>
-                  <dt style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>From Receiving</dt>
-                  <dd style={{ margin: 0 }}>
-                    <button className="vn-btn vn-btn-outline" style={{ fontSize: '0.8rem', padding: '0.15rem 0.5rem' }}
-                      onClick={() => navigate(`/wms/receiving/${task.receivingTask!.id}`)}>
-                      {task.receivingTask.id.slice(0, 8)} ({task.receivingTask.receivingType})
-                    </button>
+                  <dt className="text-xs text-muted-foreground">Quality</dt>
+                  <dd className="mt-0.5">
+                    <Badge variant={unit.qualityStatus === 'available' ? 'success' : 'warning'}>
+                      {formatStatus(unit.qualityStatus)}
+                    </Badge>
                   </dd>
                 </div>
-              )}
-              <div>
-                <dt style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Created</dt>
-                <dd style={{ margin: 0 }}>{new Date(task.createdAt).toLocaleString()}</dd>
-              </div>
-            </dl>
-          </div>
-        </div>
+              </dl>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Task Info</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <dl className="grid gap-3 text-sm">
+                <div>
+                  <dt className="text-xs text-muted-foreground">Type</dt>
+                  <dd className="mt-0.5">{formatStatus(task.putawayType)}</dd>
+                </div>
+                {task.assignedToUserId && (
+                  <div>
+                    <dt className="text-xs text-muted-foreground">Assigned To</dt>
+                    <dd className="mt-0.5">{task.assignedToUserId}</dd>
+                  </div>
+                )}
+                {task.receivingTask && (
+                  <div>
+                    <dt className="text-xs text-muted-foreground">From Receiving</dt>
+                    <dd className="mt-0.5">
+                      <Button variant="outline" size="sm" onClick={() => navigate(`/wms/receiving/${task.receivingTask!.id}`)}>
+                        {task.receivingTask.id.slice(0, 8)} ({task.receivingTask.receivingType})
+                      </Button>
+                    </dd>
+                  </div>
+                )}
+                <div>
+                  <dt className="text-xs text-muted-foreground">Created</dt>
+                  <dd className="mt-0.5">{new Date(task.createdAt).toLocaleString()}</dd>
+                </div>
+              </dl>
+            </CardContent>
+          </Card>
+        </aside>
       </div>
     </div>
   );

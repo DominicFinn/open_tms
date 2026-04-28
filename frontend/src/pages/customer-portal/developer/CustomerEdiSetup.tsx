@@ -1,6 +1,18 @@
 import { useEffect, useState } from 'react';
+import { Loader2 } from 'lucide-react';
+
 import { API_URL } from '../../../api';
 import { customerFetch } from '../CustomerDashboard';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 interface PartnerTransaction {
   id: string;
@@ -48,90 +60,118 @@ export default function CustomerEdiSetup() {
   }, []);
 
   return (
-    <div>
-      <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>EDI Setup</h1>
-      <p style={{ color: 'var(--text-secondary)', margin: '0 0 24px' }}>
-        Your trading partner configuration for EDI file exchange. This view is read-only - contact support to change connection settings.
-      </p>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">EDI setup</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Your trading partner configuration for EDI file exchange. This view is read-only - contact support to change connection settings.
+        </p>
+      </div>
 
-      {loading ? <div className="vn-loading-spinner" /> : partners.length === 0 ? (
-        <div className="vn-card" style={{ padding: 24, textAlign: 'center', color: 'var(--text-secondary)' }}>
-          No trading partner is configured for your account. If you exchange EDI documents with us, reach out to have a partner provisioned.
-        </div>
+      {loading ? (
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      ) : partners.length === 0 ? (
+        <Card>
+          <CardContent className="p-8 text-center text-sm text-muted-foreground">
+            No trading partner is configured for your account. If you exchange EDI documents with us, reach out to have a partner provisioned.
+          </CardContent>
+        </Card>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div className="space-y-4">
           {partners.map(p => (
-            <div key={p.id} className="vn-card" style={{ padding: 16 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <h3 style={{ margin: 0 }}>{p.name}</h3>
-                <span className={`vn-chip ${p.active ? 'vn-chip-success' : 'vn-chip-secondary'}`}>{p.active ? 'Active' : 'Inactive'}</span>
-              </div>
-
-              <div className="vn-form-grid" style={{ gap: 8, fontSize: 13 }}>
-                <div><strong>Entity type:</strong> {p.entityType}</div>
-                <div><strong>EDI version:</strong> {p.ediVersion}</div>
-                <div><strong>Sender ID (ISA06):</strong> <code>{p.senderId ?? '-'}</code></div>
-                <div><strong>Receiver ID (ISA08):</strong> <code>{p.receiverId ?? '-'}</code></div>
-              </div>
-
-              {(p.sftpHost || p.sftpUsername) && (
-                <div style={{ marginTop: 16, padding: 12, background: 'var(--surface-secondary)', borderRadius: 6 }}>
-                  <div style={{ fontWeight: 600, marginBottom: 6, fontSize: 13 }}>SFTP</div>
-                  <div className="vn-form-grid" style={{ gap: 6, fontSize: 13 }}>
-                    <div><strong>Host:</strong> {p.sftpHost ?? '-'}</div>
-                    <div><strong>Port:</strong> {p.sftpPort}</div>
-                    <div><strong>Username:</strong> {p.sftpUsername ?? '-'}</div>
-                    <div><strong>Credential:</strong> {p.sftpPassword || p.sftpPrivateKey ? 'Configured' : 'None'}</div>
+            <Card key={p.id}>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle>{p.name}</CardTitle>
+                <Badge variant={p.active ? 'success' : 'secondary'}>{p.active ? 'Active' : 'Inactive'}</Badge>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-2 text-sm sm:grid-cols-2">
+                  <div><strong>Entity type:</strong> {p.entityType}</div>
+                  <div><strong>EDI version:</strong> {p.ediVersion}</div>
+                  <div>
+                    <strong>Sender ID (ISA06):</strong>{' '}
+                    <code className="rounded bg-muted px-1">{p.senderId ?? '-'}</code>
+                  </div>
+                  <div>
+                    <strong>Receiver ID (ISA08):</strong>{' '}
+                    <code className="rounded bg-muted px-1">{p.receiverId ?? '-'}</code>
                   </div>
                 </div>
-              )}
 
-              {p.httpUrl && (
-                <div style={{ marginTop: 12, padding: 12, background: 'var(--surface-secondary)', borderRadius: 6 }}>
-                  <div style={{ fontWeight: 600, marginBottom: 6, fontSize: 13 }}>HTTP</div>
-                  <div className="vn-form-grid" style={{ gap: 6, fontSize: 13 }}>
-                    <div style={{ gridColumn: '1 / -1' }}><strong>URL:</strong> <code>{p.httpUrl}</code></div>
-                    <div><strong>Auth type:</strong> {p.httpAuthType ?? 'none'}</div>
-                    <div><strong>Auth header:</strong> {p.httpAuthHeader ?? '-'}</div>
-                  </div>
-                </div>
-              )}
-
-              <div style={{ marginTop: 12, padding: 12, background: 'var(--surface-secondary)', borderRadius: 6 }}>
-                <div style={{ fontWeight: 600, marginBottom: 6, fontSize: 13 }}>File exchange</div>
-                <div className="vn-form-grid" style={{ gap: 6, fontSize: 13 }}>
-                  <div><strong>Inbound:</strong> {p.inboundEnabled ? 'Enabled' : 'Disabled'}</div>
-                  <div><strong>Inbound dir:</strong> <code>{p.inboundDir}</code></div>
-                  <div><strong>Outbound:</strong> {p.outboundEnabled ? 'Enabled' : 'Disabled'}</div>
-                  <div><strong>Outbound transport:</strong> {p.outboundTransport}</div>
-                  <div style={{ gridColumn: '1 / -1' }}><strong>Outbound dir:</strong> <code>{p.outboundDir ?? '-'}</code></div>
-                </div>
-              </div>
-
-              <div style={{ marginTop: 12 }}>
-                <div style={{ fontWeight: 600, marginBottom: 6, fontSize: 13 }}>Supported transactions</div>
-                {p.transactions.length === 0 ? (
-                  <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>None configured</div>
-                ) : (
-                  <div className="vn-table-wrap">
-                    <table className="vn-table">
-                      <thead><tr><th>Type</th><th>Direction</th><th>Enabled</th><th>Auto-process</th><th>Requires 997</th></tr></thead>
-                      <tbody>
-                        {p.transactions.map(t => (
-                          <tr key={t.id}>
-                            <td><strong>{t.transactionType}</strong></td>
-                            <td>{t.direction}</td>
-                            <td>{t.enabled ? 'Yes' : 'No'}</td>
-                            <td>{t.autoProcess ? 'Yes' : 'No'}</td>
-                            <td>{t.ack997Required ? 'Yes' : 'No'}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                {(p.sftpHost || p.sftpUsername) && (
+                  <div className="rounded-md bg-muted/50 p-3 text-sm">
+                    <div className="mb-2 font-semibold">SFTP</div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <div><strong>Host:</strong> {p.sftpHost ?? '-'}</div>
+                      <div><strong>Port:</strong> {p.sftpPort}</div>
+                      <div><strong>Username:</strong> {p.sftpUsername ?? '-'}</div>
+                      <div><strong>Credential:</strong> {p.sftpPassword || p.sftpPrivateKey ? 'Configured' : 'None'}</div>
+                    </div>
                   </div>
                 )}
-              </div>
-            </div>
+
+                {p.httpUrl && (
+                  <div className="rounded-md bg-muted/50 p-3 text-sm">
+                    <div className="mb-2 font-semibold">HTTP</div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <div className="sm:col-span-2">
+                        <strong>URL:</strong>{' '}
+                        <code className="rounded bg-muted px-1">{p.httpUrl}</code>
+                      </div>
+                      <div><strong>Auth type:</strong> {p.httpAuthType ?? 'none'}</div>
+                      <div><strong>Auth header:</strong> {p.httpAuthHeader ?? '-'}</div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="rounded-md bg-muted/50 p-3 text-sm">
+                  <div className="mb-2 font-semibold">File exchange</div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <div><strong>Inbound:</strong> {p.inboundEnabled ? 'Enabled' : 'Disabled'}</div>
+                    <div>
+                      <strong>Inbound dir:</strong>{' '}
+                      <code className="rounded bg-muted px-1">{p.inboundDir}</code>
+                    </div>
+                    <div><strong>Outbound:</strong> {p.outboundEnabled ? 'Enabled' : 'Disabled'}</div>
+                    <div><strong>Outbound transport:</strong> {p.outboundTransport}</div>
+                    <div className="sm:col-span-2">
+                      <strong>Outbound dir:</strong>{' '}
+                      <code className="rounded bg-muted px-1">{p.outboundDir ?? '-'}</code>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="mb-2 text-sm font-semibold">Supported transactions</div>
+                  {p.transactions.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">None configured</div>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Type</TableHead>
+                          <TableHead>Direction</TableHead>
+                          <TableHead>Enabled</TableHead>
+                          <TableHead>Auto-process</TableHead>
+                          <TableHead>Requires 997</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {p.transactions.map(t => (
+                          <TableRow key={t.id}>
+                            <TableCell className="font-semibold">{t.transactionType}</TableCell>
+                            <TableCell>{t.direction}</TableCell>
+                            <TableCell>{t.enabled ? 'Yes' : 'No'}</TableCell>
+                            <TableCell>{t.autoProcess ? 'Yes' : 'No'}</TableCell>
+                            <TableCell>{t.ack997Required ? 'Yes' : 'No'}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
           ))}
         </div>
       )}

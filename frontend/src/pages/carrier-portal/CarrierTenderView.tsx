@@ -1,7 +1,26 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { Loader2 } from 'lucide-react';
+
 import { API_URL } from '../../api';
 import { carrierFetch, getCarrierToken } from './CarrierDashboard';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
+
+const TEXTAREA_CLASS =
+  'flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2';
+
+type StatusVariant = 'success' | 'info' | 'warning' | 'destructive' | 'muted' | 'secondary';
+
+function bidStatusVariant(s: string): StatusVariant {
+  if (s === 'accepted') return 'success';
+  if (s === 'rejected') return 'destructive';
+  return 'info';
+}
 
 export default function CarrierTenderView() {
   const { id } = useParams<{ id: string }>();
@@ -82,8 +101,21 @@ export default function CarrierTenderView() {
     setSubmitting(false);
   }
 
-  if (loading) return <div className="vn-empty"><span className="material-icons" style={{animation:'spin 1s linear infinite'}}>refresh</span><h3>Loading...</h3></div>;
-  if (!data?.tender) return <div className="vn-alert vn-alert-error">{error || 'Tender not found'}</div>;
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <h3 className="text-lg font-medium">Loading...</h3>
+      </div>
+    );
+  }
+  if (!data?.tender) {
+    return (
+      <div className="rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+        {error || 'Tender not found'}
+      </div>
+    );
+  }
 
   const { tender, offer } = data;
   const existingBid = offer?.bids?.find((b: any) => b.status === 'submitted' || b.status === 'accepted');
@@ -93,37 +125,46 @@ export default function CarrierTenderView() {
     : null;
 
   return (
-    <div>
-      {/* Header */}
-      <div className="vn-page-header">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1>{tender.reference}</h1>
-          <p style={{ color: 'var(--on-surface-variant)', margin: 0 }}>
+          <h1 className="text-3xl font-bold tracking-tight">{tender.reference}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             {tender.shipment.origin.city}{tender.shipment.origin.state ? `, ${tender.shipment.origin.state}` : ''}
-            {' → '}
+            {' -> '}
             {tender.shipment.destination.city}{tender.shipment.destination.state ? `, ${tender.shipment.destination.state}` : ''}
           </p>
         </div>
         {timeLeft !== null && tender.status === 'open' && (
-          <div style={{
-            padding: '8px 16px', borderRadius: 'var(--radius-md)',
-            background: timeLeft < 30 ? 'var(--error)' : 'var(--primary)',
-            color: '#fff', fontWeight: 600,
-          }}>
+          <div
+            className={cn(
+              'rounded-md px-3 py-2 text-sm font-semibold text-primary-foreground',
+              timeLeft < 30 ? 'bg-destructive' : 'bg-primary',
+            )}
+          >
             {timeLeft > 60 ? `${Math.floor(timeLeft / 60)}h ${timeLeft % 60}m` : `${timeLeft}m`} remaining
           </div>
         )}
       </div>
 
-      {error && <div className="vn-alert vn-alert-error" style={{ marginBottom: 'var(--spacing-2)' }}>{error}</div>}
-      {success && <div className="vn-alert vn-alert-success" style={{ marginBottom: 'var(--spacing-2)' }}>{success}</div>}
+      {error && (
+        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {error}
+        </div>
+      )}
+      {success && (
+        <div className="rounded-md border border-success/30 bg-success/10 px-3 py-2 text-sm text-success">
+          {success}
+        </div>
+      )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-3)', marginBottom: 'var(--spacing-3)' }}>
-        {/* Shipment Details */}
-        <div className="vn-card">
-          <div className="vn-card-header"><h2>Shipment Details</h2></div>
-          <div className="vn-card-body">
-            <div style={{ display: 'grid', gap: 'var(--spacing-1)', fontSize: '14px' }}>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Shipment details</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-2 text-sm">
               <div><strong>Reference:</strong> {tender.shipment.reference}</div>
               <div><strong>Customer:</strong> {tender.shipment.customer?.name}</div>
               <div>
@@ -142,99 +183,129 @@ export default function CarrierTenderView() {
               )}
               {tender.equipmentType && <div><strong>Equipment:</strong> {tender.equipmentType}</div>}
               {tender.specialInstructions && (
-                <div style={{ marginTop: 'var(--spacing-1)', padding: 'var(--spacing-1)', background: 'var(--surface-container)', borderRadius: 'var(--radius-sm)' }}>
-                  <strong>Special Instructions:</strong><br/>{tender.specialInstructions}
+                <div className="mt-2 rounded-md bg-muted/50 p-3">
+                  <strong>Special instructions:</strong>
+                  <br />
+                  {tender.specialInstructions}
                 </div>
               )}
             </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
 
-        {/* Bid Form or Status */}
-        <div className="vn-card">
+        <Card>
           {existingBid ? (
             <>
-              <div className="vn-card-header"><h2>Your Bid</h2></div>
-              <div className="vn-card-body">
-                <div style={{ textAlign: 'center', padding: 'var(--spacing-3)' }}>
-                  <div style={{ fontSize: '36px', fontWeight: 700 }}>${existingBid.rate.toLocaleString()}</div>
-                  <span className={`vn-chip vn-chip-${existingBid.status === 'accepted' ? 'success' : existingBid.status === 'rejected' ? 'error' : 'info'}`}>
-                    {existingBid.status}
-                  </span>
+              <CardHeader>
+                <CardTitle>Your bid</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-col items-center gap-3 py-6 text-center">
+                  <div className="text-4xl font-bold tracking-tight">${existingBid.rate.toLocaleString()}</div>
+                  <Badge variant={bidStatusVariant(existingBid.status)}>{existingBid.status}</Badge>
                   {existingBid.status === 'accepted' && (
-                    <div className="vn-alert vn-alert-success" style={{ marginTop: 'var(--spacing-2)' }}>
+                    <div className="mt-2 rounded-md border border-success/30 bg-success/10 px-3 py-2 text-sm text-success">
                       Congratulations! Your bid was accepted.
                     </div>
                   )}
                 </div>
-              </div>
+              </CardContent>
             </>
           ) : canBid ? (
             <>
-              <div className="vn-card-header"><h2>Submit Your Bid</h2></div>
-              <div className="vn-card-body">
+              <CardHeader>
+                <CardTitle>Submit your bid</CardTitle>
+              </CardHeader>
+              <CardContent>
                 {tender.targetRate && (
-                  <div style={{
-                    padding: 'var(--spacing-1)', background: 'var(--surface-container)',
-                    borderRadius: 'var(--radius-sm)', marginBottom: 'var(--spacing-2)',
-                    fontSize: '13px', textAlign: 'center',
-                  }}>
-                    Target Rate: <strong>${tender.targetRate.toLocaleString()}</strong>
+                  <div className="mb-4 rounded-md bg-muted/50 px-3 py-2 text-center text-sm">
+                    Target rate: <strong>${tender.targetRate.toLocaleString()}</strong>
                   </div>
                 )}
-                <form onSubmit={handleBid}>
-                  <div className="vn-field" style={{ marginBottom: 'var(--spacing-2)' }}>
-                    <label className="vn-field-label">Your Rate ($) *</label>
-                    <input className="vn-input" type="number" min="0" step="0.01" value={rate}
-                      onChange={e => setRate(e.target.value)} required placeholder="Enter your rate" />
+                <form onSubmit={handleBid} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="bid-rate">Your rate ($) *</Label>
+                    <Input
+                      id="bid-rate"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={rate}
+                      onChange={e => setRate(e.target.value)}
+                      required
+                      placeholder="Enter your rate"
+                    />
                   </div>
-                  <div className="vn-field" style={{ marginBottom: 'var(--spacing-2)' }}>
-                    <label className="vn-field-label">Transit Days</label>
-                    <input className="vn-input" type="number" min="1" value={transitDays}
-                      onChange={e => setTransitDays(e.target.value)} placeholder="Estimated transit" />
+                  <div className="space-y-2">
+                    <Label htmlFor="transit-days">Transit days</Label>
+                    <Input
+                      id="transit-days"
+                      type="number"
+                      min="1"
+                      value={transitDays}
+                      onChange={e => setTransitDays(e.target.value)}
+                      placeholder="Estimated transit"
+                    />
                   </div>
-                  <div className="vn-field" style={{ marginBottom: 'var(--spacing-2)' }}>
-                    <label className="vn-field-label">Equipment Type</label>
-                    <input className="vn-input" value={equipmentType}
-                      onChange={e => setEquipmentType(e.target.value)} placeholder="e.g. 53' Dry Van" />
+                  <div className="space-y-2">
+                    <Label htmlFor="equipment">Equipment type</Label>
+                    <Input
+                      id="equipment"
+                      value={equipmentType}
+                      onChange={e => setEquipmentType(e.target.value)}
+                      placeholder="e.g. 53' Dry Van"
+                    />
                   </div>
-                  <div className="vn-field" style={{ marginBottom: 'var(--spacing-2)' }}>
-                    <label className="vn-field-label">Notes</label>
-                    <textarea className="vn-textarea" rows={2} value={notes}
-                      onChange={e => setNotes(e.target.value)} placeholder="Additional comments" />
+                  <div className="space-y-2">
+                    <Label htmlFor="notes">Notes</Label>
+                    <textarea
+                      id="notes"
+                      className={TEXTAREA_CLASS}
+                      rows={2}
+                      value={notes}
+                      onChange={e => setNotes(e.target.value)}
+                      placeholder="Additional comments"
+                    />
                   </div>
-                  <div className="vn-form-actions">
-                    <button type="button" className="vn-btn vn-btn-danger" onClick={handleDecline} disabled={submitting}>
+                  <div className="flex justify-end gap-2 pt-2">
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      onClick={handleDecline}
+                      disabled={submitting}
+                    >
                       Decline
-                    </button>
-                    <button type="submit" className="vn-btn vn-btn-success" disabled={submitting || !rate}>
-                      {submitting ? 'Submitting...' : 'Submit Bid'}
-                    </button>
+                    </Button>
+                    <Button type="submit" variant="gradient" disabled={submitting || !rate}>
+                      {submitting ? 'Submitting...' : 'Submit bid'}
+                    </Button>
                   </div>
                 </form>
-              </div>
+              </CardContent>
             </>
           ) : (
             <>
-              <div className="vn-card-header"><h2>Tender Status</h2></div>
-              <div className="vn-card-body">
-                <div style={{ textAlign: 'center', padding: 'var(--spacing-3)', color: 'var(--on-surface-variant)' }}>
+              <CardHeader>
+                <CardTitle>Tender status</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="py-6 text-center text-sm text-muted-foreground">
                   {tender.status === 'awarded' ? 'This tender has been awarded.' :
                    tender.status === 'cancelled' ? 'This tender was cancelled.' :
                    tender.status === 'expired' ? 'This tender has expired.' :
                    offer?.status === 'expired' ? 'Your offer has expired.' :
                    'Bidding is not available.'}
                 </div>
-              </div>
+              </CardContent>
             </>
           )}
-        </div>
+        </Card>
       </div>
 
-      <div style={{ textAlign: 'center' }}>
-        <button className="vn-btn vn-btn-outline" onClick={() => navigate('/carrier-portal')}>
-          Back to Dashboard
-        </button>
+      <div className="text-center">
+        <Button variant="outline" onClick={() => navigate('/carrier-portal')}>
+          Back to dashboard
+        </Button>
       </div>
     </div>
   );

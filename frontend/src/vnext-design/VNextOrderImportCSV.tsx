@@ -1,6 +1,22 @@
 import React, { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import {
+  AlertTriangle,
+  ArrowLeft,
+  CheckCircle2,
+  CloudUpload,
+  Download,
+  FileText,
+  Loader2,
+  Upload,
+  X,
+  XCircle,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 
 interface ImportResult {
   successCount: number;
@@ -92,149 +108,137 @@ export default function VNextOrderImportCSV() {
     }
   }
 
+  const csvColumns = [
+    'orderNumber',
+    'poNumber',
+    'customerName',
+    'originName',
+    'destinationName',
+    'serviceLevel',
+    'requestedPickupDate',
+    'requestedDeliveryDate',
+    'temperatureControl',
+    'requiresHazmat',
+    'specialInstructions',
+  ];
+
   return (
-    <>
+    <div className="space-y-6">
       {/* Breadcrumb */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-        <button className="vn-btn vn-btn-ghost vn-btn-sm" onClick={() => navigate('/orders')}>
-          <span className="material-icons">arrow_back</span>
+      <div className="flex items-center gap-2">
+        <Button variant="ghost" size="sm" onClick={() => navigate('/orders')}>
+          <ArrowLeft className="h-4 w-4" />
           Orders
-        </button>
-        <span style={{ color: 'var(--on-surface-variant)', fontSize: 13 }}>/ Import CSV</span>
+        </Button>
+        <span className="text-sm text-muted-foreground">/ Import CSV</span>
       </div>
 
-      <div className="vn-page-header">
-        <div>
-          <h1>Import Orders from CSV</h1>
-          <p>Upload a CSV file to create orders in bulk</p>
-        </div>
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Import Orders from CSV</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Upload a CSV file to create orders in bulk</p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 24, alignItems: 'start' }}>
+      <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
         {/* Main */}
-        <div>
+        <div className="space-y-6">
           {/* Upload Card */}
-          <div className="vn-card" style={{ marginBottom: 24 }}>
-            <div className="vn-card-header"><h2>Upload File</h2></div>
-            <div className="vn-card-body">
+          <Card>
+            <CardHeader>
+              <CardTitle>Upload File</CardTitle>
+            </CardHeader>
+            <CardContent>
               {!file ? (
                 <div
                   onClick={() => fileInputRef.current?.click()}
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
                   onDrop={handleDrop}
-                  style={{
-                    border: `2px dashed ${dragOver ? 'var(--primary)' : 'var(--outline-variant)'}`,
-                    borderRadius: 'var(--border-radius)',
-                    padding: 48,
-                    textAlign: 'center',
-                    cursor: 'pointer',
-                    background: dragOver ? 'var(--primary-container)' : 'var(--surface-container)',
-                    transition: 'all 0.2s ease',
-                  }}
+                  className={cn(
+                    'cursor-pointer rounded-md border-2 border-dashed p-12 text-center transition-colors',
+                    dragOver ? 'border-primary bg-primary/5' : 'border-border bg-muted/30 hover:border-primary/40',
+                  )}
                 >
-                  <span className="material-icons" style={{ fontSize: 48, color: 'var(--on-surface-variant)', opacity: 0.5 }}>
-                    cloud_upload
-                  </span>
-                  <div style={{ fontSize: 16, fontWeight: 500, color: 'var(--on-surface)', marginTop: 12 }}>
-                    Drop your CSV file here
-                  </div>
-                  <div style={{ fontSize: 13, color: 'var(--on-surface-variant)', marginTop: 4 }}>
-                    or click to browse
-                  </div>
+                  <CloudUpload className="mx-auto h-12 w-12 text-muted-foreground/60" />
+                  <div className="mt-3 text-base font-medium">Drop your CSV file here</div>
+                  <div className="mt-1 text-sm text-muted-foreground">or click to browse</div>
                   <input
                     ref={fileInputRef}
                     type="file"
                     accept=".csv,text/csv"
                     onChange={handleFileChange}
-                    style={{ display: 'none' }}
+                    className="hidden"
                   />
                 </div>
               ) : (
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 12,
-                  padding: 16,
-                  background: 'var(--surface-container)',
-                  borderRadius: 'var(--border-radius-sm)',
-                  border: '1px solid var(--outline-variant)',
-                }}>
-                  <span className="material-icons" style={{ fontSize: 32, color: 'var(--primary)' }}>description</span>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--on-surface)' }}>{file.name}</div>
-                    <div style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>{formatFileSize(file.size)}</div>
+                <div className="flex items-center gap-3 rounded-md border border-border bg-muted/30 p-4">
+                  <FileText className="h-8 w-8 text-primary" />
+                  <div className="flex-1">
+                    <div className="text-sm font-medium">{file.name}</div>
+                    <div className="text-xs text-muted-foreground">{formatFileSize(file.size)}</div>
                   </div>
-                  <button className="vn-btn vn-btn-ghost vn-btn-sm" onClick={removeFile}>
-                    <span className="material-icons">close</span>
+                  <Button variant="ghost" size="sm" onClick={removeFile}>
+                    <X className="h-4 w-4" />
                     Remove
-                  </button>
+                  </Button>
                 </div>
               )}
 
-              <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-                <button
-                  className="vn-btn vn-btn-primary"
+              <div className="mt-4 flex gap-2">
+                <Button
+                  variant="gradient"
                   disabled={!file || importing}
                   onClick={handleImport}
                 >
-                  <span className="material-icons">{importing ? 'hourglass_empty' : 'upload'}</span>
+                  {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
                   {importing ? 'Importing...' : 'Import Orders'}
-                </button>
+                </Button>
               </div>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
 
           {/* Error */}
           {error && (
-            <div className="vn-alert vn-alert-error" style={{ marginBottom: 24 }}>
-              <span className="material-icons">error</span>
-              <div className="vn-alert-content">{error}</div>
+            <div className="flex items-start gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+              <XCircle className="h-5 w-5 shrink-0" />
+              <div>{error}</div>
             </div>
           )}
 
           {/* Results */}
           {result && (
-            <div className="vn-card" style={{ marginBottom: 24 }}>
-              <div className="vn-card-header"><h2>Import Results</h2></div>
-              <div className="vn-card-body">
-                <div className="vn-stats" style={{ marginBottom: result.errors && result.errors.length > 0 ? 16 : 0 }}>
-                  <div className="vn-stat">
-                    <div className="vn-stat-icon success"><span className="material-icons">check_circle</span></div>
-                    <div>
-                      <div className="vn-stat-value">{result.successCount}</div>
-                      <div className="vn-stat-label">Imported</div>
+            <Card>
+              <CardHeader>
+                <CardTitle>Import Results</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Card className="p-5">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-success/15 text-success">
+                      <CheckCircle2 className="h-5 w-5" />
                     </div>
-                  </div>
-                  <div className="vn-stat">
-                    <div className="vn-stat-icon error"><span className="material-icons">error</span></div>
-                    <div>
-                      <div className="vn-stat-value">{result.errorCount}</div>
-                      <div className="vn-stat-label">Errors</div>
+                    <div className="mt-3 text-2xl font-bold tracking-tight">{result.successCount}</div>
+                    <div className="mt-1 text-sm text-muted-foreground">Imported</div>
+                  </Card>
+                  <Card className="p-5">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-destructive/10 text-destructive">
+                      <XCircle className="h-5 w-5" />
                     </div>
-                  </div>
+                    <div className="mt-3 text-2xl font-bold tracking-tight">{result.errorCount}</div>
+                    <div className="mt-1 text-sm text-muted-foreground">Errors</div>
+                  </Card>
                 </div>
 
                 {result.errors && result.errors.length > 0 && (
-                  <div>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--on-surface)', marginBottom: 8 }}>Error Details</div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <div className="mt-6">
+                    <div className="mb-2 text-sm font-semibold">Error Details</div>
+                    <div className="space-y-1">
                       {result.errors.map((err, i) => (
                         <div
                           key={i}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 8,
-                            padding: '8px 12px',
-                            background: 'var(--error-container, var(--surface-container))',
-                            borderRadius: 'var(--border-radius-sm)',
-                            fontSize: 13,
-                            color: 'var(--on-surface)',
-                          }}
+                          className="flex items-center gap-2 rounded-md bg-muted/30 px-3 py-2 text-sm"
                         >
-                          <span className="material-icons" style={{ fontSize: 16, color: 'var(--error)' }}>warning</span>
-                          {err.row != null && <span style={{ fontWeight: 600 }}>Row {err.row}:</span>}
+                          <AlertTriangle className="h-4 w-4 text-destructive" />
+                          {err.row != null && <span className="font-semibold">Row {err.row}:</span>}
                           <span>{err.message}</span>
                         </div>
                       ))}
@@ -243,63 +247,44 @@ export default function VNextOrderImportCSV() {
                 )}
 
                 {result.successCount > 0 && result.errorCount === 0 && (
-                  <div className="vn-alert vn-alert-success" style={{ marginTop: 16 }}>
-                    <span className="material-icons">check_circle</span>
-                    <div className="vn-alert-content">All orders imported successfully!</div>
+                  <div className="mt-4 flex items-center gap-3 rounded-md border border-success/30 bg-success/10 p-3 text-sm text-success">
+                    <CheckCircle2 className="h-5 w-5" />
+                    All orders imported successfully!
                   </div>
                 )}
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           )}
         </div>
 
         {/* Sidebar: Instructions */}
         <div>
-          <div className="vn-card">
-            <div className="vn-card-header"><h2>CSV Format</h2></div>
-            <div className="vn-card-body">
-              <p style={{ fontSize: 13, color: 'var(--on-surface-variant)', margin: '0 0 12px 0' }}>
+          <Card>
+            <CardHeader>
+              <CardTitle>CSV Format</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">
                 Your CSV file should include the following columns:
               </p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {[
-                  'orderNumber',
-                  'poNumber',
-                  'customerName',
-                  'originName',
-                  'destinationName',
-                  'serviceLevel',
-                  'requestedPickupDate',
-                  'requestedDeliveryDate',
-                  'temperatureControl',
-                  'requiresHazmat',
-                  'specialInstructions',
-                ].map(col => (
+              <div className="mt-3 space-y-1.5">
+                {csvColumns.map(col => (
                   <div
                     key={col}
-                    style={{
-                      fontFamily: 'monospace',
-                      fontSize: 12,
-                      padding: '4px 8px',
-                      background: 'var(--surface-container)',
-                      borderRadius: 'var(--border-radius-sm)',
-                      color: 'var(--on-surface)',
-                    }}
+                    className="rounded-md bg-muted/30 px-3 py-1.5 font-mono text-xs"
                   >
                     {col}
                   </div>
                 ))}
               </div>
-              <div style={{ marginTop: 16 }}>
-                <button className="vn-btn vn-btn-outline vn-btn-sm" style={{ width: '100%' }}>
-                  <span className="material-icons">download</span>
-                  Download Template
-                </button>
-              </div>
-            </div>
-          </div>
+              <Button variant="outline" className="mt-4 w-full">
+                <Download className="h-4 w-4" />
+                Download Template
+              </Button>
+            </CardContent>
+          </Card>
         </div>
       </div>
-    </>
+    </div>
   );
 }

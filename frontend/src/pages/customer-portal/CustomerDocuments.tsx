@@ -1,6 +1,19 @@
 import React, { useEffect, useState } from 'react';
+import { Download, FolderOpen, Loader2 } from 'lucide-react';
+
 import { API_URL } from '../../api';
 import { customerFetch, getCustomerToken } from './CustomerDashboard';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Card } from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 interface Doc {
   id: string; documentType: string; fileName: string;
@@ -8,7 +21,14 @@ interface Doc {
 }
 
 function docTypeLabel(t: string): string {
-  const m: Record<string, string> = { bol: 'Bill of Lading', label: 'Label', customs: 'Customs Form', rate_confirmation: 'Rate Confirmation', issue_closure_report: 'Closure Report', daily_report: 'Daily Report' };
+  const m: Record<string, string> = {
+    bol: 'Bill of Lading',
+    label: 'Label',
+    customs: 'Customs Form',
+    rate_confirmation: 'Rate Confirmation',
+    issue_closure_report: 'Closure Report',
+    daily_report: 'Daily Report',
+  };
   return m[t] || t;
 }
 
@@ -43,37 +63,51 @@ export default function CustomerDocuments() {
   };
 
   return (
-    <div>
-      <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 16 }}>Documents</h1>
-      <div className="vn-card">
-        <div className="vn-table-wrap">
-          {loading ? <div style={{ textAlign: 'center', padding: 40 }}><div className="loading-spinner" /></div> : docs.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: 40, color: 'var(--on-surface-variant)' }}>
-              <span className="material-icons" style={{ fontSize: 40, opacity: 0.4 }}>folder_open</span>
-              <p>No documents available</p>
-            </div>
-          ) : (
-            <table className="vn-table">
-              <thead><tr><th>Document</th><th>Type</th><th>Size</th><th>Created</th><th>Action</th></tr></thead>
-              <tbody>
-                {docs.map(d => (
-                  <tr key={d.id}>
-                    <td><span style={{ fontWeight: 600, fontSize: 14 }}>{d.fileName}</span></td>
-                    <td><span className="vn-chip vn-chip-secondary">{docTypeLabel(d.documentType)}</span></td>
-                    <td style={{ fontSize: 13 }}>{formatSize(d.fileSize)}</td>
-                    <td style={{ fontSize: 13 }}>{new Date(d.createdAt).toLocaleDateString()}</td>
-                    <td>
-                      <button className="vn-btn vn-btn-outline vn-btn-sm" onClick={() => handleDownload(d)}>
-                        <span className="material-icons" style={{ fontSize: 16 }}>download</span> Download
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </div>
+    <div className="space-y-6">
+      <h1 className="text-3xl font-bold tracking-tight">Documents</h1>
+      <Card>
+        {loading ? (
+          <div className="flex flex-col items-center gap-3 py-12 text-muted-foreground">
+            <Loader2 className="h-6 w-6 animate-spin" />
+            <span className="text-sm">Loading...</span>
+          </div>
+        ) : docs.length === 0 ? (
+          <div className="flex flex-col items-center gap-3 py-12 text-muted-foreground">
+            <FolderOpen className="h-10 w-10 opacity-40" />
+            <p className="text-sm">No documents available</p>
+          </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Document</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Size</TableHead>
+                <TableHead>Created</TableHead>
+                <TableHead>Action</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {docs.map(d => (
+                <TableRow key={d.id}>
+                  <TableCell className="font-semibold">{d.fileName}</TableCell>
+                  <TableCell>
+                    <Badge variant="muted">{docTypeLabel(d.documentType)}</Badge>
+                  </TableCell>
+                  <TableCell className="text-sm">{formatSize(d.fileSize)}</TableCell>
+                  <TableCell className="text-sm">{new Date(d.createdAt).toLocaleDateString()}</TableCell>
+                  <TableCell>
+                    <Button variant="outline" size="sm" onClick={() => handleDownload(d)}>
+                      <Download className="h-4 w-4" />
+                      Download
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </Card>
     </div>
   );
 }

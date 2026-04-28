@@ -1,8 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { API_URL } from '../api';
+import { Loader2, PackageOpen, Plus } from 'lucide-react';
 
-/* ── Types ────────────────────────────────────────────────── */
+import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 interface ReceivingTask {
   id: string;
@@ -17,16 +35,16 @@ interface ReceivingTask {
   createdAt: string;
 }
 
-/* ── Helpers ──────────────────────────────────────────────── */
+type BadgeVariant = 'success' | 'info' | 'warning' | 'destructive' | 'muted' | 'secondary' | 'default';
 
-function statusChip(status: string): string {
+function statusVariant(status: string): BadgeVariant {
   switch (status) {
-    case 'pending': return 'vn-chip-secondary';
-    case 'in_progress': return 'vn-chip-info';
-    case 'inspection': return 'vn-chip-warning';
-    case 'completed': return 'vn-chip-success';
-    case 'cancelled': return 'vn-chip-error';
-    default: return 'vn-chip-secondary';
+    case 'pending': return 'secondary';
+    case 'in_progress': return 'info';
+    case 'inspection': return 'warning';
+    case 'completed': return 'success';
+    case 'cancelled': return 'destructive';
+    default: return 'secondary';
   }
 }
 
@@ -34,13 +52,11 @@ function formatStatus(s: string): string {
   return s.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 }
 
-/* ── Component ────────────────────────────────────────────── */
-
 export default function VNextWmsReceiving() {
   const navigate = useNavigate();
   const [tasks, setTasks] = useState<ReceivingTask[]>([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
 
   const [selectedLocation, setSelectedLocation] = useState('');
   const [locations, setLocations] = useState<Array<{ id: string; name: string }>>([]);
@@ -62,7 +78,7 @@ export default function VNextWmsReceiving() {
   useEffect(() => {
     if (!selectedLocation) return;
     setLoading(true);
-    const url = statusFilter
+    const url = statusFilter !== 'all'
       ? `${API_URL}/api/v1/receiving/tasks?locationId=${selectedLocation}&status=${statusFilter}`
       : `${API_URL}/api/v1/receiving/tasks?locationId=${selectedLocation}`;
     fetch(url)
@@ -77,95 +93,104 @@ export default function VNextWmsReceiving() {
       .finally(() => setLoading(false));
   }, [selectedLocation, statusFilter]);
 
-  const filtered = tasks; // Filtering done server-side
-
   return (
-    <div>
-      <div className="vn-page-header">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1>Receiving</h1>
-          <p className="vn-page-subtitle">Inbound goods receiving and inspection</p>
+          <h1 className="text-3xl font-bold tracking-tight">Receiving</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Inbound goods receiving and inspection</p>
         </div>
-        <button className="vn-btn vn-btn-primary" onClick={() => navigate('/wms/receiving/create')}>
-          <span className="material-icons" style={{ fontSize: '18px', marginRight: '0.5rem' }}>add</span>
+        <Button variant="gradient" onClick={() => navigate('/wms/receiving/create')}>
+          <Plus className="h-4 w-4" />
           New Receiving Task
-        </button>
+        </Button>
       </div>
 
-      {/* Filters */}
-      <div className="vn-filters" style={{ marginBottom: '1rem' }}>
-        <select
-          className="vn-filter-select"
-          value={selectedLocation}
-          onChange={e => setSelectedLocation(e.target.value)}
-        >
-          {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-        </select>
-        <select
-          className="vn-filter-select"
-          value={statusFilter}
-          onChange={e => setStatusFilter(e.target.value)}
-        >
-          <option value="">All Statuses</option>
-          <option value="pending">Pending</option>
-          <option value="in_progress">In Progress</option>
-          <option value="inspection">Inspection</option>
-          <option value="completed">Completed</option>
-          <option value="cancelled">Cancelled</option>
-        </select>
+      <div className="flex flex-wrap items-center gap-2">
+        <Select value={selectedLocation} onValueChange={setSelectedLocation}>
+          <SelectTrigger className="w-[260px]">
+            <SelectValue placeholder="Select location" />
+          </SelectTrigger>
+          <SelectContent>
+            {locations.map(l => (
+              <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-[200px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Statuses</SelectItem>
+            <SelectItem value="pending">Pending</SelectItem>
+            <SelectItem value="in_progress">In Progress</SelectItem>
+            <SelectItem value="inspection">Inspection</SelectItem>
+            <SelectItem value="completed">Completed</SelectItem>
+            <SelectItem value="cancelled">Cancelled</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {loading ? (
-        <div style={{ padding: '2rem', textAlign: 'center' }}>
-          <div className="vn-loading-spinner" />
+        <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+          <Loader2 className="h-8 w-8 animate-spin" />
         </div>
-      ) : filtered.length === 0 ? (
-        <div className="vn-card" style={{ textAlign: 'center', padding: '3rem' }}>
-          <span className="material-icons" style={{ fontSize: '48px', color: 'var(--text-secondary)', marginBottom: '1rem', display: 'block' }}>move_to_inbox</span>
-          <h3>No receiving tasks</h3>
-          <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-            Receiving tasks are created when inbound shipments arrive, or manually for blind receiving.
-          </p>
-          <button className="vn-btn vn-btn-primary" onClick={() => navigate('/wms/receiving/create')}>
-            Create Receiving Task
-          </button>
-        </div>
+      ) : tasks.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+            <PackageOpen className="h-12 w-12 text-muted-foreground" />
+            <h3 className="text-base font-medium">No receiving tasks</h3>
+            <p className="text-sm text-muted-foreground">
+              Receiving tasks are created when inbound shipments arrive, or manually for blind receiving.
+            </p>
+            <Button variant="gradient" onClick={() => navigate('/wms/receiving/create')}>
+              Create Receiving Task
+            </Button>
+          </CardContent>
+        </Card>
       ) : (
-        <div className="vn-table-wrap">
-          <table className="vn-table">
-            <thead>
-              <tr>
-                <th>Task</th>
-                <th>Type</th>
-                <th>Shipment</th>
-                <th>Dock</th>
-                <th>Progress</th>
-                <th>Assigned To</th>
-                <th>Status</th>
-                <th>Created</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(task => (
-                <tr key={task.id} onClick={() => navigate(`/wms/receiving/${task.id}`)} style={{ cursor: 'pointer' }}>
-                  <td><span className="vn-table-id">{task.id.slice(0, 8)}</span></td>
-                  <td>
-                    <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
-                      <span className="vn-chip vn-chip-secondary">{task.receivingType === 'asn' ? 'ASN' : 'Blind'}</span>
-                      {task.crossDock && <span className="vn-chip vn-chip-warning">Cross-Dock</span>}
+        <Card>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Task</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Shipment</TableHead>
+                <TableHead>Dock</TableHead>
+                <TableHead>Progress</TableHead>
+                <TableHead>Assigned To</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Created</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {tasks.map(task => (
+                <TableRow
+                  key={task.id}
+                  onClick={() => navigate(`/wms/receiving/${task.id}`)}
+                  className="cursor-pointer"
+                >
+                  <TableCell className="font-mono text-sm font-semibold">{task.id.slice(0, 8)}</TableCell>
+                  <TableCell>
+                    <div className="flex flex-wrap gap-1">
+                      <Badge variant="secondary">{task.receivingType === 'asn' ? 'ASN' : 'Blind'}</Badge>
+                      {task.crossDock && <Badge variant="warning">Cross-Dock</Badge>}
                     </div>
-                  </td>
-                  <td>{task.shipmentRef || '--'}</td>
-                  <td>{task.dockDoor || '--'}</td>
-                  <td>{task.receivedLines}/{task.lineCount} lines</td>
-                  <td>{task.assignedTo || 'Unassigned'}</td>
-                  <td><span className={`vn-chip ${statusChip(task.status)}`}>{formatStatus(task.status)}</span></td>
-                  <td>{new Date(task.createdAt).toLocaleDateString()}</td>
-                </tr>
+                  </TableCell>
+                  <TableCell>{task.shipmentRef || '-'}</TableCell>
+                  <TableCell>{task.dockDoor || '-'}</TableCell>
+                  <TableCell>{task.receivedLines}/{task.lineCount} lines</TableCell>
+                  <TableCell>{task.assignedTo || 'Unassigned'}</TableCell>
+                  <TableCell>
+                    <Badge variant={statusVariant(task.status)}>{formatStatus(task.status)}</Badge>
+                  </TableCell>
+                  <TableCell>{new Date(task.createdAt).toLocaleDateString()}</TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </TableBody>
+          </Table>
+        </Card>
       )}
     </div>
   );

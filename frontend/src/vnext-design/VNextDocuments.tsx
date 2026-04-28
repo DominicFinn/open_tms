@@ -1,6 +1,38 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import {
+  Download,
+  Eye,
+  File,
+  FileText,
+  Filter,
+  Folder,
+  Gavel,
+  Image as ImageIcon,
+  Loader2,
+  Paperclip,
+  Search,
+  Upload,
+  X,
+  XCircle,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Separator } from '@/components/ui/separator';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 
 function formatFileSize(bytes: number): string {
   if (!bytes) return 'N/A';
@@ -9,18 +41,27 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function docTypeLabel(documentType: string): { type: string; typeColor: string } {
+type DocVariant = 'info' | 'warning' | 'muted';
+
+function docTypeLabel(documentType: string): { type: string; variant: DocVariant } {
   switch ((documentType || '').toLowerCase()) {
-    case 'bol': return { type: 'BOL', typeColor: 'info' };
-    case 'customs': return { type: 'Customs', typeColor: 'warning' };
-    default: return { type: 'Attachment', typeColor: 'secondary' };
+    case 'bol': return { type: 'BOL', variant: 'info' };
+    case 'customs': return { type: 'Customs', variant: 'warning' };
+    default: return { type: 'Attachment', variant: 'muted' };
   }
 }
 
-function docIcon(mimeType: string): string {
-  if (mimeType && mimeType.startsWith('image/')) return 'image';
-  return 'description';
+function DocIcon({ mimeType, className }: { mimeType: string; className?: string }) {
+  if (mimeType && mimeType.startsWith('image/')) return <ImageIcon className={className} />;
+  return <FileText className={className} />;
 }
+
+const STAT_TONES = {
+  primary: 'bg-primary/10 text-primary',
+  info: 'bg-info/15 text-info',
+  warning: 'bg-warning/15 text-warning',
+  muted: 'bg-muted text-muted-foreground',
+} as const;
 
 export default function VNextDocuments() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -62,12 +103,11 @@ export default function VNextDocuments() {
   };
 
   const mappedDocs = documents.map((d: any) => {
-    const { type, typeColor } = docTypeLabel(d.documentType);
-    const icon = docIcon(d.mimeType);
+    const { type, variant } = docTypeLabel(d.documentType);
     const entity = d.shipmentId ? `SHP-${d.shipmentId}` : d.orderId ? `ORD-${d.orderId}` : d.carrierId ? `Carrier-${d.carrierId}` : 'N/A';
     const size = formatFileSize(d.fileSize);
     const created = d.createdAt ? new Date(d.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A';
-    return { ...d, type, typeColor, icon, entity, size, created, name: d.fileName || d.documentNumber || 'Untitled' };
+    return { ...d, type, variant, entity, size, created, name: d.fileName || d.documentNumber || 'Untitled' };
   });
 
   const typeCounts = {
@@ -90,176 +130,172 @@ export default function VNextDocuments() {
 
   if (loading) {
     return (
-      <div className="vn-empty">
-        <span className="material-icons" style={{ animation: 'spin 1s linear infinite' }}>refresh</span>
-        <h3>Loading...</h3>
+      <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <h3 className="text-lg font-medium">Loading...</h3>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="vn-empty">
-        <span className="material-icons" style={{ color: 'var(--error)' }}>error</span>
-        <h3>Error</h3>
-        <p>{error}</p>
+      <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+        <XCircle className="h-5 w-5" />
+        {error}
       </div>
     );
   }
 
+  const stats = [
+    { tone: 'primary' as const, label: 'Total Documents', value: typeCounts.all, icon: Folder, key: 'all' },
+    { tone: 'info' as const, label: 'Bills of Lading', value: typeCounts.bol, icon: FileText, key: 'bol' },
+    { tone: 'warning' as const, label: 'Customs Forms', value: typeCounts.customs, icon: Gavel, key: 'customs' },
+    { tone: 'muted' as const, label: 'Attachments', value: typeCounts.attachment, icon: Paperclip, key: 'attachment' },
+  ];
+
   return (
-    <>
-      {/* Page Header */}
-      <div className="vn-page-header">
-        <h1>Documents</h1>
-        <div className="vn-page-actions">
-          <button className="vn-btn vn-btn-primary">
-            <span className="material-icons">upload_file</span>
-            Upload
-          </button>
-        </div>
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <h1 className="text-3xl font-bold tracking-tight">Documents</h1>
+        <Button variant="gradient">
+          <Upload className="h-4 w-4" />
+          Upload
+        </Button>
       </div>
 
       {(orderIdFilter || shipmentIdFilter) && (
-        <div className="vn-alert vn-alert-info" style={{ marginBottom: 16 }}>
-          <span className="material-icons">filter_alt</span>
-          <div className="vn-alert-content" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <div className="flex items-center justify-between gap-3 rounded-md border border-info/30 bg-info/10 p-3 text-sm text-info">
+          <div className="flex items-center gap-2">
+            <Filter className="h-4 w-4" />
             <span>
               Filtered to {orderIdFilter ? 'order' : 'shipment'}{' '}
-              <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{orderIdFilter || shipmentIdFilter}</span>
+              <span className="font-mono text-xs">{orderIdFilter || shipmentIdFilter}</span>
             </span>
-            <button className="vn-btn vn-btn-ghost vn-btn-sm" onClick={clearEntityFilter}>
-              <span className="material-icons" style={{ fontSize: 16 }}>close</span>
-              Clear filter
-            </button>
           </div>
+          <Button variant="ghost" size="sm" onClick={clearEntityFilter}>
+            <X className="h-4 w-4" />
+            Clear filter
+          </Button>
         </div>
       )}
 
-      {/* Stats */}
-      <div className="vn-stats">
-        <div className="vn-stat" style={{ cursor: 'pointer' }} onClick={() => setTypeFilter('all')}>
-          <div className="vn-stat-icon primary">
-            <span className="material-icons">folder</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{typeCounts.all}</div>
-            <div className="vn-stat-label">Total Documents</div>
-          </div>
-        </div>
-        <div className="vn-stat" style={{ cursor: 'pointer' }} onClick={() => setTypeFilter('bol')}>
-          <div className="vn-stat-icon info">
-            <span className="material-icons">description</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{typeCounts.bol}</div>
-            <div className="vn-stat-label">Bills of Lading</div>
-          </div>
-        </div>
-        <div className="vn-stat" style={{ cursor: 'pointer' }} onClick={() => setTypeFilter('customs')}>
-          <div className="vn-stat-icon warning">
-            <span className="material-icons">gavel</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{typeCounts.customs}</div>
-            <div className="vn-stat-label">Customs Forms</div>
-          </div>
-        </div>
-        <div className="vn-stat" style={{ cursor: 'pointer' }} onClick={() => setTypeFilter('attachment')}>
-          <div className="vn-stat-icon secondary">
-            <span className="material-icons">attach_file</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{typeCounts.attachment}</div>
-            <div className="vn-stat-label">Attachments</div>
-          </div>
-        </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {stats.map(stat => {
+          const Icon = stat.icon;
+          return (
+            <Card
+              key={stat.key}
+              onClick={() => setTypeFilter(stat.key)}
+              className="cursor-pointer p-5 hover:border-primary/40"
+            >
+              <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', STAT_TONES[stat.tone])}>
+                <Icon className="h-5 w-5" />
+              </div>
+              <div className="mt-3 text-2xl font-bold tracking-tight">{stat.value}</div>
+              <div className="mt-1 text-sm text-muted-foreground">{stat.label}</div>
+            </Card>
+          );
+        })}
       </div>
 
-      {/* Filter Bar + Table */}
-      <div className="vn-card">
-        <div className="vn-card-header">
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-            <div className="vn-search" style={{ minWidth: 220 }}>
-              <span className="material-icons">search</span>
-              <input
-                type="text"
+      <Card>
+        <div className="flex flex-wrap items-center justify-between gap-3 p-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative min-w-[220px]">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
                 placeholder="Search documents..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
+                className="pl-9"
               />
             </div>
-            <select
-              className="vn-select"
-              value={typeFilter}
-              onChange={e => setTypeFilter(e.target.value)}
-            >
-              <option value="all">All Types</option>
-              <option value="bol">BOL</option>
-              <option value="customs">Customs</option>
-              <option value="attachment">Attachment</option>
-            </select>
-            <select className="vn-select">
-              <option value="all">All Dates</option>
-              <option value="7d">Last 7 Days</option>
-              <option value="30d">Last 30 Days</option>
-              <option value="90d">Last 90 Days</option>
-            </select>
+            <Select value={typeFilter} onValueChange={setTypeFilter}>
+              <SelectTrigger className="w-[160px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Types</SelectItem>
+                <SelectItem value="bol">BOL</SelectItem>
+                <SelectItem value="customs">Customs</SelectItem>
+                <SelectItem value="attachment">Attachment</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select defaultValue="all">
+              <SelectTrigger className="w-[160px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Dates</SelectItem>
+                <SelectItem value="7d">Last 7 Days</SelectItem>
+                <SelectItem value="30d">Last 30 Days</SelectItem>
+                <SelectItem value="90d">Last 90 Days</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-          <span style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>{filtered.length} documents</span>
+          <span className="text-sm text-muted-foreground">{filtered.length} documents</span>
         </div>
-        <div className="vn-card-body vn-card-flush">
-          <div className="vn-table-wrap">
-            <table className="vn-table">
-              <thead>
-                <tr>
-                  <th>Document Name</th>
-                  <th>Type</th>
-                  <th>Entity</th>
-                  <th>Size</th>
-                  <th>Created</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((doc, i) => (
-                  <tr key={i}>
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span className="material-icons" style={{
-                          fontSize: 20,
-                          color: doc.icon === 'description' ? 'var(--error)' : doc.icon === 'image' ? 'var(--info)' : 'var(--on-surface-variant)',
-                        }}>{doc.icon}</span>
-                        <span style={{ fontWeight: 500 }}>{doc.name}</span>
-                      </div>
-                    </td>
-                    <td><span className={`vn-chip vn-chip-${doc.typeColor}`}>{doc.type}</span></td>
-                    <td>
-                      <span style={{ color: 'var(--primary)', fontWeight: 500, cursor: 'pointer' }}>{doc.entity}</span>
-                    </td>
-                    <td style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>{doc.size}</td>
-                    <td style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>{doc.created}</td>
-                    <td style={{ display: 'flex', gap: 4 }}>
-                      {doc.documentType === 'bol' && (
-                        <Link to={`/documents/${doc.id}/view`}>
-                          <button className="vn-btn-icon" title="View BOL">
-                            <span className="material-icons" style={{ fontSize: 18 }}>visibility</span>
-                          </button>
+        <Separator />
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Document Name</TableHead>
+              <TableHead>Type</TableHead>
+              <TableHead>Entity</TableHead>
+              <TableHead>Size</TableHead>
+              <TableHead>Created</TableHead>
+              <TableHead>Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filtered.map((doc, i) => (
+              <TableRow key={i}>
+                <TableCell>
+                  <div className="flex items-center gap-2">
+                    <DocIcon mimeType={doc.mimeType} className="h-5 w-5 text-muted-foreground" />
+                    <span className="font-medium">{doc.name}</span>
+                  </div>
+                </TableCell>
+                <TableCell><Badge variant={doc.variant}>{doc.type}</Badge></TableCell>
+                <TableCell>
+                  <span className="cursor-pointer font-medium text-primary">{doc.entity}</span>
+                </TableCell>
+                <TableCell className="text-sm text-muted-foreground">{doc.size}</TableCell>
+                <TableCell className="text-sm text-muted-foreground">{doc.created}</TableCell>
+                <TableCell>
+                  <div className="flex gap-1">
+                    {doc.documentType === 'bol' && (
+                      <Button asChild variant="ghost" size="icon" className="h-8 w-8">
+                        <Link to={`/documents/${doc.id}/view`} title="View BOL">
+                          <Eye className="h-4 w-4" />
                         </Link>
-                      )}
-                      <a href={`${API_URL}/api/v1/documents/${doc.id}/download`} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
-                        <button className="vn-btn-icon" title="Download">
-                          <span className="material-icons" style={{ fontSize: 18 }}>download</span>
-                        </button>
+                      </Button>
+                    )}
+                    <Button asChild variant="ghost" size="icon" className="h-8 w-8">
+                      <a
+                        href={`${API_URL}/api/v1/documents/${doc.id}/download`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="Download"
+                      >
+                        <Download className="h-4 w-4" />
                       </a>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </>
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+            {filtered.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
+                  <File className="mx-auto mb-2 h-8 w-8 opacity-40" />
+                  No documents found
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </Card>
+    </div>
   );
 }

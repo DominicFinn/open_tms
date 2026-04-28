@@ -1,6 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Banknote, Loader2, Plus, RotateCcw } from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 interface Rma {
   id: string;
@@ -17,17 +38,19 @@ interface Rma {
   _count: { lines: number };
 }
 
-function statusChip(s: string): string {
+type BadgeVariant = 'success' | 'info' | 'warning' | 'destructive' | 'muted' | 'secondary' | 'default';
+
+function statusVariant(s: string): BadgeVariant {
   switch (s) {
-    case 'requested': return 'vn-chip-info';
-    case 'authorized': return 'vn-chip-primary';
-    case 'in_transit': return 'vn-chip-warning';
-    case 'received': return 'vn-chip-warning';
-    case 'inspecting': return 'vn-chip-warning';
-    case 'dispositioning': return 'vn-chip-warning';
-    case 'completed': return 'vn-chip-success';
-    case 'rejected': return 'vn-chip-error';
-    default: return 'vn-chip-secondary';
+    case 'requested': return 'info';
+    case 'authorized': return 'default';
+    case 'in_transit': return 'warning';
+    case 'received': return 'warning';
+    case 'inspecting': return 'warning';
+    case 'dispositioning': return 'warning';
+    case 'completed': return 'success';
+    case 'rejected': return 'destructive';
+    default: return 'secondary';
   }
 }
 
@@ -43,12 +66,12 @@ export default function VNextWmsReturns() {
   const navigate = useNavigate();
   const [rmas, setRmas] = useState<Rma[]>([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [search, setSearch] = useState('');
 
   useEffect(() => {
     setLoading(true);
-    const url = statusFilter
+    const url = statusFilter !== 'all'
       ? `${API_URL}/api/v1/rmas?status=${statusFilter}`
       : `${API_URL}/api/v1/rmas`;
     fetch(url)
@@ -63,71 +86,89 @@ export default function VNextWmsReturns() {
   );
 
   return (
-    <div>
-      <div className="vn-page-header">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1>Returns</h1>
-          <p className="vn-page-subtitle">Manage RMAs from request through disposition to refund</p>
+          <h1 className="text-3xl font-bold tracking-tight">Returns</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Manage RMAs from request through disposition to refund</p>
         </div>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button className="vn-btn vn-btn-outline" onClick={() => navigate('/wms/returns/refund-review')}>
-            <span className="material-icons" style={{ fontSize: '18px', marginRight: '0.5rem' }}>account_balance</span>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => navigate('/wms/returns/refund-review')}>
+            <Banknote className="h-4 w-4" />
             Refund Review
-          </button>
-          <button className="vn-btn vn-btn-primary" onClick={() => navigate('/wms/returns/create')}>
-            <span className="material-icons" style={{ fontSize: '18px', marginRight: '0.5rem' }}>add</span>
+          </Button>
+          <Button variant="gradient" onClick={() => navigate('/wms/returns/create')}>
+            <Plus className="h-4 w-4" />
             New RMA
-          </button>
+          </Button>
         </div>
       </div>
 
-      <div className="vn-filters" style={{ marginBottom: '1rem' }}>
-        <select className="vn-filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-          <option value="">All Statuses</option>
-          <option value="requested">Requested</option>
-          <option value="authorized">Authorized</option>
-          <option value="in_transit">In Transit</option>
-          <option value="received">Received</option>
-          <option value="inspecting">Inspecting</option>
-          <option value="dispositioning">Dispositioning</option>
-          <option value="completed">Completed</option>
-          <option value="rejected">Rejected</option>
-        </select>
-        <input className="vn-filter-input" placeholder="Search RMA number..." value={search} onChange={e => setSearch(e.target.value)} />
+      <div className="flex flex-wrap items-center gap-2">
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-[200px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Statuses</SelectItem>
+            <SelectItem value="requested">Requested</SelectItem>
+            <SelectItem value="authorized">Authorized</SelectItem>
+            <SelectItem value="in_transit">In Transit</SelectItem>
+            <SelectItem value="received">Received</SelectItem>
+            <SelectItem value="inspecting">Inspecting</SelectItem>
+            <SelectItem value="dispositioning">Dispositioning</SelectItem>
+            <SelectItem value="completed">Completed</SelectItem>
+            <SelectItem value="rejected">Rejected</SelectItem>
+          </SelectContent>
+        </Select>
+        <Input placeholder="Search RMA number..." value={search} onChange={e => setSearch(e.target.value)} className="max-w-sm" />
       </div>
 
       {loading ? (
-        <div style={{ padding: '2rem', textAlign: 'center' }}><div className="vn-loading-spinner" /></div>
+        <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+          <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
       ) : filtered.length === 0 ? (
-        <div className="vn-card" style={{ textAlign: 'center', padding: '3rem' }}>
-          <span className="material-icons" style={{ fontSize: '48px', color: 'var(--text-secondary)', marginBottom: '1rem', display: 'block' }}>assignment_return</span>
-          <h3>No RMAs</h3>
-          <p style={{ color: 'var(--text-secondary)' }}>Create an RMA manually or wait for customer portal requests.</p>
-        </div>
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+            <RotateCcw className="h-12 w-12 text-muted-foreground" />
+            <h3 className="text-base font-medium">No RMAs</h3>
+            <p className="text-sm text-muted-foreground">Create an RMA manually or wait for customer portal requests.</p>
+          </CardContent>
+        </Card>
       ) : (
-        <div className="vn-table-wrap">
-          <table className="vn-table">
-            <thead>
-              <tr>
-                <th>RMA #</th><th>Status</th><th>Reason</th><th>Lines</th><th>Suggested Refund</th><th>Actual</th><th>Via</th><th>Requested</th>
-              </tr>
-            </thead>
-            <tbody>
+        <Card>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>RMA #</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Reason</TableHead>
+                <TableHead>Lines</TableHead>
+                <TableHead>Suggested Refund</TableHead>
+                <TableHead>Actual</TableHead>
+                <TableHead>Via</TableHead>
+                <TableHead>Requested</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {filtered.map(r => (
-                <tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/wms/returns/${r.id}`)}>
-                  <td><strong>{r.rmaNumber}</strong></td>
-                  <td><span className={`vn-chip ${statusChip(r.status)}`}>{formatStatus(r.status)}</span></td>
-                  <td>{formatReason(r.returnReason)}</td>
-                  <td>{r._count?.lines ?? 0}</td>
-                  <td>${(r.suggestedRefundCents / 100).toFixed(2)}</td>
-                  <td>{r.actualRefundCents != null ? `$${(r.actualRefundCents / 100).toFixed(2)}` : '--'}</td>
-                  <td><span className="vn-chip vn-chip-secondary" style={{ fontSize: '0.75rem' }}>{formatStatus(r.initiatedVia)}</span></td>
-                  <td>{new Date(r.requestedAt).toLocaleDateString()}</td>
-                </tr>
+                <TableRow key={r.id} className="cursor-pointer" onClick={() => navigate(`/wms/returns/${r.id}`)}>
+                  <TableCell className="font-mono text-sm font-semibold">{r.rmaNumber}</TableCell>
+                  <TableCell>
+                    <Badge variant={statusVariant(r.status)}>{formatStatus(r.status)}</Badge>
+                  </TableCell>
+                  <TableCell>{formatReason(r.returnReason)}</TableCell>
+                  <TableCell>{r._count?.lines ?? 0}</TableCell>
+                  <TableCell>${(r.suggestedRefundCents / 100).toFixed(2)}</TableCell>
+                  <TableCell>{r.actualRefundCents != null ? `$${(r.actualRefundCents / 100).toFixed(2)}` : '-'}</TableCell>
+                  <TableCell><Badge variant="secondary">{formatStatus(r.initiatedVia)}</Badge></TableCell>
+                  <TableCell>{new Date(r.requestedAt).toLocaleDateString()}</TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </TableBody>
+          </Table>
+        </Card>
       )}
     </div>
   );

@@ -1,5 +1,34 @@
 import React, { useState, useEffect } from 'react';
+import { CheckCircle2, CircleAlert, Info, Loader2, Plus, RefreshCw, RotateCw } from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 interface ReplenishmentRule {
   id: string;
@@ -101,120 +130,156 @@ export default function VNextWmsReplenishment() {
   const pickFaceBins = bins.filter(b => b.binType === 'shelf' || b.binType === 'pallet' || b.binType === 'floor');
 
   return (
-    <div>
-      <div className="vn-page-header">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1>Replenishment</h1>
-          <p className="vn-page-subtitle">Auto-replenish pick faces from bulk storage when stock drops below minimum</p>
+          <h1 className="text-3xl font-bold tracking-tight">Replenishment</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Auto-replenish pick faces from bulk storage when stock drops below minimum</p>
         </div>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button className="vn-btn vn-btn-outline" onClick={handleCheck} disabled={checking}>
-            <span className="material-icons" style={{ fontSize: '18px', marginRight: '0.5rem' }}>refresh</span>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={handleCheck} disabled={checking}>
+            <RefreshCw className={`h-4 w-4 ${checking ? 'animate-spin' : ''}`} />
             {checking ? 'Checking...' : 'Run Check'}
-          </button>
-          <button className="vn-btn vn-btn-primary" onClick={() => setShowCreate(true)}>
-            <span className="material-icons" style={{ fontSize: '18px', marginRight: '0.5rem' }}>add</span>
+          </Button>
+          <Button variant="gradient" onClick={() => setShowCreate(true)}>
+            <Plus className="h-4 w-4" />
             Add Rule
-          </button>
+          </Button>
         </div>
       </div>
 
-      {error && <div className="vn-alert vn-alert-error" style={{ marginBottom: '1rem' }}>{error}</div>}
+      {error && (
+        <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+          <CircleAlert className="h-5 w-5" />
+          {error}
+        </div>
+      )}
+
       {checkResult && (
-        <div className={`vn-alert ${checkResult.tasksCreated > 0 ? 'vn-alert-success' : 'vn-alert-info'}`} style={{ marginBottom: '1rem' }}>
+        <div className={`flex items-center gap-3 rounded-md border p-4 text-sm ${checkResult.tasksCreated > 0 ? 'border-success/30 bg-success/10 text-success' : 'border-info/30 bg-info/10 text-info'}`}>
+          {checkResult.tasksCreated > 0 ? <CheckCircle2 className="h-5 w-5" /> : <Info className="h-5 w-5" />}
           {checkResult.tasksCreated > 0
             ? `Created ${checkResult.tasksCreated} replenishment task(s): ${checkResult.details.map((d: any) => `${d.sku} to ${d.pickFaceBin} (qty ${d.quantity})`).join(', ')}`
             : 'All pick faces are above minimum levels. No replenishment needed.'}
         </div>
       )}
 
-      {/* Create modal */}
-      {showCreate && (
-        <div className="vn-modal-backdrop" onClick={() => setShowCreate(false)}>
-          <div className="vn-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
-            <div className="vn-modal-header"><h3>New Replenishment Rule</h3><button onClick={() => setShowCreate(false)}><span className="material-icons">close</span></button></div>
-            <form onSubmit={handleCreate}>
-              <div className="vn-modal-body">
-                <div className="vn-field" style={{ marginBottom: '1rem' }}>
-                  <label className="vn-field-label">SKU *</label>
-                  <input className="vn-input" value={createForm.sku} onChange={e => setCreateForm({ ...createForm, sku: e.target.value })} required />
-                </div>
-                <div className="vn-field" style={{ marginBottom: '1rem' }}>
-                  <label className="vn-field-label">Pick Face Bin *</label>
-                  <select className="vn-input" value={createForm.pickFaceBinId} onChange={e => setCreateForm({ ...createForm, pickFaceBinId: e.target.value })} required>
-                    <option value="">Select bin...</option>
-                    {pickFaceBins.map(b => <option key={b.id} value={b.id}>{b.label} ({b.binType})</option>)}
-                  </select>
-                </div>
-                <div className="vn-field" style={{ marginBottom: '1rem' }}>
-                  <label className="vn-field-label">Bulk Zone (pull from) *</label>
-                  <select className="vn-input" value={createForm.bulkZoneId} onChange={e => setCreateForm({ ...createForm, bulkZoneId: e.target.value })} required>
-                    <option value="">Select zone...</option>
-                    {zones.map(z => <option key={z.id} value={z.id}>{z.name}</option>)}
-                  </select>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                  <div className="vn-field">
-                    <label className="vn-field-label">Min Qty (trigger) *</label>
-                    <input className="vn-input" type="number" min="1" value={createForm.minQuantity} onChange={e => setCreateForm({ ...createForm, minQuantity: e.target.value })} required />
-                  </div>
-                  <div className="vn-field">
-                    <label className="vn-field-label">Max Qty (replenish to) *</label>
-                    <input className="vn-input" type="number" min="1" value={createForm.maxQuantity} onChange={e => setCreateForm({ ...createForm, maxQuantity: e.target.value })} required />
-                  </div>
-                </div>
+      <Dialog open={showCreate} onOpenChange={setShowCreate}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>New Replenishment Rule</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleCreate} className="space-y-4">
+            <div className="space-y-2">
+              <Label>SKU *</Label>
+              <Input value={createForm.sku} onChange={e => setCreateForm({ ...createForm, sku: e.target.value })} required />
+            </div>
+            <div className="space-y-2">
+              <Label>Pick Face Bin *</Label>
+              <Select value={createForm.pickFaceBinId} onValueChange={v => setCreateForm({ ...createForm, pickFaceBinId: v })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select bin..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {pickFaceBins.map(b => (
+                    <SelectItem key={b.id} value={b.id}>{b.label} ({b.binType})</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Bulk Zone (pull from) *</Label>
+              <Select value={createForm.bulkZoneId} onValueChange={v => setCreateForm({ ...createForm, bulkZoneId: v })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select zone..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {zones.map(z => (
+                    <SelectItem key={z.id} value={z.id}>{z.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Min Qty (trigger) *</Label>
+                <Input type="number" min="1" value={createForm.minQuantity} onChange={e => setCreateForm({ ...createForm, minQuantity: e.target.value })} required />
               </div>
-              <div className="vn-modal-footer">
-                <button type="button" className="vn-btn vn-btn-outline" onClick={() => setShowCreate(false)}>Cancel</button>
-                <button type="submit" className="vn-btn vn-btn-primary" disabled={creating}>{creating ? 'Creating...' : 'Create Rule'}</button>
+              <div className="space-y-2">
+                <Label>Max Qty (replenish to) *</Label>
+                <Input type="number" min="1" value={createForm.maxQuantity} onChange={e => setCreateForm({ ...createForm, maxQuantity: e.target.value })} required />
               </div>
-            </form>
-          </div>
-        </div>
-      )}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" type="button" onClick={() => setShowCreate(false)}>Cancel</Button>
+              <Button variant="gradient" type="submit" disabled={creating}>{creating ? 'Creating...' : 'Create Rule'}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
-      {/* Filters */}
-      <div className="vn-filters" style={{ marginBottom: '1rem' }}>
-        <select className="vn-filter-select" value={selectedLocation} onChange={e => setSelectedLocation(e.target.value)}>
-          {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-        </select>
+      <div className="flex flex-wrap items-center gap-2">
+        <Select value={selectedLocation} onValueChange={setSelectedLocation}>
+          <SelectTrigger className="w-[260px]">
+            <SelectValue placeholder="Select location" />
+          </SelectTrigger>
+          <SelectContent>
+            {locations.map(l => (
+              <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {loading ? (
-        <div style={{ padding: '2rem', textAlign: 'center' }}><div className="vn-loading-spinner" /></div>
+        <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+          <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
       ) : rules.length === 0 ? (
-        <div className="vn-card" style={{ textAlign: 'center', padding: '3rem' }}>
-          <span className="material-icons" style={{ fontSize: '48px', color: 'var(--text-secondary)', marginBottom: '1rem', display: 'block' }}>sync</span>
-          <h3>No replenishment rules</h3>
-          <p style={{ color: 'var(--text-secondary)' }}>Set up rules to auto-replenish pick faces when stock drops below a threshold.</p>
-        </div>
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+            <RotateCw className="h-12 w-12 text-muted-foreground" />
+            <h3 className="text-base font-medium">No replenishment rules</h3>
+            <p className="text-sm text-muted-foreground">Set up rules to auto-replenish pick faces when stock drops below a threshold.</p>
+          </CardContent>
+        </Card>
       ) : (
-        <div className="vn-table-wrap">
-          <table className="vn-table">
-            <thead>
-              <tr><th>SKU</th><th>Pick Face Bin</th><th>Bulk Zone</th><th>Min Qty</th><th>Max Qty</th><th>Active</th><th>Actions</th></tr>
-            </thead>
-            <tbody>
+        <Card>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>SKU</TableHead>
+                <TableHead>Pick Face Bin</TableHead>
+                <TableHead>Bulk Zone</TableHead>
+                <TableHead>Min Qty</TableHead>
+                <TableHead>Max Qty</TableHead>
+                <TableHead>Active</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {rules.map(r => (
-                <tr key={r.id}>
-                  <td><strong>{r.sku}</strong></td>
-                  <td>{bins.find(b => b.id === r.pickFaceBinId)?.label ?? r.pickFaceBinId.slice(0, 8)}</td>
-                  <td>{zones.find(z => z.id === r.bulkZoneId)?.name ?? r.bulkZoneId.slice(0, 8)}</td>
-                  <td>{r.minQuantity}</td>
-                  <td>{r.maxQuantity}</td>
-                  <td>
-                    <span className={`vn-chip ${r.active ? 'vn-chip-success' : 'vn-chip-secondary'}`} style={{ cursor: 'pointer' }} onClick={() => handleToggle(r.id, r.active)}>
-                      {r.active ? 'Active' : 'Inactive'}
-                    </span>
-                  </td>
-                  <td>
-                    <button className="vn-btn vn-btn-outline" style={{ fontSize: '0.75rem', padding: '0.15rem 0.4rem', color: 'var(--color-error)' }} onClick={() => handleDelete(r.id)}>Delete</button>
-                  </td>
-                </tr>
+                <TableRow key={r.id}>
+                  <TableCell className="font-mono text-sm font-semibold">{r.sku}</TableCell>
+                  <TableCell>{bins.find(b => b.id === r.pickFaceBinId)?.label ?? r.pickFaceBinId.slice(0, 8)}</TableCell>
+                  <TableCell>{zones.find(z => z.id === r.bulkZoneId)?.name ?? r.bulkZoneId.slice(0, 8)}</TableCell>
+                  <TableCell>{r.minQuantity}</TableCell>
+                  <TableCell>{r.maxQuantity}</TableCell>
+                  <TableCell>
+                    <button type="button" onClick={() => handleToggle(r.id, r.active)}>
+                      <Badge variant={r.active ? 'success' : 'muted'} className="cursor-pointer">
+                        {r.active ? 'Active' : 'Inactive'}
+                      </Badge>
+                    </button>
+                  </TableCell>
+                  <TableCell>
+                    <Button variant="outline" size="sm" className="text-destructive" onClick={() => handleDelete(r.id)}>Delete</Button>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </TableBody>
+          </Table>
+        </Card>
       )}
     </div>
   );

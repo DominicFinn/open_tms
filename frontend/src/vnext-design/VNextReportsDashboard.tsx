@@ -1,5 +1,26 @@
 import React, { useEffect, useState } from 'react';
+import {
+  AlertTriangle,
+  BadgeCheck,
+  Bug,
+  CheckCircle2,
+  Clock,
+  CreditCard,
+  Loader2,
+  Plane,
+  Receipt,
+  ScrollText,
+  ShieldCheck,
+  Truck,
+  TrendingDown,
+  TrendingUp,
+  Warehouse,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { cn } from '@/lib/utils';
 
 interface DashboardData {
   periodLabel: string;
@@ -55,11 +76,11 @@ function formatCents(cents: number): string {
   return `$${(cents / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-function trendArrow(change: number | null): { icon: string; color: string; text: string } | null {
+function trendInfo(change: number | null): { Icon: typeof TrendingUp; cls: string; text: string } | null {
   if (change == null) return null;
-  if (change > 0) return { icon: 'trending_up', color: 'var(--color-success)', text: `+${change}%` };
-  if (change < 0) return { icon: 'trending_down', color: 'var(--color-error)', text: `${change}%` };
-  return { icon: 'trending_flat', color: 'var(--on-surface-variant)', text: '0%' };
+  if (change > 0) return { Icon: TrendingUp, cls: 'text-success', text: `+${change}%` };
+  if (change < 0) return { Icon: TrendingDown, cls: 'text-destructive', text: `${change}%` };
+  return { Icon: TrendingUp, cls: 'text-muted-foreground', text: '0%' };
 }
 
 function periodDates(period: Period): { dateFrom: string; dateTo: string } {
@@ -90,16 +111,52 @@ function periodDates(period: Period): { dateFrom: string; dateTo: string } {
   return { dateFrom, dateTo };
 }
 
-function StatusBar({ label, count, total, color }: { label: string; count: number; total: number; color: string }) {
+function StatusBar({ label, count, total, colorClass }: { label: string; count: number; total: number; colorClass: string }) {
   const pct = total > 0 ? (count / total) * 100 : 0;
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '6px 0' }}>
-      <span style={{ width: 100, fontSize: 13, color: 'var(--on-surface-variant)' }}>{label}</span>
-      <div style={{ flex: 1, background: 'var(--surface-container)', borderRadius: 4, height: 8 }}>
-        <div style={{ width: `${pct}%`, background: color, borderRadius: 4, height: 8, minWidth: count > 0 ? 4 : 0, transition: 'width 0.3s' }} />
+    <div className="flex items-center gap-3 py-1.5">
+      <span className="w-24 text-sm text-muted-foreground">{label}</span>
+      <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+        <div
+          className={cn('h-full rounded-full transition-all', colorClass)}
+          style={{ width: `${pct}%`, minWidth: count > 0 ? 4 : 0 }}
+        />
       </div>
-      <span style={{ width: 40, textAlign: 'right', fontSize: 13, fontWeight: 600 }}>{count}</span>
+      <span className="w-10 text-right text-sm font-semibold">{count}</span>
     </div>
+  );
+}
+
+function StatCard({
+  Icon,
+  iconClass,
+  value,
+  label,
+  trend,
+  subtext,
+}: {
+  Icon: typeof TrendingUp;
+  iconClass: string;
+  value: React.ReactNode;
+  label: string;
+  trend?: { Icon: typeof TrendingUp; cls: string; text: string } | null;
+  subtext?: React.ReactNode;
+}) {
+  return (
+    <Card className="p-5">
+      <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', iconClass)}>
+        <Icon className="h-5 w-5" />
+      </div>
+      <div className="mt-3 text-2xl font-bold tracking-tight">{value}</div>
+      <div className="mt-1 text-sm text-muted-foreground">{label}</div>
+      {trend && (
+        <div className={cn('mt-1 flex items-center gap-1 text-xs', trend.cls)}>
+          <trend.Icon className="h-3 w-3" />
+          {trend.text}
+        </div>
+      )}
+      {subtext && <div className="mt-1 text-xs text-muted-foreground">{subtext}</div>}
+    </Card>
   );
 }
 
@@ -126,215 +183,199 @@ export default function VNextReportsDashboard() {
     return () => { cancelled = true; };
   }, [period]);
 
-  if (loading) return (
-    <div style={{ padding: '24px 32px', textAlign: 'center' }}>
-      <div className="loading-spinner" style={{ margin: '80px auto' }} />
-    </div>
-  );
-  if (error || !data) return (
-    <div style={{ padding: '24px 32px' }}>
-      <div className="vn-alert vn-alert-error">{error || 'Failed to load dashboard'}</div>
-    </div>
-  );
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+  if (error || !data) {
+    return (
+      <div className="rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+        {error || 'Failed to load dashboard'}
+      </div>
+    );
+  }
 
   const { shipments, orders, issues, financial, invoices, trends } = data;
 
-  const shipTrend = trendArrow(trends.shipmentCountChange);
-  const revTrend = trendArrow(trends.revenueChange);
-  const marginTrend = trendArrow(trends.marginChange);
-  const orderTrend = trendArrow(trends.orderCountChange);
+  const shipTrend = trendInfo(trends.shipmentCountChange);
+  const revTrend = trendInfo(trends.revenueChange);
+  const marginTrend = trendInfo(trends.marginChange);
+  const orderTrend = trendInfo(trends.orderCountChange);
 
   return (
-    <div style={{ padding: '24px 32px' }}>
-      {/* Header */}
-      <div className="vn-page-header">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700 }}>Executive Dashboard</h1>
-          <p style={{ margin: '4px 0 0', color: 'var(--on-surface-variant)', fontSize: 14 }}>
-            {data.periodLabel}
-          </p>
+          <h1 className="text-3xl font-bold tracking-tight">Executive Dashboard</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{data.periodLabel}</p>
         </div>
-        <div className="vn-page-actions">
-          <div className="vn-tabs">
-            {([['7d', '7 Days'], ['30d', '30 Days'], ['mtd', 'MTD'], ['qtd', 'QTD'], ['ytd', 'YTD']] as [Period, string][]).map(([key, label]) => (
-              <button key={key} className={`vn-tab ${period === key ? 'active' : ''}`} onClick={() => setPeriod(key)}>
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
+        <Tabs value={period} onValueChange={v => setPeriod(v as Period)}>
+          <TabsList>
+            <TabsTrigger value="7d">7 Days</TabsTrigger>
+            <TabsTrigger value="30d">30 Days</TabsTrigger>
+            <TabsTrigger value="mtd">MTD</TabsTrigger>
+            <TabsTrigger value="qtd">QTD</TabsTrigger>
+            <TabsTrigger value="ytd">YTD</TabsTrigger>
+          </TabsList>
+        </Tabs>
       </div>
 
       {/* Row 1: Shipment stats */}
-      <div className="vn-stats" style={{ marginBottom: 16 }}>
-        <div className="vn-stat">
-          <div className="vn-stat-icon" style={{ background: 'var(--primary-container)', color: 'var(--primary)' }}>
-            <span className="material-icons">local_shipping</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{shipments.total}</div>
-            <div className="vn-stat-label">Total Shipments</div>
-            {shipTrend && <div className="vn-stat-change" style={{ color: shipTrend.color }}><span className="material-icons" style={{ fontSize: 14 }}>{shipTrend.icon}</span> {shipTrend.text}</div>}
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon" style={{ background: 'var(--info-container)', color: 'var(--color-info)' }}>
-            <span className="material-icons">flight_takeoff</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{shipments.inTransit}</div>
-            <div className="vn-stat-label">In Transit</div>
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon" style={{ background: 'var(--warning-container)', color: 'var(--color-warning)' }}>
-            <span className="material-icons">warehouse</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{shipments.atLocations}</div>
-            <div className="vn-stat-label">At Locations</div>
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon" style={{ background: 'var(--success-container)', color: 'var(--color-success)' }}>
-            <span className="material-icons">check_circle</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{shipments.complete}</div>
-            <div className="vn-stat-label">Delivered</div>
-          </div>
-        </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          Icon={Truck}
+          iconClass="bg-primary/10 text-primary"
+          value={shipments.total}
+          label="Total Shipments"
+          trend={shipTrend}
+        />
+        <StatCard
+          Icon={Plane}
+          iconClass="bg-info/15 text-info"
+          value={shipments.inTransit}
+          label="In Transit"
+        />
+        <StatCard
+          Icon={Warehouse}
+          iconClass="bg-warning/15 text-warning"
+          value={shipments.atLocations}
+          label="At Locations"
+        />
+        <StatCard
+          Icon={CheckCircle2}
+          iconClass="bg-success/15 text-success"
+          value={shipments.complete}
+          label="Delivered"
+        />
       </div>
 
       {/* Row 2: Financial stats */}
-      <div className="vn-stats" style={{ marginBottom: 16 }}>
-        <div className="vn-stat">
-          <div className="vn-stat-icon" style={{ background: 'var(--primary-container)', color: 'var(--primary)' }}>
-            <span className="material-icons">receipt_long</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{orders.total}</div>
-            <div className="vn-stat-label">Total Orders</div>
-            {orderTrend && <div className="vn-stat-change" style={{ color: orderTrend.color }}><span className="material-icons" style={{ fontSize: 14 }}>{orderTrend.icon}</span> {orderTrend.text}</div>}
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon" style={{ background: 'var(--success-container)', color: 'var(--color-success)' }}>
-            <span className="material-icons">trending_up</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{formatCents(financial.totalRevenueCents)}</div>
-            <div className="vn-stat-label">Revenue</div>
-            {revTrend && <div className="vn-stat-change" style={{ color: revTrend.color }}><span className="material-icons" style={{ fontSize: 14 }}>{revTrend.icon}</span> {revTrend.text}</div>}
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon" style={{ background: 'var(--error-container)', color: 'var(--color-error)' }}>
-            <span className="material-icons">payments</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{formatCents(financial.totalCostCents)}</div>
-            <div className="vn-stat-label">Cost Spent</div>
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon" style={{ background: financial.marginPercent >= 10 ? 'var(--success-container)' : 'var(--warning-container)', color: financial.marginPercent >= 10 ? 'var(--color-success)' : 'var(--color-warning)' }}>
-            <span className="material-icons">show_chart</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{formatCents(financial.totalMarginCents)} <span style={{ fontSize: 14, fontWeight: 400 }}>({financial.marginPercent}%)</span></div>
-            <div className="vn-stat-label">Margin</div>
-            {marginTrend && <div className="vn-stat-change" style={{ color: marginTrend.color }}><span className="material-icons" style={{ fontSize: 14 }}>{marginTrend.icon}</span> {marginTrend.text}</div>}
-          </div>
-        </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          Icon={ScrollText}
+          iconClass="bg-primary/10 text-primary"
+          value={orders.total}
+          label="Total Orders"
+          trend={orderTrend}
+        />
+        <StatCard
+          Icon={TrendingUp}
+          iconClass="bg-success/15 text-success"
+          value={formatCents(financial.totalRevenueCents)}
+          label="Revenue"
+          trend={revTrend}
+        />
+        <StatCard
+          Icon={CreditCard}
+          iconClass="bg-destructive/10 text-destructive"
+          value={formatCents(financial.totalCostCents)}
+          label="Cost Spent"
+        />
+        <StatCard
+          Icon={TrendingUp}
+          iconClass={cn(
+            financial.marginPercent >= 10 ? 'bg-success/15 text-success' : 'bg-warning/15 text-warning',
+          )}
+          value={
+            <>
+              {formatCents(financial.totalMarginCents)}{' '}
+              <span className="text-sm font-normal">({financial.marginPercent}%)</span>
+            </>
+          }
+          label="Margin"
+          trend={marginTrend}
+        />
       </div>
 
       {/* Row 3: Invoices & Issues */}
-      <div className="vn-stats" style={{ marginBottom: 24 }}>
-        <div className="vn-stat">
-          <div className="vn-stat-icon" style={{ background: 'var(--info-container)', color: 'var(--color-info)' }}>
-            <span className="material-icons">receipt</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{invoices.outstanding}</div>
-            <div className="vn-stat-label">Outstanding Invoices</div>
-            <div style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>{formatCents(invoices.totalBalanceCents)}</div>
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon" style={{ background: 'var(--error-container)', color: 'var(--color-error)' }}>
-            <span className="material-icons">schedule</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{invoices.overdueCount}</div>
-            <div className="vn-stat-label">Overdue</div>
-            <div style={{ fontSize: 12, color: 'var(--color-error)' }}>{formatCents(invoices.overdueBalanceCents)}</div>
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon" style={{ background: 'var(--warning-container)', color: 'var(--color-warning)' }}>
-            <span className="material-icons">bug_report</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{issues.open + issues.inProgress}</div>
-            <div className="vn-stat-label">Active Issues</div>
-            <div style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>{issues.open} open, {issues.inProgress} in progress</div>
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon" style={{ background: issues.critical > 0 ? 'var(--error-container)' : 'var(--success-container)', color: issues.critical > 0 ? 'var(--color-error)' : 'var(--color-success)' }}>
-            <span className="material-icons">{issues.critical > 0 ? 'error' : 'verified'}</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{issues.critical}</div>
-            <div className="vn-stat-label">Critical Issues</div>
-          </div>
-        </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          Icon={Receipt}
+          iconClass="bg-info/15 text-info"
+          value={invoices.outstanding}
+          label="Outstanding Invoices"
+          subtext={formatCents(invoices.totalBalanceCents)}
+        />
+        <StatCard
+          Icon={Clock}
+          iconClass="bg-destructive/10 text-destructive"
+          value={invoices.overdueCount}
+          label="Overdue"
+          subtext={<span className="text-destructive">{formatCents(invoices.overdueBalanceCents)}</span>}
+        />
+        <StatCard
+          Icon={Bug}
+          iconClass="bg-warning/15 text-warning"
+          value={issues.open + issues.inProgress}
+          label="Active Issues"
+          subtext={`${issues.open} open, ${issues.inProgress} in progress`}
+        />
+        <StatCard
+          Icon={issues.critical > 0 ? AlertTriangle : ShieldCheck}
+          iconClass={cn(
+            issues.critical > 0 ? 'bg-destructive/10 text-destructive' : 'bg-success/15 text-success',
+          )}
+          value={issues.critical}
+          label="Critical Issues"
+        />
       </div>
 
       {/* Two-column detail grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 24 }}>
-        {/* Shipment Status Breakdown */}
-        <div className="vn-card" style={{ padding: 20 }}>
-          <h3 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 600 }}>Shipment Status</h3>
-          <StatusBar label="Draft" count={shipments.byStatus['draft'] || 0} total={shipments.total} color="var(--on-surface-variant)" />
-          <StatusBar label="Booked" count={shipments.byStatus['booked'] || 0} total={shipments.total} color="var(--color-info)" />
-          <StatusBar label="In Transit" count={shipments.byStatus['in_transit'] || 0} total={shipments.total} color="var(--primary)" />
-          <StatusBar label="At Pickup" count={shipments.byStatus['at_pickup'] || 0} total={shipments.total} color="var(--color-warning)" />
-          <StatusBar label="At Delivery" count={shipments.byStatus['at_delivery'] || 0} total={shipments.total} color="var(--color-warning)" />
-          <StatusBar label="Delivered" count={shipments.byStatus['delivered'] || 0} total={shipments.total} color="var(--color-success)" />
-          <StatusBar label="Exception" count={shipments.byStatus['exception'] || 0} total={shipments.total} color="var(--color-error)" />
-        </div>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Shipment Status</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <StatusBar label="Draft" count={shipments.byStatus['draft'] || 0} total={shipments.total} colorClass="bg-muted-foreground" />
+            <StatusBar label="Booked" count={shipments.byStatus['booked'] || 0} total={shipments.total} colorClass="bg-info" />
+            <StatusBar label="In Transit" count={shipments.byStatus['in_transit'] || 0} total={shipments.total} colorClass="bg-primary" />
+            <StatusBar label="At Pickup" count={shipments.byStatus['at_pickup'] || 0} total={shipments.total} colorClass="bg-warning" />
+            <StatusBar label="At Delivery" count={shipments.byStatus['at_delivery'] || 0} total={shipments.total} colorClass="bg-warning" />
+            <StatusBar label="Delivered" count={shipments.byStatus['delivered'] || 0} total={shipments.total} colorClass="bg-success" />
+            <StatusBar label="Exception" count={shipments.byStatus['exception'] || 0} total={shipments.total} colorClass="bg-destructive" />
+          </CardContent>
+        </Card>
 
-        {/* Order Delivery Breakdown */}
-        <div className="vn-card" style={{ padding: 20 }}>
-          <h3 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 600 }}>Order Delivery Status</h3>
-          <StatusBar label="Unassigned" count={orders.byDeliveryStatus['unassigned'] || 0} total={orders.total} color="var(--on-surface-variant)" />
-          <StatusBar label="Assigned" count={orders.byDeliveryStatus['assigned'] || 0} total={orders.total} color="var(--color-info)" />
-          <StatusBar label="In Transit" count={orders.byDeliveryStatus['in_transit'] || 0} total={orders.total} color="var(--primary)" />
-          <StatusBar label="Delivered" count={orders.byDeliveryStatus['delivered'] || 0} total={orders.total} color="var(--color-success)" />
-          <StatusBar label="Exception" count={orders.byDeliveryStatus['exception'] || 0} total={orders.total} color="var(--color-error)" />
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Order Delivery Status</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <StatusBar label="Unassigned" count={orders.byDeliveryStatus['unassigned'] || 0} total={orders.total} colorClass="bg-muted-foreground" />
+            <StatusBar label="Assigned" count={orders.byDeliveryStatus['assigned'] || 0} total={orders.total} colorClass="bg-info" />
+            <StatusBar label="In Transit" count={orders.byDeliveryStatus['in_transit'] || 0} total={orders.total} colorClass="bg-primary" />
+            <StatusBar label="Delivered" count={orders.byDeliveryStatus['delivered'] || 0} total={orders.total} colorClass="bg-success" />
+            <StatusBar label="Exception" count={orders.byDeliveryStatus['exception'] || 0} total={orders.total} colorClass="bg-destructive" />
+          </CardContent>
+        </Card>
       </div>
 
       {/* Billing Pipeline */}
-      <div className="vn-card" style={{ padding: 20 }}>
-        <h3 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 600 }}>Billing Pipeline</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
-          <div style={{ textAlign: 'center', padding: 16, borderRadius: 'var(--border-radius-md)', background: 'var(--surface-container)' }}>
-            <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--color-warning)' }}>{financial.notInvoiced}</div>
-            <div style={{ fontSize: 13, color: 'var(--on-surface-variant)', marginTop: 4 }}>Not Invoiced</div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Billing Pipeline</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-3 gap-4">
+            <div className="rounded-md bg-muted/30 p-4 text-center">
+              <div className="text-3xl font-bold tracking-tight text-warning">{financial.notInvoiced}</div>
+              <div className="mt-1 text-sm text-muted-foreground">Not Invoiced</div>
+            </div>
+            <div className="rounded-md bg-muted/30 p-4 text-center">
+              <div className="text-3xl font-bold tracking-tight text-info">{financial.invoiced}</div>
+              <div className="mt-1 text-sm text-muted-foreground">Invoiced</div>
+            </div>
+            <div className="rounded-md bg-muted/30 p-4 text-center">
+              <div className="text-3xl font-bold tracking-tight text-success">{financial.paid}</div>
+              <div className="mt-1 text-sm text-muted-foreground">Paid</div>
+            </div>
           </div>
-          <div style={{ textAlign: 'center', padding: 16, borderRadius: 'var(--border-radius-md)', background: 'var(--surface-container)' }}>
-            <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--color-info)' }}>{financial.invoiced}</div>
-            <div style={{ fontSize: 13, color: 'var(--on-surface-variant)', marginTop: 4 }}>Invoiced</div>
-          </div>
-          <div style={{ textAlign: 'center', padding: 16, borderRadius: 'var(--border-radius-md)', background: 'var(--surface-container)' }}>
-            <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--color-success)' }}>{financial.paid}</div>
-            <div style={{ fontSize: 13, color: 'var(--on-surface-variant)', marginTop: 4 }}>Paid</div>
-          </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

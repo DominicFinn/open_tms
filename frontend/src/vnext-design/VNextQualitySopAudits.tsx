@@ -1,5 +1,45 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import {
+  CheckCircle2,
+  ClipboardCheck,
+  FileCheck,
+  Gauge,
+  Plus,
+  Upload,
+  X,
+  XCircle,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { cn } from '@/lib/utils';
 
 interface Checklist {
   id: string;
@@ -59,33 +99,33 @@ interface EvidenceFile {
   checklistItemId: string | null;
 }
 
-const STATUS_CHIPS: Record<string, string> = {
-  in_progress: 'vn-chip-info',
-  completed: 'vn-chip-success',
-  failed: 'vn-chip-error',
+type BadgeVariant = 'success' | 'destructive' | 'warning' | 'info' | 'secondary' | 'muted' | 'default';
+
+const STATUS_VARIANT: Record<string, BadgeVariant> = {
+  in_progress: 'info',
+  completed: 'success',
+  failed: 'destructive',
 };
 
-const CATEGORY_CHIPS: Record<string, string> = {
-  gdp: 'vn-chip-success',
-  cold_chain: 'vn-chip-info',
-  warehouse: 'vn-chip-primary',
-  transport: 'vn-chip-warning',
-  general: 'vn-chip-secondary',
+const CATEGORY_VARIANT: Record<string, BadgeVariant> = {
+  gdp: 'success',
+  cold_chain: 'info',
+  warehouse: 'default',
+  transport: 'warning',
+  general: 'secondary',
 };
 
 export default function VNextQualitySopAudits() {
   const [audits, setAudits] = useState<Audit[]>([]);
   const [checklists, setChecklists] = useState<Checklist[]>([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState('');
-  const [checklistFilter, setChecklistFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [checklistFilter, setChecklistFilter] = useState('all');
 
-  // Start audit modal
   const [showStart, setShowStart] = useState(false);
   const [startChecklistId, setStartChecklistId] = useState('');
   const [startAuditorName, setStartAuditorName] = useState('');
 
-  // Audit detail / complete
   const [detail, setDetail] = useState<AuditDetail | null>(null);
   const [responses, setResponses] = useState<Record<string, { result: string; notes: string; correctiveAction: string; evidenceRef: string }>>({});
   const [completingFindings, setCompletingFindings] = useState('');
@@ -98,8 +138,8 @@ export default function VNextQualitySopAudits() {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (statusFilter) params.set('status', statusFilter);
-      if (checklistFilter) params.set('checklistId', checklistFilter);
+      if (statusFilter !== 'all') params.set('status', statusFilter);
+      if (checklistFilter !== 'all') params.set('checklistId', checklistFilter);
       const res = await fetch(`${API_URL}/api/v1/quality/sop-audits?${params}`);
       const json = await res.json();
       setAudits(json.data || []);
@@ -140,7 +180,6 @@ export default function VNextQualitySopAudits() {
       const res = await fetch(`${API_URL}/api/v1/quality/sop-audits/${auditId}`);
       const json = await res.json();
       setDetail(json.data);
-      // Pre-fill responses from existing
       const resps: Record<string, { result: string; notes: string; correctiveAction: string; evidenceRef: string }> = {};
       for (const r of (json.data?.responses || [])) {
         resps[r.checklistItemId] = {
@@ -151,16 +190,8 @@ export default function VNextQualitySopAudits() {
         };
       }
       setResponses(resps);
-      // Load existing evidence files
       try {
-        const evRes = await fetch(`${API_URL}/api/v1/quality/sop-audits/${auditId}/evidence`);
-        const evJson = await evRes.json();
-        const evMap: Record<string, EvidenceFile> = {};
-        for (const att of (evJson.data || [])) {
-          // Match by description pattern or storageKey
-          evMap[att.id] = att;
-        }
-        // We don't map evidence to items here since we track by storageKey in responses
+        await fetch(`${API_URL}/api/v1/quality/sop-audits/${auditId}/evidence`);
       } catch { /* ignore */ }
     } catch { /* ignore */ }
   };
@@ -242,7 +273,6 @@ export default function VNextQualitySopAudits() {
 
   const formatDate = (d: string) => new Date(d).toLocaleDateString();
 
-  // Group items by section
   const groupedItems = detail?.checklist?.items?.reduce((acc, item) => {
     const section = item.section || 'General';
     if (!acc[section]) acc[section] = [];
@@ -250,129 +280,152 @@ export default function VNextQualitySopAudits() {
     return acc;
   }, {} as Record<string, ChecklistItem[]>) || {};
 
+  const statTiles = [
+    { label: 'Total audits', value: stats.total, icon: FileCheck, tone: 'bg-primary/10 text-primary' },
+    { label: 'Completed', value: stats.completed, icon: CheckCircle2, tone: 'bg-success/15 text-success' },
+    { label: 'Failed', value: stats.failed, icon: XCircle, tone: 'bg-destructive/10 text-destructive' },
+    { label: 'Avg score', value: stats.avgScore != null ? `${stats.avgScore}%` : 'N/A', icon: Gauge, tone: 'bg-info/15 text-info' },
+  ];
+
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>GDP Audits</h1>
-          <p style={{ color: 'var(--text-secondary)', margin: '4px 0 0', fontSize: 14 }}>SOP compliance audits and GDP reviews</p>
+          <h1 className="text-3xl font-bold tracking-tight">GDP audits</h1>
+          <p className="mt-1 text-sm text-muted-foreground">SOP compliance audits and GDP reviews</p>
         </div>
-        <button className="vn-btn vn-btn-primary" onClick={() => setShowStart(true)}>
-          <span className="material-icons" style={{ fontSize: 18 }}>add</span> Start New Audit
-        </button>
+        <Button variant="gradient" onClick={() => setShowStart(true)}>
+          <Plus className="h-4 w-4" />
+          Start new audit
+        </Button>
       </div>
 
-      {/* Stats */}
-      <div className="vn-stats" style={{ marginBottom: 24 }}>
-        <div className="vn-stat"><div className="vn-stat-icon primary"><span className="material-icons">fact_check</span></div><div><div className="vn-stat-value">{stats.total}</div><div className="vn-stat-label">Total Audits</div></div></div>
-        <div className="vn-stat"><div className="vn-stat-icon success"><span className="material-icons">check_circle</span></div><div><div className="vn-stat-value">{stats.completed}</div><div className="vn-stat-label">Completed</div></div></div>
-        <div className="vn-stat"><div className="vn-stat-icon error"><span className="material-icons">cancel</span></div><div><div className="vn-stat-value">{stats.failed}</div><div className="vn-stat-label">Failed</div></div></div>
-        <div className="vn-stat"><div className="vn-stat-icon info"><span className="material-icons">speed</span></div><div><div className="vn-stat-value">{stats.avgScore != null ? `${stats.avgScore}%` : 'N/A'}</div><div className="vn-stat-label">Avg Score</div></div></div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {statTiles.map(stat => {
+          const Icon = stat.icon;
+          return (
+            <Card key={stat.label}>
+              <div className="p-5">
+                <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', stat.tone)}>
+                  <Icon className="h-5 w-5" />
+                </div>
+                <div className="mt-3 text-2xl font-bold tracking-tight">{stat.value}</div>
+                <div className="mt-1 text-sm text-muted-foreground">{stat.label}</div>
+              </div>
+            </Card>
+          );
+        })}
       </div>
 
-      {/* Filters */}
-      <div className="vn-filters" style={{ marginBottom: 16 }}>
-        <select className="vn-filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-          <option value="">All Statuses</option>
-          <option value="in_progress">In Progress</option>
-          <option value="completed">Completed</option>
-          <option value="failed">Failed</option>
-        </select>
-        <select className="vn-filter-select" value={checklistFilter} onChange={e => setChecklistFilter(e.target.value)}>
-          <option value="">All Checklists</option>
-          {checklists.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
-        </select>
-      </div>
+      <Card>
+        <div className="flex flex-wrap items-center gap-3 p-4">
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All statuses</SelectItem>
+              <SelectItem value="in_progress">In progress</SelectItem>
+              <SelectItem value="completed">Completed</SelectItem>
+              <SelectItem value="failed">Failed</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={checklistFilter} onValueChange={setChecklistFilter}>
+            <SelectTrigger className="w-[240px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All checklists</SelectItem>
+              {checklists.map(c => <SelectItem key={c.id} value={c.id}>{c.title}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <Separator />
+      </Card>
 
-      {/* Audit Detail View */}
       {detail ? (
-        <div className="vn-card" style={{ padding: 24 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: 20 }}>
+        <Card className="p-6">
+          <div className="mb-5 flex items-start justify-between">
             <div>
-              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: 'var(--text-primary)' }}>
-                {detail.auditNumber} - {detail.checklist.title}
-              </h2>
-              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                <span className={`vn-chip ${STATUS_CHIPS[detail.status] || ''}`}>{detail.status.replace(/_/g, ' ')}</span>
-                <span className={`vn-chip ${CATEGORY_CHIPS[detail.checklist.category] || ''}`}>{detail.checklist.category.replace(/_/g, ' ')}</span>
-                {detail.score != null && <span className="vn-chip">{Math.round(detail.score)}% score</span>}
+              <h2 className="text-lg font-semibold">{detail.auditNumber} - {detail.checklist.title}</h2>
+              <div className="mt-2 flex gap-2">
+                <Badge variant={STATUS_VARIANT[detail.status] || 'muted'}>{detail.status.replace(/_/g, ' ')}</Badge>
+                <Badge variant={CATEGORY_VARIANT[detail.checklist.category] || 'muted'}>{detail.checklist.category.replace(/_/g, ' ')}</Badge>
+                {detail.score != null && <Badge variant="default">{Math.round(detail.score)}% score</Badge>}
               </div>
             </div>
-            <button className="vn-btn" onClick={() => setDetail(null)}>
-              <span className="material-icons" style={{ fontSize: 18 }}>close</span> Close
-            </button>
+            <Button variant="outline" onClick={() => setDetail(null)}>
+              <X className="h-4 w-4" />
+              Close
+            </Button>
           </div>
 
           {detail.status === 'in_progress' ? (
-            <>
+            <div className="space-y-6">
               {Object.entries(groupedItems).map(([section, items]) => (
-                <div key={section} style={{ marginBottom: 24 }}>
-                  <h3 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 12, borderBottom: '1px solid var(--border-color)', paddingBottom: 8 }}>{section}</h3>
+                <div key={section}>
+                  <h3 className="mb-3 border-b border-border pb-2 text-sm font-semibold">{section}</h3>
                   {items.sort((a, b) => a.sortOrder - b.sortOrder).map(item => (
-                    <div key={item.id} style={{
-                      padding: 12,
-                      marginBottom: 8,
-                      borderRadius: 8,
-                      border: `1px solid ${item.isCritical ? 'var(--color-error)' : 'var(--border-color)'}`,
-                      background: 'var(--bg-secondary)',
-                    }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: 12 }}>
-                        <div style={{ flex: 1 }}>
-                          <p style={{ margin: 0, fontSize: 13, color: 'var(--text-primary)', fontWeight: 500 }}>
-                            {item.isCritical && <span style={{ color: 'var(--color-error)', marginRight: 4 }}>*</span>}
+                    <div
+                      key={item.id}
+                      className={cn(
+                        'mb-2 rounded-md border bg-muted/30 p-3',
+                        item.isCritical ? 'border-destructive' : 'border-border',
+                      )}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1">
+                          <p className="text-sm font-medium">
+                            {item.isCritical && <span className="mr-1 text-destructive">*</span>}
                             {item.question}
                           </p>
-                          {item.guidance && <p style={{ margin: '4px 0 0', fontSize: 11, color: 'var(--text-secondary)' }}>{item.guidance}</p>}
-                          {item.isCritical && <span style={{ fontSize: 10, color: 'var(--color-error)' }}>Critical - failure will fail the entire audit</span>}
-                          {item.evidenceRequired && <span style={{ fontSize: 10, color: 'var(--color-warning)', display: 'block' }}>Evidence required</span>}
+                          {item.guidance && <p className="mt-1 text-xs text-muted-foreground">{item.guidance}</p>}
+                          {item.isCritical && <span className="text-[10px] text-destructive">Critical - failure will fail the entire audit</span>}
+                          {item.evidenceRequired && <span className="block text-[10px] text-warning">Evidence required</span>}
                         </div>
-                        <div style={{ display: 'flex', gap: 4 }}>
-                          {['pass', 'fail', 'na', 'observation'].map(r => (
-                            <button
+                        <div className="flex gap-1">
+                          {(['pass', 'fail', 'na', 'observation'] as const).map(r => (
+                            <Button
                               key={r}
-                              className={`vn-btn ${responses[item.id]?.result === r ? (r === 'pass' ? 'vn-btn-success' : r === 'fail' ? 'vn-btn-danger' : 'vn-btn-primary') : ''}`}
-                              style={{ fontSize: 11, padding: '4px 8px' }}
+                              size="sm"
+                              variant={
+                                responses[item.id]?.result === r
+                                  ? r === 'pass' ? 'default' : r === 'fail' ? 'destructive' : 'secondary'
+                                  : 'outline'
+                              }
                               onClick={() => setResponse(item.id, 'result', r)}
                             >
                               {r === 'na' ? 'N/A' : r.charAt(0).toUpperCase() + r.slice(1)}
-                            </button>
+                            </Button>
                           ))}
                         </div>
                       </div>
-                      {/* Notes - shown when any result is selected */}
+
                       {responses[item.id]?.result && (
                         <textarea
-                          className="vn-input"
-                          style={{ marginTop: 8, fontSize: 12 }}
                           rows={2}
                           placeholder="Notes..."
                           value={responses[item.id]?.notes || ''}
                           onChange={e => setResponse(item.id, 'notes', e.target.value)}
+                          className="mt-2 w-full rounded-md border border-input bg-background px-3 py-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         />
                       )}
 
-                      {/* Corrective action - shown on fail or observation */}
                       {(responses[item.id]?.result === 'fail' || responses[item.id]?.result === 'observation') && (
                         <textarea
-                          className="vn-input"
-                          style={{ marginTop: 8, fontSize: 12, borderColor: 'var(--color-warning)' }}
                           rows={2}
                           placeholder="Corrective action required..."
                           value={responses[item.id]?.correctiveAction || ''}
                           onChange={e => setResponse(item.id, 'correctiveAction', e.target.value)}
+                          className="mt-2 w-full rounded-md border border-warning bg-background px-3 py-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         />
                       )}
 
-                      {/* Evidence upload - shown when evidence is required OR any result selected */}
                       {(item.evidenceRequired || responses[item.id]?.result) && (
-                        <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div className="mt-2 flex items-center gap-2">
                           {responses[item.id]?.evidenceRef ? (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--color-success)' }}>
-                              <span className="material-icons" style={{ fontSize: 16 }}>check_circle</span>
+                            <div className="flex items-center gap-2 text-xs text-success">
+                              <CheckCircle2 className="h-4 w-4" />
                               {evidenceFiles[item.id]?.fileName || 'Evidence uploaded'}
-                              <button
-                                className="vn-btn"
-                                style={{ fontSize: 10, padding: '2px 6px' }}
+                              <Button
+                                size="sm"
+                                variant="outline"
                                 onClick={() => {
                                   setResponse(item.id, 'evidenceRef', '');
                                   setEvidenceFiles(prev => {
@@ -383,15 +436,15 @@ export default function VNextQualitySopAudits() {
                                 }}
                               >
                                 Remove
-                              </button>
+                              </Button>
                             </div>
                           ) : (
-                            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer', fontSize: 12, color: 'var(--text-secondary)' }}>
-                              <span className="material-icons" style={{ fontSize: 16 }}>upload_file</span>
+                            <label className="inline-flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+                              <Upload className="h-4 w-4" />
                               {uploadingItem === item.id ? 'Uploading...' : (item.evidenceRequired ? 'Upload evidence (required)' : 'Upload evidence')}
                               <input
                                 type="file"
-                                style={{ display: 'none' }}
+                                className="hidden"
                                 disabled={uploadingItem === item.id}
                                 onChange={e => {
                                   const file = e.target.files?.[0];
@@ -408,128 +461,147 @@ export default function VNextQualitySopAudits() {
                 </div>
               ))}
 
-              <div className="vn-form-grid" style={{ marginBottom: 16 }}>
-                <div className="vn-field">
-                  <label className="vn-field-label">Overall Findings</label>
-                  <textarea className="vn-input" rows={3} value={completingFindings} onChange={e => setCompletingFindings(e.target.value)} placeholder="Summarize audit findings..." />
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Overall findings</Label>
+                  <textarea
+                    rows={3}
+                    value={completingFindings}
+                    onChange={e => setCompletingFindings(e.target.value)}
+                    placeholder="Summarize audit findings..."
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  />
                 </div>
-                <div className="vn-field">
-                  <label className="vn-field-label">Corrective Actions Required</label>
-                  <textarea className="vn-input" rows={3} value={completingCorrectiveActions} onChange={e => setCompletingCorrectiveActions(e.target.value)} placeholder="List corrective actions needed from this audit..." />
+                <div className="space-y-2">
+                  <Label>Corrective actions required</Label>
+                  <textarea
+                    rows={3}
+                    value={completingCorrectiveActions}
+                    onChange={e => setCompletingCorrectiveActions(e.target.value)}
+                    placeholder="List corrective actions needed from this audit..."
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  />
                 </div>
               </div>
 
-              <button className="vn-btn vn-btn-primary" onClick={completeAudit} disabled={submitting}>
-                {submitting ? 'Submitting...' : 'Submit Audit'}
-              </button>
-            </>
+              <Button variant="gradient" onClick={completeAudit} disabled={submitting}>
+                {submitting ? 'Submitting...' : 'Submit audit'}
+              </Button>
+            </div>
           ) : (
-            /* Completed/failed audit view */
-            <div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 20 }}>
-                <div className="vn-card" style={{ padding: 16, textAlign: 'center' }}>
-                  <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--color-success)' }}>{detail.passCount}</div>
-                  <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Passed</div>
-                </div>
-                <div className="vn-card" style={{ padding: 16, textAlign: 'center' }}>
-                  <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--color-error)' }}>{detail.failCount}</div>
-                  <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Failed</div>
-                </div>
-                <div className="vn-card" style={{ padding: 16, textAlign: 'center' }}>
-                  <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--text-secondary)' }}>{detail.naCount}</div>
-                  <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>N/A</div>
-                </div>
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 gap-4">
+                <Card className="p-4 text-center">
+                  <div className="text-3xl font-bold text-success">{detail.passCount}</div>
+                  <div className="text-xs text-muted-foreground">Passed</div>
+                </Card>
+                <Card className="p-4 text-center">
+                  <div className="text-3xl font-bold text-destructive">{detail.failCount}</div>
+                  <div className="text-xs text-muted-foreground">Failed</div>
+                </Card>
+                <Card className="p-4 text-center">
+                  <div className="text-3xl font-bold text-muted-foreground">{detail.naCount}</div>
+                  <div className="text-xs text-muted-foreground">N/A</div>
+                </Card>
               </div>
               {detail.findings && (
-                <div className="vn-alert vn-alert-info" style={{ marginBottom: 16 }}>
+                <div className="rounded-md border border-info/30 bg-info/10 p-3 text-sm text-info">
                   <strong>Findings:</strong> {detail.findings}
                 </div>
               )}
               {detail.correctiveActions && (
-                <div className="vn-alert vn-alert-warning" style={{ marginBottom: 16 }}>
-                  <strong>Corrective Actions:</strong> {detail.correctiveActions}
+                <div className="rounded-md border border-warning/30 bg-warning/10 p-3 text-sm text-warning">
+                  <strong>Corrective actions:</strong> {detail.correctiveActions}
                 </div>
               )}
             </div>
           )}
-        </div>
+        </Card>
       ) : (
-        /* Audit List */
-        <div className="vn-table-wrap">
+        <Card>
           {loading ? (
-            <div style={{ padding: 40, textAlign: 'center' }}><div className="loading-spinner" /></div>
+            <div className="py-12 text-center text-muted-foreground">Loading...</div>
           ) : audits.length === 0 ? (
-            <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-secondary)' }}>No audits found. Start a new audit to begin.</div>
+            <div className="flex flex-col items-center gap-3 py-12 text-muted-foreground">
+              <ClipboardCheck className="h-10 w-10 opacity-40" />
+              No audits found. Start a new audit to begin.
+            </div>
           ) : (
-            <table className="vn-table">
-              <thead><tr>
-                <th>Audit #</th><th>Checklist</th><th>Category</th><th>Status</th><th>Score</th><th>Auditor</th><th>Date</th><th></th>
-              </tr></thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Audit #</TableHead>
+                  <TableHead>Checklist</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Score</TableHead>
+                  <TableHead>Auditor</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead className="w-[80px]"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {audits.map(a => (
-                  <tr key={a.id}>
-                    <td><span className="vn-table-id">{a.auditNumber}</span></td>
-                    <td>{a.checklist.title}</td>
-                    <td><span className={`vn-chip ${CATEGORY_CHIPS[a.checklist.category] || ''}`}>{a.checklist.category.replace(/_/g, ' ')}</span></td>
-                    <td><span className={`vn-chip ${STATUS_CHIPS[a.status] || ''}`}>{a.status.replace(/_/g, ' ')}</span></td>
-                    <td>
+                  <TableRow key={a.id}>
+                    <TableCell><span className="font-mono text-sm font-semibold">{a.auditNumber}</span></TableCell>
+                    <TableCell>{a.checklist.title}</TableCell>
+                    <TableCell><Badge variant={CATEGORY_VARIANT[a.checklist.category] || 'muted'}>{a.checklist.category.replace(/_/g, ' ')}</Badge></TableCell>
+                    <TableCell><Badge variant={STATUS_VARIANT[a.status] || 'muted'}>{a.status.replace(/_/g, ' ')}</Badge></TableCell>
+                    <TableCell>
                       {a.score != null ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <div style={{ width: 60, height: 6, borderRadius: 3, background: 'var(--bg-tertiary)', overflow: 'hidden' }}>
-                            <div style={{
-                              width: `${Math.round(a.score)}%`,
-                              height: '100%',
-                              borderRadius: 3,
-                              background: a.score >= 80 ? 'var(--color-success)' : a.score >= 50 ? 'var(--color-warning)' : 'var(--color-error)',
-                            }} />
+                        <div className="flex items-center gap-2">
+                          <div className="h-1.5 w-14 overflow-hidden rounded-full bg-muted">
+                            <div
+                              className={cn(
+                                'h-full',
+                                a.score >= 80 ? 'bg-success' : a.score >= 50 ? 'bg-warning' : 'bg-destructive',
+                              )}
+                              style={{ width: `${Math.round(a.score)}%` }}
+                            />
                           </div>
-                          <span style={{ fontSize: 12 }}>{Math.round(a.score)}%</span>
+                          <span className="text-xs">{Math.round(a.score)}%</span>
                         </div>
-                      ) : <span className="vn-table-secondary">-</span>}
-                    </td>
-                    <td><span className="vn-table-secondary">{a.auditorName || '-'}</span></td>
-                    <td><span className="vn-table-secondary">{formatDate(a.auditDate)}</span></td>
-                    <td>
-                      <button className="vn-btn" style={{ fontSize: 11 }} onClick={() => openDetail(a.id)}>
+                      ) : <span className="text-sm text-muted-foreground">-</span>}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{a.auditorName || '-'}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{formatDate(a.auditDate)}</TableCell>
+                    <TableCell>
+                      <Button size="sm" variant="outline" onClick={() => openDetail(a.id)}>
                         {a.status === 'in_progress' ? 'Continue' : 'View'}
-                      </button>
-                    </td>
-                  </tr>
+                      </Button>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           )}
-        </div>
+        </Card>
       )}
 
-      {/* Start Audit Modal */}
-      {showStart && (
-        <div className="vn-modal-backdrop" onClick={() => setShowStart(false)}>
-          <div className="vn-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
-            <div className="vn-modal-header">
-              <h3>Start New Audit</h3>
-              <button onClick={() => setShowStart(false)}><span className="material-icons">close</span></button>
+      <Dialog open={showStart} onOpenChange={setShowStart}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Start new audit</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <Label>Checklist *</Label>
+              <Select value={startChecklistId} onValueChange={setStartChecklistId}>
+                <SelectTrigger><SelectValue placeholder="Select a checklist..." /></SelectTrigger>
+                <SelectContent>
+                  {checklists.map(c => <SelectItem key={c.id} value={c.id}>{c.title} ({c.category})</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
-            <div className="vn-modal-body">
-              <div className="vn-field">
-                <label className="vn-field-label">Checklist *</label>
-                <select className="vn-input" value={startChecklistId} onChange={e => setStartChecklistId(e.target.value)}>
-                  <option value="">Select a checklist...</option>
-                  {checklists.map(c => <option key={c.id} value={c.id}>{c.title} ({c.category})</option>)}
-                </select>
-              </div>
-              <div className="vn-field" style={{ marginTop: 12 }}>
-                <label className="vn-field-label">Auditor Name</label>
-                <input className="vn-input" value={startAuditorName} onChange={e => setStartAuditorName(e.target.value)} placeholder="Who is performing this audit?" />
-              </div>
-            </div>
-            <div className="vn-modal-footer">
-              <button className="vn-btn" onClick={() => setShowStart(false)}>Cancel</button>
-              <button className="vn-btn vn-btn-primary" onClick={startAudit} disabled={!startChecklistId}>Start Audit</button>
+            <div className="space-y-2">
+              <Label>Auditor name</Label>
+              <Input value={startAuditorName} onChange={e => setStartAuditorName(e.target.value)} placeholder="Who is performing this audit?" />
             </div>
           </div>
-        </div>
-      )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowStart(false)}>Cancel</Button>
+            <Button variant="gradient" onClick={startAudit} disabled={!startChecklistId}>Start audit</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

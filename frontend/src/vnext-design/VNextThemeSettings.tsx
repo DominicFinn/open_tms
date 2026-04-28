@@ -1,16 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { Loader2, Palette, Save, Upload, Image as ImageIcon } from 'lucide-react';
+
 import { API_URL } from '../api';
-import {
-  VnPageHeader,
-  VnCard,
-  VnButton,
-  VnField,
-  VnInput,
-  VnFormGrid,
-  VnFormSection,
-  VnFormActions,
-  VnAlert,
-} from './components';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 const THEME_KEYS = [
   { key: 'primary', label: 'Primary' },
@@ -33,6 +28,31 @@ interface ThemeData {
   logoUrl: string | null;
   themeUpdatedAt: string | null;
   name: string;
+}
+
+function Banner({
+  variant,
+  message,
+  onClose,
+}: {
+  variant: 'success' | 'error';
+  message: string;
+  onClose?: () => void;
+}) {
+  const tone =
+    variant === 'success'
+      ? 'border-success/30 bg-success/10 text-success'
+      : 'border-destructive/30 bg-destructive/10 text-destructive';
+  return (
+    <div className={`flex items-start justify-between gap-3 rounded-md border p-3 text-sm ${tone}`}>
+      <span>{message}</span>
+      {onClose && (
+        <button onClick={onClose} className="text-xs underline opacity-70 hover:opacity-100">
+          Dismiss
+        </button>
+      )}
+    </div>
+  );
 }
 
 export default function VNextThemeSettings() {
@@ -128,153 +148,124 @@ export default function VNextThemeSettings() {
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', padding: '48px' }}>
-        <div className="loading-spinner" />
+      <div className="flex justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
   return (
-    <div className="vn-page">
-      <VnPageHeader title="Theme & Branding" subtitle="Customize the look and feel of your system" />
-
-      <nav style={{ fontSize: '13px', color: 'var(--on-surface-variant)', marginBottom: '24px' }}>
-        <span style={{ cursor: 'pointer', color: 'var(--primary)' }}>Settings</span>
-        <span style={{ margin: '0 8px' }}>/</span>
-        <span>Theme & Branding</span>
-      </nav>
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Theme and branding</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Customize the look and feel of your system</p>
+        </div>
+      </div>
 
       {alert && (
-        <div style={{ marginBottom: '16px' }}>
-          <VnAlert variant={alert.type} onClose={() => setAlert(null)}>
-            {alert.message}
-          </VnAlert>
-        </div>
+        <Banner variant={alert.type} message={alert.message} onClose={() => setAlert(null)} />
       )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-        <VnCard title="System Name">
-          <VnFormGrid>
-            <VnField label="Organization Name">
-              <VnInput
-                value={orgName}
-                onChange={e => setOrgName(e.target.value)}
-                placeholder="Enter organization name"
-              />
-            </VnField>
-          </VnFormGrid>
-          <VnFormActions>
-            <VnButton variant="primary" icon="save" onClick={saveName} disabled={savingName}>
-              {savingName ? 'Saving...' : 'Save Name'}
-            </VnButton>
-          </VnFormActions>
-        </VnCard>
-
-        <VnCard title="Logo">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {logoUrl && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                <span style={{ fontSize: '14px', color: 'var(--on-surface-variant)' }}>Current logo:</span>
-                <img
-                  src={`${API_URL}/api/v1/theme/logo`}
-                  alt="Current logo"
-                  style={{
-                    maxHeight: '64px',
-                    maxWidth: '200px',
-                    objectFit: 'contain',
-                    borderRadius: '8px',
-                    border: '1px solid var(--outline-variant)',
-                    padding: '8px',
-                    background: 'var(--surface-container-lowest)',
-                  }}
-                />
-              </div>
-            )}
-            <VnField label="Upload New Logo">
-              <div
-                style={{
-                  border: '2px dashed var(--outline-variant)',
-                  borderRadius: '12px',
-                  padding: '24px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: '8px',
-                  color: 'var(--on-surface-variant)',
-                  position: 'relative',
-                }}
-              >
-                <span className="material-icons" style={{ fontSize: '36px' }}>cloud_upload</span>
-                <span style={{ fontSize: '14px', fontWeight: 500 }}>
-                  {uploadingLogo ? 'Uploading...' : 'Click to select a logo file'}
-                </span>
-                <span style={{ fontSize: '12px' }}>SVG, PNG, or JPG (max 2MB)</span>
-                <input
-                  type="file"
-                  accept="image/svg+xml,image/png,image/jpeg"
-                  style={{
-                    position: 'absolute',
-                    inset: 0,
-                    opacity: 0,
-                    cursor: 'pointer',
-                  }}
-                  onChange={e => {
-                    const file = e.target.files?.[0];
-                    if (file) uploadLogo(file);
-                  }}
-                  disabled={uploadingLogo}
-                />
-              </div>
-            </VnField>
+      <Card>
+        <CardHeader>
+          <CardTitle>System name</CardTitle>
+          <CardDescription>The display name shown across the application.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label>Organization name</Label>
+            <Input value={orgName} onChange={e => setOrgName(e.target.value)} placeholder="Enter organization name" />
           </div>
-        </VnCard>
+          <div className="flex justify-end">
+            <Button variant="gradient" onClick={saveName} disabled={savingName}>
+              <Save className="h-4 w-4" />
+              {savingName ? 'Saving...' : 'Save name'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
-        <VnCard title="Theme Colors">
-          <VnFormSection title="Color Palette" icon="palette">
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-                gap: '16px',
-              }}
-            >
-              {THEME_KEYS.map(({ key, label }) => (
-                <VnField key={key} label={label}>
-                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                    <input
-                      type="color"
-                      value={themeColors[key] || '#000000'}
-                      onChange={e => handleColorChange(key, e.target.value)}
-                      style={{
-                        width: '40px',
-                        height: '40px',
-                        border: '1px solid var(--outline-variant)',
-                        borderRadius: '8px',
-                        cursor: 'pointer',
-                        padding: '2px',
-                        background: 'var(--surface-container-lowest)',
-                        flexShrink: 0,
-                      }}
-                    />
-                    <VnInput
-                      value={themeColors[key] || ''}
-                      onChange={e => handleColorChange(key, e.target.value)}
-                      placeholder="#000000"
-                      style={{ flex: 1 }}
-                    />
-                  </div>
-                </VnField>
-              ))}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <ImageIcon className="h-4 w-4 text-primary" />
+            Logo
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {logoUrl && (
+            <div className="flex items-center gap-4">
+              <span className="text-sm text-muted-foreground">Current logo:</span>
+              <img
+                src={`${API_URL}/api/v1/theme/logo`}
+                alt="Current logo"
+                className="max-h-16 max-w-48 rounded-md border bg-background object-contain p-2"
+              />
             </div>
-          </VnFormSection>
-          <VnFormActions>
-            <VnButton variant="outline" onClick={loadTheme}>Reset</VnButton>
-            <VnButton variant="primary" icon="save" onClick={saveColors} disabled={savingColors}>
-              {savingColors ? 'Saving...' : 'Save Colors'}
-            </VnButton>
-          </VnFormActions>
-        </VnCard>
-      </div>
+          )}
+          <div className="space-y-2">
+            <Label>Upload new logo</Label>
+            <label className="relative flex cursor-pointer flex-col items-center gap-2 rounded-md border-2 border-dashed border-input bg-background p-6 text-center text-sm text-muted-foreground hover:border-primary/40">
+              <Upload className="h-8 w-8" />
+              <span className="font-medium">{uploadingLogo ? 'Uploading...' : 'Click to select a logo file'}</span>
+              <span className="text-xs">SVG, PNG, or JPG (max 2MB)</span>
+              <input
+                type="file"
+                accept="image/svg+xml,image/png,image/jpeg"
+                className="absolute inset-0 cursor-pointer opacity-0"
+                onChange={e => {
+                  const file = e.target.files?.[0];
+                  if (file) uploadLogo(file);
+                }}
+                disabled={uploadingLogo}
+              />
+            </label>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Palette className="h-4 w-4 text-primary" />
+            Theme colors
+          </CardTitle>
+          <CardDescription>
+            Saved colors are stored on the org but no longer applied dynamically; the active theme uses Tailwind tokens.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {THEME_KEYS.map(({ key, label }) => (
+              <div key={key} className="space-y-2">
+                <Label>{label}</Label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={themeColors[key] || '#000000'}
+                    onChange={e => handleColorChange(key, e.target.value)}
+                    className="h-10 w-12 shrink-0 cursor-pointer rounded-md border border-input bg-background p-1"
+                  />
+                  <Input
+                    value={themeColors[key] || ''}
+                    onChange={e => handleColorChange(key, e.target.value)}
+                    placeholder="#000000"
+                    className="flex-1"
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={loadTheme}>Reset</Button>
+            <Button variant="gradient" onClick={saveColors} disabled={savingColors}>
+              <Save className="h-4 w-4" />
+              {savingColors ? 'Saving...' : 'Save colors'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

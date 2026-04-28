@@ -1,5 +1,27 @@
 import React, { useEffect, useState } from 'react';
+import { Loader2 } from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { cn } from '@/lib/utils';
 
 interface Commission {
   id: string;
@@ -32,7 +54,9 @@ function formatCents(cents: number): string {
   return `$${(cents / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-function statusChip(s: string): string {
+type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning' | 'info' | 'muted';
+
+function statusVariant(s: string): BadgeVariant {
   return s === 'paid' ? 'success' : s === 'approved' ? 'info' : 'warning';
 }
 
@@ -57,7 +81,6 @@ export default function VNextCommissions() {
 
   const handleAction = async (id: string, action: 'approve' | 'pay') => {
     await fetch(`${API_URL}/api/v1/commissions/${id}/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-    // Reload
     const res = await fetch(`${API_URL}/api/v1/commissions`);
     const json = await res.json();
     setCommissions(json.data || []);
@@ -76,114 +99,141 @@ export default function VNextCommissions() {
   }), { total: 0, accrued: 0, approved: 0, paid: 0 });
 
   return (
-    <div style={{ padding: '24px 32px' }}>
-      <div className="vn-page-header">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700 }}>Commissions</h1>
-          <p style={{ margin: '4px 0 0', color: 'var(--on-surface-variant)', fontSize: 14 }}>
-            Track broker agent commissions on shipments
-          </p>
+          <h1 className="text-3xl font-bold tracking-tight">Commissions</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Track broker agent commissions on shipments</p>
         </div>
       </div>
 
-      {/* Summary stats */}
-      <div className="vn-stats" style={{ marginBottom: 24 }}>
-        <div className="vn-stat"><div className="vn-stat-label">Total</div><div className="vn-stat-value">{formatCents(totals.total)}</div></div>
-        <div className="vn-stat"><div className="vn-stat-label">Accrued</div><div className="vn-stat-value" style={{ color: 'var(--color-warning)' }}>{formatCents(totals.accrued)}</div></div>
-        <div className="vn-stat"><div className="vn-stat-label">Approved</div><div className="vn-stat-value" style={{ color: 'var(--color-info)' }}>{formatCents(totals.approved)}</div></div>
-        <div className="vn-stat"><div className="vn-stat-label">Paid</div><div className="vn-stat-value" style={{ color: 'var(--color-success)' }}>{formatCents(totals.paid)}</div></div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardContent className="p-5">
+            <div className="text-sm text-muted-foreground">Total</div>
+            <div className="mt-1 text-2xl font-bold tracking-tight font-mono tabular-nums">{formatCents(totals.total)}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-5">
+            <div className="text-sm text-muted-foreground">Accrued</div>
+            <div className="mt-1 text-2xl font-bold tracking-tight font-mono tabular-nums text-warning">{formatCents(totals.accrued)}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-5">
+            <div className="text-sm text-muted-foreground">Approved</div>
+            <div className="mt-1 text-2xl font-bold tracking-tight font-mono tabular-nums text-info">{formatCents(totals.approved)}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-5">
+            <div className="text-sm text-muted-foreground">Paid</div>
+            <div className="mt-1 text-2xl font-bold tracking-tight font-mono tabular-nums text-success">{formatCents(totals.paid)}</div>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Tabs */}
-      <div className="vn-tabs" style={{ marginBottom: 16 }}>
-        <button className={`vn-tab ${tab === 'summary' ? 'active' : ''}`} onClick={() => setTab('summary')}>By Agent</button>
-        <button className={`vn-tab ${tab === 'list' ? 'active' : ''}`} onClick={() => setTab('list')}>All Commissions</button>
-      </div>
+      <Tabs value={tab} onValueChange={v => setTab(v as 'list' | 'summary')}>
+        <TabsList>
+          <TabsTrigger value="summary">By Agent</TabsTrigger>
+          <TabsTrigger value="list">All Commissions</TabsTrigger>
+        </TabsList>
+      </Tabs>
 
       {loading ? (
-        <div style={{ textAlign: 'center', padding: 40 }}><div className="loading-spinner" /></div>
+        <div className="flex flex-col items-center gap-3 py-12 text-muted-foreground">
+          <Loader2 className="h-8 w-8 animate-spin" />
+          <h3 className="text-base font-medium">Loading...</h3>
+        </div>
       ) : tab === 'summary' ? (
-        <div className="vn-card">
-          <div className="vn-table-wrap">
-            {summary.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: 40, color: 'var(--on-surface-variant)' }}>No commissions recorded yet</div>
-            ) : (
-              <table className="vn-table">
-                <thead>
-                  <tr>
-                    <th>Agent</th>
-                    <th style={{ textAlign: 'right' }}>Shipments</th>
-                    <th style={{ textAlign: 'right' }}>Total</th>
-                    <th style={{ textAlign: 'right' }}>Accrued</th>
-                    <th style={{ textAlign: 'right' }}>Approved</th>
-                    <th style={{ textAlign: 'right' }}>Paid</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {summary.map(s => (
-                    <tr key={s.userId}>
-                      <td><span style={{ fontWeight: 600 }}>{s.userName}</span><br /><span style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>{s.email}</span></td>
-                      <td style={{ textAlign: 'right' }}>{s.count}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 600 }}>{formatCents(s.totalCommissionCents)}</td>
-                      <td style={{ textAlign: 'right', color: 'var(--color-warning)' }}>{formatCents(s.accruedCents)}</td>
-                      <td style={{ textAlign: 'right', color: 'var(--color-info)' }}>{formatCents(s.approvedCents)}</td>
-                      <td style={{ textAlign: 'right', color: 'var(--color-success)' }}>{formatCents(s.paidCents)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </div>
+        <Card>
+          {summary.length === 0 ? (
+            <div className="py-12 text-center text-sm text-muted-foreground">No commissions recorded yet</div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Agent</TableHead>
+                  <TableHead className="text-right">Shipments</TableHead>
+                  <TableHead className="text-right">Total</TableHead>
+                  <TableHead className="text-right">Accrued</TableHead>
+                  <TableHead className="text-right">Approved</TableHead>
+                  <TableHead className="text-right">Paid</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {summary.map(s => (
+                  <TableRow key={s.userId}>
+                    <TableCell>
+                      <div className="font-semibold">{s.userName}</div>
+                      <div className="text-xs text-muted-foreground">{s.email}</div>
+                    </TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">{s.count}</TableCell>
+                    <TableCell className="text-right font-mono tabular-nums font-semibold">{formatCents(s.totalCommissionCents)}</TableCell>
+                    <TableCell className="text-right font-mono tabular-nums text-warning">{formatCents(s.accruedCents)}</TableCell>
+                    <TableCell className="text-right font-mono tabular-nums text-info">{formatCents(s.approvedCents)}</TableCell>
+                    <TableCell className="text-right font-mono tabular-nums text-success">{formatCents(s.paidCents)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </Card>
       ) : (
-        <div className="vn-card">
-          <div className="vn-filters" style={{ padding: '8px 16px' }}>
-            <select className="vn-filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-              <option value="all">All Statuses</option>
-              <option value="accrued">Accrued</option>
-              <option value="approved">Approved</option>
-              <option value="paid">Paid</option>
-            </select>
+        <Card>
+          <div className="flex flex-wrap items-center gap-3 p-4">
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-[200px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                <SelectItem value="accrued">Accrued</SelectItem>
+                <SelectItem value="approved">Approved</SelectItem>
+                <SelectItem value="paid">Paid</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-          <div className="vn-table-wrap">
-            <table className="vn-table">
-              <thead>
-                <tr>
-                  <th>Agent</th>
-                  <th>Shipment</th>
-                  <th>Basis</th>
-                  <th style={{ textAlign: 'right' }}>Rate</th>
-                  <th style={{ textAlign: 'right' }}>Amount</th>
-                  <th>Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map(c => {
-                  const name = [c.user.firstName, c.user.lastName].filter(Boolean).join(' ') || c.user.email;
-                  return (
-                    <tr key={c.id}>
-                      <td>{name}</td>
-                      <td><span className="vn-table-id">{c.shipment.reference}</span></td>
-                      <td>{c.basisType} ({formatCents(c.basisAmountCents)})</td>
-                      <td style={{ textAlign: 'right' }}>{Number(c.commissionPercent).toFixed(1)}%</td>
-                      <td style={{ textAlign: 'right', fontWeight: 600 }}>{formatCents(c.commissionCents)}</td>
-                      <td><span className={`vn-chip vn-chip-${statusChip(c.status)}`}>{c.status}</span></td>
-                      <td>
-                        {c.status === 'accrued' && (
-                          <button className="vn-btn vn-btn-primary vn-btn-sm" onClick={() => handleAction(c.id, 'approve')}>Approve</button>
-                        )}
-                        {c.status === 'approved' && (
-                          <button className="vn-btn vn-btn-success vn-btn-sm" onClick={() => handleAction(c.id, 'pay')}>Mark Paid</button>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Agent</TableHead>
+                <TableHead>Shipment</TableHead>
+                <TableHead>Basis</TableHead>
+                <TableHead className="text-right">Rate</TableHead>
+                <TableHead className="text-right">Amount</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filtered.map(c => {
+                const name = [c.user.firstName, c.user.lastName].filter(Boolean).join(' ') || c.user.email;
+                return (
+                  <TableRow key={c.id}>
+                    <TableCell>{name}</TableCell>
+                    <TableCell>
+                      <span className="font-mono text-sm font-semibold">{c.shipment.reference}</span>
+                    </TableCell>
+                    <TableCell>{c.basisType} ({formatCents(c.basisAmountCents)})</TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">{Number(c.commissionPercent).toFixed(1)}%</TableCell>
+                    <TableCell className="text-right font-mono tabular-nums font-semibold">{formatCents(c.commissionCents)}</TableCell>
+                    <TableCell>
+                      <Badge variant={statusVariant(c.status)}>{c.status}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      {c.status === 'accrued' && (
+                        <Button size="sm" onClick={() => handleAction(c.id, 'approve')}>Approve</Button>
+                      )}
+                      {c.status === 'approved' && (
+                        <Button size="sm" onClick={() => handleAction(c.id, 'pay')}>Mark Paid</Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </Card>
       )}
     </div>
   );

@@ -1,8 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { API_URL } from '../api';
+import { Loader2, ShoppingCart } from 'lucide-react';
 
-/* ── Types ────────────────────────────────────────────────── */
+import { API_URL } from '../api';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 interface PickTask {
   id: string;
@@ -17,17 +34,17 @@ interface PickTask {
   createdAt: string;
 }
 
-/* ── Helpers ──────────────────────────────────────────────── */
+type BadgeVariant = 'success' | 'info' | 'warning' | 'destructive' | 'muted' | 'secondary' | 'default';
 
-function statusChip(status: string): string {
+function statusVariant(status: string): BadgeVariant {
   switch (status) {
-    case 'pending': return 'vn-chip-secondary';
-    case 'assigned': return 'vn-chip-info';
-    case 'in_progress': return 'vn-chip-warning';
-    case 'completed': return 'vn-chip-success';
-    case 'short_pick': return 'vn-chip-error';
-    case 'cancelled': return 'vn-chip-error';
-    default: return 'vn-chip-secondary';
+    case 'pending': return 'secondary';
+    case 'assigned': return 'info';
+    case 'in_progress': return 'warning';
+    case 'completed': return 'success';
+    case 'short_pick': return 'destructive';
+    case 'cancelled': return 'destructive';
+    default: return 'secondary';
   }
 }
 
@@ -35,13 +52,11 @@ function formatStatus(s: string): string {
   return s.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 }
 
-/* ── Component ────────────────────────────────────────────── */
-
 export default function VNextWmsPicking() {
   const navigate = useNavigate();
   const [tasks, setTasks] = useState<PickTask[]>([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
 
   const [selectedLocation, setSelectedLocation] = useState('');
   const [locations, setLocations] = useState<Array<{ id: string; name: string }>>([]);
@@ -63,7 +78,7 @@ export default function VNextWmsPicking() {
   useEffect(() => {
     if (!selectedLocation) return;
     setLoading(true);
-    const url = statusFilter
+    const url = statusFilter !== 'all'
       ? `${API_URL}/api/v1/pick-tasks?locationId=${selectedLocation}&status=${statusFilter}`
       : `${API_URL}/api/v1/pick-tasks?locationId=${selectedLocation}`;
     fetch(url)
@@ -79,90 +94,98 @@ export default function VNextWmsPicking() {
       .finally(() => setLoading(false));
   }, [selectedLocation, statusFilter]);
 
-  const filtered = tasks; // Server-side filtering
-
   return (
-    <div>
-      <div className="vn-page-header">
-        <div>
-          <h1>Picking</h1>
-          <p className="vn-page-subtitle">Pick tasks for fulfilling orders</p>
-        </div>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Picking</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Pick tasks for fulfilling orders</p>
       </div>
 
-      {/* Filters */}
-      <div className="vn-filters" style={{ marginBottom: '1rem' }}>
-        <select
-          className="vn-filter-select"
-          value={selectedLocation}
-          onChange={e => setSelectedLocation(e.target.value)}
-        >
-          {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-        </select>
-        <select
-          className="vn-filter-select"
-          value={statusFilter}
-          onChange={e => setStatusFilter(e.target.value)}
-        >
-          <option value="">All Statuses</option>
-          <option value="pending">Pending</option>
-          <option value="assigned">Assigned</option>
-          <option value="in_progress">In Progress</option>
-          <option value="completed">Completed</option>
-          <option value="short_pick">Short Pick</option>
-        </select>
+      <div className="flex flex-wrap items-center gap-2">
+        <Select value={selectedLocation} onValueChange={setSelectedLocation}>
+          <SelectTrigger className="w-[260px]">
+            <SelectValue placeholder="Select location" />
+          </SelectTrigger>
+          <SelectContent>
+            {locations.map(l => (
+              <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-[200px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Statuses</SelectItem>
+            <SelectItem value="pending">Pending</SelectItem>
+            <SelectItem value="assigned">Assigned</SelectItem>
+            <SelectItem value="in_progress">In Progress</SelectItem>
+            <SelectItem value="completed">Completed</SelectItem>
+            <SelectItem value="short_pick">Short Pick</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {loading ? (
-        <div style={{ padding: '2rem', textAlign: 'center' }}>
-          <div className="vn-loading-spinner" />
+        <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+          <Loader2 className="h-8 w-8 animate-spin" />
         </div>
-      ) : filtered.length === 0 ? (
-        <div className="vn-card" style={{ textAlign: 'center', padding: '3rem' }}>
-          <span className="material-icons" style={{ fontSize: '48px', color: 'var(--text-secondary)', marginBottom: '1rem', display: 'block' }}>shopping_cart</span>
-          <h3>No pick tasks</h3>
-          <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-            Pick tasks are generated when waves are released. Create a wave and release it to generate pick lists.
-          </p>
-        </div>
+      ) : tasks.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+            <ShoppingCart className="h-12 w-12 text-muted-foreground" />
+            <h3 className="text-base font-medium">No pick tasks</h3>
+            <p className="text-sm text-muted-foreground">
+              Pick tasks are generated when waves are released. Create a wave and release it to generate pick lists.
+            </p>
+          </CardContent>
+        </Card>
       ) : (
-        <div className="vn-table-wrap">
-          <table className="vn-table">
-            <thead>
-              <tr>
-                <th>Task</th>
-                <th>Type</th>
-                <th>Wave</th>
-                <th>Order</th>
-                <th>Zone</th>
-                <th>Progress</th>
-                <th>Assigned To</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(task => (
-                <tr key={task.id} onClick={() => navigate(`/wms/picking/${task.id}`)} style={{ cursor: 'pointer' }}>
-                  <td><span className="vn-table-id">{task.id.slice(0, 8)}</span></td>
-                  <td><span className="vn-chip vn-chip-primary">{formatStatus(task.pickType)}</span></td>
-                  <td>{task.waveNumber || '--'}</td>
-                  <td>{task.orderRef || '--'}</td>
-                  <td>{task.zoneName || 'All'}</td>
-                  <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <div style={{ flex: 1, height: '6px', background: 'var(--border)', borderRadius: '3px', overflow: 'hidden' }}>
-                        <div style={{ width: `${task.totalLines > 0 ? (task.completedLines / task.totalLines) * 100 : 0}%`, height: '100%', background: 'var(--color-success)', borderRadius: '3px' }} />
+        <Card>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Task</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Wave</TableHead>
+                <TableHead>Order</TableHead>
+                <TableHead>Zone</TableHead>
+                <TableHead>Progress</TableHead>
+                <TableHead>Assigned To</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {tasks.map(task => (
+                <TableRow key={task.id} onClick={() => navigate(`/wms/picking/${task.id}`)} className="cursor-pointer">
+                  <TableCell className="font-mono text-sm font-semibold">{task.id.slice(0, 8)}</TableCell>
+                  <TableCell>
+                    <Badge variant="default">{formatStatus(task.pickType)}</Badge>
+                  </TableCell>
+                  <TableCell>{task.waveNumber || '-'}</TableCell>
+                  <TableCell>{task.orderRef || '-'}</TableCell>
+                  <TableCell>{task.zoneName || 'All'}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <div className="h-2 w-32 overflow-hidden rounded-full bg-muted">
+                        <div
+                          className="h-full rounded-full bg-success"
+                          style={{ width: `${task.totalLines > 0 ? (task.completedLines / task.totalLines) * 100 : 0}%` }}
+                        />
                       </div>
-                      <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{task.completedLines}/{task.totalLines}</span>
+                      <span className="text-xs text-muted-foreground">{task.completedLines}/{task.totalLines}</span>
                     </div>
-                  </td>
-                  <td>{task.assignedTo || 'Unassigned'}</td>
-                  <td><span className={`vn-chip ${statusChip(task.status)}`}>{formatStatus(task.status)}</span></td>
-                </tr>
+                  </TableCell>
+                  <TableCell>{task.assignedTo || 'Unassigned'}</TableCell>
+                  <TableCell>
+                    <Badge variant={statusVariant(task.status)}>{formatStatus(task.status)}</Badge>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </TableBody>
+          </Table>
+        </Card>
       )}
     </div>
   );

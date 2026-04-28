@@ -1,6 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, Link } from 'react-router-dom';
+import { ArrowLeft, ChevronRight, CircleAlert, Loader2, Save } from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 const ZONE_TYPES = [
   { value: 'receiving', label: 'Receiving' },
@@ -15,7 +28,7 @@ const ZONE_TYPES = [
 ];
 
 const TEMP_ZONES = [
-  { value: '', label: 'None' },
+  { value: 'none', label: 'None' },
   { value: 'ambient', label: 'Ambient' },
   { value: 'refrigerated', label: 'Refrigerated' },
   { value: 'frozen', label: 'Frozen' },
@@ -41,7 +54,7 @@ export default function VNextWmsCreateZone() {
     locationId: '',
     name: '',
     zoneType: 'bulk_storage',
-    temperatureZone: '',
+    temperatureZone: 'none',
     hazmatCertified: false,
     maxWeightKg: '',
     maxVolumeCbm: '',
@@ -75,7 +88,7 @@ export default function VNextWmsCreateZone() {
             locationId: z.locationId,
             name: z.name,
             zoneType: z.zoneType,
-            temperatureZone: z.temperatureZone || '',
+            temperatureZone: z.temperatureZone || 'none',
             hazmatCertified: z.hazmatCertified,
             maxWeightKg: z.maxWeightKg != null ? String(z.maxWeightKg) : '',
             maxVolumeCbm: z.maxVolumeCbm != null ? String(z.maxVolumeCbm) : '',
@@ -95,7 +108,7 @@ export default function VNextWmsCreateZone() {
       locationId: form.locationId,
       name: form.name.trim(),
       zoneType: form.zoneType,
-      temperatureZone: form.temperatureZone || null,
+      temperatureZone: form.temperatureZone === 'none' ? null : form.temperatureZone,
       hazmatCertified: form.hazmatCertified,
       maxWeightKg: form.maxWeightKg ? parseFloat(form.maxWeightKg) : null,
       maxVolumeCbm: form.maxVolumeCbm ? parseFloat(form.maxVolumeCbm) : null,
@@ -126,143 +139,150 @@ export default function VNextWmsCreateZone() {
 
   if (loading) {
     return (
-      <div style={{ padding: '2rem', textAlign: 'center' }}>
-        <div className="vn-loading-spinner" />
+      <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
       </div>
     );
   }
 
   return (
-    <div>
-      <div className="vn-page-header">
-        <div>
-          <h1>{isEdit ? 'Edit Zone' : 'Create Zone'}</h1>
-          <p className="vn-page-subtitle">
-            {isEdit ? 'Update zone configuration' : 'Define a new warehouse zone'}
-          </p>
-        </div>
+    <div className="space-y-6">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Link to="/wms/zones" className="hover:text-foreground">
+          <ArrowLeft className="inline h-4 w-4" /> Zones
+        </Link>
+        <ChevronRight className="h-3 w-3" />
+        <span>{isEdit ? 'Edit zone' : 'New zone'}</span>
       </div>
 
-      {error && <div className="vn-alert vn-alert-error" style={{ marginBottom: '1rem' }}>{error}</div>}
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">{isEdit ? 'Edit Zone' : 'Create Zone'}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {isEdit ? 'Update zone configuration' : 'Define a new warehouse zone'}
+        </p>
+      </div>
 
-      <form onSubmit={handleSubmit} className="vn-card" style={{ maxWidth: '700px' }}>
-        <div className="vn-form-grid">
-          {/* Location */}
-          <div className="vn-field" style={{ gridColumn: '1 / -1' }}>
-            <label className="vn-field-label">Location *</label>
-            <select
-              className="vn-input"
-              value={form.locationId}
-              onChange={e => setForm({ ...form, locationId: e.target.value })}
-              required
-              disabled={isEdit}
-            >
-              <option value="">Select a warehouse location...</option>
-              {locations.map(l => (
-                <option key={l.id} value={l.id}>{l.name}{l.locationType ? ` (${l.locationType})` : ''}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Name */}
-          <div className="vn-field">
-            <label className="vn-field-label">Zone Name *</label>
-            <input
-              className="vn-input"
-              value={form.name}
-              onChange={e => setForm({ ...form, name: e.target.value })}
-              placeholder="e.g. Bulk A, Dock 3, Cold Store"
-              required
-            />
-          </div>
-
-          {/* Zone Type */}
-          <div className="vn-field">
-            <label className="vn-field-label">Zone Type *</label>
-            <select
-              className="vn-input"
-              value={form.zoneType}
-              onChange={e => setForm({ ...form, zoneType: e.target.value })}
-              required
-            >
-              {ZONE_TYPES.map(t => (
-                <option key={t.value} value={t.value}>{t.label}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Temperature Zone */}
-          <div className="vn-field">
-            <label className="vn-field-label">Temperature Zone</label>
-            <select
-              className="vn-input"
-              value={form.temperatureZone}
-              onChange={e => setForm({ ...form, temperatureZone: e.target.value })}
-            >
-              {TEMP_ZONES.map(t => (
-                <option key={t.value} value={t.value}>{t.label}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Sort Order */}
-          <div className="vn-field">
-            <label className="vn-field-label">Sort Order</label>
-            <input
-              className="vn-input"
-              type="number"
-              value={form.sortOrder}
-              onChange={e => setForm({ ...form, sortOrder: e.target.value })}
-            />
-          </div>
-
-          {/* Max Weight */}
-          <div className="vn-field">
-            <label className="vn-field-label">Max Weight (kg)</label>
-            <input
-              className="vn-input"
-              type="number"
-              step="0.1"
-              value={form.maxWeightKg}
-              onChange={e => setForm({ ...form, maxWeightKg: e.target.value })}
-              placeholder="Optional"
-            />
-          </div>
-
-          {/* Max Volume */}
-          <div className="vn-field">
-            <label className="vn-field-label">Max Volume (cbm)</label>
-            <input
-              className="vn-input"
-              type="number"
-              step="0.01"
-              value={form.maxVolumeCbm}
-              onChange={e => setForm({ ...form, maxVolumeCbm: e.target.value })}
-              placeholder="Optional"
-            />
-          </div>
-
-          {/* Hazmat */}
-          <div className="vn-field" style={{ gridColumn: '1 / -1' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
-              <input
-                type="checkbox"
-                checked={form.hazmatCertified}
-                onChange={e => setForm({ ...form, hazmatCertified: e.target.checked })}
-              />
-              Hazmat Certified
-            </label>
-          </div>
+      {error && (
+        <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+          <CircleAlert className="h-5 w-5" />
+          {error}
         </div>
+      )}
 
-        {/* Actions */}
-        <div className="vn-form-actions" style={{ marginTop: '1.5rem' }}>
-          <button type="button" className="vn-btn vn-btn-outline" onClick={() => navigate('/wms/zones')}>
+      <form onSubmit={handleSubmit}>
+        <Card className="max-w-3xl">
+          <CardContent className="grid gap-4 p-6 md:grid-cols-2">
+            <div className="space-y-2 md:col-span-2">
+              <Label>Location *</Label>
+              <Select
+                value={form.locationId}
+                onValueChange={(v) => setForm({ ...form, locationId: v })}
+                disabled={isEdit}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a warehouse location..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {locations.map(l => (
+                    <SelectItem key={l.id} value={l.id}>
+                      {l.name}{l.locationType ? ` (${l.locationType})` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Zone Name *</Label>
+              <Input
+                value={form.name}
+                onChange={e => setForm({ ...form, name: e.target.value })}
+                placeholder="e.g. Bulk A, Dock 3, Cold Store"
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Zone Type *</Label>
+              <Select value={form.zoneType} onValueChange={v => setForm({ ...form, zoneType: v })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ZONE_TYPES.map(t => (
+                    <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Temperature Zone</Label>
+              <Select value={form.temperatureZone} onValueChange={v => setForm({ ...form, temperatureZone: v })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {TEMP_ZONES.map(t => (
+                    <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Sort Order</Label>
+              <Input
+                type="number"
+                value={form.sortOrder}
+                onChange={e => setForm({ ...form, sortOrder: e.target.value })}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Max Weight (kg)</Label>
+              <Input
+                type="number"
+                step="0.1"
+                value={form.maxWeightKg}
+                onChange={e => setForm({ ...form, maxWeightKg: e.target.value })}
+                placeholder="Optional"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Max Volume (cbm)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                value={form.maxVolumeCbm}
+                onChange={e => setForm({ ...form, maxVolumeCbm: e.target.value })}
+                placeholder="Optional"
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={form.hazmatCertified}
+                  onChange={e => setForm({ ...form, hazmatCertified: e.target.checked })}
+                  className="h-4 w-4 rounded border border-input bg-background accent-primary"
+                />
+                Hazmat Certified
+              </label>
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="mt-6 flex flex-wrap items-center justify-end gap-2">
+          <Button variant="outline" type="button" onClick={() => navigate('/wms/zones')}>
             Cancel
-          </button>
-          <button type="submit" className="vn-btn vn-btn-primary" disabled={saving}>
+          </Button>
+          <Button variant="gradient" type="submit" disabled={saving}>
+            <Save className="h-4 w-4" />
             {saving ? 'Saving...' : isEdit ? 'Update Zone' : 'Create Zone'}
-          </button>
+          </Button>
         </div>
       </form>
     </div>

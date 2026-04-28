@@ -1,5 +1,41 @@
 import { useState, useEffect } from 'react';
+import {
+  CheckCircle2,
+  Edit,
+  Loader2,
+  Plus,
+  Refrigerator,
+  Save,
+  Search,
+  Snowflake,
+  Thermometer,
+  Droplets,
+  XCircle,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 
 interface ColdChainProfile {
   id: string;
@@ -62,6 +98,13 @@ function profileToForm(p: ColdChainProfile): FormData {
     active: p.active,
   };
 }
+
+const STAT_TONES = {
+  primary: 'bg-primary/10 text-primary',
+  success: 'bg-success/15 text-success',
+  info: 'bg-info/15 text-info',
+  warning: 'bg-warning/15 text-warning',
+} as const;
 
 export default function VNextColdChainProfiles() {
   const [profiles, setProfiles] = useState<ColdChainProfile[]>([]);
@@ -132,7 +175,6 @@ export default function VNextColdChainProfiles() {
     if (alertMin < minTemp) return 'Alert Min Temperature must be greater than or equal to Min Temperature.';
     if (alertMax > maxTemp) return 'Alert Max Temperature must be less than or equal to Max Temperature.';
 
-    // Validate humidity if any humidity field is provided
     const hasHumidity = form.minHumidity !== '' || form.maxHumidity !== '' || form.alertMinHumidity !== '' || form.alertMaxHumidity !== '';
     if (hasHumidity) {
       const minH = form.minHumidity !== '' ? Number(form.minHumidity) : null;
@@ -203,7 +245,6 @@ export default function VNextColdChainProfiles() {
     }
   }
 
-  // Filtered profiles
   const filtered = profiles.filter(p => {
     if (statusFilter === 'active' && !p.active) return false;
     if (statusFilter === 'inactive' && p.active) return false;
@@ -213,7 +254,6 @@ export default function VNextColdChainProfiles() {
     return true;
   });
 
-  // Stats
   const totalCount = profiles.length;
   const activeCount = profiles.filter(p => p.active).length;
   const frozenCount = profiles.filter(p => p.minTemperature < -10).length;
@@ -221,340 +261,240 @@ export default function VNextColdChainProfiles() {
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', padding: '48px' }}>
-        <div className="loading-spinner" />
+      <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
       </div>
     );
   }
 
+  const stats = [
+    { tone: 'primary' as const, label: 'Total Profiles', value: totalCount, Icon: Thermometer },
+    { tone: 'success' as const, label: 'Active Profiles', value: activeCount, Icon: CheckCircle2 },
+    { tone: 'info' as const, label: 'Frozen Profiles', value: frozenCount, Icon: Snowflake },
+    { tone: 'warning' as const, label: 'Refrigerated Profiles', value: refrigeratedCount, Icon: Refrigerator },
+  ];
+
   return (
-    <>
-      {/* Page Header */}
-      <div className="vn-page-header">
-        <div>
-          <h1>Cold Chain Profiles</h1>
-        </div>
-        <div className="vn-page-actions">
-          <button className="vn-btn vn-btn-primary" onClick={openCreate}>
-            <span className="material-icons">add</span>
-            New Profile
-          </button>
-        </div>
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <h1 className="text-3xl font-bold tracking-tight">Cold Chain Profiles</h1>
+        <Button variant="gradient" onClick={openCreate}>
+          <Plus className="h-4 w-4" />
+          New Profile
+        </Button>
       </div>
 
       {error && (
-        <div className="vn-alert vn-alert-error" style={{ marginBottom: 16 }}>
-          <span className="material-icons">error</span>
-          <div>{error}</div>
+        <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+          <XCircle className="h-5 w-5" />
+          {error}
         </div>
       )}
 
-      {/* Stats */}
-      <div className="vn-stats">
-        <div className="vn-stat">
-          <div className="vn-stat-icon primary">
-            <span className="material-icons">thermostat</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{totalCount}</div>
-            <div className="vn-stat-label">Total Profiles</div>
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon success">
-            <span className="material-icons">check_circle</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{activeCount}</div>
-            <div className="vn-stat-label">Active Profiles</div>
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon info">
-            <span className="material-icons">ac_unit</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{frozenCount}</div>
-            <div className="vn-stat-label">Frozen Profiles</div>
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon warning">
-            <span className="material-icons">kitchen</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{refrigeratedCount}</div>
-            <div className="vn-stat-label">Refrigerated Profiles</div>
-          </div>
-        </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {stats.map(stat => {
+          const Icon = stat.Icon;
+          return (
+            <Card key={stat.label} className="p-5">
+              <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', STAT_TONES[stat.tone])}>
+                <Icon className="h-5 w-5" />
+              </div>
+              <div className="mt-3 text-2xl font-bold tracking-tight">{stat.value}</div>
+              <div className="mt-1 text-sm text-muted-foreground">{stat.label}</div>
+            </Card>
+          );
+        })}
       </div>
 
-      {/* Filters + Table Card */}
-      <div className="vn-card">
-        <div className="vn-filters">
-          <div className="vn-filter-group" style={{ flex: 1 }}>
-            <span className="material-icons">search</span>
-            <input
-              className="vn-filter-input"
+      <Card>
+        <div className="flex flex-wrap items-center gap-3 p-4">
+          <div className="relative min-w-[260px] flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
               placeholder="Search by name..."
               value={search}
               onChange={e => setSearch(e.target.value)}
-              style={{ width: '100%' }}
+              className="pl-9"
             />
           </div>
-          <select
-            className="vn-filter-select"
-            value={statusFilter}
-            onChange={e => setStatusFilter(e.target.value)}
-          >
-            <option value="all">All Statuses</option>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-          </select>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Statuses</SelectItem>
+              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="inactive">Inactive</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         {filtered.length === 0 ? (
-          <div className="vn-empty">
-            <span className="material-icons">thermostat</span>
-            <h3>No cold chain profiles found</h3>
-            <p>Create a profile to define temperature and humidity requirements.</p>
+          <div className="flex flex-col items-center gap-2 py-12 text-muted-foreground">
+            <Thermometer className="h-10 w-10" />
+            <h3 className="text-base font-medium">No cold chain profiles found</h3>
+            <p className="text-sm">Create a profile to define temperature and humidity requirements.</p>
           </div>
         ) : (
-          <div className="vn-table-wrap">
-            <table className="vn-table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Temperature Range</th>
-                  <th>Alert Range</th>
-                  <th>Humidity Range</th>
-                  <th>Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map(profile => (
-                  <tr key={profile.id}>
-                    <td>
-                      <div style={{ fontWeight: 600, color: 'var(--on-surface)' }}>{profile.name}</div>
-                      {profile.description && (
-                        <div style={{ fontSize: 12, color: 'var(--on-surface-variant)', marginTop: 2 }}>
-                          {profile.description}
-                        </div>
-                      )}
-                    </td>
-                    <td style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>
-                      {profile.minTemperature}&deg;C to {profile.maxTemperature}&deg;C
-                    </td>
-                    <td style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>
-                      {profile.alertMinTemperature}&deg;C to {profile.alertMaxTemperature}&deg;C
-                    </td>
-                    <td style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>
-                      {profile.minHumidity != null && profile.maxHumidity != null
-                        ? `${profile.minHumidity}% to ${profile.maxHumidity}%`
-                        : '\u2014'}
-                    </td>
-                    <td>
-                      <span className={`vn-chip ${profile.active ? 'vn-chip-success' : 'vn-chip-secondary'}`}>
-                        {profile.active ? 'Active' : 'Inactive'}
-                      </span>
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', gap: '4px' }}>
-                        <button
-                          className="vn-btn vn-btn-ghost vn-btn-sm"
-                          title="Edit profile"
-                          onClick={() => openEdit(profile)}
-                        >
-                          <span className="material-icons" style={{ fontSize: 18 }}>edit</span>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Temperature Range</TableHead>
+                <TableHead>Alert Range</TableHead>
+                <TableHead>Humidity Range</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filtered.map(profile => (
+                <TableRow key={profile.id}>
+                  <TableCell>
+                    <div className="font-semibold">{profile.name}</div>
+                    {profile.description && (
+                      <div className="mt-0.5 text-xs text-muted-foreground">{profile.description}</div>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {profile.minTemperature}&deg;C to {profile.maxTemperature}&deg;C
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {profile.alertMinTemperature}&deg;C to {profile.alertMaxTemperature}&deg;C
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {profile.minHumidity != null && profile.maxHumidity != null
+                      ? `${profile.minHumidity}% to ${profile.maxHumidity}%`
+                      : '-'}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={profile.active ? 'success' : 'muted'}>
+                      {profile.active ? 'Active' : 'Inactive'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      title="Edit profile"
+                      onClick={() => openEdit(profile)}
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         )}
-      </div>
+      </Card>
 
-      {/* Create / Edit Modal */}
-      {showModal && (
-        <div className="vn-modal-backdrop" onClick={e => { if (e.target === e.currentTarget) closeModal(); }}>
-          <div className="vn-modal">
-            <div className="vn-modal-header">
-              <h2>{editingProfile ? 'Edit Profile' : 'New Profile'}</h2>
-              <button className="vn-modal-close" onClick={closeModal}>
-                <span className="material-icons">close</span>
-              </button>
+      <Dialog open={showModal} onOpenChange={open => !open && closeModal()}>
+        <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{editingProfile ? 'Edit Profile' : 'New Profile'}</DialogTitle>
+          </DialogHeader>
+          {formError && (
+            <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+              <XCircle className="h-4 w-4" />
+              {formError}
             </div>
-            <div className="vn-modal-body">
-              {formError && (
-                <div className="vn-alert vn-alert-error" style={{ marginBottom: 16 }}>
-                  <span className="material-icons">error</span>
-                  <div>{formError}</div>
-                </div>
-              )}
+          )}
 
-              {/* Name & Description */}
-              <div className="vn-form-grid">
-                <div className="vn-field vn-col-span-2">
-                  <label className="vn-field-label">Name *</label>
-                  <input
-                    className="vn-input"
-                    type="text"
-                    placeholder="Profile name"
-                    value={form.name}
-                    onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                  />
-                </div>
-                <div className="vn-field vn-col-span-2">
-                  <label className="vn-field-label">Description</label>
-                  <textarea
-                    className="vn-input"
-                    placeholder="Optional description"
-                    rows={3}
-                    value={form.description}
-                    onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                    style={{ resize: 'vertical' }}
-                  />
-                </div>
+          <div className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2 md:col-span-2">
+                <Label>Name *</Label>
+                <Input
+                  placeholder="Profile name"
+                  value={form.name}
+                  onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                />
               </div>
-
-              {/* Temperature Range Section */}
-              <div className="vn-form-section">
-                <div className="vn-form-section-title">
-                  <span className="material-icons">thermostat</span>
-                  Temperature Range (&deg;C)
-                </div>
-                <div className="vn-form-grid">
-                  <div className="vn-field">
-                    <label className="vn-field-label">Min Temperature *</label>
-                    <input
-                      className="vn-input"
-                      type="number"
-                      step="any"
-                      placeholder="-20"
-                      value={form.minTemperature}
-                      onChange={e => setForm(f => ({ ...f, minTemperature: e.target.value }))}
-                    />
-                  </div>
-                  <div className="vn-field">
-                    <label className="vn-field-label">Max Temperature *</label>
-                    <input
-                      className="vn-input"
-                      type="number"
-                      step="any"
-                      placeholder="8"
-                      value={form.maxTemperature}
-                      onChange={e => setForm(f => ({ ...f, maxTemperature: e.target.value }))}
-                    />
-                  </div>
-                  <div className="vn-field">
-                    <label className="vn-field-label">Alert Min Temperature *</label>
-                    <input
-                      className="vn-input"
-                      type="number"
-                      step="any"
-                      placeholder="-18"
-                      value={form.alertMinTemperature}
-                      onChange={e => setForm(f => ({ ...f, alertMinTemperature: e.target.value }))}
-                    />
-                  </div>
-                  <div className="vn-field">
-                    <label className="vn-field-label">Alert Max Temperature *</label>
-                    <input
-                      className="vn-input"
-                      type="number"
-                      step="any"
-                      placeholder="6"
-                      value={form.alertMaxTemperature}
-                      onChange={e => setForm(f => ({ ...f, alertMaxTemperature: e.target.value }))}
-                    />
-                  </div>
-                </div>
-                <span className="vn-field-hint">Alert range should be tighter than acceptable range</span>
-              </div>
-
-              {/* Humidity Range Section */}
-              <div className="vn-form-section">
-                <div className="vn-form-section-title">
-                  <span className="material-icons">water_drop</span>
-                  Humidity Range (% RH)
-                </div>
-                <div className="vn-form-grid">
-                  <div className="vn-field">
-                    <label className="vn-field-label">Min Humidity</label>
-                    <input
-                      className="vn-input"
-                      type="number"
-                      step="any"
-                      placeholder="30"
-                      value={form.minHumidity}
-                      onChange={e => setForm(f => ({ ...f, minHumidity: e.target.value }))}
-                    />
-                  </div>
-                  <div className="vn-field">
-                    <label className="vn-field-label">Max Humidity</label>
-                    <input
-                      className="vn-input"
-                      type="number"
-                      step="any"
-                      placeholder="70"
-                      value={form.maxHumidity}
-                      onChange={e => setForm(f => ({ ...f, maxHumidity: e.target.value }))}
-                    />
-                  </div>
-                  <div className="vn-field">
-                    <label className="vn-field-label">Alert Min Humidity</label>
-                    <input
-                      className="vn-input"
-                      type="number"
-                      step="any"
-                      placeholder="35"
-                      value={form.alertMinHumidity}
-                      onChange={e => setForm(f => ({ ...f, alertMinHumidity: e.target.value }))}
-                    />
-                  </div>
-                  <div className="vn-field">
-                    <label className="vn-field-label">Alert Max Humidity</label>
-                    <input
-                      className="vn-input"
-                      type="number"
-                      step="any"
-                      placeholder="65"
-                      value={form.alertMaxHumidity}
-                      onChange={e => setForm(f => ({ ...f, alertMaxHumidity: e.target.value }))}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Active Toggle */}
-              <div className="vn-field">
-                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 14, color: 'var(--on-surface)', cursor: 'pointer' }}>
-                  <input
-                    type="checkbox"
-                    checked={form.active}
-                    onChange={e => setForm(f => ({ ...f, active: e.target.checked }))}
-                    style={{ accentColor: 'var(--primary)' }}
-                  />
-                  Active
-                </label>
+              <div className="space-y-2 md:col-span-2">
+                <Label>Description</Label>
+                <textarea
+                  className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  rows={3}
+                  placeholder="Optional description"
+                  value={form.description}
+                  onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                />
               </div>
             </div>
-            <div className="vn-modal-footer">
-              <button className="vn-btn vn-btn-outline" onClick={closeModal} disabled={saving}>
-                Cancel
-              </button>
-              <button className="vn-btn vn-btn-primary" onClick={handleSave} disabled={saving}>
-                <span className="material-icons">{editingProfile ? 'save' : 'add'}</span>
-                {saving ? 'Saving...' : editingProfile ? 'Save Changes' : 'Create Profile'}
-              </button>
+
+            <div className="space-y-3 rounded-md border border-border bg-muted/20 p-4">
+              <h3 className="flex items-center gap-2 text-sm font-semibold">
+                <Thermometer className="h-4 w-4" />
+                Temperature Range (&deg;C)
+              </h3>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Min Temperature *</Label>
+                  <Input type="number" step="any" placeholder="-20" value={form.minTemperature} onChange={e => setForm(f => ({ ...f, minTemperature: e.target.value }))} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Max Temperature *</Label>
+                  <Input type="number" step="any" placeholder="8" value={form.maxTemperature} onChange={e => setForm(f => ({ ...f, maxTemperature: e.target.value }))} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Alert Min Temperature *</Label>
+                  <Input type="number" step="any" placeholder="-18" value={form.alertMinTemperature} onChange={e => setForm(f => ({ ...f, alertMinTemperature: e.target.value }))} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Alert Max Temperature *</Label>
+                  <Input type="number" step="any" placeholder="6" value={form.alertMaxTemperature} onChange={e => setForm(f => ({ ...f, alertMaxTemperature: e.target.value }))} />
+                </div>
+              </div>
+              <div className="text-xs text-muted-foreground">Alert range should be tighter than acceptable range</div>
             </div>
+
+            <div className="space-y-3 rounded-md border border-border bg-muted/20 p-4">
+              <h3 className="flex items-center gap-2 text-sm font-semibold">
+                <Droplets className="h-4 w-4" />
+                Humidity Range (% RH)
+              </h3>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Min Humidity</Label>
+                  <Input type="number" step="any" placeholder="30" value={form.minHumidity} onChange={e => setForm(f => ({ ...f, minHumidity: e.target.value }))} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Max Humidity</Label>
+                  <Input type="number" step="any" placeholder="70" value={form.maxHumidity} onChange={e => setForm(f => ({ ...f, maxHumidity: e.target.value }))} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Alert Min Humidity</Label>
+                  <Input type="number" step="any" placeholder="35" value={form.alertMinHumidity} onChange={e => setForm(f => ({ ...f, alertMinHumidity: e.target.value }))} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Alert Max Humidity</Label>
+                  <Input type="number" step="any" placeholder="65" value={form.alertMaxHumidity} onChange={e => setForm(f => ({ ...f, alertMaxHumidity: e.target.value }))} />
+                </div>
+              </div>
+            </div>
+
+            <label className="flex cursor-pointer items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={form.active}
+                onChange={e => setForm(f => ({ ...f, active: e.target.checked }))}
+                className="h-4 w-4 rounded border border-input bg-background accent-primary"
+              />
+              Active
+            </label>
           </div>
-        </div>
-      )}
-    </>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={closeModal} disabled={saving}>Cancel</Button>
+            <Button variant="gradient" onClick={handleSave} disabled={saving}>
+              <Save className="h-4 w-4" />
+              {saving ? 'Saving...' : editingProfile ? 'Save Changes' : 'Create Profile'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }

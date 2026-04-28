@@ -1,5 +1,5 @@
 /**
- * VNextLocationOps — Per-location operations dashboard.
+ * VNextLocationOps - Per-location operations dashboard.
  *
  * Shows incoming, at-location, and outgoing shipments/units for a single location.
  * Designed for distribution centre, cross-dock, and hub-and-spoke operations.
@@ -7,7 +7,37 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import {
+  ArrowDown,
+  ArrowUp,
+  Calendar,
+  Edit,
+  Loader2,
+  Map as MapIcon,
+  Package,
+  ShieldAlert,
+  Snowflake,
+  SquareStack,
+  Truck,
+  User,
+  Warehouse,
+  ArrowLeftRight,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 import { getLocationTypeMeta } from './locationTypesMeta';
 
 interface LocationOps {
@@ -35,9 +65,9 @@ function formatDwell(minutes: number | null): string {
 
 function DwellBadge({ minutes }: { minutes: number | null }) {
   if (minutes === null) return null;
-  const color = minutes > 240 ? 'var(--color-error)' : minutes > 120 ? 'var(--color-warning)' : 'var(--on-surface-variant)';
+  const cls = minutes > 240 ? 'text-destructive' : minutes > 120 ? 'text-warning' : 'text-muted-foreground';
   return (
-    <span style={{ fontSize: '12px', fontWeight: 600, color }}>
+    <span className={cn('text-xs font-semibold', cls)}>
       {formatDwell(minutes)}
     </span>
   );
@@ -68,13 +98,17 @@ export default function VNextLocationOps() {
   }, [id]);
 
   if (loading) {
-    return <div style={{ padding: '48px', textAlign: 'center' }}><div className="loading-spinner" /></div>;
+    return (
+      <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
   }
 
   if (error || !data) {
     return (
-      <div style={{ padding: '24px' }}>
-        <div className="vn-alert vn-alert-error">{error || 'Failed to load location'}</div>
+      <div className="rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+        {error || 'Failed to load location'}
       </div>
     );
   }
@@ -84,291 +118,334 @@ export default function VNextLocationOps() {
   const capabilities = location.facilityCapabilities as Record<string, boolean> | null;
 
   return (
-    <div style={{ padding: '24px', maxWidth: '1400px', margin: '0 auto' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px' }}>
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
-            {typeMeta && <span className="material-icons" style={{ fontSize: '28px', color: 'var(--primary)' }}>{typeMeta.icon}</span>}
-            <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 700 }}>{location.name}</h1>
-            {typeMeta && <span className={`vn-chip ${typeMeta.chip}`}>{typeMeta.label}</span>}
+          <div className="flex items-center gap-3">
+            <Warehouse className="h-7 w-7 text-primary" />
+            <h1 className="text-3xl font-bold tracking-tight">{location.name}</h1>
+            {typeMeta && <Badge variant="muted">{typeMeta.label}</Badge>}
           </div>
-          <p style={{ margin: '4px 0 0', fontSize: '14px', color: 'var(--on-surface-variant)' }}>
-            {location.address1}, {location.city}{location.state ? `, ${location.state}` : ''} — {location.country}
+          <p className="mt-1 text-sm text-muted-foreground">
+            {location.address1}, {location.city}{location.state ? `, ${location.state}` : ''} - {location.country}
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <Link to={`/locations/${id}/edit`} className="vn-btn" style={{ display: 'flex', alignItems: 'center', gap: '4px', textDecoration: 'none' }}>
-            <span className="material-icons" style={{ fontSize: '16px' }}>edit</span>
-            Edit
-          </Link>
-          <Link to="/map" className="vn-btn" style={{ display: 'flex', alignItems: 'center', gap: '4px', textDecoration: 'none', background: 'transparent', border: '1px solid var(--outline-variant)', color: 'var(--on-surface-variant)' }}>
-            <span className="material-icons" style={{ fontSize: '16px' }}>map</span>
-            Map
-          </Link>
+        <div className="flex gap-2">
+          <Button asChild variant="outline">
+            <Link to={`/locations/${id}/edit`}>
+              <Edit className="h-4 w-4" />
+              Edit
+            </Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link to="/map">
+              <MapIcon className="h-4 w-4" />
+              Map
+            </Link>
+          </Button>
         </div>
       </div>
 
       {/* Facility info bar */}
       {(location.dockCount || capabilities || location.contactName) && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', marginBottom: '20px', padding: '12px 16px', background: 'var(--surface-container)', borderRadius: '8px', fontSize: '13px' }}>
+        <div className="flex flex-wrap items-center gap-4 rounded-md bg-muted/30 px-4 py-3 text-sm">
           {location.dockCount && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <span className="material-icons" style={{ fontSize: '16px', color: 'var(--primary)' }}>dock</span>
+            <div className="flex items-center gap-1.5">
+              <SquareStack className="h-4 w-4 text-primary" />
               {location.dockCount} docks
             </div>
           )}
           {capabilities?.crossDockCapable && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <span className="material-icons" style={{ fontSize: '16px', color: 'var(--color-info)' }}>swap_horiz</span>
+            <div className="flex items-center gap-1.5">
+              <ArrowLeftRight className="h-4 w-4 text-info" />
               Cross-dock
             </div>
           )}
           {capabilities?.hasColdStorage && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <span className="material-icons" style={{ fontSize: '16px', color: 'var(--color-info)' }}>ac_unit</span>
+            <div className="flex items-center gap-1.5">
+              <Snowflake className="h-4 w-4 text-info" />
               Cold storage
             </div>
           )}
           {capabilities?.hasHazmatCert && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <span className="material-icons" style={{ fontSize: '16px', color: 'var(--color-warning)' }}>warning</span>
+            <div className="flex items-center gap-1.5">
+              <ShieldAlert className="h-4 w-4 text-warning" />
               Hazmat
             </div>
           )}
           {location.appointmentRequired && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <span className="material-icons" style={{ fontSize: '16px', color: 'var(--color-warning)' }}>event</span>
+            <div className="flex items-center gap-1.5">
+              <Calendar className="h-4 w-4 text-warning" />
               Appointment required
             </div>
           )}
           {location.contactName && (
-            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--on-surface-variant)' }}>
-              <span className="material-icons" style={{ fontSize: '16px' }}>person</span>
-              {location.contactName}{location.contactPhone ? ` — ${location.contactPhone}` : ''}
+            <div className="ml-auto flex items-center gap-1.5 text-muted-foreground">
+              <User className="h-4 w-4" />
+              {location.contactName}{location.contactPhone ? ` - ${location.contactPhone}` : ''}
             </div>
           )}
         </div>
       )}
 
       {/* Stats cards */}
-      <div className="vn-stats" style={{ marginBottom: '24px' }}>
-        <div className="vn-stat" style={{ borderLeft: '4px solid var(--color-info)', cursor: 'pointer' }} onClick={() => setActiveSection('incoming')}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span className="material-icons" style={{ fontSize: '24px', color: 'var(--color-info)' }}>arrow_downward</span>
+      <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <Card
+          onClick={() => setActiveSection('incoming')}
+          className="cursor-pointer border-l-4 border-l-info p-5"
+        >
+          <div className="flex items-center gap-2">
+            <ArrowDown className="h-6 w-6 text-info" />
             <div>
-              <div style={{ fontSize: '28px', fontWeight: 700 }}>{stats.incoming}</div>
-              <div style={{ fontSize: '13px', color: 'var(--on-surface-variant)' }}>Incoming</div>
+              <div className="text-2xl font-bold tracking-tight">{stats.incoming}</div>
+              <div className="text-xs text-muted-foreground">Incoming</div>
             </div>
           </div>
-        </div>
-        <div className="vn-stat" style={{ borderLeft: '4px solid var(--color-warning)', cursor: 'pointer' }} onClick={() => setActiveSection('at_location')}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span className="material-icons" style={{ fontSize: '24px', color: 'var(--color-warning)' }}>inventory</span>
+        </Card>
+        <Card
+          onClick={() => setActiveSection('at_location')}
+          className="cursor-pointer border-l-4 border-l-warning p-5"
+        >
+          <div className="flex items-center gap-2">
+            <Package className="h-6 w-6 text-warning" />
             <div>
-              <div style={{ fontSize: '28px', fontWeight: 700 }}>{stats.atLocation}</div>
-              <div style={{ fontSize: '13px', color: 'var(--on-surface-variant)' }}>At Location</div>
+              <div className="text-2xl font-bold tracking-tight">{stats.atLocation}</div>
+              <div className="text-xs text-muted-foreground">At Location</div>
             </div>
           </div>
-        </div>
-        <div className="vn-stat" style={{ borderLeft: '4px solid var(--color-success)', cursor: 'pointer' }} onClick={() => setActiveSection('outgoing')}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span className="material-icons" style={{ fontSize: '24px', color: 'var(--color-success)' }}>arrow_upward</span>
+        </Card>
+        <Card
+          onClick={() => setActiveSection('outgoing')}
+          className="cursor-pointer border-l-4 border-l-success p-5"
+        >
+          <div className="flex items-center gap-2">
+            <ArrowUp className="h-6 w-6 text-success" />
             <div>
-              <div style={{ fontSize: '28px', fontWeight: 700 }}>{stats.outgoing}</div>
-              <div style={{ fontSize: '13px', color: 'var(--on-surface-variant)' }}>Outgoing</div>
+              <div className="text-2xl font-bold tracking-tight">{stats.outgoing}</div>
+              <div className="text-xs text-muted-foreground">Outgoing</div>
             </div>
           </div>
-        </div>
-        <div className="vn-stat" style={{ borderLeft: '4px solid var(--primary)' }}>
-          <div style={{ fontSize: '28px', fontWeight: 700 }}>{stats.unitsHere}</div>
-          <div style={{ fontSize: '13px', color: 'var(--on-surface-variant)' }}>Units Here</div>
-        </div>
-        <div className="vn-stat">
-          <div style={{ fontSize: '28px', fontWeight: 700 }}>{stats.todayArrivals}</div>
-          <div style={{ fontSize: '13px', color: 'var(--on-surface-variant)' }}>Today Arrivals</div>
-        </div>
-        <div className="vn-stat">
-          <div style={{ fontSize: '28px', fontWeight: 700, color: stats.avgDwellMinutes && stats.avgDwellMinutes > 240 ? 'var(--color-error)' : 'var(--on-surface)' }}>
+        </Card>
+        <Card className="border-l-4 border-l-primary p-5">
+          <div className="text-2xl font-bold tracking-tight">{stats.unitsHere}</div>
+          <div className="text-xs text-muted-foreground">Units Here</div>
+        </Card>
+        <Card className="p-5">
+          <div className="text-2xl font-bold tracking-tight">{stats.todayArrivals}</div>
+          <div className="text-xs text-muted-foreground">Today Arrivals</div>
+        </Card>
+        <Card className="p-5">
+          <div
+            className={cn(
+              'text-2xl font-bold tracking-tight',
+              stats.avgDwellMinutes && stats.avgDwellMinutes > 240 && 'text-destructive',
+            )}
+          >
             {formatDwell(stats.avgDwellMinutes)}
           </div>
-          <div style={{ fontSize: '13px', color: 'var(--on-surface-variant)' }}>Avg Dwell Today</div>
-        </div>
+          <div className="text-xs text-muted-foreground">Avg Dwell Today</div>
+        </Card>
       </div>
 
-      {/* Section tabs */}
-      <div className="vn-tabs" style={{ marginBottom: '16px' }}>
-        <button className={`vn-tab${activeSection === 'incoming' ? ' active' : ''}`} onClick={() => setActiveSection('incoming')}>
-          <span className="material-icons" style={{ fontSize: '18px' }}>arrow_downward</span>
-          Incoming ({stats.incoming})
-        </button>
-        <button className={`vn-tab${activeSection === 'at_location' ? ' active' : ''}`} onClick={() => setActiveSection('at_location')}>
-          <span className="material-icons" style={{ fontSize: '18px' }}>inventory</span>
-          At Location ({stats.atLocation})
-        </button>
-        <button className={`vn-tab${activeSection === 'outgoing' ? ' active' : ''}`} onClick={() => setActiveSection('outgoing')}>
-          <span className="material-icons" style={{ fontSize: '18px' }}>arrow_upward</span>
-          Outgoing ({stats.outgoing})
-        </button>
-      </div>
+      <Tabs value={activeSection} onValueChange={v => setActiveSection(v as 'incoming' | 'at_location' | 'outgoing')}>
+        <TabsList>
+          <TabsTrigger value="incoming">
+            <ArrowDown className="h-4 w-4" />
+            Incoming ({stats.incoming})
+          </TabsTrigger>
+          <TabsTrigger value="at_location">
+            <Package className="h-4 w-4" />
+            At Location ({stats.atLocation})
+          </TabsTrigger>
+          <TabsTrigger value="outgoing">
+            <ArrowUp className="h-4 w-4" />
+            Outgoing ({stats.outgoing})
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Incoming */}
-      {activeSection === 'incoming' && (
-        <div className="vn-card" style={{ padding: 0, overflow: 'hidden' }}>
-          <div className="vn-table-wrap">
-            <table className="vn-table">
-              <thead>
-                <tr>
-                  <th>Shipment</th>
-                  <th>Customer</th>
-                  <th>Carrier</th>
-                  <th>From</th>
-                  <th>Type</th>
-                  <th>ETA</th>
-                </tr>
-              </thead>
-              <tbody>
+        <TabsContent value="incoming" className="mt-4">
+          <Card>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Shipment</TableHead>
+                  <TableHead>Customer</TableHead>
+                  <TableHead>Carrier</TableHead>
+                  <TableHead>From</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>ETA</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {data.incoming.stops.map((s: any) => (
-                  <tr key={s.stopId}>
-                    <td><Link to={`/shipments/${s.shipmentId}`} style={{ color: 'var(--primary)', textDecoration: 'none', fontWeight: 500 }}>{s.shipmentReference}</Link></td>
-                    <td>{s.customerName || '--'}</td>
-                    <td>{s.carrierName || '--'}</td>
-                    <td>{s.originName}{s.originCity ? `, ${s.originCity}` : ''}</td>
-                    <td><span style={{ textTransform: 'capitalize', fontSize: '12px' }}>{s.stopType}</span></td>
-                    <td style={{ fontSize: '12px' }}>{s.estimatedArrival ? new Date(s.estimatedArrival).toLocaleString() : '--'}</td>
-                  </tr>
+                  <TableRow key={s.stopId}>
+                    <TableCell>
+                      <Link to={`/shipments/${s.shipmentId}`} className="font-medium text-primary">
+                        {s.shipmentReference}
+                      </Link>
+                    </TableCell>
+                    <TableCell>{s.customerName || '--'}</TableCell>
+                    <TableCell>{s.carrierName || '--'}</TableCell>
+                    <TableCell>{s.originName}{s.originCity ? `, ${s.originCity}` : ''}</TableCell>
+                    <TableCell className="text-xs capitalize">{s.stopType}</TableCell>
+                    <TableCell className="text-xs">{s.estimatedArrival ? new Date(s.estimatedArrival).toLocaleString() : '--'}</TableCell>
+                  </TableRow>
                 ))}
                 {data.incoming.directShipments.map((s: any) => (
-                  <tr key={s.id}>
-                    <td><Link to={`/shipments/${s.id}`} style={{ color: 'var(--primary)', textDecoration: 'none', fontWeight: 500 }}>{s.reference}</Link></td>
-                    <td>{s.customer?.name || '--'}</td>
-                    <td>{s.carrier?.name || '--'}</td>
-                    <td>{s.origin?.name}{s.origin?.city ? `, ${s.origin.city}` : ''}</td>
-                    <td><span className="vn-chip vn-chip-info" style={{ fontSize: '11px' }}>direct</span></td>
-                    <td style={{ fontSize: '12px' }}>{s.deliveryDate ? new Date(s.deliveryDate).toLocaleString() : '--'}</td>
-                  </tr>
+                  <TableRow key={s.id}>
+                    <TableCell>
+                      <Link to={`/shipments/${s.id}`} className="font-medium text-primary">
+                        {s.reference}
+                      </Link>
+                    </TableCell>
+                    <TableCell>{s.customer?.name || '--'}</TableCell>
+                    <TableCell>{s.carrier?.name || '--'}</TableCell>
+                    <TableCell>{s.origin?.name}{s.origin?.city ? `, ${s.origin.city}` : ''}</TableCell>
+                    <TableCell><Badge variant="info" className="text-xs">direct</Badge></TableCell>
+                    <TableCell className="text-xs">{s.deliveryDate ? new Date(s.deliveryDate).toLocaleString() : '--'}</TableCell>
+                  </TableRow>
                 ))}
                 {data.incoming.stops.length === 0 && data.incoming.directShipments.length === 0 && (
-                  <tr><td colSpan={6} style={{ textAlign: 'center', padding: '24px', color: 'var(--on-surface-variant)' }}>No incoming shipments</td></tr>
+                  <TableRow>
+                    <TableCell colSpan={6} className="py-6 text-center text-muted-foreground">
+                      No incoming shipments
+                    </TableCell>
+                  </TableRow>
                 )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+              </TableBody>
+            </Table>
+          </Card>
+        </TabsContent>
 
-      {/* At Location */}
-      {activeSection === 'at_location' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {/* Stops currently here */}
-          <div className="vn-card" style={{ padding: 0, overflow: 'hidden' }}>
-            <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--outline-variant)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span className="material-icons" style={{ fontSize: '18px', color: 'var(--color-warning)' }}>local_shipping</span>
+        <TabsContent value="at_location" className="mt-4 space-y-4">
+          <Card>
+            <div className="flex items-center gap-2 border-b border-border p-4 font-semibold">
+              <Truck className="h-5 w-5 text-warning" />
               Shipments at Dock ({data.atLocation.stops.length})
             </div>
-            <div className="vn-table-wrap">
-              <table className="vn-table">
-                <thead>
-                  <tr>
-                    <th>Shipment</th>
-                    <th>Customer</th>
-                    <th>Carrier</th>
-                    <th>Status</th>
-                    <th>Dwell Time</th>
-                    <th>Destination</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.atLocation.stops.map((s: any) => (
-                    <tr key={s.stopId}>
-                      <td><Link to={`/shipments/${s.shipmentId}`} style={{ color: 'var(--primary)', textDecoration: 'none', fontWeight: 500 }}>{s.shipmentReference}</Link></td>
-                      <td>{s.customerName || '--'}</td>
-                      <td>{s.carrierName || '--'}</td>
-                      <td><span className={`vn-chip ${s.status === 'in_progress' ? 'vn-chip-warning' : 'vn-chip-info'}`}>{s.status.replace(/_/g, ' ')}</span></td>
-                      <td><DwellBadge minutes={s.dwellMinutes} /></td>
-                      <td>{s.destinationName}{s.destinationCity ? `, ${s.destinationCity}` : ''}</td>
-                    </tr>
-                  ))}
-                  {data.atLocation.stops.length === 0 && (
-                    <tr><td colSpan={6} style={{ textAlign: 'center', padding: '24px', color: 'var(--on-surface-variant)' }}>No shipments currently at dock</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Shipment</TableHead>
+                  <TableHead>Customer</TableHead>
+                  <TableHead>Carrier</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Dwell Time</TableHead>
+                  <TableHead>Destination</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.atLocation.stops.map((s: any) => (
+                  <TableRow key={s.stopId}>
+                    <TableCell>
+                      <Link to={`/shipments/${s.shipmentId}`} className="font-medium text-primary">
+                        {s.shipmentReference}
+                      </Link>
+                    </TableCell>
+                    <TableCell>{s.customerName || '--'}</TableCell>
+                    <TableCell>{s.carrierName || '--'}</TableCell>
+                    <TableCell>
+                      <Badge variant={s.status === 'in_progress' ? 'warning' : 'info'}>
+                        {s.status.replace(/_/g, ' ')}
+                      </Badge>
+                    </TableCell>
+                    <TableCell><DwellBadge minutes={s.dwellMinutes} /></TableCell>
+                    <TableCell>{s.destinationName}{s.destinationCity ? `, ${s.destinationCity}` : ''}</TableCell>
+                  </TableRow>
+                ))}
+                {data.atLocation.stops.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={6} className="py-6 text-center text-muted-foreground">
+                      No shipments currently at dock
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </Card>
 
-          {/* Units here */}
           {data.atLocation.units.length > 0 && (
-            <div className="vn-card" style={{ padding: 0, overflow: 'hidden' }}>
-              <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--outline-variant)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span className="material-icons" style={{ fontSize: '18px', color: 'var(--primary)' }}>inventory_2</span>
+            <Card>
+              <div className="flex items-center gap-2 border-b border-border p-4 font-semibold">
+                <Package className="h-5 w-5 text-primary" />
                 Trackable Units ({data.atLocation.units.length})
               </div>
-              <div className="vn-table-wrap">
-                <table className="vn-table">
-                  <thead>
-                    <tr>
-                      <th>Unit</th>
-                      <th>Type</th>
-                      <th>Condition</th>
-                      <th>Order</th>
-                      <th>Shipment</th>
-                      <th>Arrived</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.atLocation.units.map((u: any) => (
-                      <tr key={u.id}>
-                        <td style={{ fontWeight: 500 }}>{u.identifier}</td>
-                        <td style={{ textTransform: 'capitalize', fontSize: '12px' }}>{u.unitType}</td>
-                        <td><span className={`vn-chip ${u.condition === 'good' ? 'vn-chip-success' : u.condition === 'damaged' ? 'vn-chip-error' : 'vn-chip-secondary'}`}>{u.condition}</span></td>
-                        <td>{u.orderNumber || '--'}</td>
-                        <td>{u.shipmentReference || '--'}</td>
-                        <td style={{ fontSize: '12px' }}>{u.arrivedAt ? new Date(u.arrivedAt).toLocaleString() : '--'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Unit</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Condition</TableHead>
+                    <TableHead>Order</TableHead>
+                    <TableHead>Shipment</TableHead>
+                    <TableHead>Arrived</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.atLocation.units.map((u: any) => (
+                    <TableRow key={u.id}>
+                      <TableCell className="font-medium">{u.identifier}</TableCell>
+                      <TableCell className="text-xs capitalize">{u.unitType}</TableCell>
+                      <TableCell>
+                        <Badge variant={u.condition === 'good' ? 'success' : u.condition === 'damaged' ? 'destructive' : 'muted'}>
+                          {u.condition}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{u.orderNumber || '--'}</TableCell>
+                      <TableCell>{u.shipmentReference || '--'}</TableCell>
+                      <TableCell className="text-xs">{u.arrivedAt ? new Date(u.arrivedAt).toLocaleString() : '--'}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Card>
           )}
-        </div>
-      )}
+        </TabsContent>
 
-      {/* Outgoing */}
-      {activeSection === 'outgoing' && (
-        <div className="vn-card" style={{ padding: 0, overflow: 'hidden' }}>
-          <div className="vn-table-wrap">
-            <table className="vn-table">
-              <thead>
-                <tr>
-                  <th>Shipment</th>
-                  <th>Status</th>
-                  <th>Customer</th>
-                  <th>Carrier</th>
-                  <th>Destination</th>
-                  <th>Pickup Date</th>
-                </tr>
-              </thead>
-              <tbody>
+        <TabsContent value="outgoing" className="mt-4">
+          <Card>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Shipment</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Customer</TableHead>
+                  <TableHead>Carrier</TableHead>
+                  <TableHead>Destination</TableHead>
+                  <TableHead>Pickup Date</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {data.outgoing.shipments.map((s: any) => (
-                  <tr key={s.id}>
-                    <td><Link to={`/shipments/${s.id}`} style={{ color: 'var(--primary)', textDecoration: 'none', fontWeight: 500 }}>{s.reference}</Link></td>
-                    <td><span className={`vn-chip ${s.status === 'in_transit' ? 'vn-chip-info' : s.status === 'dispatched' ? 'vn-chip-warning' : 'vn-chip-secondary'}`}>{s.status.replace(/_/g, ' ')}</span></td>
-                    <td>{s.customerName || '--'}</td>
-                    <td>{s.carrierName || '--'}</td>
-                    <td>{s.destinationName}{s.destinationCity ? `, ${s.destinationCity}` : ''}</td>
-                    <td style={{ fontSize: '12px' }}>{s.pickupDate ? new Date(s.pickupDate).toLocaleString() : '--'}</td>
-                  </tr>
+                  <TableRow key={s.id}>
+                    <TableCell>
+                      <Link to={`/shipments/${s.id}`} className="font-medium text-primary">
+                        {s.reference}
+                      </Link>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={s.status === 'in_transit' ? 'info' : s.status === 'dispatched' ? 'warning' : 'muted'}>
+                        {s.status.replace(/_/g, ' ')}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>{s.customerName || '--'}</TableCell>
+                    <TableCell>{s.carrierName || '--'}</TableCell>
+                    <TableCell>{s.destinationName}{s.destinationCity ? `, ${s.destinationCity}` : ''}</TableCell>
+                    <TableCell className="text-xs">{s.pickupDate ? new Date(s.pickupDate).toLocaleString() : '--'}</TableCell>
+                  </TableRow>
                 ))}
                 {data.outgoing.shipments.length === 0 && (
-                  <tr><td colSpan={6} style={{ textAlign: 'center', padding: '24px', color: 'var(--on-surface-variant)' }}>No outgoing shipments</td></tr>
+                  <TableRow>
+                    <TableCell colSpan={6} className="py-6 text-center text-muted-foreground">
+                      No outgoing shipments
+                    </TableCell>
+                  </TableRow>
                 )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+              </TableBody>
+            </Table>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

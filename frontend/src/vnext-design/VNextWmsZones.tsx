@@ -1,8 +1,28 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { API_URL } from '../api';
+import { Boxes, Grid3x3, Loader2, Plus } from 'lucide-react';
 
-/* ── Types ────────────────────────────────────────────────── */
+import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 interface WarehouseZone {
   id: string;
@@ -42,39 +62,26 @@ interface LocationOption {
   name: string;
 }
 
-const ZONE_TYPES = [
-  'receiving', 'bulk_storage', 'pick_face', 'staging', 'packing',
-  'shipping_dock', 'quarantine', 'returns', 'cross_dock',
-];
-
-const BIN_TYPES = [
-  'pallet', 'shelf', 'floor', 'dock_door', 'staging', 'pack_station',
-];
-
-const TEMP_ZONES = ['ambient', 'refrigerated', 'frozen'];
-
-/* ── Helpers ──────────────────────────────────────────────── */
-
 function formatZoneType(t: string): string {
   return t.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 }
 
-function zoneTypeChip(t: string): string {
+type BadgeVariant = 'success' | 'info' | 'warning' | 'destructive' | 'muted' | 'secondary' | 'default';
+
+function zoneTypeVariant(t: string): BadgeVariant {
   switch (t) {
-    case 'receiving': return 'vn-chip-info';
-    case 'bulk_storage': return 'vn-chip-secondary';
-    case 'pick_face': return 'vn-chip-primary';
-    case 'staging': return 'vn-chip-warning';
-    case 'packing': return 'vn-chip-info';
-    case 'shipping_dock': return 'vn-chip-success';
-    case 'quarantine': return 'vn-chip-error';
-    case 'returns': return 'vn-chip-warning';
-    case 'cross_dock': return 'vn-chip-primary';
-    default: return 'vn-chip-secondary';
+    case 'receiving': return 'info';
+    case 'bulk_storage': return 'secondary';
+    case 'pick_face': return 'default';
+    case 'staging': return 'warning';
+    case 'packing': return 'info';
+    case 'shipping_dock': return 'success';
+    case 'quarantine': return 'destructive';
+    case 'returns': return 'warning';
+    case 'cross_dock': return 'default';
+    default: return 'secondary';
   }
 }
-
-/* ── Component ────────────────────────────────────────────── */
 
 export default function VNextWmsZones() {
   const navigate = useNavigate();
@@ -89,7 +96,6 @@ export default function VNextWmsZones() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
 
-  // Load locations first, then fetch zones/bins for selected location
   useEffect(() => {
     fetch(`${API_URL}/api/v1/locations`)
       .then(r => r.json())
@@ -135,147 +141,166 @@ export default function VNextWmsZones() {
   );
 
   return (
-    <div>
-      <div className="vn-page-header">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1>Zones & Bins</h1>
-          <p className="vn-page-subtitle">Manage warehouse location hierarchy</p>
+          <h1 className="text-3xl font-bold tracking-tight">Zones &amp; Bins</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Manage warehouse location hierarchy</p>
         </div>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
+        <div className="flex gap-2">
           {tab === 'zones' && (
-            <button className="vn-btn vn-btn-primary" onClick={() => navigate('/wms/zones/create')}>
-              <span className="material-icons" style={{ fontSize: '18px', marginRight: '0.5rem' }}>add</span>
+            <Button variant="gradient" onClick={() => navigate('/wms/zones/create')}>
+              <Plus className="h-4 w-4" />
               Add Zone
-            </button>
+            </Button>
           )}
           {tab === 'bins' && (
-            <button className="vn-btn vn-btn-primary" onClick={() => navigate('/wms/bins/create')}>
-              <span className="material-icons" style={{ fontSize: '18px', marginRight: '0.5rem' }}>add</span>
+            <Button variant="gradient" onClick={() => navigate('/wms/bins/create')}>
+              <Plus className="h-4 w-4" />
               Add Bin
-            </button>
+            </Button>
           )}
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="vn-tabs" style={{ marginBottom: '1rem' }}>
-        <button className={`vn-tab ${tab === 'zones' ? 'active' : ''}`} onClick={() => switchTab('zones')}>
-          <span className="material-icons" style={{ fontSize: '18px', marginRight: '0.5rem' }}>grid_view</span>
-          Zones
-        </button>
-        <button className={`vn-tab ${tab === 'bins' ? 'active' : ''}`} onClick={() => switchTab('bins')}>
-          <span className="material-icons" style={{ fontSize: '18px', marginRight: '0.5rem' }}>inventory_2</span>
-          Bins
-        </button>
-      </div>
+      <Tabs value={tab} onValueChange={(v) => switchTab(v as 'zones' | 'bins')}>
+        <TabsList>
+          <TabsTrigger value="zones">
+            <Grid3x3 className="h-4 w-4" />
+            Zones
+          </TabsTrigger>
+          <TabsTrigger value="bins">
+            <Boxes className="h-4 w-4" />
+            Bins
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
 
-      {/* Filters */}
-      <div className="vn-filters" style={{ marginBottom: '1rem' }}>
-        <select
-          className="vn-filter-select"
-          value={selectedLocation}
-          onChange={e => setSelectedLocation(e.target.value)}
-        >
-          {locations.map(l => (
-            <option key={l.id} value={l.id}>{l.name}</option>
-          ))}
-        </select>
-        <input
-          className="vn-filter-input"
+      <div className="flex flex-wrap items-center gap-3">
+        <Select value={selectedLocation} onValueChange={setSelectedLocation}>
+          <SelectTrigger className="w-[260px]">
+            <SelectValue placeholder="Select location" />
+          </SelectTrigger>
+          <SelectContent>
+            {locations.map(l => (
+              <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Input
           placeholder={tab === 'zones' ? 'Search zones...' : 'Search bins...'}
           value={search}
           onChange={e => setSearch(e.target.value)}
+          className="max-w-md"
         />
       </div>
 
       {loading ? (
-        <div style={{ padding: '2rem', textAlign: 'center' }}>
-          <div className="vn-loading-spinner" />
+        <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+          <Loader2 className="h-8 w-8 animate-spin" />
         </div>
       ) : tab === 'zones' ? (
-        /* Zone list */
         filteredZones.length === 0 ? (
-          <div className="vn-card" style={{ textAlign: 'center', padding: '3rem' }}>
-            <span className="material-icons" style={{ fontSize: '48px', color: 'var(--text-secondary)', marginBottom: '1rem', display: 'block' }}>grid_view</span>
-            <h3>No zones configured</h3>
-            <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-              Set up warehouse zones to define receiving docks, storage areas, pick faces, and staging areas.
-            </p>
-            <button className="vn-btn vn-btn-primary" onClick={() => navigate('/wms/zones/create')}>
-              Create First Zone
-            </button>
-          </div>
+          <Card>
+            <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+              <Grid3x3 className="h-12 w-12 text-muted-foreground" />
+              <h3 className="text-base font-medium">No zones configured</h3>
+              <p className="text-sm text-muted-foreground">
+                Set up warehouse zones to define receiving docks, storage areas, pick faces, and staging areas.
+              </p>
+              <Button variant="gradient" onClick={() => navigate('/wms/zones/create')}>
+                Create First Zone
+              </Button>
+            </CardContent>
+          </Card>
         ) : (
-          <div className="vn-table-wrap">
-            <table className="vn-table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Type</th>
-                  <th>Temperature</th>
-                  <th>Hazmat</th>
-                  <th>Bins</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
+          <Card>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Temperature</TableHead>
+                  <TableHead>Hazmat</TableHead>
+                  <TableHead>Bins</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {filteredZones.map(zone => (
-                  <tr key={zone.id} onClick={() => navigate(`/wms/zones/${zone.id}`)} style={{ cursor: 'pointer' }}>
-                    <td><strong>{zone.name}</strong></td>
-                    <td><span className={`vn-chip ${zoneTypeChip(zone.zoneType)}`}>{formatZoneType(zone.zoneType)}</span></td>
-                    <td>{zone.temperatureZone ? formatZoneType(zone.temperatureZone) : '--'}</td>
-                    <td>{zone.hazmatCertified ? 'Yes' : 'No'}</td>
-                    <td>{zone.binCount}</td>
-                    <td><span className={`vn-chip ${zone.active ? 'vn-chip-success' : 'vn-chip-secondary'}`}>{zone.active ? 'Active' : 'Inactive'}</span></td>
-                  </tr>
+                  <TableRow
+                    key={zone.id}
+                    onClick={() => navigate(`/wms/zones/${zone.id}`)}
+                    className="cursor-pointer"
+                  >
+                    <TableCell className="font-semibold">{zone.name}</TableCell>
+                    <TableCell>
+                      <Badge variant={zoneTypeVariant(zone.zoneType)}>{formatZoneType(zone.zoneType)}</Badge>
+                    </TableCell>
+                    <TableCell>{zone.temperatureZone ? formatZoneType(zone.temperatureZone) : '-'}</TableCell>
+                    <TableCell>{zone.hazmatCertified ? 'Yes' : 'No'}</TableCell>
+                    <TableCell>{zone.binCount}</TableCell>
+                    <TableCell>
+                      <Badge variant={zone.active ? 'success' : 'muted'}>
+                        {zone.active ? 'Active' : 'Inactive'}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </TableBody>
+            </Table>
+          </Card>
         )
       ) : (
-        /* Bin list */
         filteredBins.length === 0 ? (
-          <div className="vn-card" style={{ textAlign: 'center', padding: '3rem' }}>
-            <span className="material-icons" style={{ fontSize: '48px', color: 'var(--text-secondary)', marginBottom: '1rem', display: 'block' }}>inventory_2</span>
-            <h3>No bins configured</h3>
-            <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-              Bins are individual storage locations within zones. Create zones first, then add bins.
-            </p>
-          </div>
+          <Card>
+            <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+              <Boxes className="h-12 w-12 text-muted-foreground" />
+              <h3 className="text-base font-medium">No bins configured</h3>
+              <p className="text-sm text-muted-foreground">
+                Bins are individual storage locations within zones. Create zones first, then add bins.
+              </p>
+            </CardContent>
+          </Card>
         ) : (
-          <div className="vn-table-wrap">
-            <table className="vn-table">
-              <thead>
-                <tr>
-                  <th>Label</th>
-                  <th>Zone</th>
-                  <th>Type</th>
-                  <th>Level</th>
-                  <th>Walk Seq</th>
-                  <th>Utilization</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
+          <Card>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Label</TableHead>
+                  <TableHead>Zone</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Level</TableHead>
+                  <TableHead>Walk Seq</TableHead>
+                  <TableHead>Utilization</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {filteredBins.map(bin => (
-                  <tr key={bin.id} style={{ cursor: 'pointer' }}>
-                    <td><strong>{bin.label}</strong></td>
-                    <td>{bin.zoneName}</td>
-                    <td><span className="vn-chip vn-chip-secondary">{formatZoneType(bin.binType)}</span></td>
-                    <td>{bin.level ?? '--'}</td>
-                    <td>{bin.walkSequence}</td>
-                    <td>
+                  <TableRow key={bin.id}>
+                    <TableCell className="font-mono text-sm font-semibold">{bin.label}</TableCell>
+                    <TableCell>{bin.zoneName}</TableCell>
+                    <TableCell>
+                      <Badge variant="secondary">{formatZoneType(bin.binType)}</Badge>
+                    </TableCell>
+                    <TableCell>{bin.level ?? '-'}</TableCell>
+                    <TableCell>{bin.walkSequence}</TableCell>
+                    <TableCell>
                       {bin.maxPalletPositions
                         ? `${bin.currentPalletCount}/${bin.maxPalletPositions} pallets`
-                        : '--'}
-                    </td>
-                    <td><span className={`vn-chip ${bin.active ? 'vn-chip-success' : 'vn-chip-secondary'}`}>{bin.active ? 'Active' : 'Inactive'}</span></td>
-                  </tr>
+                        : '-'}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={bin.active ? 'success' : 'muted'}>
+                        {bin.active ? 'Active' : 'Inactive'}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </TableBody>
+            </Table>
+          </Card>
         )
       )}
     </div>

@@ -1,5 +1,43 @@
 import { useState, useEffect } from 'react';
+import {
+  AlertTriangle,
+  CheckCircle2,
+  ClipboardList,
+  Clock,
+  Edit,
+  Loader2,
+  Plus,
+  Save,
+  Search,
+  Users,
+  Wrench,
+  XCircle,
+  ShieldCheck,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 
 interface CAPAReport {
   id: string;
@@ -117,26 +155,28 @@ const ROOT_CAUSE_CATEGORIES = [
   { value: 'other', label: 'Other' },
 ];
 
-function statusChipClass(status: string): string {
+type ChipVariant = 'success' | 'warning' | 'destructive' | 'info' | 'muted' | 'default';
+
+function statusVariant(status: string): ChipVariant {
   switch (status) {
-    case 'draft': return 'vn-chip-secondary';
-    case 'investigation': return 'vn-chip-info';
-    case 'root_cause_identified': return 'vn-chip-warning';
-    case 'action_plan': return 'vn-chip-primary';
-    case 'implementation': return 'vn-chip-primary';
-    case 'verification': return 'vn-chip-info';
-    case 'closed': return 'vn-chip-success';
-    default: return 'vn-chip-secondary';
+    case 'draft': return 'muted';
+    case 'investigation': return 'info';
+    case 'root_cause_identified': return 'warning';
+    case 'action_plan':
+    case 'implementation': return 'default';
+    case 'verification': return 'info';
+    case 'closed': return 'success';
+    default: return 'muted';
   }
 }
 
-function priorityChipClass(priority: string): string {
+function priorityVariant(priority: string): ChipVariant {
   switch (priority) {
-    case 'low': return 'vn-chip-secondary';
-    case 'medium': return 'vn-chip-info';
-    case 'high': return 'vn-chip-warning';
-    case 'critical': return 'vn-chip-error';
-    default: return 'vn-chip-secondary';
+    case 'low': return 'muted';
+    case 'medium': return 'info';
+    case 'high': return 'warning';
+    case 'critical': return 'destructive';
+    default: return 'muted';
   }
 }
 
@@ -149,7 +189,7 @@ function formatPriorityLabel(priority: string): string {
 }
 
 function formatDate(d: string | null): string {
-  if (!d) return '\u2014';
+  if (!d) return '-';
   return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
@@ -160,6 +200,13 @@ function isOverdue(report: CAPAReport): boolean {
   return new Date(report.correctiveActionDueDate) < new Date();
 }
 
+const STAT_TONES = {
+  primary: 'bg-primary/10 text-primary',
+  info: 'bg-info/15 text-info',
+  destructive: 'bg-destructive/10 text-destructive',
+  success: 'bg-success/15 text-success',
+} as const;
+
 export default function VNextCAPAReports() {
   const [reports, setReports] = useState<CAPAReport[]>([]);
   const [loading, setLoading] = useState(true);
@@ -168,7 +215,6 @@ export default function VNextCAPAReports() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [priorityFilter, setPriorityFilter] = useState('all');
 
-  // Modal state
   const [showModal, setShowModal] = useState(false);
   const [editingReport, setEditingReport] = useState<CAPAReport | null>(null);
   const [form, setForm] = useState<FormData>(EMPTY_FORM);
@@ -303,7 +349,6 @@ export default function VNextCAPAReports() {
     setForm(prev => ({ ...prev, [field]: value }));
   }
 
-  // Filtering
   const filtered = reports.filter(r => {
     if (statusFilter !== 'all' && r.status !== statusFilter) return false;
     if (priorityFilter !== 'all' && r.priority !== priorityFilter) return false;
@@ -317,522 +362,381 @@ export default function VNextCAPAReports() {
     return true;
   });
 
-  // Stats
   const totalCount = reports.length;
   const openCount = reports.filter(r => r.status !== 'closed').length;
   const overdueCount = reports.filter(r => isOverdue(r)).length;
   const closedCount = reports.filter(r => r.status === 'closed').length;
 
-  // Keyboard escape for modal
-  useEffect(() => {
-    if (!showModal) return;
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') closeModal(); };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [showModal]);
-
   if (loading) {
     return (
-      <div className="vn-empty">
-        <span className="material-icons" style={{ animation: 'spin 1s linear infinite' }}>refresh</span>
-        <h3>Loading...</h3>
+      <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <h3 className="text-lg font-medium">Loading...</h3>
       </div>
     );
   }
 
   if (error && reports.length === 0) {
     return (
-      <div className="vn-alert vn-alert-error">
-        <span className="material-icons">error</span>
-        <div className="vn-alert-content">{error}</div>
+      <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+        <XCircle className="h-5 w-5" />
+        {error}
       </div>
     );
   }
 
   const isEdit = !!editingReport;
 
+  const stats = [
+    { tone: 'primary' as const, label: 'Total Reports', value: totalCount, Icon: ClipboardList },
+    { tone: 'info' as const, label: 'Open', value: openCount, Icon: Clock },
+    { tone: 'destructive' as const, label: 'Overdue', value: overdueCount, Icon: AlertTriangle },
+    { tone: 'success' as const, label: 'Closed', value: closedCount, Icon: CheckCircle2 },
+  ];
+
   return (
-    <>
-      {/* Page Header */}
-      <div className="vn-page-header">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1>CAPA Reports</h1>
-          <p>Corrective and preventive action tracking for quality management</p>
+          <h1 className="text-3xl font-bold tracking-tight">CAPA Reports</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Corrective and preventive action tracking for quality management</p>
         </div>
-        <div className="vn-page-actions">
-          <button className="vn-btn vn-btn-primary" onClick={openCreate}>
-            <span className="material-icons">add</span>
-            New CAPA Report
-          </button>
-        </div>
+        <Button variant="gradient" onClick={openCreate}>
+          <Plus className="h-4 w-4" />
+          New CAPA Report
+        </Button>
       </div>
 
       {error && (
-        <div className="vn-alert vn-alert-error" style={{ marginBottom: 16 }}>
-          <span className="material-icons">error</span>
-          <div className="vn-alert-content">{error}</div>
+        <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+          <XCircle className="h-5 w-5" />
+          {error}
         </div>
       )}
 
-      {/* Stats */}
-      <div className="vn-stats">
-        <div className="vn-stat">
-          <div className="vn-stat-icon primary">
-            <span className="material-icons">assignment</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{totalCount}</div>
-            <div className="vn-stat-label">Total Reports</div>
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon info">
-            <span className="material-icons">pending_actions</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{openCount}</div>
-            <div className="vn-stat-label">Open</div>
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon error">
-            <span className="material-icons">schedule</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{overdueCount}</div>
-            <div className="vn-stat-label">Overdue</div>
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon success">
-            <span className="material-icons">check_circle</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{closedCount}</div>
-            <div className="vn-stat-label">Closed</div>
-          </div>
-        </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {stats.map(stat => {
+          const Icon = stat.Icon;
+          return (
+            <Card key={stat.label} className="p-5">
+              <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', STAT_TONES[stat.tone])}>
+                <Icon className="h-5 w-5" />
+              </div>
+              <div className="mt-3 text-2xl font-bold tracking-tight">{stat.value}</div>
+              <div className="mt-1 text-sm text-muted-foreground">{stat.label}</div>
+            </Card>
+          );
+        })}
       </div>
 
-      {/* Filters */}
-      <div className="vn-filter-bar" style={{ marginBottom: 16 }}>
-        <div className="vn-search">
-          <span className="material-icons">search</span>
-          <input
-            type="text"
-            placeholder="Search by report number or title..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
-        </div>
-        <select
-          className="vn-select"
-          value={statusFilter}
-          onChange={e => setStatusFilter(e.target.value)}
-        >
-          <option value="all">All Statuses</option>
-          {STATUS_OPTIONS.map(s => (
-            <option key={s.value} value={s.value}>{s.label}</option>
-          ))}
-        </select>
-        <select
-          className="vn-select"
-          value={priorityFilter}
-          onChange={e => setPriorityFilter(e.target.value)}
-        >
-          <option value="all">All Priorities</option>
-          {PRIORITY_OPTIONS.map(p => (
-            <option key={p.value} value={p.value}>{p.label}</option>
-          ))}
-        </select>
-      </div>
-
-      {/* Table */}
-      {filtered.length === 0 ? (
-        <div className="vn-empty">
-          <span className="material-icons">assignment</span>
-          <h3>No CAPA reports found</h3>
-          <p>Create a new CAPA report to begin tracking corrective and preventive actions.</p>
-        </div>
-      ) : (
-        <div className="vn-card">
-          <div className="vn-card-body vn-card-flush">
-            <div className="vn-table-wrap">
-              <table className="vn-table">
-                <thead>
-                  <tr>
-                    <th>Report #</th>
-                    <th>Title</th>
-                    <th>Issue</th>
-                    <th>Status</th>
-                    <th>Priority</th>
-                    <th>Investigator</th>
-                    <th>Due Date</th>
-                    <th>Created</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map(report => (
-                    <tr key={report.id}>
-                      <td>
-                        <span className="vn-table-id">{report.reportNumber}</span>
-                      </td>
-                      <td style={{ fontWeight: 500, color: 'var(--on-surface)' }}>
-                        {report.title}
-                      </td>
-                      <td>
-                        {report.issue ? (
-                          <span className="vn-table-secondary">{report.issue.title}</span>
-                        ) : (
-                          <span style={{ color: 'var(--on-surface-variant)', fontSize: 13 }}>{report.issueId.slice(0, 8)}...</span>
-                        )}
-                      </td>
-                      <td>
-                        <span className={`vn-chip ${statusChipClass(report.status)}`}>
-                          {formatStatusLabel(report.status)}
-                        </span>
-                      </td>
-                      <td>
-                        <span className={`vn-chip ${priorityChipClass(report.priority)}`}>
-                          {formatPriorityLabel(report.priority)}
-                        </span>
-                      </td>
-                      <td style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>
-                        {report.investigatorName || '\u2014'}
-                      </td>
-                      <td>
-                        {report.correctiveActionDueDate ? (
-                          <span style={{
-                            fontSize: 13,
-                            color: isOverdue(report) ? 'var(--error)' : 'var(--on-surface-variant)',
-                            fontWeight: isOverdue(report) ? 600 : 400,
-                          }}>
-                            {formatDate(report.correctiveActionDueDate)}
-                            {isOverdue(report) && (
-                              <span className="material-icons" style={{ fontSize: 14, marginLeft: 4, verticalAlign: 'middle' }}>warning</span>
-                            )}
-                          </span>
-                        ) : (
-                          <span style={{ color: 'var(--on-surface-variant)', fontSize: 13 }}>{'\u2014'}</span>
-                        )}
-                      </td>
-                      <td style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>
-                        {formatDate(report.createdAt)}
-                      </td>
-                      <td>
-                        <button
-                          className="vn-btn-icon"
-                          title="Edit report"
-                          onClick={() => openEdit(report.id)}
-                        >
-                          <span className="material-icons" style={{ fontSize: 18 }}>edit</span>
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+      <Card>
+        <div className="flex flex-wrap items-center gap-3 p-4">
+          <div className="relative min-w-[260px] flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search by report number or title..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="pl-9"
+            />
           </div>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Statuses</SelectItem>
+              {STATUS_OPTIONS.map(s => (
+                <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Priorities</SelectItem>
+              {PRIORITY_OPTIONS.map(p => (
+                <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
-      )}
 
-      {/* Create / Edit Modal */}
-      {showModal && (
-        <div
-          className="vn-modal-backdrop"
-          onClick={e => { if (e.target === e.currentTarget) closeModal(); }}
-        >
-          <div className="vn-modal vn-modal-xl" style={{ maxWidth: 960 }}>
-            <div className="vn-modal-header">
-              <h2>{isEdit ? 'Edit CAPA Report' : 'New CAPA Report'}</h2>
-              <button className="vn-modal-close" onClick={closeModal}>
-                <span className="material-icons">close</span>
-              </button>
-            </div>
-            <div className="vn-modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
-
-              {submitError && (
-                <div className="vn-alert vn-alert-error" style={{ marginBottom: 16 }}>
-                  <span className="material-icons">error</span>
-                  <div className="vn-alert-content">{submitError}</div>
-                </div>
-              )}
-
-              {/* Section 1: Problem Identification */}
-              <div className="vn-form-section">
-                <h3 className="vn-form-section-title">
-                  <span className="material-icons">report_problem</span>
-                  Problem Identification
-                </h3>
-                <div className="vn-form-grid">
-                  <div className="vn-field vn-col-span-2">
-                    <label className="vn-field-label">
-                      Title <span className="required">*</span>
-                    </label>
-                    <input
-                      className="vn-input"
-                      type="text"
-                      placeholder="Brief title for the CAPA report"
-                      value={form.title}
-                      onChange={e => updateField('title', e.target.value)}
-                    />
-                  </div>
-                  <div className="vn-field">
-                    <label className="vn-field-label">
-                      Issue ID <span className="required">*</span>
-                    </label>
-                    <input
-                      className="vn-input"
-                      type="text"
-                      placeholder="Linked issue ID"
-                      value={form.issueId}
-                      onChange={e => updateField('issueId', e.target.value)}
-                    />
-                  </div>
-                  <div className="vn-field">
-                    <label className="vn-field-label">Shipment ID</label>
-                    <input
-                      className="vn-input"
-                      type="text"
-                      placeholder="Optional shipment ID"
-                      value={form.shipmentId}
-                      onChange={e => updateField('shipmentId', e.target.value)}
-                    />
-                  </div>
-                  <div className="vn-field">
-                    <label className="vn-field-label">Priority</label>
-                    <select
-                      className="vn-select"
-                      value={form.priority}
-                      onChange={e => updateField('priority', e.target.value)}
-                    >
-                      {PRIORITY_OPTIONS.map(p => (
-                        <option key={p.value} value={p.value}>{p.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="vn-field vn-col-span-2">
-                    <label className="vn-field-label">
-                      Description <span className="required">*</span>
-                    </label>
-                    <textarea
-                      className="vn-textarea"
-                      rows={4}
-                      placeholder="Detailed description of the issue..."
-                      value={form.description}
-                      onChange={e => updateField('description', e.target.value)}
-                    />
-                  </div>
-                  <div className="vn-field vn-col-span-2">
-                    <label className="vn-field-label">Immediate Action</label>
-                    <textarea
-                      className="vn-textarea"
-                      rows={3}
-                      placeholder="Actions taken immediately to address the issue..."
-                      value={form.immediateAction}
-                      onChange={e => updateField('immediateAction', e.target.value)}
-                    />
-                  </div>
-                  <div className="vn-field vn-col-span-2">
-                    <label className="vn-field-label">Containment Action</label>
-                    <textarea
-                      className="vn-textarea"
-                      rows={3}
-                      placeholder="Short-term containment measures..."
-                      value={form.containmentAction}
-                      onChange={e => updateField('containmentAction', e.target.value)}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Section 2: Investigation */}
-              <div className="vn-form-section">
-                <h3 className="vn-form-section-title">
-                  <span className="material-icons">search</span>
-                  Investigation
-                </h3>
-                <div className="vn-form-grid">
-                  <div className="vn-field vn-col-span-2">
-                    <label className="vn-field-label">Investigation Details</label>
-                    <textarea
-                      className="vn-textarea"
-                      rows={4}
-                      placeholder="Details of the investigation conducted..."
-                      value={form.investigationDetails}
-                      onChange={e => updateField('investigationDetails', e.target.value)}
-                    />
-                  </div>
-                  <div className="vn-field vn-col-span-2">
-                    <label className="vn-field-label">Root Cause</label>
-                    <textarea
-                      className="vn-textarea"
-                      rows={3}
-                      placeholder="Identified root cause of the issue..."
-                      value={form.rootCause}
-                      onChange={e => updateField('rootCause', e.target.value)}
-                    />
-                  </div>
-                  <div className="vn-field">
-                    <label className="vn-field-label">Root Cause Category</label>
-                    <select
-                      className="vn-select"
-                      value={form.rootCauseCategory}
-                      onChange={e => updateField('rootCauseCategory', e.target.value)}
-                    >
-                      {ROOT_CAUSE_CATEGORIES.map(c => (
-                        <option key={c.value} value={c.value}>{c.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              {/* Section 3: Corrective & Preventive Actions */}
-              <div className="vn-form-section">
-                <h3 className="vn-form-section-title">
-                  <span className="material-icons">build</span>
-                  Corrective &amp; Preventive Actions
-                </h3>
-                <div className="vn-form-grid">
-                  <div className="vn-field vn-col-span-2">
-                    <label className="vn-field-label">Corrective Action</label>
-                    <textarea
-                      className="vn-textarea"
-                      rows={3}
-                      placeholder="Actions to correct the identified issue..."
-                      value={form.correctiveAction}
-                      onChange={e => updateField('correctiveAction', e.target.value)}
-                    />
-                  </div>
-                  <div className="vn-field">
-                    <label className="vn-field-label">Corrective Action Due Date</label>
-                    <input
-                      className="vn-input"
-                      type="date"
-                      value={form.correctiveActionDueDate}
-                      onChange={e => updateField('correctiveActionDueDate', e.target.value)}
-                    />
-                  </div>
-                  <div className="vn-field vn-col-span-2">
-                    <label className="vn-field-label">Preventive Action</label>
-                    <textarea
-                      className="vn-textarea"
-                      rows={3}
-                      placeholder="Actions to prevent recurrence..."
-                      value={form.preventiveAction}
-                      onChange={e => updateField('preventiveAction', e.target.value)}
-                    />
-                  </div>
-                  <div className="vn-field">
-                    <label className="vn-field-label">Preventive Action Due Date</label>
-                    <input
-                      className="vn-input"
-                      type="date"
-                      value={form.preventiveActionDueDate}
-                      onChange={e => updateField('preventiveActionDueDate', e.target.value)}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Section 4: People */}
-              <div className="vn-form-section">
-                <h3 className="vn-form-section-title">
-                  <span className="material-icons">people</span>
-                  People
-                </h3>
-                <div className="vn-form-grid">
-                  <div className="vn-field">
-                    <label className="vn-field-label">Investigator Name</label>
-                    <input
-                      className="vn-input"
-                      type="text"
-                      placeholder="Person leading the investigation"
-                      value={form.investigatorName}
-                      onChange={e => updateField('investigatorName', e.target.value)}
-                    />
-                  </div>
-                  <div className="vn-field">
-                    <label className="vn-field-label">Approver Name</label>
-                    <input
-                      className="vn-input"
-                      type="text"
-                      placeholder="Person responsible for approval"
-                      value={form.approverName}
-                      onChange={e => updateField('approverName', e.target.value)}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Section 5: Verification & Closure (edit only) */}
-              {isEdit && (
-                <div className="vn-form-section">
-                  <h3 className="vn-form-section-title">
-                    <span className="material-icons">verified</span>
-                    Verification &amp; Closure
-                  </h3>
-                  <div className="vn-form-grid">
-                    <div className="vn-field vn-col-span-2">
-                      <label className="vn-field-label">Verification Method</label>
-                      <textarea
-                        className="vn-textarea"
-                        rows={3}
-                        placeholder="Method used to verify the corrective action was effective..."
-                        value={form.verificationMethod}
-                        onChange={e => updateField('verificationMethod', e.target.value)}
-                      />
-                    </div>
-                    <div className="vn-field">
-                      <label className="vn-field-label">Verified By</label>
-                      <input
-                        className="vn-input"
-                        type="text"
-                        placeholder="Person who verified"
-                        value={form.verifiedByName}
-                        onChange={e => updateField('verifiedByName', e.target.value)}
-                      />
-                    </div>
-                    <div className="vn-field vn-col-span-2">
-                      <label className="vn-field-label">Effectiveness Check</label>
-                      <textarea
-                        className="vn-textarea"
-                        rows={3}
-                        placeholder="Results of the effectiveness check..."
-                        value={form.effectivenessCheck}
-                        onChange={e => updateField('effectivenessCheck', e.target.value)}
-                      />
-                    </div>
-                    <div className="vn-field vn-col-span-2">
-                      <label className="vn-field-label">Lessons Learned</label>
-                      <textarea
-                        className="vn-textarea"
-                        rows={3}
-                        placeholder="Key takeaways and lessons learned..."
-                        value={form.lessonsLearned}
-                        onChange={e => updateField('lessonsLearned', e.target.value)}
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-            </div>
-            <div className="vn-modal-footer">
-              <button className="vn-btn vn-btn-outline" onClick={closeModal} disabled={submitting}>
-                Cancel
-              </button>
-              <button className="vn-btn vn-btn-primary" onClick={handleSubmit} disabled={submitting}>
-                <span className="material-icons">save</span>
-                {submitting ? 'Saving...' : isEdit ? 'Update Report' : 'Create Report'}
-              </button>
-            </div>
+        {filtered.length === 0 ? (
+          <div className="flex flex-col items-center gap-2 py-12 text-muted-foreground">
+            <ClipboardList className="h-10 w-10" />
+            <h3 className="text-base font-medium">No CAPA reports found</h3>
+            <p className="text-sm">Create a new CAPA report to begin tracking corrective and preventive actions.</p>
           </div>
-        </div>
-      )}
-    </>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Report #</TableHead>
+                <TableHead>Title</TableHead>
+                <TableHead>Issue</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Priority</TableHead>
+                <TableHead>Investigator</TableHead>
+                <TableHead>Due Date</TableHead>
+                <TableHead>Created</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filtered.map(report => (
+                <TableRow key={report.id}>
+                  <TableCell className="font-mono text-sm font-semibold">{report.reportNumber}</TableCell>
+                  <TableCell className="font-medium">{report.title}</TableCell>
+                  <TableCell>
+                    {report.issue ? (
+                      <span className="text-sm text-muted-foreground">{report.issue.title}</span>
+                    ) : (
+                      <span className="text-sm text-muted-foreground">{report.issueId.slice(0, 8)}...</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={statusVariant(report.status)}>{formatStatusLabel(report.status)}</Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={priorityVariant(report.priority)}>{formatPriorityLabel(report.priority)}</Badge>
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{report.investigatorName || '-'}</TableCell>
+                  <TableCell>
+                    {report.correctiveActionDueDate ? (
+                      <span
+                        className={cn(
+                          'flex items-center gap-1 text-sm',
+                          isOverdue(report) ? 'font-semibold text-destructive' : 'text-muted-foreground',
+                        )}
+                      >
+                        {formatDate(report.correctiveActionDueDate)}
+                        {isOverdue(report) && <AlertTriangle className="h-3.5 w-3.5" />}
+                      </span>
+                    ) : (
+                      <span className="text-sm text-muted-foreground">-</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{formatDate(report.createdAt)}</TableCell>
+                  <TableCell>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      title="Edit report"
+                      onClick={() => openEdit(report.id)}
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </Card>
+
+      <Dialog open={showModal} onOpenChange={open => !open && closeModal()}>
+        <DialogContent className="max-h-[85vh] max-w-3xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{isEdit ? 'Edit CAPA Report' : 'New CAPA Report'}</DialogTitle>
+          </DialogHeader>
+
+          {submitError && (
+            <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+              <XCircle className="h-4 w-4" />
+              {submitError}
+            </div>
+          )}
+
+          <FormSection title="Problem Identification" Icon={AlertTriangle}>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2 md:col-span-2">
+                <Label>Title <span className="text-destructive">*</span></Label>
+                <Input
+                  placeholder="Brief title for the CAPA report"
+                  value={form.title}
+                  onChange={e => updateField('title', e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Issue ID <span className="text-destructive">*</span></Label>
+                <Input
+                  placeholder="Linked issue ID"
+                  value={form.issueId}
+                  onChange={e => updateField('issueId', e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Shipment ID</Label>
+                <Input
+                  placeholder="Optional shipment ID"
+                  value={form.shipmentId}
+                  onChange={e => updateField('shipmentId', e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Priority</Label>
+                <Select value={form.priority} onValueChange={v => updateField('priority', v)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PRIORITY_OPTIONS.map(p => (
+                      <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <FormTextarea label="Description" required value={form.description} onChange={v => updateField('description', v)} placeholder="Detailed description of the issue..." />
+              <FormTextarea label="Immediate Action" value={form.immediateAction} onChange={v => updateField('immediateAction', v)} placeholder="Actions taken immediately to address the issue..." />
+              <FormTextarea label="Containment Action" value={form.containmentAction} onChange={v => updateField('containmentAction', v)} placeholder="Short-term containment measures..." />
+            </div>
+          </FormSection>
+
+          <FormSection title="Investigation" Icon={Search}>
+            <div className="grid gap-4 md:grid-cols-2">
+              <FormTextarea label="Investigation Details" value={form.investigationDetails} onChange={v => updateField('investigationDetails', v)} placeholder="Details of the investigation conducted..." />
+              <FormTextarea label="Root Cause" value={form.rootCause} onChange={v => updateField('rootCause', v)} placeholder="Identified root cause of the issue..." />
+              <div className="space-y-2">
+                <Label>Root Cause Category</Label>
+                <Select value={form.rootCauseCategory || '_none'} onValueChange={v => updateField('rootCauseCategory', v === '_none' ? '' : v)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_none">Select category...</SelectItem>
+                    {ROOT_CAUSE_CATEGORIES.filter(c => c.value).map(c => (
+                      <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </FormSection>
+
+          <FormSection title="Corrective & Preventive Actions" Icon={Wrench}>
+            <div className="grid gap-4 md:grid-cols-2">
+              <FormTextarea label="Corrective Action" value={form.correctiveAction} onChange={v => updateField('correctiveAction', v)} placeholder="Actions to correct the identified issue..." />
+              <div className="space-y-2">
+                <Label>Corrective Action Due Date</Label>
+                <Input
+                  type="date"
+                  value={form.correctiveActionDueDate}
+                  onChange={e => updateField('correctiveActionDueDate', e.target.value)}
+                />
+              </div>
+              <FormTextarea label="Preventive Action" value={form.preventiveAction} onChange={v => updateField('preventiveAction', v)} placeholder="Actions to prevent recurrence..." />
+              <div className="space-y-2">
+                <Label>Preventive Action Due Date</Label>
+                <Input
+                  type="date"
+                  value={form.preventiveActionDueDate}
+                  onChange={e => updateField('preventiveActionDueDate', e.target.value)}
+                />
+              </div>
+            </div>
+          </FormSection>
+
+          <FormSection title="People" Icon={Users}>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Investigator Name</Label>
+                <Input
+                  placeholder="Person leading the investigation"
+                  value={form.investigatorName}
+                  onChange={e => updateField('investigatorName', e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Approver Name</Label>
+                <Input
+                  placeholder="Person responsible for approval"
+                  value={form.approverName}
+                  onChange={e => updateField('approverName', e.target.value)}
+                />
+              </div>
+            </div>
+          </FormSection>
+
+          {isEdit && (
+            <FormSection title="Verification & Closure" Icon={ShieldCheck}>
+              <div className="grid gap-4 md:grid-cols-2">
+                <FormTextarea label="Verification Method" value={form.verificationMethod} onChange={v => updateField('verificationMethod', v)} placeholder="Method used to verify the corrective action was effective..." />
+                <div className="space-y-2">
+                  <Label>Verified By</Label>
+                  <Input
+                    placeholder="Person who verified"
+                    value={form.verifiedByName}
+                    onChange={e => updateField('verifiedByName', e.target.value)}
+                  />
+                </div>
+                <FormTextarea label="Effectiveness Check" value={form.effectivenessCheck} onChange={v => updateField('effectivenessCheck', v)} placeholder="Results of the effectiveness check..." />
+                <FormTextarea label="Lessons Learned" value={form.lessonsLearned} onChange={v => updateField('lessonsLearned', v)} placeholder="Key takeaways and lessons learned..." />
+              </div>
+            </FormSection>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={closeModal} disabled={submitting}>Cancel</Button>
+            <Button variant="gradient" onClick={handleSubmit} disabled={submitting}>
+              <Save className="h-4 w-4" />
+              {submitting ? 'Saving...' : isEdit ? 'Update Report' : 'Create Report'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function FormSection({
+  title,
+  Icon,
+  children,
+}: {
+  title: string;
+  Icon: typeof AlertTriangle;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-3 rounded-md border border-border bg-muted/20 p-4">
+      <h3 className="flex items-center gap-2 text-sm font-semibold">
+        <Icon className="h-4 w-4" />
+        {title}
+      </h3>
+      {children}
+    </div>
+  );
+}
+
+function FormTextarea({
+  label,
+  value,
+  onChange,
+  placeholder,
+  required,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  required?: boolean;
+}) {
+  return (
+    <div className="space-y-2 md:col-span-2">
+      <Label>
+        {label} {required && <span className="text-destructive">*</span>}
+      </Label>
+      <textarea
+        className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        rows={3}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+      />
+    </div>
   );
 }

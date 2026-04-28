@@ -1,7 +1,15 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Loader2 } from 'lucide-react';
+
 import { API_URL } from '../api';
 import { useTheme } from '../ThemeProvider';
+import { Logo } from '@/components/brand/Logo';
+import { GradientText } from '@/components/brand/GradientText';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 
 export default function ForgotPassword() {
   const { hasLogo, logoUrl, systemName } = useTheme();
@@ -26,56 +34,72 @@ export default function ForgotPassword() {
   }
 
   return (
-    <div className="vn-login-shell">
-      <div className="vn-login-card">
-        <div className="vn-login-brand">
-          <div className="vn-login-logo" aria-hidden="true">
+    <div className="relative flex min-h-screen items-center justify-center bg-background bg-shell-gradient px-4 py-12 font-sans text-foreground">
+      <div className="pointer-events-none absolute left-1/2 top-1/2 h-[720px] w-[720px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/15 blur-[120px]" />
+      <Card className="relative w-full max-w-md border-border/50 bg-card/80 backdrop-blur-xl shadow-2xl">
+        <CardHeader className="items-center text-center">
+          <div className="mb-2 flex flex-col items-center gap-4">
             {hasLogo && logoUrl ? (
-              <img src={logoUrl} alt={systemName} />
+              <img src={logoUrl} alt={systemName} className="h-12 w-auto" />
             ) : (
-              <span className="material-icons">hub</span>
+              <Logo size="lg" showWordmark={false} />
             )}
+            <h1 className="text-2xl font-bold tracking-tight">
+              {systemName ? (
+                systemName
+              ) : (
+                <>
+                  Open <GradientText>TMS</GradientText>
+                </>
+              )}
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              Self-service reset is not yet available. For now, your administrator can reset your password from the Users admin page.
+            </p>
           </div>
-          <h1 className="vn-login-title">Reset password</h1>
-          <p className="vn-login-subtitle">
-            Self-service reset is not yet available. For now, your administrator can reset your password from the Users admin page.
-          </p>
-        </div>
-
-        {submitted ? (
-          <div className="vn-alert vn-alert-info" style={{ marginBottom: 'var(--spacing-2)' }}>
-            Your request has been logged. Please contact your administrator to complete the reset.
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit}>
-            <div className="vn-field" style={{ marginBottom: 'var(--spacing-3)' }}>
-              <label className="vn-field-label" htmlFor="fp-email">Email</label>
-              <input
-                id="fp-email"
-                className="vn-input"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoFocus
-                placeholder="you@company.com"
-              />
+        </CardHeader>
+        <CardContent>
+          {submitted ? (
+            <div className="mb-4 rounded-md border border-info/30 bg-info/10 px-3 py-2 text-sm text-info">
+              Your request has been logged. Please contact your administrator to complete the reset.
             </div>
-            <button
-              className="vn-btn vn-btn-primary"
-              type="submit"
-              disabled={loading || !email}
-              style={{ width: '100%' }}
-            >
-              {loading ? 'Submitting...' : 'Request reset'}
-            </button>
-          </form>
-        )}
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="fp-email">Email</Label>
+                <Input
+                  id="fp-email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  autoFocus
+                  placeholder="you@company.com"
+                />
+              </div>
+              <Button
+                type="submit"
+                variant="gradient"
+                className="w-full"
+                size="lg"
+                disabled={loading || !email}
+              >
+                {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+                {loading ? 'Submitting...' : 'Request reset'}
+              </Button>
+            </form>
+          )}
 
-        <div className="vn-login-footer">
-          <Link to="/login" className="vn-link">Back to sign in</Link>
-        </div>
-      </div>
+          <div className="mt-6 text-center text-sm">
+            <Link
+              to="/login"
+              className="text-muted-foreground transition-colors hover:text-primary"
+            >
+              Back to sign in
+            </Link>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

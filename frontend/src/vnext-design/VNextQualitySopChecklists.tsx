@@ -1,15 +1,55 @@
 /**
  * VNextQualitySopChecklists - SOP/GDP checklist management page.
- *
- * Lists SOP checklists with stats, filtering, and a create/edit modal
- * that supports adding/removing/reordering checklist items grouped by section.
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { API_URL } from '../api';
-import { VnPageHeader, VnChip, VnFilterBar, VnAlert, VnModal } from './components';
+import {
+  AlertTriangle,
+  ArrowDown,
+  ArrowUp,
+  Calendar,
+  CheckCircle2,
+  CircleAlert,
+  ClipboardCheck,
+  Folder,
+  ListChecks,
+  Loader2,
+  Pencil,
+  Plus,
+  Trash2,
+  X,
+} from 'lucide-react';
 
-/* ── Types ───────────────────────────────────────────────── */
+import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { cn } from '@/lib/utils';
 
 interface ChecklistItem {
   id?: string;
@@ -37,9 +77,7 @@ interface SopChecklist {
   updatedAt: string;
 }
 
-/* ── Constants ───────────────────────────────────────────── */
-
-const CATEGORIES: { value: string; label: string }[] = [
+const CATEGORIES = [
   { value: 'gdp', label: 'GDP' },
   { value: 'cold_chain', label: 'Cold Chain' },
   { value: 'warehouse', label: 'Warehouse' },
@@ -47,26 +85,28 @@ const CATEGORIES: { value: string; label: string }[] = [
   { value: 'general', label: 'General' },
 ];
 
-const FREQUENCIES: { value: string; label: string }[] = [
+const FREQUENCIES = [
   { value: 'monthly', label: 'Monthly' },
   { value: 'quarterly', label: 'Quarterly' },
   { value: 'annual', label: 'Annual' },
   { value: 'one_off', label: 'One Off' },
 ];
 
-const STATUSES: { value: string; label: string }[] = [
+const STATUSES = [
   { value: 'draft', label: 'Draft' },
   { value: 'active', label: 'Active' },
   { value: 'archived', label: 'Archived' },
 ];
 
+type BadgeVariant = 'success' | 'destructive' | 'warning' | 'info' | 'secondary' | 'muted' | 'default';
+
 function categoryLabel(val: string): string {
   return CATEGORIES.find((c) => c.value === val)?.label || val;
 }
 
-function categoryChipVariant(cat: string): 'primary' | 'success' | 'warning' | 'info' | 'error' | 'secondary' {
+function categoryVariant(cat: string): BadgeVariant {
   switch (cat) {
-    case 'gdp': return 'primary';
+    case 'gdp': return 'default';
     case 'cold_chain': return 'info';
     case 'warehouse': return 'warning';
     case 'transport': return 'success';
@@ -75,7 +115,7 @@ function categoryChipVariant(cat: string): 'primary' | 'success' | 'warning' | '
   }
 }
 
-function statusChipVariant(status: string): 'success' | 'warning' | 'secondary' {
+function statusVariant(status: string): BadgeVariant {
   switch (status) {
     case 'active': return 'success';
     case 'draft': return 'warning';
@@ -109,8 +149,6 @@ function emptyItem(sortOrder: number): ChecklistItem {
   };
 }
 
-/* ── Create/Edit Modal ───────────────────────────────────── */
-
 interface ChecklistFormProps {
   open: boolean;
   onClose: () => void;
@@ -129,7 +167,6 @@ function ChecklistFormModal({ open, onClose, onSaved, editChecklist }: Checklist
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  // Populate form when editing
   useEffect(() => {
     if (editChecklist) {
       setTitle(editChecklist.title);
@@ -231,225 +268,195 @@ function ChecklistFormModal({ open, onClose, onSaved, editChecklist }: Checklist
     }
   };
 
-  // Group items by section for display headers
   const sections = Array.from(new Set(items.map((it) => it.section || '').filter(Boolean)));
 
   return (
-    <VnModal
-      open={open}
-      onClose={onClose}
-      title={editChecklist ? 'Edit Checklist' : 'Create Checklist'}
-      size="xl"
-      footer={
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button className="vn-btn vn-btn-outline vn-btn-sm" onClick={onClose}>Cancel</button>
-          <button className="vn-btn vn-btn-primary vn-btn-sm" onClick={handleSubmit} disabled={saving || !title.trim()}>
-            {saving ? 'Saving...' : editChecklist ? 'Save Changes' : 'Create Checklist'}
-          </button>
-        </div>
-      }
-    >
-      {error && <VnAlert variant="error" onClose={() => setError('')}>{error}</VnAlert>}
+    <Dialog open={open} onOpenChange={open => { if (!open) onClose(); }}>
+      <DialogContent className="max-w-3xl max-h-[85vh] overflow-auto">
+        <DialogHeader>
+          <DialogTitle>{editChecklist ? 'Edit checklist' : 'Create checklist'}</DialogTitle>
+        </DialogHeader>
 
-      {/* Basic fields */}
-      <div className="vn-form-grid" style={{ marginBottom: 20 }}>
-        <div className="vn-field">
-          <label className="vn-field-label">Title <span style={{ color: 'var(--color-error)' }}>*</span></label>
-          <input className="vn-input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. GDP Warehouse Compliance" />
-        </div>
-        <div className="vn-field">
-          <label className="vn-field-label">SOP Reference</label>
-          <input className="vn-input" value={sopReference} onChange={(e) => setSopReference(e.target.value)} placeholder="e.g. SOP-WH-001" />
-        </div>
-        <div className="vn-field">
-          <label className="vn-field-label">Category</label>
-          <select className="vn-input" value={category} onChange={(e) => setCategory(e.target.value)}>
-            {CATEGORIES.map((c) => (
-              <option key={c.value} value={c.value}>{c.label}</option>
-            ))}
-          </select>
-        </div>
-        <div className="vn-field">
-          <label className="vn-field-label">Frequency</label>
-          <select className="vn-input" value={frequency} onChange={(e) => setFrequency(e.target.value)}>
-            {FREQUENCIES.map((f) => (
-              <option key={f.value} value={f.value}>{f.label}</option>
-            ))}
-          </select>
-        </div>
-        <div className="vn-field">
-          <label className="vn-field-label">Next Due Date</label>
-          <input className="vn-input" type="date" value={nextDueDate} onChange={(e) => setNextDueDate(e.target.value)} />
-        </div>
-        <div className="vn-field" style={{ gridColumn: '1 / -1' }}>
-          <label className="vn-field-label">Description</label>
-          <textarea
-            className="vn-input"
-            rows={2}
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Optional description of this checklist"
-            style={{ resize: 'vertical', fontFamily: 'inherit' }}
-          />
-        </div>
-      </div>
-
-      {/* Checklist items */}
-      <div style={{ marginBottom: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: 'var(--on-surface)' }}>
-            Checklist Items ({items.filter((it) => it.question.trim()).length})
-          </h3>
-          <button className="vn-btn vn-btn-ghost vn-btn-sm" onClick={addItem}>
-            <span className="material-icons" style={{ fontSize: 18 }}>add</span>
-            Add Item
-          </button>
-        </div>
-
-        {sections.length > 0 && (
-          <div style={{ marginBottom: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>Sections:</span>
-            {sections.map((s) => (
-              <span key={s} className="vn-chip vn-chip-secondary" style={{ fontSize: 11 }}>{s}</span>
-            ))}
+        {error && (
+          <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+            <CircleAlert className="h-4 w-4" />
+            <span className="flex-1">{error}</span>
+            <Button variant="ghost" size="icon" onClick={() => setError('')}><X className="h-4 w-4" /></Button>
           </div>
         )}
 
-        {items.map((item, idx) => {
-          // Show section header when section changes
-          const prevSection = idx > 0 ? items[idx - 1].section : null;
-          const showSectionHeader = item.section && item.section !== prevSection;
+        <div className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Title <span className="text-destructive">*</span></Label>
+              <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. GDP Warehouse Compliance" />
+            </div>
+            <div className="space-y-2">
+              <Label>SOP reference</Label>
+              <Input value={sopReference} onChange={(e) => setSopReference(e.target.value)} placeholder="e.g. SOP-WH-001" />
+            </div>
+            <div className="space-y-2">
+              <Label>Category</Label>
+              <Select value={category} onValueChange={setCategory}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Frequency</Label>
+              <Select value={frequency} onValueChange={setFrequency}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {FREQUENCIES.map(f => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Next due date</Label>
+              <Input type="date" value={nextDueDate} onChange={(e) => setNextDueDate(e.target.value)} />
+            </div>
+            <div className="md:col-span-2 space-y-2">
+              <Label>Description</Label>
+              <textarea
+                rows={2}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Optional description of this checklist"
+                className="w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+            </div>
+          </div>
 
-          return (
-            <React.Fragment key={idx}>
-              {showSectionHeader && (
-                <div style={{
-                  padding: '8px 0 4px',
-                  marginTop: idx > 0 ? 12 : 0,
-                  borderBottom: '1px solid var(--outline-variant)',
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: 'var(--primary)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                }}>
-                  <span className="material-icons" style={{ fontSize: 16 }}>folder</span>
-                  {item.section}
-                </div>
-              )}
-              <div
-                style={{
-                  padding: 12,
-                  marginBottom: 8,
-                  marginTop: showSectionHeader ? 8 : 0,
-                  border: '1px solid var(--outline-variant)',
-                  borderRadius: 8,
-                  borderLeft: item.isCritical ? '4px solid var(--color-error)' : '4px solid var(--outline-variant)',
-                  background: 'var(--surface-container-lowest)',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--on-surface-variant)', minWidth: 24, paddingTop: 8 }}>
-                    {idx + 1}.
-                  </span>
-                  <div style={{ flex: 1 }}>
-                    <div className="vn-form-grid" style={{ gap: 8 }}>
-                      <div className="vn-field" style={{ gridColumn: '1 / -1' }}>
-                        <label className="vn-field-label">Question <span style={{ color: 'var(--color-error)' }}>*</span></label>
-                        <input
-                          className="vn-input"
-                          value={item.question}
-                          onChange={(e) => updateItem(idx, 'question', e.target.value)}
-                          placeholder="e.g. Are temperature records maintained for the last 30 days?"
-                        />
-                      </div>
-                      <div className="vn-field">
-                        <label className="vn-field-label">Section</label>
-                        <input
-                          className="vn-input"
-                          value={item.section}
-                          onChange={(e) => updateItem(idx, 'section', e.target.value)}
-                          placeholder="e.g. Documentation"
-                          list="section-suggestions"
-                        />
-                      </div>
-                      <div className="vn-field">
-                        <label className="vn-field-label">Guidance</label>
-                        <input
-                          className="vn-input"
-                          value={item.guidance}
-                          onChange={(e) => updateItem(idx, 'guidance', e.target.value)}
-                          placeholder="Hint or reference for the auditor"
-                        />
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', gap: 16, marginTop: 8 }}>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, color: 'var(--on-surface-variant)', cursor: 'pointer' }}>
-                        <input
-                          type="checkbox"
-                          checked={item.evidenceRequired}
-                          onChange={(e) => updateItem(idx, 'evidenceRequired', e.target.checked)}
-                        />
-                        Evidence Required
-                      </label>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, color: item.isCritical ? 'var(--color-error)' : 'var(--on-surface-variant)', cursor: 'pointer' }}>
-                        <input
-                          type="checkbox"
-                          checked={item.isCritical}
-                          onChange={(e) => updateItem(idx, 'isCritical', e.target.checked)}
-                        />
-                        Critical Item
-                      </label>
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    <button
-                      className="vn-btn-icon"
-                      onClick={() => moveItem(idx, -1)}
-                      disabled={idx === 0}
-                      title="Move up"
-                      style={{ opacity: idx === 0 ? 0.3 : 1 }}
-                    >
-                      <span className="material-icons" style={{ fontSize: 18 }}>arrow_upward</span>
-                    </button>
-                    <button
-                      className="vn-btn-icon"
-                      onClick={() => moveItem(idx, 1)}
-                      disabled={idx === items.length - 1}
-                      title="Move down"
-                      style={{ opacity: idx === items.length - 1 ? 0.3 : 1 }}
-                    >
-                      <span className="material-icons" style={{ fontSize: 18 }}>arrow_downward</span>
-                    </button>
-                    <button
-                      className="vn-btn-icon"
-                      onClick={() => removeItem(idx)}
-                      disabled={items.length <= 1}
-                      title="Remove item"
-                      style={{ opacity: items.length <= 1 ? 0.3 : 1, color: 'var(--color-error)' }}
-                    >
-                      <span className="material-icons" style={{ fontSize: 18 }}>delete</span>
-                    </button>
-                  </div>
-                </div>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-semibold">
+                Checklist items ({items.filter((it) => it.question.trim()).length})
+              </h3>
+              <Button variant="ghost" size="sm" onClick={addItem}>
+                <Plus className="h-4 w-4" />
+                Add item
+              </Button>
+            </div>
+
+            {sections.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <span>Sections:</span>
+                {sections.map(s => <Badge key={s} variant="secondary">{s}</Badge>)}
               </div>
-            </React.Fragment>
-          );
-        })}
+            )}
 
-        {/* Datalist for section auto-complete */}
-        <datalist id="section-suggestions">
-          {sections.map((s) => (
-            <option key={s} value={s} />
-          ))}
-        </datalist>
-      </div>
-    </VnModal>
+            {items.map((item, idx) => {
+              const prevSection = idx > 0 ? items[idx - 1].section : null;
+              const showSectionHeader = item.section && item.section !== prevSection;
+
+              return (
+                <React.Fragment key={idx}>
+                  {showSectionHeader && (
+                    <div className={cn(
+                      'flex items-center gap-2 border-b border-border pb-1 pt-2 text-sm font-semibold text-primary',
+                      idx > 0 && 'mt-3',
+                    )}>
+                      <Folder className="h-4 w-4" />
+                      {item.section}
+                    </div>
+                  )}
+                  <div
+                    className={cn(
+                      'rounded-md border bg-muted/30 p-3',
+                      item.isCritical ? 'border-l-4 border-l-destructive' : 'border-l-4 border-l-border',
+                    )}
+                  >
+                    <div className="flex items-start gap-2">
+                      <span className="min-w-[24px] pt-2 text-sm font-semibold text-muted-foreground">{idx + 1}.</span>
+                      <div className="flex-1 space-y-2">
+                        <div className="space-y-2">
+                          <Label>Question <span className="text-destructive">*</span></Label>
+                          <Input
+                            value={item.question}
+                            onChange={(e) => updateItem(idx, 'question', e.target.value)}
+                            placeholder="e.g. Are temperature records maintained for the last 30 days?"
+                          />
+                        </div>
+                        <div className="grid gap-2 md:grid-cols-2">
+                          <div className="space-y-2">
+                            <Label>Section</Label>
+                            <Input
+                              value={item.section}
+                              onChange={(e) => updateItem(idx, 'section', e.target.value)}
+                              placeholder="e.g. Documentation"
+                              list="section-suggestions"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Guidance</Label>
+                            <Input
+                              value={item.guidance}
+                              onChange={(e) => updateItem(idx, 'guidance', e.target.value)}
+                              placeholder="Hint or reference for the auditor"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-4 text-sm">
+                          <label className="flex items-center gap-2 cursor-pointer text-muted-foreground">
+                            <input
+                              type="checkbox"
+                              checked={item.evidenceRequired}
+                              onChange={(e) => updateItem(idx, 'evidenceRequired', e.target.checked)}
+                            />
+                            Evidence required
+                          </label>
+                          <label className={cn('flex items-center gap-2 cursor-pointer', item.isCritical ? 'text-destructive' : 'text-muted-foreground')}>
+                            <input
+                              type="checkbox"
+                              checked={item.isCritical}
+                              onChange={(e) => updateItem(idx, 'isCritical', e.target.checked)}
+                            />
+                            Critical item
+                          </label>
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <Button variant="ghost" size="icon" onClick={() => moveItem(idx, -1)} disabled={idx === 0} title="Move up">
+                          <ArrowUp className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => moveItem(idx, 1)} disabled={idx === items.length - 1} title="Move down">
+                          <ArrowDown className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removeItem(idx)}
+                          disabled={items.length <= 1}
+                          title="Remove item"
+                          className="text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </React.Fragment>
+              );
+            })}
+
+            <datalist id="section-suggestions">
+              {sections.map(s => <option key={s} value={s} />)}
+            </datalist>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button variant="gradient" onClick={handleSubmit} disabled={saving || !title.trim()}>
+            {saving ? 'Saving...' : editChecklist ? 'Save changes' : 'Create checklist'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
-
-/* ── Main Page ───────────────────────────────────────────── */
 
 export default function VNextQualitySopChecklists() {
   const [checklists, setChecklists] = useState<SopChecklist[]>([]);
@@ -457,8 +464,8 @@ export default function VNextQualitySopChecklists() {
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [search, setSearch] = useState('');
-  const [filterCategory, setFilterCategory] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
+  const [filterCategory, setFilterCategory] = useState('all');
+  const [filterStatus, setFilterStatus] = useState('all');
   const [showModal, setShowModal] = useState(false);
   const [editChecklist, setEditChecklist] = useState<SopChecklist | null>(null);
 
@@ -466,8 +473,8 @@ export default function VNextQualitySopChecklists() {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (filterCategory) params.set('category', filterCategory);
-      if (filterStatus) params.set('status', filterStatus);
+      if (filterCategory !== 'all') params.set('category', filterCategory);
+      if (filterStatus !== 'all') params.set('status', filterStatus);
       const qs = params.toString();
       const res = await fetch(`${API_URL}/api/v1/quality/sop-checklists${qs ? `?${qs}` : ''}`);
       const json = await res.json();
@@ -505,7 +512,6 @@ export default function VNextQualitySopChecklists() {
     loadChecklists();
   };
 
-  // Filter by search text
   const filtered = checklists.filter((cl) => {
     if (!search) return true;
     const q = search.toLowerCase();
@@ -516,7 +522,6 @@ export default function VNextQualitySopChecklists() {
     );
   });
 
-  // Stats
   const totalActive = checklists.filter((c) => c.status === 'active').length;
   const now = new Date();
   const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
@@ -529,171 +534,160 @@ export default function VNextQualitySopChecklists() {
 
   if (loading) {
     return (
-      <div className="vn-empty">
-        <span className="material-icons" style={{ animation: 'spin 1s linear infinite' }}>refresh</span>
-        <h3>Loading checklists...</h3>
+      <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <h3 className="text-lg font-medium">Loading checklists...</h3>
       </div>
     );
   }
 
+  const stats = [
+    { label: 'Total active', value: totalActive, icon: ListChecks, tone: 'bg-primary/10 text-primary' },
+    { label: 'Due this month', value: dueThisMonth, icon: Calendar, tone: 'bg-warning/15 text-warning' },
+    { label: 'Overdue', value: overdue, icon: AlertTriangle, tone: 'bg-destructive/10 text-destructive' },
+  ];
+
   return (
-    <>
-      <VnPageHeader title="SOP Checklists" subtitle={`${checklists.length} checklists`}>
-        <button className="vn-btn vn-btn-primary vn-btn-sm" onClick={openCreate}>
-          <span className="material-icons">add</span>Create Checklist
-        </button>
-      </VnPageHeader>
-
-      {successMsg && <VnAlert variant="success" onClose={() => setSuccessMsg('')}>{successMsg}</VnAlert>}
-      {error && <VnAlert variant="error" onClose={() => setError('')}>{error}</VnAlert>}
-
-      {/* Stats */}
-      <div className="vn-stats">
-        <div className="vn-stat">
-          <div className="vn-stat-icon primary"><span className="material-icons">checklist</span></div>
-          <div>
-            <div className="vn-stat-value">{totalActive}</div>
-            <div className="vn-stat-label">Total Active</div>
-          </div>
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">SOP checklists</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{checklists.length} checklists</p>
         </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon warning"><span className="material-icons">event</span></div>
-          <div>
-            <div className="vn-stat-value">{dueThisMonth}</div>
-            <div className="vn-stat-label">Due This Month</div>
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon error"><span className="material-icons">warning</span></div>
-          <div>
-            <div className="vn-stat-value">{overdue}</div>
-            <div className="vn-stat-label">Overdue</div>
-          </div>
-        </div>
+        <Button variant="gradient" onClick={openCreate}>
+          <Plus className="h-4 w-4" />
+          Create checklist
+        </Button>
       </div>
 
-      {/* Table */}
-      <div className="vn-card" style={{ marginTop: 24 }}>
-        <VnFilterBar searchPlaceholder="Search checklists..." searchValue={search} onSearchChange={setSearch}>
-          <select
-            className="vn-filter-select"
-            value={filterCategory}
-            onChange={(e) => setFilterCategory(e.target.value)}
-          >
-            <option value="">All Categories</option>
-            {CATEGORIES.map((c) => (
-              <option key={c.value} value={c.value}>{c.label}</option>
-            ))}
-          </select>
-          <select
-            className="vn-filter-select"
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-          >
-            <option value="">All Statuses</option>
-            {STATUSES.map((s) => (
-              <option key={s.value} value={s.value}>{s.label}</option>
-            ))}
-          </select>
-        </VnFilterBar>
+      {successMsg && (
+        <div className="flex items-center gap-3 rounded-md border border-success/30 bg-success/10 p-4 text-sm text-success">
+          <CheckCircle2 className="h-5 w-5" />
+          <span className="flex-1">{successMsg}</span>
+          <Button variant="ghost" size="icon" onClick={() => setSuccessMsg('')}><X className="h-4 w-4" /></Button>
+        </div>
+      )}
+      {error && (
+        <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+          <CircleAlert className="h-5 w-5" />
+          <span className="flex-1">{error}</span>
+          <Button variant="ghost" size="icon" onClick={() => setError('')}><X className="h-4 w-4" /></Button>
+        </div>
+      )}
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        {stats.map(stat => {
+          const Icon = stat.icon;
+          return (
+            <Card key={stat.label}>
+              <div className="p-5">
+                <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', stat.tone)}>
+                  <Icon className="h-5 w-5" />
+                </div>
+                <div className="mt-3 text-2xl font-bold tracking-tight">{stat.value}</div>
+                <div className="mt-1 text-sm text-muted-foreground">{stat.label}</div>
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+
+      <Card>
+        <div className="flex flex-wrap items-center gap-3 p-4">
+          <div className="min-w-[240px] flex-1">
+            <Input placeholder="Search checklists..." value={search} onChange={e => setSearch(e.target.value)} />
+          </div>
+          <Select value={filterCategory} onValueChange={setFilterCategory}>
+            <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All categories</SelectItem>
+              {CATEGORIES.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={filterStatus} onValueChange={setFilterStatus}>
+            <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All statuses</SelectItem>
+              {STATUSES.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <Separator />
 
         {filtered.length === 0 ? (
-          <div className="vn-empty">
-            <span className="material-icons">checklist</span>
-            <h3>No checklists found</h3>
-            <p>Create your first SOP checklist to start tracking compliance audits.</p>
+          <div className="flex flex-col items-center gap-3 py-12 text-muted-foreground">
+            <ClipboardCheck className="h-10 w-10 opacity-40" />
+            <h3 className="text-base font-medium">No checklists found</h3>
+            <p className="text-sm">Create your first SOP checklist to start tracking compliance audits.</p>
           </div>
         ) : (
-          <div className="vn-table-wrap">
-            <table className="vn-table">
-              <thead>
-                <tr>
-                  <th>Title</th>
-                  <th>SOP Ref</th>
-                  <th>Category</th>
-                  <th>Frequency</th>
-                  <th>Next Due</th>
-                  <th>Last Completed</th>
-                  <th>Audits</th>
-                  <th>Status</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((cl) => {
-                  const overdueRow = isOverdue(cl.nextDueDate, cl.status);
-                  return (
-                    <tr
-                      key={cl.id}
-                      style={{
-                        cursor: 'pointer',
-                        background: overdueRow ? 'var(--error-container, rgba(255,0,0,0.04))' : undefined,
-                      }}
-                      onClick={() => openEdit(cl.id)}
-                    >
-                      <td>
-                        <span className="vn-table-id">{cl.title}</span>
-                        {cl.description && (
-                          <div className="vn-table-secondary" style={{ maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {cl.description}
-                          </div>
-                        )}
-                      </td>
-                      <td>
-                        <span style={{ fontFamily: 'monospace', fontSize: 13 }}>{cl.sopReference || '-'}</span>
-                      </td>
-                      <td>
-                        <VnChip variant={categoryChipVariant(cl.category)}>{categoryLabel(cl.category)}</VnChip>
-                      </td>
-                      <td style={{ fontSize: 13 }}>{frequencyLabel(cl.frequency)}</td>
-                      <td>
-                        <span style={{
-                          fontSize: 13,
-                          fontWeight: overdueRow ? 600 : 400,
-                          color: overdueRow ? 'var(--color-error)' : 'var(--on-surface)',
-                        }}>
-                          {formatDate(cl.nextDueDate)}
-                        </span>
-                        {overdueRow && (
-                          <div style={{ fontSize: 11, color: 'var(--color-error)', fontWeight: 600 }}>OVERDUE</div>
-                        )}
-                      </td>
-                      <td style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>
-                        {formatDate(cl.lastCompletedAt)}
-                      </td>
-                      <td style={{ fontWeight: 600 }}>{cl._count?.audits ?? 0}</td>
-                      <td>
-                        <VnChip variant={statusChipVariant(cl.status)}>
-                          {cl.status.charAt(0).toUpperCase() + cl.status.slice(1)}
-                        </VnChip>
-                      </td>
-                      <td>
-                        <button
-                          className="vn-btn-icon"
-                          onClick={(e) => { e.stopPropagation(); openEdit(cl.id); }}
-                          title="Edit checklist"
-                        >
-                          <span className="material-icons" style={{ fontSize: 18 }}>edit</span>
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Title</TableHead>
+                <TableHead>SOP ref</TableHead>
+                <TableHead>Category</TableHead>
+                <TableHead>Frequency</TableHead>
+                <TableHead>Next due</TableHead>
+                <TableHead>Last completed</TableHead>
+                <TableHead>Audits</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="w-[60px]"></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filtered.map(cl => {
+                const overdueRow = isOverdue(cl.nextDueDate, cl.status);
+                return (
+                  <TableRow
+                    key={cl.id}
+                    className={cn('cursor-pointer', overdueRow && 'bg-destructive/5')}
+                    onClick={() => openEdit(cl.id)}
+                  >
+                    <TableCell>
+                      <div className="font-medium">{cl.title}</div>
+                      {cl.description && (
+                        <div className="max-w-[240px] truncate text-xs text-muted-foreground">
+                          {cl.description}
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell><span className="font-mono text-sm">{cl.sopReference || '-'}</span></TableCell>
+                    <TableCell><Badge variant={categoryVariant(cl.category)}>{categoryLabel(cl.category)}</Badge></TableCell>
+                    <TableCell className="text-sm">{frequencyLabel(cl.frequency)}</TableCell>
+                    <TableCell>
+                      <span className={cn('text-sm', overdueRow && 'font-semibold text-destructive')}>
+                        {formatDate(cl.nextDueDate)}
+                      </span>
+                      {overdueRow && <div className="text-[10px] font-semibold text-destructive">OVERDUE</div>}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{formatDate(cl.lastCompletedAt)}</TableCell>
+                    <TableCell className="font-semibold">{cl._count?.audits ?? 0}</TableCell>
+                    <TableCell>
+                      <Badge variant={statusVariant(cl.status)}>
+                        {cl.status.charAt(0).toUpperCase() + cl.status.slice(1)}
+                      </Badge>
+                    </TableCell>
+                    <TableCell onClick={e => e.stopPropagation()}>
+                      <Button variant="ghost" size="icon" onClick={() => openEdit(cl.id)} title="Edit checklist">
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
         )}
-      </div>
+      </Card>
 
-      {/* Create/Edit Modal */}
       <ChecklistFormModal
         open={showModal}
         onClose={() => { setShowModal(false); setEditChecklist(null); }}
         onSaved={handleSaved}
         editChecklist={editChecklist}
       />
-
-      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
-    </>
+    </div>
   );
 }

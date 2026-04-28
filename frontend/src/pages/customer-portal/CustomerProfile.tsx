@@ -1,6 +1,12 @@
 import React, { useState } from 'react';
+
 import { API_URL } from '../../api';
 import { customerFetch, getCustomerUser } from './CustomerDashboard';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
 
 export default function CustomerProfile() {
   const user = getCustomerUser();
@@ -32,41 +38,72 @@ export default function CustomerProfile() {
   };
 
   return (
-    <div>
-      <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 24 }}>Profile</h1>
+    <div className="space-y-6">
+      <h1 className="text-3xl font-bold tracking-tight">Profile</h1>
 
-      <div className="vn-card" style={{ padding: 24, marginBottom: 24 }}>
-        <h3 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 600 }}>Account Information</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-          <div><div style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>Name</div><div style={{ fontWeight: 600 }}>{user.name}</div></div>
-          <div><div style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>Email</div><div style={{ fontWeight: 600 }}>{user.email}</div></div>
-          <div><div style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>Company</div><div style={{ fontWeight: 600 }}>{user.customerName}</div></div>
-          <div><div style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>Role</div><div style={{ fontWeight: 600 }}>{user.role}</div></div>
-        </div>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Account information</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <div className="text-xs text-muted-foreground">Name</div>
+              <div className="font-semibold">{user.name}</div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">Email</div>
+              <div className="font-semibold">{user.email}</div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">Company</div>
+              <div className="font-semibold">{user.customerName}</div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">Role</div>
+              <div className="font-semibold">{user.role}</div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
-      <div className="vn-card" style={{ padding: 24 }}>
-        <h3 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 600 }}>Change Password</h3>
-        <form onSubmit={handleChangePassword} style={{ maxWidth: 400 }}>
-          {message && <div className={`vn-alert vn-alert-${message.type}`} style={{ marginBottom: 16 }}>{message.text}</div>}
-          <div className="vn-field" style={{ marginBottom: 16 }}>
-            <label className="vn-field-label">Current Password</label>
-            <input className="vn-input" type="password" value={currentPw} onChange={e => setCurrentPw(e.target.value)} required />
-          </div>
-          <div className="vn-field" style={{ marginBottom: 16 }}>
-            <label className="vn-field-label">New Password</label>
-            <input className="vn-input" type="password" value={newPw} onChange={e => setNewPw(e.target.value)} required />
-            <div style={{ fontSize: 12, color: 'var(--on-surface-variant)', marginTop: 4 }}>8+ characters, uppercase, lowercase, number</div>
-          </div>
-          <div className="vn-field" style={{ marginBottom: 24 }}>
-            <label className="vn-field-label">Confirm New Password</label>
-            <input className="vn-input" type="password" value={confirmPw} onChange={e => setConfirmPw(e.target.value)} required />
-          </div>
-          <button className="vn-btn vn-btn-primary" type="submit" disabled={saving}>
-            {saving ? 'Changing...' : 'Change Password'}
-          </button>
-        </form>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Change password</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleChangePassword} className="max-w-md space-y-4">
+            {message && (
+              <div
+                className={cn(
+                  'rounded-md border px-3 py-2 text-sm',
+                  message.type === 'success'
+                    ? 'border-success/30 bg-success/10 text-success'
+                    : 'border-destructive/30 bg-destructive/10 text-destructive',
+                )}
+              >
+                {message.text}
+              </div>
+            )}
+            <div className="space-y-2">
+              <Label htmlFor="current-pw">Current password</Label>
+              <Input id="current-pw" type="password" value={currentPw} onChange={e => setCurrentPw(e.target.value)} required />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="new-pw">New password</Label>
+              <Input id="new-pw" type="password" value={newPw} onChange={e => setNewPw(e.target.value)} required />
+              <div className="text-xs text-muted-foreground">8+ characters, uppercase, lowercase, number</div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirm-pw">Confirm new password</Label>
+              <Input id="confirm-pw" type="password" value={confirmPw} onChange={e => setConfirmPw(e.target.value)} required />
+            </div>
+            <Button type="submit" variant="gradient" disabled={saving}>
+              {saving ? 'Changing...' : 'Change password'}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 }

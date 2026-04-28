@@ -1,5 +1,43 @@
 import React, { useState, useEffect } from 'react';
+import {
+  ListChecks,
+  CheckCircle2,
+  XCircle,
+  RefreshCw,
+  ChevronLeft,
+  ChevronRight,
+  MapPin,
+  Loader2,
+  X,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableHead,
+  TableRow,
+  TableCell,
+} from '@/components/ui/table';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
 
 export default function VNextWebhookLogs() {
   const [logs, setLogs] = useState<any[]>([]);
@@ -15,13 +53,8 @@ export default function VNextWebhookLogs() {
     total: 0, successful: 0, errors: 0, updates: 0,
   });
 
-  useEffect(() => {
-    loadLogs();
-  }, [page, statusFilter]);
-
-  useEffect(() => {
-    loadStats();
-  }, []);
+  useEffect(() => { loadLogs(); }, [page, statusFilter]);
+  useEffect(() => { loadStats(); }, []);
 
   async function loadStats() {
     try {
@@ -31,7 +64,7 @@ export default function VNextWebhookLogs() {
         if (json.data) setStats(json.data);
       }
     } catch {
-      // Stats endpoint may not exist, derive from data if needed
+      // ignore
     }
   }
 
@@ -50,7 +83,6 @@ export default function VNextWebhookLogs() {
       else if (data.total) setTotalPages(Math.ceil(data.total / 50));
       else if (json.meta?.totalPages) setTotalPages(json.meta.totalPages);
 
-      // Derive stats from data if stats endpoint didn't work
       if (stats.total === 0 && Array.isArray(data) && data.length > 0) {
         setStats({
           total: data.length,
@@ -74,221 +106,226 @@ export default function VNextWebhookLogs() {
       || (l.apiKeyName || l.apiKey || '').toLowerCase().includes(q);
   });
 
+  function statusBadge(l: any): { variant: 'success' | 'destructive' | 'warning'; label: string } {
+    if (l.statusCode != null && l.statusCode < 400) return { variant: 'success', label: l.status || 'Success' };
+    if (l.statusCode != null && l.statusCode >= 400) return { variant: 'destructive', label: l.status || 'Error' };
+    if (l.status === 'Success') return { variant: 'success', label: 'Success' };
+    if (l.status === 'Error') return { variant: 'destructive', label: 'Error' };
+    return { variant: 'warning', label: l.status || '-' };
+  }
+
+  const statBlocks = [
+    { label: 'Total', value: stats.total, icon: ListChecks, tone: 'bg-primary/10 text-primary' },
+    { label: 'Successful', value: stats.successful, icon: CheckCircle2, tone: 'bg-success/15 text-success' },
+    { label: 'Errors', value: stats.errors, icon: XCircle, tone: 'bg-destructive/15 text-destructive' },
+    { label: 'Updates', value: stats.updates, icon: RefreshCw, tone: 'bg-info/15 text-info' },
+  ];
+
   return (
-    <>
-      <div className="vn-page-header">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1>Webhook Logs</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Webhook logs</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Inbound webhook activity from devices and integrations</p>
         </div>
       </div>
 
       {error && (
-        <div className="alert alert-error" style={{ marginBottom: 16 }}>
+        <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
           {error}
         </div>
       )}
 
-      {/* Stats */}
-      <div className="vn-stats">
-        <div className="vn-stat">
-          <div className="vn-stat-icon primary">
-            <span className="material-icons">list_alt</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{(stats.total ?? 0).toLocaleString()}</div>
-            <div className="vn-stat-label">Total</div>
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon success">
-            <span className="material-icons">check_circle</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{(stats.successful ?? 0).toLocaleString()}</div>
-            <div className="vn-stat-label">Successful</div>
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon error">
-            <span className="material-icons">error</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{(stats.errors ?? 0).toLocaleString()}</div>
-            <div className="vn-stat-label">Errors</div>
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon info">
-            <span className="material-icons">update</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{(stats.updates ?? 0).toLocaleString()}</div>
-            <div className="vn-stat-label">Updates</div>
-          </div>
-        </div>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {statBlocks.map(s => {
+          const Icon = s.icon;
+          return (
+            <Card key={s.label}>
+              <CardContent className="flex items-center gap-3 p-4">
+                <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${s.tone}`}>
+                  <Icon className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="text-2xl font-semibold">{s.value.toLocaleString()}</div>
+                  <div className="text-xs text-muted-foreground">{s.label}</div>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
-      {/* Logs Table */}
-      <div className="vn-card">
-        <div className="vn-card-header">
-          <h2>Logs</h2>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <input
-              className="vn-input"
+      <Card>
+        <CardHeader className="flex flex-col items-start gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <CardTitle>Logs</CardTitle>
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
               placeholder="Search device, shipment..."
               value={search}
               onChange={e => setSearch(e.target.value)}
-              style={{ width: 200 }}
+              className="w-56"
             />
-            <select className="vn-select" value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1); }}>
-              <option value="all">All Statuses</option>
-              <option value="success">Success</option>
-              <option value="error">Error</option>
-              <option value="skipped">Skipped</option>
-              <option value="notfound">Not Found</option>
-            </select>
-            <select className="vn-select" value={dateRange} onChange={e => setDateRange(e.target.value)}>
-              <option value="24h">Last 24 hours</option>
-              <option value="48h">Last 48 hours</option>
-              <option value="7d">Last 7 days</option>
-              <option value="30d">Last 30 days</option>
-            </select>
+            <Select value={statusFilter} onValueChange={v => { setStatusFilter(v); setPage(1); }}>
+              <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
+                <SelectItem value="success">Success</SelectItem>
+                <SelectItem value="error">Error</SelectItem>
+                <SelectItem value="skipped">Skipped</SelectItem>
+                <SelectItem value="notfound">Not Found</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={dateRange} onValueChange={setDateRange}>
+              <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="24h">Last 24 hours</SelectItem>
+                <SelectItem value="48h">Last 48 hours</SelectItem>
+                <SelectItem value="7d">Last 7 days</SelectItem>
+                <SelectItem value="30d">Last 30 days</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-        </div>
-        <div className="vn-card-body" style={{ padding: 0 }}>
+        </CardHeader>
+        <CardContent className="p-0">
           {loading ? (
-            <div style={{ display: 'flex', justifyContent: 'center', padding: '48px' }}>
-              <div className="loading-spinner" />
+            <div className="flex justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
           ) : filtered.length === 0 ? (
-            <div className="vn-empty">
-              <span className="material-icons">list_alt</span>
-              <h3>No webhook logs found</h3>
-              <p>Logs will appear here when webhooks are received.</p>
+            <div className="flex flex-col items-center gap-2 py-12 text-center text-muted-foreground">
+              <ListChecks className="h-8 w-8" />
+              <h3 className="text-base font-medium">No webhook logs found</h3>
+              <p className="text-sm">Logs will appear here when webhooks are received.</p>
             </div>
           ) : (
-            <div className="vn-table-wrap">
-              <table className="vn-table">
-                <thead>
-                  <tr>
-                    <th>Time</th>
-                    <th>Device</th>
-                    <th>Status</th>
-                    <th>Shipment</th>
-                    <th>Location</th>
-                    <th>Updated</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map(l => (
-                    <tr
-                      key={l.id}
-                      style={{ cursor: 'pointer' }}
-                      onClick={() => setSelectedLog(l)}
-                    >
-                      <td style={{ fontSize: 13, fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
-                        {l.createdAt ? new Date(l.createdAt).toLocaleString() : l.time || '—'}
-                      </td>
-                      <td>
-                        <div style={{ fontWeight: 500 }}>{l.device || l.source || '—'}</div>
-                        <div style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>{l.apiKeyName || l.apiKey || ''}</div>
-                      </td>
-                      <td>
-                        <span className={`vn-chip ${l.statusCode && l.statusCode < 400 ? 'success' : l.statusCode && l.statusCode >= 400 ? 'error' : l.status === 'Success' ? 'success' : l.status === 'Error' ? 'error' : 'warning'}`}>
-                          {l.status || (l.statusCode ? (l.statusCode < 400 ? 'Success' : 'Error') : '—')}
-                        </span>
-                      </td>
-                      <td>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Time</TableHead>
+                  <TableHead>Device</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Shipment</TableHead>
+                  <TableHead>Location</TableHead>
+                  <TableHead>Updated</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filtered.map(l => {
+                  const sb = statusBadge(l);
+                  return (
+                    <TableRow key={l.id} className="cursor-pointer" onClick={() => setSelectedLog(l)}>
+                      <TableCell className="whitespace-nowrap font-mono text-xs">
+                        {l.createdAt ? new Date(l.createdAt).toLocaleString() : l.time || '-'}
+                      </TableCell>
+                      <TableCell>
+                        <div className="font-medium">{l.device || l.source || '-'}</div>
+                        <div className="text-xs text-muted-foreground">{l.apiKeyName || l.apiKey || ''}</div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={sb.variant}>{sb.label}</Badge>
+                      </TableCell>
+                      <TableCell>
                         {(l.shipmentId || l.shipment) ? (
-                          <span style={{ fontWeight: 500 }}>{l.shipmentId || l.shipment}</span>
+                          <span className="font-medium">{l.shipmentId || l.shipment}</span>
                         ) : (
-                          <span style={{ color: 'var(--on-surface-variant)' }}>&mdash;</span>
+                          <span className="text-muted-foreground">-</span>
                         )}
-                      </td>
-                      <td>
+                      </TableCell>
+                      <TableCell>
                         {l.hasLocation || l.latitude ? (
-                          <span className="material-icons" style={{ fontSize: 18, color: 'var(--success)' }}>location_on</span>
+                          <MapPin className="h-4 w-4 text-success" />
                         ) : (
-                          <span style={{ color: 'var(--on-surface-variant)' }}>&mdash;</span>
+                          <span className="text-muted-foreground">-</span>
                         )}
-                      </td>
-                      <td>
+                      </TableCell>
+                      <TableCell>
                         {l.updated ? (
-                          <span className="material-icons" style={{ fontSize: 18, color: 'var(--success)' }}>check_circle</span>
+                          <CheckCircle2 className="h-4 w-4 text-success" />
                         ) : (
-                          <span style={{ color: 'var(--on-surface-variant)' }}>&mdash;</span>
+                          <span className="text-muted-foreground">-</span>
                         )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
           )}
-        </div>
-        {/* Pagination */}
-        <div className="vn-card-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderTop: '1px solid var(--outline-variant)' }}>
-          <button
-            className="vn-btn vn-btn-outline"
-            style={{ fontSize: 13 }}
-            disabled={page <= 1}
-            onClick={() => setPage(p => Math.max(1, p - 1))}
-          >
-            <span className="material-icons" style={{ fontSize: 16 }}>chevron_left</span>
+        </CardContent>
+        <div className="flex items-center justify-between border-t p-3">
+          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>
+            <ChevronLeft className="h-4 w-4" />
             Previous
-          </button>
-          <span style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>Page {page} of {totalPages}</span>
-          <button
-            className="vn-btn vn-btn-outline"
-            style={{ fontSize: 13 }}
-            disabled={page >= totalPages}
-            onClick={() => setPage(p => p + 1)}
-          >
+          </Button>
+          <span className="text-sm text-muted-foreground">Page {page} of {totalPages}</span>
+          <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>
             Next
-            <span className="material-icons" style={{ fontSize: 16 }}>chevron_right</span>
-          </button>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
         </div>
-      </div>
+      </Card>
 
-      {selectedLog && (
-        <div className="vn-modal-backdrop" onClick={() => setSelectedLog(null)}>
-          <div className="vn-modal" style={{ maxWidth: 700 }} onClick={e => e.stopPropagation()}>
-            <div className="vn-modal-header">
-              <h2>Webhook Log Detail</h2>
-              <button className="vn-btn vn-btn-ghost vn-btn-icon" onClick={() => setSelectedLog(null)}>
-                <span className="material-icons">close</span>
-              </button>
-            </div>
-            <div className="vn-modal-body" style={{ maxHeight: '70vh', overflow: 'auto' }}>
-              <div className="vn-info-grid">
-                <div className="vn-info-item"><label>ID</label><span style={{ fontFamily: 'monospace', fontSize: 12 }}>{selectedLog.id}</span></div>
-                <div className="vn-info-item"><label>Status</label><span>{selectedLog.status}</span></div>
-                <div className="vn-info-item"><label>Device</label><span>{selectedLog.deviceName || '—'}</span></div>
-                <div className="vn-info-item"><label>Event Type</label><span>{selectedLog.eventType || '—'}</span></div>
-                <div className="vn-info-item"><label>Shipment</label><span>{selectedLog.shipmentReference || selectedLog.shipmentId || '—'}</span></div>
-                <div className="vn-info-item"><label>Received</label><span>{selectedLog.createdAt ? new Date(selectedLog.createdAt).toLocaleString() : '—'}</span></div>
-                <div className="vn-info-item"><label>Processed</label><span>{selectedLog.processedAt ? new Date(selectedLog.processedAt).toLocaleString() : '—'}</span></div>
+      <Dialog open={!!selectedLog} onOpenChange={open => !open && setSelectedLog(null)}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Webhook log detail</DialogTitle>
+          </DialogHeader>
+          {selectedLog && (
+            <div className="max-h-[70vh] space-y-4 overflow-auto">
+              <dl className="grid gap-3 md:grid-cols-2">
+                <div>
+                  <dt className="text-xs uppercase tracking-wide text-muted-foreground">ID</dt>
+                  <dd className="font-mono text-xs">{selectedLog.id}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs uppercase tracking-wide text-muted-foreground">Status</dt>
+                  <dd className="text-sm">{selectedLog.status}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs uppercase tracking-wide text-muted-foreground">Device</dt>
+                  <dd className="text-sm">{selectedLog.deviceName || '-'}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs uppercase tracking-wide text-muted-foreground">Event type</dt>
+                  <dd className="text-sm">{selectedLog.eventType || '-'}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs uppercase tracking-wide text-muted-foreground">Shipment</dt>
+                  <dd className="text-sm">{selectedLog.shipmentReference || selectedLog.shipmentId || '-'}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs uppercase tracking-wide text-muted-foreground">Received</dt>
+                  <dd className="text-sm">{selectedLog.createdAt ? new Date(selectedLog.createdAt).toLocaleString() : '-'}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs uppercase tracking-wide text-muted-foreground">Processed</dt>
+                  <dd className="text-sm">{selectedLog.processedAt ? new Date(selectedLog.processedAt).toLocaleString() : '-'}</dd>
+                </div>
                 {selectedLog.errorMessage && (
-                  <div className="vn-info-item" style={{ gridColumn: '1 / -1' }}><label>Error</label><span style={{ color: 'var(--error)' }}>{selectedLog.errorMessage}</span></div>
+                  <div className="md:col-span-2">
+                    <dt className="text-xs uppercase tracking-wide text-muted-foreground">Error</dt>
+                    <dd className="text-sm text-destructive">{selectedLog.errorMessage}</dd>
+                  </div>
                 )}
-              </div>
+              </dl>
               {selectedLog.rawPayload && (
-                <>
-                  <h3 style={{ marginTop: 16, fontSize: 14, fontWeight: 600, color: 'var(--on-surface)' }}>Raw Payload</h3>
-                  <pre style={{
-                    marginTop: 8, padding: 12, background: 'var(--surface-container)', borderRadius: 'var(--border-radius-sm)',
-                    fontSize: 11, fontFamily: 'monospace', overflow: 'auto', maxHeight: 300, color: 'var(--on-surface)',
-                    border: '1px solid var(--outline-variant)',
-                  }}>{JSON.stringify(selectedLog.rawPayload, null, 2)}</pre>
-                </>
+                <div>
+                  <h3 className="mb-2 text-sm font-semibold">Raw payload</h3>
+                  <pre className="max-h-72 overflow-auto rounded-md border bg-muted p-3 font-mono text-xs">
+                    {JSON.stringify(selectedLog.rawPayload, null, 2)}
+                  </pre>
+                </div>
               )}
             </div>
-            <div className="vn-modal-footer">
-              <button className="vn-btn vn-btn-outline" onClick={() => setSelectedLog(null)}>Close</button>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSelectedLog(null)}>
+              <X className="h-4 w-4" />
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }

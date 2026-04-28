@@ -1,6 +1,35 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { CircleAlert, FileText, Loader2, Plus } from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 interface WaveTemplate {
   id: string;
@@ -33,7 +62,11 @@ export default function VNextWmsWaveTemplates() {
   const [applyResult, setApplyResult] = useState<any>(null);
   const [error, setError] = useState('');
 
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<{
+    name: string; pickStrategy: string; cutoffTime: string;
+    minOrders: string; maxOrders: string; priority: string;
+    releaseSchedule: string; autoRelease: boolean; zonePickMode?: string;
+  }>({
     name: '', pickStrategy: 'discrete', cutoffTime: '',
     minOrders: '', maxOrders: '', priority: '50',
     releaseSchedule: '', autoRelease: false,
@@ -111,146 +144,187 @@ export default function VNextWmsWaveTemplates() {
   };
 
   return (
-    <div>
-      <div className="vn-page-header">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1>Wave Templates</h1>
-          <p className="vn-page-subtitle">Automate wave creation with reusable templates</p>
+          <h1 className="text-3xl font-bold tracking-tight">Wave Templates</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Automate wave creation with reusable templates</p>
         </div>
-        <button className="vn-btn vn-btn-primary" onClick={() => setShowCreate(true)}>
-          <span className="material-icons" style={{ fontSize: '18px', marginRight: '0.5rem' }}>add</span>
+        <Button variant="gradient" onClick={() => setShowCreate(true)}>
+          <Plus className="h-4 w-4" />
           New Template
-        </button>
+        </Button>
       </div>
 
-      {error && <div className="vn-alert vn-alert-error" style={{ marginBottom: '1rem' }}>{error}</div>}
+      {error && (
+        <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+          <CircleAlert className="h-5 w-5" />
+          {error}
+        </div>
+      )}
+
       {applyResult && (
-        <div className={`vn-alert ${applyResult.skipped ? 'vn-alert-warning' : 'vn-alert-success'}`} style={{ marginBottom: '1rem' }}>
-          {applyResult.skipped
-            ? `Skipped: ${applyResult.skipReason}`
-            : `Created wave ${applyResult.waveNumber} with ${applyResult.orderCount} orders`}
+        <div className={`flex items-center gap-3 rounded-md border p-4 text-sm ${applyResult.skipped ? 'border-warning/30 bg-warning/10 text-warning' : 'border-success/30 bg-success/10 text-success'}`}>
+          <CircleAlert className="h-5 w-5" />
+          <span className="flex-1">
+            {applyResult.skipped
+              ? `Skipped: ${applyResult.skipReason}`
+              : `Created wave ${applyResult.waveNumber} with ${applyResult.orderCount} orders`}
+          </span>
           {applyResult.waveId && (
-            <button className="vn-btn vn-btn-outline" style={{ marginLeft: '1rem', fontSize: '0.85rem' }} onClick={() => navigate(`/wms/waves/${applyResult.waveId}`)}>
+            <Button variant="outline" size="sm" onClick={() => navigate(`/wms/waves/${applyResult.waveId}`)}>
               View Wave
-            </button>
+            </Button>
           )}
         </div>
       )}
 
-      {/* Create modal */}
-      {showCreate && (
-        <div className="vn-modal-backdrop" onClick={() => setShowCreate(false)}>
-          <div className="vn-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '550px' }}>
-            <div className="vn-modal-header"><h3>New Wave Template</h3><button onClick={() => setShowCreate(false)}><span className="material-icons">close</span></button></div>
-            <form onSubmit={handleCreate}>
-              <div className="vn-modal-body">
-                <div className="vn-form-grid">
-                  <div className="vn-field" style={{ gridColumn: '1 / -1' }}>
-                    <label className="vn-field-label">Template Name *</label>
-                    <input className="vn-input" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder='e.g. "Daily FedEx 14:00 cutoff"' required />
-                  </div>
-                  <div className="vn-field">
-                    <label className="vn-field-label">Pick Strategy *</label>
-                    <select className="vn-input" value={form.pickStrategy} onChange={e => setForm({ ...form, pickStrategy: e.target.value })}>
-                      <option value="discrete">Discrete</option>
-                      <option value="batch">Batch</option>
-                      <option value="zone">Zone</option>
-                    </select>
-                  </div>
-                  {form.pickStrategy === 'zone' && (
-                    <div className="vn-field">
-                      <label className="vn-field-label">Zone Pick Mode *</label>
-                      <select className="vn-input" value={(form as any).zonePickMode || 'parallel'} onChange={e => setForm({ ...form, zonePickMode: e.target.value } as any)}>
-                        <option value="parallel">Parallel (all zones pick simultaneously, merge at pack)</option>
-                        <option value="sequential">Sequential (pick-and-pass through zones in order)</option>
-                      </select>
-                    </div>
-                  )}
-                  <div className="vn-field">
-                    <label className="vn-field-label">Cutoff Time</label>
-                    <input className="vn-input" type="time" value={form.cutoffTime} onChange={e => setForm({ ...form, cutoffTime: e.target.value })} />
-                  </div>
-                  <div className="vn-field">
-                    <label className="vn-field-label">Min Orders</label>
-                    <input className="vn-input" type="number" min="1" value={form.minOrders} onChange={e => setForm({ ...form, minOrders: e.target.value })} placeholder="Optional" />
-                  </div>
-                  <div className="vn-field">
-                    <label className="vn-field-label">Max Orders</label>
-                    <input className="vn-input" type="number" min="1" value={form.maxOrders} onChange={e => setForm({ ...form, maxOrders: e.target.value })} placeholder="Optional" />
-                  </div>
-                  <div className="vn-field">
-                    <label className="vn-field-label">Priority (1-100)</label>
-                    <input className="vn-input" type="number" min="1" max="100" value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value })} />
-                  </div>
-                  <div className="vn-field">
-                    <label className="vn-field-label">Auto-Release Schedule</label>
-                    <input className="vn-input" value={form.releaseSchedule} onChange={e => setForm({ ...form, releaseSchedule: e.target.value })} placeholder="Cron e.g. 0 14 * * *" />
-                  </div>
-                  <div className="vn-field" style={{ gridColumn: '1 / -1' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
-                      <input type="checkbox" checked={form.autoRelease} onChange={e => setForm({ ...form, autoRelease: e.target.checked })} />
-                      Auto-release waves (allocate inventory + generate picks immediately)
-                    </label>
-                  </div>
+      <Dialog open={showCreate} onOpenChange={setShowCreate}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>New Wave Template</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleCreate} className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2 md:col-span-2">
+                <Label>Template Name *</Label>
+                <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder='e.g. "Daily FedEx 14:00 cutoff"' required />
+              </div>
+              <div className="space-y-2">
+                <Label>Pick Strategy *</Label>
+                <Select value={form.pickStrategy} onValueChange={v => setForm({ ...form, pickStrategy: v })}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="discrete">Discrete</SelectItem>
+                    <SelectItem value="batch">Batch</SelectItem>
+                    <SelectItem value="zone">Zone</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {form.pickStrategy === 'zone' && (
+                <div className="space-y-2">
+                  <Label>Zone Pick Mode *</Label>
+                  <Select value={form.zonePickMode || 'parallel'} onValueChange={v => setForm({ ...form, zonePickMode: v })}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="parallel">Parallel (all zones simultaneously)</SelectItem>
+                      <SelectItem value="sequential">Sequential (pick-and-pass)</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
+              )}
+              <div className="space-y-2">
+                <Label>Cutoff Time</Label>
+                <Input type="time" value={form.cutoffTime} onChange={e => setForm({ ...form, cutoffTime: e.target.value })} />
               </div>
-              <div className="vn-modal-footer">
-                <button type="button" className="vn-btn vn-btn-outline" onClick={() => setShowCreate(false)}>Cancel</button>
-                <button type="submit" className="vn-btn vn-btn-primary" disabled={creating}>{creating ? 'Creating...' : 'Create Template'}</button>
+              <div className="space-y-2">
+                <Label>Min Orders</Label>
+                <Input type="number" min="1" value={form.minOrders} onChange={e => setForm({ ...form, minOrders: e.target.value })} placeholder="Optional" />
               </div>
-            </form>
-          </div>
-        </div>
-      )}
+              <div className="space-y-2">
+                <Label>Max Orders</Label>
+                <Input type="number" min="1" value={form.maxOrders} onChange={e => setForm({ ...form, maxOrders: e.target.value })} placeholder="Optional" />
+              </div>
+              <div className="space-y-2">
+                <Label>Priority (1-100)</Label>
+                <Input type="number" min="1" max="100" value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label>Auto-Release Schedule</Label>
+                <Input value={form.releaseSchedule} onChange={e => setForm({ ...form, releaseSchedule: e.target.value })} placeholder="Cron e.g. 0 14 * * *" />
+              </div>
+              <div className="md:col-span-2">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={form.autoRelease}
+                    onChange={e => setForm({ ...form, autoRelease: e.target.checked })}
+                    className="h-4 w-4 rounded border border-input bg-background accent-primary"
+                  />
+                  Auto-release waves (allocate inventory + generate picks immediately)
+                </label>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" type="button" onClick={() => setShowCreate(false)}>Cancel</Button>
+              <Button variant="gradient" type="submit" disabled={creating}>{creating ? 'Creating...' : 'Create Template'}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
-      {/* Filters */}
-      <div className="vn-filters" style={{ marginBottom: '1rem' }}>
-        <select className="vn-filter-select" value={selectedLocation} onChange={e => setSelectedLocation(e.target.value)}>
-          {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-        </select>
+      <div className="flex flex-wrap items-center gap-2">
+        <Select value={selectedLocation} onValueChange={setSelectedLocation}>
+          <SelectTrigger className="w-[260px]">
+            <SelectValue placeholder="Select location" />
+          </SelectTrigger>
+          <SelectContent>
+            {locations.map(l => (
+              <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {loading ? (
-        <div style={{ padding: '2rem', textAlign: 'center' }}><div className="vn-loading-spinner" /></div>
+        <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+          <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
       ) : templates.length === 0 ? (
-        <div className="vn-card" style={{ textAlign: 'center', padding: '3rem' }}>
-          <span className="material-icons" style={{ fontSize: '48px', color: 'var(--text-secondary)', marginBottom: '1rem', display: 'block' }}>description</span>
-          <h3>No wave templates</h3>
-          <p style={{ color: 'var(--text-secondary)' }}>Templates automate wave creation based on carrier cutoffs, order grouping, and schedules.</p>
-        </div>
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+            <FileText className="h-12 w-12 text-muted-foreground" />
+            <h3 className="text-base font-medium">No wave templates</h3>
+            <p className="text-sm text-muted-foreground">Templates automate wave creation based on carrier cutoffs, order grouping, and schedules.</p>
+          </CardContent>
+        </Card>
       ) : (
-        <div className="vn-table-wrap">
-          <table className="vn-table">
-            <thead>
-              <tr><th>Name</th><th>Strategy</th><th>Cutoff</th><th>Orders</th><th>Schedule</th><th>Waves</th><th>Active</th><th>Actions</th></tr>
-            </thead>
-            <tbody>
+        <Card>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Strategy</TableHead>
+                <TableHead>Cutoff</TableHead>
+                <TableHead>Orders</TableHead>
+                <TableHead>Schedule</TableHead>
+                <TableHead>Waves</TableHead>
+                <TableHead>Active</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {templates.map(t => (
-                <tr key={t.id}>
-                  <td><strong>{t.name}</strong></td>
-                  <td><span className="vn-chip vn-chip-primary">{formatStatus(t.pickStrategy)}</span></td>
-                  <td>{t.cutoffTime || '--'}</td>
-                  <td>{t.minOrders || '--'} - {t.maxOrders || '--'}</td>
-                  <td style={{ fontFamily: t.releaseSchedule ? 'monospace' : undefined, fontSize: '0.85rem' }}>{t.releaseSchedule || 'Manual'}</td>
-                  <td>{t._count.waves}</td>
-                  <td>
-                    <span className={`vn-chip ${t.active ? 'vn-chip-success' : 'vn-chip-secondary'}`} style={{ cursor: 'pointer' }} onClick={() => handleToggle(t.id, t.active)}>
-                      {t.active ? 'Active' : 'Inactive'}
-                    </span>
-                  </td>
-                  <td>
-                    <div style={{ display: 'flex', gap: '0.25rem' }}>
-                      <button className="vn-btn vn-btn-primary" style={{ fontSize: '0.75rem', padding: '0.15rem 0.5rem' }}
-                        disabled={applying === t.id || !t.active} onClick={() => handleApply(t.id)}>
-                        {applying === t.id ? 'Running...' : 'Run Now'}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
+                <TableRow key={t.id}>
+                  <TableCell className="font-semibold">{t.name}</TableCell>
+                  <TableCell>
+                    <Badge variant="default">{formatStatus(t.pickStrategy)}</Badge>
+                  </TableCell>
+                  <TableCell>{t.cutoffTime || '-'}</TableCell>
+                  <TableCell>{t.minOrders || '-'} - {t.maxOrders || '-'}</TableCell>
+                  <TableCell className={t.releaseSchedule ? 'font-mono text-xs' : ''}>{t.releaseSchedule || 'Manual'}</TableCell>
+                  <TableCell>{t._count.waves}</TableCell>
+                  <TableCell>
+                    <button type="button" onClick={() => handleToggle(t.id, t.active)}>
+                      <Badge variant={t.active ? 'success' : 'muted'} className="cursor-pointer">
+                        {t.active ? 'Active' : 'Inactive'}
+                      </Badge>
+                    </button>
+                  </TableCell>
+                  <TableCell>
+                    <Button variant="gradient" size="sm" disabled={applying === t.id || !t.active} onClick={() => handleApply(t.id)}>
+                      {applying === t.id ? 'Running...' : 'Run Now'}
+                    </Button>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </TableBody>
+          </Table>
+        </Card>
       )}
     </div>
   );

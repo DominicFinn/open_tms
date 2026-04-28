@@ -1,12 +1,51 @@
 /**
- * VNextSlaPolicies — Admin page for managing SLA policies and rules.
- *
- * Two-tab layout: "Organization Default" and "Customer Overrides".
- * Each policy contains typed rules that are managed as a unit.
+ * VNextSlaPolicies - Admin page for managing SLA policies and rules.
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
+import {
+  Clock,
+  Reply,
+  CheckCircle2,
+  Hourglass,
+  ArrowLeftRight,
+  Sparkles,
+  Building2,
+  Sun,
+  Lock,
+  Thermometer,
+  Activity,
+  Plus,
+  Trash2,
+  Copy,
+  Users,
+  Loader2,
+  AlertCircle,
+  type LucideIcon,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { cn } from '@/lib/utils';
 
 interface SlaRule {
   ruleType: string;
@@ -46,18 +85,18 @@ interface Customer {
   name: string;
 }
 
-const RULE_TYPES = [
-  { value: 'eta_delivery', label: 'ETA Delivery', icon: 'schedule', description: 'Shipment must arrive within X minutes of pickup' },
-  { value: 'issue_response', label: 'Issue Response', icon: 'reply', description: 'Issue must be acknowledged within X minutes' },
-  { value: 'issue_resolution', label: 'Issue Resolution', icon: 'check_circle', description: 'Issue must be resolved within X minutes' },
-  { value: 'dwell_time', label: 'Dwell Time', icon: 'hourglass_top', description: 'Max time a shipment can be stationary at a location' },
-  { value: 'dock_turnaround', label: 'Dock Turnaround', icon: 'swap_horiz', description: 'Max time from arrival to departure at a dock (location-type specific)' },
-  { value: 'sort_to_dispatch', label: 'Sort to Dispatch', icon: 'sort', description: 'Max time from inbound arrival to outbound dispatch at cross-docks' },
-  { value: 'facility_dwell', label: 'Facility Dwell', icon: 'domain', description: 'Max time at a specific facility type (DC, warehouse, terminal, port)' },
-  { value: 'light_event', label: 'Light Sensor Event', icon: 'light_mode', description: 'Light detection outside known locations (tampering)' },
-  { value: 'seal_event', label: 'Security Seal Event', icon: 'lock_open', description: 'Seal break detected outside known locations' },
-  { value: 'temperature_excursion', label: 'Temperature Excursion', icon: 'thermostat', description: 'Single excursion duration limit' },
-  { value: 'temperature_out_of_range', label: 'Cumulative Out-of-Range', icon: 'device_thermostat', description: 'Total time out of acceptable temperature range' },
+const RULE_TYPES: { value: string; label: string; Icon: LucideIcon; description: string }[] = [
+  { value: 'eta_delivery', label: 'ETA Delivery', Icon: Clock, description: 'Shipment must arrive within X minutes of pickup' },
+  { value: 'issue_response', label: 'Issue Response', Icon: Reply, description: 'Issue must be acknowledged within X minutes' },
+  { value: 'issue_resolution', label: 'Issue Resolution', Icon: CheckCircle2, description: 'Issue must be resolved within X minutes' },
+  { value: 'dwell_time', label: 'Dwell Time', Icon: Hourglass, description: 'Max time a shipment can be stationary at a location' },
+  { value: 'dock_turnaround', label: 'Dock Turnaround', Icon: ArrowLeftRight, description: 'Max time from arrival to departure at a dock' },
+  { value: 'sort_to_dispatch', label: 'Sort to Dispatch', Icon: Sparkles, description: 'Max time from inbound arrival to outbound dispatch at cross-docks' },
+  { value: 'facility_dwell', label: 'Facility Dwell', Icon: Building2, description: 'Max time at a specific facility type' },
+  { value: 'light_event', label: 'Light Sensor Event', Icon: Sun, description: 'Light detection outside known locations (tampering)' },
+  { value: 'seal_event', label: 'Security Seal Event', Icon: Lock, description: 'Seal break detected outside known locations' },
+  { value: 'temperature_excursion', label: 'Temperature Excursion', Icon: Thermometer, description: 'Single excursion duration limit' },
+  { value: 'temperature_out_of_range', label: 'Cumulative Out-of-Range', Icon: Activity, description: 'Total time out of acceptable temperature range' },
 ];
 
 const LOCATION_TYPES = [
@@ -77,7 +116,7 @@ const CATEGORIES = ['exception', 'delay', 'damage', 'compliance', 'other'];
 const DWELL_LOCATION_TYPES = ['any', 'origin', 'intermediate', 'destination'];
 
 function emptyRule(ruleType: string): SlaRule {
-  const meta = RULE_TYPES.find((r) => r.value === ruleType);
+  const meta = RULE_TYPES.find(r => r.value === ruleType);
   return {
     ruleType,
     name: meta?.label || ruleType,
@@ -88,7 +127,8 @@ function emptyRule(ruleType: string): SlaRule {
 }
 
 function RuleEditor({ rule, onChange, onRemove }: { rule: SlaRule; onChange: (r: SlaRule) => void; onRemove: () => void }) {
-  const meta = RULE_TYPES.find((r) => r.value === rule.ruleType);
+  const meta = RULE_TYPES.find(r => r.value === rule.ruleType);
+  const Icon = meta?.Icon;
   const isTimeThreshold = ['issue_response', 'issue_resolution', 'dwell_time', 'temperature_excursion', 'temperature_out_of_range', 'dock_turnaround', 'sort_to_dispatch', 'facility_dwell'].includes(rule.ruleType);
   const isEta = rule.ruleType === 'eta_delivery';
   const isOccurrence = ['light_event', 'seal_event'].includes(rule.ruleType);
@@ -100,143 +140,180 @@ function RuleEditor({ rule, onChange, onRemove }: { rule: SlaRule; onChange: (r:
   const setNum = (field: string, v: string) => set(field, v === '' ? null : parseInt(v, 10));
 
   return (
-    <div className="vn-card" style={{ padding: '16px', marginBottom: '12px', borderLeft: `4px solid ${rule.active !== false ? 'var(--primary)' : 'var(--outline-variant)'}` }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span className="material-icons" style={{ fontSize: '20px', color: 'var(--primary)' }}>{meta?.icon || 'rule'}</span>
-          <div>
-            <div style={{ fontWeight: 600, fontSize: '14px' }}>{meta?.label || rule.ruleType}</div>
-            <div style={{ fontSize: '12px', color: 'var(--on-surface-variant)' }}>{meta?.description}</div>
+    <Card className={cn('mb-3 border-l-4', rule.active !== false ? 'border-l-primary' : 'border-l-border')}>
+      <CardContent className="pt-4">
+        <div className="mb-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            {Icon && <Icon className="h-5 w-5 text-primary" />}
+            <div>
+              <div className="text-sm font-semibold">{meta?.label || rule.ruleType}</div>
+              <div className="text-xs text-muted-foreground">{meta?.description}</div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="flex cursor-pointer items-center gap-1 text-xs text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={rule.active !== false}
+                onChange={e => set('active', e.target.checked)}
+                className="h-4 w-4 rounded border border-input bg-background accent-primary"
+              />
+              Active
+            </label>
+            <Button variant="ghost" size="icon" onClick={onRemove}>
+              <Trash2 className="h-4 w-4 text-destructive" />
+            </Button>
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: 'var(--on-surface-variant)', cursor: 'pointer' }}>
-            <input type="checkbox" checked={rule.active !== false} onChange={(e) => set('active', e.target.checked)} />
-            Active
-          </label>
-          <button onClick={onRemove} className="icon-btn" title="Remove rule" style={{ color: 'var(--color-error)' }}>
-            <span className="material-icons" style={{ fontSize: '18px' }}>delete</span>
-          </button>
+
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="space-y-1">
+            <Label>Rule name</Label>
+            <Input value={rule.name} onChange={e => set('name', e.target.value)} />
+          </div>
+
+          {isEta && (
+            <div className="space-y-1">
+              <Label>Max delivery time (minutes)</Label>
+              <Input type="number" value={rule.maxDeliveryMinutes ?? ''} onChange={e => setNum('maxDeliveryMinutes', e.target.value)} placeholder="e.g. 1440 (24 hours)" />
+            </div>
+          )}
+
+          {(isTimeThreshold || isEta) && (
+            <>
+              <div className="space-y-1">
+                <Label>Warning threshold (min)</Label>
+                <Input type="number" value={rule.warningThresholdMinutes ?? ''} onChange={e => setNum('warningThresholdMinutes', e.target.value)} placeholder="e.g. 60" />
+              </div>
+              <div className="space-y-1">
+                <Label>Breach threshold (min)</Label>
+                <Input type="number" value={rule.breachThresholdMinutes ?? ''} onChange={e => setNum('breachThresholdMinutes', e.target.value)} placeholder="e.g. 120" />
+              </div>
+            </>
+          )}
+
+          {isDwell && (
+            <>
+              <div className="space-y-1">
+                <Label>Max dwell time (min)</Label>
+                <Input type="number" value={rule.maxDwellMinutes ?? ''} onChange={e => setNum('maxDwellMinutes', e.target.value)} placeholder="e.g. 240" />
+              </div>
+              <div className="space-y-1">
+                <Label>Location type</Label>
+                <Select value={rule.dwellLocationType ?? 'any'} onValueChange={v => set('dwellLocationType', v)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DWELL_LOCATION_TYPES.map(t => (
+                      <SelectItem key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </>
+          )}
+
+          {isLocationSpecific && (
+            <div className="space-y-1">
+              <Label>Facility type filter</Label>
+              <Select value={rule.locationType ?? 'all'} onValueChange={v => set('locationType', v === 'all' ? null : v)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All location types</SelectItem>
+                  {LOCATION_TYPES.map(lt => (
+                    <SelectItem key={lt.value} value={lt.value}>{lt.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {['dock_turnaround', 'sort_to_dispatch', 'facility_dwell'].includes(rule.ruleType) && (
+            <div className="space-y-1">
+              <Label>Max time (minutes)</Label>
+              <Input type="number" value={rule.maxDwellMinutes ?? ''} onChange={e => setNum('maxDwellMinutes', e.target.value)} placeholder="e.g. 120" />
+            </div>
+          )}
+
+          {isIssue && (
+            <>
+              <div className="space-y-1">
+                <Label>Issue priority filter</Label>
+                <Select value={rule.issuePriority ?? 'all'} onValueChange={v => set('issuePriority', v === 'all' ? null : v)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All priorities</SelectItem>
+                    {PRIORITIES.map(p => (
+                      <SelectItem key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>Issue category filter</Label>
+                <Select value={rule.issueCategory ?? 'all'} onValueChange={v => set('issueCategory', v === 'all' ? null : v)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All categories</SelectItem>
+                    {CATEGORIES.map(c => (
+                      <SelectItem key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </>
+          )}
+
+          {isOccurrence && (
+            <div className="space-y-1">
+              <Label>Max occurrences before breach</Label>
+              <Input type="number" value={rule.maxOccurrences ?? ''} onChange={e => setNum('maxOccurrences', e.target.value)} placeholder="0 = any occurrence" />
+            </div>
+          )}
+
+          {(rule.ruleType === 'temperature_excursion' || rule.ruleType === 'temperature_out_of_range') && (
+            <div className="space-y-1">
+              <Label>Max excursion duration (min)</Label>
+              <Input type="number" value={rule.maxExcursionMinutes ?? ''} onChange={e => setNum('maxExcursionMinutes', e.target.value)} placeholder="e.g. 30" />
+            </div>
+          )}
+
+          <div className="space-y-1">
+            <label className="flex cursor-pointer items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={rule.autoCreateIssue !== false}
+                onChange={e => set('autoCreateIssue', e.target.checked)}
+                className="h-4 w-4 rounded border border-input bg-background accent-primary"
+              />
+              Auto-create issue on breach
+            </label>
+          </div>
+          {rule.autoCreateIssue !== false && (
+            <div className="space-y-1">
+              <Label>Issue priority on breach</Label>
+              <Select value={rule.issuePriorityOnBreach ?? 'high'} onValueChange={v => set('issuePriorityOnBreach', v)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PRIORITIES.map(p => (
+                    <SelectItem key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </div>
-      </div>
-
-      <div className="vn-form-grid" style={{ gap: '12px' }}>
-        {/* Name */}
-        <div className="vn-field">
-          <label className="vn-field-label">Rule Name</label>
-          <input className="vn-input" value={rule.name} onChange={(e) => set('name', e.target.value)} />
-        </div>
-
-        {/* ETA: max delivery minutes */}
-        {isEta && (
-          <div className="vn-field">
-            <label className="vn-field-label">Max Delivery Time (minutes)</label>
-            <input className="vn-input" type="number" value={rule.maxDeliveryMinutes ?? ''} onChange={(e) => setNum('maxDeliveryMinutes', e.target.value)} placeholder="e.g. 1440 (24 hours)" />
-          </div>
-        )}
-
-        {/* Time thresholds */}
-        {(isTimeThreshold || isEta) && (
-          <>
-            <div className="vn-field">
-              <label className="vn-field-label">Warning Threshold (min)</label>
-              <input className="vn-input" type="number" value={rule.warningThresholdMinutes ?? ''} onChange={(e) => setNum('warningThresholdMinutes', e.target.value)} placeholder="e.g. 60" />
-            </div>
-            <div className="vn-field">
-              <label className="vn-field-label">Breach Threshold (min)</label>
-              <input className="vn-input" type="number" value={rule.breachThresholdMinutes ?? ''} onChange={(e) => setNum('breachThresholdMinutes', e.target.value)} placeholder="e.g. 120" />
-            </div>
-          </>
-        )}
-
-        {/* Dwell: max dwell + location type */}
-        {isDwell && (
-          <>
-            <div className="vn-field">
-              <label className="vn-field-label">Max Dwell Time (min)</label>
-              <input className="vn-input" type="number" value={rule.maxDwellMinutes ?? ''} onChange={(e) => setNum('maxDwellMinutes', e.target.value)} placeholder="e.g. 240" />
-            </div>
-            <div className="vn-field">
-              <label className="vn-field-label">Location Type</label>
-              <select className="vn-input" value={rule.dwellLocationType ?? 'any'} onChange={(e) => set('dwellLocationType', e.target.value)}>
-                {DWELL_LOCATION_TYPES.map((t) => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
-              </select>
-            </div>
-          </>
-        )}
-
-        {/* Location type filter (for location-specific rules) */}
-        {isLocationSpecific && (
-          <div className="vn-field">
-            <label className="vn-field-label">Facility Type Filter</label>
-            <select className="vn-input" value={rule.locationType ?? ''} onChange={(e) => set('locationType', e.target.value || null)}>
-              <option value="">All location types</option>
-              {LOCATION_TYPES.map((lt) => <option key={lt.value} value={lt.value}>{lt.label}</option>)}
-            </select>
-          </div>
-        )}
-
-        {/* Dwell / facility-specific max time */}
-        {['dock_turnaround', 'sort_to_dispatch', 'facility_dwell'].includes(rule.ruleType) && (
-          <div className="vn-field">
-            <label className="vn-field-label">Max Time (minutes)</label>
-            <input className="vn-input" type="number" value={rule.maxDwellMinutes ?? ''} onChange={(e) => setNum('maxDwellMinutes', e.target.value)} placeholder="e.g. 120" />
-          </div>
-        )}
-
-        {/* Issue filters */}
-        {isIssue && (
-          <>
-            <div className="vn-field">
-              <label className="vn-field-label">Issue Priority Filter</label>
-              <select className="vn-input" value={rule.issuePriority ?? ''} onChange={(e) => set('issuePriority', e.target.value || null)}>
-                <option value="">All priorities</option>
-                {PRIORITIES.map((p) => <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>)}
-              </select>
-            </div>
-            <div className="vn-field">
-              <label className="vn-field-label">Issue Category Filter</label>
-              <select className="vn-input" value={rule.issueCategory ?? ''} onChange={(e) => set('issueCategory', e.target.value || null)}>
-                <option value="">All categories</option>
-                {CATEGORIES.map((c) => <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>)}
-              </select>
-            </div>
-          </>
-        )}
-
-        {/* Occurrence-based */}
-        {isOccurrence && (
-          <div className="vn-field">
-            <label className="vn-field-label">Max Occurrences Before Breach</label>
-            <input className="vn-input" type="number" value={rule.maxOccurrences ?? ''} onChange={(e) => setNum('maxOccurrences', e.target.value)} placeholder="0 = any occurrence" />
-          </div>
-        )}
-
-        {/* Temperature */}
-        {(rule.ruleType === 'temperature_excursion' || rule.ruleType === 'temperature_out_of_range') && (
-          <div className="vn-field">
-            <label className="vn-field-label">Max Excursion Duration (min)</label>
-            <input className="vn-input" type="number" value={rule.maxExcursionMinutes ?? ''} onChange={(e) => setNum('maxExcursionMinutes', e.target.value)} placeholder="e.g. 30" />
-          </div>
-        )}
-
-        {/* Breach action */}
-        <div className="vn-field">
-          <label className="vn-field-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <input type="checkbox" checked={rule.autoCreateIssue !== false} onChange={(e) => set('autoCreateIssue', e.target.checked)} />
-            Auto-create issue on breach
-          </label>
-        </div>
-        {rule.autoCreateIssue !== false && (
-          <div className="vn-field">
-            <label className="vn-field-label">Issue Priority on Breach</label>
-            <select className="vn-input" value={rule.issuePriorityOnBreach ?? 'high'} onChange={(e) => set('issuePriorityOnBreach', e.target.value)}>
-              {PRIORITIES.map((p) => <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>)}
-            </select>
-          </div>
-        )}
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -253,103 +330,99 @@ function PolicyEditor({ policy, onSave, saving }: { policy: SlaPolicy | null; on
   }, [policy]);
 
   const addRule = (ruleType: string) => {
-    setRules((prev) => [...prev, emptyRule(ruleType)]);
+    setRules(prev => [...prev, emptyRule(ruleType)]);
     setShowAddMenu(false);
   };
 
   const updateRule = (idx: number, updated: SlaRule) => {
-    setRules((prev) => prev.map((r, i) => (i === idx ? updated : r)));
+    setRules(prev => prev.map((r, i) => (i === idx ? updated : r)));
   };
 
   const removeRule = (idx: number) => {
-    setRules((prev) => prev.filter((_, i) => i !== idx));
+    setRules(prev => prev.filter((_, i) => i !== idx));
   };
 
   const handleSave = () => {
     onSave({ name, description, rules });
   };
 
-  // Which rule types are already added?
-  const usedTypes = new Set(rules.map((r) => r.ruleType));
-  const availableTypes = RULE_TYPES.filter((rt) => !usedTypes.has(rt.value));
+  const usedTypes = new Set(rules.map(r => r.ruleType));
+  const availableTypes = RULE_TYPES.filter(rt => !usedTypes.has(rt.value));
 
   return (
-    <div>
-      {/* Policy header fields */}
-      <div className="vn-form-grid" style={{ marginBottom: '20px' }}>
-        <div className="vn-field">
-          <label className="vn-field-label">Policy Name</label>
-          <input className="vn-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Standard SLA" />
+    <div className="space-y-4">
+      <div className="grid gap-3 md:grid-cols-2">
+        <div className="space-y-1">
+          <Label>Policy name</Label>
+          <Input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Standard SLA" />
         </div>
-        <div className="vn-field">
-          <label className="vn-field-label">Description</label>
-          <input className="vn-input" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Optional description" />
+        <div className="space-y-1">
+          <Label>Description</Label>
+          <Input value={description} onChange={e => setDescription(e.target.value)} placeholder="Optional description" />
         </div>
       </div>
 
-      {/* Rules */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-        <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>Rules ({rules.length})</h3>
-        <div style={{ position: 'relative' }}>
-          <button
-            className="vn-btn"
-            onClick={() => setShowAddMenu(!showAddMenu)}
-            disabled={availableTypes.length === 0}
-            style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
-          >
-            <span className="material-icons" style={{ fontSize: '18px' }}>add</span>
-            Add Rule
-          </button>
+      <div className="flex items-center justify-between">
+        <h3 className="text-base font-semibold">Rules ({rules.length})</h3>
+        <div className="relative">
+          <Button variant="outline" onClick={() => setShowAddMenu(!showAddMenu)} disabled={availableTypes.length === 0}>
+            <Plus className="h-4 w-4" />
+            Add rule
+          </Button>
           {showAddMenu && availableTypes.length > 0 && (
-            <div style={{
-              position: 'absolute', right: 0, top: '100%', marginTop: '4px',
-              background: 'var(--surface)', border: '1px solid var(--outline-variant)',
-              borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-              zIndex: 100, minWidth: '280px', overflow: 'hidden',
-            }}>
-              {availableTypes.map((rt) => (
-                <button
-                  key={rt.value}
-                  onClick={() => addRule(rt.value)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: '10px',
-                    width: '100%', padding: '10px 14px', border: 'none',
-                    background: 'transparent', cursor: 'pointer', textAlign: 'left',
-                    color: 'var(--on-surface)', fontSize: '13px',
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--surface-container)')}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                >
-                  <span className="material-icons" style={{ fontSize: '18px', color: 'var(--primary)' }}>{rt.icon}</span>
-                  <div>
-                    <div style={{ fontWeight: 500 }}>{rt.label}</div>
-                    <div style={{ fontSize: '11px', color: 'var(--on-surface-variant)' }}>{rt.description}</div>
-                  </div>
-                </button>
-              ))}
+            <div className="absolute right-0 top-full z-50 mt-1 w-72 overflow-hidden rounded-md border bg-popover shadow-lg">
+              {availableTypes.map(rt => {
+                const Icon = rt.Icon;
+                return (
+                  <button
+                    key={rt.value}
+                    onClick={() => addRule(rt.value)}
+                    className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm hover:bg-accent"
+                  >
+                    <Icon className="h-4 w-4 text-primary" />
+                    <div>
+                      <div className="font-medium">{rt.label}</div>
+                      <div className="text-xs text-muted-foreground">{rt.description}</div>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
       </div>
 
       {rules.length === 0 && (
-        <div style={{ padding: '32px', textAlign: 'center', color: 'var(--on-surface-variant)', border: '2px dashed var(--outline-variant)', borderRadius: '8px', marginBottom: '16px' }}>
-          <span className="material-icons" style={{ fontSize: '40px', display: 'block', marginBottom: '8px', opacity: 0.4 }}>rule</span>
-          No rules configured. Click "Add Rule" to define SLA thresholds.
+        <div className="rounded-md border-2 border-dashed border-input bg-background p-8 text-center text-sm text-muted-foreground">
+          No rules configured. Click "Add rule" to define SLA thresholds.
         </div>
       )}
 
       {rules.map((rule, idx) => (
-        <RuleEditor key={`${rule.ruleType}-${idx}`} rule={rule} onChange={(r) => updateRule(idx, r)} onRemove={() => removeRule(idx)} />
+        <RuleEditor key={`${rule.ruleType}-${idx}`} rule={rule} onChange={r => updateRule(idx, r)} onRemove={() => removeRule(idx)} />
       ))}
 
-      {/* Save */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '16px' }}>
-        <button className="vn-btn" onClick={handleSave} disabled={saving || !name.trim()} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-          {saving && <span className="material-icons" style={{ fontSize: '16px', animation: 'spin 1s linear infinite' }}>sync</span>}
-          {policy?.id ? 'Save Changes' : 'Create Policy'}
-        </button>
+      <div className="flex justify-end">
+        <Button variant="gradient" onClick={handleSave} disabled={saving || !name.trim()}>
+          {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+          {policy?.id ? 'Save changes' : 'Create policy'}
+        </Button>
       </div>
+    </div>
+  );
+}
+
+function Banner({ variant, message, onClose }: { variant: 'success' | 'error'; message: string; onClose?: () => void }) {
+  const tone =
+    variant === 'success'
+      ? 'border-success/30 bg-success/10 text-success'
+      : 'border-destructive/30 bg-destructive/10 text-destructive';
+  return (
+    <div className={`flex items-start justify-between gap-3 rounded-md border p-3 text-sm ${tone}`}>
+      <span>{message}</span>
+      {onClose && (
+        <button onClick={onClose} className="text-xs underline opacity-70 hover:opacity-100">Dismiss</button>
+      )}
     </div>
   );
 }
@@ -394,11 +467,8 @@ export default function VNextSlaPolicies() {
     setSaving(true);
     setMessage(null);
     try {
-      const url = orgPolicy?.id
-        ? `${API_URL}/api/v1/sla/policies/${orgPolicy.id}`
-        : `${API_URL}/api/v1/sla/policies`;
+      const url = orgPolicy?.id ? `${API_URL}/api/v1/sla/policies/${orgPolicy.id}` : `${API_URL}/api/v1/sla/policies`;
       const method = orgPolicy?.id ? 'PUT' : 'POST';
-
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
@@ -406,7 +476,6 @@ export default function VNextSlaPolicies() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed to save');
-
       setMessage({ type: 'success', text: orgPolicy?.id ? 'Policy updated' : 'Policy created' });
       await fetchPolicies();
     } catch (err) {
@@ -420,12 +489,9 @@ export default function VNextSlaPolicies() {
     setSaving(true);
     setMessage(null);
     try {
-      const existing = customerPolicies.find((p) => p.customerId === customerId);
-      const url = existing?.id
-        ? `${API_URL}/api/v1/sla/policies/${existing.id}`
-        : `${API_URL}/api/v1/sla/policies`;
+      const existing = customerPolicies.find(p => p.customerId === customerId);
+      const url = existing?.id ? `${API_URL}/api/v1/sla/policies/${existing.id}` : `${API_URL}/api/v1/sla/policies`;
       const method = existing?.id ? 'PUT' : 'POST';
-
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
@@ -433,7 +499,6 @@ export default function VNextSlaPolicies() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed to save');
-
       setMessage({ type: 'success', text: 'Customer SLA policy saved' });
       await fetchPolicies();
     } catch (err) {
@@ -448,15 +513,14 @@ export default function VNextSlaPolicies() {
     setSaving(true);
     setMessage(null);
     try {
-      const customer = customers.find((c) => c.id === cloneCustomerId);
+      const customer = customers.find(c => c.id === cloneCustomerId);
       const res = await fetch(`${API_URL}/api/v1/sla/policies/${orgPolicy.id}/clone`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customerId: cloneCustomerId, name: `${orgPolicy.name} — ${customer?.name || cloneCustomerId}` }),
+        body: JSON.stringify({ customerId: cloneCustomerId, name: `${orgPolicy.name} - ${customer?.name || cloneCustomerId}` }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed to clone');
-
       setMessage({ type: 'success', text: `Policy cloned for ${customer?.name}` });
       setShowCloneModal(false);
       setCloneCustomerId('');
@@ -480,168 +544,140 @@ export default function VNextSlaPolicies() {
     }
   };
 
-  // Customers that don't yet have a customer-specific override
-  const customersWithoutPolicy = customers.filter(
-    (c) => !customerPolicies.some((p) => p.customerId === c.id)
-  );
-
+  const customersWithoutPolicy = customers.filter(c => !customerPolicies.some(p => p.customerId === c.id));
   const selectedCustomerPolicy = selectedCustomerId
-    ? customerPolicies.find((p) => p.customerId === selectedCustomerId) || null
+    ? customerPolicies.find(p => p.customerId === selectedCustomerId) || null
     : null;
 
   if (loading) {
     return (
-      <div style={{ padding: '24px', textAlign: 'center' }}>
-        <div className="loading-spinner" />
+      <div className="flex justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
   return (
-    <div style={{ padding: '24px', maxWidth: '1000px', margin: '0 auto' }}>
-      <div style={{ marginBottom: '24px' }}>
-        <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 700, color: 'var(--on-surface)' }}>SLA Policies</h1>
-        <p style={{ margin: '4px 0 0', fontSize: '14px', color: 'var(--on-surface-variant)' }}>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">SLA policies</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
           Configure service level agreements. The organization default applies to all entities unless a customer-specific override exists.
         </p>
       </div>
 
-      {/* Feedback */}
       {message && (
-        <div className={`vn-alert vn-alert-${message.type}`} style={{ marginBottom: '16px' }}>
-          {message.text}
-          <button onClick={() => setMessage(null)} style={{ float: 'right', background: 'none', border: 'none', cursor: 'pointer', color: 'inherit' }}>
-            <span className="material-icons" style={{ fontSize: '16px' }}>close</span>
-          </button>
-        </div>
+        <Banner variant={message.type} message={message.text} onClose={() => setMessage(null)} />
       )}
 
-      {/* Tabs */}
-      <div className="vn-tabs" style={{ marginBottom: '20px' }}>
-        <button className={`vn-tab${tab === 'org' ? ' active' : ''}`} onClick={() => setTab('org')}>
-          <span className="material-icons" style={{ fontSize: '18px' }}>business</span>
-          Organization Default
-        </button>
-        <button className={`vn-tab${tab === 'customer' ? ' active' : ''}`} onClick={() => setTab('customer')}>
-          <span className="material-icons" style={{ fontSize: '18px' }}>people</span>
-          Customer Overrides ({customerPolicies.length})
-        </button>
-      </div>
+      <Tabs value={tab} onValueChange={v => setTab(v as 'org' | 'customer')}>
+        <TabsList>
+          <TabsTrigger value="org">
+            <Building2 className="mr-1 h-4 w-4" />
+            Organization default
+          </TabsTrigger>
+          <TabsTrigger value="customer">
+            <Users className="mr-1 h-4 w-4" />
+            Customer overrides ({customerPolicies.length})
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Org default tab */}
-      {tab === 'org' && (
-        <div>
-          <PolicyEditor
-            policy={orgPolicy}
-            onSave={saveOrgPolicy}
-            saving={saving}
-          />
+        <TabsContent value="org" className="mt-4 space-y-4">
+          <PolicyEditor policy={orgPolicy} onSave={saveOrgPolicy} saving={saving} />
           {orgPolicy?.id && (
-            <div style={{ marginTop: '16px', display: 'flex', gap: '8px' }}>
-              <button
-                className="vn-btn"
-                onClick={() => setShowCloneModal(true)}
-                style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'transparent', border: '1px solid var(--outline-variant)', color: 'var(--on-surface-variant)' }}
-              >
-                <span className="material-icons" style={{ fontSize: '16px' }}>content_copy</span>
-                Clone for Customer
-              </button>
-            </div>
+            <Button variant="outline" onClick={() => setShowCloneModal(true)}>
+              <Copy className="h-4 w-4" />
+              Clone for customer
+            </Button>
           )}
-        </div>
-      )}
+        </TabsContent>
 
-      {/* Customer overrides tab */}
-      {tab === 'customer' && (
-        <div>
-          {/* Customer selector */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
-            <div className="vn-field" style={{ flex: 1, marginBottom: 0 }}>
-              <select
-                className="vn-input"
-                value={selectedCustomerId || ''}
-                onChange={(e) => setSelectedCustomerId(e.target.value || null)}
-              >
-                <option value="">Select a customer...</option>
-                <optgroup label="Customers with overrides">
-                  {customerPolicies.map((p) => (
-                    <option key={p.customerId} value={p.customerId!}>
-                      {p.customer?.name || p.customerId} — {p.name}
-                    </option>
+        <TabsContent value="customer" className="mt-4 space-y-4">
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="flex-1 space-y-1 md:max-w-md">
+              <Label>Customer</Label>
+              <Select value={selectedCustomerId || ''} onValueChange={v => setSelectedCustomerId(v || null)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a customer..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {customerPolicies.map(p => (
+                    <SelectItem key={p.customerId} value={p.customerId!}>
+                      {p.customer?.name || p.customerId} - {p.name}
+                    </SelectItem>
                   ))}
-                </optgroup>
-                {customersWithoutPolicy.length > 0 && (
-                  <optgroup label="Create new override">
-                    {customersWithoutPolicy.map((c) => (
-                      <option key={c.id} value={c.id}>{c.name} (no override)</option>
-                    ))}
-                  </optgroup>
-                )}
-              </select>
+                  {customersWithoutPolicy.map(c => (
+                    <SelectItem key={c.id} value={c.id}>{c.name} (no override)</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             {selectedCustomerPolicy && (
-              <button
-                onClick={() => { if (selectedCustomerPolicy?.id && confirm('Deactivate this customer SLA policy?')) deactivatePolicy(selectedCustomerPolicy.id); }}
-                style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 12px', fontSize: '13px', borderRadius: '6px', border: '1px solid var(--color-error)', background: 'transparent', color: 'var(--color-error)', cursor: 'pointer' }}
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  if (selectedCustomerPolicy?.id && confirm('Deactivate this customer SLA policy?')) {
+                    deactivatePolicy(selectedCustomerPolicy.id);
+                  }
+                }}
               >
-                <span className="material-icons" style={{ fontSize: '16px' }}>delete</span>
+                <Trash2 className="h-4 w-4" />
                 Deactivate
-              </button>
+              </Button>
             )}
           </div>
 
           {!selectedCustomerId && (
-            <div style={{ padding: '40px', textAlign: 'center', color: 'var(--on-surface-variant)' }}>
-              <span className="material-icons" style={{ fontSize: '48px', display: 'block', marginBottom: '8px', opacity: 0.4 }}>people</span>
+            <div className="rounded-md border-2 border-dashed border-input bg-background p-10 text-center text-sm text-muted-foreground">
+              <Users className="mx-auto mb-2 h-10 w-10 opacity-40" />
               <p>Select a customer above to edit their SLA override, or choose a customer without an override to create one.</p>
-              {orgPolicy?.id && <p style={{ fontSize: '13px' }}>Tip: Use "Clone for Customer" on the Organization tab to copy the default policy as a starting point.</p>}
+              {orgPolicy?.id && (
+                <p className="mt-1 text-xs">
+                  Tip: Use "Clone for customer" on the Organization tab to copy the default policy as a starting point.
+                </p>
+              )}
             </div>
           )}
 
           {selectedCustomerId && (
             <PolicyEditor
               policy={selectedCustomerPolicy}
-              onSave={(data) => saveCustomerPolicy(selectedCustomerId, data)}
+              onSave={data => saveCustomerPolicy(selectedCustomerId, data)}
               saving={saving}
             />
           )}
-        </div>
-      )}
+        </TabsContent>
+      </Tabs>
 
-      {/* Clone modal */}
-      {showCloneModal && (
-        <div className="vn-modal-backdrop" onClick={() => setShowCloneModal(false)}>
-          <div className="vn-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '440px' }}>
-            <div className="vn-modal-header">
-              <h2 style={{ margin: 0, fontSize: '18px' }}>Clone Policy for Customer</h2>
-            </div>
-            <div className="vn-modal-body">
-              <p style={{ margin: '0 0 12px', fontSize: '14px', color: 'var(--on-surface-variant)' }}>
-                This will create a customer-specific SLA policy based on the organization default. You can then customise the thresholds for this customer.
-              </p>
-              <div className="vn-field">
-                <label className="vn-field-label">Customer</label>
-                <select className="vn-input" value={cloneCustomerId} onChange={(e) => setCloneCustomerId(e.target.value)}>
-                  <option value="">Select customer...</option>
-                  {customersWithoutPolicy.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            <div className="vn-modal-footer">
-              <button className="vn-btn" style={{ background: 'transparent', border: '1px solid var(--outline-variant)', color: 'var(--on-surface-variant)' }} onClick={() => setShowCloneModal(false)}>
-                Cancel
-              </button>
-              <button className="vn-btn" onClick={cloneOrgPolicy} disabled={!cloneCustomerId || saving}>
-                {saving ? 'Cloning...' : 'Clone Policy'}
-              </button>
-            </div>
+      <Dialog open={showCloneModal} onOpenChange={setShowCloneModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Clone policy for customer</DialogTitle>
+            <DialogDescription>
+              This will create a customer-specific SLA policy based on the organization default.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label>Customer</Label>
+            <Select value={cloneCustomerId} onValueChange={setCloneCustomerId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select customer..." />
+              </SelectTrigger>
+              <SelectContent>
+                {customersWithoutPolicy.map(c => (
+                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-        </div>
-      )}
-
-      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCloneModal(false)}>Cancel</Button>
+            <Button variant="gradient" onClick={cloneOrgPolicy} disabled={!cloneCustomerId || saving}>
+              {saving ? 'Cloning...' : 'Clone policy'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

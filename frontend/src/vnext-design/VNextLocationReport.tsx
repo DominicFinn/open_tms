@@ -1,5 +1,34 @@
 import React, { useState, useEffect } from 'react';
+import {
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  BarChart3,
+  ChevronDown,
+  ChevronsUpDown,
+  ChevronUp,
+  Loader2,
+  MapPin,
+  PieChart,
+  Search,
+  SearchX,
+  Truck,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 import { LOCATION_TYPE_META, getLocationTypeMeta } from './locationTypesMeta';
 
 interface LocationRow {
@@ -40,26 +69,31 @@ interface ReportData {
 
 type SortField = 'name' | 'locationType' | 'shipmentsInbound' | 'shipmentsOutbound' | 'ordersInbound' | 'ordersOutbound' | 'shipmentsInTransitTo';
 
+const STAT_TONES = {
+  primary: 'bg-primary/10 text-primary',
+  success: 'bg-success/15 text-success',
+  info: 'bg-info/15 text-info',
+  warning: 'bg-warning/15 text-warning',
+} as const;
+
 export default function VNextLocationReport() {
   const [data, setData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Filters
   const [typeFilter, setTypeFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
 
-  // Sorting
   const [sortField, setSortField] = useState<SortField>('shipmentsInbound');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
-  // Active tab
   const [tab, setTab] = useState<'activity' | 'breakdown'>('activity');
 
   useEffect(() => {
     fetchReport();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [typeFilter, dateFrom, dateTo]);
 
   async function fetchReport() {
@@ -91,12 +125,11 @@ export default function VNextLocationReport() {
     }
   }
 
-  function sortIcon(field: SortField) {
-    if (sortField !== field) return 'unfold_more';
-    return sortDir === 'asc' ? 'expand_less' : 'expand_more';
+  function SortIcon({ field }: { field: SortField }) {
+    if (sortField !== field) return <ChevronsUpDown className="ml-1 inline h-3 w-3" />;
+    return sortDir === 'asc' ? <ChevronUp className="ml-1 inline h-3 w-3" /> : <ChevronDown className="ml-1 inline h-3 w-3" />;
   }
 
-  // Filter & sort locations
   const filteredLocations = (data?.locations || [])
     .filter(l => {
       if (!search) return true;
@@ -116,287 +149,272 @@ export default function VNextLocationReport() {
 
   if (loading && !data) {
     return (
-      <div className="vn-empty">
-        <span className="material-icons" style={{ animation: 'spin 1s linear infinite' }}>refresh</span>
-        <h3>Loading report...</h3>
+      <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <h3 className="text-lg font-medium">Loading report...</h3>
       </div>
     );
   }
 
-  if (error) return <div className="vn-alert vn-alert-error">{error}</div>;
+  if (error) {
+    return (
+      <div className="rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">{error}</div>
+    );
+  }
   if (!data) return null;
 
   const { summary, typeBreakdown } = data;
 
-  // Find the max volume for the bar chart scaling
   const maxTypeVolume = Math.max(
     1,
-    ...Object.values(typeBreakdown).map(t => t.shipmentsInbound + t.shipmentsOutbound)
+    ...Object.values(typeBreakdown).map(t => t.shipmentsInbound + t.shipmentsOutbound),
   );
 
+  const stats = [
+    { tone: 'primary' as const, label: 'Locations', value: summary.totalLocations, icon: MapPin },
+    { tone: 'success' as const, label: 'Shipments Inbound', value: summary.totalShipmentsInbound, icon: ArrowDownToLine },
+    { tone: 'info' as const, label: 'Shipments Outbound', value: summary.totalShipmentsOutbound, icon: ArrowUpFromLine },
+    { tone: 'warning' as const, label: 'In Transit', value: summary.totalInTransit, icon: Truck },
+  ];
+
   return (
-    <>
-      <div className="vn-page-header">
-        <div>
-          <h1>Location Activity</h1>
-          <p>Shipment and order volume across your network</p>
-        </div>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Location Activity</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Shipment and order volume across your network</p>
       </div>
 
-      {/* Stats */}
-      <div className="vn-stats">
-        <div className="vn-stat">
-          <div className="vn-stat-icon primary"><span className="material-icons">place</span></div>
-          <div>
-            <div className="vn-stat-value">{summary.totalLocations}</div>
-            <div className="vn-stat-label">Locations</div>
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon success"><span className="material-icons">call_received</span></div>
-          <div>
-            <div className="vn-stat-value">{summary.totalShipmentsInbound}</div>
-            <div className="vn-stat-label">Shipments Inbound</div>
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon info"><span className="material-icons">call_made</span></div>
-          <div>
-            <div className="vn-stat-value">{summary.totalShipmentsOutbound}</div>
-            <div className="vn-stat-label">Shipments Outbound</div>
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon warning"><span className="material-icons">local_shipping</span></div>
-          <div>
-            <div className="vn-stat-value">{summary.totalInTransit}</div>
-            <div className="vn-stat-label">In Transit</div>
-          </div>
-        </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {stats.map(stat => {
+          const Icon = stat.icon;
+          return (
+            <Card key={stat.label} className="p-5">
+              <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', STAT_TONES[stat.tone])}>
+                <Icon className="h-5 w-5" />
+              </div>
+              <div className="mt-3 text-2xl font-bold tracking-tight">{stat.value}</div>
+              <div className="mt-1 text-sm text-muted-foreground">{stat.label}</div>
+            </Card>
+          );
+        })}
       </div>
 
-      {/* Tabs */}
-      <div className="vn-tabs" style={{ marginBottom: '1rem' }}>
-        <button className={`vn-tab${tab === 'activity' ? ' active' : ''}`} onClick={() => setTab('activity')}>
-          <span className="material-icons" style={{ fontSize: 18 }}>table_chart</span>
-          Location Activity
-        </button>
-        <button className={`vn-tab${tab === 'breakdown' ? ' active' : ''}`} onClick={() => setTab('breakdown')}>
-          <span className="material-icons" style={{ fontSize: 18 }}>donut_small</span>
-          Type Breakdown
-        </button>
-      </div>
+      <Tabs value={tab} onValueChange={v => setTab(v as 'activity' | 'breakdown')}>
+        <TabsList>
+          <TabsTrigger value="activity">Location Activity</TabsTrigger>
+          <TabsTrigger value="breakdown">Type Breakdown</TabsTrigger>
+        </TabsList>
 
-      {/* ── Activity Tab ── */}
-      {tab === 'activity' && (
-        <div className="vn-card">
-          <div className="vn-filters">
-            <div className="vn-filter-group" style={{ flex: 1 }}>
-              <span className="material-icons">search</span>
-              <input
-                className="vn-filter-input"
-                placeholder="Search by name, city, state..."
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                style={{ width: '100%' }}
+        <TabsContent value="activity" className="mt-4">
+          <Card>
+            <div className="flex flex-wrap items-center gap-3 p-4">
+              <div className="relative min-w-[280px] flex-1">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Search by name, city, state..."
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+              <Select value={typeFilter} onValueChange={setTypeFilter}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Types</SelectItem>
+                  {Object.entries(LOCATION_TYPE_META).map(([value, meta]) => (
+                    <SelectItem key={value} value={value}>{meta.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Input
+                type="date"
+                value={dateFrom}
+                onChange={e => setDateFrom(e.target.value)}
+                className="w-[160px]"
+              />
+              <Input
+                type="date"
+                value={dateTo}
+                onChange={e => setDateTo(e.target.value)}
+                className="w-[160px]"
               />
             </div>
-            <select className="vn-filter-select" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
-              <option value="all">All Types</option>
-              {Object.entries(LOCATION_TYPE_META).map(([value, meta]) => (
-                <option key={value} value={value}>{meta.label}</option>
-              ))}
-            </select>
-            <input
-              type="date"
-              className="vn-filter-input"
-              value={dateFrom}
-              onChange={e => setDateFrom(e.target.value)}
-              style={{ width: 140 }}
-              title="From date"
-            />
-            <input
-              type="date"
-              className="vn-filter-input"
-              value={dateTo}
-              onChange={e => setDateTo(e.target.value)}
-              style={{ width: 140 }}
-              title="To date"
-            />
-          </div>
-
-          <div className="vn-table-wrap">
-            <table className="vn-table">
-              <thead>
-                <tr>
-                  <th style={{ cursor: 'pointer' }} onClick={() => toggleSort('name')}>
-                    Location <span className="material-icons" style={{ fontSize: 14, verticalAlign: 'middle' }}>{sortIcon('name')}</span>
-                  </th>
-                  <th style={{ cursor: 'pointer' }} onClick={() => toggleSort('locationType')}>
-                    Type <span className="material-icons" style={{ fontSize: 14, verticalAlign: 'middle' }}>{sortIcon('locationType')}</span>
-                  </th>
-                  <th style={{ cursor: 'pointer', textAlign: 'right' }} onClick={() => toggleSort('shipmentsInbound')}>
-                    Shipments In <span className="material-icons" style={{ fontSize: 14, verticalAlign: 'middle' }}>{sortIcon('shipmentsInbound')}</span>
-                  </th>
-                  <th style={{ cursor: 'pointer', textAlign: 'right' }} onClick={() => toggleSort('shipmentsOutbound')}>
-                    Shipments Out <span className="material-icons" style={{ fontSize: 14, verticalAlign: 'middle' }}>{sortIcon('shipmentsOutbound')}</span>
-                  </th>
-                  <th style={{ cursor: 'pointer', textAlign: 'right' }} onClick={() => toggleSort('ordersInbound')}>
-                    Orders In <span className="material-icons" style={{ fontSize: 14, verticalAlign: 'middle' }}>{sortIcon('ordersInbound')}</span>
-                  </th>
-                  <th style={{ cursor: 'pointer', textAlign: 'right' }} onClick={() => toggleSort('ordersOutbound')}>
-                    Orders Out <span className="material-icons" style={{ fontSize: 14, verticalAlign: 'middle' }}>{sortIcon('ordersOutbound')}</span>
-                  </th>
-                  <th style={{ cursor: 'pointer', textAlign: 'right' }} onClick={() => toggleSort('shipmentsInTransitTo')}>
-                    In Transit <span className="material-icons" style={{ fontSize: 14, verticalAlign: 'middle' }}>{sortIcon('shipmentsInTransitTo')}</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="cursor-pointer" onClick={() => toggleSort('name')}>
+                    Location <SortIcon field="name" />
+                  </TableHead>
+                  <TableHead className="cursor-pointer" onClick={() => toggleSort('locationType')}>
+                    Type <SortIcon field="locationType" />
+                  </TableHead>
+                  <TableHead className="cursor-pointer text-right" onClick={() => toggleSort('shipmentsInbound')}>
+                    Shipments In <SortIcon field="shipmentsInbound" />
+                  </TableHead>
+                  <TableHead className="cursor-pointer text-right" onClick={() => toggleSort('shipmentsOutbound')}>
+                    Shipments Out <SortIcon field="shipmentsOutbound" />
+                  </TableHead>
+                  <TableHead className="cursor-pointer text-right" onClick={() => toggleSort('ordersInbound')}>
+                    Orders In <SortIcon field="ordersInbound" />
+                  </TableHead>
+                  <TableHead className="cursor-pointer text-right" onClick={() => toggleSort('ordersOutbound')}>
+                    Orders Out <SortIcon field="ordersOutbound" />
+                  </TableHead>
+                  <TableHead className="cursor-pointer text-right" onClick={() => toggleSort('shipmentsInTransitTo')}>
+                    In Transit <SortIcon field="shipmentsInTransitTo" />
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {filteredLocations.map(loc => {
                   const meta = getLocationTypeMeta(loc.locationType);
                   return (
-                    <tr key={loc.id}>
-                      <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          <span className="material-icons" style={{ fontSize: 20, color: 'var(--on-surface-variant)' }}>
-                            {meta?.icon || 'place'}
-                          </span>
+                    <TableRow key={loc.id}>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <MapPin className="h-4 w-4 text-muted-foreground" />
                           <div>
-                            <span style={{ fontWeight: 600, color: 'var(--on-surface)' }}>{loc.name}</span>
-                            <div className="vn-table-secondary">{loc.city}{loc.state ? `, ${loc.state}` : ''} &middot; {loc.country}</div>
+                            <div className="font-semibold">{loc.name}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {loc.city}{loc.state ? `, ${loc.state}` : ''} - {loc.country}
+                            </div>
                           </div>
                         </div>
-                      </td>
-                      <td>
+                      </TableCell>
+                      <TableCell>
                         {meta ? (
-                          <span className={`vn-chip ${meta.chip}`} style={{ fontSize: 11 }}>
-                            <span className="material-icons" style={{ fontSize: 14 }}>{meta.icon}</span>
-                            {meta.label}
-                          </span>
+                          <Badge variant="muted" className="text-xs">{meta.label}</Badge>
                         ) : (
-                          <span style={{ fontSize: 12, color: 'var(--on-surface-variant)', fontStyle: 'italic' }}>Unclassified</span>
+                          <span className="text-xs italic text-muted-foreground">Unclassified</span>
                         )}
-                      </td>
-                      <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{loc.shipmentsInbound}</td>
-                      <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{loc.shipmentsOutbound}</td>
-                      <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{loc.ordersInbound}</td>
-                      <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{loc.ordersOutbound}</td>
-                      <td style={{ textAlign: 'right' }}>
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">{loc.shipmentsInbound}</TableCell>
+                      <TableCell className="text-right tabular-nums">{loc.shipmentsOutbound}</TableCell>
+                      <TableCell className="text-right tabular-nums">{loc.ordersInbound}</TableCell>
+                      <TableCell className="text-right tabular-nums">{loc.ordersOutbound}</TableCell>
+                      <TableCell className="text-right">
                         {loc.shipmentsInTransitTo > 0 ? (
-                          <span className="vn-chip vn-chip-warning" style={{ fontSize: 11 }}>
-                            <span className="material-icons" style={{ fontSize: 14 }}>local_shipping</span>
+                          <Badge variant="warning" className="text-xs">
+                            <Truck className="mr-1 h-3 w-3" />
                             {loc.shipmentsInTransitTo}
-                          </span>
+                          </Badge>
                         ) : (
-                          <span style={{ color: 'var(--on-surface-variant)' }}>0</span>
+                          <span className="text-muted-foreground">0</span>
                         )}
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   );
                 })}
                 {filteredLocations.length === 0 && (
-                  <tr>
-                    <td colSpan={7}>
-                      <div className="vn-empty">
-                        <span className="material-icons">search_off</span>
-                        <h3>No locations found</h3>
-                        <p>Try adjusting your filters</p>
+                  <TableRow>
+                    <TableCell colSpan={7}>
+                      <div className="flex flex-col items-center gap-2 py-12 text-muted-foreground">
+                        <SearchX className="h-8 w-8" />
+                        <h3 className="text-base font-medium">No locations found</h3>
+                        <p className="text-sm">Try adjusting your filters</p>
                       </div>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+              </TableBody>
+            </Table>
+          </Card>
+        </TabsContent>
 
-      {/* ── Type Breakdown Tab ── */}
-      {tab === 'breakdown' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
-          {/* Locations by type */}
-          <div className="vn-card">
-            <div className="vn-card-body" style={{ padding: '1.5rem' }}>
-              <h3 style={{ margin: '0 0 1rem', fontSize: '1rem', color: 'var(--on-surface)' }}>
-                <span className="material-icons" style={{ fontSize: 18, verticalAlign: 'middle', marginRight: 6 }}>pie_chart</span>
-                Locations by Type
-              </h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                {Object.entries(typeBreakdown)
-                  .sort(([, a], [, b]) => b.count - a.count)
-                  .map(([type, entry]) => {
-                    const meta = getLocationTypeMeta(type === 'unclassified' ? null : type);
-                    const label = meta?.label || 'Unclassified';
-                    const icon = meta?.icon || 'help_outline';
-                    const pct = summary.totalLocations > 0 ? (entry.count / summary.totalLocations) * 100 : 0;
-                    return (
-                      <div key={type}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <span className="material-icons" style={{ fontSize: 18, color: 'var(--on-surface-variant)' }}>{icon}</span>
-                            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--on-surface)' }}>{label}</span>
+        <TabsContent value="breakdown" className="mt-4">
+          <div className="grid gap-6 lg:grid-cols-2">
+            {/* Locations by type */}
+            <Card>
+              <CardContent className="p-6">
+                <h3 className="mb-4 flex items-center gap-2 text-base font-semibold">
+                  <PieChart className="h-4 w-4" />
+                  Locations by Type
+                </h3>
+                <div className="space-y-3">
+                  {Object.entries(typeBreakdown)
+                    .sort(([, a], [, b]) => b.count - a.count)
+                    .map(([type, entry]) => {
+                      const meta = getLocationTypeMeta(type === 'unclassified' ? null : type);
+                      const label = meta?.label || 'Unclassified';
+                      const pct = summary.totalLocations > 0 ? (entry.count / summary.totalLocations) * 100 : 0;
+                      return (
+                        <div key={type}>
+                          <div className="mb-1 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <MapPin className="h-4 w-4 text-muted-foreground" />
+                              <span className="text-sm font-semibold">{label}</span>
+                            </div>
+                            <span className="text-sm text-muted-foreground">
+                              {entry.count} ({pct.toFixed(0)}%)
+                            </span>
                           </div>
-                          <span style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>
-                            {entry.count} ({pct.toFixed(0)}%)
-                          </span>
+                          <div className="h-2 overflow-hidden rounded-full bg-muted">
+                            <div
+                              className="h-full rounded-full bg-primary transition-all"
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
                         </div>
-                        <div style={{ height: 8, borderRadius: 4, background: 'var(--surface-container)', overflow: 'hidden' }}>
-                          <div style={{ height: '100%', width: `${pct}%`, borderRadius: 4, background: 'var(--primary)', transition: 'width 0.3s ease' }} />
-                        </div>
-                      </div>
-                    );
-                  })}
-              </div>
-            </div>
-          </div>
+                      );
+                    })}
+                </div>
+              </CardContent>
+            </Card>
 
-          {/* Volume by type */}
-          <div className="vn-card">
-            <div className="vn-card-body" style={{ padding: '1.5rem' }}>
-              <h3 style={{ margin: '0 0 1rem', fontSize: '1rem', color: 'var(--on-surface)' }}>
-                <span className="material-icons" style={{ fontSize: 18, verticalAlign: 'middle', marginRight: 6 }}>bar_chart</span>
-                Shipment Volume by Type
-              </h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                {Object.entries(typeBreakdown)
-                  .sort(([, a], [, b]) => (b.shipmentsInbound + b.shipmentsOutbound) - (a.shipmentsInbound + a.shipmentsOutbound))
-                  .map(([type, entry]) => {
-                    const meta = getLocationTypeMeta(type === 'unclassified' ? null : type);
-                    const label = meta?.label || 'Unclassified';
-                    const icon = meta?.icon || 'help_outline';
-                    const total = entry.shipmentsInbound + entry.shipmentsOutbound;
-                    const inPct = maxTypeVolume > 0 ? (entry.shipmentsInbound / maxTypeVolume) * 100 : 0;
-                    const outPct = maxTypeVolume > 0 ? (entry.shipmentsOutbound / maxTypeVolume) * 100 : 0;
-                    return (
-                      <div key={type}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <span className="material-icons" style={{ fontSize: 18, color: 'var(--on-surface-variant)' }}>{icon}</span>
-                            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--on-surface)' }}>{label}</span>
+            {/* Volume by type */}
+            <Card>
+              <CardContent className="p-6">
+                <h3 className="mb-4 flex items-center gap-2 text-base font-semibold">
+                  <BarChart3 className="h-4 w-4" />
+                  Shipment Volume by Type
+                </h3>
+                <div className="space-y-4">
+                  {Object.entries(typeBreakdown)
+                    .sort(([, a], [, b]) => (b.shipmentsInbound + b.shipmentsOutbound) - (a.shipmentsInbound + a.shipmentsOutbound))
+                    .map(([type, entry]) => {
+                      const meta = getLocationTypeMeta(type === 'unclassified' ? null : type);
+                      const label = meta?.label || 'Unclassified';
+                      const total = entry.shipmentsInbound + entry.shipmentsOutbound;
+                      const inPct = maxTypeVolume > 0 ? (entry.shipmentsInbound / maxTypeVolume) * 100 : 0;
+                      const outPct = maxTypeVolume > 0 ? (entry.shipmentsOutbound / maxTypeVolume) * 100 : 0;
+                      return (
+                        <div key={type}>
+                          <div className="mb-1 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <MapPin className="h-4 w-4 text-muted-foreground" />
+                              <span className="text-sm font-semibold">{label}</span>
+                            </div>
+                            <span className="text-xs text-muted-foreground">{total} shipments</span>
                           </div>
-                          <span style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>{total} shipments</span>
+                          <div className="flex h-2 gap-1">
+                            <div
+                              className="rounded-full bg-success transition-all"
+                              style={{ width: `${inPct}%` }}
+                              title={`Inbound: ${entry.shipmentsInbound}`}
+                            />
+                            <div
+                              className="rounded-full bg-info transition-all"
+                              style={{ width: `${outPct}%` }}
+                              title={`Outbound: ${entry.shipmentsOutbound}`}
+                            />
+                          </div>
+                          <div className="mt-1 flex gap-4 text-xs text-muted-foreground">
+                            <span>In: {entry.shipmentsInbound}</span>
+                            <span>Out: {entry.shipmentsOutbound}</span>
+                            <span>Orders In: {entry.ordersInbound}</span>
+                            <span>Orders Out: {entry.ordersOutbound}</span>
+                          </div>
                         </div>
-                        <div style={{ display: 'flex', gap: 4, height: 8 }}>
-                          <div style={{ flex: `0 0 ${inPct}%`, borderRadius: 4, background: 'var(--success)', transition: 'flex 0.3s ease' }}
-                            title={`Inbound: ${entry.shipmentsInbound}`} />
-                          <div style={{ flex: `0 0 ${outPct}%`, borderRadius: 4, background: 'var(--info)', transition: 'flex 0.3s ease' }}
-                            title={`Outbound: ${entry.shipmentsOutbound}`} />
-                        </div>
-                        <div style={{ display: 'flex', gap: '1rem', marginTop: 2, fontSize: 11, color: 'var(--on-surface-variant)' }}>
-                          <span>In: {entry.shipmentsInbound}</span>
-                          <span>Out: {entry.shipmentsOutbound}</span>
-                          <span>Orders In: {entry.ordersInbound}</span>
-                          <span>Orders Out: {entry.ordersOutbound}</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-              </div>
-            </div>
+                      );
+                    })}
+                </div>
+              </CardContent>
+            </Card>
           </div>
-        </div>
-      )}
-    </>
+        </TabsContent>
+      </Tabs>
+    </div>
   );
 }

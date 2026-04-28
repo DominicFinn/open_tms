@@ -1,6 +1,20 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Bug, CheckCircle2, Loader2, Receipt, Truck } from 'lucide-react';
+
 import { API_URL } from '../../api';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 
 export function getCustomerToken(): string {
   return localStorage.getItem('customer_token') || '';
@@ -37,10 +51,26 @@ interface DashboardData {
   }>;
 }
 
-function statusChip(s: string): string {
-  const m: Record<string, string> = { in_transit: 'info', delivered: 'success', booked: 'warning', exception: 'error', at_pickup: 'warning', at_delivery: 'warning' };
-  return m[s] || 'secondary';
+type StatusVariant = 'success' | 'info' | 'warning' | 'destructive' | 'muted';
+
+function statusVariant(s: string): StatusVariant {
+  const m: Record<string, StatusVariant> = {
+    in_transit: 'info',
+    delivered: 'success',
+    booked: 'warning',
+    exception: 'destructive',
+    at_pickup: 'warning',
+    at_delivery: 'warning',
+  };
+  return m[s] || 'muted';
 }
+
+const TILE_TONES = {
+  primary: 'bg-primary/10 text-primary',
+  success: 'bg-success/15 text-success',
+  warning: 'bg-warning/15 text-warning',
+  info: 'bg-info/15 text-info',
+} as const;
 
 export default function CustomerDashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
@@ -55,88 +85,110 @@ export default function CustomerDashboard() {
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <div style={{ textAlign: 'center', padding: 60 }}><div className="loading-spinner" /></div>;
-  if (!data) return <div className="vn-alert vn-alert-error">Failed to load dashboard</div>;
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <h3 className="text-lg font-medium">Loading...</h3>
+      </div>
+    );
+  }
+  if (!data) {
+    return (
+      <div className="rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+        Failed to load dashboard
+      </div>
+    );
+  }
+
+  const tiles = [
+    { tone: 'primary' as const, icon: Truck, label: 'Active shipments', value: data.stats.activeShipments },
+    { tone: 'success' as const, icon: CheckCircle2, label: 'Delivered', value: data.stats.recentDeliveries },
+    { tone: 'warning' as const, icon: Bug, label: 'Open issues', value: data.stats.openIssues },
+    {
+      tone: 'info' as const,
+      icon: Receipt,
+      label: 'Outstanding invoices',
+      value: data.stats.outstandingInvoiceCount,
+      sub: formatCents(data.stats.outstandingBalanceCents),
+    },
+  ];
 
   return (
-    <div>
-      <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 4 }}>Welcome back{user.name ? `, ${user.name}` : ''}</h1>
-      <p style={{ color: 'var(--on-surface-variant)', fontSize: 14, marginBottom: 24 }}>{user.customerName}</p>
-
-      <div className="vn-stats" style={{ marginBottom: 24 }}>
-        <div className="vn-stat">
-          <div className="vn-stat-icon" style={{ background: 'var(--primary-container)', color: 'var(--primary)' }}>
-            <span className="material-icons">local_shipping</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{data.stats.activeShipments}</div>
-            <div className="vn-stat-label">Active Shipments</div>
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon" style={{ background: 'var(--success-container)', color: 'var(--color-success)' }}>
-            <span className="material-icons">check_circle</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{data.stats.recentDeliveries}</div>
-            <div className="vn-stat-label">Delivered</div>
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon" style={{ background: 'var(--warning-container)', color: 'var(--color-warning)' }}>
-            <span className="material-icons">bug_report</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{data.stats.openIssues}</div>
-            <div className="vn-stat-label">Open Issues</div>
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon" style={{ background: 'var(--info-container)', color: 'var(--color-info)' }}>
-            <span className="material-icons">receipt</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{data.stats.outstandingInvoiceCount}</div>
-            <div className="vn-stat-label">Outstanding Invoices</div>
-            <div style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>{formatCents(data.stats.outstandingBalanceCents)}</div>
-          </div>
-        </div>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">
+          Welcome back{user.name ? `, ${user.name}` : ''}
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground">{user.customerName}</p>
       </div>
 
-      <div className="vn-card">
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--outline-variant)' }}>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>Recent Shipments</h3>
-        </div>
-        <div className="vn-table-wrap">
-          <table className="vn-table">
-            <thead>
-              <tr>
-                <th>Reference</th>
-                <th>Route</th>
-                <th>Carrier</th>
-                <th>Pickup</th>
-                <th>Delivery</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.recentShipments.map(s => (
-                <tr key={s.id}>
-                  <td><Link to={`/customer-portal/shipments/${s.id}`} style={{ fontWeight: 600, color: 'var(--primary)' }}>{s.reference}</Link></td>
-                  <td style={{ fontSize: 13 }}>{s.originCity}, {s.originState} - {s.destinationCity}, {s.destinationState}</td>
-                  <td style={{ fontSize: 13 }}>{s.carrierName || '-'}</td>
-                  <td style={{ fontSize: 13 }}>{s.pickupDate ? new Date(s.pickupDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '-'}</td>
-                  <td style={{ fontSize: 13 }}>{s.deliveryDate ? new Date(s.deliveryDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '-'}</td>
-                  <td><span className={`vn-chip vn-chip-${statusChip(s.status)}`}>{s.status}</span></td>
-                </tr>
-              ))}
-              {data.recentShipments.length === 0 && (
-                <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--on-surface-variant)', padding: 24 }}>No recent shipments</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {tiles.map(t => {
+          const Icon = t.icon;
+          return (
+            <Card key={t.label}>
+              <CardContent className="p-6">
+                <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', TILE_TONES[t.tone])}>
+                  <Icon className="h-5 w-5" />
+                </div>
+                <div className="mt-4 text-3xl font-bold tracking-tight">{t.value}</div>
+                <div className="mt-1 text-sm text-muted-foreground">{t.label}</div>
+                {t.sub && <div className="mt-1 text-xs text-muted-foreground">{t.sub}</div>}
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Recent shipments</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Separator />
+          {data.recentShipments.length === 0 ? (
+            <div className="px-6 py-12 text-center text-sm text-muted-foreground">No recent shipments</div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Reference</TableHead>
+                  <TableHead>Route</TableHead>
+                  <TableHead>Carrier</TableHead>
+                  <TableHead>Pickup</TableHead>
+                  <TableHead>Delivery</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.recentShipments.map(s => (
+                  <TableRow key={s.id}>
+                    <TableCell>
+                      <Link to={`/customer-portal/shipments/${s.id}`} className="font-semibold text-primary hover:underline">
+                        {s.reference}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {s.originCity}, {s.originState} - {s.destinationCity}, {s.destinationState}
+                    </TableCell>
+                    <TableCell className="text-sm">{s.carrierName || '-'}</TableCell>
+                    <TableCell className="text-sm">
+                      {s.pickupDate ? new Date(s.pickupDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '-'}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {s.deliveryDate ? new Date(s.deliveryDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '-'}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={statusVariant(s.status)}>{s.status}</Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

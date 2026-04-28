@@ -1,6 +1,20 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { Loader2, Plus } from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 interface Tender {
   id: string;
@@ -24,19 +38,23 @@ interface Tender {
   bids: Array<{ id: string; rate: number; status: string; carrier: { name: string } }>;
 }
 
-const statusColors: Record<string, string> = {
-  draft: 'secondary',
-  open: 'primary',
+type StatusVariant = 'success' | 'warning' | 'destructive' | 'info' | 'muted' | 'default';
+
+const statusVariants: Record<string, StatusVariant> = {
+  draft: 'muted',
+  open: 'default',
   evaluating: 'warning',
   awarded: 'success',
-  cancelled: 'error',
-  expired: 'error',
+  cancelled: 'destructive',
+  expired: 'destructive',
 };
 
 interface Carrier {
   id: string;
   name: string;
 }
+
+const STATUS_OPTIONS = ['', 'draft', 'open', 'evaluating', 'awarded', 'cancelled', 'expired'];
 
 export default function Tenders() {
   const [tenders, setTenders] = useState<Tender[]>([]);
@@ -52,6 +70,7 @@ export default function Tenders() {
 
   useEffect(() => {
     fetchTenders();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusFilter, carrierFilter]);
 
   async function fetchTenders() {
@@ -66,115 +85,123 @@ export default function Tenders() {
   }
 
   return (
-    <div>
-      <div className="vn-page-header">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1>Tenders</h1>
-          <p style={{ color: 'var(--on-surface-variant)', margin: 0 }}>
-            Manage carrier tender requests and bids
-          </p>
+          <h1 className="text-3xl font-bold tracking-tight">Tenders</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Manage carrier tender requests and bids</p>
         </div>
-        <div className="vn-page-actions">
-          <Link to="/tenders/create" className="vn-btn vn-btn-primary">
-            <span className="material-icons" style={{ fontSize: '18px', marginRight: '6px' }}>add</span>
+        <Button asChild variant="gradient">
+          <Link to="/tenders/create">
+            <Plus className="h-4 w-4" />
             Create Tender
           </Link>
-        </div>
+        </Button>
       </div>
 
-      <div className="vn-card" style={{ marginBottom: 'var(--spacing-3)' }}>
-        <div style={{ display: 'flex', gap: 'var(--spacing-2)', alignItems: 'center', flexWrap: 'wrap', marginBottom: 'var(--spacing-1)' }}>
-          <label style={{ fontWeight: 500, fontSize: '14px' }}>Status:</label>
-          {['', 'draft', 'open', 'evaluating', 'awarded', 'cancelled', 'expired'].map(s => (
-            <button
+      <Card className="p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-medium">Status:</span>
+          {STATUS_OPTIONS.map(s => (
+            <Button
               key={s}
-              className={statusFilter === s ? 'vn-btn vn-btn-primary' : 'vn-btn vn-btn-outline'}
-              style={{ padding: '4px 12px', fontSize: '13px' }}
+              size="sm"
+              variant={statusFilter === s ? 'default' : 'outline'}
               onClick={() => setStatusFilter(s)}
             >
               {s || 'All'}
-            </button>
+            </Button>
           ))}
         </div>
-        <div style={{ display: 'flex', gap: 'var(--spacing-2)', alignItems: 'center' }}>
-          <label style={{ fontWeight: 500, fontSize: '14px' }}>Carrier:</label>
-          <select
-            className="vn-select"
-            style={{ width: 'auto', minWidth: '200px', padding: '4px 8px', fontSize: '13px' }}
-            value={carrierFilter}
-            onChange={e => setCarrierFilter(e.target.value)}
-          >
-            <option value="">All Carriers</option>
-            {carriers.map(c => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className="text-sm font-medium">Carrier:</span>
+          <Select value={carrierFilter || 'all'} onValueChange={v => setCarrierFilter(v === 'all' ? '' : v)}>
+            <SelectTrigger className="w-[240px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Carriers</SelectItem>
+              {carriers.map(c => (
+                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           {carrierFilter && (
-            <button className="vn-btn vn-btn-outline" style={{ padding: '4px 12px', fontSize: '13px' }} onClick={() => setCarrierFilter('')}>
+            <Button variant="outline" size="sm" onClick={() => setCarrierFilter('')}>
               Clear
-            </button>
+            </Button>
           )}
         </div>
-      </div>
+      </Card>
 
-      <div className="vn-card">
-        <div className="vn-card-flush">
-          <div className="vn-table-wrap">
-            <table className="vn-table">
-              <thead>
-                <tr>
-                  <th>Reference</th>
-                  <th>Shipment</th>
-                  <th>Route</th>
-                  <th>Strategy</th>
-                  <th>Status</th>
-                  <th>Carriers</th>
-                  <th>Bids</th>
-                  <th>Target Rate</th>
-                  <th>Created</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? (
-                  <tr><td colSpan={9} style={{ textAlign: 'center', padding: '40px' }}>
-                    <div className="vn-empty"><span className="material-icons" style={{animation:'spin 1s linear infinite'}}>refresh</span><h3>Loading...</h3></div>
-                  </td></tr>
-                ) : tenders.length === 0 ? (
-                  <tr><td colSpan={9} style={{ textAlign: 'center', padding: '40px', color: 'var(--on-surface-variant)' }}>No tenders found</td></tr>
-                ) : tenders.map(t => (
-                  <tr key={t.id} onClick={() => navigate(`/tenders/${t.id}`)} style={{ cursor: 'pointer' }}>
-                    <td style={{ fontWeight: 600 }}>{t.reference}</td>
-                    <td>
-                      <Link to={`/shipments/${t.shipment.id}`} onClick={e => e.stopPropagation()} style={{ color: 'var(--primary)' }}>
-                        {t.shipment.reference}
-                      </Link>
-                    </td>
-                    <td>
-                      {t.shipment.origin.city}{t.shipment.origin.state ? `, ${t.shipment.origin.state}` : ''}
-                      {' → '}
-                      {t.shipment.destination.city}{t.shipment.destination.state ? `, ${t.shipment.destination.state}` : ''}
-                    </td>
-                    <td>
-                      <span className={`vn-chip vn-chip-${t.strategy === 'broadcast' ? 'info' : 'secondary'}`}>
-                        {t.strategy}
-                      </span>
-                    </td>
-                    <td>
-                      <span className={`vn-chip vn-chip-${statusColors[t.status] || 'secondary'}`}>
-                        {t.status}
-                      </span>
-                    </td>
-                    <td>{t.offers.length}</td>
-                    <td>{t.bids.length}</td>
-                    <td>{t.targetRate ? `$${t.targetRate.toLocaleString()}` : '--'}</td>
-                    <td>{new Date(t.createdAt).toLocaleDateString()}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
+      <Card>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Reference</TableHead>
+              <TableHead>Shipment</TableHead>
+              <TableHead>Route</TableHead>
+              <TableHead>Strategy</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Carriers</TableHead>
+              <TableHead>Bids</TableHead>
+              <TableHead>Target Rate</TableHead>
+              <TableHead>Created</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading ? (
+              <TableRow>
+                <TableCell colSpan={9} className="py-12 text-center">
+                  <Loader2 className="mx-auto h-6 w-6 animate-spin text-muted-foreground" />
+                </TableCell>
+              </TableRow>
+            ) : tenders.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={9} className="py-12 text-center text-muted-foreground">
+                  No tenders found
+                </TableCell>
+              </TableRow>
+            ) : tenders.map(t => (
+              <TableRow
+                key={t.id}
+                onClick={() => navigate(`/tenders/${t.id}`)}
+                className="cursor-pointer"
+              >
+                <TableCell className="font-semibold">{t.reference}</TableCell>
+                <TableCell>
+                  <Link
+                    to={`/shipments/${t.shipment.id}`}
+                    onClick={e => e.stopPropagation()}
+                    className="text-primary hover:underline"
+                  >
+                    {t.shipment.reference}
+                  </Link>
+                </TableCell>
+                <TableCell>
+                  {t.shipment.origin.city}{t.shipment.origin.state ? `, ${t.shipment.origin.state}` : ''}
+                  {' -> '}
+                  {t.shipment.destination.city}{t.shipment.destination.state ? `, ${t.shipment.destination.state}` : ''}
+                </TableCell>
+                <TableCell>
+                  <Badge variant={t.strategy === 'broadcast' ? 'info' : 'muted'}>
+                    {t.strategy}
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  <Badge variant={statusVariants[t.status] || 'muted'}>
+                    {t.status}
+                  </Badge>
+                </TableCell>
+                <TableCell>{t.offers.length}</TableCell>
+                <TableCell>{t.bids.length}</TableCell>
+                <TableCell>{t.targetRate ? `$${t.targetRate.toLocaleString()}` : '--'}</TableCell>
+                <TableCell>{new Date(t.createdAt).toLocaleDateString()}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </Card>
     </div>
   );
 }

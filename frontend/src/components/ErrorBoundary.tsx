@@ -1,4 +1,7 @@
 import React, { Component } from 'react';
+import { AlertTriangle } from 'lucide-react';
+
+import { Button } from '@/components/ui/button';
 
 interface Props {
   children: React.ReactNode;
@@ -26,53 +29,31 @@ export class ErrorBoundary extends Component<Props, State> {
   render() {
     if (this.state.hasError) {
       return (
-        <div style={{
-          padding: '48px 32px',
-          textAlign: 'center',
-          maxWidth: 500,
-          margin: '0 auto',
-        }}>
-          <span className="material-icons" style={{
-            fontSize: 64,
-            color: 'var(--color-error)',
-            display: 'block',
-            marginBottom: 16,
-          }}>error_outline</span>
-          <h2 style={{ margin: '0 0 8px', fontSize: 20, fontWeight: 700 }}>
-            Something went wrong
-          </h2>
-          <p style={{ color: 'var(--on-surface-variant)', fontSize: 14, marginBottom: 24 }}>
-            This page encountered an error. Try refreshing or navigating to a different page.
+        <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 p-8 text-center">
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+            <AlertTriangle className="h-8 w-8" />
+          </div>
+          <h2 className="text-xl font-semibold">Something went wrong</h2>
+          <p className="max-w-md text-sm text-muted-foreground">
+            {this.state.error?.message || 'This page encountered an error. Try refreshing or navigating to a different page.'}
           </p>
           {this.state.error && (
-            <details style={{
-              textAlign: 'left',
-              background: 'var(--surface-container)',
-              padding: 16,
-              borderRadius: 'var(--border-radius-md)',
-              marginBottom: 16,
-            }}>
-              <summary style={{ cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>Error details</summary>
-              <pre style={{
-                fontSize: 12,
-                color: 'var(--color-error)',
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word',
-                marginTop: 8,
-              }}>
+            <details className="w-full max-w-md rounded-md border border-border bg-muted/40 p-4 text-left">
+              <summary className="cursor-pointer text-sm font-semibold">Error details</summary>
+              <pre className="mt-2 whitespace-pre-wrap break-words text-xs text-destructive">
                 {this.state.error.message}
               </pre>
             </details>
           )}
-          <button
-            className="vn-btn vn-btn-primary"
+          <Button
+            variant="outline"
             onClick={() => {
               this.setState({ hasError: false, error: null });
               window.location.reload();
             }}
           >
-            Reload Page
-          </button>
+            Reload page
+          </Button>
         </div>
       );
     }

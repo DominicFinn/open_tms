@@ -1,5 +1,27 @@
 import { useEffect, useState } from 'react';
+import { CircleAlert, Loader2, Plus } from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 interface PalletType {
   id: string;
@@ -109,149 +131,175 @@ export default function VNextPalletTypes() {
   };
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>Pallet Types</h1>
-          <p style={{ color: 'var(--text-secondary)', margin: 0 }}>
+          <h1 className="text-3xl font-bold tracking-tight">Pallet Types</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             Standard pallet specs used for palletization planning, load plans, and BOL weight totals.
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button className="vn-btn vn-btn-outline" onClick={handleSeed} disabled={seeding}>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={handleSeed} disabled={seeding}>
             {seeding ? 'Seeding...' : 'Load standard types'}
-          </button>
-          <button className="vn-btn vn-btn-primary" onClick={openCreate}>
-            <span className="material-icons">add</span> New type
-          </button>
+          </Button>
+          <Button variant="gradient" onClick={openCreate}>
+            <Plus className="h-4 w-4" />
+            New type
+          </Button>
         </div>
       </div>
 
-      {error && <div className="vn-alert vn-alert-error" style={{ marginBottom: 16 }}>{error}</div>}
-
-      {showForm && (
-        <div className="vn-card" style={{ padding: 16, marginBottom: 16 }}>
-          <h3 style={{ margin: '0 0 12px' }}>{editing ? 'Edit pallet type' : 'New pallet type'}</h3>
-          <div className="vn-form-grid" style={{ gap: 8 }}>
-            <div className="vn-field">
-              <label className="vn-field-label">Code</label>
-              <input className="vn-input" value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value }))} placeholder="EUR1" disabled={!!editing} />
-            </div>
-            <div className="vn-field">
-              <label className="vn-field-label">Name</label>
-              <input className="vn-input" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
-            </div>
-            <div className="vn-field" style={{ gridColumn: '1 / -1' }}>
-              <label className="vn-field-label">Description</label>
-              <input className="vn-input" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
-            </div>
-            <div className="vn-field">
-              <label className="vn-field-label">Length (mm)</label>
-              <input className="vn-input" type="number" value={form.lengthMm} onChange={e => setForm(f => ({ ...f, lengthMm: e.target.value }))} />
-            </div>
-            <div className="vn-field">
-              <label className="vn-field-label">Width (mm)</label>
-              <input className="vn-input" type="number" value={form.widthMm} onChange={e => setForm(f => ({ ...f, widthMm: e.target.value }))} />
-            </div>
-            <div className="vn-field">
-              <label className="vn-field-label">Deck height (mm)</label>
-              <input className="vn-input" type="number" value={form.heightMm} onChange={e => setForm(f => ({ ...f, heightMm: e.target.value }))} />
-            </div>
-            <div className="vn-field">
-              <label className="vn-field-label">Max stack height (mm, optional)</label>
-              <input className="vn-input" type="number" value={form.maxStackHeightMm} onChange={e => setForm(f => ({ ...f, maxStackHeightMm: e.target.value }))} placeholder="unlimited" />
-            </div>
-            <div className="vn-field">
-              <label className="vn-field-label">Tare weight (g)</label>
-              <input className="vn-input" type="number" value={form.tareWeightGrams} onChange={e => setForm(f => ({ ...f, tareWeightGrams: e.target.value }))} />
-            </div>
-            <div className="vn-field">
-              <label className="vn-field-label">Max load (g, SWL)</label>
-              <input className="vn-input" type="number" value={form.maxLoadGrams} onChange={e => setForm(f => ({ ...f, maxLoadGrams: e.target.value }))} />
-            </div>
-            <div className="vn-field">
-              <label className="vn-field-label">Material</label>
-              <select className="vn-input" value={form.material} onChange={e => setForm(f => ({ ...f, material: e.target.value }))}>
-                {MATERIALS.map(m => <option key={m} value={m}>{m}</option>)}
-              </select>
-            </div>
-          </div>
-          <div style={{ marginTop: 12, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <input type="checkbox" checked={form.reusable} onChange={e => setForm(f => ({ ...f, reusable: e.target.checked }))} /> Reusable
-            </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <input type="checkbox" checked={form.isoCertified} onChange={e => setForm(f => ({ ...f, isoCertified: e.target.checked }))} /> ISPM-15 certified
-            </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <input type="checkbox" checked={form.stackable} onChange={e => setForm(f => ({ ...f, stackable: e.target.checked }))} /> Stackable
-            </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <input type="checkbox" checked={form.active} onChange={e => setForm(f => ({ ...f, active: e.target.checked }))} /> Active
-            </label>
-          </div>
-          <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
-            <button className="vn-btn vn-btn-primary" onClick={handleSave}>{editing ? 'Save' : 'Create'}</button>
-            <button className="vn-btn vn-btn-outline" onClick={() => setShowForm(false)}>Cancel</button>
-          </div>
+      {error && (
+        <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+          <CircleAlert className="h-5 w-5" />
+          {error}
         </div>
       )}
 
-      <div className="vn-card">
-        <div className="vn-table-wrap">
-          <table className="vn-table">
-            <thead>
-              <tr>
-                <th>Code</th>
-                <th>Name</th>
-                <th>Size (L×W×H cm)</th>
-                <th>Tare</th>
-                <th>Max load</th>
-                <th>Max stack</th>
-                <th>Material</th>
-                <th>Flags</th>
-                <th>Status</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading && <tr><td colSpan={10} style={{ textAlign: 'center', padding: 24 }}><div className="vn-loading-spinner" /></td></tr>}
-              {!loading && rows.length === 0 && (
-                <tr><td colSpan={10} style={{ textAlign: 'center', padding: 24, color: 'var(--text-secondary)' }}>
+      {showForm && (
+        <Card>
+          <CardHeader>
+            <CardTitle>{editing ? 'Edit pallet type' : 'New pallet type'}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Code</Label>
+                <Input value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value }))} placeholder="EUR1" disabled={!!editing} />
+              </div>
+              <div className="space-y-2">
+                <Label>Name</Label>
+                <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label>Description</Label>
+                <Input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <Label>Length (mm)</Label>
+                <Input type="number" value={form.lengthMm} onChange={e => setForm(f => ({ ...f, lengthMm: e.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <Label>Width (mm)</Label>
+                <Input type="number" value={form.widthMm} onChange={e => setForm(f => ({ ...f, widthMm: e.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <Label>Deck height (mm)</Label>
+                <Input type="number" value={form.heightMm} onChange={e => setForm(f => ({ ...f, heightMm: e.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <Label>Max stack height (mm, optional)</Label>
+                <Input type="number" value={form.maxStackHeightMm} onChange={e => setForm(f => ({ ...f, maxStackHeightMm: e.target.value }))} placeholder="unlimited" />
+              </div>
+              <div className="space-y-2">
+                <Label>Tare weight (g)</Label>
+                <Input type="number" value={form.tareWeightGrams} onChange={e => setForm(f => ({ ...f, tareWeightGrams: e.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <Label>Max load (g, SWL)</Label>
+                <Input type="number" value={form.maxLoadGrams} onChange={e => setForm(f => ({ ...f, maxLoadGrams: e.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <Label>Material</Label>
+                <Select value={form.material} onValueChange={v => setForm(f => ({ ...f, material: v }))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MATERIALS.map(m => (
+                      <SelectItem key={m} value={m}>{m}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={form.reusable} onChange={e => setForm(f => ({ ...f, reusable: e.target.checked }))} className="h-4 w-4 rounded border border-input bg-background accent-primary" /> Reusable
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={form.isoCertified} onChange={e => setForm(f => ({ ...f, isoCertified: e.target.checked }))} className="h-4 w-4 rounded border border-input bg-background accent-primary" /> ISPM-15 certified
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={form.stackable} onChange={e => setForm(f => ({ ...f, stackable: e.target.checked }))} className="h-4 w-4 rounded border border-input bg-background accent-primary" /> Stackable
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={form.active} onChange={e => setForm(f => ({ ...f, active: e.target.checked }))} className="h-4 w-4 rounded border border-input bg-background accent-primary" /> Active
+              </label>
+            </div>
+            <div className="mt-4 flex gap-2">
+              <Button variant="gradient" onClick={handleSave}>{editing ? 'Save' : 'Create'}</Button>
+              <Button variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Code</TableHead>
+              <TableHead>Name</TableHead>
+              <TableHead>Size (L x W x H cm)</TableHead>
+              <TableHead>Tare</TableHead>
+              <TableHead>Max load</TableHead>
+              <TableHead>Max stack</TableHead>
+              <TableHead>Material</TableHead>
+              <TableHead>Flags</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading && (
+              <TableRow>
+                <TableCell colSpan={10} className="py-12 text-center">
+                  <Loader2 className="mx-auto h-6 w-6 animate-spin text-muted-foreground" />
+                </TableCell>
+              </TableRow>
+            )}
+            {!loading && rows.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={10} className="py-12 text-center text-sm text-muted-foreground">
                   No pallet types yet. Click <strong>Load standard types</strong> to seed EUR, US GMA, CHEP, and more.
-                </td></tr>
-              )}
-              {rows.map(p => (
-                <tr key={p.id}>
-                  <td><code>{p.code}</code></td>
-                  <td>
-                    <strong>{p.name}</strong>
-                    {p.description && <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{p.description}</div>}
-                  </td>
-                  <td>{cm(p.lengthMm)}×{cm(p.widthMm)}×{cm(p.heightMm)}</td>
-                  <td>{kg(p.tareWeightGrams)} kg</td>
-                  <td>{kg(p.maxLoadGrams)} kg</td>
-                  <td>{p.maxStackHeightMm ? `${cm(p.maxStackHeightMm)} cm` : '-'}</td>
-                  <td>{p.material}</td>
-                  <td style={{ fontSize: 11 }}>
-                    {p.reusable && <span className="vn-chip vn-chip-secondary" style={{ marginRight: 4 }}>reusable</span>}
-                    {p.isoCertified && <span className="vn-chip vn-chip-info" style={{ marginRight: 4 }}>ISPM-15</span>}
-                    {p.stackable && <span className="vn-chip vn-chip-secondary">stackable</span>}
-                  </td>
-                  <td>
-                    <span className={`vn-chip ${p.active ? 'vn-chip-success' : 'vn-chip-secondary'}`}>{p.active ? 'Active' : 'Inactive'}</span>
-                  </td>
-                  <td style={{ textAlign: 'right' }}>
-                    <button className="vn-btn vn-btn-outline vn-btn-sm" onClick={() => openEdit(p)}>Edit</button>
-                    {' '}
-                    <button className="vn-btn vn-btn-outline vn-btn-sm" style={{ color: 'var(--color-error)' }} onClick={() => handleDelete(p.id)}>Delete</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                </TableCell>
+              </TableRow>
+            )}
+            {rows.map(p => (
+              <TableRow key={p.id}>
+                <TableCell><code className="text-xs">{p.code}</code></TableCell>
+                <TableCell>
+                  <div className="font-semibold">{p.name}</div>
+                  {p.description && <div className="text-xs text-muted-foreground">{p.description}</div>}
+                </TableCell>
+                <TableCell>{cm(p.lengthMm)}x{cm(p.widthMm)}x{cm(p.heightMm)}</TableCell>
+                <TableCell>{kg(p.tareWeightGrams)} kg</TableCell>
+                <TableCell>{kg(p.maxLoadGrams)} kg</TableCell>
+                <TableCell>{p.maxStackHeightMm ? `${cm(p.maxStackHeightMm)} cm` : '-'}</TableCell>
+                <TableCell>{p.material}</TableCell>
+                <TableCell>
+                  <div className="flex flex-wrap gap-1">
+                    {p.reusable && <Badge variant="secondary">reusable</Badge>}
+                    {p.isoCertified && <Badge variant="info">ISPM-15</Badge>}
+                    {p.stackable && <Badge variant="secondary">stackable</Badge>}
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <Badge variant={p.active ? 'success' : 'muted'}>{p.active ? 'Active' : 'Inactive'}</Badge>
+                </TableCell>
+                <TableCell className="text-right">
+                  <div className="inline-flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => openEdit(p)}>Edit</Button>
+                    <Button variant="outline" size="sm" className="text-destructive" onClick={() => handleDelete(p.id)}>Delete</Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </Card>
     </div>
   );
 }

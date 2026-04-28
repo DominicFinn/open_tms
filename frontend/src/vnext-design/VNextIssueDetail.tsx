@@ -1,8 +1,38 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { API_URL } from '../api';
+import {
+  AlarmClock,
+  AlarmClockOff,
+  ArrowLeft,
+  ArrowUpFromLine,
+  Bot,
+  CheckCircle2,
+  CircleAlert,
+  ClipboardList,
+  Download,
+  ExternalLink,
+  FileText,
+  Info,
+  Loader2,
+  MapPin,
+  Package,
+  Pencil,
+  Play,
+  RefreshCw,
+  Truck,
+  UserPlus,
+  User as UserIcon,
+  XCircle,
+} from 'lucide-react';
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
+import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { cn } from '@/lib/utils';
 
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -37,8 +67,6 @@ function eventDescription(evt: any): string {
   return t.replace('issue.', '').replace(/_/g, ' ');
 }
 
-// ─── Types ──────────────────────────────────────────────────────────────────
-
 interface IssueDetail {
   id: string;
   title: string;
@@ -70,7 +98,20 @@ interface IssueDetail {
   commentCount?: number;
 }
 
-// ─── Source Entity Sidebar ──────────────────────────────────────────────────
+type BadgeVariant = 'success' | 'destructive' | 'warning' | 'info' | 'secondary' | 'muted' | 'default';
+
+function priorityVariant(priority: string): BadgeVariant {
+  if (priority === 'critical' || priority === 'high') return 'destructive';
+  if (priority === 'medium') return 'warning';
+  return 'secondary';
+}
+
+function statusVariant(status: string): BadgeVariant {
+  if (status === 'open') return 'info';
+  if (status === 'in_progress') return 'warning';
+  if (status === 'resolved') return 'success';
+  return 'secondary';
+}
 
 function SourceEntityCard({ entityType, entityId }: { entityType: string | null; entityId: string | null }) {
   const [data, setData] = useState<any>(null);
@@ -83,52 +124,93 @@ function SourceEntityCard({ entityType, entityId }: { entityType: string | null;
     fetch(url).then(r => r.json()).then(json => setData(json.data)).catch(() => {}).finally(() => setLoading(false));
   }, [entityType, entityId]);
 
-  if (!entityType || !entityId) return <div className="vn-card"><div className="vn-card-body" style={{ padding: 16, color: 'var(--on-surface-variant)', fontSize: 13 }}>No linked entity</div></div>;
-  if (loading) return <div className="vn-card"><div className="vn-card-body" style={{ padding: 16 }}><div className="loading-spinner" /></div></div>;
-  if (!data) return <div className="vn-card"><div className="vn-card-body" style={{ padding: 16, color: 'var(--on-surface-variant)', fontSize: 13 }}>Entity not found</div></div>;
+  if (!entityType || !entityId) {
+    return (
+      <Card className="p-4 text-sm text-muted-foreground">No linked entity</Card>
+    );
+  }
+  if (loading) {
+    return (
+      <Card className="p-4">
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      </Card>
+    );
+  }
+  if (!data) {
+    return <Card className="p-4 text-sm text-muted-foreground">Entity not found</Card>;
+  }
 
   if (entityType === 'shipment') {
     const driver = data.loads?.[0]?.driver;
     return (
-      <div className="vn-card">
-        <div className="vn-card-header" style={{ padding: '12px 16px' }}><h3 style={{ margin: 0, fontSize: 14 }}><span className="material-icons" style={{ fontSize: 16, verticalAlign: 'middle', marginRight: 4 }}>local_shipping</span>Shipment</h3></div>
-        <div className="vn-card-body" style={{ padding: '8px 16px 16px', fontSize: 13 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-            <span style={{ fontWeight: 600 }}>{data.reference || data.id?.slice(0, 8)}</span>
-            <span className={`vn-chip vn-chip-${data.status === 'delivered' ? 'success' : data.status === 'in_transit' ? 'warning' : 'info'}`} style={{ fontSize: 11 }}>{data.status}</span>
+      <Card>
+        <CardHeader className="p-4 pb-2">
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <Truck className="h-4 w-4" />
+            Shipment
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2 px-4 pb-4 text-sm">
+          <div className="flex items-center justify-between">
+            <span className="font-semibold">{data.reference || data.id?.slice(0, 8)}</span>
+            <Badge variant={data.status === 'delivered' ? 'success' : data.status === 'in_transit' ? 'warning' : 'info'}>
+              {data.status}
+            </Badge>
           </div>
-          {data.origin && <div style={{ marginBottom: 4 }}><span className="material-icons" style={{ fontSize: 13, color: 'var(--color-success)', verticalAlign: 'middle' }}>trip_origin</span> {data.origin.name || data.origin.city}</div>}
-          {data.destination && <div style={{ marginBottom: 4 }}><span className="material-icons" style={{ fontSize: 13, color: 'var(--color-error)', verticalAlign: 'middle' }}>place</span> {data.destination.name || data.destination.city}</div>}
-          {data.carrier && <div style={{ marginBottom: 4 }}><span className="material-icons" style={{ fontSize: 13, verticalAlign: 'middle' }}>business</span> {data.carrier.name}</div>}
-          {driver && (
-            <div style={{ marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span className="material-icons" style={{ fontSize: 13, verticalAlign: 'middle' }}>person</span>
+          {data.origin && (
+            <div className="flex items-center gap-2"><MapPin className="h-3 w-3 text-success" />{data.origin.name || data.origin.city}</div>
+          )}
+          {data.destination && (
+            <div className="flex items-center gap-2"><MapPin className="h-3 w-3 text-destructive" />{data.destination.name || data.destination.city}</div>
+          )}
+          {data.carrier && (
+            <div className="flex items-center gap-2"><Truck className="h-3 w-3" />{data.carrier.name}</div>
+          )}
+          {driver ? (
+            <div className="flex items-center gap-2">
+              <UserIcon className="h-3 w-3" />
               {driver.name}
-              {driver.phone && <span style={{ color: 'var(--primary)', marginLeft: 4 }}>{driver.phone}</span>}
+              {driver.phone && <span className="text-primary">{driver.phone}</span>}
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 text-xs text-warning">
+              <CircleAlert className="h-3 w-3" />
+              No driver assigned
             </div>
           )}
-          {!driver && <div style={{ fontSize: 12, color: 'var(--color-warning)', marginBottom: 4 }}><span className="material-icons" style={{ fontSize: 13, verticalAlign: 'middle' }}>warning</span> No driver assigned</div>}
-          <Link to={`/shipments/${entityId}`} style={{ color: 'var(--primary)', fontSize: 12, textDecoration: 'none' }}>View Shipment &rarr;</Link>
-        </div>
-      </div>
+          <Button variant="link" size="sm" asChild className="h-auto p-0">
+            <Link to={`/shipments/${entityId}`}>
+              View shipment
+              <ExternalLink className="h-3 w-3" />
+            </Link>
+          </Button>
+        </CardContent>
+      </Card>
     );
   }
 
-  // Order
   return (
-    <div className="vn-card">
-      <div className="vn-card-header" style={{ padding: '12px 16px' }}><h3 style={{ margin: 0, fontSize: 14 }}><span className="material-icons" style={{ fontSize: 16, verticalAlign: 'middle', marginRight: 4 }}>receipt_long</span>Order</h3></div>
-      <div className="vn-card-body" style={{ padding: '8px 16px 16px', fontSize: 13 }}>
-        <div style={{ fontWeight: 600, marginBottom: 4 }}>{data.reference || data.id?.slice(0, 8)}</div>
-        <div style={{ marginBottom: 4 }}>Status: <span className="vn-chip vn-chip-info" style={{ fontSize: 11 }}>{data.status}</span></div>
-        {data.customer && <div style={{ marginBottom: 4 }}>Customer: {data.customer.name}</div>}
-        <Link to={`/orders/${entityId}`} style={{ color: 'var(--primary)', fontSize: 12, textDecoration: 'none' }}>View Order &rarr;</Link>
-      </div>
-    </div>
+    <Card>
+      <CardHeader className="p-4 pb-2">
+        <CardTitle className="flex items-center gap-2 text-sm">
+          <Package className="h-4 w-4" />
+          Order
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2 px-4 pb-4 text-sm">
+        <div className="font-semibold">{data.reference || data.id?.slice(0, 8)}</div>
+        <div>Status: <Badge variant="info">{data.status}</Badge></div>
+        {data.customer && <div>Customer: {data.customer.name}</div>}
+        <Button variant="link" size="sm" asChild className="h-auto p-0">
+          <Link to={`/orders/${entityId}`}>
+            View order
+            <ExternalLink className="h-3 w-3" />
+          </Link>
+        </Button>
+      </CardContent>
+    </Card>
   );
 }
-
-// ─── Main Component ─────────────────────────────────────────────────────────
 
 function IssueReportSection({ issueId }: { issueId: string }) {
   const [report, setReport] = useState<any>(null);
@@ -149,7 +231,6 @@ function IssueReportSection({ issueId }: { issueId: string }) {
       const res = await fetch(`${API_URL}/api/v1/issues/${issueId}/report`, { method: 'POST' });
       const json = await res.json();
       if (json.data) {
-        // Re-fetch to get file info
         const docRes = await fetch(`${API_URL}/api/v1/issues/${issueId}/report`);
         const docJson = await docRes.json();
         if (docJson.data) setReport(docJson.data);
@@ -158,30 +239,33 @@ function IssueReportSection({ issueId }: { issueId: string }) {
     setGenerating(false);
   };
 
-  if (loading) return <div className="loading-spinner" />;
+  if (loading) return <Loader2 className="h-5 w-5 animate-spin" />;
 
   if (report) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <span className="material-icons" style={{ fontSize: 32, color: 'var(--color-error)' }}>picture_as_pdf</span>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 600, fontSize: 13 }}>{report.fileName}</div>
-          <div style={{ fontSize: 11, color: 'var(--on-surface-variant)' }}>Generated {new Date(report.createdAt).toLocaleString()}</div>
+      <div className="flex items-center gap-3">
+        <FileText className="h-8 w-8 text-destructive" />
+        <div className="flex-1">
+          <div className="text-sm font-semibold">{report.fileName}</div>
+          <div className="text-xs text-muted-foreground">Generated {new Date(report.createdAt).toLocaleString()}</div>
         </div>
-        <a href={`${API_URL}/api/v1/documents/${report.id}/download`} className="vn-btn vn-btn-primary" style={{ textDecoration: 'none', fontSize: 12 }}>
-          <span className="material-icons" style={{ fontSize: 16 }}>download</span> Download
-        </a>
+        <Button variant="gradient" size="sm" asChild>
+          <a href={`${API_URL}/api/v1/documents/${report.id}/download`}>
+            <Download className="h-4 w-4" />
+            Download
+          </a>
+        </Button>
       </div>
     );
   }
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-      <span style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>No closure report generated yet.</span>
-      <button className="vn-btn vn-btn-primary" onClick={handleGenerate} disabled={generating} style={{ fontSize: 12 }}>
-        <span className="material-icons" style={{ fontSize: 16 }}>description</span>
-        {generating ? 'Generating...' : 'Generate Report'}
-      </button>
+    <div className="flex items-center gap-3">
+      <span className="text-sm text-muted-foreground">No closure report generated yet.</span>
+      <Button variant="gradient" size="sm" onClick={handleGenerate} disabled={generating}>
+        <FileText className="h-4 w-4" />
+        {generating ? 'Generating...' : 'Generate report'}
+      </Button>
     </div>
   );
 }
@@ -194,29 +278,23 @@ export default function VNextIssueDetail() {
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState<'activity' | 'details' | 'resolution'>('activity');
 
-  // Activity
   const [activity, setActivity] = useState<any[]>([]);
   const [activityLoading, setActivityLoading] = useState(false);
 
-  // Comments
   const [newComment, setNewComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  // Labels
   const [allLabels, setAllLabels] = useState<any[]>([]);
   const [showLabelPicker, setShowLabelPicker] = useState(false);
 
-  // Edit states
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
   const [editingDesc, setEditingDesc] = useState(false);
   const [descDraft, setDescDraft] = useState('');
 
-  // Snooze
   const [showSnooze, setShowSnooze] = useState(false);
   const [snoozeDate, setSnoozeDate] = useState('');
 
-  // Assign
   const [showAssign, setShowAssign] = useState(false);
   const [assignName, setAssignName] = useState('');
 
@@ -245,8 +323,6 @@ export default function VNextIssueDetail() {
     loadActivity();
     fetch(`${API_URL}/api/v1/issue-labels`).then(r => r.json()).then(j => setAllLabels(j.data || [])).catch(() => {});
   }, [loadIssue, loadActivity]);
-
-  // ─── Actions ──────────────────────────────────────────────────────────────
 
   const doAction = async (path: string, body?: any) => {
     await fetch(`${API_URL}/api/v1/issues/${id}${path}`, {
@@ -296,284 +372,443 @@ export default function VNextIssueDetail() {
     loadIssue();
   };
 
-  // ─── Render ───────────────────────────────────────────────────────────────
-
-  if (loading) return <div style={{ display: 'flex', justifyContent: 'center', padding: 64 }}><div className="loading-spinner" /></div>;
-  if (error || !issue) return <div className="vn-alert vn-alert-error">{error || 'Issue not found'}</div>;
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <h3 className="text-lg font-medium">Loading...</h3>
+      </div>
+    );
+  }
+  if (error || !issue) {
+    return (
+      <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+        <CircleAlert className="h-5 w-5" />
+        {error || 'Issue not found'}
+      </div>
+    );
+  }
 
   const labels = (issue.labelAssignments || []).map((a: any) => a.label);
   const isSnoozed = issue.snoozedUntil && new Date(issue.snoozedUntil) > new Date();
-  const statusMap: Record<string, string> = { open: 'info', in_progress: 'warning', resolved: 'success', closed: 'secondary' };
-  const priorityMap: Record<string, string> = { critical: 'error', high: 'error', medium: 'warning', low: 'secondary' };
 
   return (
-    <>
-      {/* Header */}
-      <div style={{ marginBottom: 16 }}>
-        <button className="vn-btn" onClick={() => navigate('/issues')} style={{ marginBottom: 12 }}>
-          <span className="material-icons" style={{ fontSize: 18 }}>arrow_back</span> Back to Issues
-        </button>
+    <div className="space-y-6">
+      <Button variant="ghost" size="sm" onClick={() => navigate('/issues')} className="-ml-3 self-start">
+        <ArrowLeft className="h-4 w-4" />
+        Back to issues
+      </Button>
 
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
-          {/* Title */}
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-start gap-3">
           {editingTitle ? (
-            <input className="vn-input" value={titleDraft} onChange={e => setTitleDraft(e.target.value)} autoFocus
+            <Input
+              value={titleDraft}
+              onChange={e => setTitleDraft(e.target.value)}
+              autoFocus
               onBlur={() => { if (titleDraft.trim() && titleDraft !== issue.title) doUpdate({ title: titleDraft }); setEditingTitle(false); }}
               onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-              style={{ fontSize: 22, fontWeight: 700, flex: 1, minWidth: 300 }} />
+              className="flex-1 min-w-[300px] text-2xl font-bold"
+            />
           ) : (
-            <h1 style={{ margin: 0, cursor: 'pointer', flex: 1 }} onClick={() => { setTitleDraft(issue.title); setEditingTitle(true); }}>{issue.title}</h1>
+            <h1 className="flex-1 cursor-pointer text-3xl font-bold tracking-tight" onClick={() => { setTitleDraft(issue.title); setEditingTitle(true); }}>
+              {issue.title}
+            </h1>
           )}
-
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-            <span className={`vn-chip vn-chip-${priorityMap[issue.priority] || 'info'}`} style={{ textTransform: 'capitalize' }}>{issue.priority}</span>
-            <span className={`vn-chip vn-chip-${statusMap[issue.status] || 'info'}`} style={{ textTransform: 'capitalize' }}>{issue.status.replace('_', ' ')}</span>
-            <span className="vn-chip" style={{ textTransform: 'capitalize' }}>{issue.category}</span>
-            {issue.needsCapa && <span className="vn-chip vn-chip-warning"><span className="material-icons" style={{ fontSize: 14, verticalAlign: 'middle' }}>assignment_late</span> Needs CAPA</span>}
-            {isSnoozed && <span className="vn-chip"><span className="material-icons" style={{ fontSize: 14, verticalAlign: 'middle' }}>alarm</span> Snoozed</span>}
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant={priorityVariant(issue.priority)} className="capitalize">{issue.priority}</Badge>
+            <Badge variant={statusVariant(issue.status)} className="capitalize">{issue.status.replace('_', ' ')}</Badge>
+            <Badge variant="muted" className="capitalize">{issue.category}</Badge>
+            {issue.needsCapa && (
+              <Badge variant="warning"><ClipboardList className="h-3 w-3" />Needs CAPA</Badge>
+            )}
+            {isSnoozed && (
+              <Badge variant="secondary"><AlarmClock className="h-3 w-3" />Snoozed</Badge>
+            )}
           </div>
         </div>
 
-        {/* Labels */}
-        <div style={{ display: 'flex', gap: 6, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div className="flex flex-wrap items-center gap-2">
           {labels.map((l: any) => (
-            <span key={l.id} style={{ fontSize: 12, padding: '2px 8px', borderRadius: 10, background: l.color, color: '#fff', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+            <span
+              key={l.id}
+              className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-semibold text-white"
+              style={{ background: l.color }}
+            >
               {l.name}
-              <span style={{ cursor: 'pointer', fontSize: 14 }} onClick={() => handleRemoveLabel(l.id)}>&times;</span>
+              <button onClick={() => handleRemoveLabel(l.id)} className="text-white/80 hover:text-white">&times;</button>
             </span>
           ))}
-          <div style={{ position: 'relative' }}>
-            <button className="vn-btn" style={{ fontSize: 12, padding: '2px 8px' }} onClick={() => setShowLabelPicker(!showLabelPicker)}>+ Label</button>
+          <div className="relative">
+            <Button variant="outline" size="sm" onClick={() => setShowLabelPicker(!showLabelPicker)}>+ Label</Button>
             {showLabelPicker && (
-              <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 10, background: 'var(--surface)', border: '1px solid var(--outline-variant)', borderRadius: 8, padding: 8, minWidth: 160, boxShadow: 'var(--modal-shadow)' }}>
+              <div className="absolute left-0 top-full z-10 mt-1 min-w-[160px] rounded-md border border-border bg-popover p-2 shadow-lg">
                 {allLabels.filter(l => !labels.find((el: any) => el.id === l.id)).map((l: any) => (
-                  <div key={l.id} style={{ padding: '6px 8px', cursor: 'pointer', borderRadius: 4, display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}
+                  <button
+                    key={l.id}
+                    type="button"
+                    className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm transition-colors hover:bg-muted"
                     onClick={() => handleAddLabel(l.id)}
-                    onMouseOver={e => (e.currentTarget.style.background = 'var(--surface-container)')}
-                    onMouseOut={e => (e.currentTarget.style.background = 'transparent')}>
-                    <span style={{ width: 12, height: 12, borderRadius: '50%', background: l.color, flexShrink: 0 }} />
+                  >
+                    <span className="h-3 w-3 rounded-full" style={{ background: l.color }} />
                     {l.name}
-                  </div>
+                  </button>
                 ))}
-                {allLabels.filter(l => !labels.find((el: any) => el.id === l.id)).length === 0 && <div style={{ fontSize: 12, color: 'var(--on-surface-variant)', padding: 4 }}>No more labels</div>}
+                {allLabels.filter(l => !labels.find((el: any) => el.id === l.id)).length === 0 && (
+                  <div className="p-2 text-xs text-muted-foreground">No more labels</div>
+                )}
               </div>
             )}
           </div>
         </div>
       </div>
 
-      {/* Action Bar */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-        {issue.status === 'open' && <button className="vn-btn vn-btn-primary" onClick={() => doAction('/status', { status: 'in_progress' })}><span className="material-icons" style={{ fontSize: 16 }}>play_arrow</span> Start Working</button>}
-        {(issue.status === 'open' || issue.status === 'in_progress') && <button className="vn-btn vn-btn-success" onClick={() => { const r = prompt('Resolution notes (optional):'); doAction('/status', { status: 'resolved', resolution: r || undefined }); }}><span className="material-icons" style={{ fontSize: 16 }}>check</span> Resolve</button>}
-        {(issue.status === 'open' || issue.status === 'in_progress' || issue.status === 'resolved') && <button className="vn-btn" onClick={() => doAction('/close')}><span className="material-icons" style={{ fontSize: 16 }}>cancel</span> Close</button>}
-        {(issue.status === 'resolved' || issue.status === 'closed') && <button className="vn-btn" onClick={() => doAction('/reopen')}><span className="material-icons" style={{ fontSize: 16 }}>refresh</span> Reopen</button>}
-
-        <button className="vn-btn" onClick={() => setShowAssign(!showAssign)}><span className="material-icons" style={{ fontSize: 16 }}>person_add</span> Assign</button>
-        <button className="vn-btn" onClick={() => { const to = prompt('Escalate to:'); const reason = prompt('Reason:'); if (to) doAction('/escalate', { escalatedTo: to, reason }); }}><span className="material-icons" style={{ fontSize: 16 }}>arrow_upward</span> Escalate</button>
-
-        {!isSnoozed ? (
-          <button className="vn-btn" onClick={() => setShowSnooze(!showSnooze)}><span className="material-icons" style={{ fontSize: 16 }}>alarm</span> Snooze</button>
-        ) : (
-          <button className="vn-btn" onClick={() => doAction('/unsnooze')}><span className="material-icons" style={{ fontSize: 16 }}>alarm_off</span> Unsnooze</button>
+      <div className="flex flex-wrap gap-2">
+        {issue.status === 'open' && (
+          <Button onClick={() => doAction('/status', { status: 'in_progress' })}>
+            <Play className="h-4 w-4" />
+            Start working
+          </Button>
         )}
-
-        <button className={`vn-btn ${issue.needsCapa ? 'vn-btn-warning' : ''}`} onClick={() => doAction('/needs-capa', { needsCapa: !issue.needsCapa })}>
-          <span className="material-icons" style={{ fontSize: 16 }}>assignment_late</span> {issue.needsCapa ? 'Clear CAPA' : 'Needs CAPA'}
-        </button>
+        {(issue.status === 'open' || issue.status === 'in_progress') && (
+          <Button variant="default" onClick={() => { const r = prompt('Resolution notes (optional):'); doAction('/status', { status: 'resolved', resolution: r || undefined }); }}>
+            <CheckCircle2 className="h-4 w-4" />
+            Resolve
+          </Button>
+        )}
+        {(issue.status === 'open' || issue.status === 'in_progress' || issue.status === 'resolved') && (
+          <Button variant="outline" onClick={() => doAction('/close')}>
+            <XCircle className="h-4 w-4" />
+            Close
+          </Button>
+        )}
+        {(issue.status === 'resolved' || issue.status === 'closed') && (
+          <Button variant="outline" onClick={() => doAction('/reopen')}>
+            <RefreshCw className="h-4 w-4" />
+            Reopen
+          </Button>
+        )}
+        <Button variant="outline" onClick={() => setShowAssign(!showAssign)}>
+          <UserPlus className="h-4 w-4" />
+          Assign
+        </Button>
+        <Button variant="outline" onClick={() => { const to = prompt('Escalate to:'); const reason = prompt('Reason:'); if (to) doAction('/escalate', { escalatedTo: to, reason }); }}>
+          <ArrowUpFromLine className="h-4 w-4" />
+          Escalate
+        </Button>
+        {!isSnoozed ? (
+          <Button variant="outline" onClick={() => setShowSnooze(!showSnooze)}>
+            <AlarmClock className="h-4 w-4" />
+            Snooze
+          </Button>
+        ) : (
+          <Button variant="outline" onClick={() => doAction('/unsnooze')}>
+            <AlarmClockOff className="h-4 w-4" />
+            Unsnooze
+          </Button>
+        )}
+        <Button variant={issue.needsCapa ? 'default' : 'outline'} onClick={() => doAction('/needs-capa', { needsCapa: !issue.needsCapa })}>
+          <ClipboardList className="h-4 w-4" />
+          {issue.needsCapa ? 'Clear CAPA' : 'Needs CAPA'}
+        </Button>
       </div>
 
-      {/* Assign popover */}
       {showAssign && (
-        <div className="vn-card" style={{ padding: 12, marginBottom: 12, display: 'flex', gap: 8, alignItems: 'center' }}>
-          <input className="vn-input" placeholder="Assignee name" value={assignName} onChange={e => setAssignName(e.target.value)} style={{ flex: 1 }} />
-          <button className="vn-btn vn-btn-primary" onClick={() => { if (assignName.trim()) { doAction('/assign', { assigneeId: assignName.toLowerCase().replace(/\s/g, '.'), assigneeName: assignName }); setShowAssign(false); setAssignName(''); } }}>Assign</button>
-          <button className="vn-btn" onClick={() => setShowAssign(false)}>Cancel</button>
-        </div>
+        <Card className="flex items-center gap-2 p-3">
+          <Input className="flex-1" placeholder="Assignee name" value={assignName} onChange={e => setAssignName(e.target.value)} />
+          <Button variant="gradient" onClick={() => {
+            if (assignName.trim()) {
+              doAction('/assign', { assigneeId: assignName.toLowerCase().replace(/\s/g, '.'), assigneeName: assignName });
+              setShowAssign(false);
+              setAssignName('');
+            }
+          }}>
+            Assign
+          </Button>
+          <Button variant="outline" onClick={() => setShowAssign(false)}>Cancel</Button>
+        </Card>
       )}
 
-      {/* Snooze popover */}
       {showSnooze && (
-        <div className="vn-card" style={{ padding: 12, marginBottom: 12, display: 'flex', gap: 8, alignItems: 'center' }}>
-          <input type="datetime-local" className="vn-input" value={snoozeDate} onChange={e => setSnoozeDate(e.target.value)} />
-          <button className="vn-btn vn-btn-primary" onClick={() => { if (snoozeDate) { doAction('/snooze', { until: new Date(snoozeDate).toISOString() }); setShowSnooze(false); setSnoozeDate(''); } }}>Snooze</button>
-          <button className="vn-btn" onClick={() => setShowSnooze(false)}>Cancel</button>
-        </div>
+        <Card className="flex items-center gap-2 p-3">
+          <Input type="datetime-local" value={snoozeDate} onChange={e => setSnoozeDate(e.target.value)} />
+          <Button variant="gradient" onClick={() => {
+            if (snoozeDate) {
+              doAction('/snooze', { until: new Date(snoozeDate).toISOString() });
+              setShowSnooze(false);
+              setSnoozeDate('');
+            }
+          }}>
+            Snooze
+          </Button>
+          <Button variant="outline" onClick={() => setShowSnooze(false)}>Cancel</Button>
+        </Card>
       )}
 
-      {/* Main + Sidebar Grid */}
-      <div className="vn-detail-grid">
-        {/* Main Panel */}
-        <div className="vn-detail-main">
-          {/* Tabs */}
-          <div className="vn-tabs" style={{ marginBottom: 16 }}>
-            <button className={`vn-tab ${activeTab === 'activity' ? 'active' : ''}`} onClick={() => setActiveTab('activity')}>Activity</button>
-            <button className={`vn-tab ${activeTab === 'details' ? 'active' : ''}`} onClick={() => setActiveTab('details')}>Details</button>
-            {(issue.status === 'resolved' || issue.status === 'closed') && (
-              <button className={`vn-tab ${activeTab === 'resolution' ? 'active' : ''}`} onClick={() => setActiveTab('resolution')}>Resolution</button>
-            )}
+      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center gap-1 border-b border-border">
+            {(['activity', 'details', ...(issue.status === 'resolved' || issue.status === 'closed' ? ['resolution'] : [])] as const).map(tab => (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => setActiveTab(tab as any)}
+                className={cn(
+                  '-mb-px border-b-2 px-3 py-2 text-sm font-medium capitalize transition-colors',
+                  activeTab === tab
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {tab}
+              </button>
+            ))}
           </div>
 
-          {/* Activity Tab */}
           {activeTab === 'activity' && (
-            <div className="vn-card">
-              <div className="vn-card-body">
-                {activityLoading ? <div className="loading-spinner" /> : activity.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: 24, color: 'var(--on-surface-variant)' }}>No activity yet</div>
+            <Card>
+              <CardContent className="space-y-2 p-4">
+                {activityLoading ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : activity.length === 0 ? (
+                  <div className="py-6 text-center text-sm text-muted-foreground">No activity yet</div>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                  <div className="flex flex-col">
                     {activity.map((item, idx) => (
                       item.type === 'comment' ? (
-                        <div key={item.id} style={{ display: 'flex', gap: 12, padding: '12px 0', borderBottom: idx < activity.length - 1 ? '1px solid var(--outline-variant)' : 'none' }}>
-                          <div style={{
-                            width: 32, height: 32, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            background: item.authorType === 'agent' ? 'var(--color-info)' : 'var(--primary)', color: '#fff', fontSize: 12, fontWeight: 600, flexShrink: 0
-                          }}>
-                            {item.authorType === 'agent' ? <span className="material-icons" style={{ fontSize: 16 }}>smart_toy</span> : getInitials(item.authorName)}
+                        <div
+                          key={item.id}
+                          className={cn('flex gap-3 py-3', idx < activity.length - 1 && 'border-b border-border')}
+                        >
+                          <div className={cn(
+                            'flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white',
+                            item.authorType === 'agent' ? 'bg-info' : 'bg-primary',
+                          )}>
+                            {item.authorType === 'agent' ? <Bot className="h-4 w-4" /> : getInitials(item.authorName)}
                           </div>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                              <span style={{ fontWeight: 600, fontSize: 13 }}>{item.authorName}</span>
-                              <span style={{ fontSize: 11, color: 'var(--on-surface-variant)' }}>{new Date(item.timestamp).toLocaleString()}</span>
+                          <div className="flex-1">
+                            <div className="mb-1 flex items-center justify-between">
+                              <span className="text-sm font-semibold">{item.authorName}</span>
+                              <span className="text-xs text-muted-foreground">{new Date(item.timestamp).toLocaleString()}</span>
                             </div>
-                            <p style={{ fontSize: 13, lineHeight: 1.5, margin: 0 }}>{item.body}</p>
+                            <p className="text-sm leading-relaxed">{item.body}</p>
                           </div>
                         </div>
                       ) : (
-                        <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', borderBottom: idx < activity.length - 1 ? '1px solid var(--outline-variant)' : 'none', fontSize: 12, color: 'var(--on-surface-variant)' }}>
-                          <span className="material-icons" style={{ fontSize: 16 }}>info</span>
+                        <div
+                          key={item.id}
+                          className={cn(
+                            'flex items-center gap-2 py-2 text-xs text-muted-foreground',
+                            idx < activity.length - 1 && 'border-b border-border',
+                          )}
+                        >
+                          <Info className="h-4 w-4" />
                           <span>{eventDescription(item)}</span>
-                          <span style={{ marginLeft: 'auto', fontSize: 11 }}>{new Date(item.timestamp).toLocaleString()}</span>
+                          <span className="ml-auto">{new Date(item.timestamp).toLocaleString()}</span>
                         </div>
                       )
                     ))}
                   </div>
                 )}
-                {/* Add comment form */}
-                <div style={{ display: 'flex', gap: 8, marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--outline-variant)' }}>
-                  <textarea className="vn-input" placeholder="Add a comment..." value={newComment} onChange={e => setNewComment(e.target.value)} rows={2} style={{ flex: 1, resize: 'vertical' }} />
-                  <button className="vn-btn vn-btn-primary" onClick={handleAddComment} disabled={submitting || !newComment.trim()} style={{ alignSelf: 'flex-end' }}>
+
+                <Separator className="my-3" />
+                <div className="flex gap-2">
+                  <textarea
+                    rows={2}
+                    placeholder="Add a comment..."
+                    value={newComment}
+                    onChange={e => setNewComment(e.target.value)}
+                    className="flex-1 resize-y rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  />
+                  <Button variant="gradient" onClick={handleAddComment} disabled={submitting || !newComment.trim()} className="self-end">
                     {submitting ? '...' : 'Post'}
-                  </button>
+                  </Button>
                 </div>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           )}
 
-          {/* Details Tab */}
           {activeTab === 'details' && (
-            <div className="vn-card">
-              <div className="vn-card-body">
-                <div className="vn-form-grid">
-                  <div className="vn-field">
-                    <label className="vn-field-label">Description</label>
-                    {editingDesc ? (
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <textarea className="vn-input" value={descDraft} onChange={e => setDescDraft(e.target.value)} rows={4} style={{ flex: 1 }} />
-                        <button className="vn-btn vn-btn-primary" onClick={() => { doUpdate({ description: descDraft }); setEditingDesc(false); }}>Save</button>
-                        <button className="vn-btn" onClick={() => setEditingDesc(false)}>Cancel</button>
+            <Card>
+              <CardContent className="grid gap-3 p-4 md:grid-cols-2">
+                <div className="md:col-span-2 space-y-2">
+                  <Label>Description</Label>
+                  {editingDesc ? (
+                    <div className="flex gap-2">
+                      <textarea
+                        value={descDraft}
+                        onChange={e => setDescDraft(e.target.value)}
+                        rows={4}
+                        className="flex-1 resize-y rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      />
+                      <div className="flex flex-col gap-2">
+                        <Button variant="gradient" onClick={() => { doUpdate({ description: descDraft }); setEditingDesc(false); }}>Save</Button>
+                        <Button variant="outline" onClick={() => setEditingDesc(false)}>Cancel</Button>
                       </div>
-                    ) : (
-                      <div onClick={() => { setDescDraft(issue.description || ''); setEditingDesc(true); }} style={{ cursor: 'pointer', minHeight: 40, padding: 8, border: '1px solid var(--outline-variant)', borderRadius: 'var(--border-radius-sm)', fontSize: 13 }}>
-                        {issue.description || <span style={{ color: 'var(--on-surface-variant)' }}>Click to add description...</span>}
-                      </div>
-                    )}
-                  </div>
-                  <div className="vn-field"><label className="vn-field-label">Category</label><div style={{ fontSize: 13 }}>{issue.category}</div></div>
-                  <div className="vn-field"><label className="vn-field-label">Source Type</label><div style={{ fontSize: 13 }}>{issue.sourceEntityType || '-'}</div></div>
-                  <div className="vn-field"><label className="vn-field-label">Source Entity</label><div style={{ fontSize: 13 }}>{issue.sourceEntityId?.slice(0, 12) || '-'}</div></div>
-                  <div className="vn-field"><label className="vn-field-label">Created</label><div style={{ fontSize: 13 }}>{new Date(issue.createdAt).toLocaleString()}</div></div>
-                  <div className="vn-field"><label className="vn-field-label">Updated</label><div style={{ fontSize: 13 }}>{new Date(issue.updatedAt).toLocaleString()}</div></div>
-                  {issue.escalatedTo && <div className="vn-field"><label className="vn-field-label">Escalated To</label><div style={{ fontSize: 13 }}>{issue.escalatedTo}</div></div>}
-                  {issue.escalatedAt && <div className="vn-field"><label className="vn-field-label">Escalated At</label><div style={{ fontSize: 13 }}>{new Date(issue.escalatedAt).toLocaleString()}</div></div>}
+                    </div>
+                  ) : (
+                    <div
+                      onClick={() => { setDescDraft(issue.description || ''); setEditingDesc(true); }}
+                      className="min-h-[40px] cursor-pointer rounded-md border border-input p-2 text-sm hover:border-primary/40"
+                    >
+                      {issue.description || <span className="text-muted-foreground">Click to add description...</span>}
+                    </div>
+                  )}
                 </div>
-              </div>
-            </div>
+                <div className="space-y-1">
+                  <Label className="text-muted-foreground">Category</Label>
+                  <div className="text-sm">{issue.category}</div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-muted-foreground">Source type</Label>
+                  <div className="text-sm">{issue.sourceEntityType || '-'}</div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-muted-foreground">Source entity</Label>
+                  <div className="text-sm">{issue.sourceEntityId?.slice(0, 12) || '-'}</div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-muted-foreground">Created</Label>
+                  <div className="text-sm">{new Date(issue.createdAt).toLocaleString()}</div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-muted-foreground">Updated</Label>
+                  <div className="text-sm">{new Date(issue.updatedAt).toLocaleString()}</div>
+                </div>
+                {issue.escalatedTo && (
+                  <div className="space-y-1">
+                    <Label className="text-muted-foreground">Escalated to</Label>
+                    <div className="text-sm">{issue.escalatedTo}</div>
+                  </div>
+                )}
+                {issue.escalatedAt && (
+                  <div className="space-y-1">
+                    <Label className="text-muted-foreground">Escalated at</Label>
+                    <div className="text-sm">{new Date(issue.escalatedAt).toLocaleString()}</div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           )}
 
-          {/* Resolution Tab */}
           {activeTab === 'resolution' && (
-            <div className="vn-card">
-              <div className="vn-card-body">
-                <div className="vn-form-grid">
-                  <div className="vn-field"><label className="vn-field-label">Resolution</label><div style={{ fontSize: 13 }}>{issue.resolution || <span style={{ color: 'var(--on-surface-variant)' }}>No resolution notes</span>}</div></div>
-                  {issue.resolvedBy && <div className="vn-field"><label className="vn-field-label">Resolved By</label><div style={{ fontSize: 13 }}>{issue.resolvedBy}</div></div>}
-                  {issue.resolvedAt && <div className="vn-field"><label className="vn-field-label">Resolved At</label><div style={{ fontSize: 13 }}>{new Date(issue.resolvedAt).toLocaleString()}</div></div>}
-                  {issue.closedBy && <div className="vn-field"><label className="vn-field-label">Closed By</label><div style={{ fontSize: 13 }}>{issue.closedBy}</div></div>}
-                  {issue.closedAt && <div className="vn-field"><label className="vn-field-label">Closed At</label><div style={{ fontSize: 13 }}>{new Date(issue.closedAt).toLocaleString()}</div></div>}
+            <Card>
+              <CardContent className="space-y-4 p-4">
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="md:col-span-2 space-y-1">
+                    <Label className="text-muted-foreground">Resolution</Label>
+                    <div className="text-sm">{issue.resolution || <span className="text-muted-foreground">No resolution notes</span>}</div>
+                  </div>
+                  {issue.resolvedBy && (
+                    <div className="space-y-1">
+                      <Label className="text-muted-foreground">Resolved by</Label>
+                      <div className="text-sm">{issue.resolvedBy}</div>
+                    </div>
+                  )}
+                  {issue.resolvedAt && (
+                    <div className="space-y-1">
+                      <Label className="text-muted-foreground">Resolved at</Label>
+                      <div className="text-sm">{new Date(issue.resolvedAt).toLocaleString()}</div>
+                    </div>
+                  )}
+                  {issue.closedBy && (
+                    <div className="space-y-1">
+                      <Label className="text-muted-foreground">Closed by</Label>
+                      <div className="text-sm">{issue.closedBy}</div>
+                    </div>
+                  )}
+                  {issue.closedAt && (
+                    <div className="space-y-1">
+                      <Label className="text-muted-foreground">Closed at</Label>
+                      <div className="text-sm">{new Date(issue.closedAt).toLocaleString()}</div>
+                    </div>
+                  )}
                 </div>
-                {/* Closure Report */}
-                <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--outline-variant)' }}>
-                  <h3 style={{ fontSize: 14, margin: '0 0 12px 0' }}><span className="material-icons" style={{ fontSize: 16, verticalAlign: 'middle', marginRight: 4 }}>description</span>Closure Report</h3>
+                <Separator />
+                <div>
+                  <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold">
+                    <FileText className="h-4 w-4" />
+                    Closure report
+                  </h3>
                   <IssueReportSection issueId={id!} />
                 </div>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           )}
         </div>
 
-        {/* Sidebar */}
-        <div className="vn-detail-sidebar">
-          {/* Source Entity */}
+        <div className="space-y-3">
           <SourceEntityCard entityType={issue.sourceEntityType} entityId={issue.sourceEntityId} />
 
-          {/* SLA Status */}
-          <div className="vn-card">
-            <div className="vn-card-header" style={{ padding: '12px 16px' }}><h3 style={{ margin: 0, fontSize: 14 }}><span className="material-icons" style={{ fontSize: 16, verticalAlign: 'middle', marginRight: 4 }}>timer</span>SLA Status</h3></div>
-            <div className="vn-card-body" style={{ padding: '8px 16px 16px' }}>
+          <Card>
+            <CardHeader className="p-4 pb-2">
+              <CardTitle className="text-sm">SLA status</CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-4 text-sm">
               {(issue.slaEvaluations || []).length === 0 ? (
-                <div style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>No SLA rules active</div>
+                <div className="text-muted-foreground">No SLA rules active</div>
               ) : (
                 (issue.slaEvaluations || []).map((sla: any, idx: number) => (
-                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: idx < (issue.slaEvaluations || []).length - 1 ? '1px solid var(--outline-variant)' : 'none' }}>
-                    <span style={{ fontSize: 12 }}>{sla.ruleName || sla.ruleType}</span>
-                    <span className={`vn-chip vn-chip-${sla.status === 'breached' ? 'error' : sla.status === 'warning' ? 'warning' : 'info'}`} style={{ fontSize: 10 }}>{sla.status}</span>
+                  <div
+                    key={idx}
+                    className={cn(
+                      'flex items-center justify-between py-2',
+                      idx < (issue.slaEvaluations || []).length - 1 && 'border-b border-border',
+                    )}
+                  >
+                    <span className="text-xs">{sla.ruleName || sla.ruleType}</span>
+                    <Badge variant={sla.status === 'breached' ? 'destructive' : sla.status === 'warning' ? 'warning' : 'info'}>
+                      {sla.status}
+                    </Badge>
                   </div>
                 ))
               )}
-            </div>
-          </div>
+            </CardContent>
+          </Card>
 
-          {/* Assignment */}
-          <div className="vn-card">
-            <div className="vn-card-header" style={{ padding: '12px 16px' }}><h3 style={{ margin: 0, fontSize: 14 }}><span className="material-icons" style={{ fontSize: 16, verticalAlign: 'middle', marginRight: 4 }}>person</span>Assignment</h3></div>
-            <div className="vn-card-body" style={{ padding: '8px 16px 16px', fontSize: 13 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--primary)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 600 }}>
+          <Card>
+            <CardHeader className="p-4 pb-2">
+              <CardTitle className="text-sm">Assignment</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 px-4 pb-4 text-sm">
+              <div className="flex items-center gap-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
                   {getInitials(issue.assigneeName)}
                 </div>
                 <span>{issue.assigneeName || 'Unassigned'}</span>
               </div>
-              {issue.escalatedTo && <div style={{ fontSize: 12, color: 'var(--color-error)' }}>Escalated to: {issue.escalatedTo}</div>}
-            </div>
-          </div>
+              {issue.escalatedTo && <div className="text-xs text-destructive">Escalated to: {issue.escalatedTo}</div>}
+            </CardContent>
+          </Card>
 
-          {/* CAPA Reports */}
-          <div className="vn-card">
-            <div className="vn-card-header" style={{ padding: '12px 16px' }}><h3 style={{ margin: 0, fontSize: 14 }}><span className="material-icons" style={{ fontSize: 16, verticalAlign: 'middle', marginRight: 4 }}>assignment_late</span>CAPA Reports</h3></div>
-            <div className="vn-card-body" style={{ padding: '8px 16px 16px', fontSize: 13 }}>
+          <Card>
+            <CardHeader className="p-4 pb-2">
+              <CardTitle className="text-sm">CAPA reports</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 px-4 pb-4 text-sm">
               {(issue.capaReports || []).length === 0 ? (
-                <div style={{ color: 'var(--on-surface-variant)', marginBottom: 8 }}>No CAPA reports linked</div>
+                <div className="text-muted-foreground">No CAPA reports linked</div>
               ) : (
                 (issue.capaReports || []).map((capa: any) => (
-                  <div key={capa.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
-                    <Link to={`/quality/capa`} style={{ color: 'var(--primary)', textDecoration: 'none', fontSize: 12 }}>{capa.reportNumber}</Link>
-                    <span className="vn-chip" style={{ fontSize: 10 }}>{capa.status}</span>
+                  <div key={capa.id} className="flex items-center justify-between">
+                    <Link to="/quality/capa" className="text-xs text-primary hover:underline">{capa.reportNumber}</Link>
+                    <Badge variant="muted">{capa.status}</Badge>
                   </div>
                 ))
               )}
               {issue.needsCapa && (
-                <div className="vn-alert vn-alert-warning" style={{ marginTop: 8, padding: '8px 12px', fontSize: 12 }}>
-                  <span className="material-icons" style={{ fontSize: 14, verticalAlign: 'middle' }}>assignment_late</span> CAPA required for this issue
+                <div className="flex items-center gap-2 rounded-md border border-warning/30 bg-warning/10 p-2 text-xs text-warning">
+                  <ClipboardList className="h-3 w-3" />
+                  CAPA required for this issue
                 </div>
               )}
-              <Link to={`/quality/capa?createFromIssue=${id}`} className="vn-btn" style={{ marginTop: 8, fontSize: 12, width: '100%', textAlign: 'center', textDecoration: 'none', display: 'block' }}>
-                Create CAPA Report
-              </Link>
-            </div>
-          </div>
+              <Button variant="outline" size="sm" asChild className="w-full">
+                <Link to={`/quality/capa?createFromIssue=${id}`}>Create CAPA report</Link>
+              </Button>
+            </CardContent>
+          </Card>
         </div>
       </div>
-    </>
+    </div>
   );
 }

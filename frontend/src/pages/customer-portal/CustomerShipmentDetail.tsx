@@ -1,11 +1,31 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { ArrowLeft, Clock, Loader2 } from 'lucide-react';
+
 import { API_URL } from '../../api';
 import { customerFetch } from './CustomerDashboard';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
-function statusChip(s: string): string {
-  const m: Record<string, string> = { in_transit: 'info', delivered: 'success', booked: 'warning', exception: 'error', at_pickup: 'warning', at_delivery: 'warning' };
+type StatusVariant = 'success' | 'info' | 'warning' | 'destructive' | 'muted' | 'secondary';
+
+function statusVariant(s: string): StatusVariant {
+  const m: Record<string, StatusVariant> = {
+    in_transit: 'info',
+    delivered: 'success',
+    booked: 'warning',
+    exception: 'destructive',
+    at_pickup: 'warning',
+    at_delivery: 'warning',
+  };
   return m[s] || 'secondary';
+}
+
+function stopVariant(s: string): StatusVariant {
+  if (s === 'completed') return 'success';
+  if (s === 'arrived') return 'info';
+  return 'secondary';
 }
 
 export default function CustomerShipmentDetail() {
@@ -22,84 +42,144 @@ export default function CustomerShipmentDetail() {
       .finally(() => setLoading(false));
   }, [id]);
 
-  if (loading) return <div style={{ textAlign: 'center', padding: 60 }}><div className="loading-spinner" /></div>;
-  if (!shipment) return <div className="vn-alert vn-alert-error">Shipment not found</div>;
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+  if (!shipment) {
+    return (
+      <div className="rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+        Shipment not found
+      </div>
+    );
+  }
 
   return (
-    <div>
-      <button className="vn-btn vn-btn-ghost vn-btn-sm" onClick={() => navigate('/customer-portal/shipments')} style={{ marginBottom: 16 }}>
-        <span className="material-icons">arrow_back</span> Shipments
-      </button>
-
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>{shipment.reference}</h1>
-        <span className={`vn-chip vn-chip-${statusChip(shipment.status)}`}>{shipment.status}</span>
+    <div className="space-y-6">
+      <div>
+        <Button variant="ghost" size="sm" onClick={() => navigate('/customer-portal/shipments')}>
+          <ArrowLeft className="h-4 w-4" />
+          Shipments
+        </Button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 24 }}>
-        <div className="vn-card" style={{ padding: 20 }}>
-          <h3 style={{ margin: '0 0 12px', fontSize: 16, fontWeight: 600 }}>Origin</h3>
-          {shipment.origin ? (
-            <>
-              <div style={{ fontWeight: 600 }}>{shipment.origin.name}</div>
-              <div style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>{shipment.origin.address1}</div>
-              <div style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>{shipment.origin.city}, {shipment.origin.state} {shipment.origin.postalCode}</div>
-            </>
-          ) : <div style={{ color: 'var(--on-surface-variant)' }}>-</div>}
-        </div>
-        <div className="vn-card" style={{ padding: 20 }}>
-          <h3 style={{ margin: '0 0 12px', fontSize: 16, fontWeight: 600 }}>Destination</h3>
-          {shipment.destination ? (
-            <>
-              <div style={{ fontWeight: 600 }}>{shipment.destination.name}</div>
-              <div style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>{shipment.destination.address1}</div>
-              <div style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>{shipment.destination.city}, {shipment.destination.state} {shipment.destination.postalCode}</div>
-            </>
-          ) : <div style={{ color: 'var(--on-surface-variant)' }}>-</div>}
-        </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <h1 className="text-3xl font-bold tracking-tight">{shipment.reference}</h1>
+        <Badge variant={statusVariant(shipment.status)}>{shipment.status}</Badge>
       </div>
 
-      <div className="vn-card" style={{ padding: 20, marginBottom: 24 }}>
-        <h3 style={{ margin: '0 0 12px', fontSize: 16, fontWeight: 600 }}>Details</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
-          <div><div style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>Carrier</div><div style={{ fontWeight: 600 }}>{shipment.carrier?.name || '-'}</div></div>
-          <div><div style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>Pickup Date</div><div style={{ fontWeight: 600 }}>{shipment.pickupDate ? new Date(shipment.pickupDate).toLocaleDateString() : '-'}</div></div>
-          <div><div style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>Delivery Date</div><div style={{ fontWeight: 600 }}>{shipment.deliveryDate ? new Date(shipment.deliveryDate).toLocaleDateString() : '-'}</div></div>
-          <div><div style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>PRO Number</div><div style={{ fontWeight: 600 }}>{shipment.proNumber || '-'}</div></div>
-        </div>
+      <div className="grid gap-6 sm:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Origin</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {shipment.origin ? (
+              <div className="space-y-1">
+                <div className="font-semibold">{shipment.origin.name}</div>
+                <div className="text-sm text-muted-foreground">{shipment.origin.address1}</div>
+                <div className="text-sm text-muted-foreground">
+                  {shipment.origin.city}, {shipment.origin.state} {shipment.origin.postalCode}
+                </div>
+              </div>
+            ) : (
+              <div className="text-sm text-muted-foreground">-</div>
+            )}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Destination</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {shipment.destination ? (
+              <div className="space-y-1">
+                <div className="font-semibold">{shipment.destination.name}</div>
+                <div className="text-sm text-muted-foreground">{shipment.destination.address1}</div>
+                <div className="text-sm text-muted-foreground">
+                  {shipment.destination.city}, {shipment.destination.state} {shipment.destination.postalCode}
+                </div>
+              </div>
+            ) : (
+              <div className="text-sm text-muted-foreground">-</div>
+            )}
+          </CardContent>
+        </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Details</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div>
+              <div className="text-xs text-muted-foreground">Carrier</div>
+              <div className="font-semibold">{shipment.carrier?.name || '-'}</div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">Pickup date</div>
+              <div className="font-semibold">{shipment.pickupDate ? new Date(shipment.pickupDate).toLocaleDateString() : '-'}</div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">Delivery date</div>
+              <div className="font-semibold">{shipment.deliveryDate ? new Date(shipment.deliveryDate).toLocaleDateString() : '-'}</div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">PRO number</div>
+              <div className="font-semibold">{shipment.proNumber || '-'}</div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {shipment.stops && shipment.stops.length > 0 && (
-        <div className="vn-card" style={{ padding: 20, marginBottom: 24 }}>
-          <h3 style={{ margin: '0 0 12px', fontSize: 16, fontWeight: 600 }}>Stops</h3>
-          {shipment.stops.map((stop: any, i: number) => (
-            <div key={stop.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0', borderBottom: i < shipment.stops.length - 1 ? '1px solid var(--outline-variant)' : 'none' }}>
-              <span style={{ width: 24, height: 24, borderRadius: '50%', background: 'var(--primary-container)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700 }}>{i + 1}</span>
-              <div>
-                <div style={{ fontWeight: 600, fontSize: 14 }}>{stop.location?.name || 'Unknown'}</div>
-                <div style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>{stop.location?.city}, {stop.location?.state} - {stop.stopType}</div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Stops</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {shipment.stops.map((stop: any, i: number) => (
+              <div
+                key={stop.id}
+                className="flex items-center gap-3 border-b border-border py-2 last:border-0"
+              >
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+                  {i + 1}
+                </span>
+                <div className="flex-1">
+                  <div className="text-sm font-semibold">{stop.location?.name || 'Unknown'}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {stop.location?.city}, {stop.location?.state} - {stop.stopType}
+                  </div>
+                </div>
+                <Badge variant={stopVariant(stop.status)}>{stop.status}</Badge>
               </div>
-              <span className={`vn-chip vn-chip-${stop.status === 'completed' ? 'success' : stop.status === 'arrived' ? 'info' : 'secondary'}`} style={{ marginLeft: 'auto' }}>
-                {stop.status}
-              </span>
-            </div>
-          ))}
-        </div>
+            ))}
+          </CardContent>
+        </Card>
       )}
 
       {shipment.events && shipment.events.length > 0 && (
-        <div className="vn-card" style={{ padding: 20 }}>
-          <h3 style={{ margin: '0 0 12px', fontSize: 16, fontWeight: 600 }}>Tracking Events</h3>
-          {shipment.events.map((evt: any) => (
-            <div key={evt.id} style={{ display: 'flex', gap: 12, padding: '8px 0', borderBottom: '1px solid var(--outline-variant)' }}>
-              <span className="material-icons" style={{ fontSize: 16, color: 'var(--on-surface-variant)', marginTop: 2 }}>schedule</span>
-              <div>
-                <div style={{ fontSize: 13 }}>{evt.eventType}: {evt.description || evt.status || '-'}</div>
-                <div style={{ fontSize: 11, color: 'var(--on-surface-variant)' }}>{new Date(evt.createdAt).toLocaleString()}</div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Tracking events</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {shipment.events.map((evt: any) => (
+              <div key={evt.id} className="flex gap-3 border-b border-border py-2 last:border-0">
+                <Clock className="mt-0.5 h-4 w-4 text-muted-foreground" />
+                <div>
+                  <div className="text-sm">{evt.eventType}: {evt.description || evt.status || '-'}</div>
+                  <div className="text-xs text-muted-foreground">{new Date(evt.createdAt).toLocaleString()}</div>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </CardContent>
+        </Card>
       )}
     </div>
   );

@@ -1,6 +1,35 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import {
+  CircleAlert,
+  ClipboardList,
+  CreditCard,
+  Loader2,
+  Search,
+  Truck,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 
 interface CarrierInvoice {
   id: string;
@@ -28,27 +57,36 @@ function formatDate(d: string): string {
   return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-function statusChip(status: string): string {
+type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning' | 'info' | 'muted';
+
+function statusVariant(status: string): BadgeVariant {
   switch (status) {
     case 'received': return 'info';
     case 'matched': return 'success';
-    case 'discrepancy': return 'error';
+    case 'discrepancy': return 'destructive';
     case 'approved': return 'success';
     case 'scheduled': return 'warning';
     case 'paid': return 'success';
-    case 'disputed': return 'error';
+    case 'disputed': return 'destructive';
     default: return 'secondary';
   }
 }
 
-function matchChip(status: string): string {
+function matchVariant(status: string): BadgeVariant {
   switch (status) {
     case 'matched': return 'success';
     case 'partial_match': return 'warning';
-    case 'mismatch': return 'error';
+    case 'mismatch': return 'destructive';
     default: return 'secondary';
   }
 }
+
+const TONES = {
+  primary: 'bg-primary/10 text-primary',
+  warning: 'bg-warning/15 text-warning',
+  destructive: 'bg-destructive/10 text-destructive',
+  info: 'bg-info/15 text-info',
+} as const;
 
 export default function VNextFinanceCarrierInvoices() {
   const navigate = useNavigate();
@@ -82,94 +120,155 @@ export default function VNextFinanceCarrierInvoices() {
     return true;
   });
 
-  if (loading) return <div className="vn-empty"><span className="material-icons" style={{ animation: 'spin 1s linear infinite' }}>refresh</span><h3>Loading...</h3></div>;
-  if (error) return <div className="vn-alert vn-alert-error">{error}</div>;
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <h3 className="text-lg font-medium">Loading...</h3>
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+        <CircleAlert className="h-5 w-5" />
+        {error}
+      </div>
+    );
+  }
 
   return (
-    <>
-      <div className="vn-page-header">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1>Carrier Invoices</h1>
-          <p>{invoices.length} carrier invoices</p>
+          <h1 className="text-3xl font-bold tracking-tight">Carrier Invoices</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{invoices.length} carrier invoices</p>
         </div>
       </div>
 
-      <div className="vn-stats">
-        <div className="vn-stat">
-          <div className="vn-stat-icon primary"><span className="material-icons">local_shipping</span></div>
-          <div><div className="vn-stat-value">{stats.total}</div><div className="vn-stat-label">Total</div></div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon warning"><span className="material-icons">pending_actions</span></div>
-          <div><div className="vn-stat-value">{stats.pendingReview}</div><div className="vn-stat-label">Pending Review</div></div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon error"><span className="material-icons">error_outline</span></div>
-          <div><div className="vn-stat-value">{stats.discrepancies}</div><div className="vn-stat-label">Discrepancies</div></div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon info"><span className="material-icons">payments</span></div>
-          <div><div className="vn-stat-value">{formatMoney(stats.totalDue)}</div><div className="vn-stat-label">Due for Payment</div></div>
-        </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardContent className="p-5">
+            <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', TONES.primary)}>
+              <Truck className="h-5 w-5" />
+            </div>
+            <div className="mt-3 text-2xl font-bold tracking-tight">{stats.total}</div>
+            <div className="mt-1 text-sm text-muted-foreground">Total</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-5">
+            <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', TONES.warning)}>
+              <ClipboardList className="h-5 w-5" />
+            </div>
+            <div className="mt-3 text-2xl font-bold tracking-tight">{stats.pendingReview}</div>
+            <div className="mt-1 text-sm text-muted-foreground">Pending Review</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-5">
+            <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', TONES.destructive)}>
+              <CircleAlert className="h-5 w-5" />
+            </div>
+            <div className="mt-3 text-2xl font-bold tracking-tight">{stats.discrepancies}</div>
+            <div className="mt-1 text-sm text-muted-foreground">Discrepancies</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-5">
+            <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', TONES.info)}>
+              <CreditCard className="h-5 w-5" />
+            </div>
+            <div className="mt-3 text-2xl font-bold tracking-tight font-mono tabular-nums">{formatMoney(stats.totalDue)}</div>
+            <div className="mt-1 text-sm text-muted-foreground">Due for Payment</div>
+          </CardContent>
+        </Card>
       </div>
 
-      <div className="vn-card">
-        <div className="vn-filters">
-          <div className="vn-filter-group">
-            <span className="material-icons">search</span>
-            <input className="vn-filter-input" placeholder="Search carrier invoices..." value={search} onChange={e => setSearch(e.target.value)} />
+      <Card>
+        <div className="flex flex-wrap items-center gap-3 p-4">
+          <div className="relative min-w-[280px] flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              className="pl-9"
+              placeholder="Search carrier invoices..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
           </div>
-          <select className="vn-filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-            <option value="all">All Status</option>
-            <option value="received">Received</option>
-            <option value="matched">Matched</option>
-            <option value="discrepancy">Discrepancy</option>
-            <option value="approved">Approved</option>
-            <option value="paid">Paid</option>
-          </select>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-[200px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="received">Received</SelectItem>
+              <SelectItem value="matched">Matched</SelectItem>
+              <SelectItem value="discrepancy">Discrepancy</SelectItem>
+              <SelectItem value="approved">Approved</SelectItem>
+              <SelectItem value="paid">Paid</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         {filtered.length === 0 ? (
-          <div className="vn-empty"><span className="material-icons">local_shipping</span><h3>No carrier invoices found</h3></div>
-        ) : (
-          <div className="vn-table-wrap">
-            <table className="vn-table">
-              <thead>
-                <tr>
-                  <th>Invoice #</th>
-                  <th>Carrier</th>
-                  <th>Status</th>
-                  <th>Match</th>
-                  <th style={{ textAlign: 'right' }}>Amount</th>
-                  <th style={{ textAlign: 'right' }}>Variance</th>
-                  <th>Received</th>
-                  <th>Due</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map(inv => (
-                  <tr key={inv.id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/finance/carrier-invoices/${inv.id}`)}>
-                    <td><span className="vn-table-id">{inv.invoiceNumber}</span></td>
-                    <td>{inv.carrier.name}{inv.carrier.scacCode && <span className="vn-table-secondary"> ({inv.carrier.scacCode})</span>}</td>
-                    <td>
-                      <span className={`vn-chip vn-chip-${statusChip(inv.status)}`}>{inv.status}</span>
-                      {inv.autoApproved && <span className="vn-chip vn-chip-info" style={{ marginLeft: 4, fontSize: 10 }}>auto</span>}
-                    </td>
-                    <td><span className={`vn-chip vn-chip-${matchChip(inv.matchStatus)}`}>{inv.matchStatus.replace(/_/g, ' ')}</span></td>
-                    <td style={{ textAlign: 'right', fontWeight: 500 }}>{formatMoney(inv.totalCents)}</td>
-                    <td style={{ textAlign: 'right', color: inv.varianceCents && inv.varianceCents > 0 ? 'var(--error)' : inv.varianceCents && inv.varianceCents < 0 ? 'var(--success)' : 'var(--on-surface-variant)' }}>
-                      {inv.varianceCents ? `${inv.varianceCents > 0 ? '+' : ''}${formatMoney(inv.varianceCents)}` : '—'}
-                      {inv.variancePercent ? ` (${inv.variancePercent}%)` : ''}
-                    </td>
-                    <td className="vn-table-secondary">{formatDate(inv.receivedDate)}</td>
-                    <td className="vn-table-secondary">{formatDate(inv.dueDate)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="flex flex-col items-center gap-3 py-12 text-muted-foreground">
+            <Truck className="h-8 w-8" />
+            <h3 className="text-base font-medium">No carrier invoices found</h3>
           </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Invoice #</TableHead>
+                <TableHead>Carrier</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Match</TableHead>
+                <TableHead className="text-right">Amount</TableHead>
+                <TableHead className="text-right">Variance</TableHead>
+                <TableHead>Received</TableHead>
+                <TableHead>Due</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filtered.map(inv => (
+                <TableRow key={inv.id} className="cursor-pointer" onClick={() => navigate(`/finance/carrier-invoices/${inv.id}`)}>
+                  <TableCell>
+                    <span className="font-mono text-sm font-semibold">{inv.invoiceNumber}</span>
+                  </TableCell>
+                  <TableCell>
+                    {inv.carrier.name}
+                    {inv.carrier.scacCode && <span className="text-sm text-muted-foreground"> ({inv.carrier.scacCode})</span>}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1">
+                      <Badge variant={statusVariant(inv.status)}>{inv.status}</Badge>
+                      {inv.autoApproved && <Badge variant="info" className="text-[10px]">auto</Badge>}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={matchVariant(inv.matchStatus)}>{inv.matchStatus.replace(/_/g, ' ')}</Badge>
+                  </TableCell>
+                  <TableCell className="text-right font-mono tabular-nums font-medium">{formatMoney(inv.totalCents)}</TableCell>
+                  <TableCell
+                    className={cn(
+                      'text-right font-mono tabular-nums',
+                      inv.varianceCents && inv.varianceCents > 0 && 'text-destructive',
+                      inv.varianceCents && inv.varianceCents < 0 && 'text-success',
+                      !inv.varianceCents && 'text-muted-foreground',
+                    )}
+                  >
+                    {inv.varianceCents ? `${inv.varianceCents > 0 ? '+' : ''}${formatMoney(inv.varianceCents)}` : '-'}
+                    {inv.variancePercent ? ` (${inv.variancePercent}%)` : ''}
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{formatDate(inv.receivedDate)}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{formatDate(inv.dueDate)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         )}
-      </div>
-    </>
+      </Card>
+    </div>
   );
 }

@@ -1,6 +1,26 @@
 import { useEffect, useState } from 'react';
+import { Loader2 } from 'lucide-react';
+
 import { API_URL } from '../../../api';
 import { customerFetch } from '../CustomerDashboard';
+import { Badge } from '@/components/ui/badge';
+import { Card } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 interface EdiLog {
   id: string;
@@ -14,18 +34,26 @@ interface EdiLog {
   partner: { name: string } | null;
 }
 
+type StatusVariant = 'success' | 'destructive' | 'warning';
+
+function statusVariant(s: string): StatusVariant {
+  if (s === 'processed' || s === 'delivered') return 'success';
+  if (s === 'failed') return 'destructive';
+  return 'warning';
+}
+
 export default function CustomerIntegrationLogs() {
   const [logs, setLogs] = useState<EdiLog[]>([]);
   const [total, setTotal] = useState(0);
-  const [direction, setDirection] = useState('');
-  const [txType, setTxType] = useState('');
+  const [direction, setDirection] = useState('all');
+  const [txType, setTxType] = useState('all');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
     const params = new URLSearchParams();
-    if (direction) params.set('direction', direction);
-    if (txType) params.set('transactionType', txType);
+    if (direction !== 'all') params.set('direction', direction);
+    if (txType !== 'all') params.set('transactionType', txType);
     params.set('limit', '100');
     customerFetch(`${API_URL}/api/v1/customer-portal/developer/edi-logs?${params}`)
       .then(r => r.json())
@@ -37,78 +65,100 @@ export default function CustomerIntegrationLogs() {
   }, [direction, txType]);
 
   return (
-    <div>
-      <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>Integration Logs</h1>
-      <p style={{ color: 'var(--text-secondary)', margin: '0 0 16px' }}>
-        Every EDI transaction exchanged with your trading partners. {total} in total.
-      </p>
-
-      <div className="vn-card">
-        <div className="vn-filters" style={{ padding: '8px 16px' }}>
-          <select className="vn-filter-select" value={direction} onChange={e => setDirection(e.target.value)}>
-            <option value="">All directions</option>
-            <option value="inbound">Inbound</option>
-            <option value="outbound">Outbound</option>
-          </select>
-          <select className="vn-filter-select" value={txType} onChange={e => setTxType(e.target.value)}>
-            <option value="">All transaction types</option>
-            <option value="850">850 - Purchase Order</option>
-            <option value="855">855 - PO Ack</option>
-            <option value="856">856 - ASN</option>
-            <option value="810">810 - Invoice</option>
-            <option value="820">820 - Payment</option>
-            <option value="210">210 - Freight Invoice</option>
-            <option value="204">204 - Load Tender</option>
-            <option value="990">990 - Tender Response</option>
-            <option value="214">214 - Shipment Status</option>
-            <option value="180">180 - RMA</option>
-            <option value="997">997 - Functional Ack</option>
-          </select>
-        </div>
-
-        <div className="vn-table-wrap">
-          <table className="vn-table">
-            <thead>
-              <tr>
-                <th>Partner</th>
-                <th>Type</th>
-                <th>Direction</th>
-                <th>Status</th>
-                <th>Control #</th>
-                <th>Received</th>
-                <th>Processed</th>
-                <th>Error</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading && <tr><td colSpan={8} style={{ textAlign: 'center', padding: 24 }}><div className="vn-loading-spinner" /></td></tr>}
-              {!loading && logs.length === 0 && (
-                <tr><td colSpan={8} style={{ textAlign: 'center', padding: 24, color: 'var(--text-secondary)' }}>
-                  No EDI transactions yet for your account.
-                </td></tr>
-              )}
-              {logs.map(l => (
-                <tr key={l.id}>
-                  <td>{l.partner?.name ?? '-'}</td>
-                  <td><strong>{l.transactionType}</strong></td>
-                  <td>{l.direction}</td>
-                  <td>
-                    <span className={`vn-chip ${
-                      l.status === 'processed' || l.status === 'delivered' ? 'vn-chip-success'
-                      : l.status === 'failed' ? 'vn-chip-error'
-                      : 'vn-chip-warning'
-                    }`}>{l.status}</span>
-                  </td>
-                  <td><code>{l.controlNumber ?? '-'}</code></td>
-                  <td><span className="vn-table-secondary">{new Date(l.createdAt).toLocaleString()}</span></td>
-                  <td><span className="vn-table-secondary">{l.processedAt ? new Date(l.processedAt).toLocaleString() : '-'}</span></td>
-                  <td style={{ maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', fontSize: 12 }}>{l.errorMessage}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Integration logs</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Every EDI transaction exchanged with your trading partners. {total} in total.
+        </p>
       </div>
+
+      <Card>
+        <div className="flex flex-wrap items-center gap-3 p-4">
+          <Select value={direction} onValueChange={setDirection}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All directions</SelectItem>
+              <SelectItem value="inbound">Inbound</SelectItem>
+              <SelectItem value="outbound">Outbound</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={txType} onValueChange={setTxType}>
+            <SelectTrigger className="w-[260px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All transaction types</SelectItem>
+              <SelectItem value="850">850 - Purchase Order</SelectItem>
+              <SelectItem value="855">855 - PO Ack</SelectItem>
+              <SelectItem value="856">856 - ASN</SelectItem>
+              <SelectItem value="810">810 - Invoice</SelectItem>
+              <SelectItem value="820">820 - Payment</SelectItem>
+              <SelectItem value="210">210 - Freight Invoice</SelectItem>
+              <SelectItem value="204">204 - Load Tender</SelectItem>
+              <SelectItem value="990">990 - Tender Response</SelectItem>
+              <SelectItem value="214">214 - Shipment Status</SelectItem>
+              <SelectItem value="180">180 - RMA</SelectItem>
+              <SelectItem value="997">997 - Functional Ack</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <Separator />
+
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Partner</TableHead>
+              <TableHead>Type</TableHead>
+              <TableHead>Direction</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Control #</TableHead>
+              <TableHead>Received</TableHead>
+              <TableHead>Processed</TableHead>
+              <TableHead>Error</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading && (
+              <TableRow>
+                <TableCell colSpan={8} className="py-8 text-center">
+                  <Loader2 className="mx-auto h-6 w-6 animate-spin text-muted-foreground" />
+                </TableCell>
+              </TableRow>
+            )}
+            {!loading && logs.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={8} className="py-8 text-center text-sm text-muted-foreground">
+                  No EDI transactions yet for your account.
+                </TableCell>
+              </TableRow>
+            )}
+            {logs.map(l => (
+              <TableRow key={l.id}>
+                <TableCell className="text-sm">{l.partner?.name ?? '-'}</TableCell>
+                <TableCell className="font-semibold">{l.transactionType}</TableCell>
+                <TableCell className="text-sm">{l.direction}</TableCell>
+                <TableCell>
+                  <Badge variant={statusVariant(l.status)}>{l.status}</Badge>
+                </TableCell>
+                <TableCell>
+                  <code className="rounded bg-muted px-1 text-xs">{l.controlNumber ?? '-'}</code>
+                </TableCell>
+                <TableCell className="text-sm text-muted-foreground">
+                  {new Date(l.createdAt).toLocaleString()}
+                </TableCell>
+                <TableCell className="text-sm text-muted-foreground">
+                  {l.processedAt ? new Date(l.processedAt).toLocaleString() : '-'}
+                </TableCell>
+                <TableCell className="max-w-xs truncate text-xs">{l.errorMessage}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </Card>
     </div>
   );
 }

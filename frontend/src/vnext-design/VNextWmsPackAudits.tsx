@@ -1,6 +1,26 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Loader2 } from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 
 interface PackAudit {
   id: string;
@@ -24,22 +44,24 @@ interface Stats {
   passRatePercent: number | null;
 }
 
-function chipForVerdict(v: string): string {
-  if (v === 'pass') return 'vn-chip-success';
-  if (v === 'warning') return 'vn-chip-warning';
-  return 'vn-chip-error';
+type BadgeVariant = 'success' | 'info' | 'warning' | 'destructive' | 'muted' | 'secondary' | 'default';
+
+function variantForVerdict(v: string): BadgeVariant {
+  if (v === 'pass') return 'success';
+  if (v === 'warning') return 'warning';
+  return 'destructive';
 }
 
 export default function VNextWmsPackAudits() {
   const [audits, setAudits] = useState<PackAudit[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
-  const [verdictFilter, setVerdictFilter] = useState('');
+  const [verdictFilter, setVerdictFilter] = useState('all');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
     const params = new URLSearchParams();
-    if (verdictFilter) params.set('verdict', verdictFilter);
+    if (verdictFilter !== 'all') params.set('verdict', verdictFilter);
     params.set('limit', '200');
     Promise.all([
       fetch(`${API_URL}/api/v1/pack-audits?${params}`).then(r => r.json()),
@@ -53,92 +75,124 @@ export default function VNextWmsPackAudits() {
   }, [verdictFilter]);
 
   return (
-    <div>
-      <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>Pack Audits</h1>
-      <p style={{ color: 'var(--text-secondary)', margin: '0 0 16px' }}>
-        Scale and dim-weight variance checks at pack stations. Verdict beyond tolerance auto-raises a quality issue.
-      </p>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Pack Audits</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Scale and dim-weight variance checks at pack stations. Verdict beyond tolerance auto-raises a quality issue.
+        </p>
+      </div>
 
       {stats && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 16 }}>
-          <div className="vn-card" style={{ padding: 14 }}>
-            <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Last {stats.windowDays} days</div>
-            <div style={{ fontSize: 24, fontWeight: 700 }}>{stats.total}</div>
-            <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>audits recorded</div>
-          </div>
-          <div className="vn-card" style={{ padding: 14 }}>
-            <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Pass rate</div>
-            <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--color-success)' }}>{stats.passRatePercent != null ? `${stats.passRatePercent}%` : '-'}</div>
-            <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{stats.pass} / {stats.total} passed</div>
-          </div>
-          <div className="vn-card" style={{ padding: 14 }}>
-            <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Warnings</div>
-            <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--color-warning)' }}>{stats.warning}</div>
-          </div>
-          <div className="vn-card" style={{ padding: 14 }}>
-            <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Failures</div>
-            <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--color-error)' }}>{stats.fail}</div>
-          </div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Card>
+            <CardContent className="p-5">
+              <div className="text-xs text-muted-foreground">Last {stats.windowDays} days</div>
+              <div className="mt-1 text-2xl font-bold">{stats.total}</div>
+              <div className="text-xs text-muted-foreground">audits recorded</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5">
+              <div className="text-xs text-muted-foreground">Pass rate</div>
+              <div className="mt-1 text-2xl font-bold text-success">{stats.passRatePercent != null ? `${stats.passRatePercent}%` : '-'}</div>
+              <div className="text-xs text-muted-foreground">{stats.pass} / {stats.total} passed</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5">
+              <div className="text-xs text-muted-foreground">Warnings</div>
+              <div className="mt-1 text-2xl font-bold text-warning">{stats.warning}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-5">
+              <div className="text-xs text-muted-foreground">Failures</div>
+              <div className="mt-1 text-2xl font-bold text-destructive">{stats.fail}</div>
+            </CardContent>
+          </Card>
         </div>
       )}
 
-      <div className="vn-card">
-        <div className="vn-filters" style={{ padding: '8px 16px' }}>
-          <select className="vn-filter-select" value={verdictFilter} onChange={e => setVerdictFilter(e.target.value)}>
-            <option value="">All verdicts</option>
-            <option value="pass">Pass</option>
-            <option value="warning">Warning</option>
-            <option value="fail">Fail</option>
-          </select>
-        </div>
+      <Card>
+        <CardContent className="flex flex-wrap items-center gap-2 p-4">
+          <Select value={verdictFilter} onValueChange={setVerdictFilter}>
+            <SelectTrigger className="w-[200px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All verdicts</SelectItem>
+              <SelectItem value="pass">Pass</SelectItem>
+              <SelectItem value="warning">Warning</SelectItem>
+              <SelectItem value="fail">Fail</SelectItem>
+            </SelectContent>
+          </Select>
+        </CardContent>
 
-        <div className="vn-table-wrap">
-          <table className="vn-table">
-            <thead>
-              <tr>
-                <th>Pack Task</th>
-                <th>Verdict</th>
-                <th>Expected</th>
-                <th>Actual</th>
-                <th>Weight variance</th>
-                <th>Dim variance</th>
-                <th>Tolerance</th>
-                <th>Issue</th>
-                <th>Recorded</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading && <tr><td colSpan={9} style={{ textAlign: 'center', padding: 24 }}><div className="vn-loading-spinner" /></td></tr>}
-              {!loading && audits.length === 0 && (
-                <tr><td colSpan={9} style={{ textAlign: 'center', padding: 24, color: 'var(--text-secondary)' }}>No pack audits recorded yet.</td></tr>
-              )}
-              {audits.map(a => {
-                const wv = Number(a.weightVariancePercent ?? 0);
-                const dv = a.dimWeightVariancePercent != null ? Number(a.dimWeightVariancePercent) : null;
-                return (
-                  <tr key={a.id}>
-                    <td><code>{a.packTask.id.slice(0, 8)}</code></td>
-                    <td><span className={`vn-chip ${chipForVerdict(a.verdict)}`}>{a.verdict}</span></td>
-                    <td>{(a.expectedWeightGrams / 1000).toFixed(2)} kg</td>
-                    <td>{(a.actualWeightGrams / 1000).toFixed(2)} kg</td>
-                    <td style={{ fontWeight: 600, color: a.verdict === 'pass' ? 'var(--color-success)' : a.verdict === 'warning' ? 'var(--color-warning)' : 'var(--color-error)' }}>
-                      {wv > 0 ? '+' : ''}{wv.toFixed(1)}%
-                    </td>
-                    <td>{dv != null ? `${dv > 0 ? '+' : ''}${dv.toFixed(1)}%` : <span className="vn-table-secondary">-</span>}</td>
-                    <td><span className="vn-table-secondary">±{Number(a.weightTolerancePercent).toFixed(0)}%</span></td>
-                    <td>
-                      {a.issueId
-                        ? <Link to={`/issues/${a.issueId}`} className="vn-table-id">View issue</Link>
-                        : <span className="vn-table-secondary">-</span>}
-                    </td>
-                    <td><span className="vn-table-secondary">{new Date(a.createdAt).toLocaleString()}</span></td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Pack Task</TableHead>
+              <TableHead>Verdict</TableHead>
+              <TableHead>Expected</TableHead>
+              <TableHead>Actual</TableHead>
+              <TableHead>Weight variance</TableHead>
+              <TableHead>Dim variance</TableHead>
+              <TableHead>Tolerance</TableHead>
+              <TableHead>Issue</TableHead>
+              <TableHead>Recorded</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading && (
+              <TableRow>
+                <TableCell colSpan={9} className="py-12 text-center">
+                  <Loader2 className="mx-auto h-6 w-6 animate-spin text-muted-foreground" />
+                </TableCell>
+              </TableRow>
+            )}
+            {!loading && audits.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={9} className="py-12 text-center text-sm text-muted-foreground">
+                  No pack audits recorded yet.
+                </TableCell>
+              </TableRow>
+            )}
+            {audits.map(a => {
+              const wv = Number(a.weightVariancePercent ?? 0);
+              const dv = a.dimWeightVariancePercent != null ? Number(a.dimWeightVariancePercent) : null;
+              return (
+                <TableRow key={a.id}>
+                  <TableCell><code className="text-xs">{a.packTask.id.slice(0, 8)}</code></TableCell>
+                  <TableCell>
+                    <Badge variant={variantForVerdict(a.verdict)}>{a.verdict}</Badge>
+                  </TableCell>
+                  <TableCell>{(a.expectedWeightGrams / 1000).toFixed(2)} kg</TableCell>
+                  <TableCell>{(a.actualWeightGrams / 1000).toFixed(2)} kg</TableCell>
+                  <TableCell
+                    className={cn(
+                      'font-semibold',
+                      a.verdict === 'pass' && 'text-success',
+                      a.verdict === 'warning' && 'text-warning',
+                      a.verdict === 'fail' && 'text-destructive'
+                    )}
+                  >
+                    {wv > 0 ? '+' : ''}{wv.toFixed(1)}%
+                  </TableCell>
+                  <TableCell>{dv != null ? `${dv > 0 ? '+' : ''}${dv.toFixed(1)}%` : <span className="text-muted-foreground">-</span>}</TableCell>
+                  <TableCell><span className="text-muted-foreground">+/-{Number(a.weightTolerancePercent).toFixed(0)}%</span></TableCell>
+                  <TableCell>
+                    {a.issueId
+                      ? <Link to={`/issues/${a.issueId}`} className="font-mono text-sm text-primary hover:underline">View issue</Link>
+                      : <span className="text-muted-foreground">-</span>}
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{new Date(a.createdAt).toLocaleString()}</TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </Card>
     </div>
   );
 }

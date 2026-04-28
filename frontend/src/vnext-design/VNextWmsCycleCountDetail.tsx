@@ -1,6 +1,30 @@
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
+import {
+  AlertTriangle,
+  ArrowLeft,
+  CheckCircle2,
+  ChevronRight,
+  CircleAlert,
+  List,
+  Loader2,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 
 interface CycleCountLine {
   id: string;
@@ -26,8 +50,22 @@ interface CycleCountDetail {
   createdAt: string;
 }
 
-function statusChip(s: string): string {
-  switch (s) { case 'pending': return 'vn-chip-secondary'; case 'counted': return 'vn-chip-info'; case 'adjusted': return 'vn-chip-success'; case 'variance_confirmed': return 'vn-chip-warning'; default: return 'vn-chip-secondary'; }
+type BadgeVariant = 'success' | 'info' | 'warning' | 'destructive' | 'muted' | 'secondary' | 'default';
+
+function lineStatusVariant(s: string): BadgeVariant {
+  switch (s) {
+    case 'pending': return 'secondary';
+    case 'counted': return 'info';
+    case 'adjusted': return 'success';
+    case 'variance_confirmed': return 'warning';
+    default: return 'secondary';
+  }
+}
+
+function countStatusVariant(s: string): BadgeVariant {
+  if (s === 'completed') return 'success';
+  if (s === 'in_progress') return 'warning';
+  return 'secondary';
 }
 
 function formatStatus(s: string): string {
@@ -74,104 +112,170 @@ export default function VNextWmsCycleCountDetail() {
     finally { setCounting(false); }
   };
 
-  if (loading) return <div style={{ padding: '2rem', textAlign: 'center' }}><div className="vn-loading-spinner" /></div>;
-  if (!count) return <div className="vn-alert vn-alert-error">{error || 'Not found'}</div>;
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+  if (!count) {
+    return (
+      <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+        <CircleAlert className="h-5 w-5" />
+        {error || 'Not found'}
+      </div>
+    );
+  }
 
   const isActive = count.status !== 'completed' && count.status !== 'cancelled';
 
   return (
-    <div>
-      <div className="vn-page-header">
-        <div>
-          <h1>Cycle Count</h1>
-          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-            <span className="vn-table-id">{count.id.slice(0, 8)}</span>
-            <span className={`vn-chip ${count.status === 'completed' ? 'vn-chip-success' : count.status === 'in_progress' ? 'vn-chip-warning' : 'vn-chip-secondary'}`}>{formatStatus(count.status)}</span>
-            <span className="vn-chip vn-chip-primary">{formatStatus(count.countType)}</span>
-          </div>
+    <div className="space-y-6">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Link to="/wms/cycle-counts" className="hover:text-foreground">
+          <ArrowLeft className="inline h-4 w-4" /> Cycle Counts
+        </Link>
+        <ChevronRight className="h-3 w-3" />
+        <span>{count.id.slice(0, 8)}</span>
+      </div>
+
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Cycle Count</h1>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <span className="font-mono text-sm font-semibold">{count.id.slice(0, 8)}</span>
+          <Badge variant={countStatusVariant(count.status)}>{formatStatus(count.status)}</Badge>
+          <Badge variant="default">{formatStatus(count.countType)}</Badge>
         </div>
       </div>
 
-      {error && <div className="vn-alert vn-alert-error" style={{ marginBottom: '1rem' }}>{error}</div>}
-
-      {/* Stats */}
-      <div className="vn-stats" style={{ marginBottom: '1.5rem' }}>
-        <div className="vn-stat"><div className="vn-stat-icon vn-stat-icon-primary"><span className="material-icons">list</span></div><div className="vn-stat-value">{count.totalBins}</div><div className="vn-stat-label">Total Lines</div></div>
-        <div className="vn-stat"><div className="vn-stat-icon vn-stat-icon-success"><span className="material-icons">check_circle</span></div><div className="vn-stat-value">{count.countedBins}</div><div className="vn-stat-label">Counted</div></div>
-        <div className="vn-stat"><div className={`vn-stat-icon ${count.varianceCount > 0 ? 'vn-stat-icon-error' : 'vn-stat-icon-secondary'}`}><span className="material-icons">warning</span></div><div className="vn-stat-value">{count.varianceCount}</div><div className="vn-stat-label">Variances</div></div>
-      </div>
-
-      {/* Progress bar */}
-      <div className="vn-card" style={{ marginBottom: '1.5rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-          <span style={{ fontWeight: 600 }}>Progress</span>
-          <span style={{ color: 'var(--text-secondary)' }}>{count.countedBins}/{count.totalBins}</span>
-        </div>
-        <div style={{ height: '8px', background: 'var(--border)', borderRadius: '4px', overflow: 'hidden' }}>
-          <div style={{ width: `${count.totalBins > 0 ? (count.countedBins / count.totalBins) * 100 : 0}%`, height: '100%', background: 'var(--color-success)', borderRadius: '4px' }} />
-        </div>
-      </div>
-
-      {/* Inline count form */}
-      {countingLineId && (
-        <div className="vn-card" style={{ marginBottom: '1rem', borderLeft: '3px solid var(--color-primary)' }}>
-          <h3 style={{ margin: '0 0 0.75rem' }}>Record Count</h3>
-          <form onSubmit={handleRecord} style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
-            <div className="vn-field" style={{ flex: '0 0 120px' }}>
-              <label className="vn-field-label">Counted Qty</label>
-              <input className="vn-input" type="number" min="0" value={countForm.countedQuantity} onChange={e => setCountForm({ ...countForm, countedQuantity: e.target.value })} autoFocus required />
-            </div>
-            <div className="vn-field" style={{ flex: 1 }}>
-              <label className="vn-field-label">Notes</label>
-              <input className="vn-input" value={countForm.notes} onChange={e => setCountForm({ ...countForm, notes: e.target.value })} placeholder="Optional" />
-            </div>
-            <button type="submit" className="vn-btn vn-btn-primary" disabled={counting}>{counting ? 'Saving...' : 'Record'}</button>
-            <button type="button" className="vn-btn vn-btn-outline" onClick={() => setCountingLineId(null)}>Cancel</button>
-          </form>
+      {error && (
+        <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+          <CircleAlert className="h-5 w-5" />
+          {error}
         </div>
       )}
 
-      {/* Lines table */}
-      <div className="vn-card">
-        <h3 style={{ margin: '0 0 1rem' }}>Count Lines</h3>
-        <div className="vn-table-wrap">
-          <table className="vn-table">
-            <thead>
-              <tr><th>SKU</th><th>UOM</th><th>Expected</th><th>Counted</th><th>Variance</th><th>Status</th>{isActive && <th></th>}</tr>
-            </thead>
-            <tbody>
+      <div className="grid gap-3 sm:grid-cols-3">
+        {[
+          { label: 'Total Lines', value: count.totalBins, icon: List, tone: 'bg-primary/10 text-primary' },
+          { label: 'Counted', value: count.countedBins, icon: CheckCircle2, tone: 'bg-success/15 text-success' },
+          { label: 'Variances', value: count.varianceCount, icon: AlertTriangle, tone: count.varianceCount > 0 ? 'bg-destructive/10 text-destructive' : 'bg-muted text-muted-foreground' },
+        ].map(s => {
+          const Icon = s.icon;
+          return (
+            <Card key={s.label}>
+              <CardContent className="p-5">
+                <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', s.tone)}>
+                  <Icon className="h-5 w-5" />
+                </div>
+                <div className="mt-3 text-2xl font-bold tracking-tight">{s.value}</div>
+                <div className="mt-1 text-sm text-muted-foreground">{s.label}</div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      <Card>
+        <CardContent className="p-5">
+          <div className="mb-2 flex justify-between text-sm">
+            <span className="font-semibold">Progress</span>
+            <span className="text-muted-foreground">{count.countedBins}/{count.totalBins}</span>
+          </div>
+          <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full rounded-full bg-success"
+              style={{ width: `${count.totalBins > 0 ? (count.countedBins / count.totalBins) * 100 : 0}%` }}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {countingLineId && (
+        <Card className="border-l-4 border-l-primary">
+          <CardHeader>
+            <CardTitle>Record Count</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleRecord} className="flex flex-wrap items-end gap-3">
+              <div className="w-32 space-y-2">
+                <Label>Counted Qty</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={countForm.countedQuantity}
+                  onChange={e => setCountForm({ ...countForm, countedQuantity: e.target.value })}
+                  autoFocus
+                  required
+                />
+              </div>
+              <div className="flex-1 space-y-2">
+                <Label>Notes</Label>
+                <Input value={countForm.notes} onChange={e => setCountForm({ ...countForm, notes: e.target.value })} placeholder="Optional" />
+              </div>
+              <Button variant="gradient" type="submit" disabled={counting}>{counting ? 'Saving...' : 'Record'}</Button>
+              <Button variant="outline" type="button" onClick={() => setCountingLineId(null)}>Cancel</Button>
+            </form>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Count Lines</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>SKU</TableHead>
+                <TableHead>UOM</TableHead>
+                <TableHead>Expected</TableHead>
+                <TableHead>Counted</TableHead>
+                <TableHead>Variance</TableHead>
+                <TableHead>Status</TableHead>
+                {isActive && <TableHead></TableHead>}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {count.lines.map(line => (
-                <tr key={line.id} style={{ background: line.id === countingLineId ? 'var(--surface-secondary)' : undefined }}>
-                  <td><strong>{line.sku}</strong></td>
-                  <td>{line.uomCode}</td>
-                  <td>{line.expectedQuantity}</td>
-                  <td style={{ fontWeight: line.countedQuantity !== null ? 600 : undefined }}>{line.countedQuantity ?? '--'}</td>
-                  <td>
+                <TableRow key={line.id} className={cn(line.id === countingLineId && 'bg-muted')}>
+                  <TableCell className="font-mono text-sm font-semibold">{line.sku}</TableCell>
+                  <TableCell>{line.uomCode}</TableCell>
+                  <TableCell>{line.expectedQuantity}</TableCell>
+                  <TableCell className={line.countedQuantity !== null ? 'font-semibold' : ''}>{line.countedQuantity ?? '-'}</TableCell>
+                  <TableCell>
                     {line.variance !== null && line.variance !== 0 ? (
-                      <span style={{ fontWeight: 600, color: line.variance > 0 ? 'var(--color-info)' : 'var(--color-error)' }}>
+                      <span className={cn('font-semibold', line.variance > 0 ? 'text-info' : 'text-destructive')}>
                         {line.variance > 0 ? '+' : ''}{line.variance}
                       </span>
                     ) : line.variance === 0 ? (
-                      <span style={{ color: 'var(--color-success)' }}>OK</span>
-                    ) : '--'}
-                  </td>
-                  <td><span className={`vn-chip ${statusChip(line.status)}`}>{formatStatus(line.status)}</span></td>
+                      <span className="text-success">OK</span>
+                    ) : '-'}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={lineStatusVariant(line.status)}>{formatStatus(line.status)}</Badge>
+                  </TableCell>
                   {isActive && (
-                    <td>
+                    <TableCell>
                       {line.status === 'pending' && (
-                        <button className="vn-btn vn-btn-outline" style={{ fontSize: '0.8rem', padding: '0.15rem 0.5rem' }}
-                          onClick={() => { setCountingLineId(line.id); setCountForm({ countedQuantity: '', notes: '' }); }}>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => { setCountingLineId(line.id); setCountForm({ countedQuantity: '', notes: '' }); }}
+                        >
                           Count
-                        </button>
+                        </Button>
                       )}
-                    </td>
+                    </TableCell>
                   )}
-                </tr>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
     </div>
   );
 }

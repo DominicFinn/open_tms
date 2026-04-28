@@ -1,5 +1,27 @@
 import { useEffect, useState } from 'react';
+import { CircleAlert, Loader2, Plus } from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 interface Carrier { id: string; name: string; }
 interface Cutoff {
@@ -72,103 +94,137 @@ export default function VNextCarrierCutoffs() {
   };
 
   return (
-    <div>
-      <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>Carrier Cutoffs</h1>
-      <p style={{ color: 'var(--text-secondary)', margin: '0 0 16px' }}>
-        Configure the latest handoff time per day for each carrier. The cutoff monitor compares projected warehouse-ready time against these rows and raises an issue when shipments are at risk.
-      </p>
-
-      <div className="vn-card" style={{ marginBottom: 16 }}>
-        <div className="vn-filters" style={{ padding: '8px 16px' }}>
-          <select className="vn-filter-select" value={selectedCarrier} onChange={e => setSelectedCarrier(e.target.value)}>
-            <option value="">Select a carrier...</option>
-            {carriers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-          {selectedCarrier && (
-            <button className="vn-btn vn-btn-primary" style={{ marginLeft: 'auto' }} onClick={() => setShowCreate(v => !v)}>
-              <span className="material-icons">add</span> New cutoff
-            </button>
-          )}
-        </div>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Carrier Cutoffs</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Configure the latest handoff time per day for each carrier. The cutoff monitor compares projected warehouse-ready time against these rows and raises an issue when shipments are at risk.
+        </p>
       </div>
 
-      {error && <div className="vn-alert vn-alert-error" style={{ marginBottom: 16 }}>{error}</div>}
+      <Card>
+        <CardContent className="flex flex-wrap items-center gap-2 p-4">
+          <Select value={selectedCarrier} onValueChange={setSelectedCarrier}>
+            <SelectTrigger className="w-[260px]">
+              <SelectValue placeholder="Select a carrier..." />
+            </SelectTrigger>
+            <SelectContent>
+              {carriers.map(c => (
+                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {selectedCarrier && (
+            <Button variant="gradient" className="ml-auto" onClick={() => setShowCreate(v => !v)}>
+              <Plus className="h-4 w-4" />
+              New cutoff
+            </Button>
+          )}
+        </CardContent>
+      </Card>
 
-      {selectedCarrier && showCreate && (
-        <div className="vn-card" style={{ padding: 16, marginBottom: 16 }}>
-          <h3 style={{ margin: '0 0 12px' }}>New cutoff row</h3>
-          <div className="vn-form-grid" style={{ gap: 8 }}>
-            <div className="vn-field">
-              <label className="vn-field-label">Day of week</label>
-              <select className="vn-input" value={form.dayOfWeek} onChange={e => setForm(f => ({ ...f, dayOfWeek: parseInt(e.target.value) }))}>
-                {DAYS.map((d, i) => <option key={i} value={i}>{d}</option>)}
-              </select>
-            </div>
-            <div className="vn-field">
-              <label className="vn-field-label">Cutoff time (HH:mm, local)</label>
-              <input className="vn-input" value={form.cutoffLocalTime} onChange={e => setForm(f => ({ ...f, cutoffLocalTime: e.target.value }))} placeholder="16:30" />
-            </div>
-            <div className="vn-field">
-              <label className="vn-field-label">Timezone (IANA)</label>
-              <input className="vn-input" value={form.timezone} onChange={e => setForm(f => ({ ...f, timezone: e.target.value }))} placeholder="America/New_York" />
-            </div>
-            <div className="vn-field">
-              <label className="vn-field-label">Service level (optional)</label>
-              <input className="vn-input" value={form.serviceLevel} onChange={e => setForm(f => ({ ...f, serviceLevel: e.target.value }))} placeholder="ground" />
-            </div>
-          </div>
-          <div className="vn-field" style={{ marginTop: 8 }}>
-            <label className="vn-field-label">Notes</label>
-            <input className="vn-input" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
-          </div>
-          <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
-            <button className="vn-btn vn-btn-primary" onClick={handleCreate}>Create</button>
-            <button className="vn-btn vn-btn-outline" onClick={() => setShowCreate(false)}>Cancel</button>
-          </div>
+      {error && (
+        <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+          <CircleAlert className="h-5 w-5" />
+          {error}
         </div>
       )}
 
+      {selectedCarrier && showCreate && (
+        <Card>
+          <CardHeader>
+            <CardTitle>New cutoff row</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Day of week</Label>
+                <Select value={String(form.dayOfWeek)} onValueChange={v => setForm(f => ({ ...f, dayOfWeek: parseInt(v) }))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DAYS.map((d, i) => (
+                      <SelectItem key={i} value={String(i)}>{d}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Cutoff time (HH:mm, local)</Label>
+                <Input value={form.cutoffLocalTime} onChange={e => setForm(f => ({ ...f, cutoffLocalTime: e.target.value }))} placeholder="16:30" />
+              </div>
+              <div className="space-y-2">
+                <Label>Timezone (IANA)</Label>
+                <Input value={form.timezone} onChange={e => setForm(f => ({ ...f, timezone: e.target.value }))} placeholder="America/New_York" />
+              </div>
+              <div className="space-y-2">
+                <Label>Service level (optional)</Label>
+                <Input value={form.serviceLevel} onChange={e => setForm(f => ({ ...f, serviceLevel: e.target.value }))} placeholder="ground" />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Notes</Label>
+              <Input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
+            </div>
+            <div className="flex gap-2">
+              <Button variant="gradient" onClick={handleCreate}>Create</Button>
+              <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {selectedCarrier && (
-        <div className="vn-card">
-          <div className="vn-table-wrap">
-            <table className="vn-table">
-              <thead>
-                <tr>
-                  <th>Day</th>
-                  <th>Cutoff</th>
-                  <th>Timezone</th>
-                  <th>Service</th>
-                  <th>Status</th>
-                  <th>Notes</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading && <tr><td colSpan={7} style={{ textAlign: 'center', padding: 24 }}><div className="vn-loading-spinner" /></td></tr>}
-                {!loading && cutoffs.length === 0 && (
-                  <tr><td colSpan={7} style={{ textAlign: 'center', padding: 24, color: 'var(--text-secondary)' }}>
+        <Card>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Day</TableHead>
+                <TableHead>Cutoff</TableHead>
+                <TableHead>Timezone</TableHead>
+                <TableHead>Service</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Notes</TableHead>
+                <TableHead></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loading && (
+                <TableRow>
+                  <TableCell colSpan={7} className="py-12 text-center">
+                    <Loader2 className="mx-auto h-6 w-6 animate-spin text-muted-foreground" />
+                  </TableCell>
+                </TableRow>
+              )}
+              {!loading && cutoffs.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={7} className="py-12 text-center text-sm text-muted-foreground">
                     No cutoff rows configured for this carrier.
-                  </td></tr>
-                )}
-                {cutoffs.map(c => (
-                  <tr key={c.id}>
-                    <td><strong>{DAYS[c.dayOfWeek]}</strong></td>
-                    <td><code>{c.cutoffLocalTime}</code></td>
-                    <td>{c.timezone}</td>
-                    <td>{c.serviceLevel ?? '-'}</td>
-                    <td><span className={`vn-chip ${c.active ? 'vn-chip-success' : 'vn-chip-secondary'}`}>{c.active ? 'Active' : 'Disabled'}</span></td>
-                    <td><span className="vn-table-secondary">{c.notes ?? ''}</span></td>
-                    <td style={{ textAlign: 'right' }}>
-                      <button className="vn-btn vn-btn-outline vn-btn-sm" onClick={() => handleToggle(c)}>{c.active ? 'Disable' : 'Enable'}</button>
-                      {' '}
-                      <button className="vn-btn vn-btn-outline vn-btn-sm" style={{ color: 'var(--color-error)' }} onClick={() => handleDelete(c.id)}>Delete</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+                  </TableCell>
+                </TableRow>
+              )}
+              {cutoffs.map(c => (
+                <TableRow key={c.id}>
+                  <TableCell className="font-semibold">{DAYS[c.dayOfWeek]}</TableCell>
+                  <TableCell><code className="text-xs">{c.cutoffLocalTime}</code></TableCell>
+                  <TableCell>{c.timezone}</TableCell>
+                  <TableCell>{c.serviceLevel ?? '-'}</TableCell>
+                  <TableCell>
+                    <Badge variant={c.active ? 'success' : 'muted'}>{c.active ? 'Active' : 'Disabled'}</Badge>
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{c.notes ?? ''}</TableCell>
+                  <TableCell className="text-right">
+                    <div className="inline-flex gap-2">
+                      <Button variant="outline" size="sm" onClick={() => handleToggle(c)}>{c.active ? 'Disable' : 'Enable'}</Button>
+                      <Button variant="outline" size="sm" className="text-destructive" onClick={() => handleDelete(c.id)}>Delete</Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
       )}
     </div>
   );

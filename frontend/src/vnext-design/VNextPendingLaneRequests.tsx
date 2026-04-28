@@ -1,5 +1,32 @@
 import React, { useEffect, useState } from 'react';
+import {
+  Check,
+  CheckCircle2,
+  Hourglass,
+  Loader2,
+  MoreVertical,
+  Route,
+  Search,
+  X,
+  XCircle,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Separator } from '@/components/ui/separator';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 
 interface PendingLaneRequest {
   id: string;
@@ -14,20 +41,29 @@ interface PendingLaneRequest {
   createdAt?: string;
 }
 
-function statusChipColor(status: string): string {
+type StatusVariant = 'success' | 'warning' | 'destructive' | 'info' | 'muted';
+
+function statusBadgeVariant(status: string): StatusVariant {
   const s = status?.toLowerCase().replace(/[_ ]/g, '');
   if (s === 'pending') return 'warning';
   if (s === 'approved') return 'success';
-  if (s === 'rejected') return 'error';
+  if (s === 'rejected') return 'destructive';
   if (s === 'lanecreated') return 'info';
-  return 'secondary';
+  return 'muted';
 }
 
 function formatDate(d?: string): string {
-  if (!d) return '\u2014';
+  if (!d) return '-';
   const date = new Date(d);
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
+
+const STAT_TONES = {
+  total: 'bg-primary/10 text-primary',
+  pending: 'bg-warning/15 text-warning',
+  approved: 'bg-success/15 text-success',
+  rejected: 'bg-destructive/10 text-destructive',
+} as const;
 
 export default function VNextPendingLaneRequests() {
   const [requests, setRequests] = useState<PendingLaneRequest[]>([]);
@@ -82,167 +118,152 @@ export default function VNextPendingLaneRequests() {
 
   if (loading) {
     return (
-      <div className="vn-empty">
-        <span className="material-icons" style={{ animation: 'spin 1s linear infinite' }}>refresh</span>
-        <h3>Loading...</h3>
+      <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <h3 className="text-lg font-medium">Loading...</h3>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="vn-alert vn-alert-error">
-        <span className="material-icons">error</span>
-        <div className="vn-alert-content">{error}</div>
+      <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+        <XCircle className="h-5 w-5" />
+        {error}
       </div>
     );
   }
 
+  const stats = [
+    { key: 'total' as const, label: 'Total Requests', value: counts.total, icon: Route },
+    { key: 'pending' as const, label: 'Pending', value: counts.pending, icon: Hourglass },
+    { key: 'approved' as const, label: 'Approved', value: counts.approved, icon: CheckCircle2 },
+    { key: 'rejected' as const, label: 'Rejected', value: counts.rejected, icon: XCircle },
+  ];
+
   return (
-    <>
-      <div className="vn-page-header">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1>Pending Lane Requests</h1>
-          <p>{requests.length} requests</p>
+          <h1 className="text-3xl font-bold tracking-tight">Pending Lane Requests</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{requests.length} requests</p>
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="vn-stats">
-        <div className="vn-stat">
-          <div className="vn-stat-icon primary"><span className="material-icons">route</span></div>
-          <div>
-            <div className="vn-stat-value">{counts.total}</div>
-            <div className="vn-stat-label">Total Requests</div>
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon warning"><span className="material-icons">hourglass_empty</span></div>
-          <div>
-            <div className="vn-stat-value">{counts.pending}</div>
-            <div className="vn-stat-label">Pending</div>
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon success"><span className="material-icons">check_circle</span></div>
-          <div>
-            <div className="vn-stat-value">{counts.approved}</div>
-            <div className="vn-stat-label">Approved</div>
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon error"><span className="material-icons">cancel</span></div>
-          <div>
-            <div className="vn-stat-value">{counts.rejected}</div>
-            <div className="vn-stat-label">Rejected</div>
-          </div>
-        </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {stats.map(stat => {
+          const Icon = stat.icon;
+          return (
+            <Card key={stat.key} className="p-5">
+              <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', STAT_TONES[stat.key])}>
+                <Icon className="h-5 w-5" />
+              </div>
+              <div className="mt-3 text-2xl font-bold tracking-tight">{stat.value}</div>
+              <div className="mt-1 text-sm text-muted-foreground">{stat.label}</div>
+            </Card>
+          );
+        })}
       </div>
 
-      {/* Table */}
-      <div className="vn-card">
-        <div className="vn-filters">
-          <div className="vn-filter-group" style={{ flex: 1 }}>
-            <span className="material-icons">search</span>
-            <input
-              className="vn-filter-input"
+      <Card>
+        <div className="flex flex-wrap items-center gap-3 p-4">
+          <div className="relative min-w-[280px] flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
               placeholder="Search by order, origin, destination..."
               value={search}
               onChange={e => setSearch(e.target.value)}
-              style={{ width: '100%' }}
+              className="pl-9"
             />
           </div>
-          <select
-            className="vn-filter-select"
-            value={statusFilter}
-            onChange={e => setStatusFilter(e.target.value)}
-          >
-            <option value="all">All Statuses</option>
-            <option value="pending">Pending</option>
-            <option value="approved">Approved</option>
-            <option value="rejected">Rejected</option>
-            <option value="lanecreated">Lane Created</option>
-          </select>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-[200px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Statuses</SelectItem>
+              <SelectItem value="pending">Pending</SelectItem>
+              <SelectItem value="approved">Approved</SelectItem>
+              <SelectItem value="rejected">Rejected</SelectItem>
+              <SelectItem value="lanecreated">Lane Created</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
-        <div className="vn-table-wrap">
-          <table className="vn-table">
-            <thead>
-              <tr>
-                <th>Order</th>
-                <th>Route</th>
-                <th>Service Level</th>
-                <th>Requirements</th>
-                <th>Status</th>
-                <th>Created</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={7} style={{ textAlign: 'center', color: 'var(--on-surface-variant)', padding: 32 }}>
-                    No pending lane requests found
-                  </td>
-                </tr>
-              ) : (
-                filtered.map(r => (
-                  <tr key={r.id}>
-                    <td>
-                      <span className="vn-table-id">{r.order?.orderNumber || '\u2014'}</span>
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span className="vn-route-dot origin" style={{ width: 8, height: 8 }} />
-                        <span style={{ fontSize: 13 }}>
-                          {r.origin ? `${r.origin.city}, ${r.origin.state}` : '\u2014'}
-                        </span>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                        <span className="vn-route-dot destination" style={{ width: 8, height: 8 }} />
-                        <span style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>
-                          {r.destination ? `${r.destination.city}, ${r.destination.state}` : '\u2014'}
-                        </span>
-                      </div>
-                    </td>
-                    <td style={{ fontSize: 13 }}>{r.serviceLevel || '\u2014'}</td>
-                    <td>
-                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                        {r.requiresTemperatureControl && <span className="vn-chip vn-chip-secondary">Temp Ctrl</span>}
-                        {r.requiresHazmat && <span className="vn-chip vn-chip-warning">Hazmat</span>}
-                        {!r.requiresTemperatureControl && !r.requiresHazmat && '\u2014'}
-                      </div>
-                    </td>
-                    <td>
-                      <span className={`vn-chip vn-chip-${statusChipColor(r.status)}`}>{r.status}</span>
-                    </td>
-                    <td style={{ fontSize: 13, whiteSpace: 'nowrap' }}>{formatDate(r.createdAt)}</td>
-                    <td>
-                      <div style={{ display: 'flex', gap: 4 }}>
-                        {r.status?.toLowerCase() === 'pending' && (
-                          <>
-                            <button className="vn-btn vn-btn-success vn-btn-sm">
-                              <span className="material-icons">check</span>
-                              Approve
-                            </button>
-                            <button className="vn-btn vn-btn-outline vn-btn-sm" style={{ color: 'var(--error)', borderColor: 'var(--error)' }}>
-                              <span className="material-icons">close</span>
-                              Reject
-                            </button>
-                          </>
-                        )}
-                        <button className="vn-btn-icon">
-                          <span className="material-icons" style={{ fontSize: 18 }}>more_vert</span>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </>
+        <Separator />
+
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Order</TableHead>
+              <TableHead>Route</TableHead>
+              <TableHead>Service Level</TableHead>
+              <TableHead>Requirements</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Created</TableHead>
+              <TableHead></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filtered.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={7} className="py-8 text-center text-sm text-muted-foreground">
+                  No pending lane requests found
+                </TableCell>
+              </TableRow>
+            ) : (
+              filtered.map(r => (
+                <TableRow key={r.id}>
+                  <TableCell className="font-mono text-sm font-semibold">
+                    {r.order?.orderNumber || '-'}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="inline-block h-2 w-2 rounded-full bg-info" />
+                      {r.origin ? `${r.origin.city}, ${r.origin.state}` : '-'}
+                    </div>
+                    <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
+                      <span className="inline-block h-2 w-2 rounded-full bg-success" />
+                      {r.destination ? `${r.destination.city}, ${r.destination.state}` : '-'}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-sm">{r.serviceLevel || '-'}</TableCell>
+                  <TableCell>
+                    <div className="flex flex-wrap gap-1">
+                      {r.requiresTemperatureControl && <Badge variant="secondary">Temp Ctrl</Badge>}
+                      {r.requiresHazmat && <Badge variant="warning">Hazmat</Badge>}
+                      {!r.requiresTemperatureControl && !r.requiresHazmat && '-'}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={statusBadgeVariant(r.status)}>{r.status}</Badge>
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-sm">{formatDate(r.createdAt)}</TableCell>
+                  <TableCell>
+                    <div className="flex gap-1">
+                      {r.status?.toLowerCase() === 'pending' && (
+                        <>
+                          <Button size="sm" variant="default" className="h-8">
+                            <Check className="h-4 w-4" />
+                            Approve
+                          </Button>
+                          <Button size="sm" variant="outline" className="h-8 border-destructive/40 text-destructive">
+                            <X className="h-4 w-4" />
+                            Reject
+                          </Button>
+                        </>
+                      )}
+                      <Button size="icon" variant="ghost" className="h-8 w-8">
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </Card>
+    </div>
   );
 }

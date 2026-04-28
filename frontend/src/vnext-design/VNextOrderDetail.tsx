@@ -1,6 +1,30 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import {
+  ArrowLeft,
+  CircleAlert,
+  ExternalLink,
+  FileText,
+  Loader2,
+  Pencil,
+  User,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+
+type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning' | 'info' | 'muted';
 
 interface LineItem {
   id: string;
@@ -54,36 +78,45 @@ interface OrderData {
   updatedAt?: string;
 }
 
-function statusChipColor(status: string): string {
+function statusVariant(status?: string): BadgeVariant {
   const s = status?.toLowerCase().replace(/[_ ]/g, '');
   if (s === 'readytoship' || s === 'ready') return 'success';
   if (s === 'pendingapproval' || s === 'pending') return 'warning';
   if (s === 'shipped' || s === 'intransit') return 'info';
   if (s === 'delivered') return 'success';
-  if (s === 'cancelled' || s === 'canceled') return 'error';
+  if (s === 'cancelled' || s === 'canceled') return 'destructive';
   if (s === 'draft') return 'secondary';
   return 'secondary';
 }
 
-function deliveryStatusColor(status: string): string {
+function deliveryStatusVariant(status?: string): BadgeVariant {
   const s = status?.toLowerCase().replace(/[_ ]/g, '');
   if (s === 'delivered') return 'success';
   if (s === 'intransit') return 'info';
   if (s === 'pending') return 'warning';
-  if (s === 'failed' || s === 'exception') return 'error';
+  if (s === 'failed' || s === 'exception') return 'destructive';
   return 'secondary';
 }
 
 function formatDate(d?: string): string {
-  if (!d) return '\u2014';
+  if (!d) return '-';
   const date = new Date(d);
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 function formatDateTime(d?: string): string {
-  if (!d) return '\u2014';
+  if (!d) return '-';
   const date = new Date(d);
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
+function InfoItem({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <div className="text-xs font-medium text-muted-foreground">{label}</div>
+      <div className="mt-1 text-sm">{children}</div>
+    </div>
+  );
 }
 
 export default function VNextOrderDetail() {
@@ -117,316 +150,299 @@ export default function VNextOrderDetail() {
 
   if (loading) {
     return (
-      <div className="vn-empty">
-        <span className="material-icons" style={{ animation: 'spin 1s linear infinite' }}>refresh</span>
-        <h3>Loading order...</h3>
+      <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <h3 className="text-lg font-medium">Loading order...</h3>
       </div>
     );
   }
 
   if (error || !order) {
     return (
-      <div className="vn-alert vn-alert-error">
-        <span className="material-icons">error</span>
-        <div className="vn-alert-content">{error || 'Order not found'}</div>
+      <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+        <CircleAlert className="h-5 w-5" />
+        {error || 'Order not found'}
       </div>
     );
   }
 
   return (
-    <>
-      {/* Breadcrumb */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-        <button className="vn-btn vn-btn-ghost vn-btn-sm" onClick={() => navigate('/orders')}>
-          <span className="material-icons">arrow_back</span>
+    <div className="space-y-6">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Button variant="ghost" size="sm" onClick={() => navigate('/orders')} className="-ml-2 h-auto px-2 py-1">
+          <ArrowLeft className="h-4 w-4" />
           Orders
-        </button>
-        <span style={{ color: 'var(--on-surface-variant)', fontSize: 13 }}>/ {order.orderNumber || order.id}</span>
+        </Button>
+        <span>/ {order.orderNumber || order.id}</span>
       </div>
 
-      {/* Page Header */}
-      <div className="vn-page-header">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1>{order.orderNumber || order.id}</h1>
-          <div className="vn-page-header-meta">
-            <span className={`vn-chip vn-chip-${statusChipColor(order.status)}`}>{order.status}</span>
+          <h1 className="text-3xl font-bold tracking-tight">{order.orderNumber || order.id}</h1>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <Badge variant={statusVariant(order.status)}>{order.status}</Badge>
             {order.deliveryStatus && (
-              <span className={`vn-chip vn-chip-${deliveryStatusColor(order.deliveryStatus)}`}>{order.deliveryStatus}</span>
+              <Badge variant={deliveryStatusVariant(order.deliveryStatus)}>{order.deliveryStatus}</Badge>
             )}
             {order.poNumber && (
-              <span style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>PO# {order.poNumber}</span>
+              <span className="text-sm text-muted-foreground">PO# {order.poNumber}</span>
             )}
           </div>
         </div>
-        <div className="vn-page-actions">
-          <button className="vn-btn vn-btn-outline vn-btn-sm" onClick={() => navigate(`/orders/${order.id}/edit`)}>
-            <span className="material-icons">edit</span>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => navigate(`/orders/${order.id}/edit`)}>
+            <Pencil className="h-4 w-4" />
             Edit
-          </button>
-          <button className="vn-btn vn-btn-outline vn-btn-sm" onClick={() => navigate(`/documents?orderId=${order.id}`)}>
-            <span className="material-icons">description</span>
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => navigate(`/documents?orderId=${order.id}`)}>
+            <FileText className="h-4 w-4" />
             Documents
-          </button>
+          </Button>
         </div>
       </div>
 
-      <div className="vn-detail-grid">
-        {/* Main Area */}
-        <div className="vn-detail-main">
-          {/* Info Grid */}
-          <div className="vn-card" style={{ marginBottom: 24 }}>
-            <div className="vn-card-header"><h2>Order Information</h2></div>
-            <div className="vn-card-body">
-              <div className="vn-info-grid">
-                <div className="vn-info-item"><label>Customer</label><span>{order.customer?.name || '\u2014'}</span></div>
-                <div className="vn-info-item"><label>PO Number</label><span>{order.poNumber || '\u2014'}</span></div>
-                <div className="vn-info-item"><label>Service Level</label><span>{order.serviceLevel || '\u2014'}</span></div>
-                <div className="vn-info-item"><label>Import Source</label><span>{order.importSource || '\u2014'}</span></div>
-                <div className="vn-info-item"><label>Requested Pickup</label><span>{formatDate(order.requestedPickupDate)}</span></div>
-                <div className="vn-info-item"><label>Requested Delivery</label><span>{formatDate(order.requestedDeliveryDate)}</span></div>
-                <div className="vn-info-item">
-                  <label>Requirements</label>
-                  <span style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                    {order.temperatureControl && <span className="vn-chip vn-chip-secondary">Temp Control</span>}
-                    {order.requiresHazmat && <span className="vn-chip vn-chip-warning">Hazmat</span>}
-                    {!order.temperatureControl && !order.requiresHazmat && '\u2014'}
-                  </span>
-                </div>
+      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Order information</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <InfoItem label="Customer">{order.customer?.name || '-'}</InfoItem>
+                <InfoItem label="PO number">{order.poNumber || '-'}</InfoItem>
+                <InfoItem label="Service level">{order.serviceLevel || '-'}</InfoItem>
+                <InfoItem label="Import source">{order.importSource || '-'}</InfoItem>
+                <InfoItem label="Requested pickup">{formatDate(order.requestedPickupDate)}</InfoItem>
+                <InfoItem label="Requested delivery">{formatDate(order.requestedDeliveryDate)}</InfoItem>
+                <InfoItem label="Requirements">
+                  <div className="flex flex-wrap gap-1">
+                    {order.temperatureControl && <Badge variant="muted">Temp control</Badge>}
+                    {order.requiresHazmat && <Badge variant="warning">Hazmat</Badge>}
+                    {!order.temperatureControl && !order.requiresHazmat && '-'}
+                  </div>
+                </InfoItem>
               </div>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
 
-          {/* Route */}
-          <div className="vn-card" style={{ marginBottom: 24 }}>
-            <div className="vn-card-body">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                    <span className="vn-route-dot origin" />
-                    <div>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--on-surface)' }}>
-                        {order.origin?.name || 'Origin'}
-                      </div>
-                      <div style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>
-                        {order.origin ? `${order.origin.city}, ${order.origin.state}` : 'Not set'}
-                      </div>
+          <Card>
+            <CardContent className="p-6">
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-success" />
+                  <div>
+                    <div className="text-sm font-semibold">{order.origin?.name || 'Origin'}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {order.origin ? `${order.origin.city}, ${order.origin.state}` : 'Not set'}
                     </div>
                   </div>
-                  <div style={{ borderLeft: '2px dashed var(--outline-variant)', marginLeft: 5, height: 16 }} />
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
-                    <span className="vn-route-dot destination" />
-                    <div>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--on-surface)' }}>
-                        {order.destination?.name || 'Destination'}
-                      </div>
-                      <div style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>
-                        {order.destination ? `${order.destination.city}, ${order.destination.state}` : 'Not set'}
-                      </div>
+                </div>
+                <div className="ml-1 h-4 border-l-2 border-dashed border-border" />
+                <div className="flex items-center gap-3">
+                  <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-destructive" />
+                  <div>
+                    <div className="text-sm font-semibold">{order.destination?.name || 'Destination'}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {order.destination ? `${order.destination.city}, ${order.destination.state}` : 'Not set'}
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
 
-          {/* Line Items */}
-          <div className="vn-card" style={{ marginBottom: 24 }}>
-            <div className="vn-card-header">
-              <h2>Line Items</h2>
-              <span style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>{order.lineItems?.length || 0} items</span>
-            </div>
-            <div className="vn-card-body vn-card-flush">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Line items</CardTitle>
+              <span className="text-sm text-muted-foreground">{order.lineItems?.length || 0} items</span>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Separator />
               {order.lineItems && order.lineItems.length > 0 ? (
-                <div className="vn-table-wrap">
-                  <table className="vn-table">
-                    <thead>
-                      <tr>
-                        <th>SKU</th>
-                        <th>Description</th>
-                        <th>Quantity</th>
-                        <th>Weight</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {order.lineItems.map((li) => (
-                        <tr key={li.id}>
-                          <td><span style={{ fontFamily: 'monospace', fontSize: 12 }}>{li.sku || '\u2014'}</span></td>
-                          <td>{li.description || '\u2014'}</td>
-                          <td>{li.quantity ?? '\u2014'}</td>
-                          <td>{li.weight ? `${li.weight} lbs` : '\u2014'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>SKU</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead>Quantity</TableHead>
+                      <TableHead>Weight</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {order.lineItems.map((li) => (
+                      <TableRow key={li.id}>
+                        <TableCell className="font-mono text-xs">{li.sku || '-'}</TableCell>
+                        <TableCell>{li.description || '-'}</TableCell>
+                        <TableCell>{li.quantity ?? '-'}</TableCell>
+                        <TableCell>{li.weight ? `${li.weight} lbs` : '-'}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               ) : (
-                <div style={{ padding: 24, textAlign: 'center', color: 'var(--on-surface-variant)', fontSize: 13 }}>
+                <div className="px-6 py-12 text-center text-sm text-muted-foreground">
                   No line items
                 </div>
               )}
-            </div>
-          </div>
+            </CardContent>
+          </Card>
 
-          {/* Trackable Units */}
           {order.trackableUnits && order.trackableUnits.length > 0 && (
-            <div className="vn-card" style={{ marginBottom: 24 }}>
-              <div className="vn-card-header">
-                <h2>Trackable Units</h2>
-                <span style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>{order.trackableUnits.length} units</span>
-              </div>
-              <div className="vn-card-body vn-card-flush">
-                <div className="vn-table-wrap">
-                  <table className="vn-table">
-                    <thead>
-                      <tr>
-                        <th>Identifier</th>
-                        <th>Type</th>
-                        <th>Line Items</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {order.trackableUnits.map((tu) => (
-                        <tr key={tu.id}>
-                          <td><span style={{ fontFamily: 'monospace', fontSize: 12 }}>{tu.identifier || '\u2014'}</span></td>
-                          <td>{tu.unitType || '\u2014'}</td>
-                          <td>{tu.lineItems?.length || 0}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle>Trackable units</CardTitle>
+                <span className="text-sm text-muted-foreground">{order.trackableUnits.length} units</span>
+              </CardHeader>
+              <CardContent className="p-0">
+                <Separator />
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Identifier</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Line items</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {order.trackableUnits.map((tu) => (
+                      <TableRow key={tu.id}>
+                        <TableCell className="font-mono text-xs">{tu.identifier || '-'}</TableCell>
+                        <TableCell>{tu.unitType || '-'}</TableCell>
+                        <TableCell>{tu.lineItems?.length || 0}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
           )}
 
-          {/* Linked Shipments */}
-          <div className="vn-card" style={{ marginBottom: 24 }}>
-            <div className="vn-card-header">
-              <h2>Shipments</h2>
-              <span style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>{order.orderShipments?.length || 0} shipments</span>
-            </div>
-            <div className="vn-card-body vn-card-flush">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Shipments</CardTitle>
+              <span className="text-sm text-muted-foreground">{order.orderShipments?.length || 0} shipments</span>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Separator />
               {order.orderShipments && order.orderShipments.length > 0 ? (
-                <div className="vn-table-wrap">
-                  <table className="vn-table">
-                    <thead>
-                      <tr>
-                        <th>Reference</th>
-                        <th>Status</th>
-                        <th></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {order.orderShipments.map((os) => (
-                        <tr key={os.shipment.id}>
-                          <td><span className="vn-table-id">{os.shipment.reference || os.shipment.id}</span></td>
-                          <td>
-                            <span className={`vn-chip vn-chip-${statusChipColor(os.shipment.status || '')}`}>
-                              {os.shipment.status || '\u2014'}
-                            </span>
-                          </td>
-                          <td>
-                            <Link to={`/shipments/${os.shipment.id}`} className="vn-btn vn-btn-ghost vn-btn-sm">
-                              <span className="material-icons" style={{ fontSize: 18 }}>open_in_new</span>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Reference</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="w-[120px]"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {order.orderShipments.map((os) => (
+                      <TableRow key={os.shipment.id}>
+                        <TableCell className="font-mono text-sm font-semibold">{os.shipment.reference || os.shipment.id}</TableCell>
+                        <TableCell>
+                          <Badge variant={statusVariant(os.shipment.status)}>{os.shipment.status || '-'}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Button asChild variant="ghost" size="sm">
+                            <Link to={`/shipments/${os.shipment.id}`}>
+                              <ExternalLink className="h-4 w-4" />
                               View
                             </Link>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               ) : (
-                <div style={{ padding: 24, textAlign: 'center', color: 'var(--on-surface-variant)', fontSize: 13 }}>
+                <div className="px-6 py-12 text-center text-sm text-muted-foreground">
                   No shipments linked
                 </div>
               )}
-            </div>
-          </div>
+            </CardContent>
+          </Card>
 
-          {/* Audit Log */}
           {order.auditLogs && order.auditLogs.length > 0 && (
-            <div className="vn-card">
-              <div className="vn-card-header"><h2>Audit Log</h2></div>
-              <div className="vn-card-body">
-                <div className="vn-timeline">
+            <Card>
+              <CardHeader>
+                <CardTitle>Audit log</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ol className="relative space-y-4 border-l border-border pl-6">
                   {order.auditLogs.map((log) => (
-                    <div className="vn-timeline-item" key={log.id}>
-                      <div className="vn-timeline-dot info" />
-                      <div className="vn-timeline-time">{formatDateTime(log.createdAt)}</div>
-                      <div className="vn-timeline-title">{log.action || 'Action'}</div>
-                      <div className="vn-timeline-desc">{log.description || ''}</div>
+                    <li key={log.id} className="relative">
+                      <span className="absolute -left-[29px] top-1 flex h-3 w-3 items-center justify-center rounded-full bg-info ring-4 ring-background" />
+                      <div className="text-xs text-muted-foreground">{formatDateTime(log.createdAt)}</div>
+                      <div className="mt-1 text-sm font-medium">{log.action || 'Action'}</div>
+                      {log.description && (
+                        <div className="mt-0.5 text-sm text-muted-foreground">{log.description}</div>
+                      )}
                       {log.userName && (
-                        <div className="vn-timeline-location">
-                          <span className="material-icons">person</span>
+                        <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                          <User className="h-3 w-3" />
                           {log.userName}
                         </div>
                       )}
-                    </div>
+                    </li>
                   ))}
-                </div>
-              </div>
-            </div>
+                </ol>
+              </CardContent>
+            </Card>
           )}
         </div>
 
-        {/* Sidebar */}
-        <div className="vn-detail-sidebar">
-          {/* Order Status */}
-          <div className="vn-card">
-            <div className="vn-card-header"><h2>Status</h2></div>
-            <div className="vn-card-body">
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                <div className="vn-info-item">
-                  <label>Order Status</label>
-                  <span className={`vn-chip vn-chip-${statusChipColor(order.status)}`}>{order.status}</span>
-                </div>
-                <div className="vn-info-item">
-                  <label>Delivery Status</label>
-                  <span>{order.deliveryStatus ? (
-                    <span className={`vn-chip vn-chip-${deliveryStatusColor(order.deliveryStatus)}`}>{order.deliveryStatus}</span>
-                  ) : '\u2014'}</span>
-                </div>
-              </div>
-            </div>
-          </div>
+        <aside className="space-y-6 lg:sticky lg:top-20 lg:self-start">
+          <Card>
+            <CardHeader>
+              <CardTitle>Status</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <InfoItem label="Order status">
+                <Badge variant={statusVariant(order.status)}>{order.status}</Badge>
+              </InfoItem>
+              <InfoItem label="Delivery status">
+                {order.deliveryStatus ? (
+                  <Badge variant={deliveryStatusVariant(order.deliveryStatus)}>{order.deliveryStatus}</Badge>
+                ) : '-'}
+              </InfoItem>
+            </CardContent>
+          </Card>
 
-          {/* Dates */}
-          <div className="vn-card">
-            <div className="vn-card-header"><h2>Dates</h2></div>
-            <div className="vn-card-body">
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                <div className="vn-info-item"><label>Created</label><span>{formatDateTime(order.createdAt)}</span></div>
-                <div className="vn-info-item"><label>Updated</label><span>{formatDateTime(order.updatedAt)}</span></div>
-                <div className="vn-info-item"><label>Req. Pickup</label><span>{formatDate(order.requestedPickupDate)}</span></div>
-                <div className="vn-info-item"><label>Req. Delivery</label><span>{formatDate(order.requestedDeliveryDate)}</span></div>
-              </div>
-            </div>
-          </div>
+          <Card>
+            <CardHeader>
+              <CardTitle>Dates</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <InfoItem label="Created">{formatDateTime(order.createdAt)}</InfoItem>
+              <InfoItem label="Updated">{formatDateTime(order.updatedAt)}</InfoItem>
+              <InfoItem label="Req. pickup">{formatDate(order.requestedPickupDate)}</InfoItem>
+              <InfoItem label="Req. delivery">{formatDate(order.requestedDeliveryDate)}</InfoItem>
+            </CardContent>
+          </Card>
 
-          {/* Notes */}
-          <div className="vn-card">
-            <div className="vn-card-header"><h2>Notes</h2></div>
-            <div className="vn-card-body">
+          <Card>
+            <CardHeader>
+              <CardTitle>Notes</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
               {order.specialInstructions && (
-                <div style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--on-surface-variant)', marginBottom: 4 }}>Special Instructions</div>
-                  <p style={{ fontSize: 13, color: 'var(--on-surface)', margin: 0 }}>{order.specialInstructions}</p>
+                <div>
+                  <div className="text-xs font-semibold text-muted-foreground">Special instructions</div>
+                  <p className="mt-1 text-sm">{order.specialInstructions}</p>
                 </div>
               )}
               {order.notes && (
                 <div>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--on-surface-variant)', marginBottom: 4 }}>Notes</div>
-                  <p style={{ fontSize: 13, color: 'var(--on-surface)', margin: 0 }}>{order.notes}</p>
+                  <div className="text-xs font-semibold text-muted-foreground">Notes</div>
+                  <p className="mt-1 text-sm">{order.notes}</p>
                 </div>
               )}
               {!order.specialInstructions && !order.notes && (
-                <p style={{ fontSize: 13, color: 'var(--on-surface-variant)', margin: 0 }}>No notes</p>
+                <p className="text-sm text-muted-foreground">No notes</p>
               )}
-            </div>
-          </div>
-        </div>
+            </CardContent>
+          </Card>
+        </aside>
       </div>
-    </>
+    </div>
   );
 }

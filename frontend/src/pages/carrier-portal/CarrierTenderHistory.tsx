@@ -1,7 +1,20 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
+import { Loader2 } from 'lucide-react';
+
 import { API_URL } from '../../api';
 import { carrierFetch, getCarrierToken } from './CarrierDashboard';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 
 interface OfferHistory {
   id: string;
@@ -29,11 +42,13 @@ interface OfferHistory {
   };
 }
 
-const outcomeColors: Record<string, string> = {
+type StatusVariant = 'success' | 'info' | 'warning' | 'destructive' | 'muted' | 'secondary' | 'default';
+
+const outcomeVariants: Record<string, StatusVariant> = {
   won: 'success',
-  lost: 'error',
+  lost: 'destructive',
   pending: 'info',
-  active: 'primary',
+  active: 'default',
   expired: 'warning',
   cancelled: 'secondary',
 };
@@ -45,6 +60,21 @@ const outcomeLabels: Record<string, string> = {
   active: 'Active',
   expired: 'Expired',
   cancelled: 'Cancelled',
+};
+
+function tenderStatusVariant(s: string): StatusVariant {
+  if (s === 'awarded') return 'success';
+  if (s === 'open') return 'default';
+  return 'secondary';
+}
+
+const STAT_BORDER: Record<string, string> = {
+  total: 'border-l-primary',
+  won: 'border-l-success',
+  lost: 'border-l-destructive',
+  pending: 'border-l-info',
+  active: 'border-l-primary',
+  expired: 'border-l-warning',
 };
 
 export default function CarrierTenderHistory() {
@@ -70,7 +100,6 @@ export default function CarrierTenderHistory() {
     ? offers.filter(o => o.outcome === outcomeFilter)
     : offers;
 
-  // Summary counts
   const counts = {
     total: offers.length,
     won: offers.filter(o => o.outcome === 'won').length,
@@ -80,127 +109,130 @@ export default function CarrierTenderHistory() {
     expired: offers.filter(o => o.outcome === 'expired').length,
   };
 
-  if (loading) return <div className="vn-empty"><span className="material-icons" style={{animation:'spin 1s linear infinite'}}>refresh</span><h3>Loading...</h3></div>;
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <h3 className="text-lg font-medium">Loading...</h3>
+      </div>
+    );
+  }
+
+  const tiles: Array<{ key: string; label: string; value: number; valueClass?: string }> = [
+    { key: 'total', label: 'Total', value: counts.total },
+    { key: 'won', label: 'Won', value: counts.won, valueClass: 'text-success' },
+    { key: 'lost', label: 'Lost', value: counts.lost, valueClass: 'text-destructive' },
+    { key: 'pending', label: 'Pending', value: counts.pending },
+    { key: 'active', label: 'Active', value: counts.active, valueClass: 'text-primary' },
+    { key: 'expired', label: 'Expired', value: counts.expired },
+  ];
 
   return (
-    <div>
-      <div className="vn-page-header">
-        <h1>Tender History</h1>
+    <div className="space-y-6">
+      <h1 className="text-3xl font-bold tracking-tight">Tender history</h1>
+
+      <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        {tiles.map(t => {
+          const isActive = (t.key === 'total' && outcomeFilter === '') || outcomeFilter === t.key;
+          return (
+            <Card
+              key={t.key}
+              className={cn(
+                'cursor-pointer border-l-4 text-center transition-colors',
+                isActive ? STAT_BORDER[t.key] : 'border-l-transparent',
+                'hover:border-primary/40',
+              )}
+            >
+              <button
+                type="button"
+                onClick={() => setOutcomeFilter(t.key === 'total' ? '' : (outcomeFilter === t.key ? '' : t.key))}
+                className="block w-full p-4 text-left"
+              >
+                <div className="text-xs text-muted-foreground">{t.label}</div>
+                <div className={cn('mt-1 text-2xl font-bold tracking-tight', t.valueClass)}>{t.value}</div>
+              </button>
+            </Card>
+          );
+        })}
       </div>
 
-      {/* Summary cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 'var(--spacing-2)', marginBottom: 'var(--spacing-3)' }}>
-        <div className="vn-card" style={{ textAlign: 'center', cursor: 'pointer', borderLeft: outcomeFilter === '' ? '4px solid var(--primary)' : undefined }}
-          onClick={() => setOutcomeFilter('')}>
-          <div style={{ color: 'var(--on-surface-variant)', fontSize: '12px' }}>Total</div>
-          <div style={{ fontSize: '24px', fontWeight: 700 }}>{counts.total}</div>
-        </div>
-        <div className="vn-card" style={{ textAlign: 'center', cursor: 'pointer', borderLeft: outcomeFilter === 'won' ? '4px solid var(--success)' : undefined }}
-          onClick={() => setOutcomeFilter(outcomeFilter === 'won' ? '' : 'won')}>
-          <div style={{ color: 'var(--on-surface-variant)', fontSize: '12px' }}>Won</div>
-          <div style={{ fontSize: '24px', fontWeight: 700, color: 'var(--success)' }}>{counts.won}</div>
-        </div>
-        <div className="vn-card" style={{ textAlign: 'center', cursor: 'pointer', borderLeft: outcomeFilter === 'lost' ? '4px solid var(--error)' : undefined }}
-          onClick={() => setOutcomeFilter(outcomeFilter === 'lost' ? '' : 'lost')}>
-          <div style={{ color: 'var(--on-surface-variant)', fontSize: '12px' }}>Lost</div>
-          <div style={{ fontSize: '24px', fontWeight: 700, color: 'var(--error)' }}>{counts.lost}</div>
-        </div>
-        <div className="vn-card" style={{ textAlign: 'center', cursor: 'pointer', borderLeft: outcomeFilter === 'pending' ? '4px solid var(--info)' : undefined }}
-          onClick={() => setOutcomeFilter(outcomeFilter === 'pending' ? '' : 'pending')}>
-          <div style={{ color: 'var(--on-surface-variant)', fontSize: '12px' }}>Pending</div>
-          <div style={{ fontSize: '24px', fontWeight: 700 }}>{counts.pending}</div>
-        </div>
-        <div className="vn-card" style={{ textAlign: 'center', cursor: 'pointer', borderLeft: outcomeFilter === 'active' ? '4px solid var(--primary)' : undefined }}
-          onClick={() => setOutcomeFilter(outcomeFilter === 'active' ? '' : 'active')}>
-          <div style={{ color: 'var(--on-surface-variant)', fontSize: '12px' }}>Active</div>
-          <div style={{ fontSize: '24px', fontWeight: 700, color: 'var(--primary)' }}>{counts.active}</div>
-        </div>
-        <div className="vn-card" style={{ textAlign: 'center', cursor: 'pointer', borderLeft: outcomeFilter === 'expired' ? '4px solid var(--warning)' : undefined }}
-          onClick={() => setOutcomeFilter(outcomeFilter === 'expired' ? '' : 'expired')}>
-          <div style={{ color: 'var(--on-surface-variant)', fontSize: '12px' }}>Expired</div>
-          <div style={{ fontSize: '24px', fontWeight: 700 }}>{counts.expired}</div>
-        </div>
-      </div>
-
-      {/* Win rate */}
       {counts.won + counts.lost > 0 && (
-        <div className="vn-card" style={{ marginBottom: 'var(--spacing-3)', display: 'flex', alignItems: 'center', gap: 'var(--spacing-3)' }}>
-          <div>
-            <div style={{ fontSize: '13px', color: 'var(--on-surface-variant)' }}>Win Rate</div>
-            <div style={{ fontSize: '28px', fontWeight: 700, color: 'var(--success)' }}>
-              {Math.round((counts.won / (counts.won + counts.lost)) * 100)}%
+        <Card>
+          <CardContent className="flex flex-wrap items-center gap-6 p-4">
+            <div>
+              <div className="text-xs text-muted-foreground">Win rate</div>
+              <div className="text-3xl font-bold tracking-tight text-success">
+                {Math.round((counts.won / (counts.won + counts.lost)) * 100)}%
+              </div>
             </div>
-          </div>
-          <div style={{ flex: 1, height: '8px', background: 'var(--error)', borderRadius: '4px', overflow: 'hidden' }}>
-            <div style={{
-              width: `${Math.round((counts.won / (counts.won + counts.lost)) * 100)}%`,
-              height: '100%',
-              background: 'var(--success)',
-              borderRadius: '4px',
-            }} />
-          </div>
-          <div style={{ fontSize: '13px', color: 'var(--on-surface-variant)' }}>
-            {counts.won}W / {counts.lost}L
-          </div>
-        </div>
+            <div className="h-2 flex-1 min-w-[120px] overflow-hidden rounded-full bg-destructive/30">
+              <div
+                className="h-full rounded-full bg-success"
+                style={{ width: `${Math.round((counts.won / (counts.won + counts.lost)) * 100)}%` }}
+              />
+            </div>
+            <div className="text-sm text-muted-foreground">
+              {counts.won}W / {counts.lost}L
+            </div>
+          </CardContent>
+        </Card>
       )}
 
-      <div className="vn-card">
-        <div className="vn-card-flush">
-          <div className="vn-table-wrap">
-            <table className="vn-table">
-              <thead>
-                <tr>
-                  <th>Tender</th>
-                  <th>Route</th>
-                  <th>Customer</th>
-                  <th>Equipment</th>
-                  <th>Target Rate</th>
-                  <th>Your Bid</th>
-                  <th>Outcome</th>
-                  <th>Tender Status</th>
-                  <th>Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.length === 0 ? (
-                  <tr>
-                    <td colSpan={9} style={{ textAlign: 'center', padding: '40px', color: 'var(--on-surface-variant)' }}>
-                      {outcomeFilter ? `No ${outcomeLabels[outcomeFilter]?.toLowerCase()} tenders` : 'No tender history yet'}
-                    </td>
-                  </tr>
-                ) : filtered.map(o => (
-                  <tr key={o.id} onClick={() => {
-                    if (['active', 'pending'].includes(o.outcome)) {
-                      navigate(`/carrier-portal/tenders/${o.tender.id}`);
-                    }
-                  }} style={{ cursor: ['active', 'pending'].includes(o.outcome) ? 'pointer' : 'default' }}>
-                    <td style={{ fontWeight: 600 }}>{o.tenderReference}</td>
-                    <td>{o.route || '--'}</td>
-                    <td>{o.customerName || '--'}</td>
-                    <td>{o.tender.equipmentType || '--'}</td>
-                    <td>{o.tender.targetRate ? `$${o.tender.targetRate.toLocaleString()}` : '--'}</td>
-                    <td style={{ fontWeight: o.bidRate ? 700 : 400 }}>
-                      {o.bidRate ? `$${o.bidRate.toLocaleString()}` : '--'}
-                    </td>
-                    <td>
-                      <span className={`vn-chip vn-chip-${outcomeColors[o.outcome] || 'secondary'}`}>
-                        {outcomeLabels[o.outcome] || o.outcome}
-                      </span>
-                    </td>
-                    <td>
-                      <span className={`vn-chip vn-chip-${o.tenderStatus === 'awarded' ? 'success' : o.tenderStatus === 'open' ? 'primary' : 'secondary'}`}>
-                        {o.tenderStatus}
-                      </span>
-                    </td>
-                    <td>{new Date(o.createdAt).toLocaleDateString()}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
+      <Card>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Tender</TableHead>
+              <TableHead>Route</TableHead>
+              <TableHead>Customer</TableHead>
+              <TableHead>Equipment</TableHead>
+              <TableHead>Target rate</TableHead>
+              <TableHead>Your bid</TableHead>
+              <TableHead>Outcome</TableHead>
+              <TableHead>Tender status</TableHead>
+              <TableHead>Date</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filtered.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={9} className="py-10 text-center text-sm text-muted-foreground">
+                  {outcomeFilter ? `No ${outcomeLabels[outcomeFilter]?.toLowerCase()} tenders` : 'No tender history yet'}
+                </TableCell>
+              </TableRow>
+            ) : filtered.map(o => {
+              const clickable = ['active', 'pending'].includes(o.outcome);
+              return (
+                <TableRow
+                  key={o.id}
+                  onClick={() => clickable && navigate(`/carrier-portal/tenders/${o.tender.id}`)}
+                  className={clickable ? 'cursor-pointer' : ''}
+                >
+                  <TableCell className="font-semibold">{o.tenderReference}</TableCell>
+                  <TableCell className="text-sm">{o.route || '-'}</TableCell>
+                  <TableCell className="text-sm">{o.customerName || '-'}</TableCell>
+                  <TableCell className="text-sm">{o.tender.equipmentType || '-'}</TableCell>
+                  <TableCell className="text-sm">{o.tender.targetRate ? `$${o.tender.targetRate.toLocaleString()}` : '-'}</TableCell>
+                  <TableCell className={cn('text-sm', o.bidRate && 'font-bold')}>
+                    {o.bidRate ? `$${o.bidRate.toLocaleString()}` : '-'}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={outcomeVariants[o.outcome] || 'secondary'}>
+                      {outcomeLabels[o.outcome] || o.outcome}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={tenderStatusVariant(o.tenderStatus)}>{o.tenderStatus}</Badge>
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {new Date(o.createdAt).toLocaleDateString()}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </Card>
     </div>
   );
 }

@@ -1,8 +1,31 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { API_URL } from '../api';
+import {
+  Boxes,
+  CircleAlert,
+  Grid3x3,
+  Loader2,
+  Package,
+  PackageOpen,
+  PackagePlus,
+  Plus,
+  Search,
+  ShoppingCart,
+  Truck,
+  Waves,
+} from 'lucide-react';
 
-/* ── Types ────────────────────────────────────────────────── */
+import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { cn } from '@/lib/utils';
 
 interface WarehouseStats {
   zones: number;
@@ -15,7 +38,12 @@ interface WarehouseStats {
   putawayTasks: number;
 }
 
-/* ── Component ────────────────────────────────────────────── */
+const TONES = {
+  primary: 'bg-primary/10 text-primary',
+  info: 'bg-info/15 text-info',
+  success: 'bg-success/15 text-success',
+  warning: 'bg-warning/15 text-warning',
+} as const;
 
 export default function VNextWmsDashboard() {
   const navigate = useNavigate();
@@ -52,128 +80,132 @@ export default function VNextWmsDashboard() {
 
   if (loading) {
     return (
-      <div style={{ padding: '2rem', textAlign: 'center' }}>
-        <div className="vn-loading-spinner" />
+      <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
         <p>Loading warehouse dashboard...</p>
       </div>
     );
   }
 
+  const tiles = [
+    { label: 'Zones', value: stats?.zones ?? 0, icon: Grid3x3, tone: 'primary' as const, onClick: () => navigate('/wms/zones') },
+    { label: 'Active Bins', value: stats?.activeBins ?? 0, icon: Boxes, tone: 'info' as const, onClick: () => navigate('/wms/zones') },
+    { label: 'SKUs in Stock', value: stats?.totalSkus ?? 0, icon: Package, tone: 'success' as const, onClick: () => navigate('/wms/inventory') },
+    { label: 'Receiving Tasks', value: stats?.receivingTasks ?? 0, icon: PackageOpen, tone: 'warning' as const, onClick: () => navigate('/wms/receiving') },
+  ];
+
+  const tilesRow2 = [
+    { label: 'Putaway Tasks', value: stats?.putawayTasks ?? 0, icon: PackagePlus, tone: 'info' as const, onClick: () => navigate('/wms/putaway') },
+    { label: 'Pick Tasks', value: stats?.pickTasks ?? 0, icon: ShoppingCart, tone: 'primary' as const, onClick: () => navigate('/wms/picking') },
+    { label: 'Pack Tasks', value: stats?.packTasks ?? 0, icon: Package, tone: 'warning' as const, onClick: () => navigate('/wms/packing') },
+    { label: 'Loading', value: 0, icon: Truck, tone: 'success' as const, onClick: () => navigate('/wms/loading') },
+  ];
+
   return (
-    <div>
-      <div className="vn-page-header">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1>Warehouse Operations</h1>
-          <p className="vn-page-subtitle">Overview of warehouse activity and performance</p>
+          <h1 className="text-3xl font-bold tracking-tight">Warehouse Operations</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Overview of warehouse activity and performance</p>
         </div>
-        <select className="vn-filter-select" value={selectedLocation} onChange={e => setSelectedLocation(e.target.value)} style={{ width: 'auto' }}>
-          {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-        </select>
+        <Select value={selectedLocation} onValueChange={setSelectedLocation}>
+          <SelectTrigger className="w-[260px]">
+            <SelectValue placeholder="Select location" />
+          </SelectTrigger>
+          <SelectContent>
+            {locations.map(l => (
+              <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
-      {error && <div className="vn-alert vn-alert-error">{error}</div>}
+      {error && (
+        <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+          <CircleAlert className="h-5 w-5" />
+          {error}
+        </div>
+      )}
 
-      {/* Stats row */}
-      <div className="vn-stats" style={{ marginBottom: '1.5rem' }}>
-        <div className="vn-stat" onClick={() => navigate('/wms/zones')} style={{ cursor: 'pointer' }}>
-          <div className="vn-stat-icon vn-stat-icon-primary">
-            <span className="material-icons">grid_view</span>
-          </div>
-          <div className="vn-stat-value">{stats?.zones ?? 0}</div>
-          <div className="vn-stat-label">Zones</div>
-        </div>
-        <div className="vn-stat" onClick={() => navigate('/wms/zones')} style={{ cursor: 'pointer' }}>
-          <div className="vn-stat-icon vn-stat-icon-info">
-            <span className="material-icons">inventory_2</span>
-          </div>
-          <div className="vn-stat-value">{stats?.activeBins ?? 0}</div>
-          <div className="vn-stat-label">Active Bins</div>
-        </div>
-        <div className="vn-stat" onClick={() => navigate('/wms/inventory')} style={{ cursor: 'pointer' }}>
-          <div className="vn-stat-icon vn-stat-icon-success">
-            <span className="material-icons">category</span>
-          </div>
-          <div className="vn-stat-value">{stats?.totalSkus ?? 0}</div>
-          <div className="vn-stat-label">SKUs in Stock</div>
-        </div>
-        <div className="vn-stat" onClick={() => navigate('/wms/receiving')} style={{ cursor: 'pointer' }}>
-          <div className="vn-stat-icon vn-stat-icon-warning">
-            <span className="material-icons">move_to_inbox</span>
-          </div>
-          <div className="vn-stat-value">{stats?.receivingTasks ?? 0}</div>
-          <div className="vn-stat-label">Receiving Tasks</div>
-        </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {tiles.map(t => {
+          const Icon = t.icon;
+          return (
+            <Card key={t.label} className="cursor-pointer transition-colors hover:border-primary/40">
+              <button type="button" onClick={t.onClick} className="block w-full p-5 text-left">
+                <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', TONES[t.tone])}>
+                  <Icon className="h-5 w-5" />
+                </div>
+                <div className="mt-3 text-2xl font-bold tracking-tight">{t.value}</div>
+                <div className="mt-1 text-sm text-muted-foreground">{t.label}</div>
+              </button>
+            </Card>
+          );
+        })}
       </div>
 
-      {/* Second stats row */}
-      <div className="vn-stats" style={{ marginBottom: '1.5rem' }}>
-        <div className="vn-stat" onClick={() => navigate('/wms/putaway')} style={{ cursor: 'pointer' }}>
-          <div className="vn-stat-icon vn-stat-icon-info">
-            <span className="material-icons">system_update_alt</span>
-          </div>
-          <div className="vn-stat-value">{stats?.putawayTasks ?? 0}</div>
-          <div className="vn-stat-label">Putaway Tasks</div>
-        </div>
-        <div className="vn-stat" onClick={() => navigate('/wms/picking')} style={{ cursor: 'pointer' }}>
-          <div className="vn-stat-icon vn-stat-icon-primary">
-            <span className="material-icons">shopping_cart</span>
-          </div>
-          <div className="vn-stat-value">{stats?.pickTasks ?? 0}</div>
-          <div className="vn-stat-label">Pick Tasks</div>
-        </div>
-        <div className="vn-stat" onClick={() => navigate('/wms/packing')} style={{ cursor: 'pointer' }}>
-          <div className="vn-stat-icon vn-stat-icon-warning">
-            <span className="material-icons">package_2</span>
-          </div>
-          <div className="vn-stat-value">{stats?.packTasks ?? 0}</div>
-          <div className="vn-stat-label">Pack Tasks</div>
-        </div>
-        <div className="vn-stat" onClick={() => navigate('/wms/loading')} style={{ cursor: 'pointer' }}>
-          <div className="vn-stat-icon vn-stat-icon-success">
-            <span className="material-icons">local_shipping</span>
-          </div>
-          <div className="vn-stat-value">0</div>
-          <div className="vn-stat-label">Loading</div>
-        </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {tilesRow2.map(t => {
+          const Icon = t.icon;
+          return (
+            <Card key={t.label} className="cursor-pointer transition-colors hover:border-primary/40">
+              <button type="button" onClick={t.onClick} className="block w-full p-5 text-left">
+                <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', TONES[t.tone])}>
+                  <Icon className="h-5 w-5" />
+                </div>
+                <div className="mt-3 text-2xl font-bold tracking-tight">{t.value}</div>
+                <div className="mt-1 text-sm text-muted-foreground">{t.label}</div>
+              </button>
+            </Card>
+          );
+        })}
       </div>
 
-      {/* Quick actions */}
-      <div className="vn-card" style={{ marginBottom: '1.5rem' }}>
-        <h3 style={{ margin: '0 0 1rem' }}>Quick Actions</h3>
-        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-          <button className="vn-btn vn-btn-primary" onClick={() => navigate('/wms/zones')}>
-            <span className="material-icons" style={{ fontSize: '18px', marginRight: '0.5rem' }}>add</span>
+      <Card>
+        <CardHeader>
+          <CardTitle>Quick Actions</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-2">
+          <Button variant="gradient" onClick={() => navigate('/wms/zones')}>
+            <Plus className="h-4 w-4" />
             Set Up Zones
-          </button>
-          <button className="vn-btn vn-btn-outline" onClick={() => navigate('/wms/receiving')}>
-            <span className="material-icons" style={{ fontSize: '18px', marginRight: '0.5rem' }}>move_to_inbox</span>
+          </Button>
+          <Button variant="outline" onClick={() => navigate('/wms/receiving')}>
+            <PackageOpen className="h-4 w-4" />
             New Receiving Task
-          </button>
-          <button className="vn-btn vn-btn-outline" onClick={() => navigate('/wms/waves')}>
-            <span className="material-icons" style={{ fontSize: '18px', marginRight: '0.5rem' }}>waves</span>
+          </Button>
+          <Button variant="outline" onClick={() => navigate('/wms/waves')}>
+            <Waves className="h-4 w-4" />
             Create Wave
-          </button>
-          <button className="vn-btn vn-btn-outline" onClick={() => navigate('/wms/inventory')}>
-            <span className="material-icons" style={{ fontSize: '18px', marginRight: '0.5rem' }}>search</span>
+          </Button>
+          <Button variant="outline" onClick={() => navigate('/wms/inventory')}>
+            <Search className="h-4 w-4" />
             Search Inventory
-          </button>
-        </div>
-      </div>
+          </Button>
+        </CardContent>
+      </Card>
 
-      {/* Placeholder for future widgets */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
-        <div className="vn-card">
-          <h3 style={{ margin: '0 0 1rem' }}>Dock Activity</h3>
-          <p style={{ color: 'var(--text-secondary)', margin: 0 }}>
-            Dock utilization and appointment schedule will appear here once receiving is configured.
-          </p>
-        </div>
-        <div className="vn-card">
-          <h3 style={{ margin: '0 0 1rem' }}>Pick Performance</h3>
-          <p style={{ color: 'var(--text-secondary)', margin: 0 }}>
-            Pick rate, accuracy, and wave progress will appear here once picking is active.
-          </p>
-        </div>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Dock Activity</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              Dock utilization and appointment schedule will appear here once receiving is configured.
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Pick Performance</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              Pick rate, accuracy, and wave progress will appear here once picking is active.
+            </p>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

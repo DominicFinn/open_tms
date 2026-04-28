@@ -1,6 +1,28 @@
 import React, { useState, useEffect, useRef } from 'react';
+import {
+  Bot,
+  History,
+  Eye,
+  Save,
+  Plus,
+  ChevronDown,
+  ChevronUp,
+  Loader2,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
-import { VnPageHeader, VnAlert, VnModal } from './components';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { cn } from '@/lib/utils';
 
 interface AgentConfig {
   id: string;
@@ -48,6 +70,21 @@ const EVENT_DOMAINS: Record<string, string> = {
   tracking: 'Tracking',
 };
 
+function Banner({ variant, message, onClose }: { variant: 'success' | 'error'; message: string; onClose?: () => void }) {
+  const tone =
+    variant === 'success'
+      ? 'border-success/30 bg-success/10 text-success'
+      : 'border-destructive/30 bg-destructive/10 text-destructive';
+  return (
+    <div className={`flex items-start justify-between gap-3 rounded-md border p-3 text-sm ${tone}`}>
+      <span>{message}</span>
+      {onClose && (
+        <button onClick={onClose} className="text-xs underline opacity-70 hover:opacity-100">Dismiss</button>
+      )}
+    </div>
+  );
+}
+
 export default function VNextAgentConfig() {
   const [config, setConfig] = useState<AgentConfig | null>(null);
   const [versions, setVersions] = useState<PromptVersion[]>([]);
@@ -57,7 +94,6 @@ export default function VNextAgentConfig() {
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
-  // Form state
   const [enabled, setEnabled] = useState(true);
   const [subscribedEvents, setSubscribedEvents] = useState<string[]>([]);
   const [prompt, setPrompt] = useState('');
@@ -103,8 +139,7 @@ export default function VNextAgentConfig() {
           setConfidenceThreshold(cfg.confidenceThreshold ?? 0);
           setDeduplicationMinutes(cfg.deduplicationWindowMinutes ?? 30);
 
-          // Load active prompt
-          const activeVersion = cfg.versions?.find((v) => v.id === cfg.activeVersionId) || cfg.versions?.[0];
+          const activeVersion = cfg.versions?.find(v => v.id === cfg.activeVersionId) || cfg.versions?.[0];
           if (activeVersion) setPrompt(activeVersion.systemPrompt);
         }
       } catch (err: any) {
@@ -145,8 +180,7 @@ export default function VNextAgentConfig() {
         }),
       });
 
-      // Check if prompt changed
-      const activeVersion = config?.versions?.find((v) => v.id === config.activeVersionId) || config?.versions?.[0];
+      const activeVersion = config?.versions?.find(v => v.id === config.activeVersionId) || config?.versions?.[0];
       if (activeVersion && prompt !== activeVersion.systemPrompt) {
         const promptRes = await fetch(`${API_URL}/api/v1/agent-configs/triage/prompt`, {
           method: 'PUT',
@@ -158,7 +192,6 @@ export default function VNextAgentConfig() {
         setChangeNote('');
       }
 
-      // Refresh
       const refreshRes = await fetch(`${API_URL}/api/v1/agent-configs/triage`);
       const refreshJson = await refreshRes.json();
       setConfig(refreshJson.data);
@@ -199,7 +232,7 @@ export default function VNextAgentConfig() {
       const refreshJson = await refreshRes.json();
       const cfg = refreshJson.data as AgentConfig;
       setConfig(cfg);
-      const activeVersion = cfg.versions?.find((v) => v.id === cfg.activeVersionId) || cfg.versions?.[0];
+      const activeVersion = cfg.versions?.find(v => v.id === cfg.activeVersionId) || cfg.versions?.[0];
       if (activeVersion) setPrompt(activeVersion.systemPrompt);
 
       const versionsRes = await fetch(`${API_URL}/api/v1/agent-configs/triage/versions`);
@@ -212,7 +245,6 @@ export default function VNextAgentConfig() {
     }
   }
 
-  // Group events by domain
   const eventsByDomain: Record<string, AvailableEvent[]> = {};
   for (const e of availableEvents) {
     const domainKey = e.domain;
@@ -223,261 +255,277 @@ export default function VNextAgentConfig() {
 
   if (loading) {
     return (
-      <div className="vn-empty">
-        <span className="material-icons" style={{ animation: 'spin 1s linear infinite' }}>refresh</span>
-        <h3>Loading agent config...</h3>
+      <div className="flex justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
-  const activeVersion = versions.find((v) => v.isActive) || versions[0];
+  const activeVersion = versions.find(v => v.isActive) || versions[0];
   const promptChanged = activeVersion && prompt !== activeVersion.systemPrompt;
 
   return (
-    <>
-      <VnPageHeader title="Agent Configuration" subtitle="Configure AI agent prompts and behaviour">
-        <button className="vn-btn vn-btn-outline vn-btn-sm" onClick={() => setShowVersions(true)}>
-          <span className="material-icons">history</span>
-          Version History ({versions.length})
-        </button>
-      </VnPageHeader>
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Agent configuration</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Configure AI agent prompts and behaviour</p>
+        </div>
+        <Button variant="outline" onClick={() => setShowVersions(true)}>
+          <History className="h-4 w-4" />
+          Version history ({versions.length})
+        </Button>
+      </div>
 
-      {successMsg && <VnAlert variant="success" onClose={() => setSuccessMsg('')}>{successMsg}</VnAlert>}
-      {error && <VnAlert variant="error" onClose={() => setError('')}>{error}</VnAlert>}
+      {successMsg && <Banner variant="success" message={successMsg} onClose={() => setSuccessMsg('')} />}
+      {error && <Banner variant="error" message={error} onClose={() => setError('')} />}
 
-      {/* Enable toggle + agent info */}
-      <div className="vn-card" style={{ marginBottom: 24 }}>
-        <div className="vn-card-body" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            <span className="material-icons" style={{ fontSize: 32, color: 'var(--primary)' }}>smart_toy</span>
+      <Card>
+        <CardContent className="flex items-center justify-between p-4">
+          <div className="flex items-center gap-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <Bot className="h-7 w-7" />
+            </div>
             <div>
-              <h2 style={{ margin: 0, fontSize: 18 }}>{config?.name || 'Triage Agent'}</h2>
-              <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--on-surface-variant)' }}>
+              <h2 className="text-lg font-semibold">{config?.name || 'Triage Agent'}</h2>
+              <p className="text-sm text-muted-foreground">
                 {config?.description || 'Analyzes shipment exceptions and creates issues'}
               </p>
             </div>
           </div>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-            <span style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>{enabled ? 'Enabled' : 'Disabled'}</span>
-            <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} style={{ width: 20, height: 20, accentColor: 'var(--primary)' }} />
+          <label className="flex cursor-pointer items-center gap-2">
+            <span className="text-sm text-muted-foreground">{enabled ? 'Enabled' : 'Disabled'}</span>
+            <input
+              type="checkbox"
+              checked={enabled}
+              onChange={e => setEnabled(e.target.checked)}
+              className="h-5 w-5 rounded border border-input bg-background accent-primary"
+            />
           </label>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
-      <div className="vn-detail-grid">
-        {/* Main: prompt editor */}
-        <div className="vn-detail-main">
-          {/* System prompt */}
-          <div className="vn-card">
-            <div className="vn-card-header">
-              <h2>System Prompt {promptChanged && <span style={{ fontSize: 12, color: 'var(--warning)', marginLeft: 8 }}>(unsaved changes)</span>}</h2>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button className="vn-btn vn-btn-ghost vn-btn-sm" onClick={handlePreviewPrompt}>
-                  <span className="material-icons">visibility</span>Preview
-                </button>
+      <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
+        <div className="space-y-6">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>
+                System prompt
+                {promptChanged && (
+                  <span className="ml-2 text-xs font-normal text-warning">(unsaved changes)</span>
+                )}
+              </CardTitle>
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="sm" onClick={handlePreviewPrompt}>
+                  <Eye className="h-4 w-4" />
+                  Preview
+                </Button>
                 {activeVersion && (
-                  <span style={{ fontSize: 12, color: 'var(--on-surface-variant)', alignSelf: 'center' }}>
-                    v{activeVersion.versionNumber}
-                  </span>
+                  <span className="text-xs text-muted-foreground">v{activeVersion.versionNumber}</span>
                 )}
               </div>
-            </div>
-            <div className="vn-card-body" style={{ padding: 0 }}>
+            </CardHeader>
+            <CardContent className="p-0">
               <textarea
                 ref={promptRef}
                 value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                style={{
-                  width: '100%',
-                  minHeight: 320,
-                  border: 'none',
-                  outline: 'none',
-                  resize: 'vertical',
-                  fontFamily: 'monospace',
-                  fontSize: 13,
-                  lineHeight: 1.6,
-                  padding: 20,
-                  background: 'transparent',
-                  color: 'var(--on-surface)',
-                }}
+                onChange={e => setPrompt(e.target.value)}
+                rows={14}
+                className="block w-full resize-y border-0 bg-transparent p-5 font-mono text-xs leading-relaxed outline-none focus:ring-0"
               />
-            </div>
-            {promptChanged && (
-              <div style={{ padding: '12px 20px', borderTop: '1px solid var(--outline-variant)' }}>
-                <input
-                  className="vn-input"
-                  placeholder="Change note (optional) - e.g. 'Made more aggressive on cold chain'"
-                  value={changeNote}
-                  onChange={(e) => setChangeNote(e.target.value)}
-                  style={{ fontSize: 13 }}
-                />
-              </div>
-            )}
-          </div>
+              {promptChanged && (
+                <div className="border-t p-4">
+                  <Input
+                    value={changeNote}
+                    onChange={e => setChangeNote(e.target.value)}
+                    placeholder="Change note (optional) - e.g. 'Made more aggressive on cold chain'"
+                  />
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
-          {/* Event subscriptions */}
-          <div className="vn-card">
-            <div className="vn-card-header"><h2>Event Subscriptions</h2></div>
-            <div className="vn-card-body">
-              <p style={{ fontSize: 13, color: 'var(--on-surface-variant)', marginBottom: 16 }}>
+          <Card>
+            <CardHeader>
+              <CardTitle>Event subscriptions</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
                 Select which events trigger this agent. Unchecked events are ignored without restarting the worker.
               </p>
               {Object.entries(eventsByDomain).map(([domain, events]) => (
-                <div key={domain} style={{ marginBottom: 16 }}>
-                  <h3 style={{ fontSize: 12, fontWeight: 600, textTransform: 'uppercase', color: 'var(--on-surface-variant)', marginBottom: 8 }}>
+                <div key={domain}>
+                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     {EVENT_DOMAINS[domain]}
                   </h3>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                    {events.map((e) => {
+                  <div className="flex flex-wrap gap-2">
+                    {events.map(e => {
                       const checked = subscribedEvents.includes(e.value);
                       return (
-                        <label key={e.value} style={{
-                          display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px',
-                          borderRadius: 8, cursor: 'pointer', fontSize: 13,
-                          background: checked ? 'var(--primary-container)' : 'var(--surface-container)',
-                          color: checked ? 'var(--on-primary-container)' : 'var(--on-surface-variant)',
-                          border: `1px solid ${checked ? 'var(--primary)' : 'var(--outline-variant)'}`,
-                        }}>
+                        <label
+                          key={e.value}
+                          className={cn(
+                            'flex cursor-pointer items-center gap-1 rounded-md border px-3 py-1 font-mono text-xs',
+                            checked
+                              ? 'border-primary bg-primary/10 text-primary'
+                              : 'border-border bg-muted/40 text-muted-foreground',
+                          )}
+                        >
                           <input
                             type="checkbox"
                             checked={checked}
                             onChange={() => {
-                              if (checked) setSubscribedEvents(subscribedEvents.filter((x) => x !== e.value));
+                              if (checked) setSubscribedEvents(subscribedEvents.filter(x => x !== e.value));
                               else setSubscribedEvents([...subscribedEvents, e.value]);
                             }}
-                            style={{ display: 'none' }}
+                            className="hidden"
                           />
-                          <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{e.value}</span>
+                          {e.value}
                         </label>
                       );
                     })}
                   </div>
                 </div>
               ))}
-            </div>
-          </div>
+            </CardContent>
+          </Card>
 
-          {/* Advanced settings */}
-          <div className="vn-card">
-            <div className="vn-card-header" style={{ cursor: 'pointer' }} onClick={() => setShowAdvanced(!showAdvanced)}>
-              <h2>Advanced Settings</h2>
-              <span className="material-icons" style={{ color: 'var(--on-surface-variant)' }}>
-                {showAdvanced ? 'expand_less' : 'expand_more'}
-              </span>
-            </div>
+          <Card>
+            <CardHeader
+              className="flex cursor-pointer flex-row items-center justify-between"
+              onClick={() => setShowAdvanced(!showAdvanced)}
+            >
+              <CardTitle>Advanced settings</CardTitle>
+              {showAdvanced ? <ChevronUp className="h-5 w-5 text-muted-foreground" /> : <ChevronDown className="h-5 w-5 text-muted-foreground" />}
+            </CardHeader>
             {showAdvanced && (
-              <div className="vn-card-body">
-                <div className="vn-form-grid">
-                  <div className="vn-field">
-                    <label className="vn-field-label">Temperature ({temperature})</label>
-                    <input type="range" min="0" max="1" step="0.1" value={temperature} onChange={(e) => setTemperature(parseFloat(e.target.value))} style={{ width: '100%' }} />
-                    <span style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>Lower = more deterministic, higher = more creative</span>
-                  </div>
-                  <div className="vn-field">
-                    <label className="vn-field-label">Max Tokens</label>
-                    <input className="vn-input" type="number" min="64" max="4096" value={maxTokens} onChange={(e) => setMaxTokens(parseInt(e.target.value, 10))} />
-                    <span style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>Maximum response length (tokens)</span>
-                  </div>
-                  <div className="vn-field">
-                    <label className="vn-field-label">Confidence Threshold ({confidenceThreshold || 'Off'})</label>
-                    <input type="range" min="0" max="1" step="0.05" value={confidenceThreshold} onChange={(e) => setConfidenceThreshold(parseFloat(e.target.value))} style={{ width: '100%' }} />
-                    <span style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>Decisions below this confidence are overridden to "no action" (0 = accept all)</span>
-                  </div>
-                  <div className="vn-field">
-                    <label className="vn-field-label">Deduplication Window (minutes)</label>
-                    <input className="vn-input" type="number" min="1" max="1440" value={deduplicationMinutes} onChange={(e) => setDeduplicationMinutes(parseInt(e.target.value, 10))} />
-                    <span style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>Suppress duplicate decisions for the same entity within this window</span>
-                  </div>
+              <CardContent className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Temperature ({temperature})</Label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.1"
+                    value={temperature}
+                    onChange={e => setTemperature(parseFloat(e.target.value))}
+                    className="w-full"
+                  />
+                  <p className="text-xs text-muted-foreground">Lower = more deterministic, higher = more creative</p>
                 </div>
-              </div>
+                <div className="space-y-2">
+                  <Label>Max tokens</Label>
+                  <Input type="number" min="64" max="4096" value={maxTokens} onChange={e => setMaxTokens(parseInt(e.target.value, 10))} />
+                  <p className="text-xs text-muted-foreground">Maximum response length (tokens)</p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Confidence threshold ({confidenceThreshold || 'Off'})</Label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={confidenceThreshold}
+                    onChange={e => setConfidenceThreshold(parseFloat(e.target.value))}
+                    className="w-full"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Decisions below this confidence are overridden to "no action" (0 = accept all)
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Deduplication window (minutes)</Label>
+                  <Input type="number" min="1" max="1440" value={deduplicationMinutes} onChange={e => setDeduplicationMinutes(parseInt(e.target.value, 10))} />
+                  <p className="text-xs text-muted-foreground">Suppress duplicate decisions for the same entity within this window</p>
+                </div>
+              </CardContent>
             )}
-          </div>
+          </Card>
 
-          {/* Save button */}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
-            <button className="vn-btn vn-btn-primary" onClick={handleSaveSettings} disabled={saving}>
-              {saving ? 'Saving...' : 'Save Configuration'}
-            </button>
+          <div className="flex justify-end">
+            <Button variant="gradient" onClick={handleSaveSettings} disabled={saving}>
+              <Save className="h-4 w-4" />
+              {saving ? 'Saving...' : 'Save configuration'}
+            </Button>
           </div>
         </div>
 
-        {/* Sidebar: template variables */}
-        <div className="vn-detail-sidebar">
-          <div className="vn-card">
-            <div className="vn-card-header"><h2>Template Variables</h2></div>
-            <div className="vn-card-body" style={{ padding: '12px 16px' }}>
-              <p style={{ fontSize: 12, color: 'var(--on-surface-variant)', marginBottom: 12 }}>
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Template variables</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-xs text-muted-foreground">
                 Click to insert into your prompt. These are replaced with real data at runtime.
               </p>
-              {templateVars.map((v) => (
-                <div key={v.name} style={{ marginBottom: 12 }}>
-                  <button
-                    className="vn-btn vn-btn-outline vn-btn-sm"
-                    style={{ fontFamily: 'monospace', marginBottom: 4, width: '100%', justifyContent: 'flex-start' }}
+              {templateVars.map(v => (
+                <div key={v.name}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full justify-start font-mono"
                     onClick={() => insertVariable(v.name)}
                   >
-                    <span className="material-icons" style={{ fontSize: 14 }}>add</span>
+                    <Plus className="h-3 w-3" />
                     {v.name}
-                  </button>
-                  <p style={{ fontSize: 11, color: 'var(--on-surface-variant)', margin: '2px 0 0 4px', lineHeight: 1.4 }}>
-                    {v.description}
-                  </p>
+                  </Button>
+                  <p className="ml-1 mt-1 text-xs leading-relaxed text-muted-foreground">{v.description}</p>
                 </div>
               ))}
-            </div>
-          </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
 
-      {/* Preview modal */}
-      <VnModal open={showPreview} onClose={() => setShowPreview(false)} title="Prompt Preview (with sample data)" size="lg">
-        <pre style={{
-          background: 'var(--surface-container)',
-          padding: 16,
-          borderRadius: 8,
-          fontSize: 12,
-          lineHeight: 1.5,
-          whiteSpace: 'pre-wrap',
-          maxHeight: 500,
-          overflow: 'auto',
-        }}>
-          {previewContent}
-        </pre>
-      </VnModal>
+      <Dialog open={showPreview} onOpenChange={setShowPreview}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Prompt preview (with sample data)</DialogTitle>
+          </DialogHeader>
+          <pre className="max-h-[500px] overflow-auto whitespace-pre-wrap rounded-md bg-muted p-4 text-xs leading-relaxed">
+            {previewContent}
+          </pre>
+        </DialogContent>
+      </Dialog>
 
-      {/* Version history modal */}
-      <VnModal open={showVersions} onClose={() => setShowVersions(false)} title="Prompt Version History" size="lg">
-        {versions.length === 0 ? (
-          <p style={{ color: 'var(--on-surface-variant)' }}>No versions yet.</p>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {versions.map((v) => (
-              <div key={v.id} style={{
-                padding: 16,
-                borderRadius: 8,
-                background: v.isActive ? 'var(--primary-container)' : 'var(--surface-container)',
-                border: v.isActive ? '1px solid var(--primary)' : '1px solid var(--outline-variant)',
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontWeight: 600 }}>Version {v.versionNumber}</span>
-                    {v.isActive && <span className="vn-chip vn-chip-primary" style={{ fontSize: 11 }}>Active</span>}
-                  </div>
-                  {!v.isActive && (
-                    <button className="vn-btn vn-btn-outline vn-btn-sm" onClick={() => activateVersion(v.id)}>
-                      Activate
-                    </button>
-                  )}
-                </div>
-                {v.changeNote && <p style={{ fontSize: 13, margin: '0 0 4px', color: 'var(--on-surface)' }}>{v.changeNote}</p>}
-                <p style={{ fontSize: 11, color: 'var(--on-surface-variant)', margin: 0 }}>
-                  {new Date(v.createdAt).toLocaleString()} {v.createdBy ? `by ${v.createdBy}` : ''}
-                </p>
-              </div>
-            ))}
-          </div>
-        )}
-      </VnModal>
-    </>
+      <Dialog open={showVersions} onOpenChange={setShowVersions}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Prompt version history</DialogTitle>
+          </DialogHeader>
+          {versions.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No versions yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {versions.map(v => (
+                <Card
+                  key={v.id}
+                  className={cn(v.isActive && 'border-primary bg-primary/5')}
+                >
+                  <CardContent className="p-4">
+                    <div className="mb-2 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold">Version {v.versionNumber}</span>
+                        {v.isActive && <Badge variant="info">Active</Badge>}
+                      </div>
+                      {!v.isActive && (
+                        <Button variant="outline" size="sm" onClick={() => activateVersion(v.id)}>
+                          Activate
+                        </Button>
+                      )}
+                    </div>
+                    {v.changeNote && <p className="mb-1 text-sm">{v.changeNote}</p>}
+                    <p className="text-xs text-muted-foreground">
+                      {new Date(v.createdAt).toLocaleString()} {v.createdBy ? `by ${v.createdBy}` : ''}
+                    </p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }

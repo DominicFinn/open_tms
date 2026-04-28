@@ -1,7 +1,47 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import {
+  CheckCircle2,
+  CircleAlert,
+  Loader2,
+  Plus,
+  PlayCircle,
+  Search,
+  Trash2,
+  X,
+  Zap,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
-import { VnPageHeader, VnChip, VnFilterBar, VnAlert, VnModal } from './components';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { cn } from '@/lib/utils';
 
 interface AutomationRule {
   id: string;
@@ -74,7 +114,6 @@ export default function VNextAutomationRules() {
   const [search, setSearch] = useState('');
   const [showCreate, setShowCreate] = useState(false);
 
-  // Create/edit form state
   const [formName, setFormName] = useState('');
   const [formEventPattern, setFormEventPattern] = useState('shipment.exception');
   const [formConditions, setFormConditions] = useState<{ field: string; operator: string; value: string }[]>([
@@ -125,7 +164,6 @@ export default function VNextAutomationRules() {
     setSaving(true);
     setError('');
     try {
-      // Parse condition values (try JSON parse for numbers/arrays)
       const conditions = formConditions.map((c) => {
         let value: unknown = c.value;
         if (c.operator !== 'exists' && c.operator !== 'notExists') {
@@ -175,265 +213,325 @@ export default function VNextAutomationRules() {
 
   if (loading) {
     return (
-      <div className="vn-empty">
-        <span className="material-icons" style={{ animation: 'spin 1s linear infinite' }}>refresh</span>
-        <h3>Loading rules...</h3>
+      <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <h3 className="text-lg font-medium">Loading rules...</h3>
       </div>
     );
   }
 
+  const stats = [
+    { label: 'Total rules', value: rules.length, icon: Zap, tone: 'bg-primary/10 text-primary' },
+    { label: 'Active', value: rules.filter(r => r.enabled).length, icon: CheckCircle2, tone: 'bg-success/15 text-success' },
+    { label: 'Total executions', value: rules.reduce((sum, r) => sum + r.executionCount, 0), icon: PlayCircle, tone: 'bg-info/15 text-info' },
+  ];
+
   return (
-    <>
-      <VnPageHeader title="Automation Rules" subtitle={`${rules.length} rules`}>
-        <button className="vn-btn vn-btn-primary vn-btn-sm" onClick={() => setShowCreate(true)}>
-          <span className="material-icons">add</span>Create Rule
-        </button>
-      </VnPageHeader>
-
-      {successMsg && <VnAlert variant="success" onClose={() => setSuccessMsg('')}>{successMsg}</VnAlert>}
-      {error && <VnAlert variant="error" onClose={() => setError('')}>{error}</VnAlert>}
-
-      {/* Stats */}
-      <div className="vn-stats">
-        <div className="vn-stat">
-          <div className="vn-stat-icon primary"><span className="material-icons">bolt</span></div>
-          <div>
-            <div className="vn-stat-value">{rules.length}</div>
-            <div className="vn-stat-label">Total Rules</div>
-          </div>
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Automation rules</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{rules.length} rules</p>
         </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon success"><span className="material-icons">check_circle</span></div>
-          <div>
-            <div className="vn-stat-value">{rules.filter((r) => r.enabled).length}</div>
-            <div className="vn-stat-label">Active</div>
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon info"><span className="material-icons">play_circle</span></div>
-          <div>
-            <div className="vn-stat-value">{rules.reduce((sum, r) => sum + r.executionCount, 0)}</div>
-            <div className="vn-stat-label">Total Executions</div>
-          </div>
-        </div>
+        <Button variant="gradient" onClick={() => setShowCreate(true)}>
+          <Plus className="h-4 w-4" />
+          Create rule
+        </Button>
       </div>
 
-      {/* Rules table */}
-      <div className="vn-card" style={{ marginTop: 24 }}>
-        <VnFilterBar searchPlaceholder="Search rules..." searchValue={search} onSearchChange={setSearch} />
+      {successMsg && (
+        <div className="flex items-center gap-3 rounded-md border border-success/30 bg-success/10 p-4 text-sm text-success">
+          <CheckCircle2 className="h-5 w-5" />
+          <span className="flex-1">{successMsg}</span>
+          <Button variant="ghost" size="icon" onClick={() => setSuccessMsg('')}><X className="h-4 w-4" /></Button>
+        </div>
+      )}
+      {error && (
+        <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+          <CircleAlert className="h-5 w-5" />
+          <span className="flex-1">{error}</span>
+          <Button variant="ghost" size="icon" onClick={() => setError('')}><X className="h-4 w-4" /></Button>
+        </div>
+      )}
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        {stats.map(stat => {
+          const Icon = stat.icon;
+          return (
+            <Card key={stat.label}>
+              <div className="p-5">
+                <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', stat.tone)}>
+                  <Icon className="h-5 w-5" />
+                </div>
+                <div className="mt-3 text-2xl font-bold tracking-tight">{stat.value}</div>
+                <div className="mt-1 text-sm text-muted-foreground">{stat.label}</div>
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+
+      <Card>
+        <div className="flex flex-wrap items-center gap-3 p-4">
+          <div className="relative min-w-[240px] flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search rules..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+        </div>
+
+        <Separator />
 
         {filtered.length === 0 ? (
-          <div className="vn-empty">
-            <span className="material-icons">bolt</span>
-            <h3>No automation rules yet</h3>
-            <p>Create rules manually or promote agent decisions to automate proven patterns.</p>
+          <div className="flex flex-col items-center gap-3 py-12 text-muted-foreground">
+            <Zap className="h-10 w-10 opacity-40" />
+            <h3 className="text-base font-medium">No automation rules yet</h3>
+            <p className="text-sm">Create rules manually or promote agent decisions to automate proven patterns.</p>
           </div>
         ) : (
-          <div className="vn-table-wrap">
-            <table className="vn-table">
-              <thead>
-                <tr>
-                  <th>Rule</th>
-                  <th>Event</th>
-                  <th>Conditions</th>
-                  <th>Action</th>
-                  <th>Executions</th>
-                  <th>Last Run</th>
-                  <th>Status</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((rule) => (
-                  <tr key={rule.id} onClick={() => navigate(`/automation-rules/${rule.id}`)} style={{ cursor: 'pointer' }}>
-                    <td>
-                      <span className="vn-table-id">{rule.name}</span>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Rule</TableHead>
+                <TableHead>Event</TableHead>
+                <TableHead>Conditions</TableHead>
+                <TableHead>Action</TableHead>
+                <TableHead>Executions</TableHead>
+                <TableHead>Last run</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="w-[60px]"></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filtered.map(rule => {
+                const preview = conditionsPreview(rule.conditions);
+                return (
+                  <TableRow key={rule.id} onClick={() => navigate(`/automation-rules/${rule.id}`)} className="cursor-pointer">
+                    <TableCell>
+                      <div className="font-medium">{rule.name}</div>
                       {rule.sourceDecisionId && (
-                        <div className="vn-table-secondary">Promoted from agent</div>
+                        <div className="text-xs text-muted-foreground">Promoted from agent</div>
                       )}
-                    </td>
-                    <td><code style={{ fontSize: 12 }}>{rule.eventPattern}</code></td>
-                    <td>
-                      <span style={{ fontSize: 12, color: 'var(--on-surface-variant)', fontFamily: 'monospace' }}>
-                        {conditionsPreview(rule.conditions).substring(0, 60)}{conditionsPreview(rule.conditions).length > 60 ? '...' : ''}
+                    </TableCell>
+                    <TableCell><code className="rounded bg-muted px-1.5 py-0.5 text-xs">{rule.eventPattern}</code></TableCell>
+                    <TableCell>
+                      <span className="font-mono text-xs text-muted-foreground">
+                        {preview.length > 60 ? `${preview.slice(0, 60)}...` : preview}
                       </span>
-                    </td>
-                    <td>
-                      {rule.actionType === 'create_issue' && <VnChip variant="info">Create Issue</VnChip>}
-                      {rule.actionType === 'escalate_issue' && <VnChip variant="warning">Escalate</VnChip>}
-                    </td>
-                    <td style={{ fontWeight: 600 }}>{rule.executionCount}</td>
-                    <td style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>{timeAgo(rule.lastExecutedAt)}</td>
-                    <td>
-                      <button
-                        className={`vn-chip vn-chip-${rule.enabled ? 'success' : 'secondary'}`}
-                        style={{ cursor: 'pointer', border: 'none' }}
+                    </TableCell>
+                    <TableCell>
+                      {rule.actionType === 'create_issue' && <Badge variant="info">Create issue</Badge>}
+                      {rule.actionType === 'escalate_issue' && <Badge variant="warning">Escalate</Badge>}
+                      {rule.actionType === 'skill_chain' && <Badge>Skill chain</Badge>}
+                    </TableCell>
+                    <TableCell className="font-semibold">{rule.executionCount}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{timeAgo(rule.lastExecutedAt)}</TableCell>
+                    <TableCell onClick={e => e.stopPropagation()}>
+                      <Badge
+                        variant={rule.enabled ? 'success' : 'secondary'}
+                        className="cursor-pointer"
                         onClick={() => toggleRule(rule.id)}
                       >
                         {rule.enabled ? 'Active' : 'Disabled'}
-                      </button>
-                    </td>
-                    <td>
-                      <button className="vn-btn-icon" onClick={() => deleteRule(rule.id)} title="Delete">
-                        <span className="material-icons" style={{ fontSize: 18, color: 'var(--error)' }}>delete</span>
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                      </Badge>
+                    </TableCell>
+                    <TableCell onClick={e => e.stopPropagation()}>
+                      <Button variant="ghost" size="icon" onClick={() => deleteRule(rule.id)} title="Delete" className="text-destructive hover:text-destructive">
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
         )}
-      </div>
+      </Card>
 
-      {/* Create rule modal */}
-      <VnModal
-        open={showCreate}
-        onClose={() => setShowCreate(false)}
-        title="Create Automation Rule"
-        size="lg"
-        footer={
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-            <button className="vn-btn vn-btn-outline vn-btn-sm" onClick={() => setShowCreate(false)}>Cancel</button>
-            <button className="vn-btn vn-btn-primary vn-btn-sm" onClick={createRule} disabled={saving || !formName}>
-              {saving ? 'Creating...' : 'Create Rule'}
-            </button>
-          </div>
-        }
-      >
-        {/* Name */}
-        <div className="vn-field" style={{ marginBottom: 16 }}>
-          <label className="vn-field-label">Rule Name</label>
-          <input className="vn-input" placeholder="e.g. Critical delay auto-escalation" value={formName} onChange={(e) => setFormName(e.target.value)} />
-        </div>
+      <Dialog open={showCreate} onOpenChange={setShowCreate}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-auto">
+          <DialogHeader>
+            <DialogTitle>Create automation rule</DialogTitle>
+          </DialogHeader>
 
-        {/* WHEN: Event pattern */}
-        <div style={{ marginBottom: 20 }}>
-          <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 8, color: 'var(--primary)' }}>WHEN</h3>
-          <div className="vn-field">
-            <label className="vn-field-label">Event Type</label>
-            <select className="vn-input" value={formEventPattern} onChange={(e) => setFormEventPattern(e.target.value)}>
-              {EVENT_PATTERNS.map((ep) => (
-                <option key={ep.value} value={ep.value}>{ep.label} ({ep.value})</option>
+          <div className="space-y-6">
+            <div className="space-y-2">
+              <Label>Rule name</Label>
+              <Input placeholder="e.g. Critical delay auto-escalation" value={formName} onChange={e => setFormName(e.target.value)} />
+            </div>
+
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold text-primary">WHEN</h3>
+              <div className="space-y-2">
+                <Label>Event type</Label>
+                <Select value={formEventPattern} onValueChange={setFormEventPattern}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {EVENT_PATTERNS.map(ep => (
+                      <SelectItem key={ep.value} value={ep.value}>{ep.label} ({ep.value})</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold text-primary">GIVEN</h3>
+              {formConditions.map((c, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <Input
+                    className="flex-[2] font-mono text-sm"
+                    placeholder="payload.delayMinutes"
+                    value={c.field}
+                    onChange={e => {
+                      const arr = [...formConditions];
+                      arr[i].field = e.target.value;
+                      setFormConditions(arr);
+                    }}
+                  />
+                  <Select
+                    value={c.operator}
+                    onValueChange={v => {
+                      const arr = [...formConditions];
+                      arr[i].operator = v;
+                      setFormConditions(arr);
+                    }}
+                  >
+                    <SelectTrigger className="flex-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {OPERATORS.map(op => (
+                        <SelectItem key={op.value} value={op.value}>{op.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {c.operator !== 'exists' && c.operator !== 'notExists' && (
+                    <Input
+                      className="flex-[2] font-mono text-sm"
+                      placeholder='60 or "critical" or ["a","b"]'
+                      value={c.value}
+                      onChange={e => {
+                        const arr = [...formConditions];
+                        arr[i].value = e.target.value;
+                        setFormConditions(arr);
+                      }}
+                    />
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setFormConditions(formConditions.filter((_, j) => j !== i))}
+                    disabled={formConditions.length === 1}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
               ))}
-            </select>
-          </div>
-        </div>
-
-        {/* GIVEN: Conditions */}
-        <div style={{ marginBottom: 20 }}>
-          <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 8, color: 'var(--primary)' }}>GIVEN</h3>
-          {formConditions.map((c, i) => (
-            <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
-              <input
-                className="vn-input"
-                style={{ flex: 2, fontFamily: 'monospace', fontSize: 13 }}
-                placeholder="payload.delayMinutes"
-                value={c.field}
-                onChange={(e) => { const arr = [...formConditions]; arr[i].field = e.target.value; setFormConditions(arr); }}
-              />
-              <select
-                className="vn-input"
-                style={{ flex: 1 }}
-                value={c.operator}
-                onChange={(e) => { const arr = [...formConditions]; arr[i].operator = e.target.value; setFormConditions(arr); }}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setFormConditions([...formConditions, { field: '', operator: 'equals', value: '' }])}
               >
-                {OPERATORS.map((op) => (
-                  <option key={op.value} value={op.value}>{op.label}</option>
-                ))}
-              </select>
-              {c.operator !== 'exists' && c.operator !== 'notExists' && (
-                <input
-                  className="vn-input"
-                  style={{ flex: 2, fontFamily: 'monospace', fontSize: 13 }}
-                  placeholder='60 or "critical" or ["a","b"]'
-                  value={c.value}
-                  onChange={(e) => { const arr = [...formConditions]; arr[i].value = e.target.value; setFormConditions(arr); }}
-                />
-              )}
-              <button
-                className="vn-btn-icon"
-                onClick={() => setFormConditions(formConditions.filter((_, j) => j !== i))}
-                style={{ opacity: formConditions.length === 1 ? 0.3 : 1 }}
-                disabled={formConditions.length === 1}
-              >
-                <span className="material-icons" style={{ fontSize: 18 }}>close</span>
-              </button>
+                <Plus className="h-4 w-4" />
+                Add condition
+              </Button>
             </div>
-          ))}
-          <button
-            className="vn-btn vn-btn-ghost vn-btn-sm"
-            onClick={() => setFormConditions([...formConditions, { field: '', operator: 'equals', value: '' }])}
-          >
-            <span className="material-icons">add</span>Add Condition
-          </button>
-        </div>
 
-        {/* THEN: Action */}
-        <div style={{ marginBottom: 20 }}>
-          <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 8, color: 'var(--primary)' }}>THEN</h3>
-          <div className="vn-form-grid">
-            <div className="vn-field">
-              <label className="vn-field-label">Action</label>
-              <select className="vn-input" value={formActionType} onChange={(e) => setFormActionType(e.target.value)}>
-                <option value="create_issue">Create Issue</option>
-                <option value="escalate_issue">Escalate Issue</option>
-                {skillChains.length > 0 && <option value="skill_chain">Skill Chain</option>}
-              </select>
-            </div>
-            {formActionType === 'create_issue' && (
-              <>
-                <div className="vn-field">
-                  <label className="vn-field-label">Priority</label>
-                  <select className="vn-input" value={formIssuePriority} onChange={(e) => setFormIssuePriority(e.target.value)}>
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                    <option value="critical">Critical</option>
-                  </select>
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold text-primary">THEN</h3>
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Action</Label>
+                  <Select value={formActionType} onValueChange={setFormActionType}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="create_issue">Create issue</SelectItem>
+                      <SelectItem value="escalate_issue">Escalate issue</SelectItem>
+                      {skillChains.length > 0 && <SelectItem value="skill_chain">Skill chain</SelectItem>}
+                    </SelectContent>
+                  </Select>
                 </div>
-                <div className="vn-field">
-                  <label className="vn-field-label">Category</label>
-                  <select className="vn-input" value={formIssueCategory} onChange={(e) => setFormIssueCategory(e.target.value)}>
-                    <option value="exception">Exception</option>
-                    <option value="delay">Delay</option>
-                    <option value="damage">Damage</option>
-                    <option value="compliance">Compliance</option>
-                    <option value="other">Other</option>
-                  </select>
-                </div>
-                <div className="vn-field" style={{ gridColumn: '1 / -1' }}>
-                  <label className="vn-field-label">Issue Title</label>
-                  <input className="vn-input" placeholder="Leave blank to use rule name" value={formIssueTitle} onChange={(e) => setFormIssueTitle(e.target.value)} />
-                </div>
-              </>
-            )}
-            {formActionType === 'skill_chain' && (
-              <div className="vn-field" style={{ gridColumn: '1 / -1' }}>
-                <label className="vn-field-label">Skill Chain</label>
-                <select className="vn-input" value={formSkillChainId} onChange={(e) => setFormSkillChainId(e.target.value)}>
-                  <option value="">Select a skill chain...</option>
-                  {skillChains.map((sc) => (
-                    <option key={sc.id} value={sc.id}>{sc.name}{sc.description ? ` - ${sc.description}` : ''}</option>
-                  ))}
-                </select>
-                {skillChains.length === 0 && (
-                  <span style={{ fontSize: 12, color: 'var(--warning)', marginTop: 4, display: 'block' }}>
-                    No skill chains created yet. Create one at Settings &gt; Skill Chains first.
-                  </span>
+                {formActionType === 'create_issue' && (
+                  <>
+                    <div className="space-y-2">
+                      <Label>Priority</Label>
+                      <Select value={formIssuePriority} onValueChange={setFormIssuePriority}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="low">Low</SelectItem>
+                          <SelectItem value="medium">Medium</SelectItem>
+                          <SelectItem value="high">High</SelectItem>
+                          <SelectItem value="critical">Critical</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Category</Label>
+                      <Select value={formIssueCategory} onValueChange={setFormIssueCategory}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="exception">Exception</SelectItem>
+                          <SelectItem value="delay">Delay</SelectItem>
+                          <SelectItem value="damage">Damage</SelectItem>
+                          <SelectItem value="compliance">Compliance</SelectItem>
+                          <SelectItem value="other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="md:col-span-2 space-y-2">
+                      <Label>Issue title</Label>
+                      <Input placeholder="Leave blank to use rule name" value={formIssueTitle} onChange={e => setFormIssueTitle(e.target.value)} />
+                    </div>
+                  </>
+                )}
+                {formActionType === 'skill_chain' && (
+                  <div className="md:col-span-2 space-y-2">
+                    <Label>Skill chain</Label>
+                    <Select value={formSkillChainId} onValueChange={setFormSkillChainId}>
+                      <SelectTrigger><SelectValue placeholder="Select a skill chain..." /></SelectTrigger>
+                      <SelectContent>
+                        {skillChains.map(sc => (
+                          <SelectItem key={sc.id} value={sc.id}>
+                            {sc.name}{sc.description ? ` - ${sc.description}` : ''}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {skillChains.length === 0 && (
+                      <p className="text-xs text-warning">
+                        No skill chains created yet. Create one at Settings &gt; Skill Chains first.
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
-            )}
-          </div>
-        </div>
+            </div>
 
-        {/* Priority */}
-        <div className="vn-field">
-          <label className="vn-field-label">Rule Priority ({formPriority})</label>
-          <input type="range" min="1" max="100" value={formPriority} onChange={(e) => setFormPriority(parseInt(e.target.value, 10))} style={{ width: '100%' }} />
-          <span style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>Lower number = higher priority. First matching rule executes.</span>
-        </div>
-      </VnModal>
-    </>
+            <div className="space-y-2">
+              <Label>Rule priority ({formPriority})</Label>
+              <input
+                type="range"
+                min="1"
+                max="100"
+                value={formPriority}
+                onChange={e => setFormPriority(parseInt(e.target.value, 10))}
+                className="w-full"
+              />
+              <span className="text-xs text-muted-foreground">Lower number = higher priority. First matching rule executes.</span>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
+            <Button variant="gradient" onClick={createRule} disabled={saving || !formName}>
+              {saving ? 'Creating...' : 'Create rule'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }

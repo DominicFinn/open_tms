@@ -1,6 +1,26 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import {
+  ArrowLeft,
+  CircleAlert,
+  CreditCard,
+  Loader2,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 
 interface LineItem {
   id: string;
@@ -43,15 +63,33 @@ function formatMoney(cents: number): string {
   return `$${(cents / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 function formatDate(d?: string): string {
-  if (!d) return '—';
+  if (!d) return '-';
   return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
-function statusChip(s: string): string {
-  const m: Record<string, string> = { received: 'info', matched: 'success', discrepancy: 'error', approved: 'success', scheduled: 'warning', paid: 'success', disputed: 'error' };
+
+type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning' | 'info' | 'muted';
+
+function statusVariant(s: string): BadgeVariant {
+  const m: Record<string, BadgeVariant> = {
+    received: 'info',
+    matched: 'success',
+    discrepancy: 'destructive',
+    approved: 'success',
+    scheduled: 'warning',
+    paid: 'success',
+    disputed: 'destructive',
+  };
   return m[s] || 'secondary';
 }
-function matchChip(s: string): string {
-  const m: Record<string, string> = { matched: 'success', variance: 'warning', unmatched: 'error', pending: 'secondary', partial_match: 'warning', mismatch: 'error' };
+function matchVariant(s: string): BadgeVariant {
+  const m: Record<string, BadgeVariant> = {
+    matched: 'success',
+    variance: 'warning',
+    unmatched: 'destructive',
+    pending: 'secondary',
+    partial_match: 'warning',
+    mismatch: 'destructive',
+  };
   return m[s] || 'secondary';
 }
 
@@ -90,111 +128,175 @@ export default function VNextFinanceCarrierInvoiceDetail() {
     finally { setActionLoading(''); }
   };
 
-  if (loading) return <div className="vn-empty"><span className="material-icons" style={{ animation: 'spin 1s linear infinite' }}>refresh</span><h3>Loading...</h3></div>;
-  if (error || !invoice) return <div className="vn-alert vn-alert-error">{error || 'Not found'}</div>;
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <h3 className="text-lg font-medium">Loading...</h3>
+      </div>
+    );
+  }
+  if (error || !invoice) {
+    return (
+      <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+        <CircleAlert className="h-5 w-5" />
+        {error || 'Not found'}
+      </div>
+    );
+  }
 
   const ci = invoice;
 
   return (
-    <>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-        <button className="vn-btn vn-btn-ghost vn-btn-sm" onClick={() => navigate('/finance/carrier-invoices')}>
-          <span className="material-icons">arrow_back</span> Carrier Invoices
-        </button>
-        <span style={{ color: 'var(--on-surface-variant)', fontSize: 13 }}>/ {ci.invoiceNumber}</span>
+    <div className="space-y-6">
+      <div className="flex items-center gap-2 text-sm">
+        <Button variant="ghost" size="sm" onClick={() => navigate('/finance/carrier-invoices')}>
+          <ArrowLeft className="h-4 w-4" /> Carrier Invoices
+        </Button>
+        <span className="text-muted-foreground">/ {ci.invoiceNumber}</span>
       </div>
 
-      <div className="vn-page-header">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1>{ci.invoiceNumber}</h1>
-          <div className="vn-page-header-meta">
-            <span className={`vn-chip vn-chip-${statusChip(ci.status)}`}>{ci.status}</span>
-            <span className={`vn-chip vn-chip-${matchChip(ci.matchStatus)}`}>{ci.matchStatus.replace(/_/g, ' ')}</span>
-            {ci.autoApproved && <span className="vn-chip vn-chip-info">auto-approved</span>}
+          <h1 className="text-3xl font-bold tracking-tight">{ci.invoiceNumber}</h1>
+          <div className="mt-2 flex items-center gap-2">
+            <Badge variant={statusVariant(ci.status)}>{ci.status}</Badge>
+            <Badge variant={matchVariant(ci.matchStatus)}>{ci.matchStatus.replace(/_/g, ' ')}</Badge>
+            {ci.autoApproved && <Badge variant="info">auto-approved</Badge>}
           </div>
         </div>
-        <div className="vn-page-actions">
+        <div className="flex flex-wrap gap-2">
           {['received', 'matched', 'discrepancy'].includes(ci.status) && (
-            <button className="vn-btn vn-btn-primary vn-btn-sm" onClick={() => doAction('approve')} disabled={!!actionLoading}>
+            <Button size="sm" onClick={() => doAction('approve')} disabled={!!actionLoading}>
               {actionLoading === 'approve' ? 'Approving...' : 'Approve for Payment'}
-            </button>
+            </Button>
           )}
           {['approved', 'scheduled'].includes(ci.status) && (
-            <button className="vn-btn vn-btn-success vn-btn-sm" onClick={() => doAction('pay', { amountCents: ci.approvedCents ?? ci.totalCents })} disabled={!!actionLoading}>
-              <span className="material-icons">payment</span>
+            <Button size="sm" onClick={() => doAction('pay', { amountCents: ci.approvedCents ?? ci.totalCents })} disabled={!!actionLoading}>
+              <CreditCard className="h-4 w-4" />
               {actionLoading === 'pay' ? 'Recording...' : 'Record Payment'}
-            </button>
+            </Button>
           )}
         </div>
       </div>
 
-      <div className="vn-detail-grid">
-        <div className="vn-detail-main">
-          {/* Three-way match results */}
-          <div className="vn-card" style={{ marginBottom: 24 }}>
-            <div className="vn-card-header"><h2>Freight Audit — Line-by-Line Match</h2></div>
-            <div className="vn-table-wrap">
-              <table className="vn-table">
-                <thead>
-                  <tr>
-                    <th>Description</th>
-                    <th>Type</th>
-                    <th>Match</th>
-                    <th style={{ textAlign: 'right' }}>Invoiced</th>
-                    <th style={{ textAlign: 'right' }}>Expected</th>
-                    <th style={{ textAlign: 'right' }}>Variance</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {ci.lineItems.map(li => (
-                    <tr key={li.id}>
-                      <td>
-                        {li.description}
-                        {li.freightClass && <span className="vn-table-secondary"> (Class {li.freightClass})</span>}
-                        {li.billedWeight && <span className="vn-table-secondary"> — {li.billedWeight} lbs</span>}
-                      </td>
-                      <td><span className="vn-chip vn-chip-secondary">{li.chargeType.replace(/_/g, ' ')}</span></td>
-                      <td><span className={`vn-chip vn-chip-${matchChip(li.matchStatus)}`}>{li.matchStatus}</span></td>
-                      <td style={{ textAlign: 'right', fontWeight: 500 }}>{formatMoney(li.amountCents)}</td>
-                      <td style={{ textAlign: 'right' }}>{li.expectedAmountCents != null ? formatMoney(li.expectedAmountCents) : '—'}</td>
-                      <td style={{ textAlign: 'right', color: li.varianceCents && li.varianceCents > 0 ? 'var(--error)' : li.varianceCents && li.varianceCents < 0 ? 'var(--success)' : undefined, fontWeight: li.varianceCents ? 500 : 400 }}>
-                        {li.varianceCents != null ? `${li.varianceCents > 0 ? '+' : ''}${formatMoney(li.varianceCents)}` : '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr>
-                    <td colSpan={3} style={{ textAlign: 'right', fontWeight: 700 }}>Total</td>
-                    <td style={{ textAlign: 'right', fontWeight: 700 }}>{formatMoney(ci.totalCents)}</td>
-                    <td></td>
-                    <td style={{ textAlign: 'right', fontWeight: 700, color: ci.varianceCents && ci.varianceCents > 0 ? 'var(--error)' : 'var(--on-surface-variant)' }}>
-                      {ci.varianceCents != null ? `${ci.varianceCents > 0 ? '+' : ''}${formatMoney(ci.varianceCents)} (${ci.variancePercent}%)` : '—'}
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
+      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+        <div className="space-y-6">
+          <Card>
+            <div className="p-5">
+              <h2 className="text-lg font-semibold">Freight Audit - Line-by-Line Match</h2>
             </div>
-          </div>
+            <Separator />
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Description</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Match</TableHead>
+                  <TableHead className="text-right">Invoiced</TableHead>
+                  <TableHead className="text-right">Expected</TableHead>
+                  <TableHead className="text-right">Variance</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {ci.lineItems.map(li => (
+                  <TableRow key={li.id}>
+                    <TableCell>
+                      {li.description}
+                      {li.freightClass && <span className="ml-1 text-sm text-muted-foreground">(Class {li.freightClass})</span>}
+                      {li.billedWeight && <span className="ml-1 text-sm text-muted-foreground">- {li.billedWeight} lbs</span>}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="muted">{li.chargeType.replace(/_/g, ' ')}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={matchVariant(li.matchStatus)}>{li.matchStatus}</Badge>
+                    </TableCell>
+                    <TableCell className="text-right font-mono tabular-nums font-medium">{formatMoney(li.amountCents)}</TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">{li.expectedAmountCents != null ? formatMoney(li.expectedAmountCents) : '-'}</TableCell>
+                    <TableCell
+                      className={cn(
+                        'text-right font-mono tabular-nums',
+                        li.varianceCents && li.varianceCents > 0 && 'text-destructive font-medium',
+                        li.varianceCents && li.varianceCents < 0 && 'text-success font-medium',
+                      )}
+                    >
+                      {li.varianceCents != null ? `${li.varianceCents > 0 ? '+' : ''}${formatMoney(li.varianceCents)}` : '-'}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            <div className="border-t p-5">
+              <div className="flex justify-between text-sm font-bold">
+                <span>Total</span>
+                <div className="flex items-center gap-6">
+                  <span className="font-mono tabular-nums">{formatMoney(ci.totalCents)}</span>
+                  <span className={cn('font-mono tabular-nums', ci.varianceCents && ci.varianceCents > 0 ? 'text-destructive' : 'text-muted-foreground')}>
+                    {ci.varianceCents != null ? `${ci.varianceCents > 0 ? '+' : ''}${formatMoney(ci.varianceCents)} (${ci.variancePercent}%)` : '-'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </Card>
         </div>
 
-        <div className="vn-detail-sidebar">
-          <div className="vn-card" style={{ padding: 20 }}>
-            <h3 style={{ margin: '0 0 16px' }}>Invoice Details</h3>
-            <div className="vn-info-grid">
-              <div className="vn-info-item"><label>Carrier</label><span>{ci.carrier.name}{ci.carrier.scacCode && ` (${ci.carrier.scacCode})`}</span></div>
-              <div className="vn-info-item"><label>Invoice Total</label><span style={{ fontWeight: 600 }}>{formatMoney(ci.totalCents)}</span></div>
-              {ci.approvedCents != null && <div className="vn-info-item"><label>Approved</label><span style={{ color: 'var(--success)' }}>{formatMoney(ci.approvedCents)}</span></div>}
-              <div className="vn-info-item"><label>Received</label><span>{formatDate(ci.receivedDate)}</span></div>
-              <div className="vn-info-item"><label>Due Date</label><span>{formatDate(ci.dueDate)}</span></div>
-              {ci.approvedAt && <div className="vn-info-item"><label>Approved At</label><span>{formatDate(ci.approvedAt)}</span></div>}
-              {ci.paidAt && <div className="vn-info-item"><label>Paid</label><span>{formatDate(ci.paidAt)}</span></div>}
-              {ci.paymentReference && <div className="vn-info-item"><label>Payment Ref</label><span>{ci.paymentReference}</span></div>}
-              {ci.notes && <div className="vn-info-item"><label>Notes</label><span>{ci.notes}</span></div>}
-            </div>
-          </div>
-        </div>
+        <aside className="space-y-6 lg:sticky lg:top-20 lg:self-start">
+          <Card>
+            <CardContent className="p-5">
+              <h3 className="mb-4 text-base font-semibold">Invoice Details</h3>
+              <dl className="space-y-3 text-sm">
+                <div>
+                  <dt className="text-xs text-muted-foreground">Carrier</dt>
+                  <dd>{ci.carrier.name}{ci.carrier.scacCode && ` (${ci.carrier.scacCode})`}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">Invoice Total</dt>
+                  <dd className="font-semibold font-mono tabular-nums">{formatMoney(ci.totalCents)}</dd>
+                </div>
+                {ci.approvedCents != null && (
+                  <div>
+                    <dt className="text-xs text-muted-foreground">Approved</dt>
+                    <dd className="text-success font-mono tabular-nums">{formatMoney(ci.approvedCents)}</dd>
+                  </div>
+                )}
+                <div>
+                  <dt className="text-xs text-muted-foreground">Received</dt>
+                  <dd>{formatDate(ci.receivedDate)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">Due Date</dt>
+                  <dd>{formatDate(ci.dueDate)}</dd>
+                </div>
+                {ci.approvedAt && (
+                  <div>
+                    <dt className="text-xs text-muted-foreground">Approved At</dt>
+                    <dd>{formatDate(ci.approvedAt)}</dd>
+                  </div>
+                )}
+                {ci.paidAt && (
+                  <div>
+                    <dt className="text-xs text-muted-foreground">Paid</dt>
+                    <dd>{formatDate(ci.paidAt)}</dd>
+                  </div>
+                )}
+                {ci.paymentReference && (
+                  <div>
+                    <dt className="text-xs text-muted-foreground">Payment Ref</dt>
+                    <dd>{ci.paymentReference}</dd>
+                  </div>
+                )}
+                {ci.notes && (
+                  <div>
+                    <dt className="text-xs text-muted-foreground">Notes</dt>
+                    <dd>{ci.notes}</dd>
+                  </div>
+                )}
+              </dl>
+            </CardContent>
+          </Card>
+        </aside>
       </div>
-    </>
+    </div>
   );
 }

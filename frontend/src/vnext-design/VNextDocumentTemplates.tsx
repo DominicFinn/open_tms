@@ -1,5 +1,27 @@
 import { useState, useEffect } from 'react';
+import { FileText, CheckCircle2, Star, Plus, Pencil, Trash2, Save, Loader2 } from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableHead,
+  TableRow,
+  TableCell,
+} from '@/components/ui/table';
 
 interface DocumentTemplate {
   id: string;
@@ -31,6 +53,21 @@ const emptyForm = {
   isDefault: false,
   active: true,
 };
+
+function Banner({ variant, message, onClose }: { variant: 'success' | 'error'; message: string; onClose?: () => void }) {
+  const tone =
+    variant === 'success'
+      ? 'border-success/30 bg-success/10 text-success'
+      : 'border-destructive/30 bg-destructive/10 text-destructive';
+  return (
+    <div className={`flex items-start justify-between gap-3 rounded-md border p-3 text-sm ${tone}`}>
+      <span>{message}</span>
+      {onClose && (
+        <button onClick={onClose} className="text-xs underline opacity-70 hover:opacity-100">Dismiss</button>
+      )}
+    </div>
+  );
+}
 
 export default function VNextDocumentTemplates() {
   const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
@@ -114,9 +151,7 @@ export default function VNextDocumentTemplates() {
         isDefault: form.isDefault,
         active: form.active,
       };
-      const url = editing
-        ? `${API_URL}/api/v1/document-templates/${editing.id}`
-        : `${API_URL}/api/v1/document-templates`;
+      const url = editing ? `${API_URL}/api/v1/document-templates/${editing.id}` : `${API_URL}/api/v1/document-templates`;
       const res = await fetch(url, {
         method: editing ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -141,9 +176,7 @@ export default function VNextDocumentTemplates() {
     setError('');
     setSuccess('');
     try {
-      const res = await fetch(`${API_URL}/api/v1/document-templates/${id}`, {
-        method: 'DELETE',
-      });
+      const res = await fetch(`${API_URL}/api/v1/document-templates/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed to delete template');
       setSuccess('Template deleted successfully');
       await loadTemplates();
@@ -159,258 +192,202 @@ export default function VNextDocumentTemplates() {
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', padding: '48px' }}>
-        <div className="loading-spinner" />
+      <div className="flex justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
+  const stats = [
+    { label: 'Total templates', value: templates.length, icon: FileText, tone: 'bg-primary/10 text-primary' },
+    { label: 'Active', value: templates.filter(t => t.active).length, icon: CheckCircle2, tone: 'bg-success/15 text-success' },
+    { label: 'Default', value: templates.filter(t => t.isDefault).length, icon: Star, tone: 'bg-info/15 text-info' },
+  ];
+
   return (
-    <>
-      <div className="vn-page-header">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1>Document Templates</h1>
-          <p>Manage templates for BOLs, labels, customs forms, and reports</p>
+          <h1 className="text-3xl font-bold tracking-tight">Document templates</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Manage templates for BOLs, labels, customs forms, and reports
+          </p>
         </div>
-        <div className="vn-page-actions">
-          <button className="vn-btn vn-btn-primary" onClick={openCreate}>
-            <span className="material-icons">add</span>
-            New Template
-          </button>
-        </div>
+        <Button variant="gradient" onClick={openCreate}>
+          <Plus className="h-4 w-4" />
+          New template
+        </Button>
       </div>
 
-      {error && (
-        <div className="alert alert-error" style={{ marginBottom: 16 }}>
-          {error}
-          <button
-            className="vn-btn-icon"
-            style={{ marginLeft: 'auto' }}
-            onClick={() => setError('')}
-          >
-            <span className="material-icons" style={{ fontSize: 18 }}>close</span>
-          </button>
-        </div>
-      )}
+      {error && <Banner variant="error" message={error} onClose={() => setError('')} />}
+      {success && <Banner variant="success" message={success} onClose={() => setSuccess('')} />}
 
-      {success && (
-        <div className="alert alert-success" style={{ marginBottom: 16 }}>
-          {success}
-          <button
-            className="vn-btn-icon"
-            style={{ marginLeft: 'auto' }}
-            onClick={() => setSuccess('')}
-          >
-            <span className="material-icons" style={{ fontSize: 18 }}>close</span>
-          </button>
-        </div>
-      )}
+      <div className="grid gap-4 sm:grid-cols-3">
+        {stats.map(s => {
+          const Icon = s.icon;
+          return (
+            <Card key={s.label}>
+              <CardContent className="flex items-center gap-3 p-4">
+                <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${s.tone}`}>
+                  <Icon className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="text-2xl font-semibold">{s.value}</div>
+                  <div className="text-xs text-muted-foreground">{s.label}</div>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
 
       {showForm && (
-        <div className="vn-card" style={{ marginBottom: 24 }}>
-          <div className="vn-card-header">
-            <h2>{editing ? 'Edit Template' : 'Create Template'}</h2>
-          </div>
-          <div className="vn-card-body">
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-              <div>
-                <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--on-surface)', marginBottom: 4 }}>
-                  Name *
-                </label>
+        <Card>
+          <CardHeader>
+            <CardTitle>{editing ? 'Edit template' : 'Create template'}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Name *</Label>
+                <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Template name" />
+              </div>
+              <div className="space-y-2">
+                <Label>Document type</Label>
+                <Select value={form.documentType} onValueChange={v => setForm(f => ({ ...f, documentType: v }))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DOCUMENT_TYPES.map(dt => (
+                      <SelectItem key={dt.value} value={dt.value}>{dt.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Description</Label>
+              <textarea
+                value={form.description}
+                onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                placeholder="Brief description of this template"
+                rows={2}
+                className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>HTML template</Label>
+              <textarea
+                value={form.htmlTemplate}
+                onChange={e => setForm(f => ({ ...f, htmlTemplate: e.target.value }))}
+                placeholder="<html>...</html>"
+                rows={10}
+                className="flex w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Config (JSON)</Label>
+              <textarea
+                value={form.config}
+                onChange={e => setForm(f => ({ ...f, config: e.target.value }))}
+                placeholder="{}"
+                rows={4}
+                className="flex w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center gap-6">
+              <label className="flex cursor-pointer items-center gap-2 text-sm">
                 <input
-                  className="vn-input"
-                  value={form.name}
-                  onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                  placeholder="Template name"
-                  style={{ width: '100%' }}
+                  type="checkbox"
+                  checked={form.isDefault}
+                  onChange={e => setForm(f => ({ ...f, isDefault: e.target.checked }))}
+                  className="h-4 w-4 rounded border border-input bg-background accent-primary"
                 />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--on-surface)', marginBottom: 4 }}>
-                  Document Type
-                </label>
-                <select
-                  className="vn-input"
-                  value={form.documentType}
-                  onChange={e => setForm(f => ({ ...f, documentType: e.target.value }))}
-                  style={{ width: '100%' }}
-                >
-                  {DOCUMENT_TYPES.map(dt => (
-                    <option key={dt.value} value={dt.value}>{dt.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div style={{ gridColumn: '1 / -1' }}>
-                <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--on-surface)', marginBottom: 4 }}>
-                  Description
-                </label>
-                <textarea
-                  className="vn-input"
-                  value={form.description}
-                  onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                  placeholder="Brief description of this template"
-                  rows={2}
-                  style={{ width: '100%', resize: 'vertical' }}
+                Default template
+              </label>
+              <label className="flex cursor-pointer items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={form.active}
+                  onChange={e => setForm(f => ({ ...f, active: e.target.checked }))}
+                  className="h-4 w-4 rounded border border-input bg-background accent-primary"
                 />
-              </div>
-              <div style={{ gridColumn: '1 / -1' }}>
-                <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--on-surface)', marginBottom: 4 }}>
-                  HTML Template
-                </label>
-                <textarea
-                  className="vn-input"
-                  value={form.htmlTemplate}
-                  onChange={e => setForm(f => ({ ...f, htmlTemplate: e.target.value }))}
-                  placeholder="<html>...</html>"
-                  rows={10}
-                  style={{ width: '100%', fontFamily: 'monospace', fontSize: 13, resize: 'vertical' }}
-                />
-              </div>
-              <div style={{ gridColumn: '1 / -1' }}>
-                <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: 'var(--on-surface)', marginBottom: 4 }}>
-                  Config (JSON)
-                </label>
-                <textarea
-                  className="vn-input"
-                  value={form.config}
-                  onChange={e => setForm(f => ({ ...f, config: e.target.value }))}
-                  placeholder="{}"
-                  rows={4}
-                  style={{ width: '100%', fontFamily: 'monospace', fontSize: 13, resize: 'vertical' }}
-                />
-              </div>
-              <div style={{ display: 'flex', gap: 24, alignItems: 'center' }}>
-                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 14, color: 'var(--on-surface)', cursor: 'pointer' }}>
-                  <input
-                    type="checkbox"
-                    checked={form.isDefault}
-                    onChange={e => setForm(f => ({ ...f, isDefault: e.target.checked }))}
-                    style={{ accentColor: 'var(--primary)' }}
-                  />
-                  Default Template
-                </label>
-                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 14, color: 'var(--on-surface)', cursor: 'pointer' }}>
-                  <input
-                    type="checkbox"
-                    checked={form.active}
-                    onChange={e => setForm(f => ({ ...f, active: e.target.checked }))}
-                    style={{ accentColor: 'var(--primary)' }}
-                  />
-                  Active
-                </label>
-              </div>
+                Active
+              </label>
             </div>
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 20 }}>
-              <button className="vn-btn vn-btn-outline" onClick={cancelForm}>Cancel</button>
-              <button className="vn-btn vn-btn-primary" onClick={saveTemplate} disabled={saving}>
-                <span className="material-icons">{editing ? 'save' : 'add'}</span>
-                {saving ? 'Saving...' : editing ? 'Update Template' : 'Create Template'}
-              </button>
+
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={cancelForm}>Cancel</Button>
+              <Button variant="gradient" onClick={saveTemplate} disabled={saving}>
+                <Save className="h-4 w-4" />
+                {saving ? 'Saving...' : editing ? 'Update template' : 'Create template'}
+              </Button>
             </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       )}
 
-      {/* Stats */}
-      <div className="vn-stats">
-        <div className="vn-stat">
-          <div className="vn-stat-icon primary">
-            <span className="material-icons">description</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{templates.length}</div>
-            <div className="vn-stat-label">Total Templates</div>
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon success">
-            <span className="material-icons">check_circle</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{templates.filter(t => t.active).length}</div>
-            <div className="vn-stat-label">Active</div>
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon info">
-            <span className="material-icons">star</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{templates.filter(t => t.isDefault).length}</div>
-            <div className="vn-stat-label">Default</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Table */}
-      <div className="vn-card">
-        <div className="vn-card-header">
-          <h2>Templates</h2>
-        </div>
-        <div className="vn-card-body" style={{ padding: 0 }}>
+      <Card>
+        <CardHeader>
+          <CardTitle>Templates</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
           {templates.length === 0 ? (
-            <div className="vn-empty">
-              <span className="material-icons">description</span>
-              <h3>No document templates</h3>
-              <p>Create your first template to get started.</p>
+            <div className="flex flex-col items-center gap-2 py-12 text-center text-muted-foreground">
+              <FileText className="h-8 w-8" />
+              <h3 className="text-base font-medium">No document templates</h3>
+              <p className="text-sm">Create your first template to get started.</p>
             </div>
           ) : (
-            <div className="vn-table-wrap">
-              <table className="vn-table">
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Type</th>
-                    <th>Description</th>
-                    <th>Default</th>
-                    <th>Active</th>
-                    <th>Created</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {templates.map(t => (
-                    <tr key={t.id}>
-                      <td style={{ fontWeight: 500 }}>{t.name}</td>
-                      <td>
-                        <span className="vn-chip primary">{typeLabel(t.documentType)}</span>
-                      </td>
-                      <td style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>
-                        {truncate(t.description, 60)}
-                      </td>
-                      <td>
-                        {t.isDefault && (
-                          <span className="material-icons" style={{ fontSize: 20, color: 'var(--primary)' }}>
-                            check_circle
-                          </span>
-                        )}
-                      </td>
-                      <td>
-                        <span className={`vn-chip ${t.active ? 'success' : 'error'}`}>
-                          {t.active ? 'Active' : 'Inactive'}
-                        </span>
-                      </td>
-                      <td style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>
-                        {t.createdAt ? new Date(t.createdAt).toLocaleDateString() : ''}
-                      </td>
-                      <td>
-                        <div style={{ display: 'flex', gap: 4 }}>
-                          <button className="vn-btn-icon" title="Edit" onClick={() => openEdit(t)}>
-                            <span className="material-icons" style={{ fontSize: 18 }}>edit</span>
-                          </button>
-                          <button className="vn-btn-icon" title="Delete" onClick={() => deleteTemplate(t.id)}>
-                            <span className="material-icons" style={{ fontSize: 18, color: 'var(--error)' }}>delete</span>
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead>Default</TableHead>
+                  <TableHead>Active</TableHead>
+                  <TableHead>Created</TableHead>
+                  <TableHead className="w-32">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {templates.map(t => (
+                  <TableRow key={t.id}>
+                    <TableCell className="font-medium">{t.name}</TableCell>
+                    <TableCell><Badge variant="info">{typeLabel(t.documentType)}</Badge></TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{truncate(t.description, 60)}</TableCell>
+                    <TableCell>
+                      {t.isDefault && <CheckCircle2 className="h-4 w-4 text-primary" />}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={t.active ? 'success' : 'destructive'}>{t.active ? 'Active' : 'Inactive'}</Badge>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {t.createdAt ? new Date(t.createdAt).toLocaleDateString() : ''}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex gap-1">
+                        <Button variant="ghost" size="icon" onClick={() => openEdit(t)}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => deleteTemplate(t.id)}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           )}
-        </div>
-      </div>
-    </>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

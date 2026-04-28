@@ -1,6 +1,35 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import {
+  ArrowLeft,
+  CheckCircle2,
+  CircleAlert,
+  CreditCard,
+  Loader2,
+  Search,
+  XCircle,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 
 interface OutstandingInvoice {
   id: string;
@@ -27,7 +56,6 @@ export default function VNextFinanceRecordPayments() {
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
 
-  // Payment entries keyed by invoice ID
   const [payments, setPayments] = useState<Record<string, { amount: string; method: string; ref: string }>>({});
   const [processing, setProcessing] = useState(false);
   const [results, setResults] = useState<Array<{ invoiceNumber: string; success: boolean; message: string }>>([]);
@@ -36,7 +64,6 @@ export default function VNextFinanceRecordPayments() {
     fetch(`${API_URL}/api/v1/invoices?status=sent`)
       .then(r => r.json())
       .then(j => {
-        // Also fetch partial_paid and overdue
         return Promise.all([
           j,
           fetch(`${API_URL}/api/v1/invoices?status=partial_paid`).then(r => r.json()),
@@ -45,7 +72,6 @@ export default function VNextFinanceRecordPayments() {
       })
       .then(([sent, partial, overdue]) => {
         const all = [...(sent.data || []), ...(partial.data || []), ...(overdue.data || [])];
-        // Dedupe by ID and filter to those with balance
         const unique = [...new Map(all.map((i: any) => [i.id, i])).values()].filter((i: any) => i.balanceCents > 0);
         setInvoices(unique as OutstandingInvoice[]);
       })
@@ -98,7 +124,7 @@ export default function VNextFinanceRecordPayments() {
         if (json.error) {
           newResults.push({ invoiceNumber: inv.invoiceNumber, success: false, message: json.error });
         } else {
-          newResults.push({ invoiceNumber: inv.invoiceNumber, success: true, message: `${formatMoney(amountCents)} applied — ${json.data?.invoiceStatus}` });
+          newResults.push({ invoiceNumber: inv.invoiceNumber, success: true, message: `${formatMoney(amountCents)} applied - ${json.data?.invoiceStatus}` });
         }
       } catch (e: any) {
         newResults.push({ invoiceNumber: inv.invoiceNumber, success: false, message: e.message });
@@ -109,7 +135,6 @@ export default function VNextFinanceRecordPayments() {
     setPayments({});
     setProcessing(false);
 
-    // Refresh the invoice list
     setLoading(true);
     fetch(`${API_URL}/api/v1/invoices?status=sent`)
       .then(r => r.json())
@@ -128,119 +153,166 @@ export default function VNextFinanceRecordPayments() {
       .finally(() => setLoading(false));
   };
 
-  if (loading && invoices.length === 0) return <div className="vn-empty"><span className="material-icons" style={{ animation: 'spin 1s linear infinite' }}>refresh</span><h3>Loading...</h3></div>;
-  if (error) return <div className="vn-alert vn-alert-error">{error}</div>;
+  if (loading && invoices.length === 0) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <h3 className="text-lg font-medium">Loading...</h3>
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+        <CircleAlert className="h-5 w-5" />
+        {error}
+      </div>
+    );
+  }
 
   return (
-    <>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-        <button className="vn-btn vn-btn-ghost vn-btn-sm" onClick={() => navigate('/finance/invoices')}>
-          <span className="material-icons">arrow_back</span> Invoices
-        </button>
-        <span style={{ color: 'var(--on-surface-variant)', fontSize: 13 }}>/ Record Payments</span>
+    <div className="space-y-6">
+      <div className="flex items-center gap-2 text-sm">
+        <Button variant="ghost" size="sm" onClick={() => navigate('/finance/invoices')}>
+          <ArrowLeft className="h-4 w-4" /> Invoices
+        </Button>
+        <span className="text-muted-foreground">/ Record Payments</span>
       </div>
 
-      <div className="vn-page-header">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1>Record Payments</h1>
-          <p>Enter payment amounts against outstanding invoices. Process a bank statement in one go.</p>
+          <h1 className="text-3xl font-bold tracking-tight">Record Payments</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Enter payment amounts against outstanding invoices. Process a bank statement in one go.</p>
         </div>
       </div>
 
-      {/* Results from last batch */}
       {results.length > 0 && (
-        <div className="vn-card" style={{ marginBottom: 16, padding: 16 }}>
-          <h3 style={{ margin: '0 0 8px' }}>Payment Results</h3>
-          {results.map((r, i) => (
-            <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '4px 0' }}>
-              <span className="material-icons" style={{ fontSize: 18, color: r.success ? 'var(--success)' : 'var(--error)' }}>
-                {r.success ? 'check_circle' : 'error'}
-              </span>
-              <strong>{r.invoiceNumber}</strong>
-              <span style={{ color: 'var(--on-surface-variant)' }}>{r.message}</span>
+        <Card>
+          <CardContent className="p-4">
+            <h3 className="mb-2 text-base font-semibold">Payment Results</h3>
+            <div className="space-y-1">
+              {results.map((r, i) => (
+                <div key={i} className="flex items-center gap-2 py-1 text-sm">
+                  {r.success
+                    ? <CheckCircle2 className="h-4 w-4 text-success" />
+                    : <XCircle className="h-4 w-4 text-destructive" />}
+                  <strong>{r.invoiceNumber}</strong>
+                  <span className="text-muted-foreground">{r.message}</span>
+                </div>
+              ))}
             </div>
-          ))}
-          <button className="vn-btn vn-btn-ghost vn-btn-sm" onClick={() => setResults([])} style={{ marginTop: 8 }}>Dismiss</button>
-        </div>
+            <Button variant="ghost" size="sm" onClick={() => setResults([])} className="mt-2">Dismiss</Button>
+          </CardContent>
+        </Card>
       )}
 
-      <div className="vn-card">
-        <div className="vn-filters">
-          <div className="vn-filter-group">
-            <span className="material-icons">search</span>
-            <input className="vn-filter-input" placeholder="Search by invoice # or customer..." value={search} onChange={e => setSearch(e.target.value)} />
+      <Card>
+        <div className="flex flex-wrap items-center gap-3 p-4">
+          <div className="relative min-w-[280px] flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              className="pl-9"
+              placeholder="Search by invoice # or customer..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
           </div>
           {entriesWithAmount.length > 0 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span style={{ fontWeight: 500 }}>{entriesWithAmount.length} payment{entriesWithAmount.length > 1 ? 's' : ''} — {formatMoney(totalToApply)}</span>
-              <button className="vn-btn vn-btn-success" onClick={processPayments} disabled={processing}>
-                <span className="material-icons">payment</span>
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-medium">{entriesWithAmount.length} payment{entriesWithAmount.length > 1 ? 's' : ''} - {formatMoney(totalToApply)}</span>
+              <Button onClick={processPayments} disabled={processing}>
+                <CreditCard className="h-4 w-4" />
                 {processing ? 'Processing...' : 'Apply All Payments'}
-              </button>
+              </Button>
             </div>
           )}
         </div>
 
         {filtered.length === 0 ? (
-          <div className="vn-empty"><span className="material-icons">check_circle</span><h3>No outstanding invoices</h3></div>
-        ) : (
-          <div className="vn-table-wrap">
-            <table className="vn-table">
-              <thead>
-                <tr>
-                  <th>Invoice #</th>
-                  <th>Customer</th>
-                  <th>Due Date</th>
-                  <th style={{ textAlign: 'right' }}>Balance</th>
-                  <th style={{ width: 140 }}>Amount ($)</th>
-                  <th style={{ width: 100 }}>Method</th>
-                  <th style={{ width: 140 }}>Reference</th>
-                  <th style={{ width: 60 }}></th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map(inv => {
-                  const p = payments[inv.id] || { amount: '', method: 'ach', ref: '' };
-                  const isPastDue = new Date(inv.dueDate) < new Date();
-                  return (
-                    <tr key={inv.id}>
-                      <td>
-                        <span className="vn-table-id" style={{ cursor: 'pointer' }} onClick={() => navigate(`/finance/invoices/${inv.id}`)}>
-                          {inv.invoiceNumber}
-                        </span>
-                      </td>
-                      <td>{inv.customer.name}</td>
-                      <td style={{ color: isPastDue ? 'var(--error)' : undefined }}>{formatDate(inv.dueDate)}{isPastDue && ' (overdue)'}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 600 }}>{formatMoney(inv.balanceCents)}</td>
-                      <td>
-                        <input className="vn-input" type="number" step="0.01" min="0" max={inv.balanceCents / 100}
-                          value={p.amount} onChange={e => setPaymentField(inv.id, 'amount', e.target.value)}
-                          placeholder="0.00" style={{ textAlign: 'right' }} />
-                      </td>
-                      <td>
-                        <select className="vn-input" value={p.method} onChange={e => setPaymentField(inv.id, 'method', e.target.value)} style={{ padding: '4px 6px', fontSize: 12 }}>
-                          <option value="ach">ACH</option>
-                          <option value="wire">Wire</option>
-                          <option value="check">Check</option>
-                        </select>
-                      </td>
-                      <td>
-                        <input className="vn-input" type="text" value={p.ref} onChange={e => setPaymentField(inv.id, 'ref', e.target.value)}
-                          placeholder="Ref #" style={{ fontSize: 12 }} />
-                      </td>
-                      <td>
-                        <button className="vn-btn vn-btn-ghost vn-btn-sm" onClick={() => payFullBalance(inv)} title="Pay full balance" style={{ padding: 4 }}>
-                          <span className="material-icons" style={{ fontSize: 16 }}>check_circle</span>
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="flex flex-col items-center gap-3 py-12 text-muted-foreground">
+            <CheckCircle2 className="h-8 w-8" />
+            <h3 className="text-base font-medium">No outstanding invoices</h3>
           </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Invoice #</TableHead>
+                <TableHead>Customer</TableHead>
+                <TableHead>Due Date</TableHead>
+                <TableHead className="text-right">Balance</TableHead>
+                <TableHead className="w-[140px]">Amount ($)</TableHead>
+                <TableHead className="w-[110px]">Method</TableHead>
+                <TableHead className="w-[140px]">Reference</TableHead>
+                <TableHead className="w-[60px]" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filtered.map(inv => {
+                const p = payments[inv.id] || { amount: '', method: 'ach', ref: '' };
+                const isPastDue = new Date(inv.dueDate) < new Date();
+                return (
+                  <TableRow key={inv.id}>
+                    <TableCell>
+                      <span
+                        className="font-mono text-sm font-semibold cursor-pointer hover:underline"
+                        onClick={() => navigate(`/finance/invoices/${inv.id}`)}
+                      >
+                        {inv.invoiceNumber}
+                      </span>
+                    </TableCell>
+                    <TableCell>{inv.customer.name}</TableCell>
+                    <TableCell className={cn(isPastDue && 'text-destructive')}>
+                      {formatDate(inv.dueDate)}{isPastDue && ' (overdue)'}
+                    </TableCell>
+                    <TableCell className="text-right font-mono tabular-nums font-semibold">{formatMoney(inv.balanceCents)}</TableCell>
+                    <TableCell>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        max={inv.balanceCents / 100}
+                        value={p.amount}
+                        onChange={e => setPaymentField(inv.id, 'amount', e.target.value)}
+                        placeholder="0.00"
+                        className="text-right font-mono tabular-nums"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Select value={p.method} onValueChange={v => setPaymentField(inv.id, 'method', v)}>
+                        <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="ach">ACH</SelectItem>
+                          <SelectItem value="wire">Wire</SelectItem>
+                          <SelectItem value="check">Check</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        value={p.ref}
+                        onChange={e => setPaymentField(inv.id, 'ref', e.target.value)}
+                        placeholder="Ref #"
+                        className="text-xs"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title="Pay full balance"
+                        onClick={() => payFullBalance(inv)}
+                      >
+                        <CheckCircle2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
         )}
-      </div>
-    </>
+      </Card>
+    </div>
   );
 }

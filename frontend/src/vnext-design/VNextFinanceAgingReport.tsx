@@ -1,5 +1,28 @@
 import React, { useState, useEffect } from 'react';
+import {
+  AlertTriangle,
+  CheckCircle2,
+  CircleAlert,
+  Clock,
+  Download,
+  Loader2,
+  Wallet,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableFooter,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 
 interface AgingBucket {
   current: number;
@@ -28,10 +51,12 @@ function formatMoney(cents: number): string {
   return `$${(cents / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-function bucketColor(cents: number): string | undefined {
-  if (cents === 0) return 'var(--on-surface-variant)';
-  return undefined;
-}
+const TONES = {
+  primary: 'bg-primary/10 text-primary',
+  success: 'bg-success/15 text-success',
+  warning: 'bg-warning/15 text-warning',
+  destructive: 'bg-destructive/10 text-destructive',
+} as const;
 
 export default function VNextFinanceAgingReport() {
   const [data, setData] = useState<AgingData | null>(null);
@@ -54,137 +79,193 @@ export default function VNextFinanceAgingReport() {
     window.open(`${API_URL}/api/v1/reports/ar-aging/csv?asOfDate=${asOfDate}`, '_blank');
   };
 
-  if (loading) return <div className="vn-empty"><span className="material-icons" style={{ animation: 'spin 1s linear infinite' }}>refresh</span><h3>Loading...</h3></div>;
-  if (error) return <div className="vn-alert vn-alert-error">{error}</div>;
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <h3 className="text-lg font-medium">Loading...</h3>
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+        <CircleAlert className="h-5 w-5" />
+        {error}
+      </div>
+    );
+  }
   if (!data) return null;
 
   const t = data.totals;
   const pastDueTotal = t.days1to30 + t.days31to60 + t.days61to90 + t.days90plus;
 
   return (
-    <>
-      <div className="vn-page-header">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1>AR Aging Report</h1>
-          <p>Outstanding invoices by days past due as of {data.asOfDate}</p>
+          <h1 className="text-3xl font-bold tracking-tight">AR Aging Report</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Outstanding invoices by days past due as of {data.asOfDate}</p>
         </div>
-        <div className="vn-page-actions">
-          <input type="date" className="vn-input" value={asOfDate} onChange={e => setAsOfDate(e.target.value)} style={{ width: 160 }} />
-          <button className="vn-btn vn-btn-outline vn-btn-sm" onClick={downloadCsv}>
-            <span className="material-icons">download</span> Export CSV
-          </button>
-        </div>
-      </div>
-
-      {/* Summary stats */}
-      <div className="vn-stats">
-        <div className="vn-stat">
-          <div className="vn-stat-icon primary"><span className="material-icons">account_balance_wallet</span></div>
-          <div><div className="vn-stat-value">{formatMoney(t.total)}</div><div className="vn-stat-label">Total Outstanding</div></div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon success"><span className="material-icons">schedule</span></div>
-          <div><div className="vn-stat-value">{formatMoney(t.current)}</div><div className="vn-stat-label">Current (Not Due)</div></div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon warning"><span className="material-icons">warning</span></div>
-          <div><div className="vn-stat-value">{formatMoney(pastDueTotal)}</div><div className="vn-stat-label">Past Due Total</div></div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon error"><span className="material-icons">error</span></div>
-          <div><div className="vn-stat-value">{formatMoney(t.days90plus)}</div><div className="vn-stat-label">90+ Days</div></div>
+        <div className="flex items-center gap-2">
+          <Input
+            type="date"
+            value={asOfDate}
+            onChange={e => setAsOfDate(e.target.value)}
+            className="w-[170px]"
+          />
+          <Button variant="outline" size="sm" onClick={downloadCsv}>
+            <Download className="h-4 w-4" /> Export CSV
+          </Button>
         </div>
       </div>
 
-      {/* Totals bar chart (visual) */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardContent className="p-5">
+            <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', TONES.primary)}>
+              <Wallet className="h-5 w-5" />
+            </div>
+            <div className="mt-3 text-2xl font-bold tracking-tight font-mono tabular-nums">{formatMoney(t.total)}</div>
+            <div className="mt-1 text-sm text-muted-foreground">Total Outstanding</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-5">
+            <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', TONES.success)}>
+              <Clock className="h-5 w-5" />
+            </div>
+            <div className="mt-3 text-2xl font-bold tracking-tight font-mono tabular-nums">{formatMoney(t.current)}</div>
+            <div className="mt-1 text-sm text-muted-foreground">Current (Not Due)</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-5">
+            <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', TONES.warning)}>
+              <AlertTriangle className="h-5 w-5" />
+            </div>
+            <div className="mt-3 text-2xl font-bold tracking-tight font-mono tabular-nums">{formatMoney(pastDueTotal)}</div>
+            <div className="mt-1 text-sm text-muted-foreground">Past Due Total</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-5">
+            <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', TONES.destructive)}>
+              <CircleAlert className="h-5 w-5" />
+            </div>
+            <div className="mt-3 text-2xl font-bold tracking-tight font-mono tabular-nums">{formatMoney(t.days90plus)}</div>
+            <div className="mt-1 text-sm text-muted-foreground">90+ Days</div>
+          </CardContent>
+        </Card>
+      </div>
+
       {t.total > 0 && (
-        <div className="vn-card" style={{ padding: 20, marginBottom: 16 }}>
-          <h3 style={{ margin: '0 0 12px' }}>Aging Distribution</h3>
-          <div style={{ display: 'flex', height: 32, borderRadius: 'var(--border-radius-sm)', overflow: 'hidden', background: 'var(--surface-container)' }}>
-            {t.current > 0 && (
-              <div style={{ width: `${(t.current / t.total) * 100}%`, background: 'var(--success)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 11, fontWeight: 600 }}
-                title={`Current: ${formatMoney(t.current)}`}>
-                {(t.current / t.total * 100) > 10 ? 'Current' : ''}
-              </div>
-            )}
-            {t.days1to30 > 0 && (
-              <div style={{ width: `${(t.days1to30 / t.total) * 100}%`, background: 'var(--info)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 11, fontWeight: 600 }}
-                title={`1-30 Days: ${formatMoney(t.days1to30)}`}>
-                {(t.days1to30 / t.total * 100) > 10 ? '1-30' : ''}
-              </div>
-            )}
-            {t.days31to60 > 0 && (
-              <div style={{ width: `${(t.days31to60 / t.total) * 100}%`, background: 'var(--warning)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 11, fontWeight: 600 }}
-                title={`31-60 Days: ${formatMoney(t.days31to60)}`}>
-                {(t.days31to60 / t.total * 100) > 10 ? '31-60' : ''}
-              </div>
-            )}
-            {t.days61to90 > 0 && (
-              <div style={{ width: `${(t.days61to90 / t.total) * 100}%`, background: '#e65100', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 11, fontWeight: 600 }}
-                title={`61-90 Days: ${formatMoney(t.days61to90)}`}>
-                {(t.days61to90 / t.total * 100) > 10 ? '61-90' : ''}
-              </div>
-            )}
-            {t.days90plus > 0 && (
-              <div style={{ width: `${(t.days90plus / t.total) * 100}%`, background: 'var(--error)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 11, fontWeight: 600 }}
-                title={`90+ Days: ${formatMoney(t.days90plus)}`}>
-                {(t.days90plus / t.total * 100) > 10 ? '90+' : ''}
-              </div>
-            )}
-          </div>
-        </div>
+        <Card>
+          <CardContent className="p-5">
+            <h3 className="mb-3 text-base font-semibold">Aging Distribution</h3>
+            <div className="flex h-8 overflow-hidden rounded-md bg-muted">
+              {t.current > 0 && (
+                <div
+                  className="flex items-center justify-center bg-success text-xs font-semibold text-white"
+                  style={{ width: `${(t.current / t.total) * 100}%` }}
+                  title={`Current: ${formatMoney(t.current)}`}
+                >
+                  {(t.current / t.total * 100) > 10 ? 'Current' : ''}
+                </div>
+              )}
+              {t.days1to30 > 0 && (
+                <div
+                  className="flex items-center justify-center bg-info text-xs font-semibold text-white"
+                  style={{ width: `${(t.days1to30 / t.total) * 100}%` }}
+                  title={`1-30 Days: ${formatMoney(t.days1to30)}`}
+                >
+                  {(t.days1to30 / t.total * 100) > 10 ? '1-30' : ''}
+                </div>
+              )}
+              {t.days31to60 > 0 && (
+                <div
+                  className="flex items-center justify-center bg-warning text-xs font-semibold text-white"
+                  style={{ width: `${(t.days31to60 / t.total) * 100}%` }}
+                  title={`31-60 Days: ${formatMoney(t.days31to60)}`}
+                >
+                  {(t.days31to60 / t.total * 100) > 10 ? '31-60' : ''}
+                </div>
+              )}
+              {t.days61to90 > 0 && (
+                <div
+                  className="flex items-center justify-center bg-accent text-xs font-semibold text-white"
+                  style={{ width: `${(t.days61to90 / t.total) * 100}%` }}
+                  title={`61-90 Days: ${formatMoney(t.days61to90)}`}
+                >
+                  {(t.days61to90 / t.total * 100) > 10 ? '61-90' : ''}
+                </div>
+              )}
+              {t.days90plus > 0 && (
+                <div
+                  className="flex items-center justify-center bg-destructive text-xs font-semibold text-white"
+                  style={{ width: `${(t.days90plus / t.total) * 100}%` }}
+                  title={`90+ Days: ${formatMoney(t.days90plus)}`}
+                >
+                  {(t.days90plus / t.total * 100) > 10 ? '90+' : ''}
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
       )}
 
-      {/* Customer breakdown table */}
-      <div className="vn-card">
-        <div className="vn-card-header"><h2>By Customer ({data.customers.length})</h2></div>
+      <Card>
+        <div className="p-5">
+          <h2 className="text-lg font-semibold">By Customer ({data.customers.length})</h2>
+        </div>
         {data.customers.length === 0 ? (
-          <div className="vn-empty"><span className="material-icons">check_circle</span><h3>No outstanding invoices</h3></div>
-        ) : (
-          <div className="vn-table-wrap">
-            <table className="vn-table">
-              <thead>
-                <tr>
-                  <th>Customer</th>
-                  <th style={{ textAlign: 'right' }}>Invoices</th>
-                  <th style={{ textAlign: 'right' }}>Current</th>
-                  <th style={{ textAlign: 'right' }}>1-30 Days</th>
-                  <th style={{ textAlign: 'right' }}>31-60 Days</th>
-                  <th style={{ textAlign: 'right' }}>61-90 Days</th>
-                  <th style={{ textAlign: 'right' }}>90+ Days</th>
-                  <th style={{ textAlign: 'right', fontWeight: 700 }}>Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.customers.map(c => (
-                  <tr key={c.customerId}>
-                    <td style={{ fontWeight: 500 }}>{c.customerName}</td>
-                    <td style={{ textAlign: 'right' }}>{c.invoiceCount}</td>
-                    <td style={{ textAlign: 'right', color: bucketColor(c.buckets.current) }}>{formatMoney(c.buckets.current)}</td>
-                    <td style={{ textAlign: 'right', color: bucketColor(c.buckets.days1to30) }}>{formatMoney(c.buckets.days1to30)}</td>
-                    <td style={{ textAlign: 'right', color: c.buckets.days31to60 > 0 ? 'var(--warning)' : bucketColor(c.buckets.days31to60) }}>{formatMoney(c.buckets.days31to60)}</td>
-                    <td style={{ textAlign: 'right', color: c.buckets.days61to90 > 0 ? 'var(--warning)' : bucketColor(c.buckets.days61to90) }}>{formatMoney(c.buckets.days61to90)}</td>
-                    <td style={{ textAlign: 'right', color: c.buckets.days90plus > 0 ? 'var(--error)' : bucketColor(c.buckets.days90plus), fontWeight: c.buckets.days90plus > 0 ? 600 : 400 }}>{formatMoney(c.buckets.days90plus)}</td>
-                    <td style={{ textAlign: 'right', fontWeight: 700 }}>{formatMoney(c.buckets.total)}</td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr style={{ fontWeight: 700 }}>
-                  <td>TOTAL</td>
-                  <td style={{ textAlign: 'right' }}>{data.customers.reduce((s, c) => s + c.invoiceCount, 0)}</td>
-                  <td style={{ textAlign: 'right' }}>{formatMoney(t.current)}</td>
-                  <td style={{ textAlign: 'right' }}>{formatMoney(t.days1to30)}</td>
-                  <td style={{ textAlign: 'right' }}>{formatMoney(t.days31to60)}</td>
-                  <td style={{ textAlign: 'right' }}>{formatMoney(t.days61to90)}</td>
-                  <td style={{ textAlign: 'right', color: t.days90plus > 0 ? 'var(--error)' : undefined }}>{formatMoney(t.days90plus)}</td>
-                  <td style={{ textAlign: 'right' }}>{formatMoney(t.total)}</td>
-                </tr>
-              </tfoot>
-            </table>
+          <div className="flex flex-col items-center gap-3 py-12 text-muted-foreground">
+            <CheckCircle2 className="h-8 w-8" />
+            <h3 className="text-base font-medium">No outstanding invoices</h3>
           </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Customer</TableHead>
+                <TableHead className="text-right">Invoices</TableHead>
+                <TableHead className="text-right">Current</TableHead>
+                <TableHead className="text-right">1-30 Days</TableHead>
+                <TableHead className="text-right">31-60 Days</TableHead>
+                <TableHead className="text-right">61-90 Days</TableHead>
+                <TableHead className="text-right">90+ Days</TableHead>
+                <TableHead className="text-right font-bold">Total</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.customers.map(c => (
+                <TableRow key={c.customerId}>
+                  <TableCell className="font-medium">{c.customerName}</TableCell>
+                  <TableCell className="text-right font-mono tabular-nums">{c.invoiceCount}</TableCell>
+                  <TableCell className={cn('text-right font-mono tabular-nums', c.buckets.current === 0 && 'text-muted-foreground')}>{formatMoney(c.buckets.current)}</TableCell>
+                  <TableCell className={cn('text-right font-mono tabular-nums', c.buckets.days1to30 === 0 && 'text-muted-foreground')}>{formatMoney(c.buckets.days1to30)}</TableCell>
+                  <TableCell className={cn('text-right font-mono tabular-nums', c.buckets.days31to60 > 0 ? 'text-warning' : 'text-muted-foreground')}>{formatMoney(c.buckets.days31to60)}</TableCell>
+                  <TableCell className={cn('text-right font-mono tabular-nums', c.buckets.days61to90 > 0 ? 'text-warning' : 'text-muted-foreground')}>{formatMoney(c.buckets.days61to90)}</TableCell>
+                  <TableCell className={cn('text-right font-mono tabular-nums', c.buckets.days90plus > 0 ? 'text-destructive font-semibold' : 'text-muted-foreground')}>{formatMoney(c.buckets.days90plus)}</TableCell>
+                  <TableCell className="text-right font-mono tabular-nums font-bold">{formatMoney(c.buckets.total)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+            <TableFooter>
+              <TableRow className="font-bold">
+                <TableCell>TOTAL</TableCell>
+                <TableCell className="text-right font-mono tabular-nums">{data.customers.reduce((s, c) => s + c.invoiceCount, 0)}</TableCell>
+                <TableCell className="text-right font-mono tabular-nums">{formatMoney(t.current)}</TableCell>
+                <TableCell className="text-right font-mono tabular-nums">{formatMoney(t.days1to30)}</TableCell>
+                <TableCell className="text-right font-mono tabular-nums">{formatMoney(t.days31to60)}</TableCell>
+                <TableCell className="text-right font-mono tabular-nums">{formatMoney(t.days61to90)}</TableCell>
+                <TableCell className={cn('text-right font-mono tabular-nums', t.days90plus > 0 && 'text-destructive')}>{formatMoney(t.days90plus)}</TableCell>
+                <TableCell className="text-right font-mono tabular-nums">{formatMoney(t.total)}</TableCell>
+              </TableRow>
+            </TableFooter>
+          </Table>
         )}
-      </div>
-    </>
+      </Card>
+    </div>
   );
 }

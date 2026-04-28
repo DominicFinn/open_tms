@@ -1,11 +1,32 @@
 import React, { useState } from 'react';
+import {
+  BarChart3,
+  CreditCard,
+  DollarSign,
+  Download,
+  Receipt,
+  Truck,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { cn } from '@/lib/utils';
 
 interface ExportOption {
   key: string;
   label: string;
   description: string;
-  icon: string;
+  icon: React.ComponentType<{ className?: string }>;
   endpoint: string;
   supportsDateRange: boolean;
   extraParams?: { key: string; label: string; options: { value: string; label: string }[] }[];
@@ -15,51 +36,51 @@ const EXPORTS: ExportOption[] = [
   {
     key: 'invoices',
     label: 'Invoice Register',
-    description: 'All customer invoices with line item detail — totals, payment status, balances',
-    icon: 'receipt',
+    description: 'All customer invoices with line item detail - totals, payment status, balances',
+    icon: Receipt,
     endpoint: '/api/v1/reports/export/invoices',
     supportsDateRange: true,
     extraParams: [{ key: 'status', label: 'Status', options: [
-      { value: '', label: 'All' }, { value: 'draft', label: 'Draft' }, { value: 'sent', label: 'Sent' },
+      { value: 'all', label: 'All' }, { value: 'draft', label: 'Draft' }, { value: 'sent', label: 'Sent' },
       { value: 'paid', label: 'Paid' }, { value: 'overdue', label: 'Overdue' }, { value: 'void', label: 'Void' },
     ]}],
   },
   {
     key: 'carrier-invoices',
     label: 'Carrier Invoice Register',
-    description: 'All carrier invoices with freight audit results — match status, variance, line items',
-    icon: 'local_shipping',
+    description: 'All carrier invoices with freight audit results - match status, variance, line items',
+    icon: Truck,
     endpoint: '/api/v1/reports/export/carrier-invoices',
     supportsDateRange: true,
     extraParams: [{ key: 'status', label: 'Status', options: [
-      { value: '', label: 'All' }, { value: 'received', label: 'Received' }, { value: 'approved', label: 'Approved' },
+      { value: 'all', label: 'All' }, { value: 'received', label: 'Received' }, { value: 'approved', label: 'Approved' },
       { value: 'paid', label: 'Paid' }, { value: 'discrepancy', label: 'Discrepancy' },
     ]}],
   },
   {
     key: 'payments',
     label: 'Payment Ledger',
-    description: 'All customer payments received — date, invoice, amount, method, reference',
-    icon: 'payment',
+    description: 'All customer payments received - date, invoice, amount, method, reference',
+    icon: CreditCard,
     endpoint: '/api/v1/reports/export/payments',
     supportsDateRange: true,
   },
   {
     key: 'charges',
     label: 'Charge Detail',
-    description: 'All revenue and cost charges across shipments — for margin analysis and reconciliation',
-    icon: 'attach_money',
+    description: 'All revenue and cost charges across shipments - for margin analysis and reconciliation',
+    icon: DollarSign,
     endpoint: '/api/v1/reports/export/charges',
     supportsDateRange: true,
     extraParams: [{ key: 'chargeCategory', label: 'Category', options: [
-      { value: '', label: 'All' }, { value: 'revenue', label: 'Revenue' }, { value: 'cost', label: 'Cost' },
+      { value: 'all', label: 'All' }, { value: 'revenue', label: 'Revenue' }, { value: 'cost', label: 'Cost' },
     ]}],
   },
   {
     key: 'ar-aging',
     label: 'AR Aging',
     description: 'Outstanding invoices bucketed by days past due per customer',
-    icon: 'assessment',
+    icon: BarChart3,
     endpoint: '/api/v1/reports/ar-aging/csv',
     supportsDateRange: false,
   },
@@ -82,7 +103,7 @@ export default function VNextFinanceExports() {
     if (exp.extraParams) {
       for (const p of exp.extraParams) {
         const val = extraFilters[`${exp.key}-${p.key}`];
-        if (val) params.set(p.key, val);
+        if (val && val !== 'all') params.set(p.key, val);
       }
     }
     const qs = params.toString();
@@ -90,75 +111,98 @@ export default function VNextFinanceExports() {
   };
 
   return (
-    <>
-      <div className="vn-page-header">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1>Financial Exports</h1>
-          <p>Download CSV files for your accounting system</p>
+          <h1 className="text-3xl font-bold tracking-tight">Financial Exports</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Download CSV files for your accounting system</p>
         </div>
       </div>
 
-      {/* Global date range */}
-      <div className="vn-card" style={{ padding: 20, marginBottom: 24 }}>
-        <h3 style={{ margin: '0 0 12px' }}>Date Range</h3>
-        <div style={{ display: 'flex', gap: 16, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-          <div className="vn-field" style={{ marginBottom: 0 }}>
-            <label className="vn-field-label">From</label>
-            <input className="vn-input" type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
-          </div>
-          <div className="vn-field" style={{ marginBottom: 0 }}>
-            <label className="vn-field-label">To</label>
-            <input className="vn-input" type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} />
-          </div>
-          <div style={{ display: 'flex', gap: 8, paddingBottom: 2 }}>
-            <button className="vn-btn vn-btn-ghost" style={{ padding: '10px 14px' }} onClick={() => {
-              const d = new Date(); d.setDate(d.getDate() - 30);
-              setDateFrom(d.toISOString().slice(0, 10)); setDateTo(today);
-            }}>Last 30 days</button>
-            <button className="vn-btn vn-btn-ghost" style={{ padding: '10px 14px' }} onClick={() => {
-              const d = new Date(); d.setDate(d.getDate() - 90);
-              setDateFrom(d.toISOString().slice(0, 10)); setDateTo(today);
-            }}>Last 90 days</button>
-            <button className="vn-btn vn-btn-ghost" style={{ padding: '10px 14px' }} onClick={() => {
-              setDateFrom(`${new Date().getFullYear()}-01-01`); setDateTo(today);
-            }}>Year to date</button>
-          </div>
-        </div>
-      </div>
-
-      {/* Export cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: 16 }}>
-        {EXPORTS.map(exp => (
-          <div key={exp.key} className="vn-card" style={{ padding: 20, display: 'flex', flexDirection: 'column' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-              <div className="vn-stat-icon primary" style={{ width: 40, height: 40, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <span className="material-icons">{exp.icon}</span>
-              </div>
-              <div>
-                <h3 style={{ margin: 0 }}>{exp.label}</h3>
-              </div>
+      <Card>
+        <CardContent className="p-5">
+          <h3 className="mb-3 text-base font-semibold">Date Range</h3>
+          <div className="flex flex-wrap items-end gap-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="from">From</Label>
+              <Input id="from" type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
             </div>
-            <p style={{ color: 'var(--on-surface-variant)', fontSize: 13, margin: '0 0 16px', flex: 1 }}>{exp.description}</p>
-
-            {exp.extraParams && (
-              <div style={{ marginBottom: 12 }}>
-                {exp.extraParams.map(p => (
-                  <select key={p.key} className="vn-filter-select" style={{ width: '100%', marginBottom: 8 }}
-                    value={extraFilters[`${exp.key}-${p.key}`] || ''}
-                    onChange={e => setExtraFilters(prev => ({ ...prev, [`${exp.key}-${p.key}`]: e.target.value }))}>
-                    {p.options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                  </select>
-                ))}
-              </div>
-            )}
-
-            <button className="vn-btn vn-btn-outline" style={{ width: '100%', justifyContent: 'center' }} onClick={() => download(exp)}>
-              <span className="material-icons">download</span>
-              Download CSV
-            </button>
+            <div className="space-y-1.5">
+              <Label htmlFor="to">To</Label>
+              <Input id="to" type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  const d = new Date(); d.setDate(d.getDate() - 30);
+                  setDateFrom(d.toISOString().slice(0, 10)); setDateTo(today);
+                }}
+              >
+                Last 30 days
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  const d = new Date(); d.setDate(d.getDate() - 90);
+                  setDateFrom(d.toISOString().slice(0, 10)); setDateTo(today);
+                }}
+              >
+                Last 90 days
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setDateFrom(`${new Date().getFullYear()}-01-01`); setDateTo(today);
+                }}
+              >
+                Year to date
+              </Button>
+            </div>
           </div>
-        ))}
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {EXPORTS.map(exp => {
+          const Icon = exp.icon;
+          return (
+            <Card key={exp.key} className="flex flex-col">
+              <CardContent className="flex flex-1 flex-col p-5">
+                <div className="mb-3 flex items-center gap-3">
+                  <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', 'bg-primary/10 text-primary')}>
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <h3 className="text-base font-semibold">{exp.label}</h3>
+                </div>
+                <p className="mb-4 flex-1 text-sm text-muted-foreground">{exp.description}</p>
+
+                {exp.extraParams && (
+                  <div className="mb-3 space-y-2">
+                    {exp.extraParams.map(p => (
+                      <Select
+                        key={p.key}
+                        value={extraFilters[`${exp.key}-${p.key}`] || 'all'}
+                        onValueChange={v => setExtraFilters(prev => ({ ...prev, [`${exp.key}-${p.key}`]: v }))}
+                      >
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {p.options.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    ))}
+                  </div>
+                )}
+
+                <Button variant="outline" className="w-full" onClick={() => download(exp)}>
+                  <Download className="h-4 w-4" />
+                  Download CSV
+                </Button>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
-    </>
+    </div>
   );
 }
