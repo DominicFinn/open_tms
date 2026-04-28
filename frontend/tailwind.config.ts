@@ -2,12 +2,6 @@ import type { Config } from 'tailwindcss';
 import animate from 'tailwindcss-animate';
 
 const config: Config = {
-  // While we coexist with theme.css, disable Tailwind's preflight so it does
-  // not reset existing global styles. Re-enable in phase 12 when theme.css and
-  // vnext.css are deleted.
-  corePlugins: {
-    preflight: false,
-  },
   // Honor the existing data-theme attribute set by ThemeProvider in addition
   // to the shadcn-style .dark class so both can drive the new tokens.
   darkMode: ['class', '[data-theme="dark"]'],

@@ -1,13 +1,109 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import {
+  AlertTriangle,
+  ArrowRight,
+  CheckCircle2,
+  ChevronRight,
+  CircleAlert,
+  Download,
+  ExternalLink,
+  Info,
+  Loader2,
+  Package,
+  Percent,
+  Plus,
+  Truck,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
+import { GradientText } from '@/components/brand/GradientText';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
+
+interface Shipment {
+  id: string;
+  status?: string;
+  referenceNumber?: string;
+  originCity?: string;
+  originState?: string;
+  destinationCity?: string;
+  destinationState?: string;
+}
+
+interface Order {
+  id: string;
+  status?: string;
+}
+
+interface Issue {
+  id: string;
+  title?: string;
+  status?: string;
+  priority?: string;
+  sourceEntityId?: string;
+  createdAt?: string;
+}
+
+interface SlaSummary {
+  active: number;
+  warning: number;
+  breached: number;
+  met: number;
+  total: number;
+}
+
+const STATUS_VARIANT = {
+  delivered: 'success',
+  in_transit: 'info',
+  pickup: 'warning',
+  picked_up: 'warning',
+  booked: 'muted',
+} as const;
+
+const STATUS_LABEL: Record<string, string> = {
+  delivered: 'Delivered',
+  in_transit: 'In transit',
+  pickup: 'Pickup',
+  picked_up: 'Pickup',
+  booked: 'Booked',
+};
+
+function statusToBadge(status?: string) {
+  if (!status) return { label: 'Unknown', variant: 'muted' as const };
+  const variant = (STATUS_VARIANT as Record<string, string>)[status] ?? 'muted';
+  const label = STATUS_LABEL[status] ?? status;
+  return { label, variant: variant as 'success' | 'info' | 'warning' | 'muted' };
+}
+
+function relativeTime(iso?: string): string {
+  if (!iso) return '';
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
+}
 
 export default function VNextDashboard() {
   const navigate = useNavigate();
-  const [shipments, setShipments] = useState<any[]>([]);
-  const [orders, setOrders] = useState<any[]>([]);
-  const [activeIssues, setActiveIssues] = useState<any[]>([]);
-  const [slaSummary, setSlaSummary] = useState<{ active: number; warning: number; breached: number; met: number; total: number } | null>(null);
+  const [shipments, setShipments] = useState<Shipment[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [activeIssues, setActiveIssues] = useState<Issue[]>([]);
+  const [slaSummary, setSlaSummary] = useState<SlaSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -27,22 +123,22 @@ export default function VNextDashboard() {
           setShipments(shipJson.data || []);
           setOrders(ordJson.data || []);
         }
-        // Fetch issues separately — non-critical, so don't block on errors
         fetch(`${API_URL}/api/v1/issues`)
           .then(r => r.json())
           .then(json => {
             if (!cancelled) {
               const issues = (json.data || [])
-                .filter((i: any) => i.status === 'open' || i.status === 'in_progress')
+                .filter((i: Issue) => i.status === 'open' || i.status === 'in_progress')
                 .slice(0, 5);
               setActiveIssues(issues);
             }
           })
           .catch(() => {});
-        // Fetch SLA summary — non-critical
         fetch(`${API_URL}/api/v1/sla/evaluations/summary`)
           .then(r => r.json())
-          .then(json => { if (!cancelled) setSlaSummary(json.data || null); })
+          .then(json => {
+            if (!cancelled) setSlaSummary(json.data || null);
+          })
           .catch(() => {});
       } catch (e: any) {
         if (!cancelled) setError(e.message || 'Failed to load data');
@@ -51,284 +147,265 @@ export default function VNextDashboard() {
       }
     }
     fetchData();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   if (loading) {
     return (
-      <div className="vn-empty">
-        <span className="material-icons" style={{ animation: 'spin 1s linear infinite' }}>refresh</span>
-        <h3>Loading...</h3>
+      <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <h3 className="text-lg font-medium">Loading...</h3>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="vn-empty">
-        <span className="material-icons" style={{ color: 'var(--error)' }}>error</span>
-        <h3>Error</h3>
-        <p>{error}</p>
+      <div className="flex flex-col items-center gap-3 py-24 text-destructive">
+        <CircleAlert className="h-8 w-8" />
+        <h3 className="text-lg font-medium">Error</h3>
+        <p className="text-sm text-muted-foreground">{error}</p>
       </div>
     );
   }
 
-  const activeShipments = shipments.filter((s: any) => s.status !== 'delivered' && s.status !== 'cancelled');
-  const inTransit = shipments.filter((s: any) => s.status === 'in_transit');
-  const delivered = shipments.filter((s: any) => s.status === 'delivered');
-  const pendingOrders = orders.filter((o: any) => o.status === 'pending' || o.status === 'new');
-  const onTimeCount = delivered.length;
-  const totalForRate = delivered.length || 1;
-  const onTimeRate = ((onTimeCount / totalForRate) * 100).toFixed(1);
-
+  const activeShipments = shipments.filter(s => s.status !== 'delivered' && s.status !== 'cancelled');
+  const inTransit = shipments.filter(s => s.status === 'in_transit');
+  const delivered = shipments.filter(s => s.status === 'delivered');
+  const pendingOrders = orders.filter(o => o.status === 'pending' || o.status === 'new');
+  const onTimeRate = (((delivered.length / (delivered.length || 1)) * 100)).toFixed(1);
   const recentShipments = shipments.slice(0, 5);
+  const today = new Date().toLocaleDateString('en-US', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+  });
 
-  const statusToChip = (status: string) => {
-    switch (status) {
-      case 'in_transit': return { label: 'In Transit', color: 'info' };
-      case 'delivered': return { label: 'Delivered', color: 'success' };
-      case 'pickup': case 'picked_up': return { label: 'Pickup', color: 'warning' };
-      case 'booked': return { label: 'Booked', color: 'secondary' };
-      default: return { label: status || 'Unknown', color: 'secondary' };
-    }
+  const stats = [
+    { label: 'Active shipments', value: activeShipments.length, icon: Truck, tone: 'primary', onClick: () => navigate('/shipments') },
+    { label: 'Pending orders', value: pendingOrders.length, icon: Package, tone: 'accent', onClick: () => navigate('/orders') },
+    { label: 'In transit', value: inTransit.length, icon: Truck, tone: 'warning', onClick: () => navigate('/shipments') },
+    { label: 'Delivered', value: delivered.length, icon: CheckCircle2, tone: 'success', onClick: () => navigate('/shipments') },
+    { label: 'On-time delivery', value: `${onTimeRate}%`, icon: Percent, tone: 'success' },
+  ];
+
+  const tones = {
+    primary: 'bg-primary/10 text-primary',
+    accent: 'bg-accent/15 text-accent',
+    success: 'bg-success/15 text-success',
+    warning: 'bg-warning/15 text-warning',
   };
 
-  const today = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-
   return (
-    <>
-      <div className="vn-page-header">
+    <div className="space-y-8">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1>Dashboard</h1>
-          <p>{today}</p>
+          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">{today}</div>
+          <h1 className="mt-2 text-4xl font-bold tracking-tight">
+            <GradientText>Dashboard</GradientText>
+          </h1>
         </div>
-        <div className="vn-page-actions">
-          <button className="vn-btn vn-btn-outline">
-            <span className="material-icons">download</span>
+        <div className="flex gap-2">
+          <Button variant="outline">
+            <Download className="h-4 w-4" />
             Export
-          </button>
-          <button className="vn-btn vn-btn-primary" onClick={() => navigate('/shipments')}>
-            <span className="material-icons">add</span>
-            New Shipment
-          </button>
+          </Button>
+          <Button variant="gradient" onClick={() => navigate('/shipments/create')}>
+            <Plus className="h-4 w-4" />
+            New shipment
+          </Button>
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="vn-stats">
-        <div className="vn-stat" style={{ cursor: 'pointer' }} onClick={() => navigate('/shipments')}>
-          <div className="vn-stat-icon primary">
-            <span className="material-icons">local_shipping</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{activeShipments.length}</div>
-            <div className="vn-stat-label">Active Shipments</div>
-          </div>
-        </div>
-        <div className="vn-stat" style={{ cursor: 'pointer' }} onClick={() => navigate('/orders')}>
-          <div className="vn-stat-icon info">
-            <span className="material-icons">receipt_long</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{pendingOrders.length}</div>
-            <div className="vn-stat-label">Pending Orders</div>
-          </div>
-        </div>
-        <div className="vn-stat" style={{ cursor: 'pointer' }} onClick={() => navigate('/shipments')}>
-          <div className="vn-stat-icon warning">
-            <span className="material-icons">local_shipping</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{inTransit.length}</div>
-            <div className="vn-stat-label">In Transit</div>
-          </div>
-        </div>
-        <div className="vn-stat" style={{ cursor: 'pointer' }} onClick={() => navigate('/shipments')}>
-          <div className="vn-stat-icon success">
-            <span className="material-icons">check_circle</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{delivered.length}</div>
-            <div className="vn-stat-label">Delivered</div>
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon success">
-            <span className="material-icons">percent</span>
-          </div>
-          <div>
-            <div className="vn-stat-value">{onTimeRate}%</div>
-            <div className="vn-stat-label">On-Time Delivery</div>
-          </div>
-        </div>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        {stats.map(stat => {
+          const Icon = stat.icon;
+          const Wrapper = stat.onClick ? 'button' : 'div';
+          return (
+            <Card key={stat.label} asChild={false} className={stat.onClick ? 'cursor-pointer transition-colors hover:border-primary/40' : ''}>
+              <Wrapper
+                {...(stat.onClick ? { type: 'button' as const, onClick: stat.onClick } : {})}
+                className="block w-full text-left"
+              >
+                <CardContent className="p-6">
+                  <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', tones[stat.tone as keyof typeof tones])}>
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <div className="mt-4 text-3xl font-bold tracking-tight">{stat.value}</div>
+                  <div className="mt-1 text-sm text-muted-foreground">{stat.label}</div>
+                </CardContent>
+              </Wrapper>
+            </Card>
+          );
+        })}
       </div>
 
-      {/* Quick Actions Grid */}
-      <div className="vn-grid-2" style={{ marginBottom: 24 }}>
-        {/* Recent Shipments */}
-        <div className="vn-card">
-          <div className="vn-card-header">
-            <h2>Recent Shipments</h2>
-            <button className="vn-btn vn-btn-ghost vn-btn-sm" onClick={() => navigate('/shipments')}>
-              View All
-              <span className="material-icons">arrow_forward</span>
-            </button>
-          </div>
-          <div className="vn-card-body vn-card-flush">
-            <div className="vn-table-wrap">
-              <table className="vn-table">
-                <thead>
-                  <tr>
-                    <th>Shipment</th>
-                    <th>Route</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentShipments.map((s: any) => {
-                    const chip = statusToChip(s.status);
+      <div className="grid gap-6 lg:grid-cols-3">
+        <Card className="lg:col-span-2">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle>Recent shipments</CardTitle>
+              <CardDescription>Latest activity across all lanes.</CardDescription>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => navigate('/shipments')}>
+              View all
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Separator />
+            {recentShipments.length === 0 ? (
+              <div className="px-6 py-12 text-center text-sm text-muted-foreground">
+                No shipments found
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Shipment</TableHead>
+                    <TableHead>Route</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {recentShipments.map(s => {
+                    const badge = statusToBadge(s.status);
                     const origin = s.originCity && s.originState ? `${s.originCity}, ${s.originState}` : s.originCity || 'N/A';
                     const dest = s.destinationCity && s.destinationState ? `${s.destinationCity}, ${s.destinationState}` : s.destinationCity || 'N/A';
                     return (
-                      <tr key={s.id} onClick={() => navigate(`/shipments/${s.id}`)} style={{ cursor: 'pointer' }}>
-                        <td><span className="vn-table-id">{s.referenceNumber || `SHP-${s.id}`}</span></td>
-                        <td>
-                          <div style={{ fontSize: 13 }}>{origin}</div>
-                          <div className="vn-table-secondary">to {dest}</div>
-                        </td>
-                        <td><span className={`vn-chip vn-chip-${chip.color}`}>{chip.label}</span></td>
-                      </tr>
+                      <TableRow
+                        key={s.id}
+                        onClick={() => navigate(`/shipments/${s.id}`)}
+                        className="cursor-pointer"
+                      >
+                        <TableCell className="font-mono text-sm font-semibold">
+                          {s.referenceNumber || `SHP-${s.id}`}
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-sm">{origin}</div>
+                          <div className="text-xs text-muted-foreground">to {dest}</div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={badge.variant}>{badge.label}</Badge>
+                        </TableCell>
+                      </TableRow>
                     );
                   })}
-                  {recentShipments.length === 0 && (
-                    <tr><td colSpan={3} style={{ textAlign: 'center', color: 'var(--on-surface-variant)' }}>No shipments found</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        {/* Recent Issues */}
-        <div className="vn-card">
-          <div className="vn-card-header">
-            <h2>Active Issues</h2>
-            <button className="vn-btn vn-btn-ghost vn-btn-sm" onClick={() => navigate('/issues')}>
-              View Board
-              <span className="material-icons">arrow_forward</span>
-            </button>
-          </div>
-          <div className="vn-card-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {activeIssues.map((issue: any) => {
-              const severityColor = (p: string) => {
-                if (p === 'critical' || p === 'high') return 'error';
-                if (p === 'medium') return 'warning';
-                return 'info';
-              };
-              const chipColor = severityColor(issue.priority);
-              const relativeTime = (() => {
-                if (!issue.createdAt) return '';
-                const diff = Date.now() - new Date(issue.createdAt).getTime();
-                const mins = Math.floor(diff / 60000);
-                if (mins < 60) return `${mins}m ago`;
-                const hrs = Math.floor(mins / 60);
-                if (hrs < 24) return `${hrs}h ago`;
-                const days = Math.floor(hrs / 24);
-                return `${days}d ago`;
-              })();
-              return (
-                <div key={issue.id} style={{
-                  display: 'flex', alignItems: 'center', gap: 12,
-                  padding: '10px 12px',
-                  borderRadius: 'var(--border-radius-sm)',
-                  border: '1px solid var(--outline-variant)',
-                  cursor: 'pointer',
-                }}>
-                  <span className="material-icons" style={{
-                    color: chipColor === 'error' ? 'var(--error)' : chipColor === 'warning' ? 'var(--warning)' : 'var(--info)',
-                    fontSize: 20,
-                  }}>
-                    {chipColor === 'error' ? 'error' : chipColor === 'warning' ? 'warning' : 'info'}
-                  </span>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--on-surface)' }}>{issue.title}</div>
-                    <div style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>{issue.sourceEntityId || 'N/A'} · {relativeTime}</div>
-                  </div>
-                  <span className="material-icons" style={{ fontSize: 18, color: 'var(--on-surface-variant)' }}>chevron_right</span>
-                </div>
-              );
-            })}
-            {activeIssues.length === 0 && (
-              <div style={{ textAlign: 'center', padding: '16px 0', color: 'var(--on-surface-variant)', fontSize: 13 }}>
-                No active issues
-              </div>
+                </TableBody>
+              </Table>
             )}
-          </div>
-        </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle>Active issues</CardTitle>
+              <CardDescription>Open exceptions waiting for review.</CardDescription>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => navigate('/issues')}>
+              View board
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {activeIssues.length === 0 ? (
+              <div className="py-8 text-center text-sm text-muted-foreground">No active issues</div>
+            ) : (
+              activeIssues.map(issue => {
+                const sev = (() => {
+                  if (issue.priority === 'critical' || issue.priority === 'high') return 'destructive';
+                  if (issue.priority === 'medium') return 'warning';
+                  return 'info';
+                })();
+                const tone = {
+                  destructive: 'border-destructive/30 bg-destructive/5 text-destructive',
+                  warning: 'border-warning/30 bg-warning/5 text-warning',
+                  info: 'border-info/30 bg-info/5 text-info',
+                }[sev];
+                const SevIcon = sev === 'destructive' ? AlertTriangle : sev === 'warning' ? AlertTriangle : Info;
+                return (
+                  <button
+                    key={issue.id}
+                    type="button"
+                    onClick={() => navigate(`/issues/${issue.id}`)}
+                    className={cn(
+                      'flex w-full items-center gap-3 rounded-md border p-3 text-left transition-colors',
+                      tone,
+                    )}
+                  >
+                    <SevIcon className="h-4 w-4 shrink-0" />
+                    <div className="flex-1">
+                      <div className="text-sm font-medium text-foreground">{issue.title}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {issue.sourceEntityId || 'N/A'} &middot; {relativeTime(issue.createdAt)}
+                      </div>
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                  </button>
+                );
+              })
+            )}
+          </CardContent>
+        </Card>
       </div>
 
-      {/* SLA Health */}
       {slaSummary && slaSummary.total > 0 && (
-        <div className="vn-card" style={{ cursor: 'pointer' }} onClick={() => navigate('/sla')}>
-          <div className="vn-card-header">
-            <h2>SLA Health</h2>
-            <span className="material-icons" style={{ fontSize: 18, color: 'var(--on-surface-variant)' }}>open_in_new</span>
-          </div>
-          <div className="vn-card-body">
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', textAlign: 'center' }}>
+        <Card className="cursor-pointer transition-colors hover:border-primary/40" onClick={() => navigate('/sla')}>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>SLA health</CardTitle>
+            <ExternalLink className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-4 gap-4 text-center">
               {[
-                { label: 'Active', value: slaSummary.active, color: 'var(--color-info)' },
-                { label: 'Warning', value: slaSummary.warning, color: 'var(--color-warning)' },
-                { label: 'Breached', value: slaSummary.breached, color: 'var(--color-error)' },
-                { label: 'Met', value: slaSummary.met, color: 'var(--color-success)' },
-              ].map((s) => (
+                { label: 'Active', value: slaSummary.active, color: 'text-info' },
+                { label: 'Warning', value: slaSummary.warning, color: 'text-warning' },
+                { label: 'Breached', value: slaSummary.breached, color: 'text-destructive' },
+                { label: 'Met', value: slaSummary.met, color: 'text-success' },
+              ].map(s => (
                 <div key={s.label}>
-                  <div style={{ fontSize: '28px', fontWeight: 700, color: s.color }}>{s.value}</div>
-                  <div style={{ fontSize: '12px', color: 'var(--on-surface-variant)', marginTop: '2px' }}>{s.label}</div>
+                  <div className={cn('text-3xl font-bold tracking-tight', s.color)}>{s.value}</div>
+                  <div className="mt-1 text-xs text-muted-foreground">{s.label}</div>
                 </div>
               ))}
             </div>
             {slaSummary.breached > 0 && (
-              <div className="vn-alert vn-alert-error" style={{ marginTop: '12px', padding: '8px 12px', fontSize: '13px' }}>
-                <span className="material-icons" style={{ fontSize: '16px', verticalAlign: 'middle', marginRight: '4px' }}>warning</span>
-                {slaSummary.breached} SLA{slaSummary.breached > 1 ? 's' : ''} breached — click to view details
+              <div className="mt-4 flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                <AlertTriangle className="h-4 w-4" />
+                {slaSummary.breached} SLA{slaSummary.breached > 1 ? 's' : ''} breached - click to view details
               </div>
             )}
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       )}
 
-      {/* On-time delivery progress */}
-      <div className="vn-card">
-        <div className="vn-card-header">
-          <h2>Delivery Performance — This Week</h2>
-        </div>
-        <div className="vn-card-body">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {(() => {
-              const total = shipments.length || 1;
-              const deliveredCount = delivered.length;
-              const inTransitCount = inTransit.length;
-              const otherCount = total - deliveredCount - inTransitCount;
-              return [
-                { label: 'Delivered', value: parseFloat(((deliveredCount / total) * 100).toFixed(1)), count: deliveredCount, variant: 'success' },
-                { label: 'In Transit', value: parseFloat(((inTransitCount / total) * 100).toFixed(1)), count: inTransitCount, variant: 'warning' },
-                { label: 'Other', value: parseFloat(((otherCount / total) * 100).toFixed(1)), count: otherCount, variant: 'error' },
-              ];
-            })().map(row => (
-              <div key={row.label}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 14 }}>
-                  <span style={{ fontWeight: 500, color: 'var(--on-surface)' }}>{row.label}</span>
-                  <span style={{ color: 'var(--on-surface-variant)' }}>{row.count} shipments ({row.value}%)</span>
-                </div>
-                <div className="vn-progress">
-                  <div className={`vn-progress-bar ${row.variant}`} style={{ width: `${row.value}%` }} />
-                </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Delivery performance - this week</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          {(() => {
+            const total = shipments.length || 1;
+            const otherCount = total - delivered.length - inTransit.length;
+            return [
+              { label: 'Delivered', count: delivered.length, pct: parseFloat(((delivered.length / total) * 100).toFixed(1)), tone: 'bg-success' },
+              { label: 'In transit', count: inTransit.length, pct: parseFloat(((inTransit.length / total) * 100).toFixed(1)), tone: 'bg-warning' },
+              { label: 'Other', count: otherCount, pct: parseFloat(((otherCount / total) * 100).toFixed(1)), tone: 'bg-destructive' },
+            ];
+          })().map(row => (
+            <div key={row.label}>
+              <div className="mb-2 flex items-center justify-between text-sm">
+                <span className="font-medium">{row.label}</span>
+                <span className="text-muted-foreground">{row.count} shipments ({row.pct}%)</span>
               </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </>
+              <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                <div className={cn('h-full rounded-full', row.tone)} style={{ width: `${row.pct}%` }} />
+              </div>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+    </div>
   );
 }

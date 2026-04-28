@@ -1,7 +1,15 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Loader2 } from 'lucide-react';
+
 import { API_URL } from '../api';
 import { useTheme } from '../ThemeProvider';
+import { Logo } from '@/components/brand/Logo';
+import { GradientText } from '@/components/brand/GradientText';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -41,68 +49,83 @@ export default function Login() {
   }
 
   return (
-    <div className="vn-login-shell">
-      <div className="vn-login-card">
-        <div className="vn-login-brand">
-          <div className={`vn-login-logo ${loading ? 'spinning' : ''}`} aria-hidden="true">
+    <div className="relative flex min-h-screen items-center justify-center bg-background bg-shell-gradient px-4 py-12 font-sans text-foreground">
+      <div className="pointer-events-none absolute left-1/2 top-1/2 h-[720px] w-[720px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/15 blur-[120px]" />
+      <Card className="relative w-full max-w-md border-border/50 bg-card/80 backdrop-blur-xl shadow-2xl">
+        <CardHeader className="items-center text-center">
+          <div className="mb-2 flex flex-col items-center gap-4">
             {hasLogo && logoUrl ? (
-              <img src={logoUrl} alt={systemName} />
+              <img src={logoUrl} alt={systemName} className="h-12 w-auto" />
             ) : (
-              <span className="material-icons">hub</span>
+              <Logo size="lg" showWordmark={false} />
             )}
+            <h1 className="text-2xl font-bold tracking-tight">
+              {systemName ? (
+                systemName
+              ) : (
+                <>
+                  Open <GradientText>TMS</GradientText>
+                </>
+              )}
+            </h1>
+            <p className="text-sm text-muted-foreground">Sign in to continue</p>
           </div>
-          <h1 className="vn-login-title">{systemName}</h1>
-          <p className="vn-login-subtitle">Sign in to continue</p>
-        </div>
+        </CardHeader>
+        <CardContent>
+          {error && (
+            <div className="mb-4 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {error}
+            </div>
+          )}
 
-        {error && (
-          <div className="vn-alert vn-alert-error" style={{ marginBottom: 'var(--spacing-2)' }}>
-            {error}
-          </div>
-        )}
+          <form onSubmit={handleSubmit} autoComplete="on" className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="login-email">Email</Label>
+              <Input
+                id="login-email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                autoFocus
+                autoComplete="username"
+                placeholder="you@company.com"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="login-password">Password</Label>
+              <Input
+                id="login-password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                autoComplete="current-password"
+                placeholder="Enter your password"
+              />
+            </div>
+            <Button
+              type="submit"
+              variant="gradient"
+              className="w-full"
+              size="lg"
+              disabled={loading || !email || !password}
+            >
+              {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+              {loading ? 'Signing in...' : 'Sign in'}
+            </Button>
+          </form>
 
-        <form onSubmit={handleSubmit} autoComplete="on">
-          <div className="vn-field" style={{ marginBottom: 'var(--spacing-2)' }}>
-            <label className="vn-field-label" htmlFor="login-email">Email</label>
-            <input
-              id="login-email"
-              className="vn-input"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              autoFocus
-              autoComplete="username"
-              placeholder="you@company.com"
-            />
+          <div className="mt-6 text-center text-sm">
+            <Link
+              to="/forgot-password"
+              className="text-muted-foreground transition-colors hover:text-primary"
+            >
+              Forgot password?
+            </Link>
           </div>
-          <div className="vn-field" style={{ marginBottom: 'var(--spacing-3)' }}>
-            <label className="vn-field-label" htmlFor="login-password">Password</label>
-            <input
-              id="login-password"
-              className="vn-input"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              autoComplete="current-password"
-              placeholder="Enter your password"
-            />
-          </div>
-          <button
-            className="vn-btn vn-btn-primary"
-            type="submit"
-            disabled={loading || !email || !password}
-            style={{ width: '100%' }}
-          >
-            {loading ? 'Signing in...' : 'Sign In'}
-          </button>
-        </form>
-
-        <div className="vn-login-footer">
-          <Link to="/forgot-password" className="vn-link">Forgot password?</Link>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

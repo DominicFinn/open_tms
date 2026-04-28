@@ -204,10 +204,6 @@ import WarehousePackAudit from './warehouse/WarehousePackAudit';
 import WarehouseAppointments from './warehouse/WarehouseAppointments';
 import WarehouseReceive from './warehouse/WarehouseReceive';
 import WarehousePack from './warehouse/WarehousePack';
-import './theme.css';
-// vnext.css stays globally loaded during coexistence: many existing pages
-// still use vn-* classes. Phase 12 deletes the file and removes this import.
-import './vnext-design/vnext.css';
 import './shadcn-tokens.css';
 
 const root = createRoot(document.getElementById('root')!);

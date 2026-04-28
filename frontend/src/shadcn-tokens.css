@@ -1,13 +1,10 @@
 /*
- * shadcn-tokens.css
+ * shadcn-tokens.css - the single CSS layer for the app.
  *
- * Brand-aligned shadcn token block + Tailwind layers. All CSS variables here
- * are prefixed `--shadcn-` to avoid colliding with the legacy theme.css
- * tokens during coexistence. tailwind.config.ts maps `bg-primary`, `text-foreground`,
- * etc. to these prefixed vars.
- *
- * When phase 12 deletes theme.css and vnext.css, drop the prefix and merge
- * with the project's canonical tokens.
+ * Brand tokens map onto shadcn's standard variable names with a `--shadcn-`
+ * prefix (set in tailwind.config.ts colors). Dark is the brand default so
+ * `:root` carries the dark values; explicit light mode comes via
+ * [data-theme='light'].
  */
 
 @tailwind base;
@@ -15,7 +12,50 @@
 @tailwind utilities;
 
 @layer base {
+  /* Dark = brand default */
   :root,
+  [data-theme='dark'],
+  .dark {
+    --shadcn-background: 222 84% 5%;
+    --shadcn-foreground: 210 40% 98%;
+
+    --shadcn-card: 222 47% 11%;
+    --shadcn-card-foreground: 210 40% 98%;
+
+    --shadcn-popover: 222 47% 11%;
+    --shadcn-popover-foreground: 210 40% 98%;
+
+    --shadcn-primary: 217 91% 60%;
+    --shadcn-primary-foreground: 222 84% 5%;
+
+    --shadcn-secondary: 217 33% 17%;
+    --shadcn-secondary-foreground: 210 40% 98%;
+
+    --shadcn-muted: 217 33% 17%;
+    --shadcn-muted-foreground: 215 20% 65%;
+
+    --shadcn-accent: 258 90% 66%;
+    --shadcn-accent-foreground: 0 0% 100%;
+
+    --shadcn-destructive: 0 73% 50%;
+    --shadcn-destructive-foreground: 210 40% 98%;
+
+    --shadcn-success: 142 71% 45%;
+    --shadcn-success-foreground: 0 0% 100%;
+
+    --shadcn-warning: 45 93% 47%;
+    --shadcn-warning-foreground: 222 47% 11%;
+
+    --shadcn-info: 189 94% 43%;
+    --shadcn-info-foreground: 0 0% 100%;
+
+    --shadcn-border: 217 33% 20%;
+    --shadcn-input: 217 33% 20%;
+    --shadcn-ring: 217 91% 60%;
+
+    --shadcn-radius: 0.625rem;
+  }
+
   [data-theme='light'] {
     --shadcn-background: 0 0% 100%;
     --shadcn-foreground: 222 47% 11%;
@@ -53,47 +93,20 @@
     --shadcn-border: 214 32% 91%;
     --shadcn-input: 214 32% 91%;
     --shadcn-ring: 221 83% 53%;
-
-    --shadcn-radius: 0.625rem;
   }
+}
 
-  .dark,
-  [data-theme='dark'] {
-    --shadcn-background: 222 84% 5%;
-    --shadcn-foreground: 210 40% 98%;
-
-    --shadcn-card: 222 47% 11%;
-    --shadcn-card-foreground: 210 40% 98%;
-
-    --shadcn-popover: 222 47% 11%;
-    --shadcn-popover-foreground: 210 40% 98%;
-
-    --shadcn-primary: 217 91% 60%;
-    --shadcn-primary-foreground: 222 84% 5%;
-
-    --shadcn-secondary: 217 33% 17%;
-    --shadcn-secondary-foreground: 210 40% 98%;
-
-    --shadcn-muted: 217 33% 17%;
-    --shadcn-muted-foreground: 215 20% 65%;
-
-    --shadcn-accent: 258 90% 66%;
-    --shadcn-accent-foreground: 0 0% 100%;
-
-    --shadcn-destructive: 0 73% 50%;
-    --shadcn-destructive-foreground: 210 40% 98%;
-
-    --shadcn-success: 142 71% 45%;
-    --shadcn-success-foreground: 0 0% 100%;
-
-    --shadcn-warning: 45 93% 47%;
-    --shadcn-warning-foreground: 222 47% 11%;
-
-    --shadcn-info: 189 94% 43%;
-    --shadcn-info-foreground: 0 0% 100%;
-
-    --shadcn-border: 217 33% 20%;
-    --shadcn-input: 217 33% 20%;
-    --shadcn-ring: 217 91% 60%;
+@layer base {
+  * {
+    border-color: hsl(var(--shadcn-border));
+  }
+  html,
+  body {
+    background-color: hsl(var(--shadcn-background));
+    color: hsl(var(--shadcn-foreground));
+    font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 }
