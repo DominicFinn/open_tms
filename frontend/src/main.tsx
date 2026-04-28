@@ -205,6 +205,7 @@ import WarehouseAppointments from './warehouse/WarehouseAppointments';
 import WarehouseReceive from './warehouse/WarehouseReceive';
 import WarehousePack from './warehouse/WarehousePack';
 import './theme.css';
+import './shadcn-tokens.css';
 
 const root = createRoot(document.getElementById('root')!);
 root.render(
