@@ -186,24 +186,6 @@ import VNextWmsCreateReturn from './vnext-design/VNextWmsCreateReturn';
 import VNextWmsReturnDetail from './vnext-design/VNextWmsReturnDetail';
 import VNextWmsRefundReview from './vnext-design/VNextWmsRefundReview';
 
-// Warehouse App
-import { WarehouseLayout } from './warehouse/warehouse-layout';
-import WarehouseLogin from './warehouse/WarehouseLogin';
-import WarehouseSelectLocation from './warehouse/WarehouseSelectLocation';
-import WarehouseShipments from './warehouse/WarehouseShipments';
-import WarehouseShipmentDetail from './warehouse/WarehouseShipmentDetail';
-import WarehouseArchive from './warehouse/WarehouseArchive';
-import WarehouseCreateShipment from './warehouse/WarehouseCreateShipment';
-import WarehouseSettings from './warehouse/WarehouseSettings';
-import WarehouseTasks from './warehouse/WarehouseTasks';
-import WarehousePickTask from './warehouse/WarehousePickTask';
-import WarehousePutawayTask from './warehouse/WarehousePutawayTask';
-import WarehouseReturnReceive from './warehouse/WarehouseReturnReceive';
-import WarehouseReturnInspect from './warehouse/WarehouseReturnInspect';
-import WarehousePackAudit from './warehouse/WarehousePackAudit';
-import WarehouseAppointments from './warehouse/WarehouseAppointments';
-import WarehouseReceive from './warehouse/WarehouseReceive';
-import WarehousePack from './warehouse/WarehousePack';
 import './shadcn-tokens.css';
 
 const root = createRoot(document.getElementById('root')!);
@@ -250,27 +232,7 @@ root.render(
           <Route path="developer/logs" element={<CustomerIntegrationLogs />} />
         </Route>
 
-        {/* Warehouse App (standalone — outside main layout) */}
-        <Route path="/warehouse/login" element={<WarehouseLogin />} />
-        <Route path="/warehouse/select-location" element={<WarehouseSelectLocation />} />
-        <Route path="/warehouse" element={<WarehouseLayout />}>
-          <Route index element={<WarehouseShipments />} />
-          <Route path="shipments/:id" element={<WarehouseShipmentDetail />} />
-          <Route path="archive" element={<WarehouseArchive />} />
-          <Route path="create" element={<WarehouseCreateShipment />} />
-          <Route path="tasks" element={<WarehouseTasks />} />
-          <Route path="tasks/pick/:id" element={<WarehousePickTask />} />
-          <Route path="tasks/putaway/:id" element={<WarehousePutawayTask />} />
-          <Route path="tasks/return-receive/:id" element={<WarehouseReturnReceive />} />
-          <Route path="tasks/return-inspect/:id" element={<WarehouseReturnInspect />} />
-          <Route path="tasks/pack-audit/:id" element={<WarehousePackAudit />} />
-          <Route path="tasks/receive/:id" element={<WarehouseReceive />} />
-          <Route path="tasks/pack/:id" element={<WarehousePack />} />
-          <Route path="appointments" element={<WarehouseAppointments />} />
-          <Route path="settings" element={<WarehouseSettings />} />
-        </Route>
-
-        {/* Main app (VNext layout) — requires internal user auth */}
+        {/* Main app (VNext layout) - requires internal user auth */}
         <Route path="/" element={<RequireAuth><VNextLayout /></RequireAuth>}>
           {/* Dashboard */}
           <Route index element={<VNextDashboard />} />

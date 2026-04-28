@@ -297,9 +297,6 @@ const APPS: AppDef[] = [
         { to: '/settings/roles', icon: Shield, label: 'Roles & Permissions' },
         { to: '/settings/users', icon: Users, label: 'Users' },
       ]},
-      { title: 'Apps', items: [
-        { to: '/warehouse', icon: WarehouseIcon, label: 'Warehouse App' },
-      ]},
       { title: 'Development', items: [
         { to: '/style-guide', icon: Palette, label: 'Style Guide' },
       ]},
