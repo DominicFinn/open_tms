@@ -1,5 +1,42 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  CheckCircle2,
+  CircleAlert,
+  FileText,
+  Grid3x3,
+  List as ListIcon,
+  Loader2,
+  Mail,
+  Plus,
+  Search,
+  SearchX,
+  Truck,
+  Users,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 
 interface Customer {
   id: string;
@@ -9,13 +46,8 @@ interface Customer {
   _count?: { shipments: number; orders: number };
 }
 
-function formatCurrency(val: number) {
-  if (val >= 1000000) return `$${(val / 1000000).toFixed(1)}M`;
-  if (val >= 1000) return `$${(val / 1000).toFixed(0)}K`;
-  return `$${val}`;
-}
-
 export default function VNextCustomers() {
+  const navigate = useNavigate();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -58,208 +90,199 @@ export default function VNextCustomers() {
 
   if (loading) {
     return (
-      <div className="vn-empty">
-        <span className="material-icons" style={{ animation: 'spin 1s linear infinite' }}>refresh</span>
-        <h3>Loading...</h3>
+      <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <h3 className="text-lg font-medium">Loading...</h3>
       </div>
     );
   }
 
   if (error) {
-    return <div className="vn-alert vn-alert-error">{error}</div>;
+    return (
+      <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+        <CircleAlert className="h-5 w-5" />
+        {error}
+      </div>
+    );
   }
 
+  const statTiles = [
+    { label: 'Total customers', value: stats.total, icon: Users, tone: 'bg-primary/10 text-primary' },
+    { label: 'Active', value: stats.active, icon: CheckCircle2, tone: 'bg-success/15 text-success' },
+    { label: 'Total shipments', value: stats.totalShipments, icon: Truck, tone: 'bg-info/15 text-info' },
+    { label: 'Total orders', value: stats.totalOrders, icon: FileText, tone: 'bg-warning/15 text-warning' },
+  ];
+
   return (
-    <>
-      <div className="vn-page-header">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1>Customers</h1>
-          <p>{customers.length} customers in your account</p>
+          <h1 className="text-3xl font-bold tracking-tight">Customers</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {customers.length} customers in your account
+          </p>
         </div>
-        <div className="vn-page-actions">
-          <button className="vn-btn vn-btn-primary">
-            <span className="material-icons">add</span>
-            New Customer
-          </button>
-        </div>
+        <Button variant="gradient" onClick={() => navigate('/customers/create')}>
+          <Plus className="h-4 w-4" />
+          New customer
+        </Button>
       </div>
 
-      {/* Stats */}
-      <div className="vn-stats">
-        <div className="vn-stat">
-          <div className="vn-stat-icon primary"><span className="material-icons">people</span></div>
-          <div>
-            <div className="vn-stat-value">{stats.total}</div>
-            <div className="vn-stat-label">Total Customers</div>
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon success"><span className="material-icons">check_circle</span></div>
-          <div>
-            <div className="vn-stat-value">{stats.active}</div>
-            <div className="vn-stat-label">Active</div>
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon info"><span className="material-icons">local_shipping</span></div>
-          <div>
-            <div className="vn-stat-value">{stats.totalShipments}</div>
-            <div className="vn-stat-label">Total Shipments</div>
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon warning"><span className="material-icons">receipt_long</span></div>
-          <div>
-            <div className="vn-stat-value">{stats.totalOrders}</div>
-            <div className="vn-stat-label">Total Orders</div>
-          </div>
-        </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {statTiles.map(stat => {
+          const Icon = stat.icon;
+          return (
+            <Card key={stat.label}>
+              <div className="p-5">
+                <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', stat.tone)}>
+                  <Icon className="h-5 w-5" />
+                </div>
+                <div className="mt-3 text-2xl font-bold tracking-tight">{stat.value}</div>
+                <div className="mt-1 text-sm text-muted-foreground">{stat.label}</div>
+              </div>
+            </Card>
+          );
+        })}
       </div>
 
-      {/* Filters */}
-      <div className="vn-card">
-        <div className="vn-filters">
-          <div className="vn-filter-group" style={{ flex: 1 }}>
-            <span className="material-icons">search</span>
-            <input
-              className="vn-filter-input"
+      <Card>
+        <div className="flex flex-wrap items-center gap-3 p-4">
+          <div className="relative min-w-[280px] flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
               placeholder="Search by name, contact, or email..."
               value={search}
               onChange={e => setSearch(e.target.value)}
-              style={{ width: '100%' }}
+              className="pl-9"
             />
           </div>
-          <select className="vn-filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-            <option value="all">All Statuses ({stats.total})</option>
-            <option value="active">Active ({stats.active})</option>
-            <option value="inactive">Inactive ({customers.filter(c => c.archived).length})</option>
-          </select>
-          <div style={{ display: 'flex', border: '1px solid var(--outline-variant)', borderRadius: 'var(--border-radius-sm)', overflow: 'hidden' }}>
-            <button
-              className="vn-btn-icon"
-              style={{ borderRadius: 0, background: viewMode === 'cards' ? 'var(--surface-container)' : 'transparent' }}
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-[200px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All statuses ({stats.total})</SelectItem>
+              <SelectItem value="active">Active ({stats.active})</SelectItem>
+              <SelectItem value="inactive">Inactive ({customers.filter(c => c.archived).length})</SelectItem>
+            </SelectContent>
+          </Select>
+          <div className="ml-auto inline-flex rounded-md border border-input">
+            <Button
+              variant={viewMode === 'cards' ? 'secondary' : 'ghost'}
+              size="icon"
+              className="rounded-r-none"
               onClick={() => setViewMode('cards')}
             >
-              <span className="material-icons" style={{ fontSize: 20 }}>grid_view</span>
-            </button>
-            <button
-              className="vn-btn-icon"
-              style={{ borderRadius: 0, background: viewMode === 'table' ? 'var(--surface-container)' : 'transparent' }}
+              <Grid3x3 className="h-4 w-4" />
+            </Button>
+            <Separator orientation="vertical" />
+            <Button
+              variant={viewMode === 'table' ? 'secondary' : 'ghost'}
+              size="icon"
+              className="rounded-l-none"
               onClick={() => setViewMode('table')}
             >
-              <span className="material-icons" style={{ fontSize: 20 }}>view_list</span>
-            </button>
+              <ListIcon className="h-4 w-4" />
+            </Button>
           </div>
         </div>
-      </div>
+      </Card>
 
-      {/* Card View */}
-      {viewMode === 'cards' && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))', gap: 16, marginTop: 16 }}>
+      {viewMode === 'cards' ? (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map(c => (
-            <div key={c.id} className="vn-card" style={{ cursor: 'pointer' }}>
-              <div className="vn-card-body">
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 14 }}>
-                  <div style={{
-                    width: 48, height: 48, borderRadius: 12, background: 'var(--primary)', color: 'var(--on-primary)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                    fontSize: 20, fontWeight: 700,
-                  }}>
-                    {c.name.charAt(0)}
+            <Card key={c.id} className="cursor-pointer transition-colors hover:border-primary/40">
+              <div className="p-5">
+                <div className="mb-4 flex items-start gap-3">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-brand-gradient text-base font-bold text-white">
+                    {c.name.charAt(0).toUpperCase()}
                   </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <span style={{ fontSize: 16, fontWeight: 600, color: 'var(--on-surface)' }}>{c.name}</span>
-                      <span className={`vn-chip vn-chip-${c.archived ? 'error' : 'success'}`}>{c.archived ? 'Inactive' : 'Active'}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="truncate text-base font-semibold">{c.name}</span>
+                      <Badge variant={c.archived ? 'destructive' : 'success'}>
+                        {c.archived ? 'Inactive' : 'Active'}
+                      </Badge>
                     </div>
-                    <div style={{ fontSize: 13, color: 'var(--on-surface-variant)', marginTop: 2 }}>
-                      <span className="material-icons" style={{ fontSize: 14, verticalAlign: 'text-bottom', marginRight: 4 }}>mail</span>
-                      {c.contactEmail || '—'}
+                    <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                      <Mail className="h-3.5 w-3.5" />
+                      {c.contactEmail || '-'}
                     </div>
                   </div>
                 </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, paddingTop: 14, borderTop: '1px solid var(--outline-variant)' }}>
+                <div className="grid grid-cols-2 gap-3 border-t border-border pt-3">
                   <div>
-                    <div style={{ fontSize: 12, color: 'var(--on-surface-variant)', marginBottom: 2 }}>Shipments</div>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--on-surface)' }}>{c._count?.shipments ?? 0}</div>
+                    <div className="text-xs text-muted-foreground">Shipments</div>
+                    <div className="text-sm font-semibold">{c._count?.shipments ?? 0}</div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 12, color: 'var(--on-surface-variant)', marginBottom: 2 }}>Orders</div>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--on-surface)' }}>{c._count?.orders ?? 0}</div>
+                    <div className="text-xs text-muted-foreground">Orders</div>
+                    <div className="text-sm font-semibold">{c._count?.orders ?? 0}</div>
                   </div>
                 </div>
               </div>
-            </div>
+            </Card>
           ))}
           {filtered.length === 0 && (
-            <div className="vn-card" style={{ gridColumn: '1 / -1' }}>
-              <div className="vn-empty">
-                <span className="material-icons">search_off</span>
-                <h3>No customers found</h3>
-                <p>Try adjusting your search or filters</p>
+            <Card className="col-span-full">
+              <div className="flex flex-col items-center gap-3 py-12 text-muted-foreground">
+                <SearchX className="h-8 w-8" />
+                <h3 className="text-base font-medium">No customers found</h3>
+                <p className="text-sm">Try adjusting your search or filters</p>
               </div>
-            </div>
+            </Card>
           )}
         </div>
-      )}
-
-      {/* Table View */}
-      {viewMode === 'table' && (
-        <div className="vn-card" style={{ marginTop: 16 }}>
-          <div className="vn-table-wrap">
-            <table className="vn-table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Email</th>
-                  <th>Shipments</th>
-                  <th>Orders</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map(c => (
-                  <tr key={c.id}>
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <div style={{
-                          width: 36, height: 36, borderRadius: 10, background: 'var(--primary)', color: 'var(--on-primary)',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                          fontSize: 15, fontWeight: 700,
-                        }}>
-                          {c.name.charAt(0)}
-                        </div>
-                        <div>
-                          <span style={{ fontWeight: 600, color: 'var(--on-surface)' }}>{c.name}</span>
-                          <div className="vn-table-secondary">{c.id}</div>
-                        </div>
+      ) : (
+        <Card>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Shipments</TableHead>
+                <TableHead>Orders</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filtered.map(c => (
+                <TableRow key={c.id}>
+                  <TableCell>
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-gradient text-sm font-bold text-white">
+                        {c.name.charAt(0).toUpperCase()}
                       </div>
-                    </td>
-                    <td>
-                      <div className="vn-table-secondary">{c.contactEmail || '—'}</div>
-                    </td>
-                    <td style={{ fontSize: 13, fontWeight: 600 }}>{c._count?.shipments ?? 0}</td>
-                    <td style={{ fontSize: 13, fontWeight: 600, color: 'var(--primary)' }}>{c._count?.orders ?? 0}</td>
-                    <td><span className={`vn-chip vn-chip-${c.archived ? 'error' : 'success'}`}>{c.archived ? 'Inactive' : 'Active'}</span></td>
-                  </tr>
-                ))}
-                {filtered.length === 0 && (
-                  <tr>
-                    <td colSpan={5}>
-                      <div className="vn-empty">
-                        <span className="material-icons">search_off</span>
-                        <h3>No customers found</h3>
-                        <p>Try adjusting your search or filters</p>
+                      <div>
+                        <div className="font-semibold">{c.name}</div>
+                        <div className="text-xs text-muted-foreground">{c.id}</div>
                       </div>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{c.contactEmail || '-'}</TableCell>
+                  <TableCell className="text-sm font-semibold">{c._count?.shipments ?? 0}</TableCell>
+                  <TableCell className="text-sm font-semibold text-primary">{c._count?.orders ?? 0}</TableCell>
+                  <TableCell>
+                    <Badge variant={c.archived ? 'destructive' : 'success'}>
+                      {c.archived ? 'Inactive' : 'Active'}
+                    </Badge>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {filtered.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={5}>
+                    <div className="flex flex-col items-center gap-3 py-12 text-muted-foreground">
+                      <SearchX className="h-8 w-8" />
+                      <h3 className="text-base font-medium">No customers found</h3>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </Card>
       )}
-    </>
+    </div>
   );
 }

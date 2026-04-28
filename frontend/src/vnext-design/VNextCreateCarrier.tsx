@@ -1,6 +1,39 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import {
+  ArrowLeft,
+  Building2,
+  ChevronRight,
+  CircleAlert,
+  CreditCard,
+  Loader2,
+  MapPin,
+  Save,
+  ShieldCheck,
+  Truck,
+  User,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+
+const EQUIPMENT_TYPES = [
+  { key: 'dryVan', label: 'Dry van' },
+  { key: 'reefer', label: 'Reefer' },
+  { key: 'flatbed', label: 'Flatbed' },
+  { key: 'tanker', label: 'Tanker' },
+  { key: 'intermodal', label: 'Intermodal' },
+];
 
 export default function VNextCreateCarrier() {
   const { id } = useParams();
@@ -20,11 +53,7 @@ export default function VNextCreateCarrier() {
   const [postalCode, setPostalCode] = useState('');
   const [country, setCountry] = useState('US');
   const [equipment, setEquipment] = useState<Record<string, boolean>>({
-    dryVan: false,
-    reefer: false,
-    flatbed: false,
-    tanker: false,
-    intermodal: false,
+    dryVan: false, reefer: false, flatbed: false, tanker: false, intermodal: false,
   });
   const [serviceMode, setServiceMode] = useState('FTL');
   const [insuranceAmount, setInsuranceAmount] = useState('');
@@ -40,7 +69,10 @@ export default function VNextCreateCarrier() {
     if (!id) return;
     setLoading(true);
     fetch(`${API_URL}/api/v1/carriers/${id}`)
-      .then(r => { if (!r.ok) throw new Error('Failed to load'); return r.json(); })
+      .then(r => {
+        if (!r.ok) throw new Error('Failed to load');
+        return r.json();
+      })
       .then(json => {
         const c = json.data;
         if (!c) return;
@@ -90,211 +122,247 @@ export default function VNextCreateCarrier() {
     }
   };
 
-  if (loading) return <div className="loading-spinner" style={{ margin: '2rem auto' }} />;
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
 
-  const toggleEquipment = (key: string) => {
-    setEquipment(prev => ({ ...prev, [key]: !prev[key] }));
-  };
+  const toggleEquipment = (key: string) => setEquipment(prev => ({ ...prev, [key]: !prev[key] }));
 
   return (
-    <>
-      <div className="vn-page-header">
-        <div>
-          <div style={{ fontSize: 13, color: 'var(--on-surface-variant)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
-            <Link to="/carriers" style={{ color: 'var(--primary)', textDecoration: 'none' }}>Carriers</Link>
-            <span className="material-icons" style={{ fontSize: 16 }}>chevron_right</span>
-            <span>{isEdit ? 'Edit Carrier' : 'New Carrier'}</span>
+    <div className="space-y-6">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Link to="/carriers" className="hover:text-foreground">
+          <ArrowLeft className="inline h-4 w-4" /> Carriers
+        </Link>
+        <ChevronRight className="h-3 w-3" />
+        <span>{isEdit ? 'Edit carrier' : 'New carrier'}</span>
+      </div>
+
+      <h1 className="text-3xl font-bold tracking-tight">{isEdit ? 'Edit carrier' : 'New carrier'}</h1>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Building2 className="h-4 w-4 text-primary" />
+            Company information
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-3">
+          <div className="space-y-2 md:col-span-3">
+            <Label>Name</Label>
+            <Input type="text" placeholder="Carrier name" value={name} onChange={e => setName(e.target.value)} />
           </div>
-          <h1>{isEdit ? 'Edit Carrier' : 'New Carrier'}</h1>
+          <div className="space-y-2">
+            <Label>MC number</Label>
+            <Input type="text" placeholder="MC-000000" value={mcNumber} onChange={e => setMcNumber(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>DOT number</Label>
+            <Input type="text" placeholder="0000000" value={dotNumber} onChange={e => setDotNumber(e.target.value)} />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <User className="h-4 w-4 text-primary" />
+            Contact
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-3">
+          <div className="space-y-2">
+            <Label>Contact name</Label>
+            <Input type="text" placeholder="Full name" value={contactName} onChange={e => setContactName(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>Email</Label>
+            <Input type="email" placeholder="email@example.com" value={email} onChange={e => setEmail(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>Phone</Label>
+            <Input type="tel" placeholder="(555) 000-0000" value={phone} onChange={e => setPhone(e.target.value)} />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <MapPin className="h-4 w-4 text-primary" />
+            Address
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2 md:col-span-2">
+            <Label>Address 1</Label>
+            <Input type="text" placeholder="Street address" value={address1} onChange={e => setAddress1(e.target.value)} />
+          </div>
+          <div className="space-y-2 md:col-span-2">
+            <Label>Address 2</Label>
+            <Input type="text" placeholder="Suite, unit, etc." value={address2} onChange={e => setAddress2(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>City</Label>
+            <Input type="text" placeholder="City" value={city} onChange={e => setCity(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>State</Label>
+            <Input type="text" placeholder="State / Province" value={state} onChange={e => setState(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>Postal code</Label>
+            <Input type="text" placeholder="00000" value={postalCode} onChange={e => setPostalCode(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>Country</Label>
+            <Select value={country} onValueChange={setCountry}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="US">United States</SelectItem>
+                <SelectItem value="CA">Canada</SelectItem>
+                <SelectItem value="MX">Mexico</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Truck className="h-4 w-4 text-primary" />
+            Equipment &amp; capabilities
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <Label>Equipment types</Label>
+            <div className="mt-2 flex flex-wrap gap-4">
+              {EQUIPMENT_TYPES.map(eq => (
+                <label key={eq.key} className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={equipment[eq.key]}
+                    onChange={() => toggleEquipment(eq.key)}
+                    className="h-4 w-4 rounded border border-input bg-background accent-primary"
+                  />
+                  {eq.label}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div>
+            <Label>Service mode</Label>
+            <div className="mt-2 flex gap-4">
+              {['FTL', 'LTL', 'Both'].map(mode => (
+                <label key={mode} className="flex items-center gap-2 text-sm">
+                  <input
+                    type="radio"
+                    name="serviceMode"
+                    value={mode}
+                    checked={serviceMode === mode}
+                    onChange={e => setServiceMode(e.target.value)}
+                    className="h-4 w-4 border border-input bg-background accent-primary"
+                  />
+                  {mode}
+                </label>
+              ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <CreditCard className="h-4 w-4 text-primary" />
+            Payment terms
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label>Payment terms (days)</Label>
+            <Select value={paymentTermsDays} onValueChange={setPaymentTermsDays}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="15">Net 15</SelectItem>
+                <SelectItem value="30">Net 30</SelectItem>
+                <SelectItem value="45">Net 45</SelectItem>
+                <SelectItem value="60">Net 60</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Currency</Label>
+            <Select value={carrierCurrency} onValueChange={setCarrierCurrency}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="USD">USD</SelectItem>
+                <SelectItem value="EUR">EUR</SelectItem>
+                <SelectItem value="GBP">GBP</SelectItem>
+                <SelectItem value="CAD">CAD</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-primary" />
+            Insurance
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label>Insurance amount</Label>
+            <Input type="number" placeholder="1000000" value={insuranceAmount} onChange={e => setInsuranceAmount(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>Expiry date</Label>
+            <Input type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)} />
+          </div>
+          <div className="space-y-2 md:col-span-2">
+            <Label>Notes</Label>
+            <textarea
+              rows={3}
+              placeholder="Additional insurance notes..."
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+              className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {submitError && (
+        <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+          <CircleAlert className="h-5 w-5" />
+          {submitError}
         </div>
+      )}
+
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <Button variant="outline" asChild>
+          <Link to="/carriers">Cancel</Link>
+        </Button>
+        <Button variant="gradient" onClick={handleSubmit} disabled={submitting}>
+          <Save className="h-4 w-4" />
+          {submitting ? 'Saving...' : isEdit ? 'Update carrier' : 'Save carrier'}
+        </Button>
       </div>
-
-      <div className="vn-card">
-        <div className="vn-card-body" style={{ padding: 0 }}>
-
-          {/* Company Information */}
-          <div className="vn-form-section">
-            <div className="vn-form-section-title">
-              <span className="material-icons">business</span>
-              Company Information
-            </div>
-            <div className="vn-form-grid">
-              <div className="vn-field">
-                <label className="vn-field-label">Name</label>
-                <input className="vn-input" type="text" placeholder="Carrier name" value={name} onChange={e => setName(e.target.value)} />
-              </div>
-              <div className="vn-field">
-                <label className="vn-field-label">MC Number</label>
-                <input className="vn-input" type="text" placeholder="MC-000000" value={mcNumber} onChange={e => setMcNumber(e.target.value)} />
-              </div>
-              <div className="vn-field">
-                <label className="vn-field-label">DOT Number</label>
-                <input className="vn-input" type="text" placeholder="0000000" value={dotNumber} onChange={e => setDotNumber(e.target.value)} />
-              </div>
-            </div>
-          </div>
-
-          {/* Contact */}
-          <div className="vn-form-section">
-            <div className="vn-form-section-title">
-              <span className="material-icons">person</span>
-              Contact
-            </div>
-            <div className="vn-form-grid">
-              <div className="vn-field">
-                <label className="vn-field-label">Contact Name</label>
-                <input className="vn-input" type="text" placeholder="Full name" value={contactName} onChange={e => setContactName(e.target.value)} />
-              </div>
-              <div className="vn-field">
-                <label className="vn-field-label">Email</label>
-                <input className="vn-input" type="email" placeholder="email@example.com" value={email} onChange={e => setEmail(e.target.value)} />
-              </div>
-              <div className="vn-field">
-                <label className="vn-field-label">Phone</label>
-                <input className="vn-input" type="tel" placeholder="(555) 000-0000" value={phone} onChange={e => setPhone(e.target.value)} />
-              </div>
-            </div>
-          </div>
-
-          {/* Address */}
-          <div className="vn-form-section">
-            <div className="vn-form-section-title">
-              <span className="material-icons">location_on</span>
-              Address
-            </div>
-            <div className="vn-form-grid">
-              <div className="vn-field vn-col-span-2">
-                <label className="vn-field-label">Address 1</label>
-                <input className="vn-input" type="text" placeholder="Street address" value={address1} onChange={e => setAddress1(e.target.value)} />
-              </div>
-              <div className="vn-field vn-col-span-2">
-                <label className="vn-field-label">Address 2</label>
-                <input className="vn-input" type="text" placeholder="Suite, unit, etc." value={address2} onChange={e => setAddress2(e.target.value)} />
-              </div>
-              <div className="vn-field">
-                <label className="vn-field-label">City</label>
-                <input className="vn-input" type="text" placeholder="City" value={city} onChange={e => setCity(e.target.value)} />
-              </div>
-              <div className="vn-field">
-                <label className="vn-field-label">State</label>
-                <input className="vn-input" type="text" placeholder="State / Province" value={state} onChange={e => setState(e.target.value)} />
-              </div>
-              <div className="vn-field">
-                <label className="vn-field-label">Postal Code</label>
-                <input className="vn-input" type="text" placeholder="00000" value={postalCode} onChange={e => setPostalCode(e.target.value)} />
-              </div>
-              <div className="vn-field">
-                <label className="vn-field-label">Country</label>
-                <select className="vn-select" value={country} onChange={e => setCountry(e.target.value)}>
-                  <option value="US">United States</option>
-                  <option value="CA">Canada</option>
-                  <option value="MX">Mexico</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {/* Equipment & Capabilities */}
-          <div className="vn-form-section">
-            <div className="vn-form-section-title">
-              <span className="material-icons">local_shipping</span>
-              Equipment &amp; Capabilities
-            </div>
-            <div className="vn-form-grid">
-              <div className="vn-field vn-col-span-2">
-                <label className="vn-field-label">Equipment Types</label>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginTop: 4 }}>
-                  {[
-                    { key: 'dryVan', label: 'Dry Van' },
-                    { key: 'reefer', label: 'Reefer' },
-                    { key: 'flatbed', label: 'Flatbed' },
-                    { key: 'tanker', label: 'Tanker' },
-                    { key: 'intermodal', label: 'Intermodal' },
-                  ].map(eq => (
-                    <label key={eq.key} className="vn-checkbox">
-                      <input type="checkbox" checked={equipment[eq.key]} onChange={() => toggleEquipment(eq.key)} />
-                      <span>{eq.label}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-              <div className="vn-field vn-col-span-2">
-                <label className="vn-field-label">Service Mode</label>
-                <div style={{ display: 'flex', gap: 16, marginTop: 4 }}>
-                  {['FTL', 'LTL', 'Both'].map(mode => (
-                    <label key={mode} className="vn-radio">
-                      <input type="radio" name="serviceMode" value={mode} checked={serviceMode === mode} onChange={e => setServiceMode(e.target.value)} />
-                      <span>{mode}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Payment Terms */}
-          <div className="vn-form-section">
-            <div className="vn-form-section-title">
-              <span className="material-icons">payments</span>
-              Payment Terms
-            </div>
-            <div className="vn-form-grid">
-              <div className="vn-field">
-                <label className="vn-field-label">Payment Terms (days)</label>
-                <select className="vn-select" value={paymentTermsDays} onChange={e => setPaymentTermsDays(e.target.value)}>
-                  <option value="15">Net 15</option>
-                  <option value="30">Net 30</option>
-                  <option value="45">Net 45</option>
-                  <option value="60">Net 60</option>
-                </select>
-              </div>
-              <div className="vn-field">
-                <label className="vn-field-label">Currency</label>
-                <select className="vn-select" value={carrierCurrency} onChange={e => setCarrierCurrency(e.target.value)}>
-                  <option value="USD">USD</option>
-                  <option value="EUR">EUR</option>
-                  <option value="GBP">GBP</option>
-                  <option value="CAD">CAD</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {/* Insurance */}
-          <div className="vn-form-section">
-            <div className="vn-form-section-title">
-              <span className="material-icons">verified_user</span>
-              Insurance
-            </div>
-            <div className="vn-form-grid">
-              <div className="vn-field">
-                <label className="vn-field-label">Insurance Amount</label>
-                <input className="vn-input" type="number" placeholder="1000000" value={insuranceAmount} onChange={e => setInsuranceAmount(e.target.value)} />
-              </div>
-              <div className="vn-field">
-                <label className="vn-field-label">Expiry Date</label>
-                <input className="vn-input" type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)} />
-              </div>
-              <div className="vn-field vn-col-span-2">
-                <label className="vn-field-label">Notes</label>
-                <textarea className="vn-textarea" rows={3} placeholder="Additional insurance notes..." value={notes} onChange={e => setNotes(e.target.value)} />
-              </div>
-            </div>
-          </div>
-
-        </div>
-      </div>
-
-      {submitError && <div className="vn-alert vn-alert-error" style={{ marginBottom: 16 }}>{submitError}</div>}
-
-      {/* Form Actions */}
-      <div className="vn-form-actions">
-        <Link to="/carriers" className="vn-btn vn-btn-outline">Cancel</Link>
-        <button className="vn-btn vn-btn-primary" onClick={handleSubmit} disabled={submitting}>
-          <span className="material-icons">save</span>
-          {submitting ? 'Saving...' : isEdit ? 'Update Carrier' : 'Save Carrier'}
-        </button>
-      </div>
-    </>
+    </div>
   );
 }

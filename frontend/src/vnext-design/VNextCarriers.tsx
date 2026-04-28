@@ -1,6 +1,35 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import {
+  CheckCircle2,
+  CircleAlert,
+  Clock,
+  Grid3x3,
+  List as ListIcon,
+  Loader2,
+  MapPin,
+  Pencil,
+  Plus,
+  Search,
+  Star,
+  Truck,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 
 interface Carrier {
   id: string;
@@ -19,12 +48,13 @@ interface Carrier {
   insuranceDocReceived?: boolean;
 }
 
-function carrierStatus(c: Carrier): { label: string; color: string } {
-  if (c.archived) return { label: 'Inactive', color: 'error' };
-  if (c.validationTier === 'probation') return { label: 'Probation', color: 'warning' };
-  return { label: 'Active', color: 'success' };
-}
+type StatusVariant = 'success' | 'warning' | 'destructive';
 
+function carrierStatus(c: Carrier): { label: string; variant: StatusVariant } {
+  if (c.archived) return { label: 'Inactive', variant: 'destructive' };
+  if (c.validationTier === 'probation') return { label: 'Probation', variant: 'warning' };
+  return { label: 'Active', variant: 'success' };
+}
 
 export default function VNextCarriers() {
   const navigate = useNavigate();
@@ -53,220 +83,261 @@ export default function VNextCarriers() {
         if (!cancelled) setLoading(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const filtered = carriers.filter(c => {
     if (!search) return true;
     const q = search.toLowerCase();
-    return c.name.toLowerCase().includes(q) || (c.mcNumber || '').toLowerCase().includes(q) || (c.contactName || '').toLowerCase().includes(q);
+    return c.name.toLowerCase().includes(q)
+      || (c.mcNumber || '').toLowerCase().includes(q)
+      || (c.contactName || '').toLowerCase().includes(q);
   });
 
   if (loading) {
     return (
-      <div className="vn-empty"><span className="material-icons" style={{animation:'spin 1s linear infinite'}}>refresh</span><h3>Loading...</h3></div>
+      <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <h3 className="text-lg font-medium">Loading...</h3>
+      </div>
     );
   }
 
   if (error) {
     return (
-      <div className="vn-alert vn-alert-error"><span className="material-icons">error</span><div className="vn-alert-content">{error}</div></div>
+      <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+        <CircleAlert className="h-5 w-5" />
+        {error}
+      </div>
     );
   }
 
+  const stats = [
+    { label: 'Active carriers', value: carriers.filter(c => !c.archived).length, icon: CheckCircle2, tone: 'bg-success/15 text-success' },
+    { label: 'Registration verified', value: carriers.filter(c => c.registrationChecked).length, icon: Star, tone: 'bg-info/15 text-info' },
+    { label: 'Insurance on file', value: carriers.filter(c => c.insuranceDocReceived).length, icon: Truck, tone: 'bg-primary/10 text-primary' },
+    { label: 'Archived', value: carriers.filter(c => c.archived).length, icon: Clock, tone: 'bg-warning/15 text-warning' },
+  ];
+
   return (
-    <>
-      <div className="vn-page-header">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1>Carriers</h1>
-          <p>{carriers.length} carriers in your network</p>
+          <h1 className="text-3xl font-bold tracking-tight">Carriers</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {carriers.length} carriers in your network
+          </p>
         </div>
-        <div className="vn-page-actions">
-          <div style={{ display: 'flex', border: '1px solid var(--outline-variant)', borderRadius: 'var(--border-radius-sm)', overflow: 'hidden' }}>
-            <button className="vn-btn-icon" style={{ borderRadius: 0, background: viewMode === 'cards' ? 'var(--surface-container)' : 'transparent' }} onClick={() => setViewMode('cards')}>
-              <span className="material-icons" style={{ fontSize: 20 }}>grid_view</span>
-            </button>
-            <button className="vn-btn-icon" style={{ borderRadius: 0, background: viewMode === 'table' ? 'var(--surface-container)' : 'transparent' }} onClick={() => setViewMode('table')}>
-              <span className="material-icons" style={{ fontSize: 20 }}>view_list</span>
-            </button>
+        <div className="flex items-center gap-2">
+          <div className="inline-flex rounded-md border border-input">
+            <Button
+              variant={viewMode === 'cards' ? 'secondary' : 'ghost'}
+              size="icon"
+              className="rounded-r-none"
+              onClick={() => setViewMode('cards')}
+            >
+              <Grid3x3 className="h-4 w-4" />
+            </Button>
+            <Separator orientation="vertical" />
+            <Button
+              variant={viewMode === 'table' ? 'secondary' : 'ghost'}
+              size="icon"
+              className="rounded-l-none"
+              onClick={() => setViewMode('table')}
+            >
+              <ListIcon className="h-4 w-4" />
+            </Button>
           </div>
-          <button className="vn-btn vn-btn-primary" onClick={() => navigate('/carriers/create')}>
-            <span className="material-icons">add</span>
-            Add Carrier
-          </button>
+          <Button variant="gradient" onClick={() => navigate('/carriers/create')}>
+            <Plus className="h-4 w-4" />
+            Add carrier
+          </Button>
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="vn-stats">
-        <div className="vn-stat">
-          <div className="vn-stat-icon success"><span className="material-icons">check_circle</span></div>
-          <div>
-            <div className="vn-stat-value">{carriers.filter(c => !c.archived).length}</div>
-            <div className="vn-stat-label">Active Carriers</div>
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon info"><span className="material-icons">star</span></div>
-          <div>
-            <div className="vn-stat-value">{carriers.filter(c => c.registrationChecked).length}</div>
-            <div className="vn-stat-label">Registration Verified</div>
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon primary"><span className="material-icons">local_shipping</span></div>
-          <div>
-            <div className="vn-stat-value">{carriers.filter(c => c.insuranceDocReceived).length}</div>
-            <div className="vn-stat-label">Insurance on File</div>
-          </div>
-        </div>
-        <div className="vn-stat">
-          <div className="vn-stat-icon warning"><span className="material-icons">schedule</span></div>
-          <div>
-            <div className="vn-stat-value">{carriers.filter(c => c.archived).length}</div>
-            <div className="vn-stat-label">Archived</div>
-          </div>
-        </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {stats.map(stat => {
+          const Icon = stat.icon;
+          return (
+            <Card key={stat.label}>
+              <div className="p-5">
+                <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', stat.tone)}>
+                  <Icon className="h-5 w-5" />
+                </div>
+                <div className="mt-3 text-2xl font-bold tracking-tight">{stat.value}</div>
+                <div className="mt-1 text-sm text-muted-foreground">{stat.label}</div>
+              </div>
+            </Card>
+          );
+        })}
       </div>
 
-      {/* Filters */}
-      <div className="vn-filters">
-        <div className="vn-filter-group" style={{ flex: 1, minWidth: 240 }}>
-          <span className="material-icons">search</span>
-          <input
-            className="vn-filter-input"
-            placeholder="Search carriers by name, MC#, or contact..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            style={{ width: '100%' }}
-          />
+      <Card>
+        <div className="p-4">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search carriers by name, MC#, or contact..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="pl-9"
+            />
+          </div>
         </div>
-      </div>
+      </Card>
 
       {viewMode === 'cards' ? (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))', gap: 16 }}>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map(c => {
             const st = carrierStatus(c);
+            const isOpen = expandedId === c.id;
             return (
-            <div key={c.id} className="vn-card" style={{ cursor: 'pointer' }} onClick={() => setExpandedId(expandedId === c.id ? null : c.id)}>
-              <div className="vn-card-body">
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 14 }}>
-                  <div style={{
-                    width: 48, height: 48, borderRadius: 12, background: 'var(--primary)', color: 'var(--on-primary)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                  }}>
-                    <span className="material-icons">local_shipping</span>
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <span style={{ fontSize: 16, fontWeight: 600, color: 'var(--on-surface)' }}>{c.name}</span>
-                      <span className={`vn-chip vn-chip-${st.color}`}>{st.label}</span>
+              <Card
+                key={c.id}
+                className="cursor-pointer transition-colors hover:border-primary/40"
+                onClick={() => setExpandedId(isOpen ? null : c.id)}
+              >
+                <div className="p-5">
+                  <div className="mb-4 flex items-start gap-3">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+                      <Truck className="h-5 w-5" />
                     </div>
-                    <div style={{ fontSize: 13, color: 'var(--on-surface-variant)', marginTop: 2 }}>
-                      {c.mcNumber ? `MC# ${c.mcNumber}` : ''}{c.mcNumber && c.dotNumber ? ' · ' : ''}{c.dotNumber ? `DOT# ${c.dotNumber}` : ''}
-                    </div>
-                  </div>
-                </div>
-
-                {c.city && c.state && (
-                  <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 12, fontSize: 13, color: 'var(--on-surface-variant)' }}>
-                    <span className="material-icons" style={{ fontSize: 16 }}>location_on</span>
-                    {c.city}, {c.state}{c.country && c.country !== 'US' ? `, ${c.country}` : ''}
-                  </div>
-                )}
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
-                  <div>
-                    <div style={{ fontSize: 12, color: 'var(--on-surface-variant)', marginBottom: 4 }}>Registration</div>
-                    <span className={`vn-chip vn-chip-${c.registrationChecked ? 'success' : 'secondary'}`}>
-                      {c.registrationChecked ? 'Verified' : 'Pending'}
-                    </span>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 12, color: 'var(--on-surface-variant)', marginBottom: 4 }}>Insurance</div>
-                    <span className={`vn-chip vn-chip-${c.insuranceDocReceived ? 'success' : 'warning'}`}>
-                      {c.insuranceDocReceived ? 'On File' : 'Missing'}
-                    </span>
-                  </div>
-                </div>
-
-                {expandedId === c.id && (
-                  <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--outline-variant)' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
-                      <div className="vn-info-item"><label>Contact</label><span>{c.contactName || '—'}</span></div>
-                      <div className="vn-info-item"><label>Phone</label><span>{c.contactPhone || '—'}</span></div>
-                      <div className="vn-info-item" style={{ gridColumn: '1 / -1' }}><label>Email</label><span style={{ color: 'var(--info)' }}>{c.contactEmail || '—'}</span></div>
-                    </div>
-                    {c.validationTier && (
-                      <div style={{ fontSize: 13, color: 'var(--on-surface-variant)', marginBottom: 12 }}>
-                        Validation Tier: <strong>{c.validationTier}</strong>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="truncate text-base font-semibold">{c.name}</span>
+                        <Badge variant={st.variant}>{st.label}</Badge>
                       </div>
-                    )}
-                    <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                      <button
-                        className="vn-btn vn-btn-primary vn-btn-sm"
-                        onClick={(e) => { e.stopPropagation(); navigate(`/carriers/${c.id}/edit`); }}
-                      >
-                        <span className="material-icons" style={{ fontSize: 16 }}>edit</span>
-                        Open details
-                      </button>
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        {c.mcNumber ? `MC# ${c.mcNumber}` : ''}
+                        {c.mcNumber && c.dotNumber ? ' · ' : ''}
+                        {c.dotNumber ? `DOT# ${c.dotNumber}` : ''}
+                      </div>
                     </div>
                   </div>
-                )}
-              </div>
-            </div>
+
+                  {c.city && c.state && (
+                    <div className="mb-3 flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <MapPin className="h-3.5 w-3.5" />
+                      {c.city}, {c.state}{c.country && c.country !== 'US' ? `, ${c.country}` : ''}
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <div className="mb-1 text-xs text-muted-foreground">Registration</div>
+                      <Badge variant={c.registrationChecked ? 'success' : 'muted'}>
+                        {c.registrationChecked ? 'Verified' : 'Pending'}
+                      </Badge>
+                    </div>
+                    <div>
+                      <div className="mb-1 text-xs text-muted-foreground">Insurance</div>
+                      <Badge variant={c.insuranceDocReceived ? 'success' : 'warning'}>
+                        {c.insuranceDocReceived ? 'On file' : 'Missing'}
+                      </Badge>
+                    </div>
+                  </div>
+
+                  {isOpen && (
+                    <div className="mt-4 border-t border-border pt-4 text-sm">
+                      <dl className="grid grid-cols-2 gap-3">
+                        <div>
+                          <dt className="text-xs text-muted-foreground">Contact</dt>
+                          <dd>{c.contactName || '-'}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-xs text-muted-foreground">Phone</dt>
+                          <dd>{c.contactPhone || '-'}</dd>
+                        </div>
+                        <div className="col-span-2">
+                          <dt className="text-xs text-muted-foreground">Email</dt>
+                          <dd className="text-info">{c.contactEmail || '-'}</dd>
+                        </div>
+                      </dl>
+                      {c.validationTier && (
+                        <div className="mt-3 text-xs text-muted-foreground">
+                          Validation tier: <strong>{c.validationTier}</strong>
+                        </div>
+                      )}
+                      <div className="mt-4 flex justify-end">
+                        <Button
+                          size="sm"
+                          onClick={e => {
+                            e.stopPropagation();
+                            navigate(`/carriers/${c.id}/edit`);
+                          }}
+                        >
+                          <Pencil className="h-4 w-4" />
+                          Open details
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </Card>
             );
           })}
         </div>
       ) : (
-        <div className="vn-card">
-          <div className="vn-table-wrap">
-            <table className="vn-table">
-              <thead>
-                <tr>
-                  <th>Carrier</th>
-                  <th>MC / DOT</th>
-                  <th>Location</th>
-                  <th>Registration</th>
-                  <th>Insurance</th>
-                  <th>Validation</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map(c => {
-                  const st = carrierStatus(c);
-                  return (
-                  <tr key={c.id} onClick={() => navigate(`/carriers/${c.id}/edit`)} style={{ cursor: 'pointer' }}>
-                    <td>
-                      <span style={{ fontWeight: 600, color: 'var(--on-surface)' }}>{c.name}</span>
-                      <div className="vn-table-secondary">{c.contactName || ''}{c.contactPhone ? ` · ${c.contactPhone}` : ''}</div>
-                    </td>
-                    <td>
-                      <div style={{ fontSize: 13 }}>{c.mcNumber ? `MC# ${c.mcNumber}` : '—'}</div>
-                      <div className="vn-table-secondary">{c.dotNumber ? `DOT# ${c.dotNumber}` : ''}</div>
-                    </td>
-                    <td style={{ fontSize: 13 }}>{c.city && c.state ? `${c.city}, ${c.state}` : '—'}</td>
-                    <td>
-                      <span className={`vn-chip vn-chip-${c.registrationChecked ? 'success' : 'secondary'}`}>
+        <Card>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Carrier</TableHead>
+                <TableHead>MC / DOT</TableHead>
+                <TableHead>Location</TableHead>
+                <TableHead>Registration</TableHead>
+                <TableHead>Insurance</TableHead>
+                <TableHead>Validation</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filtered.map(c => {
+                const st = carrierStatus(c);
+                return (
+                  <TableRow
+                    key={c.id}
+                    onClick={() => navigate(`/carriers/${c.id}/edit`)}
+                    className="cursor-pointer"
+                  >
+                    <TableCell>
+                      <div className="font-semibold">{c.name}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {c.contactName || ''}{c.contactPhone ? ` · ${c.contactPhone}` : ''}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-sm">{c.mcNumber ? `MC# ${c.mcNumber}` : '-'}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {c.dotNumber ? `DOT# ${c.dotNumber}` : ''}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {c.city && c.state ? `${c.city}, ${c.state}` : '-'}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={c.registrationChecked ? 'success' : 'muted'}>
                         {c.registrationChecked ? 'Verified' : 'Pending'}
-                      </span>
-                    </td>
-                    <td>
-                      <span className={`vn-chip vn-chip-${c.insuranceDocReceived ? 'success' : 'warning'}`}>
-                        {c.insuranceDocReceived ? 'On File' : 'Missing'}
-                      </span>
-                    </td>
-                    <td style={{ fontSize: 13 }}>{c.validationTier || '—'}</td>
-                    <td><span className={`vn-chip vn-chip-${st.color}`}>{st.label}</span></td>
-                  </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={c.insuranceDocReceived ? 'success' : 'warning'}>
+                        {c.insuranceDocReceived ? 'On file' : 'Missing'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-sm">{c.validationTier || '-'}</TableCell>
+                    <TableCell>
+                      <Badge variant={st.variant}>{st.label}</Badge>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </Card>
       )}
-    </>
+    </div>
   );
 }
