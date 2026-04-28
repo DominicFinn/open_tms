@@ -2,8 +2,47 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import {
+  AlertTriangle,
+  ArrowDown,
+  ArrowUp,
+  CalendarCheck,
+  CheckCircle2,
+  CircleAlert,
+  Download,
+  FilePenLine,
+  List as ListIcon,
+  Loader2,
+  Map as MapIcon,
+  Plus,
+  Search,
+  SearchX,
+  Truck,
+  X,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
-import { VnFilterBar, VnDateRangeFilter } from './components';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 
 interface Shipment {
   id: string;
@@ -32,26 +71,25 @@ interface ShipmentTypeSummary {
 type SortField = 'createdAt' | 'updatedAt' | 'pickupDate' | 'deliveryDate';
 type SortOrder = 'asc' | 'desc';
 
-function statusColor(status: string): string {
+type StatusVariant = 'success' | 'info' | 'warning' | 'destructive' | 'muted';
+
+function statusVariant(status: string): StatusVariant {
   const s = status?.toLowerCase().replace(/[_ ]/g, '');
   if (s === 'intransit') return 'info';
   if (s === 'delivered') return 'success';
   if (s === 'booked' || s === 'atpickup') return 'warning';
-  if (s === 'issue' || s === 'exception') return 'error';
-  if (s === 'draft') return 'secondary';
-  return 'secondary';
+  if (s === 'issue' || s === 'exception') return 'destructive';
+  return 'muted';
 }
 
 function formatDate(d?: string): string {
   if (!d) return '-';
-  const date = new Date(d);
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
 function formatDateTime(d?: string): string {
   if (!d) return '-';
-  const date = new Date(d);
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 function csvEscape(value: unknown): string {
@@ -96,6 +134,22 @@ function exportShipmentsCsv(rows: Shipment[]): void {
   URL.revokeObjectURL(url);
 }
 
+const STAT_TONES = {
+  draft: 'bg-muted text-muted-foreground',
+  transit: 'bg-info/15 text-info',
+  booked: 'bg-primary/10 text-primary',
+  delivered: 'bg-success/15 text-success',
+  issue: 'bg-destructive/10 text-destructive',
+} as const;
+
+const MARKER_COLORS: Record<StatusVariant, string> = {
+  info: '#3b82f6',
+  success: '#22c55e',
+  warning: '#eab308',
+  destructive: '#ef4444',
+  muted: '#94a3b8',
+};
+
 export default function VNextShipments() {
   const navigate = useNavigate();
   const mapRef = useRef<HTMLDivElement>(null);
@@ -120,13 +174,14 @@ export default function VNextShipments() {
       .then(r => r.json())
       .then(j => {
         const map: Record<string, ShipmentTypeSummary> = {};
-        (j.data || []).forEach((t: ShipmentTypeSummary) => { map[t.id] = t; });
+        (j.data || []).forEach((t: ShipmentTypeSummary) => {
+          map[t.id] = t;
+        });
         setShipmentTypes(map);
       })
       .catch(() => {});
   }, []);
 
-  // Fetch shipments from API with server-side date filters and sort
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -153,7 +208,9 @@ export default function VNextShipments() {
         if (!cancelled) setLoading(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [createdFrom, createdTo, updatedFrom, updatedTo, sortBy, sortOrder]);
 
   const statusCounts = useMemo(() => ({
@@ -165,20 +222,22 @@ export default function VNextShipments() {
     issue: shipments.filter(s => ['issue', 'exception'].includes(s.status?.toLowerCase())).length,
   }), [shipments]);
 
-  // Initialize map
   useEffect(() => {
     if (!mapRef.current || mapInstance.current) return;
     const map = L.map(mapRef.current, { zoomControl: true, attributionControl: false }).setView([39.5, -98.5], 4);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
       maxZoom: 19,
     }).addTo(map);
     markersRef.current = L.layerGroup().addTo(map);
     mapInstance.current = map;
     setTimeout(() => map.invalidateSize(), 100);
-    return () => { map.remove(); mapInstance.current = null; markersRef.current = null; };
+    return () => {
+      map.remove();
+      mapInstance.current = null;
+      markersRef.current = null;
+    };
   }, []);
 
-  // Update map markers when shipments change
   useEffect(() => {
     if (!markersRef.current) return;
     markersRef.current.clearLayers();
@@ -186,15 +245,7 @@ export default function VNextShipments() {
       const lat = s.origin?.lat;
       const lng = s.origin?.lng;
       if (lat == null || lng == null) return;
-      const cs = getComputedStyle(document.documentElement);
-      const sc = statusColor(s.status);
-      const colorMap: Record<string, string> = {
-        info: cs.getPropertyValue('--marker-default').trim(),
-        success: cs.getPropertyValue('--marker-origin').trim(),
-        warning: cs.getPropertyValue('--marker-stop').trim(),
-        error: cs.getPropertyValue('--marker-destination').trim(),
-      };
-      const color = colorMap[sc] || cs.getPropertyValue('--outline-variant').trim();
+      const color = MARKER_COLORS[statusVariant(s.status)];
       const icon = L.divIcon({
         className: '',
         html: `<div style="width:14px;height:14px;border-radius:50%;background:${color};border:3px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.3);"></div>`,
@@ -204,11 +255,10 @@ export default function VNextShipments() {
       const originLabel = s.origin ? `${s.origin.city}, ${s.origin.state}` : '';
       const destLabel = s.destination ? `${s.destination.city}, ${s.destination.state}` : '';
       L.marker([lat, lng], { icon }).addTo(markersRef.current!)
-        .bindPopup(`<strong>${s.reference || s.id}</strong><br/>${originLabel} → ${destLabel}<br/><em>${s.status}</em>`);
+        .bindPopup(`<strong>${s.reference || s.id}</strong><br/>${originLabel} -> ${destLabel}<br/><em>${s.status}</em>`);
     });
   }, [shipments]);
 
-  // Resize map when switching to map view
   useEffect(() => {
     if (viewMode === 'map' && mapInstance.current) {
       setTimeout(() => mapInstance.current?.invalidateSize(), 100);
@@ -234,7 +284,7 @@ export default function VNextShipments() {
     return true;
   });
 
-  const hasDateFilters = createdFrom || createdTo || updatedFrom || updatedTo;
+  const hasDateFilters = !!(createdFrom || createdTo || updatedFrom || updatedTo);
   const clearDateFilters = () => {
     setCreatedFrom('');
     setCreatedTo('');
@@ -242,240 +292,272 @@ export default function VNextShipments() {
     setUpdatedTo('');
   };
 
+  const stats = [
+    { key: 'draft', label: 'Draft', value: statusCounts.draft, icon: FilePenLine },
+    { key: 'transit', label: 'In transit', value: statusCounts.transit, icon: Truck },
+    { key: 'booked', label: 'Booked', value: statusCounts.booked, icon: CalendarCheck },
+    { key: 'delivered', label: 'Delivered', value: statusCounts.delivered, icon: CheckCircle2 },
+    { key: 'issue', label: 'Issues', value: statusCounts.issue, icon: AlertTriangle },
+  ] as const;
+
   if (loading) {
     return (
-      <div className="vn-empty"><span className="material-icons" style={{animation:'spin 1s linear infinite'}}>refresh</span><h3>Loading...</h3></div>
+      <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <h3 className="text-lg font-medium">Loading...</h3>
+      </div>
     );
   }
 
   if (error) {
     return (
-      <div className="vn-alert vn-alert-error"><span className="material-icons">error</span><div className="vn-alert-content">{error}</div></div>
+      <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+        <CircleAlert className="h-5 w-5" />
+        {error}
+      </div>
     );
   }
 
   return (
-    <>
-      <div className="vn-page-header">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1>Shipments</h1>
-          <p>{shipments.length} total shipments</p>
+          <h1 className="text-3xl font-bold tracking-tight">Shipments</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{shipments.length} total shipments</p>
         </div>
-        <div className="vn-page-actions">
-          <button className="vn-btn vn-btn-outline" onClick={() => exportShipmentsCsv(filtered)}>
-            <span className="material-icons">download</span>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => exportShipmentsCsv(filtered)}>
+            <Download className="h-4 w-4" />
             Export
-          </button>
-          <button className="vn-btn vn-btn-primary" onClick={() => navigate('/shipments/create')}>
-            <span className="material-icons">add</span>
-            New Shipment
-          </button>
+          </Button>
+          <Button variant="gradient" onClick={() => navigate('/shipments/create')}>
+            <Plus className="h-4 w-4" />
+            New shipment
+          </Button>
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="vn-stats">
-        <div className="vn-stat" style={{ cursor: 'pointer' }} onClick={() => setStatusFilter('draft')}>
-          <div className="vn-stat-icon"><span className="material-icons">edit_note</span></div>
-          <div>
-            <div className="vn-stat-value">{statusCounts.draft}</div>
-            <div className="vn-stat-label">Draft</div>
-          </div>
-        </div>
-        <div className="vn-stat" style={{ cursor: 'pointer' }} onClick={() => setStatusFilter('transit')}>
-          <div className="vn-stat-icon info"><span className="material-icons">local_shipping</span></div>
-          <div>
-            <div className="vn-stat-value">{statusCounts.transit}</div>
-            <div className="vn-stat-label">In Transit</div>
-          </div>
-        </div>
-        <div className="vn-stat" style={{ cursor: 'pointer' }} onClick={() => setStatusFilter('booked')}>
-          <div className="vn-stat-icon primary"><span className="material-icons">event_available</span></div>
-          <div>
-            <div className="vn-stat-value">{statusCounts.booked}</div>
-            <div className="vn-stat-label">Booked</div>
-          </div>
-        </div>
-        <div className="vn-stat" style={{ cursor: 'pointer' }} onClick={() => setStatusFilter('delivered')}>
-          <div className="vn-stat-icon success"><span className="material-icons">check_circle</span></div>
-          <div>
-            <div className="vn-stat-value">{statusCounts.delivered}</div>
-            <div className="vn-stat-label">Delivered</div>
-          </div>
-        </div>
-        <div className="vn-stat" style={{ cursor: 'pointer' }} onClick={() => setStatusFilter('issue')}>
-          <div className="vn-stat-icon error"><span className="material-icons">warning</span></div>
-          <div>
-            <div className="vn-stat-value">{statusCounts.issue}</div>
-            <div className="vn-stat-label">Issues</div>
-          </div>
-        </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        {stats.map(stat => {
+          const Icon = stat.icon;
+          const isActive = statusFilter === stat.key;
+          return (
+            <Card
+              key={stat.key}
+              className={cn('cursor-pointer transition-colors', isActive ? 'border-primary' : 'hover:border-primary/40')}
+            >
+              <button
+                type="button"
+                onClick={() => setStatusFilter(isActive ? 'all' : stat.key)}
+                className="block w-full p-5 text-left"
+              >
+                <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', STAT_TONES[stat.key])}>
+                  <Icon className="h-5 w-5" />
+                </div>
+                <div className="mt-3 text-2xl font-bold tracking-tight">{stat.value}</div>
+                <div className="mt-1 text-sm text-muted-foreground">{stat.label}</div>
+              </button>
+            </Card>
+          );
+        })}
       </div>
 
-      {/* Map (always mounted, hidden when not active for performance) */}
-      <div style={{ display: viewMode === 'map' ? 'block' : 'none', marginBottom: 24 }}>
-        <div ref={mapRef} className="vn-map full" />
+      <div className={cn('rounded-lg border border-border bg-card', viewMode !== 'map' && 'hidden')}>
+        <div ref={mapRef} className="h-[600px] w-full overflow-hidden rounded-lg" />
       </div>
 
-      {/* Shipments Table Card */}
-      <div className="vn-card">
-        <VnFilterBar
-          searchPlaceholder="Search by ID, customer, origin, destination, carrier..."
-          searchValue={search}
-          onSearchChange={setSearch}
-        >
-          <select
-            className="vn-filter-select"
-            value={statusFilter}
-            onChange={e => setStatusFilter(e.target.value)}
-          >
-            <option value="all">All Statuses ({statusCounts.all})</option>
-            <option value="draft">Draft ({statusCounts.draft})</option>
-            <option value="transit">In Transit ({statusCounts.transit})</option>
-            <option value="booked">Booked ({statusCounts.booked})</option>
-            <option value="delivered">Delivered ({statusCounts.delivered})</option>
-            <option value="issue">Issue ({statusCounts.issue})</option>
-          </select>
-          <select
-            className="vn-filter-select"
-            value={sortBy}
-            onChange={e => setSortBy(e.target.value as SortField)}
-            title="Sort by"
-          >
-            <option value="createdAt">Sort: Created</option>
-            <option value="updatedAt">Sort: Updated</option>
-            <option value="pickupDate">Sort: Pickup</option>
-            <option value="deliveryDate">Sort: Delivery</option>
-          </select>
-          <button
-            type="button"
-            className="vn-filter-btn"
+      <Card>
+        <div className="flex flex-wrap items-center gap-3 p-4">
+          <div className="relative min-w-[280px] flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search by ID, customer, origin, destination, carrier..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-[200px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All statuses ({statusCounts.all})</SelectItem>
+              <SelectItem value="draft">Draft ({statusCounts.draft})</SelectItem>
+              <SelectItem value="transit">In transit ({statusCounts.transit})</SelectItem>
+              <SelectItem value="booked">Booked ({statusCounts.booked})</SelectItem>
+              <SelectItem value="delivered">Delivered ({statusCounts.delivered})</SelectItem>
+              <SelectItem value="issue">Issue ({statusCounts.issue})</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={sortBy} onValueChange={v => setSortBy(v as SortField)}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="createdAt">Sort: Created</SelectItem>
+              <SelectItem value="updatedAt">Sort: Updated</SelectItem>
+              <SelectItem value="pickupDate">Sort: Pickup</SelectItem>
+              <SelectItem value="deliveryDate">Sort: Delivery</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Button
+            variant="outline"
+            size="icon"
             onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
             title={sortOrder === 'asc' ? 'Ascending (oldest first)' : 'Descending (newest first)'}
+            aria-label="Toggle sort order"
           >
-            <span className="material-icons">
-              {sortOrder === 'asc' ? 'arrow_upward' : 'arrow_downward'}
-            </span>
-            {sortOrder === 'asc' ? 'Asc' : 'Desc'}
-          </button>
-          <div className="vn-filter-btn-group">
-            <button
-              type="button"
-              className={`vn-filter-btn${viewMode === 'table' ? ' is-active' : ''}`}
+            {sortOrder === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
+          </Button>
+
+          <div className="ml-auto inline-flex rounded-md border border-input">
+            <Button
+              variant={viewMode === 'table' ? 'secondary' : 'ghost'}
+              size="sm"
+              className="rounded-r-none"
               onClick={() => setViewMode('table')}
-              title="Table view"
-              aria-label="Table view"
             >
-              <span className="material-icons">view_list</span>
-            </button>
-            <button
-              type="button"
-              className={`vn-filter-btn${viewMode === 'map' ? ' is-active' : ''}`}
+              <ListIcon className="h-4 w-4" />
+              Table
+            </Button>
+            <Separator orientation="vertical" />
+            <Button
+              variant={viewMode === 'map' ? 'secondary' : 'ghost'}
+              size="sm"
+              className="rounded-l-none"
               onClick={() => setViewMode('map')}
-              title="Map view"
-              aria-label="Map view"
             >
-              <span className="material-icons">map</span>
-            </button>
+              <MapIcon className="h-4 w-4" />
+              Map
+            </Button>
           </div>
-        </VnFilterBar>
+        </div>
 
-        <VnDateRangeFilter
-          rows={[
-            {
-              iconName: 'event',
-              label: 'Created',
-              from: createdFrom,
-              to: createdTo,
-              onFromChange: setCreatedFrom,
-              onToChange: setCreatedTo,
-            },
-            {
-              iconName: 'update',
-              label: 'Updated',
-              from: updatedFrom,
-              to: updatedTo,
-              onFromChange: setUpdatedFrom,
-              onToChange: setUpdatedTo,
-            },
-          ]}
-          onClear={clearDateFilters}
-          showClear={!!hasDateFilters}
-        />
+        <Separator />
 
-        <div className="vn-table-wrap">
-          <table className="vn-table">
-            <thead>
-              <tr>
-                <th>Shipment</th>
-                <th>Customer</th>
-                <th>Route</th>
-                <th>Carrier</th>
-                <th>Lane</th>
-                <th>Pickup</th>
-                <th>Delivery</th>
-                <th>PRO #</th>
-                <th>Created</th>
-                <th>Updated</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
+        <div className="grid grid-cols-[110px_170px_24px_170px_auto] items-center gap-3 px-4 py-3 text-sm md:px-6">
+          <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Created</div>
+          <Input
+            type="date"
+            value={createdFrom}
+            onChange={e => setCreatedFrom(e.target.value)}
+            aria-label="Created from"
+          />
+          <div className="text-center text-xs text-muted-foreground">to</div>
+          <Input
+            type="date"
+            value={createdTo}
+            onChange={e => setCreatedTo(e.target.value)}
+            aria-label="Created to"
+          />
+          <div className="justify-self-end">
+            {hasDateFilters && (
+              <Button variant="ghost" size="sm" onClick={clearDateFilters}>
+                <X className="h-4 w-4" />
+                Clear
+              </Button>
+            )}
+          </div>
+
+          <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Updated</div>
+          <Input
+            type="date"
+            value={updatedFrom}
+            onChange={e => setUpdatedFrom(e.target.value)}
+            aria-label="Updated from"
+          />
+          <div className="text-center text-xs text-muted-foreground">to</div>
+          <Input
+            type="date"
+            value={updatedTo}
+            onChange={e => setUpdatedTo(e.target.value)}
+            aria-label="Updated to"
+          />
+          <div />
+        </div>
+
+        <Separator />
+
+        {viewMode === 'table' && (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Shipment</TableHead>
+                <TableHead>Customer</TableHead>
+                <TableHead>Route</TableHead>
+                <TableHead>Carrier</TableHead>
+                <TableHead>Lane</TableHead>
+                <TableHead>Pickup</TableHead>
+                <TableHead>Delivery</TableHead>
+                <TableHead>PRO #</TableHead>
+                <TableHead>Created</TableHead>
+                <TableHead>Updated</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {filtered.map(s => {
                 const type = s.shipmentTypeId ? shipmentTypes[s.shipmentTypeId] : null;
                 return (
-                <tr key={s.id} onClick={() => navigate(`/shipments/${s.id}`)}>
-                  <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      {type ? (
-                        <span
-                          className="material-icons"
-                          style={{ color: type.color, fontSize: 20 }}
-                          title={type.name}
-                        >{type.icon}</span>
-                      ) : (
-                        <span style={{ width: 20, display: 'inline-block' }} />
-                      )}
-                      <span className="vn-table-id">{s.reference || s.id}</span>
-                    </div>
-                  </td>
-                  <td>{s.customer?.name || '—'}</td>
-                  <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span className="vn-route-dot origin" style={{ width: 8, height: 8 }} />
-                      <span style={{ fontSize: 13 }}>{s.origin ? `${s.origin.city}, ${s.origin.state}` : '—'}</span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                      <span className="vn-route-dot destination" style={{ width: 8, height: 8 }} />
-                      <span style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>{s.destination ? `${s.destination.city}, ${s.destination.state}` : '—'}</span>
-                    </div>
-                  </td>
-                  <td style={{ fontSize: 13 }}>{s.carrier?.name || '—'}</td>
-                  <td>{s.lane ? <span className="vn-chip vn-chip-secondary">{s.lane.name}</span> : '—'}</td>
-                  <td style={{ fontSize: 13, whiteSpace: 'nowrap' }}>{formatDate(s.pickupDate)}</td>
-                  <td style={{ fontSize: 13, whiteSpace: 'nowrap' }}>{formatDate(s.deliveryDate)}</td>
-                  <td style={{ fontSize: 13 }}>{s.proNumber || '-'}</td>
-                  <td style={{ fontSize: 13, whiteSpace: 'nowrap', color: 'var(--on-surface-variant)' }}>{formatDateTime(s.createdAt)}</td>
-                  <td style={{ fontSize: 13, whiteSpace: 'nowrap', color: 'var(--on-surface-variant)' }}>{formatDateTime(s.updatedAt)}</td>
-                  <td><span className={`vn-chip vn-chip-${statusColor(s.status)}`}>{s.status}</span></td>
-                </tr>
+                  <TableRow
+                    key={s.id}
+                    onClick={() => navigate(`/shipments/${s.id}`)}
+                    className="cursor-pointer"
+                  >
+                    <TableCell>
+                      <div className="flex items-center gap-2 font-mono text-sm font-semibold">
+                        {type && (
+                          <span
+                            className="inline-flex h-2 w-2 rounded-full"
+                            style={{ background: type.color }}
+                            title={type.name}
+                          />
+                        )}
+                        {s.reference || s.id}
+                      </div>
+                    </TableCell>
+                    <TableCell>{s.customer?.name || '-'}</TableCell>
+                    <TableCell>
+                      <div className="text-sm">{s.origin ? `${s.origin.city}, ${s.origin.state}` : '-'}</div>
+                      <div className="text-xs text-muted-foreground">
+                        to {s.destination ? `${s.destination.city}, ${s.destination.state}` : '-'}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-sm">{s.carrier?.name || '-'}</TableCell>
+                    <TableCell>
+                      {s.lane ? <Badge variant="muted">{s.lane.name}</Badge> : '-'}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-sm">{formatDate(s.pickupDate)}</TableCell>
+                    <TableCell className="whitespace-nowrap text-sm">{formatDate(s.deliveryDate)}</TableCell>
+                    <TableCell className="text-sm">{s.proNumber || '-'}</TableCell>
+                    <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                      {formatDateTime(s.createdAt)}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                      {formatDateTime(s.updatedAt)}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={statusVariant(s.status)}>{s.status}</Badge>
+                    </TableCell>
+                  </TableRow>
                 );
               })}
-              {filtered.length === 0 && (
-                <tr>
-                  <td colSpan={11}>
-                    <div className="vn-empty">
-                      <span className="material-icons">search_off</span>
-                      <h3>No shipments found</h3>
-                      <p>Try adjusting your search or filters</p>
-                    </div>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </>
+            </TableBody>
+          </Table>
+        )}
+
+        {viewMode === 'table' && filtered.length === 0 && (
+          <div className="flex flex-col items-center gap-3 py-12 text-muted-foreground">
+            <SearchX className="h-8 w-8" />
+            <h3 className="text-base font-medium">No shipments found</h3>
+            <p className="text-sm">Try adjusting your search or filters</p>
+          </div>
+        )}
+      </Card>
+    </div>
   );
 }

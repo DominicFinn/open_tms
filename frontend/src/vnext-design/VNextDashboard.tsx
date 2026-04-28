@@ -220,12 +220,13 @@ export default function VNextDashboard() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         {stats.map(stat => {
           const Icon = stat.icon;
-          const Wrapper = stat.onClick ? 'button' : 'div';
           return (
-            <Card key={stat.label} asChild={false} className={stat.onClick ? 'cursor-pointer transition-colors hover:border-primary/40' : ''}>
-              <Wrapper
-                {...(stat.onClick ? { type: 'button' as const, onClick: stat.onClick } : {})}
-                className="block w-full text-left"
+            <Card key={stat.label} className={stat.onClick ? 'cursor-pointer transition-colors hover:border-primary/40' : ''}>
+              <button
+                type="button"
+                onClick={stat.onClick ?? undefined}
+                disabled={!stat.onClick}
+                className="block w-full text-left disabled:cursor-default"
               >
                 <CardContent className="p-6">
                   <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', tones[stat.tone as keyof typeof tones])}>
@@ -234,7 +235,7 @@ export default function VNextDashboard() {
                   <div className="mt-4 text-3xl font-bold tracking-tight">{stat.value}</div>
                   <div className="mt-1 text-sm text-muted-foreground">{stat.label}</div>
                 </CardContent>
-              </Wrapper>
+              </button>
             </Card>
           );
         })}

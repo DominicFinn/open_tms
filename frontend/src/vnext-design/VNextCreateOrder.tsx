@@ -1,6 +1,29 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import {
+  ArrowLeft,
+  ChevronRight,
+  CircleAlert,
+  ListChecks,
+  Plus,
+  Receipt,
+  Route,
+  Save,
+  Trash2,
+} from 'lucide-react';
+
 import { API_URL } from '../api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface LineItem {
   id: number;
@@ -22,15 +45,12 @@ export default function VNextCreateOrder() {
   const [orderDate, setOrderDate] = useState('');
   const [requestedDelivery, setRequestedDelivery] = useState('');
   const [serviceLevel, setServiceLevel] = useState('');
-
   const [originLocation, setOriginLocation] = useState('');
   const [destLocation, setDestLocation] = useState('');
-
   const [tempControl, setTempControl] = useState('ambient');
   const [hazmat, setHazmat] = useState(false);
   const [specialInstructions, setSpecialInstructions] = useState('');
   const [notes, setNotes] = useState('');
-
   const [lineItems, setLineItems] = useState<LineItem[]>([
     { id: 1, sku: '', description: '', quantity: '', weight: '' },
   ]);
@@ -53,7 +73,10 @@ export default function VNextCreateOrder() {
   useEffect(() => {
     if (!id) return;
     fetch(`${API_URL}/api/v1/orders/${id}`)
-      .then(r => { if (!r.ok) throw new Error('Failed to load order'); return r.json(); })
+      .then(r => {
+        if (!r.ok) throw new Error('Failed to load order');
+        return r.json();
+      })
       .then(json => {
         const o = json.data;
         if (!o) return;
@@ -113,7 +136,8 @@ export default function VNextCreateOrder() {
       }
       const body: any = {
         poNumber, customerId: customer, originId: originLocation, destinationId: destLocation,
-        requestedPickupDate: orderDate || undefined, requestedDeliveryDate: requestedDelivery || undefined,
+        requestedPickupDate: orderDate || undefined,
+        requestedDeliveryDate: requestedDelivery || undefined,
         serviceLevel: serviceLevel || undefined,
         temperatureControl: tempControl, requiresHazmat: hazmat,
         lineItems: lineItems.filter(li => li.sku || li.description).map(li => ({
@@ -143,190 +167,269 @@ export default function VNextCreateOrder() {
     setLineItems(prev => [...prev, { id: nextLineId++, sku: '', description: '', quantity: '', weight: '' }]);
   };
 
-  const removeLineItem = (id: number) => {
-    setLineItems(prev => prev.length > 1 ? prev.filter(item => item.id !== id) : prev);
+  const removeLineItem = (lid: number) => {
+    setLineItems(prev => prev.length > 1 ? prev.filter(item => item.id !== lid) : prev);
   };
 
-  const updateLineItem = (id: number, field: keyof LineItem, value: string) => {
-    setLineItems(prev => prev.map(item => item.id === id ? { ...item, [field]: value } : item));
+  const updateLineItem = (lid: number, field: keyof LineItem, value: string) => {
+    setLineItems(prev => prev.map(item => item.id === lid ? { ...item, [field]: value } : item));
   };
 
   return (
-    <>
-      <div className="vn-page-header">
-        <div>
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>
-            <Link to="/orders" style={{ color: 'var(--color-primary)', textDecoration: 'none' }}>Orders</Link>
-            {' '}&gt; {isEdit ? 'Edit Order' : 'New Order'}
-          </p>
-          <h1>{isEdit ? 'Edit Order' : 'New Order'}</h1>
-        </div>
+    <div className="space-y-6">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Link to="/orders" className="hover:text-foreground">
+          <ArrowLeft className="inline h-4 w-4" /> Orders
+        </Link>
+        <ChevronRight className="h-3 w-3" />
+        <span>{isEdit ? 'Edit order' : 'New order'}</span>
       </div>
 
-      <div className="vn-card">
-        <div className="vn-card-body" style={{ padding: '2rem' }}>
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">{isEdit ? 'Edit order' : 'New order'}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {isEdit ? 'Update the order details below.' : 'Create a customer order from scratch.'}
+        </p>
+      </div>
 
-          {/* Order Details */}
-          <div className="vn-form-section">
-            <h3 className="vn-form-section-title">
-              <span className="material-icons">receipt_long</span>
-              Order Details
-            </h3>
-            <div className="vn-form-grid">
-              <div className="vn-field">
-                <label className="vn-field-label">Customer</label>
-                <select className="vn-select" value={customer} onChange={e => setCustomer(e.target.value)} disabled={isEdit}>
-                  <option value="">Select customer...</option>
-                  {customers.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-                {isEdit && <div className="vn-field-hint">Customer cannot be changed after creation</div>}
-              </div>
-              <div className="vn-field">
-                <label className="vn-field-label">PO Number</label>
-                <input className="vn-input" type="text" placeholder="Enter PO number" value={poNumber} onChange={e => setPoNumber(e.target.value)} />
-              </div>
-              <div className="vn-field">
-                <label className="vn-field-label">Order Date</label>
-                <input className="vn-input" type="date" value={orderDate} onChange={e => setOrderDate(e.target.value)} />
-              </div>
-              <div className="vn-field">
-                <label className="vn-field-label">Requested Delivery Date</label>
-                <input className="vn-input" type="date" value={requestedDelivery} onChange={e => setRequestedDelivery(e.target.value)} />
-              </div>
-              <div className="vn-field">
-                <label className="vn-field-label">Service Level</label>
-                <select className="vn-select" value={serviceLevel} onChange={e => setServiceLevel(e.target.value)}>
-                  <option value="">Select service level...</option>
-                  <option value="ftl">FTL</option>
-                  <option value="ltl">LTL</option>
-                </select>
-              </div>
-            </div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Receipt className="h-4 w-4 text-primary" />
+            Order details
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="customer">Customer</Label>
+            <Select value={customer} onValueChange={setCustomer} disabled={isEdit}>
+              <SelectTrigger id="customer">
+                <SelectValue placeholder="Select customer..." />
+              </SelectTrigger>
+              <SelectContent>
+                {customers.map((c: any) => (
+                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {isEdit && (
+              <p className="text-xs text-muted-foreground">Customer cannot be changed after creation</p>
+            )}
           </div>
-
-          {/* Origin & Destination */}
-          <div className="vn-form-section">
-            <h3 className="vn-form-section-title">
-              <span className="material-icons">route</span>
-              Origin &amp; Destination
-            </h3>
-            <div className="vn-form-grid">
-              <div className="vn-field">
-                <label className="vn-field-label">Origin Location</label>
-                <select className="vn-select" value={originLocation} onChange={e => setOriginLocation(e.target.value)}>
-                  <option value="">Select origin...</option>
-                  {locations.map((l: any) => <option key={l.id} value={l.id}>{l.name} — {l.city}, {l.state}</option>)}
-                </select>
-              </div>
-              <div className="vn-field">
-                <label className="vn-field-label">Destination Location</label>
-                <select className="vn-select" value={destLocation} onChange={e => setDestLocation(e.target.value)}>
-                  <option value="">Select destination...</option>
-                  {locations.map((l: any) => <option key={l.id} value={l.id}>{l.name} — {l.city}, {l.state}</option>)}
-                </select>
-              </div>
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="po">PO number</Label>
+            <Input
+              id="po"
+              type="text"
+              placeholder="Enter PO number"
+              value={poNumber}
+              onChange={e => setPoNumber(e.target.value)}
+            />
           </div>
-
-          {/* Requirements */}
-          <div className="vn-form-section">
-            <h3 className="vn-form-section-title">
-              <span className="material-icons">checklist</span>
-              Requirements
-            </h3>
-            <div className="vn-form-grid">
-              <div className="vn-field">
-                <label className="vn-field-label">Temperature Control</label>
-                <select className="vn-select" value={tempControl} onChange={e => setTempControl(e.target.value)}>
-                  <option value="ambient">Ambient</option>
-                  <option value="refrigerated">Refrigerated</option>
-                  <option value="frozen">Frozen</option>
-                </select>
-              </div>
-              <div className="vn-field">
-                <label className="vn-field-label" aria-hidden="true" style={{ visibility: 'hidden' }}>Hazmat</label>
-                <label className="vn-checkbox" style={{ display: 'flex', alignItems: 'center', gap: 8, height: 42 }}>
-                  <input type="checkbox" checked={hazmat} onChange={e => setHazmat(e.target.checked)} />
-                  Hazmat
-                </label>
-              </div>
-              <div className="vn-field vn-col-span-2">
-                <label className="vn-field-label">Special Instructions</label>
-                <textarea className="vn-textarea" rows={3} placeholder="Enter any special instructions..." value={specialInstructions} onChange={e => setSpecialInstructions(e.target.value)} />
-              </div>
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="orderDate">Order date</Label>
+            <Input id="orderDate" type="date" value={orderDate} onChange={e => setOrderDate(e.target.value)} />
           </div>
+          <div className="space-y-2">
+            <Label htmlFor="reqDel">Requested delivery date</Label>
+            <Input id="reqDel" type="date" value={requestedDelivery} onChange={e => setRequestedDelivery(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="svc">Service level</Label>
+            <Select value={serviceLevel} onValueChange={setServiceLevel}>
+              <SelectTrigger id="svc">
+                <SelectValue placeholder="Select service level..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ftl">FTL</SelectItem>
+                <SelectItem value="ltl">LTL</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
 
-          {/* Line Items */}
-          {!isEdit && (
-          <div className="vn-form-section">
-            <h3 className="vn-form-section-title">
-              <span className="material-icons">list</span>
-              Line Items
-            </h3>
-            <div style={{ overflowX: 'auto' }}>
-              <table className="vn-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Route className="h-4 w-4 text-primary" />
+            Origin &amp; destination
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="origin">Origin location</Label>
+            <Select value={originLocation} onValueChange={setOriginLocation}>
+              <SelectTrigger id="origin">
+                <SelectValue placeholder="Select origin..." />
+              </SelectTrigger>
+              <SelectContent>
+                {locations.map((l: any) => (
+                  <SelectItem key={l.id} value={l.id}>{l.name} - {l.city}, {l.state}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="dest">Destination location</Label>
+            <Select value={destLocation} onValueChange={setDestLocation}>
+              <SelectTrigger id="dest">
+                <SelectValue placeholder="Select destination..." />
+              </SelectTrigger>
+              <SelectContent>
+                {locations.map((l: any) => (
+                  <SelectItem key={l.id} value={l.id}>{l.name} - {l.city}, {l.state}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <ListChecks className="h-4 w-4 text-primary" />
+            Requirements
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="temp">Temperature control</Label>
+            <Select value={tempControl} onValueChange={setTempControl}>
+              <SelectTrigger id="temp">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ambient">Ambient</SelectItem>
+                <SelectItem value="refrigerated">Refrigerated</SelectItem>
+                <SelectItem value="frozen">Frozen</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-end">
+            <label className="flex items-center gap-2 text-sm font-medium">
+              <input
+                type="checkbox"
+                checked={hazmat}
+                onChange={e => setHazmat(e.target.checked)}
+                className="h-4 w-4 rounded border border-input bg-background accent-primary"
+              />
+              Hazmat
+            </label>
+          </div>
+          <div className="space-y-2 md:col-span-2">
+            <Label htmlFor="instructions">Special instructions</Label>
+            <textarea
+              id="instructions"
+              rows={3}
+              placeholder="Enter any special instructions..."
+              value={specialInstructions}
+              onChange={e => setSpecialInstructions(e.target.value)}
+              className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {!isEdit && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <ListChecks className="h-4 w-4 text-primary" />
+              Line items
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
                 <thead>
-                  <tr>
-                    <th style={{ padding: '0.75rem', textAlign: 'left', borderBottom: '2px solid var(--border-color)', color: 'var(--text-secondary)', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>SKU</th>
-                    <th style={{ padding: '0.75rem', textAlign: 'left', borderBottom: '2px solid var(--border-color)', color: 'var(--text-secondary)', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Description</th>
-                    <th style={{ padding: '0.75rem', textAlign: 'left', borderBottom: '2px solid var(--border-color)', color: 'var(--text-secondary)', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Qty</th>
-                    <th style={{ padding: '0.75rem', textAlign: 'left', borderBottom: '2px solid var(--border-color)', color: 'var(--text-secondary)', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Weight (lb)</th>
-                    <th style={{ padding: '0.75rem', textAlign: 'center', borderBottom: '2px solid var(--border-color)', width: '3rem' }}></th>
+                  <tr className="border-b border-border text-xs uppercase tracking-wider text-muted-foreground">
+                    <th className="px-2 py-2 text-left">SKU</th>
+                    <th className="px-2 py-2 text-left">Description</th>
+                    <th className="px-2 py-2 text-left">Qty</th>
+                    <th className="px-2 py-2 text-left">Weight (lb)</th>
+                    <th className="px-2 py-2 w-12"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {lineItems.map(item => (
-                    <tr key={item.id}>
-                      <td style={{ padding: '0.5rem 0.75rem', borderBottom: '1px solid var(--border-color)' }}>
-                        <input className="vn-input" type="text" placeholder="SKU" value={item.sku} onChange={e => updateLineItem(item.id, 'sku', e.target.value)} />
+                    <tr key={item.id} className="border-b border-border last:border-0">
+                      <td className="px-2 py-2">
+                        <Input
+                          type="text"
+                          placeholder="SKU"
+                          value={item.sku}
+                          onChange={e => updateLineItem(item.id, 'sku', e.target.value)}
+                        />
                       </td>
-                      <td style={{ padding: '0.5rem 0.75rem', borderBottom: '1px solid var(--border-color)' }}>
-                        <input className="vn-input" type="text" placeholder="Description" value={item.description} onChange={e => updateLineItem(item.id, 'description', e.target.value)} />
+                      <td className="px-2 py-2">
+                        <Input
+                          type="text"
+                          placeholder="Description"
+                          value={item.description}
+                          onChange={e => updateLineItem(item.id, 'description', e.target.value)}
+                        />
                       </td>
-                      <td style={{ padding: '0.5rem 0.75rem', borderBottom: '1px solid var(--border-color)', width: '6rem' }}>
-                        <input className="vn-input" type="number" placeholder="0" value={item.quantity} onChange={e => updateLineItem(item.id, 'quantity', e.target.value)} />
+                      <td className="px-2 py-2 w-24">
+                        <Input
+                          type="number"
+                          placeholder="0"
+                          value={item.quantity}
+                          onChange={e => updateLineItem(item.id, 'quantity', e.target.value)}
+                        />
                       </td>
-                      <td style={{ padding: '0.5rem 0.75rem', borderBottom: '1px solid var(--border-color)', width: '7rem' }}>
-                        <input className="vn-input" type="number" placeholder="0" value={item.weight} onChange={e => updateLineItem(item.id, 'weight', e.target.value)} />
+                      <td className="px-2 py-2 w-28">
+                        <Input
+                          type="number"
+                          placeholder="0"
+                          value={item.weight}
+                          onChange={e => updateLineItem(item.id, 'weight', e.target.value)}
+                        />
                       </td>
-                      <td style={{ padding: '0.5rem 0.75rem', borderBottom: '1px solid var(--border-color)', textAlign: 'center' }}>
-                        <button
-                          className="vn-btn vn-btn-danger"
-                          style={{ padding: '0.25rem', minWidth: 'unset' }}
+                      <td className="px-2 py-2 text-center">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
                           onClick={() => removeLineItem(item.id)}
-                          title="Remove item"
+                          className="text-destructive"
+                          aria-label="Remove item"
                         >
-                          <span className="material-icons" style={{ fontSize: '1.1rem' }}>delete</span>
-                        </button>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-            <div style={{ marginTop: '0.75rem' }}>
-              <button className="vn-btn vn-btn-outline" onClick={addLineItem}>
-                <span className="material-icons">add</span>
-                Add Item
-              </button>
+            <div className="mt-4">
+              <Button variant="outline" size="sm" onClick={addLineItem}>
+                <Plus className="h-4 w-4" />
+                Add item
+              </Button>
             </div>
-          </div>
-          )}
+          </CardContent>
+        </Card>
+      )}
 
-          {submitError && <div className="vn-alert vn-alert-error" style={{ marginBottom: 16 }}>{submitError}</div>}
-
-          {/* Form Actions */}
-          <div className="vn-form-actions">
-            <Link to={isEdit && id ? `/orders/${id}` : '/orders'} className="vn-btn vn-btn-outline">Cancel</Link>
-            <button className="vn-btn vn-btn-primary" onClick={handleSubmit} disabled={submitting}>
-              <span className="material-icons">{isEdit ? 'save' : 'add'}</span>
-              {submitting ? (isEdit ? 'Saving...' : 'Creating...') : (isEdit ? 'Save Changes' : 'Create Order')}
-            </button>
-          </div>
-
+      {submitError && (
+        <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+          <CircleAlert className="h-5 w-5" />
+          {submitError}
         </div>
+      )}
+
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <Button variant="outline" asChild>
+          <Link to={isEdit && id ? `/orders/${id}` : '/orders'}>Cancel</Link>
+        </Button>
+        <Button variant="gradient" onClick={handleSubmit} disabled={submitting}>
+          {isEdit ? <Save className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+          {submitting ? (isEdit ? 'Saving...' : 'Creating...') : (isEdit ? 'Save changes' : 'Create order')}
+        </Button>
       </div>
-    </>
+    </div>
   );
 }
