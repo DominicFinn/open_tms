@@ -117,7 +117,7 @@ function FinancialsTab({ shipmentId }: { shipmentId: string }) {
     fetch(`${API_URL}/api/v1/shipments/${shipmentId}/financials`)
       .then(r => r.json())
       .then(j => setData(j.data))
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => setLoading(false));
   }, [shipmentId]);
 
@@ -955,7 +955,7 @@ function ShipmentNotesTab({ shipmentId }: { shipmentId: string }) {
     fetch(`${API_URL}/api/v1/comments?entityType=shipment&entityId=${shipmentId}`)
       .then(r => r.json())
       .then(json => setComments(json.data?.items || json.data || []))
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => setLoading(false));
   }, [shipmentId]);
 
@@ -1053,7 +1053,7 @@ function CarrierTrackingTab({ shipmentId }: { shipmentId: string }) {
     fetch(`${API_URL}/api/v1/shipments/${shipmentId}/carrier-tracking`)
       .then(r => r.json())
       .then(j => setEvents(j.data || []))
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => setLoading(false));
   }, [shipmentId]);
 
@@ -1119,8 +1119,8 @@ function CarrierTrackingTab({ shipmentId }: { shipmentId: string }) {
               const variant = TRACKING_STATUS_VARIANT[ev.status] || 'muted';
               const dotTone =
                 ev.status === 'delivered' ? 'border-success/30 bg-success/10 text-success' :
-                ev.status === 'exception' ? 'border-destructive/30 bg-destructive/10 text-destructive' :
-                'border-info/30 bg-info/10 text-info';
+                  ev.status === 'exception' ? 'border-destructive/30 bg-destructive/10 text-destructive' :
+                    'border-info/30 bg-info/10 text-info';
               const location = [ev.city, ev.state, ev.country].filter(Boolean).join(', ');
               return (
                 <li key={ev.id || i} className="relative">
@@ -1200,7 +1200,7 @@ export default function VNextShipmentDetail() {
           fetch(`${API_URL}/api/v1/shipment-types/${json.data.shipmentTypeId}`)
             .then(r => r.json())
             .then(j => { if (!j.error) setShipmentType(j.data); })
-            .catch(() => {});
+            .catch(() => { });
         }
       })
       .catch(err => setError(err.message))
@@ -1212,7 +1212,7 @@ export default function VNextShipmentDetail() {
     fetch(`${API_URL}/api/v1/documents?shipmentId=${id}`)
       .then(r => r.json())
       .then(json => { if (!json.error) setDocuments(json.data || []); })
-      .catch(() => {});
+      .catch(() => { });
   }, [id]);
 
   useEffect(() => { loadDocuments(); }, [loadDocuments]);
@@ -1238,7 +1238,7 @@ export default function VNextShipmentDetail() {
           setRouteDeviation(json.data);
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, [shipment?.laneId, shipment?.status, shipment?.currentLat, shipment?.currentLng]);
 
   const handleGenerateDoc = async (type: 'bol' | 'customs' | 'rate_confirmation') => {
@@ -1357,14 +1357,14 @@ export default function VNextShipmentDetail() {
   const orders = shipment.orderShipments || [];
 
   const tabs = [
-    { value: 'events', label: 'Events & History', Icon: Clock },
-    { value: 'documents', label: 'Documents', Icon: FileText },
+    { value: 'events', label: 'Events', Icon: Clock },
+    { value: 'documents', label: 'Docs', Icon: FileText },
     { value: 'financials', label: 'Financials', Icon: CreditCard },
     { value: 'notes', label: 'Notes', Icon: MessageSquare },
     { value: 'cargo', label: 'Cargo', Icon: Package },
     { value: 'telemetry', label: 'Telemetry', Icon: Thermometer },
     { value: 'sla', label: 'SLA', Icon: Timer },
-    { value: 'carrier-tracking', label: 'Carrier Tracking', Icon: Target },
+    { value: 'carrier-tracking', label: 'Carriers', Icon: Target },
   ];
 
   return (
@@ -1528,8 +1528,8 @@ export default function VNextShipmentDetail() {
                       {events.map((ev: any, i: number) => {
                         const tone =
                           ev.type === 'pickup' ? 'border-success/30 bg-success/10 text-success' :
-                          ev.type === 'delivery' ? 'border-primary/30 bg-primary/10 text-primary' :
-                          'border-info/30 bg-info/10 text-info';
+                            ev.type === 'delivery' ? 'border-primary/30 bg-primary/10 text-primary' :
+                              'border-info/30 bg-info/10 text-info';
                         return (
                           <li key={ev.id || i} className="relative">
                             <span className={cn('absolute -left-[35px] flex h-6 w-6 items-center justify-center rounded-full border', tone)}>
