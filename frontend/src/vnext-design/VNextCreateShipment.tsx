@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { toast } from 'sonner';
 import {
   ArrowLeft,
   Ban,
@@ -190,7 +191,28 @@ export default function VNextCreateShipment() {
   const reqMark = (field: string) =>
     isFieldRequired(field) ? <span className="text-destructive"> *</span> : null;
 
+  const dateError = useMemo(() => {
+    if (pickupDate && deliveryDate && deliveryDate < pickupDate) {
+      return 'Delivery date cannot be before pickup date.';
+    }
+    if (hasPickupWindow && pickupWindowStart && pickupWindowEnd && pickupWindowEnd < pickupWindowStart) {
+      return 'Pickup window end cannot be before window start.';
+    }
+    if (hasDeliveryWindow && deliveryWindowStart && deliveryWindowEnd && deliveryWindowEnd < deliveryWindowStart) {
+      return 'Delivery window end cannot be before window start.';
+    }
+    return '';
+  }, [
+    pickupDate, deliveryDate,
+    hasPickupWindow, pickupWindowStart, pickupWindowEnd,
+    hasDeliveryWindow, deliveryWindowStart, deliveryWindowEnd,
+  ]);
+
   const handleSubmit = async () => {
+    if (dateError) {
+      setSubmitError(dateError);
+      return;
+    }
     setSubmitError('');
     setSubmitting(true);
     try {
@@ -218,7 +240,17 @@ export default function VNextCreateShipment() {
       });
       const json = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
       if (!res.ok || json.error) throw new Error(json.error || 'Failed to save shipment');
-      navigate(isEdit ? `/shipments/${id}` : '/shipments');
+      const newId = json.data?.id ?? id;
+      const ref = json.data?.reference || newId?.slice(0, 8);
+      if (isEdit) {
+        toast.success(`Shipment ${ref} updated`);
+        navigate(`/shipments/${id}`);
+      } else {
+        toast.success(`Shipment ${ref} created`, {
+          action: { label: 'View', onClick: () => navigate(`/shipments/${newId}`) },
+        });
+        navigate('/shipments');
+      }
     } catch (err: any) {
       setSubmitError(err.message);
     } finally {
@@ -411,6 +443,7 @@ export default function VNextCreateShipment() {
                 <Input
                   type="datetime-local"
                   value={pickupWindowEnd}
+                  min={pickupWindowStart || undefined}
                   onChange={e => setPickupWindowEnd(e.target.value)}
                 />
               </div>
@@ -442,7 +475,12 @@ export default function VNextCreateShipment() {
           </div>
           <div className="space-y-2">
             <Label>Delivery date{reqMark('deliveryDate')}</Label>
-            <Input type="date" value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)} />
+            <Input
+              type="date"
+              value={deliveryDate}
+              min={pickupDate || undefined}
+              onChange={e => setDeliveryDate(e.target.value)}
+            />
           </div>
           <div className="md:col-span-2">
             <label className="flex items-center gap-2 text-sm font-medium">
@@ -479,6 +517,7 @@ export default function VNextCreateShipment() {
                 <Input
                   type="datetime-local"
                   value={deliveryWindowEnd}
+                  min={deliveryWindowStart || undefined}
                   onChange={e => setDeliveryWindowEnd(e.target.value)}
                 />
               </div>
@@ -600,10 +639,10 @@ export default function VNextCreateShipment() {
         </div>
       )}
 
-      {submitError && (
+      {(submitError || dateError) && (
         <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
           <CircleAlert className="h-5 w-5" />
-          {submitError}
+          {submitError || dateError}
         </div>
       )}
 
@@ -611,7 +650,7 @@ export default function VNextCreateShipment() {
         <Button variant="outline" asChild>
           <Link to={isEdit && id ? `/shipments/${id}` : '/shipments'}>Cancel</Link>
         </Button>
-        <Button variant="gradient" onClick={handleSubmit} disabled={submitting}>
+        <Button variant="gradient" onClick={handleSubmit} disabled={submitting || !!dateError}>
           {isEdit ? <Save className="h-4 w-4" /> : <PencilLine className="h-4 w-4" />}
           {submitting
             ? 'Saving...'

@@ -188,7 +188,29 @@ export default function VNextQualityDashboard() {
     );
   }
 
-  const d = dashboard!;
+  // The API may return a partial response (no data yet, no issues recorded,
+  // etc). Fill in zeros so the dashboard renders empty rather than crashing.
+  const d: DashboardData = {
+    issues: {
+      total: dashboard?.issues?.total ?? 0,
+      open: dashboard?.issues?.open ?? 0,
+      critical: dashboard?.issues?.critical ?? 0,
+      needsCapa: dashboard?.issues?.needsCapa ?? 0,
+      byCategory: dashboard?.issues?.byCategory ?? [],
+      byPriority: dashboard?.issues?.byPriority ?? [],
+    },
+    capa: {
+      total: dashboard?.capa?.total ?? 0,
+      open: dashboard?.capa?.open ?? 0,
+      overdueFollowUps: dashboard?.capa?.overdueFollowUps ?? 0,
+    },
+    sop: {
+      activeChecklists: dashboard?.sop?.activeChecklists ?? 0,
+      overdueChecklists: dashboard?.sop?.overdueChecklists ?? 0,
+      recentAudits: dashboard?.sop?.recentAudits ?? 0,
+      failedAudits: dashboard?.sop?.failedAudits ?? 0,
+    },
+  };
 
   const renderTrendsChart = () => {
     const data = trends?.trends || [];

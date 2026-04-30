@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { toast } from 'sonner';
 import {
   ArrowLeft,
   ArrowRightLeft,
@@ -162,6 +163,15 @@ export default function VNextCreateLocation() {
       if (!res.ok) throw new Error('Failed to save location');
       const json = await res.json();
       if (json.error) throw new Error(json.error);
+      const newId = json.data?.id ?? id;
+      const label = json.data?.name || name || newId?.slice(0, 8);
+      if (isEdit) {
+        toast.success(`Location ${label} updated`);
+      } else {
+        toast.success(`Location ${label} created`, {
+          action: newId ? { label: 'View', onClick: () => navigate(`/locations/${newId}/edit`) } : undefined,
+        });
+      }
       navigate('/locations');
     } catch (err: any) {
       setSubmitError(err.message);

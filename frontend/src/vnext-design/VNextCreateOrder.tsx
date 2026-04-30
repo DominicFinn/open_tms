@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { toast } from 'sonner';
 import {
   ArrowLeft,
   ChevronRight,
@@ -131,6 +132,7 @@ export default function VNextCreateOrder() {
         if (!res.ok) throw new Error('Failed to update order');
         const json = await res.json();
         if (json.error) throw new Error(json.error);
+        toast.success(`Order ${json.data?.orderNumber || id?.slice(0, 8)} updated`);
         navigate(`/orders/${id}`);
         return;
       }
@@ -155,6 +157,11 @@ export default function VNextCreateOrder() {
       if (!res.ok) throw new Error('Failed to create order');
       const json = await res.json();
       if (json.error) throw new Error(json.error);
+      const newId = json.data?.id;
+      const ref = json.data?.orderNumber || newId?.slice(0, 8);
+      toast.success(`Order ${ref} created`, {
+        action: newId ? { label: 'View', onClick: () => navigate(`/orders/${newId}`) } : undefined,
+      });
       navigate('/orders');
     } catch (err: any) {
       setSubmitError(err.message);

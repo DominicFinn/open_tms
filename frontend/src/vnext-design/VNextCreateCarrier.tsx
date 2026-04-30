@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { toast } from 'sonner';
 import {
   ArrowLeft,
   Building2,
@@ -114,6 +115,15 @@ export default function VNextCreateCarrier() {
       if (!res.ok) throw new Error('Failed to save carrier');
       const json = await res.json();
       if (json.error) throw new Error(json.error);
+      const newId = json.data?.id ?? id;
+      const label = json.data?.name || name || newId?.slice(0, 8);
+      if (isEdit) {
+        toast.success(`Carrier ${label} updated`);
+      } else {
+        toast.success(`Carrier ${label} created`, {
+          action: newId ? { label: 'View', onClick: () => navigate(`/carriers/${newId}/edit`) } : undefined,
+        });
+      }
       navigate('/carriers');
     } catch (err: any) {
       setSubmitError(err.message);

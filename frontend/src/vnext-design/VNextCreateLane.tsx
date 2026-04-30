@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { toast } from 'sonner';
 import {
   ArrowLeft,
   ChevronRight,
@@ -145,6 +146,16 @@ export default function VNextCreateLane() {
         setSavingRoute(false);
       }
 
+      const label = json.data?.name || savedLaneId?.slice(0, 8) || 'lane';
+      if (isEdit) {
+        toast.success(`Lane ${label} updated`);
+      } else {
+        toast.success(`Lane ${label} created`, {
+          action: savedLaneId
+            ? { label: 'View', onClick: () => navigate(`/lanes/${savedLaneId}`) }
+            : undefined,
+        });
+      }
       navigate('/lanes');
     } catch (err: any) {
       setSubmitError(err.message);

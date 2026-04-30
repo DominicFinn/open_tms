@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { toast } from 'sonner';
 import {
   ArrowLeft,
   Building2,
@@ -96,6 +97,15 @@ export default function VNextCreateCustomer() {
       if (!res.ok) throw new Error('Failed to save customer');
       const json = await res.json();
       if (json.error) throw new Error(json.error);
+      const newId = json.data?.id ?? id;
+      const label = json.data?.name || name || newId?.slice(0, 8);
+      if (isEdit) {
+        toast.success(`Customer ${label} updated`);
+      } else {
+        toast.success(`Customer ${label} created`, {
+          action: newId ? { label: 'View', onClick: () => navigate(`/customers/${newId}/edit`) } : undefined,
+        });
+      }
       navigate('/customers');
     } catch (err: any) {
       setSubmitError(err.message);

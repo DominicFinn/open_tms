@@ -1,6 +1,7 @@
 
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Toaster } from 'sonner';
 import { ThemeProvider } from './ThemeProvider';
 import { MapProvider } from './MapProvider';
 import { installAuthFetchInterceptor } from './authFetch';
@@ -211,6 +212,20 @@ root.render(
   <BrowserRouter>
     <ThemeProvider>
       <MapProvider>
+      <Toaster
+        position="top-right"
+        theme="dark"
+        toastOptions={{
+          classNames: {
+            toast: 'group bg-card text-card-foreground border border-border shadow-lg',
+            title: 'text-sm font-semibold',
+            description: 'text-xs text-muted-foreground',
+            actionButton: 'bg-primary text-primary-foreground hover:bg-primary/90',
+            success: '!border-success/40',
+            error: '!border-destructive/40',
+          },
+        }}
+      />
       <Routes>
         {/* Main TMS auth pages (standalone — outside main layout) */}
         <Route path="/login" element={<Login />} />
