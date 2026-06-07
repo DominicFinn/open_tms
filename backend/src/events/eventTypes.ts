@@ -117,10 +117,40 @@ export const EVENT_TYPES = {
   ISSUE_LABEL_ADDED: 'issue.label_added',
   ISSUE_LABEL_REMOVED: 'issue.label_removed',
 
+  // Issue label catalogue (the labels themselves, not assignments)
+  ISSUE_LABEL_CREATED: 'issue_label.created',
+  ISSUE_LABEL_UPDATED: 'issue_label.updated',
+  ISSUE_LABEL_DELETED: 'issue_label.deleted',
+
   // Comments
   COMMENT_ADDED: 'comment.added',
   COMMENT_UPDATED: 'comment.updated',
   COMMENT_DELETED: 'comment.deleted',
+
+  // API keys
+  API_KEY_CREATED: 'api_key.created',
+  API_KEY_UPDATED: 'api_key.updated',
+  API_KEY_REVOKED: 'api_key.revoked',
+  API_KEY_DELETED: 'api_key.deleted',
+
+  // Agent config + prompt versioning
+  AGENT_CONFIG_CREATED: 'agent_config.created',
+  AGENT_CONFIG_UPDATED: 'agent_config.updated',
+  AGENT_CONFIG_PROMPT_VERSION_CREATED: 'agent_config.prompt_version_created',
+  AGENT_CONFIG_VERSION_ACTIVATED: 'agent_config.version_activated',
+
+  // Automation rules
+  AUTOMATION_RULE_CREATED: 'automation_rule.created',
+  AUTOMATION_RULE_UPDATED: 'automation_rule.updated',
+  AUTOMATION_RULE_TOGGLED: 'automation_rule.toggled',
+  AUTOMATION_RULE_DELETED: 'automation_rule.deleted',
+  AUTOMATION_RULE_PROMOTED_FROM_DECISION: 'automation_rule.promoted_from_decision',
+
+  // Customer-owned outbound webhooks
+  CUSTOMER_WEBHOOK_CREATED: 'customer_webhook.created',
+  CUSTOMER_WEBHOOK_UPDATED: 'customer_webhook.updated',
+  CUSTOMER_WEBHOOK_DELETED: 'customer_webhook.deleted',
+  CUSTOMER_WEBHOOK_SECRET_ROTATED: 'customer_webhook.secret_rotated',
 
   // Cold Chain
   COLD_CHAIN_PROFILE_CREATED: 'cold_chain_profile.created',
@@ -345,7 +375,7 @@ export const EVENT_SCHEMA_VERSIONS: Record<string, number> = {
   [EVENT_TYPES.SHIPMENT_STOP_ARRIVED]: 1,
   [EVENT_TYPES.SHIPMENT_STOP_COMPLETED]: 1,
   [EVENT_TYPES.SHIPMENT_ARCHIVED]: 1,
-  [EVENT_TYPES.ORDER_CREATED]: 1,
+  [EVENT_TYPES.ORDER_CREATED]: 2, // v2: payload includes packingSummary (Phase 1 cartonization)
   [EVENT_TYPES.ORDER_UPDATED]: 1,
   [EVENT_TYPES.ORDER_STATUS_CHANGED]: 1,
   [EVENT_TYPES.ORDER_DELIVERY_STATUS_CHANGED]: 1,
@@ -385,7 +415,27 @@ export const EVENT_SCHEMA_VERSIONS: Record<string, number> = {
   [EVENT_TYPES.ISSUE_NEEDS_CAPA_MARKED]: 1,
   [EVENT_TYPES.ISSUE_LABEL_ADDED]: 1,
   [EVENT_TYPES.ISSUE_LABEL_REMOVED]: 1,
+  [EVENT_TYPES.ISSUE_LABEL_CREATED]: 1,
+  [EVENT_TYPES.ISSUE_LABEL_UPDATED]: 1,
+  [EVENT_TYPES.ISSUE_LABEL_DELETED]: 1,
   // Comments
+  [EVENT_TYPES.API_KEY_CREATED]: 1,
+  [EVENT_TYPES.API_KEY_UPDATED]: 1,
+  [EVENT_TYPES.API_KEY_REVOKED]: 1,
+  [EVENT_TYPES.API_KEY_DELETED]: 1,
+  [EVENT_TYPES.AGENT_CONFIG_CREATED]: 1,
+  [EVENT_TYPES.AGENT_CONFIG_UPDATED]: 1,
+  [EVENT_TYPES.AGENT_CONFIG_PROMPT_VERSION_CREATED]: 1,
+  [EVENT_TYPES.AGENT_CONFIG_VERSION_ACTIVATED]: 1,
+  [EVENT_TYPES.AUTOMATION_RULE_CREATED]: 1,
+  [EVENT_TYPES.AUTOMATION_RULE_UPDATED]: 1,
+  [EVENT_TYPES.AUTOMATION_RULE_TOGGLED]: 1,
+  [EVENT_TYPES.AUTOMATION_RULE_DELETED]: 1,
+  [EVENT_TYPES.AUTOMATION_RULE_PROMOTED_FROM_DECISION]: 1,
+  [EVENT_TYPES.CUSTOMER_WEBHOOK_CREATED]: 1,
+  [EVENT_TYPES.CUSTOMER_WEBHOOK_UPDATED]: 1,
+  [EVENT_TYPES.CUSTOMER_WEBHOOK_DELETED]: 1,
+  [EVENT_TYPES.CUSTOMER_WEBHOOK_SECRET_ROTATED]: 1,
   [EVENT_TYPES.COMMENT_ADDED]: 1,
   [EVENT_TYPES.COMMENT_UPDATED]: 1,
   [EVENT_TYPES.COMMENT_DELETED]: 1,

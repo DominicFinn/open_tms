@@ -125,7 +125,11 @@ export default function CustomerOrders() {
             <TableBody>
               {orders.map(o => (
                 <TableRow key={o.id}>
-                  <TableCell className="font-mono text-sm font-semibold">{o.orderNumber}</TableCell>
+                  <TableCell className="font-mono text-sm font-semibold">
+                    <Link to={`/customer-portal/orders/${o.id}`} className="text-primary hover:underline">
+                      {o.orderNumber}
+                    </Link>
+                  </TableCell>
                   <TableCell className="text-sm">{o.poNumber || '-'}</TableCell>
                   <TableCell className="text-sm">
                     {o.originCity ? `${o.originCity}, ${o.originState}` : '-'} - {o.destinationCity ? `${o.destinationCity}, ${o.destinationState}` : '-'}

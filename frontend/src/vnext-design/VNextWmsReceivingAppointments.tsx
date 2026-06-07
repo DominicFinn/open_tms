@@ -4,6 +4,7 @@ import { CircleAlert, Loader2, Plus } from 'lucide-react';
 import { API_URL } from '../api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
@@ -171,7 +172,7 @@ export default function VNextWmsReceivingAppointments() {
               ))}
             </SelectContent>
           </Select>
-          <Input type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)} className="w-auto" />
+          <DatePicker type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)} className="w-auto min-w-[180px]" />
         </CardContent>
       </Card>
 
@@ -183,11 +184,11 @@ export default function VNextWmsReceivingAppointments() {
           <CardContent className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label>Scheduled start *</Label>
-              <Input type="datetime-local" value={form.scheduledAt} onChange={e => setForm(f => ({ ...f, scheduledAt: e.target.value }))} />
+              <DatePicker type="datetime-local" value={form.scheduledAt} onChange={e => setForm(f => ({ ...f, scheduledAt: e.target.value }))} />
             </div>
             <div className="space-y-2">
               <Label>Scheduled end *</Label>
-              <Input type="datetime-local" value={form.scheduledEndAt} onChange={e => setForm(f => ({ ...f, scheduledEndAt: e.target.value }))} />
+              <DatePicker type="datetime-local" value={form.scheduledEndAt} onChange={e => setForm(f => ({ ...f, scheduledEndAt: e.target.value }))} />
             </div>
             <div className="space-y-2">
               <Label>Dock bin</Label>

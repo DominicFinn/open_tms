@@ -6,6 +6,8 @@ import { Command } from '../types.js';
 
 export interface CreateLanePayload {
   name: string;
+  /** Multi-tenancy scope. Route handlers thread this from the JWT. */
+  orgId?: string | null;
   originId: string;
   destinationId: string;
   distance?: number;
@@ -28,9 +30,18 @@ export class CreateLaneCommandHandler extends BaseCommandHandler<CreateLanePaylo
     tx: TransactionClient,
     emit: EmitFn
   ): Promise<{ id: string; name: string }> {
-    const { stops, ...laneData } = command.payload;
+    const { stops, orgId: payloadOrgId, ...laneData } = command.payload;
 
-    const lane = await tx.lane.create({ data: laneData });
+    // Multi-tenancy: prefer the payload's orgId, fall back to command.orgId
+    // (the JWT path). Lane.orgId is NOT NULL post phase-3 tightening — we
+    // throw rather than write a half-built row when neither source
+    // supplies one.
+    const orgIdToWrite = payloadOrgId || command.orgId;
+    if (!orgIdToWrite) {
+      throw new Error('orgId is required to create a Lane (multi-tenancy)');
+    }
+
+    const lane = await tx.lane.create({ data: { ...laneData, orgId: orgIdToWrite } });
 
     if (stops?.length) {
       await tx.laneStop.createMany({

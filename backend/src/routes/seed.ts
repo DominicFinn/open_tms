@@ -29,27 +29,37 @@ export async function seedRoutes(server: FastifyInstance) {
       await server.prisma.location.deleteMany();
       await server.prisma.customer.deleteMany();
 
+      // Multi-tenancy: seed into whichever Organization happens to exist
+      // (this dev-only endpoint runs after `prisma migrate` has created
+      // the default Organization).
+      const seedOrg = await server.prisma.organization.findFirst({ select: { id: true } });
+      if (!seedOrg) {
+        throw new Error('No Organization row exists — run migrations before seeding');
+      }
+      const seedOrgId = seedOrg.id;
+
       // Create customers
       const customers = await server.prisma.customer.createMany({
         data: [
-          { name: 'Walmart Inc.', contactEmail: 'logistics@walmart.com' },
-          { name: 'Best Buy Co. Inc.', contactEmail: 'supply@bestbuy.com' },
-          { name: 'Target Corporation', contactEmail: 'operations@target.com' },
-          { name: 'Amazon.com Inc.', contactEmail: 'fulfillment@amazon.com' },
-          { name: 'Home Depot Inc.', contactEmail: 'distribution@homedepot.com' },
-          { name: 'Lowe\'s Companies Inc.', contactEmail: 'logistics@lowes.com' },
-          { name: 'Costco Wholesale Corporation', contactEmail: 'supply@costco.com' },
-          { name: 'Kroger Company', contactEmail: 'distribution@kroger.com' },
-          { name: 'CVS Health Corporation', contactEmail: 'logistics@cvs.com' },
-          { name: 'Walgreens Boots Alliance', contactEmail: 'supply@walgreens.com' }
+          { orgId: seedOrgId, name: 'Walmart Inc.', contactEmail: 'logistics@walmart.com' },
+          { orgId: seedOrgId, name: 'Best Buy Co. Inc.', contactEmail: 'supply@bestbuy.com' },
+          { orgId: seedOrgId, name: 'Target Corporation', contactEmail: 'operations@target.com' },
+          { orgId: seedOrgId, name: 'Amazon.com Inc.', contactEmail: 'fulfillment@amazon.com' },
+          { orgId: seedOrgId, name: 'Home Depot Inc.', contactEmail: 'distribution@homedepot.com' },
+          { orgId: seedOrgId, name: 'Lowe\'s Companies Inc.', contactEmail: 'logistics@lowes.com' },
+          { orgId: seedOrgId, name: 'Costco Wholesale Corporation', contactEmail: 'supply@costco.com' },
+          { orgId: seedOrgId, name: 'Kroger Company', contactEmail: 'distribution@kroger.com' },
+          { orgId: seedOrgId, name: 'CVS Health Corporation', contactEmail: 'logistics@cvs.com' },
+          { orgId: seedOrgId, name: 'Walgreens Boots Alliance', contactEmail: 'supply@walgreens.com' }
         ]
       });
 
-      // Create locations (20 warehouses/distribution centers + real Walmart/Best Buy locations)
-      const locations = await server.prisma.location.createMany({
-        data: [
+      // Create locations (20 warehouses/distribution centers + real Walmart/Best Buy locations).
+      // Splatting orgId via .map() keeps the data array compact rather
+      // than repeating `orgId: seedOrgId` on every entry.
+      const seedLocationRows = [
+        {
           // Head Office - Dallas, Texas
-          {
             name: 'Head Office - Dallas',
             address1: '1234 Commerce Street',
             city: 'Dallas',
@@ -492,7 +502,9 @@ export async function seedRoutes(server: FastifyInstance) {
             lat: 39.7392,
             lng: -104.9903
           }
-        ]
+      ];
+      const locations = await server.prisma.location.createMany({
+        data: seedLocationRows.map(r => ({ ...r, orgId: seedOrgId })),
       });
 
       // Create realistic lane routes based on locations
@@ -644,7 +656,7 @@ export async function seedRoutes(server: FastifyInstance) {
       // Create all lanes
       if (lanesToCreate.length > 0) {
         await server.prisma.lane.createMany({
-          data: lanesToCreate
+          data: lanesToCreate.map(l => ({ ...l, orgId: seedOrgId }))
         });
       }
 
@@ -661,6 +673,7 @@ export async function seedRoutes(server: FastifyInstance) {
       // Add specific Phoenix to Portland shipment
       if (phoenixDC && portlandWalmart && walmartCustomer) {
         sampleShipments.push({
+          orgId: seedOrgId,
           reference: 'SH-PHX-PDX-001',
           customerId: walmartCustomer.id,
           originId: phoenixDC.id,
@@ -692,6 +705,7 @@ export async function seedRoutes(server: FastifyInstance) {
         const destination = allLocations[Math.floor(Math.random() * allLocations.length)];
 
         sampleShipments.push({
+          orgId: seedOrgId,
           reference: `SH-${String(i + 2).padStart(4, '0')}`,
           customerId: customer.id,
           originId: origin.id,

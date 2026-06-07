@@ -1,33 +1,49 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 
 export default async function deviceRoutes(server: FastifyInstance) {
   const prisma = server.prisma;
+  await registerOrgScope(server);
 
-  // GET /api/v1/devices — List all devices
-  server.get('/api/v1/devices', async (_req, reply) => {
-    const devices = await prisma.device.findMany({
-      orderBy: { lastSeenAt: 'desc' },
-      include: {
-        assignments: {
-          where: { active: true },
-          include: {
-            shipment: { select: { id: true, reference: true, status: true } },
-            order: { select: { id: true, orderNumber: true, status: true } },
+  // GET /api/v1/devices — List devices for the requesting tenant.
+  // `limit` and `offset` query params drive pagination; X-Total-Count surfaces
+  // the unpaged total without breaking the existing response shape.
+  server.get('/api/v1/devices', async (req, reply) => {
+    const q = req.query as { limit?: string; offset?: string };
+    const limit = Math.min(Math.max(Number(q.limit) || 500, 1), 1000);
+    const offset = Math.max(Number(q.offset) || 0, 0);
+    const orgId = req.orgId!;
+    const where = { orgId };
+    const [devices, total] = await Promise.all([
+      prisma.device.findMany({
+        where,
+        orderBy: { lastSeenAt: 'desc' },
+        include: {
+          assignments: {
+            where: { active: true },
+            include: {
+              shipment: { select: { id: true, reference: true, status: true } },
+              order: { select: { id: true, orderNumber: true, status: true } },
+            },
           },
+          _count: { select: { sensorReadings: true, deviceEvents: true } },
         },
-        _count: { select: { sensorReadings: true, deviceEvents: true } },
-      },
-      take: 500,
-    });
+        take: limit,
+        skip: offset,
+      }),
+      prisma.device.count({ where }),
+    ]);
+    reply.header('X-Total-Count', String(total));
     return reply.send({ data: devices });
   });
 
-  // GET /api/v1/devices/:id — Device detail
+  // GET /api/v1/devices/:id — Device detail, scoped to tenant
   server.get('/api/v1/devices/:id', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const device = await prisma.device.findUnique({
-      where: { id },
+    const orgId = req.orgId!;
+    const device = await prisma.device.findFirst({
+      where: { id, orgId },
       include: {
         assignments: {
           orderBy: { assignedAt: 'desc' },
@@ -54,8 +70,10 @@ export default async function deviceRoutes(server: FastifyInstance) {
       model: z.string().optional(),
     }).parse(req.body);
 
+    const orgId = req.orgId!;
     const device = await prisma.device.create({
       data: {
+        orgId,
         externalId: body.externalId,
         displayId: body.displayId || null,
         name: body.name,
@@ -67,7 +85,7 @@ export default async function deviceRoutes(server: FastifyInstance) {
     return reply.status(201).send({ data: device });
   });
 
-  // PUT /api/v1/devices/:id — Update device
+  // PUT /api/v1/devices/:id — Update device. Cross-tenant guard before write.
   server.put('/api/v1/devices/:id', async (req, reply) => {
     const { id } = req.params as { id: string };
     const body = z.object({
@@ -76,6 +94,10 @@ export default async function deviceRoutes(server: FastifyInstance) {
       displayId: z.string().optional(),
       model: z.string().optional(),
     }).parse(req.body);
+
+    const orgId = req.orgId!;
+    const existing = await prisma.device.findFirst({ where: { id, orgId }, select: { id: true } });
+    if (!existing) return reply.status(404).send({ data: null, error: 'Device not found' });
 
     const device = await prisma.device.update({
       where: { id },
@@ -92,6 +114,10 @@ export default async function deviceRoutes(server: FastifyInstance) {
       orderId: z.string().uuid().optional(),
       trackableUnitId: z.string().uuid().optional(),
     }).parse(req.body);
+
+    const orgId = req.orgId!;
+    const existing = await prisma.device.findFirst({ where: { id, orgId }, select: { id: true } });
+    if (!existing) return reply.status(404).send({ data: null, error: 'Device not found' });
 
     // Deactivate any existing active assignment for this device
     await prisma.deviceAssignment.updateMany({
@@ -113,6 +139,10 @@ export default async function deviceRoutes(server: FastifyInstance) {
   // DELETE /api/v1/devices/:id/assign — Unassign device
   server.delete('/api/v1/devices/:id/assign', async (req, reply) => {
     const { id } = req.params as { id: string };
+    const orgId = req.orgId!;
+    const existing = await prisma.device.findFirst({ where: { id, orgId }, select: { id: true } });
+    if (!existing) return reply.status(404).send({ data: null, error: 'Device not found' });
+
     await prisma.deviceAssignment.updateMany({
       where: { deviceId: id, active: true },
       data: { active: false, unassignedAt: new Date() },
@@ -120,9 +150,15 @@ export default async function deviceRoutes(server: FastifyInstance) {
     return reply.send({ data: { unassigned: true } });
   });
 
-  // GET /api/v1/devices/:id/readings — Sensor readings for a device
+  // GET /api/v1/devices/:id/readings — Sensor readings for a device.
+  // Tenant-guard the device existence first so a malicious caller can't
+  // probe sensor readings across orgs by guessing UUIDs.
   server.get('/api/v1/devices/:id/readings', async (req, reply) => {
     const { id } = req.params as { id: string };
+    const orgId = req.orgId!;
+    const existing = await prisma.device.findFirst({ where: { id, orgId }, select: { id: true } });
+    if (!existing) return reply.status(404).send({ data: null, error: 'Device not found' });
+
     const query = req.query as { limit?: string; since?: string };
     const limit = Math.min(parseInt(query.limit || '200'), 1000);
 

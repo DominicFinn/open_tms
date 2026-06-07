@@ -126,6 +126,15 @@ export default function Login() {
           </div>
         </CardContent>
       </Card>
+      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-xs text-muted-foreground">
+        <Link to="/carrier-portal/login" className="transition-colors hover:text-primary">
+          Carrier login
+        </Link>
+        <span className="mx-2 opacity-50">·</span>
+        <Link to="/customer-portal/login" className="transition-colors hover:text-primary">
+          Customer login
+        </Link>
+      </div>
     </div>
   );
 }

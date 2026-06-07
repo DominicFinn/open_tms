@@ -43,6 +43,11 @@ function mockPrisma() {
         return Promise.resolve(e);
       }),
     },
+    // Multi-tenancy fallback: the adapter looks up the first Organization
+    // when creating a Device because external IoT webhooks have no JWT.
+    organization: {
+      findFirst: jest.fn().mockResolvedValue({ id: 'test-org' }),
+    },
     shipmentEvent: {
       create: jest.fn().mockImplementation(({ data }) => {
         const e = { id: 'se-001', ...data };

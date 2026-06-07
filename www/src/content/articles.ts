@@ -11,6 +11,77 @@ export interface Article {
 
 export const articles: Article[] = [
   {
+    slug: 'open-logistics-roadmap',
+    title: 'The Open Logistics Roadmap',
+    excerpt: 'More thoughts about the name, the scope, and what this thing is actually trying to be. Where the project is, where it is going, and why I am pumping the brakes on new functionality.',
+    date: '2026-05-07',
+    author: 'Dominic Finn',
+    category: 'announcements',
+    readTime: '6 min read',
+    content: `
+## The Honest Starting Point
+
+I work on Open TMS as a side project. A few hours here, a few hours there, in between everything else. I will be the first to admit I have meandered. The scope has grown well beyond what I originally set out to build, and at this point the project includes:
+
+- A TMS
+- A WMS
+- An exception and issue centre
+- IoT ingestion with shipment visibility
+- A quality centre with follow-ups and CAPA management
+- Financial reporting
+- A carrier portal
+- A customer portal
+
+And more besides. I like all of it. I think most of it is genuinely useful. But I have, very obviously, bitten off more than one person working part-time can chew.
+
+So this article is about where the project actually is, what I think the name should eventually be, and where the next few months go.
+
+## "Open Logistics" Keeps Coming Back
+
+I wrote a separate article about whether the project should keep the name "Open TMS". Short answer: for now, yes. Long answer: the moment the WMS features mature and the platform genuinely spans transportation and warehousing, "TMS" stops describing what this is.
+
+The functionality already in the repo points at something broader. Once you have WMS, exception handling, IoT visibility, financial reporting, quality and CAPA workflows, and carrier and customer portals all under one roof, you are not really running a TMS. You are running a logistics platform.
+
+That is why "Open Logistics" keeps creeping into how I think about the roadmap. Not as a rename today  - that is premature  - but as a direction.
+
+## Short Term: Stop Bashing In Features
+
+The most important thing right now is to stop adding new things and get the existing ones into a state where someone can actually run them in production.
+
+I work with a tester who will be helping with this once he wraps up another project. The plan is straightforward: manual testing of the full flows, then locking that knowledge in with automated test coverage. I want every behaviour and scenario covered  - not just unit tests around individual handlers, but the end-to-end flows that match what an operator actually does day to day. A lot of the scenarios are documented already. The gap is in turning that documentation into a verified, repeatable test suite.
+
+This is the unglamorous part. It is also the part that decides whether this becomes a project people use or a project people fork and abandon.
+
+## Medium Term: Assets, Digital Twins, ERP
+
+Once the foundations are solid, the part of the roadmap I am most excited about is asset management and digital twins.
+
+The idea is this: cartonised goods with BLE labels become assets in the system. Once they are assets, they have state  - location, custody, condition, ownership. That state can move with them through the WMS, into an ERP layer, and right out into the visibility functionality on shipment.
+
+This is really about state management. A pallet at rest in a warehouse and the same pallet on a truck should not be two different records in two different systems. They should be the same asset, with the same identity, observed by different parts of the platform at different points in time. BLE labels are the practical bridge between the warehouse view of the world and the in-transit view.
+
+The ERP angle is interesting too. I am not going to replace SAP. Nobody is. But there is a real gap for small and medium-sized businesses who need basic ERP functionality without the SAP price tag and complexity. If Open Logistics can offer a basic ERP layer that integrates naturally with the TMS and WMS already in the codebase, that is a useful thing to exist.
+
+The other medium-term thought is whether the actual shipments work belongs inside this codebase at all, or whether it should be pushed out into an API service that abstracts shipment management. System Loco is one option for that integration. There may be others. The point is: the shipment domain is well-defined enough that it could live behind an API and let the rest of the platform focus on orchestration rather than re-implementing the same primitives over and over.
+
+## Long Term: Performance, and Maybe a Different Backend
+
+Long term, I think about backend performance. The current Fastify and TypeScript stack is fine. It is productive, it is familiar, and it is not the bottleneck today. But at some scale, and for the kind of event-driven, concurrent workloads that logistics platforms generate, something like Elixir starts to look attractive.
+
+Honestly, part of the appeal is that Elixir has been on my "languages I want to learn properly" list for a long time. That is not a good reason to rewrite a working backend. So I am holding off. If and when there is a real performance ceiling we hit on the current stack, that is the moment to evaluate alternatives properly  - not before.
+
+## The Real Question
+
+Underneath all of this is a question I keep circling. What is Open TMS actually trying to be?
+
+The most honest answer I have is: an open source platform that does the boring, expensive, vendor-locked parts of logistics software well, and gives them away. TMS, WMS, visibility, financial reporting, carrier and customer portals, exception and quality management. The stuff that costs hundreds of thousands a year in commercial licenses.
+
+If the platform keeps growing in that direction  - and I think it will  - the name will have to grow too. "Open TMS" describes the entry point. "Open Logistics" describes the destination. I am not in a hurry to make that change, but I am not pretending it is not coming either.
+
+For now: less new functionality, more testing, more reliability. The roadmap is mostly about not getting distracted.
+    `,
+  },
+  {
     slug: 'why-open-source-tms',
     title: 'Why We Built an Open Source TMS',
     excerpt: 'TMS software costs a fortune and most of it isn\'t even that complex under the hood. So I built one and open sourced it.',

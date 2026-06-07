@@ -6,18 +6,18 @@ import { ICommandBus } from '../commands/CommandBus.js';
 import { CREATE_LANE } from '../commands/lanes/CreateLaneCommand.js';
 import { UPDATE_LANE } from '../commands/lanes/UpdateLaneCommand.js';
 import { ARCHIVE_LANE } from '../commands/lanes/ArchiveLaneCommand.js';
+import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 
 export async function laneRoutes(server: FastifyInstance) {
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
 
-  const getOrgId = async () => {
-    const org = await server.prisma.organization.findFirst({ select: { id: true } });
-    return org?.id || 'default';
-  };
-  // Get all lanes (uses denormalized read model for performance)
+  await registerOrgScope(server);
+  // Get all lanes (uses denormalized read model for performance). Scoped
+  // to the requesting tenant.
   server.get('/api/v1/lanes', async (req: FastifyRequest, _reply: FastifyReply) => {
     const { status } = (req.query as any) || {};
-    const where: any = {};
+    const orgId = req.orgId!;
+    const where: any = { orgId };
     if (status) where.status = status;
     else where.status = 'active';
 
@@ -60,10 +60,12 @@ export async function laneRoutes(server: FastifyInstance) {
       }
     }
 
-    // Get origin and destination to generate lane name
+    const orgId = req.orgId!;
+    // Get origin and destination to generate lane name (tenant-scoped so
+    // a malicious payload can't reference another tenant's location).
     const [origin, destination] = await Promise.all([
-      server.prisma.location.findUnique({ where: { id: body.originId } }),
-      server.prisma.location.findUnique({ where: { id: body.destinationId } })
+      server.prisma.location.findFirst({ where: { id: body.originId, orgId } }),
+      server.prisma.location.findFirst({ where: { id: body.destinationId, orgId } })
     ]);
 
     if (!origin || !destination) {
@@ -71,12 +73,13 @@ export async function laneRoutes(server: FastifyInstance) {
       return { data: null, error: 'Origin or destination location not found' };
     }
 
-    // Validate that all stop locations exist
+    // Validate that all stop locations exist in this tenant.
     if (body.stops.length > 0) {
       const stopLocations = await server.prisma.location.findMany({
         where: {
           id: { in: stopLocationIds },
-          archived: false
+          archived: false,
+          orgId,
         }
       });
 
@@ -90,10 +93,11 @@ export async function laneRoutes(server: FastifyInstance) {
 
     const result = await commandBus.dispatch({
       type: CREATE_LANE,
-      orgId: await getOrgId(),
-      actorId: null,
+      orgId,
+      actorId: req.user?.sub ?? null,
       payload: {
         name: laneName,
+        orgId,
         originId: body.originId,
         destinationId: body.destinationId,
         distance: body.distance,
@@ -108,9 +112,10 @@ export async function laneRoutes(server: FastifyInstance) {
       return { data: null, error: result.error };
     }
 
-    // Fetch complete lane with relationships for response
-    const created = await server.prisma.lane.findUnique({
-      where: { id: (result.data as any).id },
+    // Fetch complete lane with relationships for response, scoped to this
+    // tenant so a malicious payload can't fetch another org's lane.
+    const created = await server.prisma.lane.findFirst({
+      where: { id: (result.data as any).id, orgId },
       include: {
         origin: true,
         destination: true,
@@ -125,8 +130,9 @@ export async function laneRoutes(server: FastifyInstance) {
   // Get lane by ID
   server.get('/api/v1/lanes/:id', async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
+    const orgId = req.orgId!;
     const lane = await server.prisma.lane.findFirst({
-      where: { id, archived: false },
+      where: { id, archived: false, orgId },
       include: {
         origin: true,
         destination: true,
@@ -166,8 +172,9 @@ export async function laneRoutes(server: FastifyInstance) {
       })).optional()
     }).parse((req as any).body);
 
+    const orgId = req.orgId!;
     const lane = await server.prisma.lane.findFirst({
-      where: { id, archived: false }
+      where: { id, archived: false, orgId }
     });
     if (!lane) {
       reply.code(404);
@@ -200,7 +207,8 @@ export async function laneRoutes(server: FastifyInstance) {
         const stopLocations = await server.prisma.location.findMany({
           where: {
             id: { in: stopLocationIds },
-            archived: false
+            archived: false,
+            orgId,
           }
         });
 
@@ -212,10 +220,11 @@ export async function laneRoutes(server: FastifyInstance) {
     }
 
     // If origin or destination is being updated, validate they exist
+    // in the requesting tenant.
     if (body.originId || body.destinationId) {
       const [origin, destination] = await Promise.all([
-        body.originId ? server.prisma.location.findUnique({ where: { id: body.originId } }) : null,
-        body.destinationId ? server.prisma.location.findUnique({ where: { id: body.destinationId } }) : null
+        body.originId ? server.prisma.location.findFirst({ where: { id: body.originId, orgId } }) : null,
+        body.destinationId ? server.prisma.location.findFirst({ where: { id: body.destinationId, orgId } }) : null
       ]);
 
       if (body.originId && !origin) {
@@ -314,10 +323,21 @@ export async function laneRoutes(server: FastifyInstance) {
   server.delete('/api/v1/lanes/:id', async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
 
+    const orgId = req.orgId!;
+    // Cross-tenant guard before dispatching the command.
+    const existing = await server.prisma.lane.findFirst({
+      where: { id, orgId },
+      select: { id: true },
+    });
+    if (!existing) {
+      reply.code(404);
+      return { data: null, error: 'Lane not found' };
+    }
+
     const result = await commandBus.dispatch({
       type: ARCHIVE_LANE,
-      orgId: await getOrgId(),
-      actorId: null,
+      orgId,
+      actorId: req.user?.sub ?? null,
       payload: { id },
       metadata: { correlationId: randomUUID(), source: 'api' },
     });

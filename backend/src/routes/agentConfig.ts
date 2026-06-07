@@ -1,10 +1,24 @@
 /**
  * Agent Configuration routes — manage configurable agent prompts and behaviour.
+ *
+ * All writes go through the command bus. The /:agentType GET endpoint will
+ * lazily auto-provision the default triage config if none exists; that
+ * provisioning also goes through CreateAgentConfigCommand so the config +
+ * first version + active pointer land atomically.
  */
 
 import { FastifyPluginAsync } from 'fastify';
+import crypto from 'crypto';
 import { DEFAULT_TRIAGE_PROMPT, DEFAULT_TRIAGE_EVENTS } from '../events/handlers/TriageAgentHandler.js';
 import { EVENT_TYPES } from '../events/eventTypes.js';
+import { container, TOKENS } from '../di/index.js';
+import { ICommandBus } from '../commands/CommandBus.js';
+import {
+  CREATE_AGENT_CONFIG,
+  UPDATE_AGENT_CONFIG,
+  CREATE_PROMPT_VERSION,
+  ACTIVATE_PROMPT_VERSION,
+} from '../commands/agentConfig/index.js';
 
 /** All event types available for agent subscription */
 const AVAILABLE_EVENTS = Object.entries(EVENT_TYPES).map(([key, value]) => ({
@@ -43,42 +57,28 @@ const TEMPLATE_VARIABLES = [
 ];
 
 export const agentConfigRoutes: FastifyPluginAsync = async (server) => {
+  const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
 
   // ── GET /api/v1/agent-configs/available-events ──
-
   server.get('/api/v1/agent-configs/available-events', {
-    schema: {
-      tags: ['Agent Config'],
-      summary: 'List all available event types for agent subscription',
-    },
-  }, async () => {
-    return { data: AVAILABLE_EVENTS, error: null };
-  });
+    schema: { tags: ['Agent Config'], summary: 'List all available event types for agent subscription' },
+  }, async () => ({ data: AVAILABLE_EVENTS, error: null }));
 
   // ── GET /api/v1/agent-configs/template-variables ──
-
   server.get('/api/v1/agent-configs/template-variables', {
-    schema: {
-      tags: ['Agent Config'],
-      summary: 'List template variables available in agent prompts, with sample data',
-    },
-  }, async () => {
-    return { data: TEMPLATE_VARIABLES, error: null };
-  });
+    schema: { tags: ['Agent Config'], summary: 'List template variables available in agent prompts, with sample data' },
+  }, async () => ({ data: TEMPLATE_VARIABLES, error: null }));
 
   // ── GET /api/v1/agent-configs ──
-
   server.get('/api/v1/agent-configs', {
-    schema: {
-      tags: ['Agent Config'],
-      summary: 'List all agent configurations',
-    },
-  }, async () => {
-    const org = await server.prisma.organization.findFirst();
-    if (!org) return { data: [], error: null };
+    schema: { tags: ['Agent Config'], summary: 'List all agent configurations' },
+  }, async (req) => {
+    const orgId = req.user?.organizationId
+      ?? (await server.prisma.organization.findFirst())?.id;
+    if (!orgId) return { data: [], error: null };
 
     const configs = await server.prisma.agentConfig.findMany({
-      where: { orgId: org.id },
+      where: { orgId },
       include: {
         versions: {
           orderBy: { versionNumber: 'desc' },
@@ -92,69 +92,59 @@ export const agentConfigRoutes: FastifyPluginAsync = async (server) => {
   });
 
   // ── GET /api/v1/agent-configs/:agentType ──
-
   server.get<{ Params: { agentType: string } }>('/api/v1/agent-configs/:agentType', {
     schema: {
       tags: ['Agent Config'],
       summary: 'Get agent config by type (auto-creates default if missing)',
-      params: {
-        type: 'object',
-        required: ['agentType'],
-        properties: { agentType: { type: 'string' } },
-      },
+      params: { type: 'object', required: ['agentType'], properties: { agentType: { type: 'string' } } },
     },
-  }, async (request) => {
-    const org = await server.prisma.organization.findFirst();
-    if (!org) return { data: null, error: 'Organization not found' };
+  }, async (request, reply) => {
+    const orgId = request.user?.organizationId
+      ?? (await server.prisma.organization.findFirst())?.id;
+    if (!orgId) { reply.code(404); return { data: null, error: 'Organization not found' }; }
 
     let config = await server.prisma.agentConfig.findFirst({
-      where: { orgId: org.id, agentType: request.params.agentType },
-      include: {
-        versions: {
-          orderBy: { versionNumber: 'desc' },
-        },
-      },
+      where: { orgId, agentType: request.params.agentType },
+      include: { versions: { orderBy: { versionNumber: 'desc' } } },
     });
 
-    // Auto-create default config if none exists
+    // Auto-create default config if none exists, via the command bus so the
+    // first-version + active pointer land in a single transaction.
     if (!config && request.params.agentType === 'triage') {
-      config = await server.prisma.agentConfig.create({
-        data: {
-          orgId: org.id,
+      const result = await commandBus.dispatch({
+        type: CREATE_AGENT_CONFIG,
+        orgId,
+        actorId: request.user?.sub ?? 'system',
+        payload: {
           agentType: 'triage',
           name: 'Shipment Triage Agent',
           description: 'Analyzes shipment exceptions, SLA breaches, cargo issues, and cold chain excursions using AI to decide what action to take.',
           enabled: true,
           subscribedEvents: DEFAULT_TRIAGE_EVENTS,
-          versions: {
-            create: {
-              versionNumber: 1,
-              systemPrompt: DEFAULT_TRIAGE_PROMPT,
-              changeNote: 'Default prompt',
-              createdBy: 'system',
-            },
-          },
+          systemPrompt: DEFAULT_TRIAGE_PROMPT,
+          changeNote: 'Default prompt',
+          createdBy: 'system',
         },
-        include: { versions: { orderBy: { versionNumber: 'desc' as const } } },
+        metadata: { correlationId: crypto.randomUUID(), source: 'api' },
       });
-      // Set active version
-      await server.prisma.agentConfig.update({
-        where: { id: config.id },
-        data: { activeVersionId: config.versions[0].id },
-      });
+
+      if (!result.success) {
+        reply.code(500);
+        return { data: null, error: result.error ?? 'Failed to provision default config' };
+      }
+
       config = await server.prisma.agentConfig.findFirst({
-        where: { id: config.id },
-        include: { versions: { orderBy: { versionNumber: 'desc' as const } } },
+        where: { orgId, agentType: 'triage' },
+        include: { versions: { orderBy: { versionNumber: 'desc' } } },
       });
     }
 
-    if (!config) return { data: null, error: 'Agent config not found' };
+    if (!config) { reply.code(404); return { data: null, error: 'Agent config not found' }; }
 
     return { data: config, error: null };
   });
 
   // ── PUT /api/v1/agent-configs/:agentType ──
-
   server.put<{
     Params: { agentType: string };
     Body: {
@@ -171,11 +161,7 @@ export const agentConfigRoutes: FastifyPluginAsync = async (server) => {
     schema: {
       tags: ['Agent Config'],
       summary: 'Update agent config settings (non-prompt fields)',
-      params: {
-        type: 'object',
-        required: ['agentType'],
-        properties: { agentType: { type: 'string' } },
-      },
+      params: { type: 'object', required: ['agentType'], properties: { agentType: { type: 'string' } } },
       body: {
         type: 'object',
         properties: {
@@ -191,36 +177,37 @@ export const agentConfigRoutes: FastifyPluginAsync = async (server) => {
       },
     },
   }, async (request, reply) => {
-    const org = await server.prisma.organization.findFirst();
-    if (!org) { reply.code(404); return { data: null, error: 'Organization not found' }; }
+    const orgId = request.user?.organizationId
+      ?? (await server.prisma.organization.findFirst())?.id;
+    if (!orgId) { reply.code(404); return { data: null, error: 'Organization not found' }; }
 
     const config = await server.prisma.agentConfig.findFirst({
-      where: { orgId: org.id, agentType: request.params.agentType },
+      where: { orgId, agentType: request.params.agentType },
+      select: { id: true },
     });
     if (!config) { reply.code(404); return { data: null, error: 'Agent config not found' }; }
 
-    const body = request.body;
-    const updateData: Record<string, unknown> = {};
-    if (body.name !== undefined) updateData.name = body.name;
-    if (body.description !== undefined) updateData.description = body.description;
-    if (body.enabled !== undefined) updateData.enabled = body.enabled;
-    if (body.subscribedEvents !== undefined) updateData.subscribedEvents = body.subscribedEvents;
-    if (body.temperature !== undefined) updateData.temperature = body.temperature;
-    if (body.maxTokens !== undefined) updateData.maxTokens = body.maxTokens;
-    if (body.confidenceThreshold !== undefined) updateData.confidenceThreshold = body.confidenceThreshold;
-    if (body.deduplicationWindowMinutes !== undefined) updateData.deduplicationWindowMinutes = body.deduplicationWindowMinutes;
-
-    const updated = await server.prisma.agentConfig.update({
-      where: { id: config.id },
-      data: updateData,
-      include: { versions: { orderBy: { versionNumber: 'desc' }, take: 1 } },
+    const result = await commandBus.dispatch({
+      type: UPDATE_AGENT_CONFIG,
+      orgId,
+      actorId: request.user?.sub ?? null,
+      payload: { id: config.id, data: request.body },
+      metadata: { correlationId: crypto.randomUUID(), source: 'api' },
     });
 
+    if (!result.success) {
+      reply.code(400);
+      return { data: null, error: result.error ?? 'Failed to update agent config' };
+    }
+
+    const updated = await server.prisma.agentConfig.findUnique({
+      where: { id: config.id },
+      include: { versions: { orderBy: { versionNumber: 'desc' }, take: 1 } },
+    });
     return { data: updated, error: null };
   });
 
   // ── PUT /api/v1/agent-configs/:agentType/prompt ──
-
   server.put<{
     Params: { agentType: string };
     Body: { systemPrompt: string; changeNote?: string };
@@ -228,11 +215,7 @@ export const agentConfigRoutes: FastifyPluginAsync = async (server) => {
     schema: {
       tags: ['Agent Config'],
       summary: 'Save a new prompt version (creates an immutable version record)',
-      params: {
-        type: 'object',
-        required: ['agentType'],
-        properties: { agentType: { type: 'string' } },
-      },
+      params: { type: 'object', required: ['agentType'], properties: { agentType: { type: 'string' } } },
       body: {
         type: 'object',
         required: ['systemPrompt'],
@@ -243,48 +226,50 @@ export const agentConfigRoutes: FastifyPluginAsync = async (server) => {
       },
     },
   }, async (request, reply) => {
-    const org = await server.prisma.organization.findFirst();
-    if (!org) { reply.code(404); return { data: null, error: 'Organization not found' }; }
+    const orgId = request.user?.organizationId
+      ?? (await server.prisma.organization.findFirst())?.id;
+    if (!orgId) { reply.code(404); return { data: null, error: 'Organization not found' }; }
 
     const config = await server.prisma.agentConfig.findFirst({
-      where: { orgId: org.id, agentType: request.params.agentType },
-      include: { versions: { orderBy: { versionNumber: 'desc' }, take: 1 } },
+      where: { orgId, agentType: request.params.agentType },
+      select: { id: true },
     });
     if (!config) { reply.code(404); return { data: null, error: 'Agent config not found' }; }
 
-    const nextVersion = (config.versions[0]?.versionNumber ?? 0) + 1;
-
-    const version = await server.prisma.agentConfigVersion.create({
-      data: {
+    const result = await commandBus.dispatch({
+      type: CREATE_PROMPT_VERSION,
+      orgId,
+      actorId: request.user?.sub ?? null,
+      payload: {
         configId: config.id,
-        versionNumber: nextVersion,
         systemPrompt: request.body.systemPrompt,
-        changeNote: request.body.changeNote || null,
+        changeNote: request.body.changeNote ?? null,
+        createdBy: request.user?.sub ?? null,
       },
+      metadata: { correlationId: crypto.randomUUID(), source: 'api' },
     });
 
-    // Set as active
-    await server.prisma.agentConfig.update({
-      where: { id: config.id },
-      data: { activeVersionId: version.id },
-    });
+    if (!result.success) {
+      reply.code(400);
+      return { data: null, error: result.error ?? 'Failed to save prompt version' };
+    }
 
+    const version = await server.prisma.agentConfigVersion.findUnique({
+      where: { id: (result.data as { versionId: string }).versionId },
+    });
     return { data: version, error: null };
   });
 
   // ── GET /api/v1/agent-configs/:agentType/versions ──
-
   server.get<{ Params: { agentType: string } }>('/api/v1/agent-configs/:agentType/versions', {
-    schema: {
-      tags: ['Agent Config'],
-      summary: 'List prompt version history',
-    },
+    schema: { tags: ['Agent Config'], summary: 'List prompt version history' },
   }, async (request) => {
-    const org = await server.prisma.organization.findFirst();
-    if (!org) return { data: [], error: null };
+    const orgId = request.user?.organizationId
+      ?? (await server.prisma.organization.findFirst())?.id;
+    if (!orgId) return { data: [], error: null };
 
     const config = await server.prisma.agentConfig.findFirst({
-      where: { orgId: org.id, agentType: request.params.agentType },
+      where: { orgId, agentType: request.params.agentType },
       select: { id: true, activeVersionId: true },
     });
     if (!config) return { data: [], error: null };
@@ -295,47 +280,50 @@ export const agentConfigRoutes: FastifyPluginAsync = async (server) => {
     });
 
     return {
-      data: versions.map((v) => ({
-        ...v,
-        isActive: v.id === config.activeVersionId,
-      })),
+      data: versions.map((v) => ({ ...v, isActive: v.id === config.activeVersionId })),
       error: null,
     };
   });
 
   // ── POST /api/v1/agent-configs/:agentType/versions/:versionId/activate ──
-
   server.post<{
     Params: { agentType: string; versionId: string };
   }>('/api/v1/agent-configs/:agentType/versions/:versionId/activate', {
-    schema: {
-      tags: ['Agent Config'],
-      summary: 'Activate (rollback to) a specific prompt version',
-    },
+    schema: { tags: ['Agent Config'], summary: 'Activate (rollback to) a specific prompt version' },
   }, async (request, reply) => {
-    const org = await server.prisma.organization.findFirst();
-    if (!org) { reply.code(404); return { data: null, error: 'Organization not found' }; }
+    const orgId = request.user?.organizationId
+      ?? (await server.prisma.organization.findFirst())?.id;
+    if (!orgId) { reply.code(404); return { data: null, error: 'Organization not found' }; }
 
     const config = await server.prisma.agentConfig.findFirst({
-      where: { orgId: org.id, agentType: request.params.agentType },
+      where: { orgId, agentType: request.params.agentType },
+      select: { id: true },
     });
     if (!config) { reply.code(404); return { data: null, error: 'Agent config not found' }; }
 
-    const version = await server.prisma.agentConfigVersion.findFirst({
-      where: { id: request.params.versionId, configId: config.id },
-    });
-    if (!version) { reply.code(404); return { data: null, error: 'Version not found' }; }
-
-    await server.prisma.agentConfig.update({
-      where: { id: config.id },
-      data: { activeVersionId: version.id },
+    const result = await commandBus.dispatch({
+      type: ACTIVATE_PROMPT_VERSION,
+      orgId,
+      actorId: request.user?.sub ?? null,
+      payload: { configId: config.id, versionId: request.params.versionId },
+      metadata: { correlationId: crypto.randomUUID(), source: 'api' },
     });
 
-    return { data: { ...version, isActive: true }, error: null };
+    if (!result.success) {
+      const code = (result.error || '').toLowerCase().includes('not found') ? 404 : 400;
+      reply.code(code);
+      return { data: null, error: result.error ?? 'Failed to activate version' };
+    }
+
+    const version = await server.prisma.agentConfigVersion.findUnique({
+      where: { id: request.params.versionId },
+    });
+    return { data: version ? { ...version, isActive: true } : null, error: null };
   });
 
   // ── POST /api/v1/agent-configs/:agentType/preview-prompt ──
-
+  // Pure server-side string templating — no DB writes, so it stays out of
+  // the command bus.
   server.post<{
     Params: { agentType: string };
     Body: { systemPrompt: string };
@@ -343,20 +331,13 @@ export const agentConfigRoutes: FastifyPluginAsync = async (server) => {
     schema: {
       tags: ['Agent Config'],
       summary: 'Preview a prompt with template variables replaced by sample data',
-      body: {
-        type: 'object',
-        required: ['systemPrompt'],
-        properties: { systemPrompt: { type: 'string' } },
-      },
+      body: { type: 'object', required: ['systemPrompt'], properties: { systemPrompt: { type: 'string' } } },
     },
   }, async (request) => {
     const prompt = request.body.systemPrompt;
 
-    // Replace template variables with sample data
     const sampleMap: Record<string, string> = {};
-    for (const v of TEMPLATE_VARIABLES) {
-      sampleMap[v.name] = v.sample;
-    }
+    for (const v of TEMPLATE_VARIABLES) sampleMap[v.name] = v.sample;
 
     let resolved = prompt;
     for (const [varName, sample] of Object.entries(sampleMap)) {

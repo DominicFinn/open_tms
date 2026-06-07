@@ -32,12 +32,34 @@ interface LineItem {
   description?: string;
   quantity?: number;
   weight?: number;
+  weightUnit?: string;
+  length?: number;
+  width?: number;
+  height?: number;
+  dimUnit?: string;
+  unitOfMeasure?: string;
+  unitPriceCents?: number;
+  totalPriceCents?: number;
+  priceCurrency?: string;
+  freightClass?: string;
+  nmfcCode?: string;
+  hazmat?: boolean;
+  unNumber?: string;
+  hazmatClass?: string;
+  packingGroup?: string;
+  properShippingName?: string;
+  hsCode?: string;
+  countryOfOrigin?: string;
+  temperature?: string;
+  tempMinC?: number;
+  tempMaxC?: number;
 }
 
 interface TrackableUnit {
   id: string;
   identifier?: string;
   unitType?: string;
+  packagingType?: { kind: string; code: string; name: string } | null;
   lineItems: any[];
 }
 
@@ -260,26 +282,116 @@ export default function VNextOrderDetail() {
             <CardContent className="p-0">
               <Separator />
               {order.lineItems && order.lineItems.length > 0 ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>SKU</TableHead>
-                      <TableHead>Description</TableHead>
-                      <TableHead>Quantity</TableHead>
-                      <TableHead>Weight</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {order.lineItems.map((li) => (
-                      <TableRow key={li.id}>
-                        <TableCell className="font-mono text-xs">{li.sku || '-'}</TableCell>
-                        <TableCell>{li.description || '-'}</TableCell>
-                        <TableCell>{li.quantity ?? '-'}</TableCell>
-                        <TableCell>{li.weight ? `${li.weight} lbs` : '-'}</TableCell>
+                <>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>SKU</TableHead>
+                        <TableHead>Description</TableHead>
+                        <TableHead>Qty</TableHead>
+                        <TableHead>UoM</TableHead>
+                        <TableHead>Weight</TableHead>
+                        <TableHead>Dims</TableHead>
+                        <TableHead>Class</TableHead>
+                        <TableHead>NMFC</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {order.lineItems.map((li) => (
+                        <TableRow key={li.id}>
+                          <TableCell className="font-mono text-xs">{li.sku || '-'}</TableCell>
+                          <TableCell>{li.description || '-'}</TableCell>
+                          <TableCell>{li.quantity ?? '-'}</TableCell>
+                          <TableCell>{li.unitOfMeasure || '-'}</TableCell>
+                          <TableCell>{li.weight != null ? `${li.weight} ${li.weightUnit || ''}` : '-'}</TableCell>
+                          <TableCell>
+                            {li.length && li.width && li.height
+                              ? `${li.length} x ${li.width} x ${li.height} ${li.dimUnit || ''}`
+                              : '-'}
+                          </TableCell>
+                          <TableCell>{li.freightClass || '-'}</TableCell>
+                          <TableCell>{li.nmfcCode || '-'}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+
+                  {order.lineItems.some((li) => li.hazmat) && (
+                    <div className="m-4 rounded-md border border-warning/40 bg-warning/10 p-3">
+                      <div className="mb-2 text-xs font-semibold uppercase tracking-wide">Hazmat</div>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>SKU</TableHead>
+                            <TableHead>UN</TableHead>
+                            <TableHead>Class</TableHead>
+                            <TableHead>PG</TableHead>
+                            <TableHead>Proper shipping name</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {order.lineItems.filter((li) => li.hazmat).map((li) => (
+                            <TableRow key={'hz-' + li.id}>
+                              <TableCell className="font-mono text-xs">{li.sku || '-'}</TableCell>
+                              <TableCell>{li.unNumber || '-'}</TableCell>
+                              <TableCell>{li.hazmatClass || '-'}</TableCell>
+                              <TableCell>{li.packingGroup || '-'}</TableCell>
+                              <TableCell>{li.properShippingName || '-'}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+
+                  {order.lineItems.some((li) => li.hsCode || li.countryOfOrigin) && (
+                    <div className="m-4 rounded-md border border-border p-3">
+                      <div className="mb-2 text-xs font-semibold uppercase tracking-wide">Customs</div>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>SKU</TableHead>
+                            <TableHead>HS code</TableHead>
+                            <TableHead>Country of origin</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {order.lineItems.filter((li) => li.hsCode || li.countryOfOrigin).map((li) => (
+                            <TableRow key={'cu-' + li.id}>
+                              <TableCell className="font-mono text-xs">{li.sku || '-'}</TableCell>
+                              <TableCell>{li.hsCode || '-'}</TableCell>
+                              <TableCell>{li.countryOfOrigin || '-'}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+
+                  {order.lineItems.some((li) => li.tempMinC != null || li.tempMaxC != null) && (
+                    <div className="m-4 rounded-md border border-info/40 bg-info/10 p-3">
+                      <div className="mb-2 text-xs font-semibold uppercase tracking-wide">Temperature</div>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>SKU</TableHead>
+                            <TableHead>Min (°C)</TableHead>
+                            <TableHead>Max (°C)</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {order.lineItems.filter((li) => li.tempMinC != null || li.tempMaxC != null).map((li) => (
+                            <TableRow key={'tc-' + li.id}>
+                              <TableCell className="font-mono text-xs">{li.sku || '-'}</TableCell>
+                              <TableCell>{li.tempMinC ?? '-'}</TableCell>
+                              <TableCell>{li.tempMaxC ?? '-'}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </>
               ) : (
                 <div className="px-6 py-12 text-center text-sm text-muted-foreground">
                   No line items
@@ -301,6 +413,7 @@ export default function VNextOrderDetail() {
                     <TableRow>
                       <TableHead>Identifier</TableHead>
                       <TableHead>Type</TableHead>
+                      <TableHead>Packaging</TableHead>
                       <TableHead>Line items</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -309,6 +422,7 @@ export default function VNextOrderDetail() {
                       <TableRow key={tu.id}>
                         <TableCell className="font-mono text-xs">{tu.identifier || '-'}</TableCell>
                         <TableCell>{tu.unitType || '-'}</TableCell>
+                        <TableCell>{tu.packagingType ? `${tu.packagingType.kind}: ${tu.packagingType.code}` : '-'}</TableCell>
                         <TableCell>{tu.lineItems?.length || 0}</TableCell>
                       </TableRow>
                     ))}

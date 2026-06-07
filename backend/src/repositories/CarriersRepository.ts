@@ -1,6 +1,8 @@
 import { PrismaClient, Carrier } from '@prisma/client';
 
 export interface CreateCarrierDTO {
+  /** Multi-tenancy scope. Required post phase-2 tightening. */
+  orgId: string;
   name: string;
   mcNumber?: string;
   dotNumber?: string;
@@ -50,8 +52,8 @@ export interface UpdateCarrierDTO {
 }
 
 export interface ICarriersRepository {
-  all(): Promise<Carrier[]>;
-  findById(id: string): Promise<Carrier | null>;
+  all(orgId?: string | null): Promise<Carrier[]>;
+  findById(id: string, orgId?: string | null): Promise<Carrier | null>;
   create(data: CreateCarrierDTO): Promise<Carrier>;
   update(id: string, data: UpdateCarrierDTO): Promise<Carrier>;
   archive(id: string): Promise<Carrier>;
@@ -60,17 +62,21 @@ export interface ICarriersRepository {
 export class CarriersRepository implements ICarriersRepository {
   constructor(private prisma: PrismaClient) {}
 
-  async all(): Promise<Carrier[]> {
+  async all(orgId?: string | null): Promise<Carrier[]> {
+    const where: any = { archived: false };
+    // Scope to the requesting tenant when supplied. NULL orgId rows
+    // are legacy and excluded from scoped queries.
+    if (orgId) where.orgId = orgId;
     return this.prisma.carrier.findMany({
-      where: { archived: false },
+      where,
       orderBy: { name: 'asc' }
     });
   }
 
-  async findById(id: string): Promise<Carrier | null> {
-    return this.prisma.carrier.findFirst({
-      where: { id, archived: false }
-    });
+  async findById(id: string, orgId?: string | null): Promise<Carrier | null> {
+    const where: any = { id, archived: false };
+    if (orgId) where.orgId = orgId;
+    return this.prisma.carrier.findFirst({ where });
   }
 
   async create(data: CreateCarrierDTO): Promise<Carrier> {

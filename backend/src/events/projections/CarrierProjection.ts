@@ -16,6 +16,7 @@ export class CarrierProjection implements IEventHandler {
     priority: 5,
     retryLimit: 5,
     expireInSeconds: 600,
+    pollingIntervalSeconds: 0.5,
   };
 
   constructor(private prisma: PrismaClient) {}

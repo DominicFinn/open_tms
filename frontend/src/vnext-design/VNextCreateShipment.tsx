@@ -27,6 +27,7 @@ import {
 } from '../shared/shipmentTypeValidator';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -406,7 +407,7 @@ export default function VNextCreateShipment() {
           </div>
           <div className="space-y-2">
             <Label>Pickup date{reqMark('pickupDate')}</Label>
-            <Input type="date" value={pickupDate} onChange={e => setPickupDate(e.target.value)} />
+            <DatePicker type="date" value={pickupDate} onChange={e => setPickupDate(e.target.value)} />
           </div>
           <div className="md:col-span-2">
             <label className="flex items-center gap-2 text-sm font-medium">
@@ -432,7 +433,7 @@ export default function VNextCreateShipment() {
             <>
               <div className="space-y-2">
                 <Label>Window start</Label>
-                <Input
+                <DatePicker
                   type="datetime-local"
                   value={pickupWindowStart}
                   onChange={e => setPickupWindowStart(e.target.value)}
@@ -440,7 +441,7 @@ export default function VNextCreateShipment() {
               </div>
               <div className="space-y-2">
                 <Label>Window end</Label>
-                <Input
+                <DatePicker
                   type="datetime-local"
                   value={pickupWindowEnd}
                   min={pickupWindowStart || undefined}
@@ -475,7 +476,7 @@ export default function VNextCreateShipment() {
           </div>
           <div className="space-y-2">
             <Label>Delivery date{reqMark('deliveryDate')}</Label>
-            <Input
+            <DatePicker
               type="date"
               value={deliveryDate}
               min={pickupDate || undefined}
@@ -506,7 +507,7 @@ export default function VNextCreateShipment() {
             <>
               <div className="space-y-2">
                 <Label>Window start</Label>
-                <Input
+                <DatePicker
                   type="datetime-local"
                   value={deliveryWindowStart}
                   onChange={e => setDeliveryWindowStart(e.target.value)}
@@ -514,7 +515,7 @@ export default function VNextCreateShipment() {
               </div>
               <div className="space-y-2">
                 <Label>Window end</Label>
-                <Input
+                <DatePicker
                   type="datetime-local"
                   value={deliveryWindowEnd}
                   min={deliveryWindowStart || undefined}

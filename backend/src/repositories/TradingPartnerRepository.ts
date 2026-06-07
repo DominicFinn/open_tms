@@ -1,6 +1,8 @@
 import { PrismaClient, TradingPartner, TradingPartnerTransaction } from '@prisma/client';
 
 export interface CreateTradingPartnerDTO {
+  /** Multi-tenancy scope. Required post phase-2 tightening. */
+  orgId: string;
   name: string;
   entityType: string;
   customerId?: string;
@@ -57,12 +59,13 @@ export type TradingPartnerWithTransactions = TradingPartner & {
 export interface ITradingPartnerRepository {
   create(data: CreateTradingPartnerDTO): Promise<TradingPartner>;
   findById(id: string): Promise<TradingPartnerWithTransactions | null>;
-  findAll(filters?: { entityType?: string; active?: boolean }): Promise<TradingPartnerWithTransactions[]>;
+  findAll(filters?: { entityType?: string; active?: boolean; includeDeleted?: boolean }): Promise<TradingPartnerWithTransactions[]>;
   findByCarrierId(carrierId: string): Promise<TradingPartnerWithTransactions | null>;
   findByCustomerId(customerId: string): Promise<TradingPartnerWithTransactions | null>;
   findInboundPartners(): Promise<TradingPartnerWithTransactions[]>;
   findOutboundPartnersByTransaction(transactionType: string): Promise<TradingPartnerWithTransactions[]>;
   update(id: string, data: UpdateTradingPartnerDTO): Promise<TradingPartner>;
+  softDelete(id: string, deletedBy: string | null): Promise<TradingPartner>;
   updateLastPolled(id: string): Promise<void>;
   // Transactions
   addTransaction(data: CreateTransactionDTO): Promise<TradingPartnerTransaction>;
@@ -71,9 +74,9 @@ export interface ITradingPartnerRepository {
   // Logs
   createLog(data: any): Promise<any>;
   findLogById(id: string): Promise<any>;
-  findLogs(filters: { partnerId?: string; transactionType?: string; direction?: string; status?: string }): Promise<any[]>;
-  findLogsWithPagination(filters: { partnerId?: string; transactionType?: string; direction?: string; status?: string; source?: string; search?: string }, limit?: number, offset?: number): Promise<{ logs: any[]; total: number }>;
-  getLogStats(filters?: { partnerId?: string; transactionType?: string; direction?: string }): Promise<{ total: number; pending: number; processing: number; success: number; error: number; duplicate: number; totalEntitiesCreated: number }>;
+  findLogs(filters: { orgId?: string; partnerId?: string; transactionType?: string; direction?: string; status?: string }): Promise<any[]>;
+  findLogsWithPagination(filters: { orgId?: string; partnerId?: string; transactionType?: string; direction?: string; status?: string; source?: string; search?: string }, limit?: number, offset?: number): Promise<{ logs: any[]; total: number }>;
+  getLogStats(filters?: { orgId?: string; partnerId?: string; transactionType?: string; direction?: string }): Promise<{ total: number; pending: number; processing: number; success: number; error: number; duplicate: number; totalEntitiesCreated: number }>;
   updateLog(id: string, data: any): Promise<any>;
 }
 
@@ -97,10 +100,11 @@ export class TradingPartnerRepository implements ITradingPartnerRepository {
     }) as Promise<TradingPartnerWithTransactions | null>;
   }
 
-  async findAll(filters?: { entityType?: string; active?: boolean }): Promise<TradingPartnerWithTransactions[]> {
+  async findAll(filters?: { entityType?: string; active?: boolean; includeDeleted?: boolean }): Promise<TradingPartnerWithTransactions[]> {
     const where: any = {};
     if (filters?.entityType) where.entityType = filters.entityType;
     if (filters?.active !== undefined) where.active = filters.active;
+    if (!filters?.includeDeleted) where.deletedAt = null;
 
     return this.prisma.tradingPartner.findMany({
       where,
@@ -111,21 +115,21 @@ export class TradingPartnerRepository implements ITradingPartnerRepository {
 
   async findByCarrierId(carrierId: string): Promise<TradingPartnerWithTransactions | null> {
     return this.prisma.tradingPartner.findFirst({
-      where: { carrierId, active: true },
+      where: { carrierId, active: true, deletedAt: null },
       include: partnerInclude,
     }) as Promise<TradingPartnerWithTransactions | null>;
   }
 
   async findByCustomerId(customerId: string): Promise<TradingPartnerWithTransactions | null> {
     return this.prisma.tradingPartner.findFirst({
-      where: { customerId, active: true },
+      where: { customerId, active: true, deletedAt: null },
       include: partnerInclude,
     }) as Promise<TradingPartnerWithTransactions | null>;
   }
 
   async findInboundPartners(): Promise<TradingPartnerWithTransactions[]> {
     return this.prisma.tradingPartner.findMany({
-      where: { active: true, inboundEnabled: true },
+      where: { active: true, inboundEnabled: true, deletedAt: null },
       include: partnerInclude,
     }) as Promise<TradingPartnerWithTransactions[]>;
   }
@@ -134,6 +138,7 @@ export class TradingPartnerRepository implements ITradingPartnerRepository {
     return this.prisma.tradingPartner.findMany({
       where: {
         active: true,
+        deletedAt: null,
         outboundEnabled: true,
         transactions: {
           some: { transactionType, direction: 'outbound', enabled: true },
@@ -145,6 +150,19 @@ export class TradingPartnerRepository implements ITradingPartnerRepository {
 
   async update(id: string, data: UpdateTradingPartnerDTO): Promise<TradingPartner> {
     return this.prisma.tradingPartner.update({ where: { id }, data });
+  }
+
+  async softDelete(id: string, deletedBy: string | null): Promise<TradingPartner> {
+    return this.prisma.tradingPartner.update({
+      where: { id },
+      data: {
+        deletedAt: new Date(),
+        deletedBy,
+        active: false,           // also flip active so polling/outbound stop immediately
+        inboundEnabled: false,
+        outboundEnabled: false,
+      },
+    });
   }
 
   async updateLastPolled(id: string): Promise<void> {
@@ -171,6 +189,11 @@ export class TradingPartnerRepository implements ITradingPartnerRepository {
   // ── Logs ──
 
   async createLog(data: any): Promise<any> {
+    // Note on orgId: the surrounding domain (Customer, Carrier, TradingPartner,
+    // Shipment) does not carry orgId directly today, so we can't auto-derive
+    // it. Route handlers should pass `req.user.organizationId` explicitly so
+    // new rows are scoped; legacy rows backfilled to NULL are handled
+    // tolerantly by the read endpoints.
     return this.prisma.ediTransactionLog.create({ data });
   }
 
@@ -181,8 +204,9 @@ export class TradingPartnerRepository implements ITradingPartnerRepository {
     });
   }
 
-  async findLogs(filters: { partnerId?: string; transactionType?: string; direction?: string; status?: string }): Promise<any[]> {
+  async findLogs(filters: { orgId?: string; partnerId?: string; transactionType?: string; direction?: string; status?: string }): Promise<any[]> {
     const where: any = {};
+    if (filters.orgId) where.orgId = filters.orgId;
     if (filters.partnerId) where.partnerId = filters.partnerId;
     if (filters.transactionType) where.transactionType = filters.transactionType;
     if (filters.direction) where.direction = filters.direction;
@@ -197,11 +221,12 @@ export class TradingPartnerRepository implements ITradingPartnerRepository {
   }
 
   async findLogsWithPagination(
-    filters: { partnerId?: string; transactionType?: string; direction?: string; status?: string; source?: string; search?: string },
+    filters: { orgId?: string; partnerId?: string; transactionType?: string; direction?: string; status?: string; source?: string; search?: string },
     limit = 50,
     offset = 0,
   ): Promise<{ logs: any[]; total: number }> {
     const where: any = {};
+    if (filters.orgId) where.orgId = filters.orgId;
     if (filters.partnerId) where.partnerId = filters.partnerId;
     if (filters.transactionType) where.transactionType = filters.transactionType;
     if (filters.direction) where.direction = filters.direction;
@@ -229,10 +254,11 @@ export class TradingPartnerRepository implements ITradingPartnerRepository {
     return { logs, total };
   }
 
-  async getLogStats(filters?: { partnerId?: string; transactionType?: string; direction?: string }): Promise<{
+  async getLogStats(filters?: { orgId?: string; partnerId?: string; transactionType?: string; direction?: string }): Promise<{
     total: number; pending: number; processing: number; success: number; error: number; duplicate: number; totalEntitiesCreated: number;
   }> {
     const where: any = {};
+    if (filters?.orgId) where.orgId = filters.orgId;
     if (filters?.partnerId) where.partnerId = filters.partnerId;
     if (filters?.transactionType) where.transactionType = filters.transactionType;
     if (filters?.direction) where.direction = filters.direction;

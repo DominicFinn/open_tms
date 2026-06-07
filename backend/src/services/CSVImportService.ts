@@ -102,7 +102,11 @@ interface ImportResult {
 }
 
 export interface ICSVImportService {
-  importOrders(csvContent: string): Promise<ImportResult>;
+  /**
+   * Import orders from CSV content into the given tenant.
+   * orgId is required post phase-2 multi-tenancy tightening.
+   */
+  importOrders(csvContent: string, orgId: string): Promise<ImportResult>;
   parseCSV(csvContent: string): ParsedOrder[];
 }
 
@@ -301,7 +305,7 @@ export class CSVImportService implements ICSVImportService {
   /**
    * Import orders from CSV content
    */
-  async importOrders(csvContent: string): Promise<ImportResult> {
+  async importOrders(csvContent: string, orgId: string): Promise<ImportResult> {
     const result: ImportResult = {
       success: true,
       ordersCreated: 0,
@@ -360,6 +364,7 @@ export class CSVImportService implements ICSVImportService {
 
           // Create order
           const order = await this.ordersRepo.create({
+            orgId,
             orderNumber: parsedOrder.orderNumber,
             poNumber: parsedOrder.poNumber,
             customerId,

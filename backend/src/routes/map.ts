@@ -7,8 +7,11 @@
  */
 
 import { FastifyPluginAsync } from 'fastify';
+import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 
 export const mapRoutes: FastifyPluginAsync = async (server) => {
+  await registerOrgScope(server);
+
   // GET /api/v1/map/shipments — get shipments within a bounding box
   server.get<{
     Querystring: {
@@ -58,8 +61,13 @@ export const mapRoutes: FastifyPluginAsync = async (server) => {
     const limit = Math.min(parseInt(request.query.limit || '2000', 10), 5000);
     const statusFilter = request.query.status?.split(',').filter(Boolean);
 
+    // Multi-tenancy: scope to the requesting tenant. Without this, the map
+    // showed every org's shipments to anyone with a JWT.
+    const orgId = request.orgId!;
+
     // Build WHERE clause
     const where: any = {
+      orgId,
       currentLat: { not: null },
       currentLng: { not: null },
     };
@@ -119,7 +127,10 @@ export const mapRoutes: FastifyPluginAsync = async (server) => {
     const shipmentIds = readModels.map((s) => s.id);
     const routeData = shipmentIds.length > 0
       ? await server.prisma.shipment.findMany({
-          where: { id: { in: shipmentIds } },
+          // Belt and braces: the readModel above is already orgId-scoped,
+          // so `shipmentIds` only contains this tenant's shipments. Adding
+          // orgId here makes the multi-tenancy story obvious to reviewers.
+          where: { id: { in: shipmentIds }, orgId },
           select: {
             id: true,
             origin: { select: { lat: true, lng: true } },

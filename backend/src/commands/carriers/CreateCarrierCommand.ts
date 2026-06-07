@@ -6,6 +6,9 @@ import { Command } from '../types.js';
 
 export interface CreateCarrierPayload {
   name: string;
+  // Multi-tenancy: optional in the type for parity with legacy callers
+  // (seed/test); route handlers always supply it from the JWT.
+  orgId?: string | null;
   mcNumber?: string;
   dotNumber?: string;
   contactName?: string;
@@ -32,7 +35,17 @@ export class CreateCarrierCommandHandler extends BaseCommandHandler<CreateCarrie
     tx: TransactionClient,
     emit: EmitFn
   ): Promise<{ id: string; name: string }> {
-    const carrier = await tx.carrier.create({ data: command.payload });
+    const { orgId: payloadOrgId, ...rest } = command.payload;
+    // Carrier.orgId is NOT NULL post phase-2 tightening; throw if neither
+    // the payload nor command.orgId supply one rather than write a
+    // half-built row.
+    const resolvedOrgId = payloadOrgId || command.orgId;
+    if (!resolvedOrgId) {
+      throw new Error('orgId is required to create a Carrier (multi-tenancy)');
+    }
+    const carrier = await tx.carrier.create({
+      data: { ...rest, orgId: resolvedOrgId },
+    });
 
     emit(this.createEvent(command, {
       type: EVENT_TYPES.CARRIER_CREATED,

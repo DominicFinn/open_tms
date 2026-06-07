@@ -33,11 +33,22 @@ export interface QueueJob {
   errorMessage?: string | null;
 }
 
+export interface SubscribeAdapterOptions {
+  /** Worker concurrency. Default: 2 */
+  concurrency?: number;
+  /** How often pg-boss polls for new jobs. Default: 2s */
+  pollingIntervalSeconds?: number;
+}
+
 export interface IQueueAdapter {
   start(): Promise<void>;
   stop(): Promise<void>;
   publish(queueName: string, message: QueueMessage): Promise<string>;
-  subscribe(queueName: string, handler: (message: QueueMessage) => Promise<void>): Promise<void>;
+  subscribe(
+    queueName: string,
+    handler: (message: QueueMessage) => Promise<void>,
+    options?: SubscribeAdapterOptions,
+  ): Promise<void>;
 
   // Monitoring
   getQueueStats(queueName: string): Promise<QueueStats>;

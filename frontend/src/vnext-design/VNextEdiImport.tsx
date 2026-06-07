@@ -17,7 +17,11 @@ import {
 export default function VNextEdiImport() {
   const [content, setContent] = useState('');
   const [fileName, setFileName] = useState('');
-  const [partnerId, setPartnerId] = useState('');
+  // Radix Select forbids an empty string as an item value, so we use this
+  // sentinel to mean "no partner selected — manual import" and translate it
+  // to undefined in the request body.
+  const NO_PARTNER = '__none__';
+  const [partnerId, setPartnerId] = useState<string>(NO_PARTNER);
   const [partners, setPartners] = useState<Array<{ id: string; name: string }>>([]);
   const [detectedType, setDetectedType] = useState('');
   const [result, setResult] = useState<any>(null);
@@ -30,7 +34,8 @@ export default function VNextEdiImport() {
     if (partnersLoaded) return;
     const res = await fetch(`${API_URL}/api/v1/trading-partners?active=true`);
     const json = await res.json();
-    setPartners((json.data || []).map((p: any) => ({ id: p.id, name: p.name })));
+    const list = Array.isArray(json.data) ? json.data : [];
+    setPartners(list.map((p: any) => ({ id: p.id, name: p.name })));
     setPartnersLoaded(true);
   };
 
@@ -84,7 +89,7 @@ export default function VNextEdiImport() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           content,
-          partnerId: partnerId || undefined,
+          partnerId: partnerId && partnerId !== NO_PARTNER ? partnerId : undefined,
           fileName: fileName || undefined,
           source: 'manual',
         }),
@@ -170,7 +175,7 @@ export default function VNextEdiImport() {
                 <SelectValue placeholder="None - manual import" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">None - manual import</SelectItem>
+                <SelectItem value={NO_PARTNER}>None - manual import</SelectItem>
                 {partners.map(p => (
                   <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                 ))}

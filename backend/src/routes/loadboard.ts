@@ -1,15 +1,14 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { optionalAuth } from '../middleware/jwtAuth.js';
+import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 
 export async function loadboardRoutes(server: FastifyInstance) {
   // Apply optional auth to all loadboard routes (permissions checked when token present)
   server.addHook('preHandler', optionalAuth);
-
-  const getOrgId = async () => {
-    const org = await server.prisma.organization.findFirst({ select: { id: true } });
-    return org?.id || 'default';
-  };
+  // The org-scope hook runs after optionalAuth so it can read the JWT;
+  // for unauthed callers it falls through to the first Organization.
+  await registerOrgScope(server);
 
   // Get load board shipments (unassigned to carrier)
   server.get('/api/v1/loadboard', {
@@ -45,7 +44,12 @@ export async function loadboardRoutes(server: FastifyInstance) {
       dateTo?: string;
     };
 
+    // Multi-tenancy: scope every load-board read to the requesting tenant.
+    // Unauthed callers see the default Organization's loadboard (matches
+    // legacy single-tenant behaviour) — they can't cross-tenant probe.
+    const orgId = req.orgId!;
     const where: any = {
+      orgId,
       archived: false,
       carrierId: null,
       status: { in: ['booked', 'confirmed', 'ready', 'pending'] },
@@ -106,8 +110,10 @@ export async function loadboardRoutes(server: FastifyInstance) {
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { shipmentId } = req.params as { shipmentId: string };
 
-    const shipment = await server.prisma.shipment.findUnique({
-      where: { id: shipmentId },
+    // Cross-tenant guard: findFirst so the where clause can include orgId.
+    const orgId = req.orgId!;
+    const shipment = await server.prisma.shipment.findFirst({
+      where: { id: shipmentId, orgId },
       select: {
         id: true,
         laneId: true,
@@ -149,6 +155,7 @@ export async function loadboardRoutes(server: FastifyInstance) {
     if (shipment.laneId) {
       const historicalShipments = await server.prisma.shipment.findMany({
         where: {
+          orgId,
           laneId: shipment.laneId,
           carrierId: { not: null },
           id: { not: shipmentId },
@@ -167,8 +174,7 @@ export async function loadboardRoutes(server: FastifyInstance) {
         .map(s => s.carrier!);
     }
 
-    // Compute tender acceptance stats per carrier
-    const orgId = await getOrgId();
+    // Compute tender acceptance stats per carrier (orgId already resolved above)
     const carrierIds = [
       ...laneCarriers.map(lc => lc.carrierId),
       ...historicalCarriers.map(c => c.id),
@@ -280,8 +286,9 @@ export async function loadboardRoutes(server: FastifyInstance) {
       notes: z.string().optional(),
     }).parse(req.body);
 
-    const shipment = await server.prisma.shipment.findUnique({
-      where: { id: shipmentId },
+    const orgId = req.orgId!;
+    const shipment = await server.prisma.shipment.findFirst({
+      where: { id: shipmentId, orgId },
       select: { id: true, carrierId: true, status: true, reference: true },
     });
 
@@ -304,8 +311,6 @@ export async function loadboardRoutes(server: FastifyInstance) {
       reply.code(400);
       return { data: null, error: 'Carrier not found or archived' };
     }
-
-    const orgId = await getOrgId();
 
     // Assign carrier and create cost charge in a transaction
     const result = await server.prisma.$transaction(async (tx) => {

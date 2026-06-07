@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { CheckCircle2, CircleAlert, Plus, Search, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 import { API_URL } from '../api';
 import { Button } from '@/components/ui/button';
@@ -133,13 +134,31 @@ export default function VNextTradingPartners() {
       if (typeFilter !== 'all') params.set('entityType', typeFilter);
       const res = await fetch(`${API_URL}/api/v1/trading-partners?${params}`);
       const json = await res.json();
-      setPartners(json.data || []);
+      setPartners(Array.isArray(json.data) ? json.data : []);
     } catch (err: any) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
   }, [typeFilter]);
+
+  const deletePartner = async (p: TradingPartner) => {
+    if (!window.confirm(`Soft-delete trading partner "${p.name}"? It will be hidden from the list and polling/outbound disabled, but the row is kept for audit.`)) {
+      return;
+    }
+    try {
+      const res = await fetch(`${API_URL}/api/v1/trading-partners/${p.id}`, { method: 'DELETE' });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json.error) {
+        toast.error(json.error || `Failed to delete partner (${res.status})`);
+        return;
+      }
+      toast.success(`"${p.name}" deleted`);
+      fetchPartners();
+    } catch (err) {
+      toast.error((err as Error).message || 'Failed to delete partner');
+    }
+  };
 
   useEffect(() => { fetchPartners(); }, [fetchPartners]);
 
@@ -343,7 +362,18 @@ export default function VNextTradingPartners() {
                   {p.lastPolledAt ? new Date(p.lastPolledAt).toLocaleString() : 'Never'}
                 </TableCell>
                 <TableCell>
-                  <Button size="sm" variant="outline" onClick={() => openEdit(p)}>Edit</Button>
+                  <div className="flex items-center gap-1">
+                    <Button size="sm" variant="outline" onClick={() => openEdit(p)}>Edit</Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => deletePartner(p)}
+                      title="Delete partner"
+                      className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             ))}

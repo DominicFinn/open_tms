@@ -8,11 +8,15 @@ import { IEDI180Service, EDI180Data } from '../services/EDI180Service.js';
 import { PrismaClient } from '@prisma/client';
 import crypto from 'crypto';
 
+import { registerOrgScopeForEdi } from '../auth/orgScopeMiddleware.js';
+
 export async function edi180Routes(server: FastifyInstance) {
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
   const prisma = container.resolve<PrismaClient>(TOKENS.PrismaClient);
   const parseService = container.resolve<IEDI180ParseService>(TOKENS.IEDI180ParseService);
   const generateService = container.resolve<IEDI180Service>(TOKENS.IEDI180Service);
+
+  await registerOrgScopeForEdi(server);
 
   // POST /api/v1/edi/180/inbound — Process inbound EDI 180 (customer return request)
   server.post('/api/v1/edi/180/inbound', {
@@ -35,8 +39,10 @@ export async function edi180Routes(server: FastifyInstance) {
       partnerId: z.string().optional(),
     }).parse((req as any).body);
 
-    const orgId = (req as any).orgId || (await prisma.organization.findFirst({ select: { id: true } }))?.id || 'default-org';
-    const actorId = (req as any).userId || 'edi-180-inbound';
+    // Multi-tenancy: req.orgId is populated by the EDI hook chain at the
+    // top of this plugin (JWT → partner.customer.orgId → default org).
+    const orgId = req.orgId!;
+    const actorId = req.user?.sub ?? 'edi-180-inbound';
 
     // Parse the EDI content
     const parsed = parseService.parseEDI180(body.content);
@@ -172,8 +178,10 @@ export async function edi180Routes(server: FastifyInstance) {
       return { data: null, error: 'Customer not found' };
     }
 
-    // Look up the org / return receiving address
-    const org = await prisma.organization.findFirst();
+    // Look up the org / return receiving address. req.orgId is populated
+    // by the EDI hook chain — scope to the requesting tenant rather than
+    // just picking the first Organization.
+    const org = await prisma.organization.findUnique({ where: { id: req.orgId! } });
 
     // Look up original order to find warehouse ship-from (as return ship-to)
     const order = await prisma.order.findUnique({

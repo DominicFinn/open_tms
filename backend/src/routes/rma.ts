@@ -14,6 +14,8 @@ import { CANCEL_RMA_PICKUP } from '../commands/rma/CancelPickupCommand.js';
 import type { IBinaryStorageProvider } from '../storage/IBinaryStorageProvider.js';
 import { PrismaClient } from '@prisma/client';
 import crypto from 'crypto';
+import { resolveActorId as resolveActorIdShared } from '../auth/orgScope.js';
+import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 
 const RETURN_REASONS = ['damaged', 'wrong_item', 'not_as_described', 'no_longer_needed', 'defective', 'ordered_extra', 'other'] as const;
 const DISPOSITIONS = ['restock', 'refurb', 'scrap', 'recycle', 'donate', 'rtv', 'customer_keeps'] as const;
@@ -54,6 +56,11 @@ export async function rmaRoutes(server: FastifyInstance) {
   const prisma = container.resolve<PrismaClient>(TOKENS.PrismaClient);
   const binaryStorage = container.resolve<IBinaryStorageProvider>(TOKENS.IBinaryStorageProvider);
 
+  await registerOrgScope(server);
+  // RMA's command bus calls want a non-null actorId; fall back to 'system'
+  // for unauthed/internal callers.
+  const resolveActorId = (req: FastifyRequest): string => resolveActorIdShared(req) ?? 'system';
+
   // GET /api/v1/rmas?status=xxx&customerId=xxx
   server.get('/api/v1/rmas', {
     schema: {
@@ -71,7 +78,7 @@ export async function rmaRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest) => {
     const q = req.query as any;
-    const orgId = (req as any).orgId || 'default-org';
+    const orgId = req.orgId!;
     const where: any = { orgId };
     if (q.status) where.status = q.status;
     if (q.customerId) where.customerId = q.customerId;
@@ -110,7 +117,7 @@ export async function rmaRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest) => {
     const q = req.query as { stage?: 'receive' | 'inspect' | 'any'; rmaNumber?: string };
-    const orgId = (req as any).orgId || 'default-org';
+    const orgId = req.orgId!;
     const stage = q.stage ?? 'any';
 
     const statusByStage: Record<string, string[]> = {
@@ -148,8 +155,12 @@ export async function rmaRoutes(server: FastifyInstance) {
     schema: { tags: ['WMS - Returns / RMA'], summary: 'Get RMA detail with lines' },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const rma = await prisma.rma.findUnique({
-      where: { id },
+    const orgId = req.orgId!;
+    // findFirst (not findUnique) so the where clause can include orgId.
+    // Return 404 — not 403 — when the row belongs to another tenant so
+    // existence is opaque.
+    const rma = await prisma.rma.findFirst({
+      where: { id, orgId },
       include: {
         lines: { orderBy: { createdAt: 'asc' } },
       },
@@ -205,8 +216,8 @@ export async function rmaRoutes(server: FastifyInstance) {
       })).min(1),
     }).parse((req as any).body);
 
-    const orgId = (req as any).orgId || 'default-org';
-    const actorId = (req as any).userId || 'system';
+    const orgId = req.orgId!;
+    const actorId = resolveActorId(req);
 
     const result = await commandBus.dispatch({
       type: CREATE_RMA, orgId, actorId, payload: body,
@@ -223,8 +234,8 @@ export async function rmaRoutes(server: FastifyInstance) {
     schema: { tags: ['WMS - Returns / RMA'], summary: 'Authorize a requested RMA' },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const orgId = (req as any).orgId || 'default-org';
-    const actorId = (req as any).userId || 'system';
+    const orgId = req.orgId!;
+    const actorId = resolveActorId(req);
 
     const result = await commandBus.dispatch({
       type: AUTHORIZE_RMA, orgId, actorId, payload: { rmaId: id },
@@ -248,8 +259,8 @@ export async function rmaRoutes(server: FastifyInstance) {
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
     const body = z.object({ rejectionNotes: z.string().min(1) }).parse((req as any).body);
-    const orgId = (req as any).orgId || 'default-org';
-    const actorId = (req as any).userId || 'system';
+    const orgId = req.orgId!;
+    const actorId = resolveActorId(req);
 
     const result = await commandBus.dispatch({
       type: REJECT_RMA, orgId, actorId, payload: { rmaId: id, ...body },
@@ -282,8 +293,8 @@ export async function rmaRoutes(server: FastifyInstance) {
       trackableUnitId: z.string().uuid().optional(),
     }).parse((req as any).body);
 
-    const orgId = (req as any).orgId || 'default-org';
-    const actorId = (req as any).userId || 'system';
+    const orgId = req.orgId!;
+    const actorId = resolveActorId(req);
 
     const result = await commandBus.dispatch({
       type: RECEIVE_RMA_LINE, orgId, actorId, payload: { rmaLineId: id, ...body },
@@ -320,8 +331,8 @@ export async function rmaRoutes(server: FastifyInstance) {
       routeToBinId: z.string().uuid().optional(),
     }).parse((req as any).body);
 
-    const orgId = (req as any).orgId || 'default-org';
-    const actorId = (req as any).userId || 'system';
+    const orgId = req.orgId!;
+    const actorId = resolveActorId(req);
 
     const result = await commandBus.dispatch({
       type: INSPECT_RMA_LINE, orgId, actorId, payload: { rmaLineId: id, ...body },
@@ -352,8 +363,8 @@ export async function rmaRoutes(server: FastifyInstance) {
       refundAdjustmentNotes: z.string().optional(),
     }).parse((req as any).body ?? {});
 
-    const orgId = (req as any).orgId || 'default-org';
-    const actorId = (req as any).userId || 'system';
+    const orgId = req.orgId!;
+    const actorId = resolveActorId(req);
 
     const result = await commandBus.dispatch({
       type: COMPLETE_RMA, orgId, actorId, payload: { rmaId: id, ...body },
@@ -371,7 +382,7 @@ export async function rmaRoutes(server: FastifyInstance) {
       summary: 'Finance review queue: RMAs awaiting refund approval',
     },
   }, async (req: FastifyRequest) => {
-    const orgId = (req as any).orgId || 'default-org';
+    const orgId = req.orgId!;
 
     // Queue = RMAs in 'dispositioning' status (all lines inspected, awaiting finance review & completion)
     const rmas = await prisma.rma.findMany({
@@ -404,8 +415,8 @@ export async function rmaRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const orgId = (req as any).orgId || 'default-org';
-    const actorId = (req as any).userId || 'system';
+    const orgId = req.orgId!;
+    const actorId = resolveActorId(req);
     const body = req.body as any;
 
     const result = await commandBus.dispatch({
@@ -462,8 +473,8 @@ export async function rmaRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const orgId = (req as any).orgId || 'default-org';
-    const actorId = (req as any).userId || 'system';
+    const orgId = req.orgId!;
+    const actorId = resolveActorId(req);
     const body = req.body as any;
 
     const result = await commandBus.dispatch({
@@ -488,8 +499,8 @@ export async function rmaRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const orgId = (req as any).orgId || 'default-org';
-    const actorId = (req as any).userId || 'system';
+    const orgId = req.orgId!;
+    const actorId = resolveActorId(req);
     const body = (req.body as any) ?? {};
 
     const result = await commandBus.dispatch({

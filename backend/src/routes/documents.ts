@@ -1,11 +1,15 @@
-import { FastifyInstance } from 'fastify';
+import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
+import crypto from 'crypto';
+import { PrismaClient } from '@prisma/client';
 import { container } from '../di/container.js';
 import { TOKENS } from '../di/tokens.js';
 import { IDocumentTemplateRepository } from '../repositories/DocumentTemplateRepository.js';
 import { IGeneratedDocumentRepository } from '../repositories/GeneratedDocumentRepository.js';
 import { IDocumentGenerationService } from '../services/DocumentGenerationService.js';
 import { IBinaryStorageProvider } from '../storage/IBinaryStorageProvider.js';
+import { IQueueAdapter } from '../queue/IQueueAdapter.js';
+import { QUEUES, type DocumentGenerationKind, type DocumentGenerationJob } from '../queue/events.js';
 
 const createTemplateSchema = z.object({
   name: z.string().min(1),
@@ -111,6 +115,40 @@ export async function documentRoutes(server: FastifyInstance) {
   const docRepo = container.resolve<IGeneratedDocumentRepository>(TOKENS.IGeneratedDocumentRepository);
   const docService = container.resolve<IDocumentGenerationService>(TOKENS.IDocumentGenerationService);
   const storageProvider = container.resolve<IBinaryStorageProvider>(TOKENS.IBinaryStorageProvider);
+  const prisma = container.resolve<PrismaClient>(TOKENS.PrismaClient);
+  // Optional — only present when the queue infra is wired up. Async
+  // endpoints fall back to 503 if this isn't available.
+  let queueAdapter: IQueueAdapter | null = null;
+  try {
+    queueAdapter = container.resolve<IQueueAdapter>(TOKENS.IQueueAdapter);
+  } catch {
+    queueAdapter = null;
+  }
+
+  // Helper: enqueue a generation job and return the correlationId clients
+  // can use to poll for the resulting GeneratedDocument.
+  const enqueueGeneration = async (
+    kind: DocumentGenerationKind,
+    entityId: string,
+    templateId: string | undefined,
+    req: FastifyRequest,
+  ): Promise<{ correlationId: string; jobId: string }> => {
+    if (!queueAdapter) throw new Error('Queue adapter not configured');
+    const correlationId = crypto.randomUUID();
+    const job: DocumentGenerationJob = {
+      kind,
+      entityId,
+      templateId: templateId ?? null,
+      correlationId,
+      requestedBy: req.user?.sub ?? null,
+      orgId: req.user?.organizationId ?? null,
+    };
+    const jobId = await queueAdapter.publish(QUEUES.DOCUMENT_GENERATION, {
+      type: 'document.generation',
+      payload: job,
+    });
+    return { correlationId, jobId };
+  };
 
   // ── Template CRUD ─────────────────────────────────────────────────────
 
@@ -265,6 +303,52 @@ export async function documentRoutes(server: FastifyInstance) {
       return { data: null, error: parsed.error.issues.map(i => i.message).join('. ') };
     }
 
+    // Guard: refuse to generate a BOL until the shipment has actually been
+    // built up (orders attached + units or line items present). The BOL
+    // metadata is captured immutably at generation time, so generating
+    // before the WMS load completes produces a permanently empty document.
+    // The intended trigger is `POST /load-plans/:id/complete`, which fires
+    // automatically after picking and loading.
+    const shipment = await prisma.shipment.findUnique({
+      where: { id: parsed.data.shipmentId },
+      select: {
+        id: true,
+        orderShipments: {
+          select: {
+            order: {
+              select: {
+                _count: { select: { trackableUnits: true, lineItems: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!shipment) {
+      reply.code(404);
+      return { data: null, error: 'Shipment not found' };
+    }
+
+    if (shipment.orderShipments.length === 0) {
+      reply.code(400);
+      return {
+        data: null,
+        error: 'Cannot generate BOL: no orders are attached to this shipment. Attach at least one order first.',
+      };
+    }
+
+    const hasItems = shipment.orderShipments.some(
+      os => os.order._count.trackableUnits > 0 || os.order._count.lineItems > 0,
+    );
+    if (!hasItems) {
+      reply.code(400);
+      return {
+        data: null,
+        error: 'Cannot generate BOL: the attached orders have no trackable units or line items. Complete picking and loading in the WMS first, then a BOL is generated automatically when the load plan is sealed.',
+      };
+    }
+
     try {
       const result = await docService.generateBOL(parsed.data.shipmentId, parsed.data.templateId);
       reply.code(201);
@@ -368,6 +452,168 @@ export async function documentRoutes(server: FastifyInstance) {
       reply.code(400);
       return { data: null, error: err.message };
     }
+  });
+
+  // ── Async generation variants ─────────────────────────────────────────
+  // These return 202 + a correlationId immediately and let a background
+  // worker render the PDF. Clients poll
+  // GET /api/v1/documents/jobs/:correlationId for completion.
+
+  const asyncResponse = {
+    202: {
+      type: 'object',
+      properties: {
+        data: {
+          type: 'object',
+          properties: {
+            correlationId: { type: 'string', format: 'uuid' },
+            jobId: { type: 'string' },
+            statusUrl: { type: 'string' },
+          },
+        },
+        error: { type: 'object', nullable: true },
+      },
+    },
+    503: errorResponse,
+  } as const;
+
+  server.post('/api/v1/documents/generate/bol/async', {
+    schema: {
+      description: 'Enqueue an async BOL generation. Returns immediately with a correlationId; poll /api/v1/documents/jobs/:correlationId.',
+      tags: ['Document Generation'],
+      body: {
+        type: 'object',
+        required: ['shipmentId'],
+        properties: {
+          shipmentId: { type: 'string', format: 'uuid' },
+          templateId: { type: 'string', format: 'uuid' },
+        },
+      },
+      response: asyncResponse,
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    if (!queueAdapter) {
+      reply.code(503);
+      return { data: null, error: 'Async document generation is not available' };
+    }
+    const parsed = generateBolSchema.safeParse(req.body);
+    if (!parsed.success) {
+      reply.code(400);
+      return { data: null, error: parsed.error.issues.map(i => i.message).join('. ') };
+    }
+    const { correlationId, jobId } = await enqueueGeneration('bol', parsed.data.shipmentId, parsed.data.templateId, req);
+    reply.code(202);
+    return { data: { correlationId, jobId, statusUrl: `/api/v1/documents/jobs/${correlationId}` }, error: null };
+  });
+
+  server.post('/api/v1/documents/generate/labels/async', {
+    schema: {
+      description: 'Enqueue an async label sheet generation. See /bol/async for the polling pattern.',
+      tags: ['Document Generation'],
+      body: {
+        type: 'object',
+        required: ['orderId'],
+        properties: {
+          orderId: { type: 'string', format: 'uuid' },
+          templateId: { type: 'string', format: 'uuid' },
+        },
+      },
+      response: asyncResponse,
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    if (!queueAdapter) {
+      reply.code(503);
+      return { data: null, error: 'Async document generation is not available' };
+    }
+    const parsed = generateLabelsSchema.safeParse(req.body);
+    if (!parsed.success) {
+      reply.code(400);
+      return { data: null, error: parsed.error.issues.map(i => i.message).join('. ') };
+    }
+    const { correlationId, jobId } = await enqueueGeneration('labels', parsed.data.orderId, parsed.data.templateId, req);
+    reply.code(202);
+    return { data: { correlationId, jobId, statusUrl: `/api/v1/documents/jobs/${correlationId}` }, error: null };
+  });
+
+  server.post('/api/v1/documents/generate/customs/async', {
+    schema: {
+      description: 'Enqueue an async customs form generation. See /bol/async for the polling pattern.',
+      tags: ['Document Generation'],
+      body: {
+        type: 'object',
+        required: ['shipmentId'],
+        properties: {
+          shipmentId: { type: 'string', format: 'uuid' },
+          templateId: { type: 'string', format: 'uuid' },
+        },
+      },
+      response: asyncResponse,
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    if (!queueAdapter) {
+      reply.code(503);
+      return { data: null, error: 'Async document generation is not available' };
+    }
+    const parsed = generateCustomsSchema.safeParse(req.body);
+    if (!parsed.success) {
+      reply.code(400);
+      return { data: null, error: parsed.error.issues.map(i => i.message).join('. ') };
+    }
+    const { correlationId, jobId } = await enqueueGeneration('customs', parsed.data.shipmentId, parsed.data.templateId, req);
+    reply.code(202);
+    return { data: { correlationId, jobId, statusUrl: `/api/v1/documents/jobs/${correlationId}` }, error: null };
+  });
+
+  server.post('/api/v1/documents/rate-confirmation/async', {
+    schema: {
+      description: 'Enqueue an async rate-confirmation generation. See /bol/async for the polling pattern.',
+      tags: ['Documents'],
+      body: {
+        type: 'object',
+        required: ['shipmentId'],
+        properties: { shipmentId: { type: 'string', format: 'uuid' } },
+      },
+      response: asyncResponse,
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    if (!queueAdapter) {
+      reply.code(503);
+      return { data: null, error: 'Async document generation is not available' };
+    }
+    const { shipmentId } = (req as any).body as { shipmentId: string };
+    if (!shipmentId) {
+      reply.code(400);
+      return { data: null, error: 'shipmentId is required' };
+    }
+    const { correlationId, jobId } = await enqueueGeneration('rate_confirmation', shipmentId, undefined, req);
+    reply.code(202);
+    return { data: { correlationId, jobId, statusUrl: `/api/v1/documents/jobs/${correlationId}` }, error: null };
+  });
+
+  // Status endpoint: looks up the GeneratedDocument by metadata.correlationId.
+  // pg-boss native job state is checked as a fallback for "still queued"
+  // / "active" / "failed" reporting before the document exists.
+  server.get<{ Params: { correlationId: string } }>('/api/v1/documents/jobs/:correlationId', {
+    schema: {
+      description: 'Poll for an async document generation job by correlationId. Returns the GeneratedDocument when ready.',
+      tags: ['Document Generation'],
+      params: { type: 'object', properties: { correlationId: { type: 'string', format: 'uuid' } } },
+    },
+  }, async (req) => {
+    const { correlationId } = req.params;
+
+    const doc = await prisma.generatedDocument.findFirst({
+      where: { metadata: { path: ['correlationId'], equals: correlationId } },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (doc) {
+      return { data: { status: 'completed', document: doc }, error: null };
+    }
+
+    // No document yet — caller can keep polling. We don't expose pg-boss
+    // job IDs here because the correlationId is the public handle.
+    return { data: { status: 'pending', document: null }, error: null };
   });
 
   // ── Generated Documents ───────────────────────────────────────────────

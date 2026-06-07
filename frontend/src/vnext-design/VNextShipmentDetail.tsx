@@ -24,6 +24,7 @@ import {
   MessageSquare,
   Package,
   Pen,
+  Pencil,
   Plus,
   RefreshCw,
   Search,
@@ -34,10 +35,14 @@ import {
   Target,
   Thermometer,
   Timer,
+  Trash2,
   Truck,
   Wallet,
+  X,
   XCircle,
 } from 'lucide-react';
+
+import { toast } from 'sonner';
 
 import { API_URL } from '../api';
 import { Badge } from '@/components/ui/badge';
@@ -54,6 +59,7 @@ import {
 } from '@/components/ui/table';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
+import { useCurrentUser } from '../hooks/useCurrentUser';
 import { getDeviceImageUrl } from './deviceImages';
 
 // Hex colors used inside Leaflet HTML strings (cannot use Tailwind/var(--*))
@@ -946,10 +952,17 @@ function SlaTab({ shipmentId }: { shipmentId: string }) {
 
 // ─── Notes Tab ────────────────────────────────────────────────────────
 function ShipmentNotesTab({ shipmentId }: { shipmentId: string }) {
+  const { user, hasRole } = useCurrentUser();
+  const isAdmin = hasRole('admin');
+  const currentUserId = user?.id ?? null;
+
   const [comments, setComments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [newComment, setNewComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingDraft, setEditingDraft] = useState('');
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   const loadComments = useCallback(() => {
     fetch(`${API_URL}/api/v1/comments?entityType=shipment&entityId=${shipmentId}`)
@@ -965,15 +978,74 @@ function ShipmentNotesTab({ shipmentId }: { shipmentId: string }) {
     if (!newComment.trim()) return;
     setSubmitting(true);
     try {
-      await fetch(`${API_URL}/api/v1/comments`, {
+      const res = await fetch(`${API_URL}/api/v1/comments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ entityType: 'shipment', entityId: shipmentId, body: newComment }),
       });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json.error) {
+        toast.error(json.error || 'Failed to post comment');
+        return;
+      }
       setNewComment('');
       loadComments();
-    } catch { /* ignore */ }
-    setSubmitting(false);
+    } catch {
+      toast.error('Failed to post comment');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const beginEdit = (c: any) => {
+    setEditingId(c.id);
+    setEditingDraft(c.body || '');
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditingDraft('');
+  };
+
+  const saveEdit = async (id: string) => {
+    if (!editingDraft.trim()) return;
+    setBusyId(id);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/comments/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body: editingDraft }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json.error) {
+        toast.error(json.error || 'Failed to update comment');
+        return;
+      }
+      cancelEdit();
+      loadComments();
+    } catch {
+      toast.error('Failed to update comment');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('Delete this comment? It will be hidden but kept for audit.')) return;
+    setBusyId(id);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/comments/${id}`, { method: 'DELETE' });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json.error) {
+        toast.error(json.error || 'Failed to delete comment');
+        return;
+      }
+      loadComments();
+    } catch {
+      toast.error('Failed to delete comment');
+    } finally {
+      setBusyId(null);
+    }
   };
 
   if (loading) {
@@ -994,27 +1066,92 @@ function ShipmentNotesTab({ shipmentId }: { shipmentId: string }) {
             <p>No notes yet. Add the first comment below.</p>
           </div>
         )}
-        {comments.map((c: any) => (
-          <div key={c.id} className="flex gap-3 border-b border-border py-3 last:border-0">
-            <div
-              className={cn(
-                'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white',
-                c.authorType === 'agent' ? 'bg-info' : 'bg-primary',
-              )}
-            >
-              {c.authorType === 'agent'
-                ? <Bot className="h-4 w-4" />
-                : (c.authorName || '?').split(/\s+/).map((w: string) => w[0]).join('').toUpperCase().slice(0, 2)}
-            </div>
-            <div className="flex-1">
-              <div className="mb-1 flex justify-between">
-                <span className="text-sm font-semibold">{c.authorName}</span>
-                <span className="text-xs text-muted-foreground">{new Date(c.createdAt).toLocaleString()}</span>
+        {comments.map((c: any) => {
+          const isAuthor = !!currentUserId && c.authorId === currentUserId;
+          const canEdit = isAuthor && c.authorType !== 'agent';
+          const canDelete = (isAuthor || isAdmin) && c.authorType !== 'agent';
+          const isEditing = editingId === c.id;
+          const busy = busyId === c.id;
+          return (
+            <div key={c.id} className="group flex gap-3 border-b border-border py-3 last:border-0">
+              <div
+                className={cn(
+                  'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white',
+                  c.authorType === 'agent' ? 'bg-info' : 'bg-primary',
+                )}
+              >
+                {c.authorType === 'agent'
+                  ? <Bot className="h-4 w-4" />
+                  : (c.authorName || '?').split(/\s+/).map((w: string) => w[0]).join('').toUpperCase().slice(0, 2)}
               </div>
-              <p className="text-sm leading-relaxed">{c.body}</p>
+              <div className="flex-1">
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <span className="text-sm font-semibold">{c.authorName || 'Unknown user'}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">
+                      {c.createdAt ? new Date(c.createdAt).toLocaleString() : ''}
+                      {c.updatedAt && c.createdAt && c.updatedAt !== c.createdAt && (
+                        <span className="ml-1 italic">(edited)</span>
+                      )}
+                    </span>
+                    {!isEditing && (canEdit || canDelete) && (
+                      <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+                        {canEdit && (
+                          <button
+                            type="button"
+                            onClick={() => beginEdit(c)}
+                            disabled={busy}
+                            className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+                            title="Edit comment"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                        {canDelete && (
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(c.id)}
+                            disabled={busy}
+                            className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                            title={isAuthor ? 'Delete comment' : 'Delete (admin)'}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                {isEditing ? (
+                  <div className="flex gap-2">
+                    <textarea
+                      className="flex w-full flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      value={editingDraft}
+                      onChange={e => setEditingDraft(e.target.value)}
+                      rows={2}
+                      autoFocus
+                    />
+                    <div className="flex flex-col gap-1 self-end">
+                      <Button
+                        size="sm"
+                        variant="gradient"
+                        onClick={() => saveEdit(c.id)}
+                        disabled={busy || !editingDraft.trim() || editingDraft === c.body}
+                      >
+                        {busy ? '...' : 'Save'}
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={cancelEdit} disabled={busy} title="Cancel">
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="whitespace-pre-wrap text-sm leading-relaxed">{c.body}</p>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
         <div className="mt-4 flex gap-2">
           <textarea
             className="flex w-full flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
@@ -1243,6 +1380,7 @@ export default function VNextShipmentDetail() {
 
   const handleGenerateDoc = async (type: 'bol' | 'customs' | 'rate_confirmation') => {
     if (!id) return;
+    const names: Record<string, string> = { bol: 'Bill of Lading', customs: 'Customs Form', rate_confirmation: 'Rate Confirmation' };
     setGenerating(type);
     try {
       const endpoint = type === 'rate_confirmation'
@@ -1254,14 +1392,19 @@ export default function VNextShipmentDetail() {
         body: JSON.stringify({ shipmentId: id }),
       });
       const json = await res.json();
-      if (json.error) { alert(`Error: ${json.error}`); return; }
+      if (!res.ok || json.error) {
+        toast.error(json.error || `Failed to generate ${names[type] || type}`, {
+          duration: 8000,
+        });
+        return;
+      }
+      toast.success(`${names[type] || type} generated`);
       loadDocuments();
       if (type === 'bol') {
         navigate(`/documents/${json.data.id}/view`);
       }
     } catch {
-      const names: Record<string, string> = { bol: 'Bill of Lading', customs: 'Customs Form', rate_confirmation: 'Rate Confirmation' };
-      alert(`Failed to generate ${names[type] || type}`);
+      toast.error(`Failed to generate ${names[type] || type}`);
     } finally {
       setGenerating(null);
     }
@@ -1415,7 +1558,7 @@ export default function VNextShipmentDetail() {
             <Share2 className="h-4 w-4" />
             Share
           </Button>
-          <Button variant="gradient" size="sm">
+          <Button variant="gradient" size="sm" onClick={() => setActiveTab('carrier-tracking')}>
             <Target className="h-4 w-4" />
             Track
           </Button>
@@ -1497,7 +1640,7 @@ export default function VNextShipmentDetail() {
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
         <div className="space-y-6">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="flex flex-wrap">
+            <TabsList className="flex w-full justify-start overflow-x-auto">
               {tabs.map(t => (
                 <TabsTrigger key={t.value} value={t.value}>
                   {t.label}

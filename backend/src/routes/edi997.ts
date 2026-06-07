@@ -18,9 +18,13 @@ import { container, TOKENS } from '../di/index.js';
 import { IEDI997Service } from '../services/EDI997Service.js';
 import { ITradingPartnerRepository } from '../repositories/TradingPartnerRepository.js';
 
+import { registerOrgScopeForEdi } from '../auth/orgScopeMiddleware.js';
+
 export async function edi997Routes(server: FastifyInstance) {
   const edi997Service = container.resolve<IEDI997Service>(TOKENS.IEDI997Service);
   const tradingPartnerRepo = container.resolve<ITradingPartnerRepository>(TOKENS.ITradingPartnerRepository);
+
+  await registerOrgScopeForEdi(server);
 
   server.post('/api/v1/edi/997/inbound', {
     schema: {
@@ -46,6 +50,7 @@ export async function edi997Routes(server: FastifyInstance) {
 
     // Create inbound 997 log entry
     const logEntry = await tradingPartnerRepo.createLog({
+      orgId: req.orgId!,
       partnerId: body.partnerId || null,
       transactionType: '997',
       direction: 'inbound',

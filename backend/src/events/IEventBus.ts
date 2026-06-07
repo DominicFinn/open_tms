@@ -18,6 +18,14 @@ export interface SubscribeOptions {
   retryLimit?: number;
   /** Job expiry in seconds. Default: 900 (15 min) */
   expireInSeconds?: number;
+  /**
+   * How often this queue polls the DB for new jobs.
+   * Background workers (default 2s) trade a touch of latency for an order
+   * of magnitude less idle DB pressure. Read-model projections that are
+   * load-bearing for "POST then navigate to list" UX should opt in to a
+   * tighter value (e.g. 0.5–1s).
+   */
+  pollingIntervalSeconds?: number;
 }
 
 export interface IEventBus {

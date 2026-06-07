@@ -32,10 +32,14 @@ export class AcceptQuoteCommandHandler extends BaseCommandHandler<AcceptQuotePay
       throw new Error('Quote has expired');
     }
 
-    // Create an order from the quote
+    // Create an order from the quote. Multi-tenancy: copy orgId from the
+    // source quote so the new Order lands in the same tenant rather than
+    // relying on `command.orgId` (admin tooling may dispatch on behalf of
+    // a different actor).
     const orderNumber = `ORD-Q-${quote.quoteNumber.slice(4)}`;
     const order = await tx.order.create({
       data: {
+        orgId: quote.orgId,
         orderNumber,
         customerId: quote.customerId,
         status: 'validated',
@@ -90,6 +94,7 @@ export class AcceptQuoteCommandHandler extends BaseCommandHandler<AcceptQuotePay
 
         const shipment = await tx.shipment.create({
           data: {
+            orgId: quote.orgId,
             reference: shipmentReference,
             customerId: quote.customerId,
             originId: quote.originId!,

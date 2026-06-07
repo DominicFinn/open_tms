@@ -11,6 +11,8 @@ import {
   ClipboardList,
   Download,
   ExternalLink,
+  Eye,
+  EyeOff,
   FileText,
   Info,
   Loader2,
@@ -28,6 +30,7 @@ import {
 import { API_URL } from '../api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
@@ -283,6 +286,7 @@ export default function VNextIssueDetail() {
 
   const [newComment, setNewComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [commentVisibleToCustomer, setCommentVisibleToCustomer] = useState(false);
 
   const [allLabels, setAllLabels] = useState<any[]>([]);
   const [showLabelPicker, setShowLabelPicker] = useState(false);
@@ -350,9 +354,15 @@ export default function VNextIssueDetail() {
     await fetch(`${API_URL}/api/v1/comments`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ entityType: 'issue', entityId: id, body: newComment }),
+      body: JSON.stringify({
+        entityType: 'issue',
+        entityId: id,
+        body: newComment,
+        visibleToCustomer: commentVisibleToCustomer,
+      }),
     });
     setNewComment('');
+    setCommentVisibleToCustomer(false);
     setSubmitting(false);
     loadActivity();
   };
@@ -531,7 +541,7 @@ export default function VNextIssueDetail() {
 
       {showSnooze && (
         <Card className="flex items-center gap-2 p-3">
-          <Input type="datetime-local" value={snoozeDate} onChange={e => setSnoozeDate(e.target.value)} />
+          <DatePicker type="datetime-local" value={snoozeDate} onChange={e => setSnoozeDate(e.target.value)} className="flex-1" />
           <Button variant="gradient" onClick={() => {
             if (snoozeDate) {
               doAction('/snooze', { until: new Date(snoozeDate).toISOString() });
@@ -587,9 +597,18 @@ export default function VNextIssueDetail() {
                             {item.authorType === 'agent' ? <Bot className="h-4 w-4" /> : getInitials(item.authorName)}
                           </div>
                           <div className="flex-1">
-                            <div className="mb-1 flex items-center justify-between">
+                            <div className="mb-1 flex items-center justify-between gap-2">
                               <span className="text-sm font-semibold">{item.authorName}</span>
-                              <span className="text-xs text-muted-foreground">{new Date(item.timestamp).toLocaleString()}</span>
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                {item.authorType === 'customer' ? (
+                                  <Badge variant="info" className="gap-1"><UserIcon className="h-3 w-3" />Customer</Badge>
+                                ) : item.visibleToCustomer ? (
+                                  <Badge variant="success" className="gap-1"><Eye className="h-3 w-3" />Shared with customer</Badge>
+                                ) : (
+                                  <Badge variant="muted" className="gap-1"><EyeOff className="h-3 w-3" />Internal only</Badge>
+                                )}
+                                <span>{new Date(item.timestamp).toLocaleString()}</span>
+                              </div>
                             </div>
                             <p className="text-sm leading-relaxed">{item.body}</p>
                           </div>
@@ -612,17 +631,28 @@ export default function VNextIssueDetail() {
                 )}
 
                 <Separator className="my-3" />
-                <div className="flex gap-2">
-                  <textarea
-                    rows={2}
-                    placeholder="Add a comment..."
-                    value={newComment}
-                    onChange={e => setNewComment(e.target.value)}
-                    className="flex-1 resize-y rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  />
-                  <Button variant="gradient" onClick={handleAddComment} disabled={submitting || !newComment.trim()} className="self-end">
-                    {submitting ? '...' : 'Post'}
-                  </Button>
+                <div className="flex flex-col gap-2">
+                  <div className="flex gap-2">
+                    <textarea
+                      rows={2}
+                      placeholder="Add a comment..."
+                      value={newComment}
+                      onChange={e => setNewComment(e.target.value)}
+                      className="flex-1 resize-y rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    />
+                    <Button variant="gradient" onClick={handleAddComment} disabled={submitting || !newComment.trim()} className="self-end">
+                      {submitting ? '...' : 'Post'}
+                    </Button>
+                  </div>
+                  <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <input
+                      type="checkbox"
+                      checked={commentVisibleToCustomer}
+                      onChange={e => setCommentVisibleToCustomer(e.target.checked)}
+                      className="h-4 w-4 rounded border-input"
+                    />
+                    Visible to customer in their portal
+                  </label>
                 </div>
               </CardContent>
             </Card>

@@ -8,12 +8,16 @@ import { ICommandBus } from '../commands/CommandBus.js';
 import { RECEIVE_CARRIER_INVOICE, ReceiveCarrierInvoicePayload } from '../commands/carrierInvoices/ReceiveCarrierInvoiceCommand.js';
 import { PrismaClient } from '@prisma/client';
 
+import { registerOrgScopeForEdi } from '../auth/orgScopeMiddleware.js';
+
 export async function edi210Routes(server: FastifyInstance) {
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
   const tradingPartnerRepo = container.resolve<ITradingPartnerRepository>(TOKENS.ITradingPartnerRepository);
   const prisma = container.resolve<PrismaClient>(TOKENS.PrismaClient);
   const edi210ParseService = new EDI210ParseService();
   const edi810Service = new EDI810Service();
+
+  await registerOrgScopeForEdi(server);
 
   // Inbound EDI 210 — parse carrier freight invoice and create carrier invoice
   server.post('/api/v1/edi/210/inbound', {
@@ -38,6 +42,7 @@ export async function edi210Routes(server: FastifyInstance) {
 
     // Create transaction log entry
     const logEntry = await tradingPartnerRepo.createLog({
+      orgId: req.orgId!,
       partnerId: body.partnerId || null,
       transactionType: '210',
       direction: 'inbound',
@@ -296,6 +301,7 @@ export async function edi210Routes(server: FastifyInstance) {
 
     // Log the outbound generation
     await tradingPartnerRepo.createLog({
+      orgId: req.orgId!,
       partnerId: null,
       transactionType: '810',
       direction: 'outbound',

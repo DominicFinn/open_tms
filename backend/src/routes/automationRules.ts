@@ -1,26 +1,38 @@
 /**
  * Automation Rules API routes — CRUD for deterministic rules promoted from agent decisions.
+ * All writes go through the command bus.
  */
 
 import { FastifyPluginAsync } from 'fastify';
 import { evaluateConditions, RuleCondition, EvaluationContext } from '../services/automation/ConditionEvaluator.js';
 import { randomUUID } from 'crypto';
+import { container, TOKENS } from '../di/index.js';
+import { ICommandBus } from '../commands/CommandBus.js';
+import {
+  CREATE_AUTOMATION_RULE,
+  UPDATE_AUTOMATION_RULE,
+  DELETE_AUTOMATION_RULE,
+  PROMOTE_DECISION_TO_RULE,
+} from '../commands/automationRules/index.js';
 
 export const automationRuleRoutes: FastifyPluginAsync = async (server) => {
+  const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
+
+  const resolveOrgId = async (req: any): Promise<string | null> => {
+    if (req.user?.organizationId) return req.user.organizationId;
+    const org = await server.prisma.organization.findFirst();
+    return org?.id ?? null;
+  };
 
   // ── GET /api/v1/automation-rules ──
-
   server.get('/api/v1/automation-rules', {
-    schema: {
-      tags: ['Automation Rules'],
-      summary: 'List all automation rules',
-    },
-  }, async () => {
-    const org = await server.prisma.organization.findFirst();
-    if (!org) return { data: [], error: null };
+    schema: { tags: ['Automation Rules'], summary: 'List all automation rules' },
+  }, async (req) => {
+    const orgId = await resolveOrgId(req);
+    if (!orgId) return { data: [], error: null };
 
     const rules = await server.prisma.automationRule.findMany({
-      where: { orgId: org.id },
+      where: { orgId },
       orderBy: [{ priority: 'asc' }, { createdAt: 'desc' }],
       take: 500,
     });
@@ -29,7 +41,6 @@ export const automationRuleRoutes: FastifyPluginAsync = async (server) => {
   });
 
   // ── POST /api/v1/automation-rules ──
-
   server.post<{
     Body: {
       name: string;
@@ -63,46 +74,43 @@ export const automationRuleRoutes: FastifyPluginAsync = async (server) => {
       },
     },
   }, async (request, reply) => {
-    const org = await server.prisma.organization.findFirst();
-    if (!org) { reply.code(404); return { data: null, error: 'Organization not found' }; }
+    const orgId = await resolveOrgId(request);
+    if (!orgId) { reply.code(404); return { data: null, error: 'Organization not found' }; }
 
-    const body = request.body;
-
-    const rule = await server.prisma.automationRule.create({
-      data: {
-        orgId: org.id,
-        name: body.name,
-        description: body.description || null,
-        eventPattern: body.eventPattern,
-        conditions: body.conditions,
-        actionType: body.actionType,
-        actionConfig: body.actionConfig,
-        priority: body.priority ?? 50,
-        sourceDecisionId: body.sourceDecisionId || null,
-        skillChainId: body.skillChainId || null,
-        inlineSteps: body.inlineSteps || undefined,
+    const result = await commandBus.dispatch({
+      type: CREATE_AUTOMATION_RULE,
+      orgId,
+      actorId: request.user?.sub ?? null,
+      payload: {
+        name: request.body.name,
+        description: request.body.description ?? null,
+        eventPattern: request.body.eventPattern,
+        conditions: request.body.conditions,
+        actionType: request.body.actionType,
+        actionConfig: request.body.actionConfig,
+        priority: request.body.priority,
+        sourceDecisionId: request.body.sourceDecisionId ?? null,
+        skillChainId: request.body.skillChainId ?? null,
+        inlineSteps: request.body.inlineSteps,
       },
+      metadata: { correlationId: randomUUID(), source: 'api' },
     });
 
-    // If created from a decision, mark it as promoted
-    if (body.sourceDecisionId) {
-      await server.prisma.agentDecision.update({
-        where: { id: body.sourceDecisionId },
-        data: { promotedToAutomation: true, promotedAt: new Date() },
-      }).catch(() => {});
+    if (!result.success) {
+      reply.code(400);
+      return { data: null, error: result.error ?? 'Failed to create rule' };
     }
 
+    const rule = await server.prisma.automationRule.findUnique({
+      where: { id: (result.data as { id: string }).id },
+    });
     reply.code(201);
     return { data: rule, error: null };
   });
 
   // ── GET /api/v1/automation-rules/:id ──
-
   server.get<{ Params: { id: string } }>('/api/v1/automation-rules/:id', {
-    schema: {
-      tags: ['Automation Rules'],
-      summary: 'Get automation rule by ID',
-    },
+    schema: { tags: ['Automation Rules'], summary: 'Get automation rule by ID' },
   }, async (request, reply) => {
     const rule = await server.prisma.automationRule.findUnique({
       where: { id: request.params.id },
@@ -112,7 +120,6 @@ export const automationRuleRoutes: FastifyPluginAsync = async (server) => {
   });
 
   // ── PUT /api/v1/automation-rules/:id ──
-
   server.put<{
     Params: { id: string };
     Body: {
@@ -126,70 +133,85 @@ export const automationRuleRoutes: FastifyPluginAsync = async (server) => {
       enabled?: boolean;
     };
   }>('/api/v1/automation-rules/:id', {
-    schema: {
-      tags: ['Automation Rules'],
-      summary: 'Update an automation rule',
-    },
+    schema: { tags: ['Automation Rules'], summary: 'Update an automation rule' },
   }, async (request, reply) => {
-    const existing = await server.prisma.automationRule.findUnique({ where: { id: request.params.id } });
-    if (!existing) { reply.code(404); return { data: null, error: 'Rule not found' }; }
+    const orgId = await resolveOrgId(request);
+    if (!orgId) { reply.code(404); return { data: null, error: 'Organization not found' }; }
 
-    const body = request.body;
-    const rule = await server.prisma.automationRule.update({
-      where: { id: request.params.id },
-      data: {
-        ...(body.name !== undefined && { name: body.name }),
-        ...(body.description !== undefined && { description: body.description }),
-        ...(body.eventPattern !== undefined && { eventPattern: body.eventPattern }),
-        ...(body.conditions !== undefined && { conditions: body.conditions }),
-        ...(body.actionType !== undefined && { actionType: body.actionType }),
-        ...(body.actionConfig !== undefined && { actionConfig: body.actionConfig }),
-        ...(body.priority !== undefined && { priority: body.priority }),
-        ...(body.enabled !== undefined && { enabled: body.enabled }),
-      },
+    const result = await commandBus.dispatch({
+      type: UPDATE_AUTOMATION_RULE,
+      orgId,
+      actorId: request.user?.sub ?? null,
+      payload: { id: request.params.id, data: request.body },
+      metadata: { correlationId: randomUUID(), source: 'api' },
     });
 
+    if (!result.success) {
+      const code = (result.error || '').toLowerCase().includes('not found') ? 404 : 400;
+      reply.code(code);
+      return { data: null, error: result.error ?? 'Failed to update rule' };
+    }
+
+    const rule = await server.prisma.automationRule.findUnique({
+      where: { id: request.params.id },
+    });
     return { data: rule, error: null };
   });
 
   // ── DELETE /api/v1/automation-rules/:id ──
-
   server.delete<{ Params: { id: string } }>('/api/v1/automation-rules/:id', {
-    schema: {
-      tags: ['Automation Rules'],
-      summary: 'Delete an automation rule',
-    },
+    schema: { tags: ['Automation Rules'], summary: 'Delete an automation rule' },
   }, async (request, reply) => {
-    await server.prisma.automationRule.delete({ where: { id: request.params.id } }).catch(() => {});
-    return { data: { deleted: true }, error: null };
+    const orgId = await resolveOrgId(request);
+    if (!orgId) { reply.code(404); return { data: null, error: 'Organization not found' }; }
+
+    const result = await commandBus.dispatch({
+      type: DELETE_AUTOMATION_RULE,
+      orgId,
+      actorId: request.user?.sub ?? null,
+      payload: { id: request.params.id },
+      metadata: { correlationId: randomUUID(), source: 'api' },
+    });
+
+    if (!result.success) {
+      reply.code(400);
+      return { data: null, error: result.error ?? 'Failed to delete rule' };
+    }
+
+    return { data: { deleted: (result.data as { deleted: boolean }).deleted }, error: null };
   });
 
   // ── POST /api/v1/automation-rules/:id/toggle ──
-
+  // Implemented as an UpdateAutomationRule with `{ enabled: <flipped> }` so
+  // the command handler can emit AUTOMATION_RULE_TOGGLED for audit/UX.
   server.post<{ Params: { id: string } }>('/api/v1/automation-rules/:id/toggle', {
-    schema: {
-      tags: ['Automation Rules'],
-      summary: 'Toggle an automation rule enabled/disabled',
-    },
+    schema: { tags: ['Automation Rules'], summary: 'Toggle an automation rule enabled/disabled' },
   }, async (request) => {
+    const orgId = await resolveOrgId(request);
+    if (!orgId) return { data: null, error: 'Organization not found' };
+
     const rule = await server.prisma.automationRule.findUnique({ where: { id: request.params.id } });
     if (!rule) return { data: null, error: 'Rule not found' };
 
-    const updated = await server.prisma.automationRule.update({
-      where: { id: request.params.id },
-      data: { enabled: !rule.enabled },
+    const result = await commandBus.dispatch({
+      type: UPDATE_AUTOMATION_RULE,
+      orgId,
+      actorId: request.user?.sub ?? null,
+      payload: { id: request.params.id, data: { enabled: !rule.enabled } },
+      metadata: { correlationId: randomUUID(), source: 'api' },
     });
 
+    if (!result.success) return { data: null, error: result.error ?? 'Toggle failed' };
+
+    const updated = await server.prisma.automationRule.findUnique({
+      where: { id: request.params.id },
+    });
     return { data: updated, error: null };
   });
 
   // ── GET /api/v1/automation-rules/:id/executions ──
-
   server.get<{ Params: { id: string }; Querystring: { limit?: string } }>('/api/v1/automation-rules/:id/executions', {
-    schema: {
-      tags: ['Automation Rules'],
-      summary: 'Get execution log for a rule',
-    },
+    schema: { tags: ['Automation Rules'], summary: 'Get execution log for a rule' },
   }, async (request) => {
     const limit = request.query.limit ? parseInt(request.query.limit, 10) : 50;
 
@@ -203,68 +225,44 @@ export const automationRuleRoutes: FastifyPluginAsync = async (server) => {
   });
 
   // ── POST /api/v1/automation-rules/from-decision/:decisionId ──
-  // Creates a rule pre-filled from a promoted agent decision.
-
   server.post<{ Params: { decisionId: string }; Body: { name?: string; priority?: number } }>('/api/v1/automation-rules/from-decision/:decisionId', {
     schema: {
       tags: ['Automation Rules'],
       summary: 'Create an automation rule from a promoted agent decision',
     },
   }, async (request, reply) => {
-    const decision = await server.prisma.agentDecision.findUnique({
-      where: { id: request.params.decisionId },
-    });
-    if (!decision) { reply.code(404); return { data: null, error: 'Decision not found' }; }
+    const orgId = await resolveOrgId(request);
+    if (!orgId) { reply.code(404); return { data: null, error: 'Organization not found' }; }
 
-    const conditions = (decision.matchedConditions as RuleCondition[]) || [];
-    if (conditions.length === 0) {
-      reply.code(400);
-      return { data: null, error: 'Decision has no matched conditions to promote' };
-    }
-
-    // Extract event pattern from conditions
-    const eventTypeCondition = conditions.find((c) => c.field === 'event.type' && c.operator === 'equals');
-    const eventPattern = eventTypeCondition ? String(eventTypeCondition.value) : decision.triggerEventType || 'shipment.*';
-
-    // Build action config from decision
-    const actionConfig: Record<string, unknown> = {};
-    const decisionPayload = (decision.actionPayload as Record<string, unknown>) || {};
-    if (decision.actionType === 'create_issue') {
-      actionConfig.issuePriority = decisionPayload.issuePriority || 'medium';
-      actionConfig.issueCategory = decisionPayload.issueCategory || 'exception';
-      actionConfig.issueTitle = decisionPayload.issueTitle || decision.summary;
-    } else if (decision.actionType === 'escalate_issue') {
-      actionConfig.escalatedTo = 'operations-manager';
-      actionConfig.escalateReason = decisionPayload.escalateReason || decision.summary;
-    }
-
-    const rule = await server.prisma.automationRule.create({
-      data: {
-        orgId: decision.orgId,
-        name: request.body.name || `Auto: ${decision.summary}`,
-        description: `Promoted from agent decision ${decision.id.slice(0, 8)}. Original reasoning: ${decision.reasoning.substring(0, 200)}`,
-        eventPattern,
-        conditions: conditions.filter((c) => c.field !== 'event.type'), // event.type is the eventPattern, not a condition
-        actionType: decision.actionType,
-        actionConfig,
-        priority: request.body.priority ?? 50,
-        sourceDecisionId: decision.id,
+    const result = await commandBus.dispatch({
+      type: PROMOTE_DECISION_TO_RULE,
+      orgId,
+      actorId: request.user?.sub ?? null,
+      payload: {
+        decisionId: request.params.decisionId,
+        name: request.body?.name,
+        priority: request.body?.priority,
       },
+      metadata: { correlationId: randomUUID(), source: 'api' },
     });
 
-    // Mark decision as promoted
-    await server.prisma.agentDecision.update({
-      where: { id: decision.id },
-      data: { promotedToAutomation: true, promotedAt: new Date() },
-    });
+    if (!result.success) {
+      const err = result.error ?? 'Promotion failed';
+      const code = /not found/i.test(err) ? 404 : 400;
+      reply.code(code);
+      return { data: null, error: err };
+    }
 
+    const rule = await server.prisma.automationRule.findUnique({
+      where: { id: (result.data as { ruleId: string }).ruleId },
+    });
     reply.code(201);
     return { data: rule, error: null };
   });
 
   // ── POST /api/v1/automation-rules/:id/test ──
-  // Dry-run: evaluate a rule against a sample event.
-
+  // Pure dry-run evaluation against a sample event — no DB writes, stays
+  // outside the command bus.
   server.post<{
     Params: { id: string };
     Body: { event: { type: string; entityType: string; entityId: string; timestamp: string; payload: Record<string, unknown> } };
@@ -294,7 +292,7 @@ export const automationRuleRoutes: FastifyPluginAsync = async (server) => {
     const rule = await server.prisma.automationRule.findUnique({ where: { id: request.params.id } });
     if (!rule) { reply.code(404); return { data: null, error: 'Rule not found' }; }
 
-    const conditions = rule.conditions as RuleCondition[];
+    const conditions = rule.conditions as unknown as RuleCondition[];
     const evalContext: EvaluationContext = {
       event: {
         ...request.body.event,
@@ -309,7 +307,10 @@ export const automationRuleRoutes: FastifyPluginAsync = async (server) => {
         ruleId: rule.id,
         ruleName: rule.name,
         eventPattern: rule.eventPattern,
-        eventPatternMatched: request.body.event.type === rule.eventPattern || rule.eventPattern.endsWith('.*') && request.body.event.type.startsWith(rule.eventPattern.slice(0, -1)),
+        eventPatternMatched:
+          request.body.event.type === rule.eventPattern ||
+          (rule.eventPattern.endsWith('.*') &&
+            request.body.event.type.startsWith(rule.eventPattern.slice(0, -1))),
         conditionResults: result.details,
         allConditionsMatched: result.matched,
         wouldExecuteAction: result.matched,

@@ -1,9 +1,9 @@
 import { planHomogeneousPallet, recommendPalletType, CartonSpec } from '../../services/palletization/PalletizationPlanner';
-import { STANDARD_PALLET_TYPES } from '../../services/palletization/standardPalletTypes';
+import { STANDARD_PACKAGING_TYPES } from '../../services/palletization/standardPackagingTypes';
 
-// Build a PalletType-shaped object (Prisma row) from a spec
+// Build a PackagingType-shaped object (Prisma row) from a spec
 function mkPallet(code: string, overrides: Partial<any> = {}): any {
-  const spec = STANDARD_PALLET_TYPES.find(s => s.code === code);
+  const spec = STANDARD_PACKAGING_TYPES.find(s => s.code === code);
   if (!spec) throw new Error(`Unknown spec ${code}`);
   return {
     id: `p-${code}`, orgId: 'org-1', createdAt: new Date(), updatedAt: new Date(), imageUrl: null,

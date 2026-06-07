@@ -658,7 +658,7 @@ export default function VNextShipmentMap() {
     <div
       ref={containerRef}
       className={cn(
-        'flex flex-col bg-background',
+        'relative isolate flex flex-col bg-background',
         isFullscreen ? 'h-screen' : 'h-[calc(100vh-56px)]',
       )}
     >
@@ -792,7 +792,7 @@ export default function VNextShipmentMap() {
 
       {/* Legend */}
       {entityType === 'shipments' && (
-        <div className="absolute bottom-6 left-6 z-[1000] rounded-md border border-border bg-card/95 p-3 text-xs shadow-lg backdrop-blur">
+        <div className="absolute bottom-6 right-6 z-[1000] rounded-md border border-border bg-card/95 p-3 text-xs shadow-lg backdrop-blur">
           <div className="mb-1.5 font-semibold">Legend</div>
           <LegendItem color={COLOR_INFO} label="In Transit" Icon={Truck} />
           <LegendItem color={COLOR_SUCCESS} label="Delivered" Icon={CheckCircle2} />

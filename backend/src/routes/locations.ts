@@ -5,25 +5,28 @@ import { IArrivalCriteriaRepository } from '../repositories/ArrivalCriteriaRepos
 import { ILocationResolutionService } from '../services/LocationResolutionService.js';
 import { container, TOKENS } from '../di/index.js';
 import { IEventBus, EVENT_TYPES, createEvent } from '../events/index.js';
+import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 
 export async function locationRoutes(server: FastifyInstance) {
   const locationsRepo = container.resolve<ILocationsRepository>(TOKENS.ILocationsRepository);
   const arrivalCriteriaRepo = container.resolve<IArrivalCriteriaRepository>(TOKENS.IArrivalCriteriaRepository);
   const locationResolutionService = container.resolve<ILocationResolutionService>(TOKENS.ILocationResolutionService);
 
+  await registerOrgScope(server);
+
   /** Publish a location domain event (best-effort, non-blocking) */
   async function publishLocationEvent(
     type: string,
     locationId: string,
     payload: Record<string, unknown>,
+    orgId: string,
     actorId?: string,
   ) {
     try {
       const eventBus = container.resolve<IEventBus>(TOKENS.IEventBus);
-      const org = await server.prisma.organization.findFirst({ select: { id: true } });
       await eventBus.publish(createEvent({
         type,
-        orgId: org?.id || 'default',
+        orgId,
         actorId: actorId ?? null,
         entityType: 'location',
         entityId: locationId,
@@ -35,16 +38,30 @@ export async function locationRoutes(server: FastifyInstance) {
     }
   }
 
-  // Get all locations (with arrival criteria count)
-  server.get('/api/v1/locations', async (_req: FastifyRequest, _reply: FastifyReply) => {
-    const locations = await server.prisma.location.findMany({
-      where: { archived: false },
-      include: {
-        arrivalCriteria: { where: { active: true }, select: { id: true, criteriaType: true } },
-      },
-      orderBy: { name: 'asc' },
-      take: 500,
-    });
+  // Get all locations (with arrival criteria count). Defaults to 500 for
+  // backwards compatibility with callers that don't paginate; explicit
+  // `limit` and `offset` query params let clients page through larger sets.
+  // X-Total-Count surfaces the unpaged total without changing the data shape.
+  server.get('/api/v1/locations', async (req: FastifyRequest, reply: FastifyReply) => {
+    const q = req.query as { limit?: string; offset?: string };
+    const limit = Math.min(Math.max(Number(q.limit) || 500, 1), 1000);
+    const offset = Math.max(Number(q.offset) || 0, 0);
+    // Multi-tenancy: scope to the requesting tenant.
+    const orgId = req.orgId!;
+    const where: any = { archived: false, orgId };
+    const [locations, total] = await Promise.all([
+      server.prisma.location.findMany({
+        where,
+        include: {
+          arrivalCriteria: { where: { active: true }, select: { id: true, criteriaType: true } },
+        },
+        orderBy: { name: 'asc' },
+        take: limit,
+        skip: offset,
+      }),
+      server.prisma.location.count({ where }),
+    ]);
+    reply.header('X-Total-Count', String(total));
     return { data: locations, error: null };
   });
 
@@ -81,24 +98,26 @@ export async function locationRoutes(server: FastifyInstance) {
       })
       .parse((req as any).body);
 
+    const orgId = req.orgId!;
     // Use resolution service to create with default arrival criteria.
     // The service emits LOCATION_CREATED for new locations automatically.
     // For existing locations (resolved, not created), publish LOCATION_UPDATED.
-    const result = await locationResolutionService.resolveOrCreate(body, req.user?.sub);
+    const result = await locationResolutionService.resolveOrCreate({ ...body, orgId }, req.user?.sub);
 
     if (!result.created) {
       await publishLocationEvent(
         EVENT_TYPES.LOCATION_UPDATED,
         result.location.id,
         { locationName: result.location.name, source: 'manual', created: false },
+        orgId,
         req.user?.sub,
       );
     }
 
     reply.code(result.created ? 201 : 200);
-    // Fetch with arrival criteria
-    const full = await server.prisma.location.findUnique({
-      where: { id: result.location.id },
+    // Fetch with arrival criteria, scoped to this tenant.
+    const full = await server.prisma.location.findFirst({
+      where: { id: result.location.id, orgId },
       include: { arrivalCriteria: { where: { active: true } } },
     });
     return { data: full, error: null };
@@ -107,8 +126,9 @@ export async function locationRoutes(server: FastifyInstance) {
   // Get location by ID (with arrival criteria)
   server.get('/api/v1/locations/:id', async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
+    const orgId = req.orgId!;
     const location = await server.prisma.location.findFirst({
-      where: { id, archived: false },
+      where: { id, archived: false, orgId },
       include: { arrivalCriteria: { where: { active: true } } },
     });
     if (!location) {
@@ -134,7 +154,8 @@ export async function locationRoutes(server: FastifyInstance) {
       ...locationMetadataSchema,
     }).parse((req as any).body);
 
-    const location = await locationsRepo.findById(id);
+    const orgId = req.orgId!;
+    const location = await locationsRepo.findById(id, orgId);
     if (!location) {
       reply.code(404);
       return { data: null, error: 'Location not found' };
@@ -156,7 +177,7 @@ export async function locationRoutes(server: FastifyInstance) {
     await publishLocationEvent(EVENT_TYPES.LOCATION_UPDATED, id, {
       locationName: updated.name,
       changes,
-    }, req.user?.sub);
+    }, orgId, req.user?.sub);
 
     return { data: updated, error: null };
   });
@@ -169,7 +190,8 @@ export async function locationRoutes(server: FastifyInstance) {
       return { data: [], error: null };
     }
 
-    const locations = await locationsRepo.search(q);
+    const orgId = req.orgId!;
+    const locations = await locationsRepo.search(q, orgId);
     return { data: locations, error: null };
   });
 
@@ -178,7 +200,8 @@ export async function locationRoutes(server: FastifyInstance) {
   server.delete('/api/v1/locations/:id', async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
 
-    const location = await locationsRepo.findById(id);
+    const orgId = req.orgId!;
+    const location = await locationsRepo.findById(id, orgId);
     if (!location) {
       reply.code(404);
       return { data: null, error: 'Location not found' };
@@ -188,7 +211,7 @@ export async function locationRoutes(server: FastifyInstance) {
 
     await publishLocationEvent(EVENT_TYPES.LOCATION_ARCHIVED, id, {
       locationName: location.name,
-    }, req.user?.sub);
+    }, orgId, req.user?.sub);
 
     return { data: archived, error: null };
   });

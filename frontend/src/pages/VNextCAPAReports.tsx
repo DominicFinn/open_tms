@@ -26,6 +26,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -622,7 +623,7 @@ export default function VNextCAPAReports() {
               <FormTextarea label="Corrective Action" value={form.correctiveAction} onChange={v => updateField('correctiveAction', v)} placeholder="Actions to correct the identified issue..." />
               <div className="space-y-2">
                 <Label>Corrective Action Due Date</Label>
-                <Input
+                <DatePicker
                   type="date"
                   value={form.correctiveActionDueDate}
                   onChange={e => updateField('correctiveActionDueDate', e.target.value)}
@@ -631,7 +632,7 @@ export default function VNextCAPAReports() {
               <FormTextarea label="Preventive Action" value={form.preventiveAction} onChange={v => updateField('preventiveAction', v)} placeholder="Actions to prevent recurrence..." />
               <div className="space-y-2">
                 <Label>Preventive Action Due Date</Label>
-                <Input
+                <DatePicker
                   type="date"
                   value={form.preventiveActionDueDate}
                   onChange={e => updateField('preventiveActionDueDate', e.target.value)}

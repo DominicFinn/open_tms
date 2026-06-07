@@ -16,6 +16,7 @@ import {
 import { API_URL } from '../api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -235,11 +236,11 @@ export default function VNextCreateOrder() {
           </div>
           <div className="space-y-2">
             <Label htmlFor="orderDate">Order date</Label>
-            <Input id="orderDate" type="date" value={orderDate} onChange={e => setOrderDate(e.target.value)} />
+            <DatePicker id="orderDate" type="date" value={orderDate} onChange={e => setOrderDate(e.target.value)} />
           </div>
           <div className="space-y-2">
             <Label htmlFor="reqDel">Requested delivery date</Label>
-            <Input id="reqDel" type="date" value={requestedDelivery} onChange={e => setRequestedDelivery(e.target.value)} />
+            <DatePicker id="reqDel" type="date" value={requestedDelivery} onChange={e => setRequestedDelivery(e.target.value)} />
           </div>
           <div className="space-y-2">
             <Label htmlFor="svc">Service level</Label>

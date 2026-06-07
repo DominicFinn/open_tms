@@ -1,4 +1,4 @@
-import { PalletType } from '@prisma/client';
+import { PackagingType } from '@prisma/client';
 
 export interface CartonSpec {
   lengthMm: number;
@@ -32,13 +32,22 @@ export interface PalletizationResult {
  *
  * This is a simple homogeneous stacker - no mixing, no interlocking patterns.
  * Good enough for an operator-facing planning estimate.
+ *
+ * Only `kind = 'pallet'` rows make sense as inputs; non-pallet packaging is
+ * not a load-bearing deck and tare/max-load may be null.
  */
-export function planHomogeneousPallet(pallet: PalletType, carton: CartonSpec): PalletizationResult {
+export function planHomogeneousPallet(pallet: PackagingType, carton: CartonSpec): PalletizationResult {
   const warnings: string[] = [];
 
   if (carton.lengthMm <= 0 || carton.widthMm <= 0 || carton.heightMm <= 0 || carton.weightGrams <= 0) {
     throw new Error('Carton dimensions and weight must all be positive');
   }
+
+  if (pallet.tareWeightGrams == null || pallet.maxLoadGrams == null) {
+    throw new Error('Palletization requires tareWeightGrams and maxLoadGrams; this packaging type is missing one or both');
+  }
+  const tareWeightGrams = pallet.tareWeightGrams;
+  const maxLoadGrams = pallet.maxLoadGrams;
 
   // Try both orientations
   const orientA = Math.floor(pallet.lengthMm / carton.lengthMm) * Math.floor(pallet.widthMm / carton.widthMm);
@@ -53,7 +62,7 @@ export function planHomogeneousPallet(pallet: PalletType, carton: CartonSpec): P
       layers: 0,
       totalCartons: 0,
       stackedHeightMm: pallet.heightMm,
-      totalWeightGrams: pallet.tareWeightGrams,
+      totalWeightGrams: tareWeightGrams,
       weightUtilizationPercent: 0,
       heightUtilizationPercent: pallet.maxStackHeightMm ? (pallet.heightMm / pallet.maxStackHeightMm) * 100 : null,
       fits: false,
@@ -74,7 +83,7 @@ export function planHomogeneousPallet(pallet: PalletType, carton: CartonSpec): P
         layers: 0,
         totalCartons: 0,
         stackedHeightMm: pallet.heightMm,
-        totalWeightGrams: pallet.tareWeightGrams,
+        totalWeightGrams: tareWeightGrams,
         weightUtilizationPercent: 0,
         heightUtilizationPercent: 100,
         fits: false,
@@ -85,9 +94,8 @@ export function planHomogeneousPallet(pallet: PalletType, carton: CartonSpec): P
   }
 
   // How many layers fit under the weight limit
-  const usableWeight = pallet.maxLoadGrams;
   const weightPerLayer = carton.weightGrams * cartonsPerLayer;
-  const maxLayersByWeight = weightPerLayer > 0 ? Math.floor(usableWeight / weightPerLayer) : Infinity;
+  const maxLayersByWeight = weightPerLayer > 0 ? Math.floor(maxLoadGrams / weightPerLayer) : Infinity;
 
   const layers = Math.max(0, Math.min(maxLayersByHeight, maxLayersByWeight));
   if (maxLayersByWeight < maxLayersByHeight) warnings.push('Weight limit reached before height limit');
@@ -95,10 +103,10 @@ export function planHomogeneousPallet(pallet: PalletType, carton: CartonSpec): P
 
   const totalCartons = cartonsPerLayer * layers;
   const cargoWeight = totalCartons * carton.weightGrams;
-  const totalWeightGrams = pallet.tareWeightGrams + cargoWeight;
+  const totalWeightGrams = tareWeightGrams + cargoWeight;
   const stackedHeightMm = pallet.heightMm + layers * carton.heightMm;
 
-  const weightUtilizationPercent = Number(((cargoWeight / pallet.maxLoadGrams) * 100).toFixed(1));
+  const weightUtilizationPercent = Number(((cargoWeight / maxLoadGrams) * 100).toFixed(1));
   const heightUtilizationPercent = pallet.maxStackHeightMm
     ? Number(((stackedHeightMm / pallet.maxStackHeightMm) * 100).toFixed(1))
     : null;
@@ -119,16 +127,16 @@ export function planHomogeneousPallet(pallet: PalletType, carton: CartonSpec): P
 }
 
 /**
- * Recommend the best pallet type from a list for a given homogeneous carton
- * load. Ranks by cartons-per-pallet (desc), then weight utilization (desc).
+ * Recommend the best pallet (kind = 'pallet') from a list for a given
+ * homogeneous carton load. Ranks by cartons-per-pallet (desc), then weight
+ * utilization (desc). Non-pallet packaging is filtered out.
  */
 export function recommendPalletType(
-  palletTypes: PalletType[],
+  packagingTypes: PackagingType[],
   carton: CartonSpec,
 ): { best: PalletizationResult | null; all: PalletizationResult[] } {
-  const results = palletTypes
-    .filter(p => p.active)
-    .map(p => planHomogeneousPallet(p, carton));
+  const palletsOnly = packagingTypes.filter(p => p.active && p.kind === 'pallet' && p.tareWeightGrams != null && p.maxLoadGrams != null);
+  const results = palletsOnly.map(p => planHomogeneousPallet(p, carton));
 
   const viable = results.filter(r => r.fits);
   viable.sort((a, b) => {

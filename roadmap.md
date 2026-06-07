@@ -228,6 +228,13 @@ Every TMS needs customer self-service. The carrier portal exists but there's not
 - **Order Entry** ✅
   - Customer self-service order creation from portal with PO number, origin/destination, line items, service level
   - Location auto-resolution from city/state
+  - **Phase 1: Order Line Items & Cartonization** ✅ (Jun 2026)
+    - Surfaced existing schema gaps: hazmat detail (UN/class/PG/PSN), unit of measure, customs (HS code, country of origin), temperature range (tempMinC/tempMaxC) added to OrderLineItem
+    - `ModeRulesService` drives required-ness from `(mode, flags)` — FTL/LTL/parcel × hazmat × international × temp-controlled. Same matrix evaluated client-side in the portal and re-validated server-side
+    - `OrderCartonizationService` derives density, suggested freight class (NMFC density table), rolled-up class, total weight, total cube, pallet positions, linear feet — read-only live preview at `POST /api/v1/order-line-items/cartonization/preview`
+    - `PalletType` generalised → `PackagingType` (org-scoped catalogue with `kind` discriminator: pallet | carton | crate | drum | roll | bag | tote | loose | custom). Admin CRUD at `/wms/packaging-types`
+    - Order-level packing summary auto-generates `TrackableUnit`s from `(packagingTypeId, unitCount, stackable)` — customers don't build pallets by hand
+  - Phase 2: per-unit manual modelling (mixed-SKU pallets, per-unit dims/weights) 🔲
   - Order templates for recurring shipments 🔲
   - Bulk order upload (CSV) through portal 🔲
 - **Shareable Tracking Links** ✅

@@ -5,6 +5,7 @@ import { ArrowLeft, ChevronRight, CircleAlert, Info, Loader2 } from 'lucide-reac
 import { API_URL } from '../api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
@@ -515,7 +516,7 @@ export default function VNextWmsReturnDetail() {
                 <div className="grid gap-3 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label>Pickup Date/Time</Label>
-                    <Input type="datetime-local" value={pickupForm.pickupDate} onChange={e => setPickupForm(f => ({ ...f, pickupDate: e.target.value }))} />
+                    <DatePicker type="datetime-local" value={pickupForm.pickupDate} onChange={e => setPickupForm(f => ({ ...f, pickupDate: e.target.value }))} />
                   </div>
                   <div className="space-y-2">
                     <Label>Window (optional)</Label>

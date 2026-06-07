@@ -7,6 +7,7 @@ import { ICommandBus } from '../commands/CommandBus.js';
 import { CREATE_SHIPMENT } from '../commands/shipments/CreateShipmentCommand.js';
 import { UPDATE_SHIPMENT } from '../commands/shipments/UpdateShipmentCommand.js';
 import { ARCHIVE_SHIPMENT } from '../commands/shipments/ArchiveShipmentCommand.js';
+import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 
 // Accepts YYYY-MM-DD (HTML date input), YYYY-MM-DDTHH:mm[:ss[.sss]][Z] (datetime-local), or full ISO.
 // Normalizes to a full ISO string.
@@ -23,10 +24,7 @@ const flexibleDate = z.string().trim().min(1).transform((v, ctx) => {
 export async function shipmentRoutes(server: FastifyInstance) {
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
 
-  const getOrgId = async () => {
-    const org = await server.prisma.organization.findFirst({ select: { id: true } });
-    return org?.id || 'default';
-  };
+  await registerOrgScope(server);
 
   // Get all shipments (uses denormalized read model for performance).
   // We attach relation objects (customer/origin/destination/carrier/lane) so
@@ -44,7 +42,9 @@ export async function shipmentRoutes(server: FastifyInstance) {
       sortBy,
       sortOrder,
     } = (req.query as any) || {};
-    const where: any = {};
+    // Multi-tenancy: every query is scoped to the requesting JWT's org.
+    const orgId = req.orgId!;
+    const where: any = { orgId };
     if (status) where.status = status;
     if (customerId) where.customerId = customerId;
     if (carrierId) where.carrierId = carrierId;
@@ -85,8 +85,12 @@ export async function shipmentRoutes(server: FastifyInstance) {
     if (rows.length === 0) return { data: rows, error: null };
 
     const ids = rows.map(s => s.id);
+    // Defense in depth: the readModel above already filtered by orgId, so
+    // `ids` only contains rows in this tenant. The orgId on this lookup is
+    // redundant given that — but keeping it makes the multi-tenancy story
+    // obvious to reviewers (every prisma.shipment query has orgId).
     const typeLinks = await server.prisma.shipment.findMany({
-      where: { id: { in: ids } },
+      where: { id: { in: ids }, orgId },
       select: { id: true, shipmentTypeId: true },
     });
     const typeById = new Map(typeLinks.map(t => [t.id, t.shipmentTypeId]));
@@ -160,12 +164,13 @@ export async function shipmentRoutes(server: FastifyInstance) {
     });
 
     const body = schema.parse((req as any).body);
+    const orgId = req.orgId!;
 
     const result = await commandBus.dispatch({
       type: CREATE_SHIPMENT,
-      orgId: await getOrgId(),
-      actorId: null,
-      payload: body,
+      orgId,
+      actorId: req.user?.sub ?? null,
+      payload: { ...body, orgId },
       metadata: { correlationId: randomUUID(), source: 'api' },
     });
 
@@ -174,9 +179,10 @@ export async function shipmentRoutes(server: FastifyInstance) {
       return { data: null, error: result.error };
     }
 
-    // Fetch full shipment for response
+    // Fetch full shipment for response — orgId scope is redundant given
+    // the row was just created in this tenant but enforces the invariant.
     const created = await server.prisma.shipment.findFirst({
-      where: { id: (result.data as any).id },
+      where: { id: (result.data as any).id, orgId },
       include: {
         customer: true,
         origin: true,
@@ -205,8 +211,9 @@ export async function shipmentRoutes(server: FastifyInstance) {
   // Get shipment by ID
   server.get('/api/v1/shipments/:id', async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
+    const orgId = req.orgId!;
     const shipment = await server.prisma.shipment.findFirst({
-      where: { id, archived: false },
+      where: { id, archived: false, orgId },
       include: {
         customer: true,
         origin: true,
@@ -256,7 +263,8 @@ export async function shipmentRoutes(server: FastifyInstance) {
   // Get shipment events
   server.get('/api/v1/shipments/:id/events', async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const shipment = await server.prisma.shipment.findFirst({ where: { id, archived: false } });
+    const orgId = req.orgId!;
+    const shipment = await server.prisma.shipment.findFirst({ where: { id, archived: false, orgId } });
     if (!shipment) {
       reply.code(404);
       return { data: null, error: 'Shipment not found' };
@@ -304,10 +312,22 @@ export async function shipmentRoutes(server: FastifyInstance) {
       message: "Either laneId or both originId and destinationId must be provided"
     }).parse((req as any).body);
 
+    const orgId = req.orgId!;
+    // Cross-tenant guard before we hit the command bus. If the row belongs
+    // to a different tenant we 404 without ever invoking the command.
+    const existing = await server.prisma.shipment.findFirst({
+      where: { id, orgId },
+      select: { id: true },
+    });
+    if (!existing) {
+      reply.code(404);
+      return { data: null, error: 'Shipment not found' };
+    }
+
     const result = await commandBus.dispatch({
       type: UPDATE_SHIPMENT,
-      orgId: await getOrgId(),
-      actorId: null,
+      orgId,
+      actorId: req.user?.sub ?? null,
       payload: { id, data: body },
       metadata: { correlationId: randomUUID(), source: 'api' },
     });
@@ -318,7 +338,7 @@ export async function shipmentRoutes(server: FastifyInstance) {
     }
 
     const updated = await server.prisma.shipment.findFirst({
-      where: { id },
+      where: { id, orgId },
       include: {
         customer: true, origin: true, destination: true,
         lane: body.laneId ? { include: { origin: true, destination: true } } : false
@@ -332,11 +352,21 @@ export async function shipmentRoutes(server: FastifyInstance) {
   // Delete (archive) shipment
   server.delete('/api/v1/shipments/:id', async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
+    const orgId = req.orgId!;
+
+    const existing = await server.prisma.shipment.findFirst({
+      where: { id, orgId },
+      select: { id: true },
+    });
+    if (!existing) {
+      reply.code(404);
+      return { data: null, error: 'Shipment not found' };
+    }
 
     const result = await commandBus.dispatch({
       type: ARCHIVE_SHIPMENT,
-      orgId: await getOrgId(),
-      actorId: null,
+      orgId,
+      actorId: req.user?.sub ?? null,
       payload: { id },
       metadata: { correlationId: randomUUID(), source: 'api' },
     });

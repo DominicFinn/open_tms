@@ -278,8 +278,17 @@ export class ShipmentAssignmentService implements IShipmentAssignmentService {
     const timestamp = Date.now().toString(36).toUpperCase().slice(-6);
     const reference = `SH-${serviceLevel}-${timestamp}`;
 
+    // Multi-tenancy: derive orgId from the customer (Customer.orgId is
+    // NOT NULL post phase 2). Any code path reaching this without a valid
+    // customerId already threw earlier.
+    const customer = await this.prisma.customer.findUniqueOrThrow({
+      where: { id: customerId },
+      select: { orgId: true },
+    });
+
     return this.prisma.shipment.create({
       data: {
+        orgId: customer.orgId,
         reference,
         customerId,
         originId,

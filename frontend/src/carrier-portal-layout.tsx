@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { LogOut } from 'lucide-react';
 
@@ -6,11 +6,11 @@ import { Logo } from '@/components/brand/Logo';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
-
-interface CarrierUser {
-  carrierName?: string;
-  email?: string;
-}
+import {
+  clearCarrierSession,
+  getCarrierUser,
+  type CarrierSessionUser,
+} from './pages/carrier-portal/carrierSession';
 
 const NAV: { to: string; label: string; end?: boolean }[] = [
   { to: '/carrier-portal', label: 'Dashboard', end: true },
@@ -21,22 +21,23 @@ const NAV: { to: string; label: string; end?: boolean }[] = [
 
 export function CarrierPortalLayout() {
   const navigate = useNavigate();
+  const [user, setUser] = useState<CarrierSessionUser | null>(null);
 
-  function getCarrierUser(): CarrierUser {
-    try {
-      return JSON.parse(localStorage.getItem('carrier_user') || '{}');
-    } catch {
-      return {};
+  useEffect(() => {
+    const u = getCarrierUser();
+    if (!u) {
+      navigate('/carrier-portal/login');
+      return;
     }
-  }
+    setUser(u);
+  }, [navigate]);
 
   function handleLogout() {
-    localStorage.removeItem('carrier_token');
-    localStorage.removeItem('carrier_user');
+    clearCarrierSession();
     navigate('/carrier-portal/login');
   }
 
-  const user = getCarrierUser();
+  if (!user) return null;
 
   return (
     <div className="min-h-screen bg-background text-foreground font-sans">

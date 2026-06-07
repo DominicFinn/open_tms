@@ -17,6 +17,7 @@ import {
 import { API_URL } from '../api';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -228,13 +229,13 @@ export default function VNextLocationReport() {
                   ))}
                 </SelectContent>
               </Select>
-              <Input
+              <DatePicker
                 type="date"
                 value={dateFrom}
                 onChange={e => setDateFrom(e.target.value)}
                 className="w-[160px]"
               />
-              <Input
+              <DatePicker
                 type="date"
                 value={dateTo}
                 onChange={e => setDateTo(e.target.value)}

@@ -185,8 +185,12 @@ export default function VNextCarrierTrackingSetup() {
       const carriersJson = await carriersRes.json();
       const integrationsJson = await integrationsRes.json();
       if (!carriersRes.ok) throw new Error(carriersJson.error || 'Failed to load carriers');
-      setCarriers(carriersJson.data || []);
-      setExistingIntegrations(integrationsJson.data || []);
+      // Defensive: the integrations endpoint historically returned an empty
+      // object instead of an array when its Fastify response schema typed
+      // `data` as object. Treat anything non-array as an empty list so the
+      // wizard keeps working.
+      setCarriers(Array.isArray(carriersJson.data) ? carriersJson.data : []);
+      setExistingIntegrations(Array.isArray(integrationsJson.data) ? integrationsJson.data : []);
     } catch (err) {
       setError((err as Error).message);
     } finally {

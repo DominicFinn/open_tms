@@ -14,6 +14,7 @@ import { ICommandBus } from '../commands/CommandBus.js';
 import { CREATE_ORDER } from '../commands/orders/CreateOrderCommand.js';
 import { UPDATE_ORDER } from '../commands/orders/UpdateOrderCommand.js';
 import { ARCHIVE_ORDER } from '../commands/orders/ArchiveOrderCommand.js';
+import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 
 // Validation schemas (exported for reuse by customerApi.ts)
 export const lineItemSchema = z.object({
@@ -27,7 +28,23 @@ export const lineItemSchema = z.object({
   height: z.number().positive().optional(),
   dimUnit: z.string().default('cm'),
   hazmat: z.boolean().default(false),
-  temperature: z.string().optional()
+  temperature: z.string().optional(),
+
+  // Phase 1 additions
+  unitOfMeasure: z.string().optional(),
+  unitPriceCents: z.number().int().nonnegative().optional(),
+  totalPriceCents: z.number().int().nonnegative().optional(),
+  priceCurrency: z.string().optional(),
+  freightClass: z.string().optional(),
+  nmfcCode: z.string().optional(),
+  unNumber: z.string().optional(),
+  hazmatClass: z.string().optional(),
+  packingGroup: z.string().optional(),
+  properShippingName: z.string().optional(),
+  hsCode: z.string().optional(),
+  countryOfOrigin: z.string().length(2).optional(),
+  tempMinC: z.number().optional(),
+  tempMaxC: z.number().optional(),
 });
 
 export const trackableUnitSchema = z.object({
@@ -36,7 +53,15 @@ export const trackableUnitSchema = z.object({
   customTypeName: z.string().optional(),
   barcode: z.string().optional(),
   notes: z.string().optional(),
+  packagingTypeId: z.string().uuid().nullable().optional(),
   lineItems: z.array(lineItemSchema).min(1, 'Each trackable unit must have at least one line item')
+});
+
+export const packingSummarySchema = z.object({
+  packagingTypeId: z.string().uuid().nullable().optional(),
+  unitCount: z.number().int().positive(),
+  stackable: z.boolean().optional(),
+  notes: z.string().optional(),
 });
 
 export const createOrderSchema = z.object({
@@ -86,6 +111,10 @@ export const createOrderSchema = z.object({
   // Line items (legacy - for backward compatibility)
   lineItems: z.array(lineItemSchema).optional(),
 
+  // Order-level "packing summary" (Phase 1). Auto-generates handling units
+  // when trackableUnits is not explicitly supplied.
+  packingSummary: packingSummarySchema.optional(),
+
   // Additional info
   specialInstructions: z.string().optional(),
   notes: z.string().optional()
@@ -122,14 +151,15 @@ export async function orderRoutes(server: FastifyInstance) {
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
   const locationResolution = container.resolve<ILocationResolutionService>(TOKENS.ILocationResolutionService);
 
-  const getOrgId = async () => {
-    const org = await server.prisma.organization.findFirst({ select: { id: true } });
-    return org?.id || 'default';
-  };
+  await registerOrgScope(server);
 
-  // Get all orders
-  server.get('/api/v1/orders', async (_req: FastifyRequest, _reply: FastifyReply) => {
-    const orders = await ordersRepo.all();
+  // Get all orders (optionally filtered by customer) — scoped to JWT org.
+  server.get('/api/v1/orders', async (req: FastifyRequest, _reply: FastifyReply) => {
+    const { customerId } = (req.query as { customerId?: string }) || {};
+    const orgId = req.orgId!;
+    const orders = customerId
+      ? await ordersRepo.findByCustomerId(customerId, { orgId })
+      : await ordersRepo.all(orgId);
     return { data: orders, error: null };
   });
 
@@ -201,11 +231,12 @@ export async function orderRoutes(server: FastifyInstance) {
       status = 'validated';
     }
 
+    const orgId = req.orgId!;
     const result = await commandBus.dispatch({
       type: CREATE_ORDER,
-      orgId: await getOrgId(),
-      actorId: null,
-      payload: { orderData, status },
+      orgId,
+      actorId: req.user?.sub ?? null,
+      payload: { orderData: { ...orderData, orgId }, status },
       metadata: { correlationId: randomUUID(), source: 'api' },
     });
 
@@ -215,7 +246,7 @@ export async function orderRoutes(server: FastifyInstance) {
     }
 
     // Fetch full order with relations for response
-    const created = await ordersRepo.findById((result.data as any).id);
+    const created = await ordersRepo.findById((result.data as any).id, orgId);
     reply.code(201);
     return { data: created, error: null };
   });
@@ -223,7 +254,8 @@ export async function orderRoutes(server: FastifyInstance) {
   // Get order by ID
   server.get('/api/v1/orders/:id', async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const order = await ordersRepo.findById(id);
+    const orgId = req.orgId!;
+    const order = await ordersRepo.findById(id, orgId);
     if (!order) {
       reply.code(404);
       return { data: null, error: 'Order not found' };
@@ -241,10 +273,18 @@ export async function orderRoutes(server: FastifyInstance) {
     if (body.requestedPickupDate) data.requestedPickupDate = new Date(body.requestedPickupDate);
     if (body.requestedDeliveryDate) data.requestedDeliveryDate = new Date(body.requestedDeliveryDate);
 
+    const orgId = req.orgId!;
+    // Cross-tenant guard before we hit the command bus.
+    const existing = await ordersRepo.findById(id, orgId);
+    if (!existing) {
+      reply.code(404);
+      return { data: null, error: 'Order not found' };
+    }
+
     const result = await commandBus.dispatch({
       type: UPDATE_ORDER,
-      orgId: await getOrgId(),
-      actorId: null,
+      orgId,
+      actorId: req.user?.sub ?? null,
       payload: { id, data },
       metadata: { correlationId: randomUUID(), source: 'api' },
     });
@@ -254,7 +294,7 @@ export async function orderRoutes(server: FastifyInstance) {
       return { data: null, error: result.error };
     }
 
-    const updated = await ordersRepo.findById(id);
+    const updated = await ordersRepo.findById(id, orgId);
     return { data: updated, error: null };
   });
 
@@ -262,10 +302,17 @@ export async function orderRoutes(server: FastifyInstance) {
   server.delete('/api/v1/orders/:id', async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
 
+    const orgId = req.orgId!;
+    const existing = await ordersRepo.findById(id, orgId);
+    if (!existing) {
+      reply.code(404);
+      return { data: null, error: 'Order not found' };
+    }
+
     const result = await commandBus.dispatch({
       type: ARCHIVE_ORDER,
-      orgId: await getOrgId(),
-      actorId: null,
+      orgId,
+      actorId: req.user?.sub ?? null,
       payload: { id },
       metadata: { correlationId: randomUUID(), source: 'api' },
     });
@@ -275,7 +322,7 @@ export async function orderRoutes(server: FastifyInstance) {
       return { data: null, error: result.error };
     }
 
-    const archived = await ordersRepo.findById(id);
+    const archived = await ordersRepo.findById(id, orgId);
     return { data: archived, error: null };
   });
 
@@ -287,7 +334,8 @@ export async function orderRoutes(server: FastifyInstance) {
       createLocation: z.boolean().default(false)
     }).parse((req as any).body);
 
-    const order = await ordersRepo.findById(id);
+    const orgId = req.orgId!;
+    const order = await ordersRepo.findById(id, orgId);
     if (!order) {
       reply.code(404);
       return { data: null, error: 'Order not found' };
@@ -320,7 +368,7 @@ export async function orderRoutes(server: FastifyInstance) {
     const updated = await ordersRepo.validateLocation(id, body.locationType, locationId);
 
     // Fetch the updated order with relations
-    const updatedOrder = await ordersRepo.findById(id);
+    const updatedOrder = await ordersRepo.findById(id, orgId);
 
     return { data: updatedOrder, error: null };
   });
@@ -330,7 +378,8 @@ export async function orderRoutes(server: FastifyInstance) {
     const { id } = req.params as { id: string };
     const body = lineItemSchema.parse((req as any).body);
 
-    const order = await ordersRepo.findById(id);
+    const orgId = req.orgId!;
+    const order = await ordersRepo.findById(id, orgId);
     if (!order) {
       reply.code(404);
       return { data: null, error: 'Order not found' };
@@ -345,7 +394,8 @@ export async function orderRoutes(server: FastifyInstance) {
   server.delete('/api/v1/orders/:orderId/line-items/:itemId', async (req: FastifyRequest, reply: FastifyReply) => {
     const { orderId, itemId } = req.params as { orderId: string; itemId: string };
 
-    const order = await ordersRepo.findById(orderId);
+    const orgId = req.orgId!;
+    const order = await ordersRepo.findById(orderId, orgId);
     if (!order) {
       reply.code(404);
       return { data: null, error: 'Order not found' };
@@ -360,7 +410,8 @@ export async function orderRoutes(server: FastifyInstance) {
     const { id } = req.params as { id: string };
     const body = trackableUnitSchema.parse((req as any).body);
 
-    const order = await ordersRepo.findById(id);
+    const orgId = req.orgId!;
+    const order = await ordersRepo.findById(id, orgId);
     if (!order) {
       reply.code(404);
       return { data: null, error: 'Order not found' };
@@ -380,7 +431,8 @@ export async function orderRoutes(server: FastifyInstance) {
       barcode: z.string().optional()
     }).parse((req as any).body);
 
-    const order = await ordersRepo.findById(orderId);
+    const orgId = req.orgId!;
+    const order = await ordersRepo.findById(orderId, orgId);
     if (!order) {
       reply.code(404);
       return { data: null, error: 'Order not found' };
@@ -394,7 +446,8 @@ export async function orderRoutes(server: FastifyInstance) {
   server.delete('/api/v1/orders/:orderId/trackable-units/:unitId', async (req: FastifyRequest, reply: FastifyReply) => {
     const { orderId, unitId } = req.params as { orderId: string; unitId: string };
 
-    const order = await ordersRepo.findById(orderId);
+    const orgId = req.orgId!;
+    const order = await ordersRepo.findById(orderId, orgId);
     if (!order) {
       reply.code(404);
       return { data: null, error: 'Order not found' };
@@ -409,7 +462,8 @@ export async function orderRoutes(server: FastifyInstance) {
     const { orderId, unitId } = req.params as { orderId: string; unitId: string };
     const body = lineItemSchema.parse((req as any).body);
 
-    const order = await ordersRepo.findById(orderId);
+    const orgId = req.orgId!;
+    const order = await ordersRepo.findById(orderId, orgId);
     if (!order) {
       reply.code(404);
       return { data: null, error: 'Order not found' };
@@ -427,7 +481,8 @@ export async function orderRoutes(server: FastifyInstance) {
       targetUnitId: z.string().uuid()
     }).parse((req as any).body);
 
-    const order = await ordersRepo.findById(orderId);
+    const orgId = req.orgId!;
+    const order = await ordersRepo.findById(orderId, orgId);
     if (!order) {
       reply.code(404);
       return { data: null, error: 'Order not found' };
@@ -441,7 +496,8 @@ export async function orderRoutes(server: FastifyInstance) {
   server.post('/api/v1/orders/:orderId/trackable-units/:unitId/generate-barcode', async (req: FastifyRequest, reply: FastifyReply) => {
     const { orderId, unitId } = req.params as { orderId: string; unitId: string };
 
-    const order = await ordersRepo.findById(orderId);
+    const orgId = req.orgId!;
+    const order = await ordersRepo.findById(orderId, orgId);
     if (!order) {
       reply.code(404);
       return { data: null, error: 'Order not found' };
@@ -456,7 +512,8 @@ export async function orderRoutes(server: FastifyInstance) {
     const { id } = req.params as { id: string };
 
     try {
-      const order = await ordersRepo.findById(id);
+      const orgId = req.orgId!;
+      const order = await ordersRepo.findById(id, orgId);
       if (!order) {
         reply.code(404);
         return { data: null, error: 'Order not found' };
@@ -474,7 +531,8 @@ export async function orderRoutes(server: FastifyInstance) {
   server.get('/api/v1/orders/:id/audit-logs', async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
 
-    const order = await ordersRepo.findById(id);
+    const orgId = req.orgId!;
+    const order = await ordersRepo.findById(id, orgId);
     if (!order) {
       reply.code(404);
       return { data: null, error: 'Order not found' };
@@ -493,7 +551,8 @@ export async function orderRoutes(server: FastifyInstance) {
   server.get('/api/v1/orders/:id/status-timeline', async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
 
-    const order = await ordersRepo.findById(id);
+    const orgId = req.orgId!;
+    const order = await ordersRepo.findById(id, orgId);
     if (!order) {
       reply.code(404);
       return { data: null, error: 'Order not found' };
@@ -552,7 +611,8 @@ export async function orderRoutes(server: FastifyInstance) {
     }).parse((req as any).body);
 
     try {
-      const order = await ordersRepo.findById(orderId);
+      const orgId = req.orgId!;
+      const order = await ordersRepo.findById(orderId, orgId);
       if (!order) {
         reply.code(404);
         return { data: null, error: 'Order not found' };
@@ -576,7 +636,8 @@ export async function orderRoutes(server: FastifyInstance) {
     }).parse((req as any).body);
 
     try {
-      const order = await ordersRepo.findById(orderId);
+      const orgId = req.orgId!;
+      const order = await ordersRepo.findById(orderId, orgId);
       if (!order) {
         reply.code(404);
         return { data: null, error: 'Order not found' };
@@ -599,7 +660,8 @@ export async function orderRoutes(server: FastifyInstance) {
   server.get('/api/v1/orders/:id/export/csv', async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
 
-    const order = await ordersRepo.findById(id);
+    const orgId = req.orgId!;
+    const order = await ordersRepo.findById(id, orgId);
     if (!order) {
       reply.code(404);
       return { data: null, error: 'Order not found' };
@@ -674,7 +736,8 @@ export async function orderRoutes(server: FastifyInstance) {
         };
       }
 
-      const result = await csvImportService.importOrders(body.csvContent);
+      const orgId = req.orgId!;
+      const result = await csvImportService.importOrders(body.csvContent, orgId);
 
       if (!result.success && result.errors.length > 0) {
         reply.code(400);
@@ -705,7 +768,8 @@ export async function orderRoutes(server: FastifyInstance) {
     const { id } = req.params as { id: string };
 
     try {
-      const order = await ordersRepo.findById(id);
+      const orgId = req.orgId!;
+      const order = await ordersRepo.findById(id, orgId);
       if (!order) {
         reply.code(404);
         return { data: null, error: 'Order not found' };
@@ -913,7 +977,8 @@ export async function orderRoutes(server: FastifyInstance) {
     }).parse((req as any).body);
 
     try {
-      const order = await ordersRepo.findById(id);
+      const orgId = req.orgId!;
+      const order = await ordersRepo.findById(id, orgId);
       if (!order) {
         reply.code(404);
         return { data: null, error: 'Order not found' };

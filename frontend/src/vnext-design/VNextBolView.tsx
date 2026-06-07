@@ -11,6 +11,8 @@ import {
   XCircle,
 } from 'lucide-react';
 
+import { toast } from 'sonner';
+
 import { API_URL } from '../api';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -30,6 +32,7 @@ export default function VNextBolView() {
   const [doc, setDoc] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -42,6 +45,50 @@ export default function VNextBolView() {
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   }, [id]);
+
+  /**
+   * Download a generated document via authenticated fetch.
+   *
+   * A plain `<a href>` triggers a browser navigation, which bypasses the
+   * `window.fetch` interceptor in `authFetch.ts`, so no Bearer token is sent
+   * and the backend rejects with 401. Going through `fetch` lets the
+   * interceptor attach the Authorization header; we read the response as a
+   * blob and synthesise a click on a hidden anchor to actually save the file.
+   */
+  const handleDownload = async () => {
+    if (!id) return;
+    setDownloading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/documents/${id}/download`);
+      if (!res.ok) {
+        let message = `Download failed (${res.status})`;
+        try {
+          const json = await res.json();
+          if (json?.error) message = json.error;
+        } catch {
+          // Body wasn't JSON — keep the status-based message.
+        }
+        toast.error(message);
+        return;
+      }
+      const blob = await res.blob();
+      const cd = res.headers.get('Content-Disposition') || '';
+      const match = cd.match(/filename="?([^";]+)"?/i);
+      const fileName = match?.[1] || doc?.fileName || `document-${id}.pdf`;
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch (err) {
+      toast.error((err as Error).message || 'Download failed');
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -93,15 +140,9 @@ export default function VNextBolView() {
             <Printer className="h-4 w-4" />
             Print
           </Button>
-          <Button asChild variant="gradient" size="sm">
-            <a
-              href={`${API_URL}/api/v1/documents/${id}/download`}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <Download className="h-4 w-4" />
-              Download PDF
-            </a>
+          <Button variant="gradient" size="sm" onClick={handleDownload} disabled={downloading}>
+            {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            {downloading ? 'Downloading...' : 'Download PDF'}
           </Button>
         </div>
       </div>

@@ -61,7 +61,15 @@ export default function VNextWebhookLogs() {
       const res = await fetch(`${API_URL}/api/v1/webhook-logs/stats`);
       if (res.ok) {
         const json = await res.json();
-        if (json.data) setStats(json.data);
+        const t = json.data?.totals;
+        if (t) {
+          setStats({
+            total: t.total ?? 0,
+            successful: t.success ?? 0,
+            errors: t.errors ?? 0,
+            updates: t.updates ?? 0,
+          });
+        }
       }
     } catch {
       // ignore
@@ -146,7 +154,7 @@ export default function VNextWebhookLogs() {
                   <Icon className="h-5 w-5" />
                 </div>
                 <div>
-                  <div className="text-2xl font-semibold">{s.value.toLocaleString()}</div>
+                  <div className="text-2xl font-semibold">{(s.value ?? 0).toLocaleString()}</div>
                   <div className="text-xs text-muted-foreground">{s.label}</div>
                 </div>
               </CardContent>

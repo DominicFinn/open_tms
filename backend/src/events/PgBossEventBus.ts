@@ -160,10 +160,17 @@ export class PgBossEventBus implements IEventBus {
   ): Promise<void> {
     const queueName = QUEUE_PREFIX + handlerName;
 
-    await this.queue.subscribe(queueName, async (message: QueueMessage) => {
-      const event = message.payload as DomainEvent;
-      await handler(event);
-    });
+    await this.queue.subscribe(
+      queueName,
+      async (message: QueueMessage) => {
+        const event = message.payload as DomainEvent;
+        await handler(event);
+      },
+      {
+        concurrency: options.concurrency,
+        pollingIntervalSeconds: options.pollingIntervalSeconds,
+      },
+    );
 
     console.log(`[EventBus] Handler "${handlerName}" subscribed to queue "${queueName}"`);
   }

@@ -3,28 +3,39 @@ import { z } from 'zod';
 import { ITradingPartnerRepository } from '../repositories/TradingPartnerRepository.js';
 import { IEdiRouterService } from '../services/EdiRouterService.js';
 import { container, TOKENS } from '../di/index.js';
+import { registerOrgScopeForEdi } from '../auth/orgScopeMiddleware.js';
 
 export async function tradingPartnerRoutes(server: FastifyInstance) {
   const partnerRepo = container.resolve<ITradingPartnerRepository>(TOKENS.ITradingPartnerRepository);
+
+  // Multi-tenancy: chained hooks cover all three shapes used here:
+  //  - admin reads with a JWT (req.user.organizationId)
+  //  - per-partner lookups via /trading-partners/:id/... that derive
+  //    orgId from the partner row when the JWT is absent
+  //  - create-partner / unauthed seed flows that have neither — fall
+  //    through to the default Organization
+  await registerOrgScopeForEdi(server);
 
   // List all trading partners
   server.get('/api/v1/trading-partners', {
     schema: {
       tags: ['Trading Partners'],
-      summary: 'List all trading partners',
+      summary: 'List all trading partners (excludes soft-deleted by default)',
       querystring: {
         type: 'object',
         properties: {
           entityType: { type: 'string' },
           active: { type: 'boolean' },
+          includeDeleted: { type: 'boolean', description: 'Include soft-deleted partners (admin)' },
         },
       },
     },
   }, async (req: FastifyRequest, _reply: FastifyReply) => {
-    const { entityType, active } = req.query as any;
+    const { entityType, active, includeDeleted } = req.query as any;
     const partners = await partnerRepo.findAll({
       entityType,
       active: active !== undefined ? active === 'true' || active === true : undefined,
+      includeDeleted: includeDeleted === 'true' || includeDeleted === true,
     });
     return { data: partners, error: null };
   });
@@ -108,7 +119,10 @@ export async function tradingPartnerRoutes(server: FastifyInstance) {
       outboundFileNaming: z.enum(['date', 'sequence', 'reference']).optional(),
     }).parse((req as any).body);
 
-    const partner = await partnerRepo.create(body);
+    // Multi-tenancy: req.orgId is populated by the EDI hook chain
+    // registered at the top of this plugin (JWT → first Organization).
+    const orgId = req.orgId!;
+    const partner = await partnerRepo.create({ ...body, orgId });
     reply.code(201);
     return { data: partner, error: null };
   });
@@ -154,6 +168,33 @@ export async function tradingPartnerRoutes(server: FastifyInstance) {
       reply.code(400);
       return { data: null, error: err.message };
     }
+  });
+
+  // Soft-delete trading partner
+  // Sets deletedAt + deletedBy and disables polling/outbound. The row stays
+  // for audit (EDI logs reference it). Pass ?includeDeleted=true on the list
+  // endpoint to see soft-deleted partners.
+  server.delete('/api/v1/trading-partners/:id', {
+    schema: {
+      tags: ['Trading Partners'],
+      summary: 'Soft-delete a trading partner. Row is kept for audit; polling and outbound are disabled.',
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+
+    const existing = await partnerRepo.findById(id);
+    if (!existing) {
+      reply.code(404);
+      return { data: null, error: 'Trading partner not found' };
+    }
+    if (existing.deletedAt) {
+      // Idempotent
+      return { data: { id, alreadyDeleted: true }, error: null };
+    }
+
+    const deletedBy = req.user?.sub ?? null;
+    const updated = await partnerRepo.softDelete(id, deletedBy);
+    return { data: { id: updated.id, deletedAt: updated.deletedAt }, error: null };
   });
 
   // ── Transaction type management ──
@@ -336,7 +377,8 @@ export async function tradingPartnerRoutes(server: FastifyInstance) {
   }, async (req: FastifyRequest, _reply: FastifyReply) => {
     const { id } = req.params as { id: string };
     const { transactionType, direction, status } = req.query as any;
-    const logs = await partnerRepo.findLogs({ partnerId: id, transactionType, direction, status });
+    const orgId = req.user?.organizationId ?? undefined;
+    const logs = await partnerRepo.findLogs({ orgId, partnerId: id, transactionType, direction, status });
     return { data: logs, error: null };
   });
 
@@ -361,8 +403,9 @@ export async function tradingPartnerRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, _reply: FastifyReply) => {
     const { transactionType, direction, status, partnerId, source, search, limit, offset } = req.query as any;
+    const orgId = req.user?.organizationId ?? undefined;
     const result = await partnerRepo.findLogsWithPagination(
-      { partnerId, transactionType, direction, status, source, search },
+      { orgId, partnerId, transactionType, direction, status, source, search },
       parseInt(limit) || 50,
       parseInt(offset) || 0,
     );
@@ -379,6 +422,13 @@ export async function tradingPartnerRoutes(server: FastifyInstance) {
     const { id } = req.params as { id: string };
     const log = await partnerRepo.findLogById(id);
     if (!log) {
+      reply.code(404);
+      return { data: null, error: 'EDI transaction log not found' };
+    }
+    // Cross-tenant guard: a log row's orgId may be null for legacy/manual
+    // imports — return 404 (rather than 403) so we don't leak existence.
+    const orgId = req.user?.organizationId ?? null;
+    if (orgId && log.orgId && log.orgId !== orgId) {
       reply.code(404);
       return { data: null, error: 'EDI transaction log not found' };
     }
@@ -401,7 +451,8 @@ export async function tradingPartnerRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, _reply: FastifyReply) => {
     const { partnerId, transactionType, direction } = req.query as any;
-    const stats = await partnerRepo.getLogStats({ partnerId, transactionType, direction });
+    const orgId = req.user?.organizationId ?? undefined;
+    const stats = await partnerRepo.getLogStats({ orgId, partnerId, transactionType, direction });
     return { data: stats, error: null };
   });
 
@@ -415,6 +466,12 @@ export async function tradingPartnerRoutes(server: FastifyInstance) {
     const { id } = req.params as { id: string };
     const log = await partnerRepo.findLogById(id);
     if (!log) {
+      reply.code(404);
+      return { data: null, error: 'EDI transaction log not found' };
+    }
+    // Same cross-tenant guard as the read endpoint.
+    const orgId = req.user?.organizationId ?? null;
+    if (orgId && log.orgId && log.orgId !== orgId) {
       reply.code(404);
       return { data: null, error: 'EDI transaction log not found' };
     }

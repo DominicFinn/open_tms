@@ -52,29 +52,12 @@ export const slaReportRoutes: FastifyPluginAsync = async (server) => {
       where.ruleType = { in: ruleTypes };
     }
 
-    // Fetch evaluations
-    const evaluations = await server.prisma.slaEvaluation.findMany({
-      where,
-      orderBy: [{ slaStartedAt: 'asc' }],
-      take: 10000,
-    });
-
-    // Fetch customer names for denormalization
-    const customerIds = [...new Set(evaluations.filter((e) => e.customerId).map((e) => e.customerId!))];
-    const customers = customerIds.length > 0
-      ? await server.prisma.customer.findMany({
-          where: { id: { in: customerIds } },
-          select: { id: true, name: true },
-          take: 10000,
-        })
-      : [];
-    const customerMap = new Map(customers.map((c) => [c.id, c.name]));
-
-    // Build CSV
-    const csvRows: string[] = [];
-
-    // Header
-    csvRows.push([
+    // Cursor-paginate to avoid silent truncation. The previous implementation
+    // capped the result set at 10K rows with no warning, so high-volume orgs
+    // got an incomplete report. Pull customer names lazily as we encounter
+    // unseen customer IDs, instead of resolving them all up-front.
+    const BATCH_SIZE = 1000;
+    const HEADER_ROW = [
       'Evaluation ID',
       'Entity Type',
       'Entity ID',
@@ -90,38 +73,68 @@ export const slaReportRoutes: FastifyPluginAsync = async (server) => {
       'Met At',
       'Breach Duration (min)',
       'Remaining (min)',
-    ].join(','));
+    ].join(',');
 
-    // Data rows
-    for (const e of evaluations) {
-      const fields = [
-        e.id,
-        e.entityType,
-        e.entityId,
-        e.entityReference || '',
-        e.customerId ? (customerMap.get(e.customerId) || e.customerId) : '',
-        e.ruleType,
-        e.ruleName,
-        e.status,
-        e.slaStartedAt.toISOString(),
-        e.slaDueAt?.toISOString() || '',
-        e.warningAt?.toISOString() || '',
-        e.breachedAt?.toISOString() || '',
-        e.metAt?.toISOString() || '',
-        e.breachDurationMinutes?.toString() || '',
-        e.remainingMinutes?.toString() || '',
-      ];
-      csvRows.push(fields.map((f) => `"${f.replace(/"/g, '""')}"`).join(','));
-    }
-
-    const csvContent = csvRows.join('\n');
     const fromStr = fromDate.toISOString().slice(0, 10);
     const toStr = toDate.toISOString().slice(0, 10);
 
     reply
       .header('Content-Type', 'text/csv')
-      .header('Content-Disposition', `attachment; filename="SLA-Compliance-Report-${fromStr}-to-${toStr}.csv"`)
-      .send(csvContent);
+      .header('Content-Disposition', `attachment; filename="SLA-Compliance-Report-${fromStr}-to-${toStr}.csv"`);
+
+    // Build the CSV in memory via cursor pagination — keeps response shape
+    // identical to the previous Buffer payload while removing the 10K cap.
+    const csvParts: string[] = [HEADER_ROW];
+    const customerMap = new Map<string, string>();
+    let cursor: { id: string } | undefined;
+
+    while (true) {
+      const batch = await server.prisma.slaEvaluation.findMany({
+        where,
+        orderBy: [{ slaStartedAt: 'asc' }, { id: 'asc' }],
+        take: BATCH_SIZE,
+        ...(cursor ? { cursor, skip: 1 } : {}),
+      });
+      if (batch.length === 0) break;
+
+      // Resolve any customer IDs we haven't seen yet
+      const unseenCustomerIds = batch
+        .map((e) => e.customerId)
+        .filter((id): id is string => !!id && !customerMap.has(id));
+      if (unseenCustomerIds.length > 0) {
+        const customers = await server.prisma.customer.findMany({
+          where: { id: { in: Array.from(new Set(unseenCustomerIds)) } },
+          select: { id: true, name: true },
+        });
+        for (const c of customers) customerMap.set(c.id, c.name);
+      }
+
+      for (const e of batch) {
+        const fields = [
+          e.id,
+          e.entityType,
+          e.entityId,
+          e.entityReference || '',
+          e.customerId ? (customerMap.get(e.customerId) || e.customerId) : '',
+          e.ruleType,
+          e.ruleName,
+          e.status,
+          e.slaStartedAt.toISOString(),
+          e.slaDueAt?.toISOString() || '',
+          e.warningAt?.toISOString() || '',
+          e.breachedAt?.toISOString() || '',
+          e.metAt?.toISOString() || '',
+          e.breachDurationMinutes?.toString() || '',
+          e.remainingMinutes?.toString() || '',
+        ];
+        csvParts.push(fields.map((f) => `"${f.replace(/"/g, '""')}"`).join(','));
+      }
+
+      if (batch.length < BATCH_SIZE) break;
+      cursor = { id: batch[batch.length - 1].id };
+    }
+
+    return reply.send(csvParts.join('\n'));
   });
 
   // GET /api/v1/reports/sla-summary — summary stats for a date range (JSON)

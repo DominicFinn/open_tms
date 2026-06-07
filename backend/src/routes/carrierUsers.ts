@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { ICarrierAuthService } from '../services/CarrierAuthService.js';
 import { ICarrierUserRepository } from '../repositories/CarrierUserRepository.js';
+import { computeLockoutStatus } from '../services/auth/lockout.js';
 import { container, TOKENS } from '../di/index.js';
 
 export async function carrierUserRoutes(server: FastifyInstance) {
@@ -17,8 +18,10 @@ export async function carrierUserRoutes(server: FastifyInstance) {
   }, async (req: FastifyRequest, _reply: FastifyReply) => {
     const { carrierId } = req.params as { carrierId: string };
     const users = await carrierUserRepo.findByCarrierId(carrierId);
-    // Strip passwordHash from response
-    const safeUsers = users.map(({ passwordHash, ...rest }) => rest);
+    const safeUsers = users.map(({ passwordHash, ...rest }) => ({
+      ...rest,
+      lockoutStatus: computeLockoutStatus(rest),
+    }));
     return { data: safeUsers, error: null };
   });
 
@@ -134,5 +137,22 @@ export async function carrierUserRoutes(server: FastifyInstance) {
       reply.code(400);
       return { data: null, error: err.message };
     }
+  });
+
+  // Unlock a locked-out account (clears failed-attempt counter)
+  server.post('/api/v1/carriers/:carrierId/users/:id/unlock', {
+    schema: {
+      tags: ['Carrier Users'],
+      summary: 'Clear lockout for a carrier user',
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { carrierId: string; id: string };
+    const user = await carrierUserRepo.findById(id);
+    if (!user) {
+      reply.code(404);
+      return { data: null, error: 'User not found' };
+    }
+    await authService.unlockAccount(user.id);
+    return { data: { unlocked: true }, error: null };
   });
 }

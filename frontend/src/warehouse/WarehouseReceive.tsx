@@ -139,7 +139,6 @@ export default function WarehouseReceive() {
     try {
       const res = await fetch(`${API_URL}/api/v1/receiving/tasks/${id}/complete`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
       });
       const data = await res.json();
       if (data.error) setError(data.error);

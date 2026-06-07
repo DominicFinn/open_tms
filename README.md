@@ -6,7 +6,11 @@
 [![Fastify](https://img.shields.io/badge/Fastify-202020?logo=fastify&logoColor=white)](https://www.fastify.io/)
 [![Prisma](https://img.shields.io/badge/Prisma-3982CE?logo=prisma&logoColor=white)](https://www.prisma.io/)
 
-A simple, open-source Transport Management System built with TypeScript, featuring a CQRS event-driven backend, React frontend, and comprehensive domain modelling. Designed for managing shipments, customers, carriers, orders, and operational issues with real-time IoT tracking, EDI integration, and a beautiful Material Design 3 interface.
+A simple, open-source Transport Management System built with TypeScript, featuring a CQRS event-driven backend, React frontend, and comprehensive domain modelling. Designed for managing shipments, customers, carriers, orders, and operational issues with real-time IoT tracking, EDI integration, and a beautiful interface.
+
+## Important note
+
+This is in active development without a release version yet! When stable I'll tag. 
 
 ## Contributing
 
@@ -44,7 +48,7 @@ Deploy your own Open TMS instance with one click:
 - **Customer Management** - Create, edit, and manage customer information
 - **Location Management** - Handle warehouses, distribution centres, cross docks, terminals, and more with facility classification, capabilities tracking, operating hours, and contact details
 - **Carrier & Lane Management** - Define carriers, lanes, multi-stop routes, and carrier assignments
-- **Order Management** - Full order lifecycle with trackable units (pallets, totes, boxes) and line items
+- **Order Management** - Full order lifecycle with trackable units (pallets, totes, boxes, drums, crates) and line items. Mode-driven required fields (FTL/LTL/parcel, hazmat, international, temperature-controlled), full hazmat detail (UN/class/PG/PSN), customs (HS code, country of origin), temperature range (min/max °C), and derived cartonization (density, suggested freight class, pallet positions, linear feet) computed live as the customer fills the form.
 - **Shipment Tracking** - Complete shipment lifecycle management with status tracking
 - **Order-to-Shipment Conversion** - Combine multiple orders into one shipment, split large orders across multiple shipments, or convert individually with a conversion wizard
 - **CSV Import** - Bulk order creation from CSV files with automatic customer/location matching
@@ -556,6 +560,7 @@ Customer-facing API for programmatic order creation and tracking. Requires a cus
 - `PUT /api/v1/organization/settings` - Update org settings
 
 ### Integration Guides
+- **[Customer Portal Guide](./docs/CUSTOMER_PORTAL_GUIDE.md)** - What a customer can log in and do (dashboard, orders, shipments, issues, returns, invoices, documents)
 - **[Customer API Guide](./docs/CUSTOMER_API_GUIDE.md)** - External API for programmatic order creation
 - **[CSV Import Guide](./docs/CSV_IMPORT_GUIDE.md)** - Bulk order import from CSV files
 - **[EDI Import Guide](./docs/EDI_IMPORT_GUIDE.md)** - X12 850 import, partner config, SFTP collection
@@ -645,6 +650,7 @@ open_tms/
 ├── terraform/              # Infrastructure as Code
 ├── .github/workflows/      # CI/CD pipelines
 ├── docs/                   # Integration guides
+│   ├── CUSTOMER_PORTAL_GUIDE.md
 │   ├── CUSTOMER_API_GUIDE.md
 │   ├── CSV_IMPORT_GUIDE.md
 │   └── EDI_IMPORT_GUIDE.md
@@ -767,6 +773,45 @@ container.singleton(TOKENS.ICustomersRepository)
 - **Container Intelligence** - Carton catalogue extended with temperature zone, insulation hours, tamper-evident flag, value class, hazmat UN classes, and material type. Recommender groups pack items by constraint profile (temperature + value + hazmat compatibility with UN segregation matrix), picks the smallest qualifying carton per group, and attaches required ancillaries (gel pack, dry ice, desiccant, fragile padding, tamper seal). Transit-hours aware: refrigerated packages past 24h transit automatically promote to dry ice
 - **Warehouse mobile app** - Pick task execution, putaway scan-to-confirm, receiving (ASN + blind) with per-line inspection, packing with barcode verification and carton selection, pack audit (scale + dim variance), and return receiving + inspection/disposition tasks - all on one unified task list with Receive / Putaway / Pick / Pack / Returns tabs. Supports Zebra / Honeywell RF gun barcode wedges alongside camera scanning
 - **147 tests** across 13 test suites covering the full goods flow
+
+### Bill of Lading (BOL) workflow
+
+The BOL is an **immutable** document. Its content is captured as a metadata snapshot at generation time and frozen — re-opening the document later does not pull fresh data from the shipment. Generating a BOL too early therefore produces a permanently empty document, so generation is gated to the end of the WMS flow.
+
+**Intended flow (the only path that produces a fully populated BOL):**
+
+1. Order created → assigned to shipment
+2. Pick task created → handheld scans (or admin "complete pick")
+3. Load plan created with vehicle / dock / driver
+4. Lines loaded onto vehicle (handheld scans or admin "Load all")
+5. Load plan completed + sealed → BOL is auto-generated here. `POST /api/v1/load-plans/:id/complete` synchronously calls `DocumentGenerationService.generateBOL` after the load plan transitions to `completed`, capturing vehicle, driver, stops, orders, trackable units, and line items.
+
+**Manual generation (`POST /api/v1/documents/generate/bol`)** is still supported for re-issuing a BOL or for admin testing, but it is guarded:
+
+- `400` if the shipment has no orders attached
+- `400` if every attached order has zero trackable units **and** zero line items
+
+The `VNextShipmentDetail` page surfaces the guard's error message via a sonner toast so dispatchers see why the document refused to generate. Once picking and loading have produced units/line items the same call succeeds and stores the immutable snapshot.
+
+**Viewing the PDF.** `GET /api/v1/documents/:id/download` is JWT-protected. Plain `<a href>` navigation bypasses the global `window.fetch` interceptor in `frontend/src/authFetch.ts`, so the link arrives without an Authorization header and the backend returns `401 "Authorization header required"`. The BOL view's Download button instead does an authenticated `fetch`, reads the response as a blob, and synthesises a click on a hidden `<a download>`. The pattern lives in [`VNextBolView.handleDownload`](frontend/src/vnext-design/VNextBolView.tsx) and should be reused for any other JWT-protected file download — a system-wide signed-URL or download-cookie scheme is a separate, larger change.
+
+### Trading partners — soft delete
+
+Trading partners support soft delete (`Comment` does too — see below). `DELETE /api/v1/trading-partners/:id` sets `TradingPartner.deletedAt` + `deletedBy` and disables `active` / `inboundEnabled` / `outboundEnabled` so the polling worker stops touching the partner immediately. The row is preserved because `EdiTransactionLog` rows reference it for audit. The list endpoint hides soft-deleted partners by default; pass `?includeDeleted=true` to see them. The frontend (`VNextTradingPartners`) shows a trash icon next to Edit on every row.
+
+Migration: `backend/prisma/migrations/20260430_trading_partner_soft_delete` adds the columns and an index.
+
+> SFTP test connections require the `ssh2-sftp-client` package, which is now listed in `backend/package.json`. If a fresh checkout shows `Cannot find package 'ssh2-sftp-client'` when clicking **Test connection**, run `npm install` from the repo root to pick up workspace dependencies.
+
+### Notes & comments
+
+The polymorphic `Comment` model (issues, shipments, orders) supports edit and delete:
+
+- **POST /api/v1/comments** — author identity is taken from `req.user.sub` and the user's `firstName`/`lastName` are looked up from the DB; `createdAt` is set by Prisma. Frontend never has to send these.
+- **PUT /api/v1/comments/:id** — author-only edit. Bumps `updatedAt`; the UI shows an `(edited)` marker when `updatedAt > createdAt`.
+- **DELETE /api/v1/comments/:id** — soft delete. Sets `Comment.deletedAt` + `deletedBy` rather than removing the row, so the audit trail is preserved. Author or admin (role `admin` / permission `comments:*` / `*`) can delete; the list endpoint hides soft-deleted rows by default and exposes `?includeDeleted=true` for admins.
+
+Migration: `backend/prisma/migrations/20260430_comment_soft_delete` adds `deletedAt` + `deletedBy` columns and an index.
 
 ### Shipment Tracking
 - **Full lifecycle management** from draft to delivery

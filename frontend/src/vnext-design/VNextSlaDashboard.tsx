@@ -17,6 +17,7 @@ import {
 import { API_URL } from '../api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
@@ -93,6 +94,8 @@ export default function VNextSlaDashboard() {
   const [loading, setLoading] = useState(true);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+  const [reportFrom, setReportFrom] = useState(() => new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
+  const [reportTo, setReportTo] = useState(() => new Date().toISOString().slice(0, 10));
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -302,28 +305,28 @@ export default function VNextSlaDashboard() {
           <div className="flex flex-wrap items-end gap-3">
             <div className="space-y-1">
               <Label>From</Label>
-              <Input
+              <DatePicker
                 type="date"
                 id="report-from"
-                defaultValue={new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)}
+                value={reportFrom}
+                onChange={e => setReportFrom(e.target.value)}
               />
             </div>
             <div className="space-y-1">
               <Label>To</Label>
-              <Input
+              <DatePicker
                 type="date"
                 id="report-to"
-                defaultValue={new Date().toISOString().slice(0, 10)}
+                value={reportTo}
+                onChange={e => setReportTo(e.target.value)}
               />
             </div>
             <Button
               variant="outline"
               onClick={() => {
-                const from = (document.getElementById('report-from') as HTMLInputElement)?.value;
-                const to = (document.getElementById('report-to') as HTMLInputElement)?.value;
                 const params = new URLSearchParams();
-                if (from) params.set('from', from);
-                if (to) params.set('to', to);
+                if (reportFrom) params.set('from', reportFrom);
+                if (reportTo) params.set('to', reportTo);
                 window.open(`${API_URL}/api/v1/reports/sla-compliance?${params}`, '_blank');
               }}
             >

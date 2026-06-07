@@ -102,6 +102,39 @@ unassigned → assigned → in_transit → delivered
                               ↘ exception → (resolved) → in_transit
 ```
 
+### Line Items & Cartonization (Phase 1)
+
+Captured at create time on the commercial `OrderLineItem` rows, with derived numbers computed on the fly.
+
+**Fields on `OrderLineItem` (Phase 1 additions in bold):**
+description, sku, quantity, **unitOfMeasure**, weight + unit, L/W/H + dim unit, declared value (unitPriceCents / totalPriceCents / priceCurrency), freightClass, nmfcCode, hazmat (bool) + **unNumber / hazmatClass / packingGroup / properShippingName**, **hsCode / countryOfOrigin**, temperature (label) + **tempMinC / tempMaxC**.
+
+**Required-ness is mode-driven (`ModeRulesService`)** — same matrix is evaluated client-side in the portal form and re-evaluated server-side in `POST /api/v1/customer-portal/orders`:
+
+| Field | FTL | LTL | Parcel | + Hazmat | + International | + Temp ctrl |
+|---|:--:|:--:|:--:|:--:|:--:|:--:|
+| description, qty, UoM, weight | ✓ | ✓ | ✓ | ✓ | | |
+| dimensions L/W/H | rec | ✓ | ✓ | ✓ | | |
+| freightClass, nmfcCode, stackable | | ✓ | | ✓ (except parcel) | | |
+| UN number, hazmat class, packing group, proper shipping name | | | | ✓ | | |
+| hsCode, countryOfOrigin | | | | | ✓ | |
+| tempMinC, tempMaxC | | | | | | ✓ |
+
+Org-level overrides (`required` / `recommended` / `hidden` per field) are accepted by the service but not yet exposed via UI.
+
+**`OrderCartonizationService` derives (never captures from user):**
+- per-line: total weight (lb), total cube (ft³), density (lb/ft³), suggested freight class (NMFC density table)
+- per-order: rolled-up freight class (highest class across lines), order-total weight, order-total cube
+- from order-level packing summary: pallet positions (halved for stackable), linear feet on a 53' trailer
+
+Available as a read-only live preview at `POST /api/v1/order-line-items/cartonization/preview` (pure compute, no persistence).
+
+**Auto-generated handling units (`TrackableUnit`s):** when an order is created with `packingSummary` (packagingTypeId, unitCount, stackable) and no explicit `trackableUnits[]`, `CreateOrderCommand` auto-generates `unitCount` `TrackableUnit`s tagged with that packaging type and a sequence number. Phase 1 keeps it simple — line items are not allocated to specific units; that's Phase 2.
+
+**Packaging catalogue (`PackagingType`)** is org-scoped with a `kind` discriminator (pallet | carton | crate | drum | roll | bag | tote | loose | custom). Pallet-specific fields (tareWeightGrams, maxLoadGrams, material) are nullable. Generalised from the original `PalletType` model in 2026-06; admin CRUD lives at `/wms/packaging-types`.
+
+**Event payload v2:** `order.created` schema version bumped to 2 — payload now carries `packingSummary` (or null if none was provided).
+
 ---
 
 ## Shipments

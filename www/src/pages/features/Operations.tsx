@@ -160,6 +160,35 @@ const sections = [
     ),
   },
   {
+    problem: 'Customer order entry is a blob of free text and your team rekeys every line for rating',
+    solution: 'Smart, mode-driven order capture',
+    description: 'The portal asks for exactly the right fields based on the shipment mode and flags  - LTL gets dimensions and class, hazmat reveals UN / class / packing group / proper shipping name, international adds HS code and country of origin, temperature-controlled adds min and max degrees C. As customers fill the form, density, suggested freight class, pallet positions, and linear feet calculate live. Order-level packing summary auto-generates handling units (pallets, cartons, drums, totes) from a single packaging-type catalogue. Nothing to rekey at your end.',
+    illustration: (
+      <svg viewBox="0 0 280 200" fill="none" className="w-full h-auto">
+        <rect x="20" y="20" width="140" height="160" rx="10" stroke="rgba(99,102,241,0.3)" strokeWidth="1.5" fill="rgba(99,102,241,0.05)" />
+        <rect x="34" y="36" width="112" height="6" rx="3" fill="rgba(99,102,241,0.25)" />
+        <rect x="34" y="50" width="80" height="4" rx="2" fill="rgba(99,102,241,0.15)" />
+        <rect x="34" y="64" width="112" height="14" rx="4" fill="rgba(99,102,241,0.1)" stroke="rgba(99,102,241,0.18)" strokeWidth="1" />
+        <rect x="34" y="84" width="50" height="14" rx="4" fill="rgba(139,92,246,0.12)" stroke="rgba(139,92,246,0.22)" strokeWidth="1" />
+        <rect x="90" y="84" width="56" height="14" rx="4" fill="rgba(139,92,246,0.12)" stroke="rgba(139,92,246,0.22)" strokeWidth="1" />
+        <rect x="34" y="104" width="112" height="14" rx="4" fill="rgba(99,102,241,0.1)" stroke="rgba(99,102,241,0.18)" strokeWidth="1" />
+        <rect x="34" y="124" width="50" height="14" rx="4" fill="rgba(59,130,246,0.12)" stroke="rgba(59,130,246,0.22)" strokeWidth="1" />
+        <rect x="90" y="124" width="56" height="14" rx="4" fill="rgba(59,130,246,0.12)" stroke="rgba(59,130,246,0.22)" strokeWidth="1" />
+        <rect x="34" y="146" width="112" height="22" rx="6" fill="rgba(139,92,246,0.08)" stroke="rgba(139,92,246,0.2)" strokeWidth="1" />
+        <path d="M168 80 l12 0 l0 -8 l8 12 l-8 0 l0 8 z" stroke="rgba(99,102,241,0.4)" strokeWidth="1.2" fill="rgba(99,102,241,0.1)" strokeLinejoin="round" />
+        <rect x="190" y="40" width="74" height="140" rx="10" stroke="rgba(139,92,246,0.35)" strokeWidth="1.5" fill="rgba(139,92,246,0.06)" />
+        <rect x="200" y="54" width="54" height="6" rx="3" fill="rgba(139,92,246,0.28)" />
+        <rect x="200" y="68" width="40" height="4" rx="2" fill="rgba(139,92,246,0.18)" />
+        <rect x="200" y="86" width="54" height="10" rx="3" fill="rgba(59,130,246,0.18)" />
+        <rect x="200" y="100" width="36" height="4" rx="2" fill="rgba(59,130,246,0.14)" />
+        <rect x="200" y="116" width="54" height="10" rx="3" fill="rgba(99,102,241,0.18)" />
+        <rect x="200" y="130" width="36" height="4" rx="2" fill="rgba(99,102,241,0.14)" />
+        <rect x="200" y="146" width="54" height="10" rx="3" fill="rgba(139,92,246,0.18)" />
+        <rect x="200" y="160" width="36" height="4" rx="2" fill="rgba(139,92,246,0.14)" />
+      </svg>
+    ),
+  },
+  {
     problem: 'Documents are created manually and live in email threads nobody can find',
     solution: 'Automated document generation',
     description: 'Handlebars-based templates for BOLs, shipping labels, customs forms, and daily operations reports. Documents generate automatically at the right point in the shipment lifecycle and store in S3-compatible storage with 10-year retention.',

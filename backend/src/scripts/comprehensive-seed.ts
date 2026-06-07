@@ -159,7 +159,7 @@ async function wipe() {
   await prisma.customer.deleteMany();
 
   await prisma.coldChainProfile.deleteMany();
-  await prisma.palletType.deleteMany();
+  await prisma.packagingType.deleteMany();
 
   await prisma.arrivalCriteria.deleteMany();
   await prisma.location.deleteMany();
@@ -359,7 +359,7 @@ async function seedPalletTypes(orgId: string) {
   const created = [];
   for (const t of types) {
     created.push(
-      await prisma.palletType.create({ data: { ...t, orgId } })
+      await prisma.packagingType.create({ data: { ...t, orgId } })
     );
   }
   return created;
@@ -944,6 +944,7 @@ async function seedCarriers(orgId: string) {
     for (const [v, vt] of vehicleTypes.entries()) {
       await prisma.vehicle.create({
         data: {
+          orgId,
           carrierId: carrier.id,
           plate: `${d.scacCode}-${String(v + 1).padStart(3, '0')}`,
           type: vt,
@@ -962,6 +963,7 @@ async function seedCarriers(orgId: string) {
     for (const [idx, [first, last]] of driverNames.entries()) {
       await prisma.driver.create({
         data: {
+          orgId,
           carrierId: carrier.id,
           name: `${first} ${last}`,
           phone: `+1-555-${String(1000 + i * 100 + idx).padStart(4, '0')}`,
@@ -1020,7 +1022,8 @@ async function seedCarriers(orgId: string) {
 async function seedLanes(
   locations: { id: string; city: string; name: string }[],
   customers: { id: string; name: string }[],
-  carriers: { id: string; name: string }[]
+  carriers: { id: string; name: string }[],
+  orgId: string,
 ) {
   function loc(city: string) {
     return locations.find((l) => l.city === city)!;
@@ -1052,6 +1055,7 @@ async function seedLanes(
 
     const lane = await prisma.lane.create({
       data: {
+        orgId,
         name: `${origin.city} → ${dest.city}`,
         originId: origin.id,
         destinationId: dest.id,
@@ -1205,6 +1209,7 @@ async function seedOrders(
 
     const order = await prisma.order.create({
       data: {
+        orgId,
         orderNumber: `ORD-${String(10000 + i).padStart(5, '0')}`,
         poNumber: `PO-${cust.name.split(' ')[0].toUpperCase()}-${String(1000 + i)}`,
         status: s.status,
@@ -1264,7 +1269,7 @@ async function seedOrders(
           unitType: 'pallet',
           sequenceNumber: u,
           barcode: `9${randomBytes(6).toString('hex').toUpperCase()}`,
-          palletTypeId: s.palletType?.id || null,
+          packagingTypeId: s.palletType?.id || null,
           condition: 'good',
           qualityStatus: 'available',
           ownerCustomerId: cust.id,
@@ -1315,7 +1320,7 @@ async function seedBulkOrders(
   customers: any[],
   locations: any[],
   palletTypes: any[],
-  _orgId: string,
+  orgId: string,
   startIndex: number,
   count: number
 ): Promise<any[]> {
@@ -1403,6 +1408,7 @@ async function seedBulkOrders(
     const orderNumber = `ORD-${String(10000 + startIndex + i + 1).padStart(5, '0')}`;
     const order = await prisma.order.create({
       data: {
+        orgId,
         orderNumber,
         poNumber: `PO-${r.cust.split(' ')[0].toUpperCase()}-${String(startIndex + i + 2000)}`,
         status,
@@ -1458,7 +1464,7 @@ async function seedBulkOrders(
           unitType: 'pallet',
           sequenceNumber: u,
           barcode: `9${randomBytes(6).toString('hex').toUpperCase()}`,
-          palletTypeId: palletType?.id || null,
+          packagingTypeId: palletType?.id || null,
           condition: 'good',
           qualityStatus: 'available',
           ownerCustomerId: customer.id,
@@ -1481,7 +1487,8 @@ async function seedShipments(
   lanes: any[],
   carriers: any[],
   locations: any[],
-  coldChainProfiles: any[]
+  coldChainProfiles: any[],
+  orgId: string,
 ) {
   const created: any[] = [];
   // Only convert non-pending / non-cancelled / non-location_error orders to shipments
@@ -1538,6 +1545,7 @@ async function seedShipments(
 
     const shipment = await prisma.shipment.create({
       data: {
+        orgId,
         reference: `SHP-${String(refCounter++).padStart(5, '0')}`,
         status,
         pickupDate: order.requestedPickupDate,
@@ -1643,7 +1651,7 @@ async function seedShipments(
 
 // ─── Devices + Assignments + Sensor Readings ────────────────────────────────
 
-async function seedDevices(shipmentRecords: any[]) {
+async function seedDevices(shipmentRecords: any[], orgId: string) {
   const inTransit = shipmentRecords.filter((r) =>
     r.shipment.status === 'in_transit' || r.shipment.status === 'exception'
   );
@@ -1652,6 +1660,7 @@ async function seedDevices(shipmentRecords: any[]) {
   for (const [i, r] of inTransit.entries()) {
     const device = await prisma.device.create({
       data: {
+        orgId,
         externalId: `SL-${randomBytes(8).toString('hex').toUpperCase()}`,
         displayId: `HG-${String(10000 + i).padStart(5, '0')}`,
         name: r.shipment.reference,
@@ -2290,7 +2299,7 @@ async function seedSla(orgId: string, customers: any[]) {
 
 // ─── Trading Partners + EDI Logs ────────────────────────────────────────────
 
-async function seedTradingPartners(customers: any[], carriers: any[]) {
+async function seedTradingPartners(customers: any[], carriers: any[], orgId: string) {
   const nordic = customers.find((c) => c.name === 'Nordic Frost Foods');
   const metro = customers.find((c) => c.name === 'Metro Grocer Co');
   const continental = carriers.find((c) => c.name === 'Continental Freight Systems');
@@ -2300,6 +2309,7 @@ async function seedTradingPartners(customers: any[], carriers: any[]) {
   if (nordic) {
     const p = await prisma.tradingPartner.create({
       data: {
+        orgId,
         name: 'Nordic Frost Foods EDI',
         entityType: 'customer',
         customerId: nordic.id,
@@ -2348,6 +2358,7 @@ async function seedTradingPartners(customers: any[], carriers: any[]) {
   if (metro) {
     const p = await prisma.tradingPartner.create({
       data: {
+        orgId,
         name: 'Metro Grocer API',
         entityType: 'customer',
         customerId: metro.id,
@@ -2376,6 +2387,7 @@ async function seedTradingPartners(customers: any[], carriers: any[]) {
   if (continental) {
     const p = await prisma.tradingPartner.create({
       data: {
+        orgId,
         name: 'Continental Freight EDI',
         entityType: 'carrier',
         carrierId: continental.id,
@@ -2405,6 +2417,7 @@ async function seedTradingPartners(customers: any[], carriers: any[]) {
   if (polar) {
     const p = await prisma.tradingPartner.create({
       data: {
+        orgId,
         name: 'PolarChain Logistics EDI',
         entityType: 'carrier',
         carrierId: polar.id,
@@ -2770,7 +2783,7 @@ async function main() {
   console.log(`✓ Carriers: ${carriers.length}`);
 
   console.log('Seeding lanes + carrier contracts...');
-  const lanes = await seedLanes(locations as any, customers, carriers);
+  const lanes = await seedLanes(locations as any, customers, carriers, org.id);
   console.log(`✓ Lanes: ${lanes.length}`);
 
   console.log('Seeding orders + line items + trackable units...');
@@ -2778,11 +2791,11 @@ async function main() {
   console.log(`✓ Orders: ${orders.length}`);
 
   console.log('Seeding shipments + stops + loads...');
-  const shipmentRecords = await seedShipments(orders, lanes, carriers, locations, ccProfiles);
+  const shipmentRecords = await seedShipments(orders, lanes, carriers, locations, ccProfiles, org.id);
   console.log(`✓ Shipments: ${shipmentRecords.length}`);
 
   console.log('Seeding devices + sensor readings...');
-  const devices = await seedDevices(shipmentRecords);
+  const devices = await seedDevices(shipmentRecords, org.id);
   console.log(`✓ Devices: ${devices.length}`);
 
   console.log('Seeding tenders + offers + bids...');
@@ -2814,7 +2827,7 @@ async function main() {
   console.log('✓ SLA');
 
   console.log('Seeding trading partners + EDI config...');
-  await seedTradingPartners(customers, carriers);
+  await seedTradingPartners(customers, carriers, org.id);
   console.log('✓ Trading partners');
 
   console.log('Seeding triage agent config...');

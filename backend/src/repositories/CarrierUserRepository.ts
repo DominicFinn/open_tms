@@ -22,6 +22,8 @@ export interface ICarrierUserRepository {
   update(id: string, data: UpdateCarrierUserDTO): Promise<CarrierUser>;
   updatePassword(id: string, passwordHash: string): Promise<CarrierUser>;
   updateLastLogin(id: string): Promise<CarrierUser>;
+  applyFailedAttempt(id: string, failedLoginAttempts: number, lockedUntil: Date | null): Promise<CarrierUser>;
+  clearLockout(id: string): Promise<CarrierUser>;
 }
 
 export class CarrierUserRepository implements ICarrierUserRepository {
@@ -70,7 +72,21 @@ export class CarrierUserRepository implements ICarrierUserRepository {
   async updateLastLogin(id: string): Promise<CarrierUser> {
     return this.prisma.carrierUser.update({
       where: { id },
-      data: { lastLoginAt: new Date() },
+      data: { lastLoginAt: new Date(), failedLoginAttempts: 0, lockedUntil: null },
+    });
+  }
+
+  async applyFailedAttempt(id: string, failedLoginAttempts: number, lockedUntil: Date | null): Promise<CarrierUser> {
+    return this.prisma.carrierUser.update({
+      where: { id },
+      data: { failedLoginAttempts, lockedUntil },
+    });
+  }
+
+  async clearLockout(id: string): Promise<CarrierUser> {
+    return this.prisma.carrierUser.update({
+      where: { id },
+      data: { failedLoginAttempts: 0, lockedUntil: null },
     });
   }
 }

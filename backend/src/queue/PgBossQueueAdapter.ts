@@ -1,6 +1,9 @@
 import { PgBoss } from 'pg-boss';
-import { IQueueAdapter, QueueMessage, QueueStats, QueueJob } from './IQueueAdapter.js';
+import { IQueueAdapter, QueueMessage, QueueStats, QueueJob, SubscribeAdapterOptions } from './IQueueAdapter.js';
 import { QUEUES } from './events.js';
+
+const DEFAULT_POLL_INTERVAL_SECONDS = 2;
+const DEFAULT_CONCURRENCY = 2;
 
 const DEAD_LETTER_SUFFIX = '.dead';
 
@@ -69,23 +72,27 @@ export class PgBossQueueAdapter implements IQueueAdapter {
 
   async subscribe(
     queueName: string,
-    handler: (message: QueueMessage) => Promise<void>
+    handler: (message: QueueMessage) => Promise<void>,
+    options?: SubscribeAdapterOptions,
   ): Promise<void> {
     await this.boss.createQueue(queueName, {
       ...QUEUE_DEFAULTS,
       deadLetter: queueName + DEAD_LETTER_SUFFIX,
     }).catch(() => {});
 
+    // Default to a 2-second poll: with ~20 subscribers a 0.5s default would
+    // be ~40 polling round-trips per second even when the queues are empty.
+    // Latency-sensitive subscribers (read-model projections that back
+    // "POST then navigate to list" UX) can opt back into faster polling
+    // via SubscribeOptions.pollingIntervalSeconds.
+    const pollingIntervalSeconds = options?.pollingIntervalSeconds ?? DEFAULT_POLL_INTERVAL_SECONDS;
+    const concurrency = options?.concurrency ?? DEFAULT_CONCURRENCY;
+
     await this.boss.work(
       queueName,
       {
-        localConcurrency: 2,
-        // pg-boss defaults to a 2-second poll. Lowering to the minimum (500ms)
-        // means projections (e.g. ShipmentReadModel) update soon enough after
-        // a write that "POST then navigate to list" reliably shows the new
-        // entity. Each subscribed queue is one polling loop; the extra DB
-        // pressure is negligible for our handler count.
-        pollingIntervalSeconds: 0.5,
+        localConcurrency: concurrency,
+        pollingIntervalSeconds,
       },
       async (jobs: any[]) => {
         for (const job of jobs) {
@@ -99,7 +106,10 @@ export class PgBossQueueAdapter implements IQueueAdapter {
       }
     );
 
-    console.log(`[Queue] Worker subscribed to ${queueName}`);
+    console.log(
+      `[Queue] Worker subscribed to ${queueName} ` +
+      `(concurrency=${concurrency}, poll=${pollingIntervalSeconds}s)`
+    );
   }
 
   async getQueueStats(queueName: string): Promise<QueueStats> {

@@ -27,6 +27,8 @@ export type LaneWithBasicRelations = Prisma.LaneGetPayload<{
 }>;
 
 export interface CreateLaneDTO {
+  /** Multi-tenancy scope. Optional during phase-3 transition. */
+  orgId?: string | null;
   name: string;
   originId: string;
   destinationId: string;
@@ -67,10 +69,10 @@ export interface UpdateLaneCarrierDTO {
 }
 
 export interface ILanesRepository {
-  all(): Promise<LaneWithRelations[]>;
-  findById(id: string): Promise<LaneWithRelations | null>;
-  findByIdSimple(id: string): Promise<Lane | null>;
-  findByIdWithOriginDestination(id: string): Promise<any>;
+  all(orgId?: string | null): Promise<LaneWithRelations[]>;
+  findById(id: string, orgId?: string | null): Promise<LaneWithRelations | null>;
+  findByIdSimple(id: string, orgId?: string | null): Promise<Lane | null>;
+  findByIdWithOriginDestination(id: string, orgId?: string | null): Promise<any>;
   createWithTransaction(laneData: CreateLaneDTO, stops: CreateLaneStopDTO[]): Promise<LaneWithBasicRelations>;
   updateWithTransaction(id: string, laneData: UpdateLaneDTO, stops?: CreateLaneStopDTO[]): Promise<LaneWithRelations>;
   archive(id: string): Promise<Lane>;
@@ -88,9 +90,11 @@ export interface ILanesRepository {
 export class LanesRepository implements ILanesRepository {
   constructor(private prisma: PrismaClient) {}
 
-  async all(): Promise<LaneWithRelations[]> {
+  async all(orgId?: string | null): Promise<LaneWithRelations[]> {
+    const where: any = { archived: false };
+    if (orgId) where.orgId = orgId;
     return this.prisma.lane.findMany({
-      where: { archived: false },
+      where,
       include: {
         origin: true,
         destination: true,
@@ -109,9 +113,11 @@ export class LanesRepository implements ILanesRepository {
     });
   }
 
-  async findById(id: string): Promise<LaneWithRelations | null> {
+  async findById(id: string, orgId?: string | null): Promise<LaneWithRelations | null> {
+    const where: any = { id, archived: false };
+    if (orgId) where.orgId = orgId;
     return this.prisma.lane.findFirst({
-      where: { id, archived: false },
+      where,
       include: {
         origin: true,
         destination: true,
@@ -129,15 +135,17 @@ export class LanesRepository implements ILanesRepository {
     });
   }
 
-  async findByIdSimple(id: string): Promise<Lane | null> {
-    return this.prisma.lane.findFirst({
-      where: { id, archived: false }
-    });
+  async findByIdSimple(id: string, orgId?: string | null): Promise<Lane | null> {
+    const where: any = { id, archived: false };
+    if (orgId) where.orgId = orgId;
+    return this.prisma.lane.findFirst({ where });
   }
 
-  async findByIdWithOriginDestination(id: string) {
+  async findByIdWithOriginDestination(id: string, orgId?: string | null) {
+    const where: any = { id, archived: false };
+    if (orgId) where.orgId = orgId;
     return this.prisma.lane.findFirst({
-      where: { id, archived: false },
+      where,
       include: { origin: true, destination: true }
     });
   }
@@ -147,9 +155,10 @@ export class LanesRepository implements ILanesRepository {
     stops: CreateLaneStopDTO[]
   ): Promise<LaneWithBasicRelations> {
     return this.prisma.$transaction(async (tx: any) => {
-      // Create the lane
+      // Create the lane. orgId stays optional in the DTO during phase-3
+      // transition; the NOT NULL migration will enforce it at the DB.
       const lane = await tx.lane.create({
-        data: laneData
+        data: { ...laneData, orgId: laneData.orgId ?? null }
       });
 
       // Create stops if any
@@ -308,7 +317,9 @@ export class LanesRepository implements ILanesRepository {
   }
 
   async createMany(data: CreateLaneDTO[]): Promise<void> {
-    await this.prisma.lane.createMany({ data });
+    await this.prisma.lane.createMany({
+      data: data.map(d => ({ ...d, orgId: d.orgId ?? null })) as any
+    });
   }
 
   async count(): Promise<number> {

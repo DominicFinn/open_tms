@@ -24,6 +24,7 @@ import {
 import { API_URL } from '../api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -441,14 +442,14 @@ export default function VNextShipments() {
 
         <div className="grid grid-cols-[110px_170px_24px_170px_auto] items-center gap-3 px-4 py-3 text-sm md:px-6">
           <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Created</div>
-          <Input
+          <DatePicker
             type="date"
             value={createdFrom}
             onChange={e => setCreatedFrom(e.target.value)}
             aria-label="Created from"
           />
           <div className="text-center text-xs text-muted-foreground">to</div>
-          <Input
+          <DatePicker
             type="date"
             value={createdTo}
             onChange={e => setCreatedTo(e.target.value)}
@@ -464,14 +465,14 @@ export default function VNextShipments() {
           </div>
 
           <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Updated</div>
-          <Input
+          <DatePicker
             type="date"
             value={updatedFrom}
             onChange={e => setUpdatedFrom(e.target.value)}
             aria-label="Updated from"
           />
           <div className="text-center text-xs text-muted-foreground">to</div>
-          <Input
+          <DatePicker
             type="date"
             value={updatedTo}
             onChange={e => setUpdatedTo(e.target.value)}

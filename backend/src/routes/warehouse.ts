@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { WarehouseService } from '../services/WarehouseService.js';
+import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 
 /**
  * Warehouse App API Routes
@@ -13,6 +14,14 @@ import { WarehouseService } from '../services/WarehouseService.js';
 export async function warehouseRoutes(server: FastifyInstance) {
   const prisma = server.prisma;
   const warehouseService = new WarehouseService(prisma);
+
+  // Multi-tenancy: warehouse PWA has no auth preHandlers today (a known
+  // gap on the broader review). For now we use the standard org-scope
+  // hook so routes pick up the default-Organization fallback — matches
+  // current single-tenant behaviour. When warehouse gets per-tenant auth
+  // (e.g. magic-link bound to a User with organizationId), the middleware
+  // will automatically use the JWT's orgId instead.
+  await registerOrgScope(server);
 
   // ─── Auth: Magic Link ───────────────────────────────────────────────────────
 
@@ -597,8 +606,26 @@ export async function warehouseRoutes(server: FastifyInstance) {
       carrierId: z.string().uuid().optional(),
     }).parse(req.body);
 
+    // Multi-tenancy: shipment is scoped to the customer's tenant. We
+    // also guard against cross-tenant creation: a warehouse operative
+    // in tenant A cannot create a shipment under tenant B's customer.
+    // (Today the warehouse PWA is single-tenant, so req.orgId always
+    // matches; the guard catches regressions once per-tenant auth lands.)
+    const cust = await prisma.customer.findUnique({
+      where: { id: body.customerId },
+      select: { orgId: true },
+    });
+    if (!cust) {
+      reply.code(404);
+      return { data: null, error: 'Customer not found' };
+    }
+    if (req.orgId && cust.orgId !== req.orgId) {
+      reply.code(404);
+      return { data: null, error: 'Customer not found' };
+    }
     const shipment = await prisma.shipment.create({
       data: {
+        orgId: cust.orgId,
         reference: body.reference,
         customerId: body.customerId,
         originId: body.originId,
@@ -694,8 +721,12 @@ export async function warehouseRoutes(server: FastifyInstance) {
       tags: ['Warehouse'],
       summary: 'Get warehouse app settings',
     },
-  }, async (_req: FastifyRequest, _reply: FastifyReply) => {
-    const org = await prisma.organization.findFirst({
+  }, async (req: FastifyRequest, _reply: FastifyReply) => {
+    // Multi-tenancy: scope to the requesting tenant rather than just
+    // picking the first Organization. req.orgId comes from the standard
+    // org-scope hook above.
+    const org = await prisma.organization.findUnique({
+      where: { id: req.orgId! },
       select: {
         magicLinksEnabled: true,
         warehouseScanMode: true,
@@ -723,14 +754,10 @@ export async function warehouseRoutes(server: FastifyInstance) {
       warehouseScanMode: z.enum(['hid', 'camera']).optional(),
     }).parse(req.body);
 
-    const org = await prisma.organization.findFirst();
-    if (!org) {
-      reply.code(404);
-      return { data: null, error: 'Organization not found' };
-    }
-
+    // Multi-tenancy: update the requesting tenant's Organization, not
+    // just the first one we find.
     const updated = await prisma.organization.update({
-      where: { id: org.id },
+      where: { id: req.orgId! },
       data: body,
     });
 

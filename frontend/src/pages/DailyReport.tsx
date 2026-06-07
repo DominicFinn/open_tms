@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { API_URL } from '../api';
+import { DatePicker } from '@/components/ui/date-picker';
 
 interface ReportSummary {
   date: string;
@@ -50,8 +51,7 @@ export default function DailyReport() {
       <div style={{ marginBottom: '24px', display: 'flex', gap: '16px', alignItems: 'center' }}>
         <div>
           <label style={{ display: 'block', marginBottom: '4px', fontWeight: 500 }}>Report Date</label>
-          <input type="date" value={date} onChange={e => setDate(e.target.value)}
-            style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--md-outline)' }} />
+          <DatePicker type="date" value={date} onChange={e => setDate(e.target.value)} className="w-[180px]" />
         </div>
         <div style={{ display: 'flex', gap: '8px', alignSelf: 'flex-end' }}>
           <button onClick={handleDownloadExcel}

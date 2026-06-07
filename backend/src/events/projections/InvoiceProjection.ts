@@ -18,7 +18,7 @@ export class InvoiceProjection implements IEventHandler {
     EVENT_TYPES.INVOICE_OVERDUE,
     EVENT_TYPES.INVOICE_VOIDED,
   ];
-  readonly options = { concurrency: 3, retryLimit: 3, expireInSeconds: 30 };
+  readonly options = { concurrency: 3, retryLimit: 3, expireInSeconds: 30, pollingIntervalSeconds: 0.5 };
 
   constructor(private prisma: PrismaClient) {}
 

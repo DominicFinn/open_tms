@@ -16,6 +16,7 @@ import {
 import { API_URL } from '../api';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
@@ -479,7 +480,7 @@ export default function VNextQualityCapa() {
             </div>
             <div className="space-y-2">
               <Label>Due date</Label>
-              <Input type="date" value={newFollowUpDue} onChange={e => setNewFollowUpDue(e.target.value)} />
+              <DatePicker type="date" value={newFollowUpDue} onChange={e => setNewFollowUpDue(e.target.value)} />
             </div>
             <div className="space-y-2">
               <Label>Notes</Label>

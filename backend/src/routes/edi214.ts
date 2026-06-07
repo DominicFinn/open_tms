@@ -11,6 +11,7 @@ import { PROCESS_INBOUND_214 } from '../commands/shipments/ProcessInbound214Comm
 import { mapEdi214Status, getDefaultStatusMapping } from '../services/edi214StatusMapping.js';
 import { CommandBus } from '../commands/CommandBus.js';
 import crypto from 'crypto';
+import { registerOrgScopeForEdi } from '../auth/orgScopeMiddleware.js';
 
 export async function edi214Routes(server: FastifyInstance) {
   const prisma = container.resolve<PrismaClient>(TOKENS.PrismaClient);
@@ -20,6 +21,8 @@ export async function edi214Routes(server: FastifyInstance) {
   const edi997Service = container.resolve<EDI997Service>(TOKENS.IEDI997Service);
   const deliveryService = container.resolve<IOutboundEdiDeliveryService>(TOKENS.IOutboundEdiDeliveryService);
   const tradingPartnerRepo = container.resolve<ITradingPartnerRepository>(TOKENS.ITradingPartnerRepository);
+
+  await registerOrgScopeForEdi(server);
 
   /**
    * POST /api/v1/edi/214/inbound — Receive inbound EDI 214 from carrier
@@ -78,10 +81,12 @@ export async function edi214Routes(server: FastifyInstance) {
     // Use the most recent status detail (last AT7 in the document)
     const latestStatus = parseResult.statusDetails[parseResult.statusDetails.length - 1];
 
-    // 3. Dispatch command to update shipment
+    // 3. Dispatch command to update shipment. Shipment.orgId is NOT NULL
+    // post phase 2 so it's the most authoritative source; req.orgId from
+    // the EDI hook chain is the fallback for any legacy rows.
     const result = await commandBus.dispatch({
       type: PROCESS_INBOUND_214,
-      orgId: shipment.orgId,
+      orgId: shipment.orgId ?? req.orgId!,
       actorId: null,
       payload: {
         shipmentId: shipment.id,
@@ -110,22 +115,22 @@ export async function edi214Routes(server: FastifyInstance) {
       return { data: null, error: result.error };
     }
 
-    // 4. Log to EdiTransactionLog
-    await prisma.ediTransactionLog.create({
-      data: {
-        partnerId: partnerId || undefined,
-        transactionType: '214',
-        direction: 'inbound',
-        fileName: fileName || undefined,
-        fileSize: content.length,
-        fileContent: content,
-        fileHash: computeFileHash(content),
-        transport: 'http',
-        status: 'success',
-        processedAt: new Date(),
-        shipmentId: shipment.id,
-        shipmentReference: shipment.reference,
-      },
+    // 4. Log to EdiTransactionLog. orgId comes from the JWT — Shipment
+    // doesn't carry it directly today, see TradingPartnerRepository.createLog.
+    await tradingPartnerRepo.createLog({
+      orgId: req.orgId!,
+      partnerId: partnerId || undefined,
+      transactionType: '214',
+      direction: 'inbound',
+      fileName: fileName || undefined,
+      fileSize: content.length,
+      fileContent: content,
+      fileHash: computeFileHash(content),
+      transport: 'http',
+      status: 'success',
+      processedAt: new Date(),
+      shipmentId: shipment.id,
+      shipmentReference: shipment.reference,
     });
 
     // 5. Generate 997 acknowledgment if required

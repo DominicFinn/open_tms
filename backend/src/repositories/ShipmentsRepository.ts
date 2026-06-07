@@ -5,6 +5,8 @@ export type ShipmentWithRelations = any;
 export type ShipmentWithFullRelations = any;
 
 export interface CreateShipmentDTO {
+  /** Multi-tenancy scope. Required post phase-2 tightening. */
+  orgId: string;
   reference: string;
   customerId: string;
   laneId?: string;
@@ -31,8 +33,8 @@ export interface UpdateShipmentDTO {
 }
 
 export interface IShipmentsRepository {
-  all(): Promise<ShipmentWithRelations[]>;
-  findById(id: string): Promise<ShipmentWithFullRelations | null>;
+  all(orgId?: string | null): Promise<ShipmentWithRelations[]>;
+  findById(id: string, orgId?: string | null): Promise<ShipmentWithFullRelations | null>;
   create(data: CreateShipmentDTO, includeLane?: boolean): Promise<ShipmentWithRelations>;
   update(id: string, data: UpdateShipmentDTO, includeLane?: boolean): Promise<ShipmentWithRelations>;
   archive(id: string): Promise<any>;
@@ -43,9 +45,11 @@ export interface IShipmentsRepository {
 export class ShipmentsRepository implements IShipmentsRepository {
   constructor(private prisma: PrismaClient) {}
 
-  async all(): Promise<ShipmentWithRelations[]> {
+  async all(orgId?: string | null): Promise<ShipmentWithRelations[]> {
+    const where: any = { archived: false };
+    if (orgId) where.orgId = orgId;
     return this.prisma.shipment.findMany({
-      where: { archived: false },
+      where,
       include: {
         customer: true,
         origin: true,
@@ -61,9 +65,11 @@ export class ShipmentsRepository implements IShipmentsRepository {
     });
   }
 
-  async findById(id: string): Promise<ShipmentWithFullRelations | null> {
+  async findById(id: string, orgId?: string | null): Promise<ShipmentWithFullRelations | null> {
+    const where: any = { id, archived: false };
+    if (orgId) where.orgId = orgId;
     return this.prisma.shipment.findFirst({
-      where: { id, archived: false },
+      where,
       include: {
         customer: true,
         origin: true,

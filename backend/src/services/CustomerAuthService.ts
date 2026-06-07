@@ -1,5 +1,14 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
 import { ICustomerUserRepository } from '../repositories/CustomerUserRepository.js';
+import {
+  computeLockoutStatus,
+  isLockedOut,
+  LOCKOUT_MINUTES,
+  LockoutStatus,
+  MAX_FAILED_ATTEMPTS,
+  minutesUntilUnlocked,
+  nextFailedAttemptState,
+} from './auth/lockout.js';
 
 if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
   throw new Error('JWT_SECRET environment variable is required in production');
@@ -7,8 +16,6 @@ if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
 const JWT_SECRET = process.env.JWT_SECRET || 'open-tms-dev-secret-change-in-production';
 const CUSTOMER_JWT_ISSUER = 'open-tms-customer';
 const TOKEN_EXPIRY_HOURS = 24;
-const MAX_FAILED_ATTEMPTS = 5;
-const LOCKOUT_MINUTES = 15;
 
 export interface CustomerJWTPayload {
   sub: string;
@@ -38,6 +45,8 @@ export interface PasswordValidation {
   errors: string[];
 }
 
+export type { LockoutStatus } from './auth/lockout.js';
+
 export interface ICustomerAuthService {
   register(customerId: string, email: string, password: string, name: string, role?: string): Promise<any>;
   login(email: string, password: string): Promise<CustomerLoginResult>;
@@ -45,17 +54,9 @@ export interface ICustomerAuthService {
   adminResetPassword(userId: string, newPassword: string): Promise<void>;
   validatePasswordStrength(password: string): PasswordValidation;
   verifyToken(token: string): CustomerJWTPayload;
+  unlockAccount(userId: string): Promise<void>;
+  getLockoutStatus(userId: string): Promise<LockoutStatus>;
 }
-
-const failedAttempts = new Map<string, { count: number; lockedUntil: Date | null }>();
-
-// Prune expired lockout entries every 15 minutes to prevent unbounded growth
-setInterval(() => {
-  const now = new Date();
-  for (const [key, value] of failedAttempts) {
-    if (value.lockedUntil && value.lockedUntil < now) failedAttempts.delete(key);
-  }
-}, 15 * 60 * 1000).unref();
 
 export class CustomerAuthService implements ICustomerAuthService {
   constructor(private customerUserRepo: ICustomerUserRepository) {}
@@ -88,34 +89,30 @@ export class CustomerAuthService implements ICustomerAuthService {
   }
 
   async login(email: string, password: string): Promise<CustomerLoginResult> {
-    const attempts = failedAttempts.get(email);
-    if (attempts?.lockedUntil && attempts.lockedUntil > new Date()) {
-      const minutesLeft = Math.ceil((attempts.lockedUntil.getTime() - Date.now()) / 60000);
+    const user = await this.customerUserRepo.findByEmail(email);
+    if (!user) throw new Error('Invalid email or password');
+
+    if (isLockedOut(user)) {
+      const minutesLeft = minutesUntilUnlocked(user);
       throw new Error(`Account is temporarily locked. Try again in ${minutesLeft} minutes.`);
     }
 
-    const user = await this.customerUserRepo.findByEmail(email);
-    if (!user) {
-      this.recordFailedAttempt(email);
-      throw new Error('Invalid email or password');
-    }
     if (!user.active) throw new Error('Account is deactivated');
 
     const valid = await this.verifyPassword(password, user.passwordHash);
     if (!valid) {
-      this.recordFailedAttempt(email);
-      const current = failedAttempts.get(email);
-      const remaining = MAX_FAILED_ATTEMPTS - (current?.count || 0);
-      if (remaining <= 0) {
+      const next = nextFailedAttemptState(user);
+      await this.customerUserRepo.applyFailedAttempt(user.id, next.failedLoginAttempts, next.lockedUntil);
+      if (next.triggeredLock) {
         throw new Error(`Account is temporarily locked due to too many failed attempts. Try again in ${LOCKOUT_MINUTES} minutes.`);
       }
+      const remaining = MAX_FAILED_ATTEMPTS - next.failedLoginAttempts;
       if (remaining <= 2) {
         throw new Error(`Invalid email or password. ${remaining} attempt(s) remaining before lockout.`);
       }
       throw new Error('Invalid email or password');
     }
 
-    failedAttempts.delete(email);
     await this.customerUserRepo.updateLastLogin(user.id);
 
     const customer = (user as any).customer;
@@ -163,7 +160,16 @@ export class CustomerAuthService implements ICustomerAuthService {
 
     const newHash = await this.hashPassword(newPassword);
     await this.customerUserRepo.updatePassword(userId, newHash);
-    failedAttempts.delete(user.email);
+    await this.customerUserRepo.clearLockout(userId);
+  }
+
+  async unlockAccount(userId: string): Promise<void> {
+    await this.customerUserRepo.clearLockout(userId);
+  }
+
+  async getLockoutStatus(userId: string): Promise<LockoutStatus> {
+    const user = await this.customerUserRepo.findById(userId);
+    return computeLockoutStatus(user);
   }
 
   verifyToken(token: string): CustomerJWTPayload {
@@ -191,15 +197,6 @@ export class CustomerAuthService implements ICustomerAuthService {
     }
 
     return payload;
-  }
-
-  private recordFailedAttempt(email: string): void {
-    const current = failedAttempts.get(email) || { count: 0, lockedUntil: null };
-    current.count += 1;
-    if (current.count >= MAX_FAILED_ATTEMPTS) {
-      current.lockedUntil = new Date(Date.now() + LOCKOUT_MINUTES * 60 * 1000);
-    }
-    failedAttempts.set(email, current);
   }
 
   private generateToken(claims: Omit<CustomerJWTPayload, 'iat' | 'exp' | 'iss'>): string {

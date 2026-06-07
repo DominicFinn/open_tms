@@ -236,7 +236,7 @@ const APPS: AppDef[] = [
         { to: '/wms/inventory', icon: Package, label: 'Inventory' },
         { to: '/wms/product-dimensions', icon: Ruler, label: 'Product Dimensions' },
         { to: '/wms/carton-catalogue', icon: Package, label: 'Carton Catalogue' },
-        { to: '/wms/pallet-types', icon: Boxes, label: 'Pallet Types' },
+        { to: '/wms/packaging-types', icon: Boxes, label: 'Packaging Types' },
         { to: '/wms/cycle-counts', icon: ClipboardCheck, label: 'Cycle Counts' },
         { to: '/wms/replenishment', icon: RefreshCcw, label: 'Replenishment' },
       ]},
@@ -296,6 +296,7 @@ const APPS: AppDef[] = [
         { to: '/settings/skill-chains', icon: GitBranch, label: 'Skill Chains' },
         { to: '/settings/roles', icon: Shield, label: 'Roles & Permissions' },
         { to: '/settings/users', icon: Users, label: 'Users' },
+        { to: '/settings/portal-users', icon: Key, label: 'Portal Users' },
       ]},
       { title: 'Apps', items: [
         { to: '/warehouse', icon: WarehouseIcon, label: 'Warehouse App' },
@@ -345,7 +346,7 @@ export default function VNextLayout() {
       {/* Sidebar */}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-40 flex w-64 shrink-0 flex-col border-r border-border bg-card transition-transform lg:static lg:translate-x-0',
+          'fixed inset-y-0 left-0 z-40 flex w-64 shrink-0 flex-col border-r border-border bg-card transition-transform lg:static lg:translate-x-0 print:hidden',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full',
         )}
       >
@@ -403,7 +404,7 @@ export default function VNextLayout() {
 
       {/* Main column */}
       <div className="flex min-h-screen flex-1 flex-col">
-        <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-border bg-background/80 px-4 backdrop-blur md:px-6">
+        <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-border bg-background/80 px-4 backdrop-blur md:px-6 print:hidden">
           <button
             type="button"
             onClick={() => setSidebarOpen(o => !o)}
@@ -487,8 +488,8 @@ export default function VNextLayout() {
           </div>
         </header>
 
-        <main className="flex-1 px-4 py-6 md:px-8 md:py-8">
-          <div className="mx-auto max-w-[1440px]">
+        <main className="flex-1 px-4 py-6 md:px-8 md:py-8 print:p-0">
+          <div className="mx-auto max-w-[1440px] print:max-w-none">
             <ErrorBoundary>
               <Outlet />
             </ErrorBoundary>

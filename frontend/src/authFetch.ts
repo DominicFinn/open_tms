@@ -31,6 +31,11 @@ function requestAlreadyHasAuth(init: RequestInit | undefined, input: RequestInfo
 }
 
 function isPortalRoute(url: string): boolean {
+  // WMS admin endpoints share the /api/v1/warehouse/ prefix with the PWA but
+  // require the main TMS JWT. Keep them on the standard auth path.
+  if (url.includes('/api/v1/warehouse/zones') || url.includes('/api/v1/warehouse/bins')) {
+    return false;
+  }
   // Portals manage their own tokens — don't inject the main TMS token into them.
   return (
     url.includes('/api/v1/carrier-portal') ||

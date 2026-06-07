@@ -12,6 +12,7 @@ import {
 import { API_URL } from '../api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Input } from '@/components/ui/input';
 import {
   Table,
@@ -108,7 +109,7 @@ export default function VNextFinanceAgingReport() {
           <p className="mt-1 text-sm text-muted-foreground">Outstanding invoices by days past due as of {data.asOfDate}</p>
         </div>
         <div className="flex items-center gap-2">
-          <Input
+          <DatePicker
             type="date"
             value={asOfDate}
             onChange={e => setAsOfDate(e.target.value)}

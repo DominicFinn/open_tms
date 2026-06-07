@@ -8,12 +8,15 @@ import { ICommandBus } from '../commands/CommandBus.js';
 import { CREATE_CHARGE, CreateChargePayload } from '../commands/charges/CreateChargeCommand.js';
 import { APPROVE_CHARGE, ApproveChargePayload } from '../commands/charges/ApproveChargeCommand.js';
 import { REWEIGH_ADJUSTMENT, ReweighAdjustmentPayload } from '../commands/charges/ReweighAdjustmentCommand.js';
+import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 
 export async function chargeRoutes(server: FastifyInstance) {
   const chargeService = container.resolve<IChargeService>(TOKENS.IChargeService);
   const chargeRepo = container.resolve<IChargeRepository>(TOKENS.IChargeRepository);
   const ratingService = container.resolve<IRatingService>(TOKENS.IRatingService);
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
+
+  await registerOrgScope(server);
 
   // List charges (with filters)
   server.get('/api/v1/charges', {
@@ -33,7 +36,11 @@ export async function chargeRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest) => {
     const query = req.query as Record<string, string>;
+    // Always include orgId so the underlying ChargeRepository.findAll
+    // narrows to this tenant — Charge has the column, the previous shape
+    // of this filter just didn't pass it.
     const charges = await chargeService.getCharges({
+      orgId: req.orgId!,
       shipmentId: query.shipmentId,
       orderId: query.orderId,
       chargeCategory: query.chargeCategory,
@@ -53,6 +60,15 @@ export async function chargeRoutes(server: FastifyInstance) {
     const { id } = req.params as { id: string };
     const charge = await chargeRepo.findById(id);
     if (!charge) {
+      reply.code(404);
+      return { data: null, error: 'Charge not found' };
+    }
+    // Multi-tenancy guard: Charge has orgId, but findById doesn't filter on it.
+    // Without this check, a user from another org could fetch any charge by
+    // guessing the UUID. Returning 404 (not 403) keeps the existence of the
+    // resource opaque.
+    const orgId = req.orgId;
+    if (orgId && charge.orgId !== orgId) {
       reply.code(404);
       return { data: null, error: 'Charge not found' };
     }

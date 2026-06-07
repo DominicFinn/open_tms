@@ -5,6 +5,7 @@ import { CircleAlert, Loader2 } from 'lucide-react';
 import { API_URL } from '../api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
@@ -180,7 +181,7 @@ export default function VNextWmsCreateWave() {
               )}
               <div className="space-y-2">
                 <Label>Cutoff Time</Label>
-                <Input type="datetime-local" value={form.cutoffAt} onChange={e => setForm({ ...form, cutoffAt: e.target.value })} />
+                <DatePicker type="datetime-local" value={form.cutoffAt} onChange={e => setForm({ ...form, cutoffAt: e.target.value })} />
               </div>
 
               <div className="rounded-md bg-muted p-3">

@@ -16,19 +16,25 @@ import {
 } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
 
-export function getCustomerToken(): string {
-  return localStorage.getItem('customer_token') || '';
-}
+import {
+  getCustomerToken as _getCustomerToken,
+  getCustomerUser as _getCustomerUser,
+  type CustomerSessionUser,
+} from './customerSession';
 
-export function getCustomerUser(): any {
-  try { return JSON.parse(localStorage.getItem('customer_user') || '{}'); } catch { return {}; }
+export const getCustomerToken = _getCustomerToken;
+
+export function getCustomerUser(): Partial<CustomerSessionUser> {
+  return _getCustomerUser() ?? {};
 }
 
 export function customerFetch(url: string, opts?: RequestInit) {
-  return fetch(url, {
-    ...opts,
-    headers: { ...opts?.headers, Authorization: `Bearer ${getCustomerToken()}`, 'Content-Type': 'application/json' },
-  });
+  const headers: Record<string, string> = {
+    ...(opts?.headers as Record<string, string> | undefined),
+    Authorization: `Bearer ${getCustomerToken()}`,
+  };
+  if (opts?.body != null) headers['Content-Type'] = 'application/json';
+  return fetch(url, { ...opts, headers });
 }
 
 function formatCents(cents: number): string {
@@ -101,16 +107,24 @@ export default function CustomerDashboard() {
     );
   }
 
-  const tiles = [
-    { tone: 'primary' as const, icon: Truck, label: 'Active shipments', value: data.stats.activeShipments },
-    { tone: 'success' as const, icon: CheckCircle2, label: 'Delivered', value: data.stats.recentDeliveries },
-    { tone: 'warning' as const, icon: Bug, label: 'Open issues', value: data.stats.openIssues },
+  const tiles: Array<{
+    tone: 'primary' | 'success' | 'warning' | 'info';
+    icon: typeof Truck;
+    label: string;
+    value: number;
+    sub?: string;
+    to?: string;
+  }> = [
+    { tone: 'primary', icon: Truck, label: 'Active shipments', value: data.stats.activeShipments, to: '/customer-portal/shipments?status=active' },
+    { tone: 'success', icon: CheckCircle2, label: 'Delivered', value: data.stats.recentDeliveries, to: '/customer-portal/shipments?status=delivered' },
+    { tone: 'warning', icon: Bug, label: 'Open issues', value: data.stats.openIssues, to: '/customer-portal/issues?status=open' },
     {
-      tone: 'info' as const,
+      tone: 'info',
       icon: Receipt,
       label: 'Outstanding invoices',
       value: data.stats.outstandingInvoiceCount,
       sub: formatCents(data.stats.outstandingBalanceCents),
+      to: '/customer-portal/invoices?status=outstanding',
     },
   ];
 
@@ -126,17 +140,27 @@ export default function CustomerDashboard() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {tiles.map(t => {
           const Icon = t.icon;
+          const body = (
+            <CardContent className="p-6">
+              <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', TILE_TONES[t.tone])}>
+                <Icon className="h-5 w-5" />
+              </div>
+              <div className="mt-4 text-3xl font-bold tracking-tight">{t.value}</div>
+              <div className="mt-1 text-sm text-muted-foreground">{t.label}</div>
+              {t.sub && <div className="mt-1 text-xs text-muted-foreground">{t.sub}</div>}
+            </CardContent>
+          );
+          if (!t.to) {
+            return <Card key={t.label}>{body}</Card>;
+          }
           return (
-            <Card key={t.label}>
-              <CardContent className="p-6">
-                <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', TILE_TONES[t.tone])}>
-                  <Icon className="h-5 w-5" />
-                </div>
-                <div className="mt-4 text-3xl font-bold tracking-tight">{t.value}</div>
-                <div className="mt-1 text-sm text-muted-foreground">{t.label}</div>
-                {t.sub && <div className="mt-1 text-xs text-muted-foreground">{t.sub}</div>}
-              </CardContent>
-            </Card>
+            <Link
+              key={t.label}
+              to={t.to}
+              className="block rounded-lg transition-shadow hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            >
+              <Card className="h-full">{body}</Card>
+            </Link>
           );
         })}
       </div>

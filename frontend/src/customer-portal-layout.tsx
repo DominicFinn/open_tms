@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   Building2,
+  Bug,
   Code,
   Cable,
   FileSpreadsheet,
@@ -21,6 +22,7 @@ import {
 } from 'lucide-react';
 
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { clearCustomerSession, getCustomerUser } from './pages/customer-portal/customerSession';
 import { Logo } from '@/components/brand/Logo';
 import {
   Dialog,
@@ -47,7 +49,7 @@ interface CpAppDef {
 
 const APPS: CpAppDef[] = [
   {
-    key: 'portal', icon: Building2, label: 'Portal', basePath: '/customer-portal',
+    key: 'portal', icon: Building2, label: 'Customer Portal', basePath: '/customer-portal',
     sections: [
       { title: 'Overview', items: [
         { to: '/customer-portal', icon: LayoutDashboard, label: 'Dashboard', end: true },
@@ -55,6 +57,7 @@ const APPS: CpAppDef[] = [
       { title: 'Operations', items: [
         { to: '/customer-portal/orders', icon: Package, label: 'Orders' },
         { to: '/customer-portal/shipments', icon: Truck, label: 'Shipments' },
+        { to: '/customer-portal/issues', icon: Bug, label: 'Issues' },
         { to: '/customer-portal/returns', icon: Undo2, label: 'Returns' },
       ]},
       { title: 'Finance & Docs', items: [
@@ -103,16 +106,12 @@ export function CustomerPortalLayout() {
   const [user, setUser] = useState<PortalUser | null>(null);
 
   useEffect(() => {
-    try {
-      const u = JSON.parse(localStorage.getItem('customer_user') || 'null');
-      if (!u) {
-        navigate('/customer-portal/login');
-        return;
-      }
-      setUser(u);
-    } catch {
+    const u = getCustomerUser();
+    if (!u) {
       navigate('/customer-portal/login');
+      return;
     }
+    setUser(u);
   }, [navigate]);
 
   const activeAppKey = detectApp(location.pathname);
@@ -124,8 +123,7 @@ export function CustomerPortalLayout() {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('customer_token');
-    localStorage.removeItem('customer_user');
+    clearCustomerSession();
     navigate('/customer-portal/login');
   };
 

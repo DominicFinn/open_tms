@@ -1,5 +1,12 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
 import { PrismaClient } from '@prisma/client';
+import {
+  isLockedOut,
+  LOCKOUT_MINUTES,
+  MAX_FAILED_ATTEMPTS,
+  minutesUntilUnlocked,
+  nextFailedAttemptState,
+} from './auth/lockout.js';
 
 if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
   throw new Error('JWT_SECRET environment variable is required in production');
@@ -7,8 +14,6 @@ if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
 const JWT_SECRET = process.env.JWT_SECRET || 'open-tms-dev-secret-change-in-production';
 const JWT_ISSUER = 'open-tms-auth';
 const TOKEN_EXPIRY_HOURS = 12;
-const MAX_FAILED_ATTEMPTS = 5;
-const LOCKOUT_MINUTES = 15;
 
 export interface InternalJWTPayload {
   sub: string;
@@ -41,15 +46,6 @@ export interface PasswordValidation {
   errors: string[];
 }
 
-const failedAttempts = new Map<string, { count: number; lockedUntil: Date | null }>();
-
-setInterval(() => {
-  const now = new Date();
-  for (const [key, value] of failedAttempts) {
-    if (value.lockedUntil && value.lockedUntil < now) failedAttempts.delete(key);
-  }
-}, 15 * 60 * 1000).unref();
-
 export interface IAuthService {
   login(email: string, password: string): Promise<LoginResult>;
   getUserWithAuthContext(userId: string): Promise<LoginResult['user'] | null>;
@@ -74,38 +70,38 @@ export class AuthService implements IAuthService {
   async login(email: string, password: string): Promise<LoginResult> {
     const normalizedEmail = email.trim().toLowerCase();
 
-    const attempts = failedAttempts.get(normalizedEmail);
-    if (attempts?.lockedUntil && attempts.lockedUntil > new Date()) {
-      const minutesLeft = Math.ceil((attempts.lockedUntil.getTime() - Date.now()) / 60000);
-      throw new Error(`Account is temporarily locked. Try again in ${minutesLeft} minutes.`);
-    }
-
     const user = await this.prisma.user.findFirst({
       where: { email: normalizedEmail },
       include: { roles: { include: { role: true } } },
     });
 
     if (!user || !user.passwordHash) {
-      this.recordFailedAttempt(normalizedEmail);
       throw new Error('Invalid email or password');
     }
+
+    if (isLockedOut(user)) {
+      const minutesLeft = minutesUntilUnlocked(user);
+      throw new Error(`Account is temporarily locked. Try again in ${minutesLeft} minutes.`);
+    }
+
     if (!user.active) throw new Error('Account is deactivated. Contact your administrator.');
 
     const valid = this.verifyPassword(password, user.passwordHash);
     if (!valid) {
-      this.recordFailedAttempt(normalizedEmail);
-      const current = failedAttempts.get(normalizedEmail);
-      const remaining = MAX_FAILED_ATTEMPTS - (current?.count || 0);
-      if (remaining <= 0) {
+      const next = nextFailedAttemptState(user);
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { failedLoginAttempts: next.failedLoginAttempts, lockedUntil: next.lockedUntil },
+      });
+      if (next.triggeredLock) {
         throw new Error(`Account is temporarily locked due to too many failed attempts. Try again in ${LOCKOUT_MINUTES} minutes.`);
       }
+      const remaining = MAX_FAILED_ATTEMPTS - next.failedLoginAttempts;
       if (remaining <= 2) {
         throw new Error(`Invalid email or password. ${remaining} attempt(s) remaining before lockout.`);
       }
       throw new Error('Invalid email or password');
     }
-
-    failedAttempts.delete(normalizedEmail);
 
     await this.prisma.user.update({
       where: { id: user.id },
@@ -191,8 +187,6 @@ export class AuthService implements IAuthService {
         lockedUntil: null,
       },
     });
-
-    failedAttempts.delete(user.email.toLowerCase());
   }
 
   // ── private helpers ──
@@ -207,15 +201,6 @@ export class AuthService implements IAuthService {
       for (const p of perms) permSet.add(p);
     }
     return { roles: roleNames, permissions: Array.from(permSet) };
-  }
-
-  private recordFailedAttempt(email: string): void {
-    const current = failedAttempts.get(email) || { count: 0, lockedUntil: null };
-    current.count += 1;
-    if (current.count >= MAX_FAILED_ATTEMPTS) {
-      current.lockedUntil = new Date(Date.now() + LOCKOUT_MINUTES * 60 * 1000);
-    }
-    failedAttempts.set(email, current);
   }
 
   private generateToken(claims: Omit<InternalJWTPayload, 'iat' | 'exp' | 'iss'>): string {

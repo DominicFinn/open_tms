@@ -8,11 +8,15 @@ import { CREATE_ORDER } from '../commands/orders/CreateOrderCommand.js';
 import { IEDI940ParseService } from '../services/EDI940ParseService.js';
 import { IEDI945Service, EDI945Data, EDI945LineData, EDI945Address } from '../services/EDI945Service.js';
 
+import { registerOrgScopeForEdi } from '../auth/orgScopeMiddleware.js';
+
 export async function edi940Routes(server: FastifyInstance) {
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
   const prisma = container.resolve<PrismaClient>(TOKENS.PrismaClient);
   const parseService = container.resolve<IEDI940ParseService>(TOKENS.IEDI940ParseService);
   const generateService = container.resolve<IEDI945Service>(TOKENS.IEDI945Service);
+
+  await registerOrgScopeForEdi(server);
 
   // POST /api/v1/edi/940/inbound — parse a 940 and create an Order
   server.post('/api/v1/edi/940/inbound', {
@@ -87,8 +91,12 @@ export async function edi940Routes(server: FastifyInstance) {
     });
 
     const orderNumber = parsed.depositorOrderNumber || `940-${Date.now()}`;
-    const actorId = (req as any).userId || 'edi-940-inbound';
-    const orgId = (req as any).orgId || (await prisma.organization.findFirst({ select: { id: true } }))?.id || 'default-org';
+    // Multi-tenancy: req.orgId is populated by the EDI hook chain
+    // registered at the top of this plugin (JWT → partner.customer.orgId
+    // → default Organization). The actor is best-effort: prefer the JWT
+    // sub, fall back to a synthetic identifier for unauthed ingest.
+    const actorId = req.user?.sub ?? 'edi-940-inbound';
+    const orgId = req.orgId!;
 
     const orderData: any = {
       orderNumber,

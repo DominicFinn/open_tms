@@ -320,8 +320,18 @@ export class SystemLocoAdapter {
       });
     }
 
+    // Multi-tenancy: external IoT webhooks have no JWT context, so we
+    // attribute the new Device to the first Organization. Multi-tenant
+    // deployments should attach an explicit orgId hint to the webhook
+    // payload (future work) so the adapter can pick the right tenant.
+    const fallbackOrg = await this.prisma.organization.findFirst({ select: { id: true } });
+    if (!fallbackOrg) {
+      throw new Error('SystemLocoAdapter: no Organization in DB; cannot attribute new Device');
+    }
+
     return this.prisma.device.create({
       data: {
+        orgId: fallbackOrg.id,
         externalId,
         displayId: deviceInfo.displayId || null,
         name: deviceInfo.name || externalId,

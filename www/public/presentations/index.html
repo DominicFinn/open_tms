@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Presentations - Open TMS</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --p50:#eff6ff; --p100:#dbeafe; --p200:#bfdbfe; --p300:#93c5fd;
+    --p400:#60a5fa; --p500:#3b82f6; --p600:#2563eb; --p700:#1d4ed8;
+    --p800:#1e40af; --p900:#1e3a8a; --p950:#172554;
+    --a400:#a78bfa; --a500:#8b5cf6; --a600:#7c3aed;
+    --s50:#f8fafc; --s100:#f1f5f9; --s200:#e2e8f0; --s300:#cbd5e1;
+    --s400:#94a3b8; --s500:#64748b; --s600:#475569; --s700:#334155;
+    --s800:#1e293b; --s900:#0f172a; --s950:#020617;
+    --green:#22c55e; --yellow:#eab308; --red:#ef4444; --cyan:#06b6d4;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    min-height: 100%;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    color: #fff;
+    background: var(--s950);
+  }
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background: linear-gradient(135deg, var(--s950) 0%, var(--p950) 50%, var(--s900) 100%);
+    z-index: -2;
+  }
+  body::after {
+    content: '';
+    position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    opacity: 0.03;
+    z-index: -1;
+    pointer-events: none;
+  }
+
+  .glow-orb {
+    position: fixed;
+    width: 700px; height: 700px;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 0;
+    filter: blur(120px);
+  }
+  .glow-orb.p { background: rgba(37, 99, 235, 0.18); top: -200px; left: -200px; }
+  .glow-orb.a { background: rgba(139, 92, 246, 0.14); bottom: -250px; right: -200px; }
+
+  .wrap {
+    position: relative;
+    z-index: 1;
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 80px 48px 96px;
+  }
+
+  .pill {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 16px;
+    border-radius: 999px;
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    background: rgba(59, 130, 246, 0.1);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--p300);
+    letter-spacing: 0.02em;
+    width: fit-content;
+  }
+  .pill .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--green);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.4} }
+
+  h1 {
+    font-size: 64px;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    line-height: 1.04;
+    margin: 24px 0 20px;
+  }
+  .gradient-text {
+    background: linear-gradient(135deg, var(--p400), var(--a500));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+  }
+  .lede {
+    font-size: 20px;
+    color: var(--s300);
+    line-height: 1.6;
+    max-width: 760px;
+    margin-bottom: 64px;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 28px;
+  }
+
+  .card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    padding: 36px 36px 32px;
+    border-radius: 24px;
+    background: linear-gradient(180deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.7) 100%);
+    border: 1px solid rgba(148, 163, 184, 0.12);
+    text-decoration: none;
+    color: inherit;
+    overflow: hidden;
+    transition: transform .25s ease, border-color .25s ease, box-shadow .25s ease;
+    backdrop-filter: blur(8px);
+    min-height: 320px;
+  }
+  .card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(600px circle at var(--mx, 50%) var(--my, 0%), rgba(59, 130, 246, 0.18), transparent 60%);
+    opacity: 0;
+    transition: opacity .25s ease;
+    pointer-events: none;
+  }
+  .card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(96, 165, 250, 0.4);
+    box-shadow: 0 20px 60px -20px rgba(37, 99, 235, 0.5);
+  }
+  .card:hover::before { opacity: 1; }
+
+  .card-icon {
+    width: 64px; height: 64px;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 28px;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.18), rgba(139, 92, 246, 0.14));
+    color: var(--p300);
+    flex-shrink: 0;
+  }
+  .card.tms .card-icon { color: var(--p300); }
+  .card.wms .card-icon {
+    color: var(--cyan);
+    background: linear-gradient(135deg, rgba(6, 182, 212, 0.18), rgba(59, 130, 246, 0.14));
+    border-color: rgba(6, 182, 212, 0.25);
+  }
+  .card.edi .card-icon {
+    color: var(--a400);
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(59, 130, 246, 0.12));
+    border-color: rgba(139, 92, 246, 0.25);
+  }
+  .card.incident .card-icon {
+    color: #fca5a5;
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.18), rgba(234, 179, 8, 0.14));
+    border-color: rgba(239, 68, 68, 0.25);
+  }
+
+  .card-eyebrow {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--s400);
+    margin-bottom: 10px;
+  }
+  .card h2 {
+    font-size: 30px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+    margin-bottom: 14px;
+  }
+  .card p {
+    font-size: 16px;
+    color: var(--s300);
+    line-height: 1.6;
+    flex-grow: 1;
+  }
+  .card-cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 24px;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--p300);
+    transition: gap .2s ease, color .2s ease;
+  }
+  .card:hover .card-cta { gap: 14px; color: var(--p400); }
+  .card-cta .arrow {
+    display: inline-flex;
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: rgba(59, 130, 246, 0.15);
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(59, 130, 246, 0.25);
+  }
+
+  .footer {
+    margin-top: 80px;
+    padding-top: 32px;
+    border-top: 1px solid rgba(148, 163, 184, 0.1);
+    color: var(--s500);
+    font-size: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  .footer a { color: var(--p400); text-decoration: none; }
+  .footer a:hover { color: var(--p300); }
+
+  @media (max-width: 880px) {
+    .wrap { padding: 56px 24px 64px; }
+    h1 { font-size: 44px; }
+    .lede { font-size: 17px; margin-bottom: 40px; }
+    .grid { grid-template-columns: 1fr; gap: 20px; }
+    .card { padding: 28px; min-height: auto; }
+    .card h2 { font-size: 24px; }
+  }
+</style>
+</head>
+<body>
+  <div class="glow-orb p"></div>
+  <div class="glow-orb a"></div>
+
+  <div class="wrap">
+    <span class="pill"><span class="dot"></span> Open TMS Presentations</span>
+    <h1>Decks &amp; <span class="gradient-text">walkthroughs</span></h1>
+    <p class="lede">A small library of slide decks explaining how the moving parts of Open TMS fit together. Click any card to open the deck. Use arrow keys inside a deck to navigate.</p>
+
+    <div class="grid">
+      <a class="card tms" href="tms-presentation.html">
+        <div class="card-icon">TMS</div>
+        <div class="card-eyebrow">Foundations</div>
+        <h2>How a TMS Works</h2>
+        <p>An end-to-end tour of a Transportation Management System: orders, planning, tendering, execution, tracking, and settlement. A useful primer if you are new to the domain or onboarding stakeholders.</p>
+        <span class="card-cta">Open deck <span class="arrow">→</span></span>
+      </a>
+
+      <a class="card wms" href="wms-presentation.html">
+        <div class="card-icon">WMS</div>
+        <div class="card-eyebrow">Operations</div>
+        <h2>Inside the Warehouse</h2>
+        <p>A walk through the warehouse module: receiving, putaway, locations, picking and packing, and how warehouse events flow back into shipments and orders.</p>
+        <span class="card-cta">Open deck <span class="arrow">→</span></span>
+      </a>
+
+      <a class="card edi" href="edi-flow-presentation.html">
+        <div class="card-icon">EDI</div>
+        <div class="card-eyebrow">Integration</div>
+        <h2>The EDI Flow</h2>
+        <p>How EDI messages move between trading partners and Open TMS. Covers the lifecycle of 850, 204, 990, 214, 210, 810, and 820 transactions, plus the universal inbound endpoint and 997 acknowledgments.</p>
+        <span class="card-cta">Open deck <span class="arrow">→</span></span>
+      </a>
+
+      <a class="card incident" href="incident-presentation.html">
+        <div class="card-icon">OPS</div>
+        <div class="card-eyebrow">Exception Handling</div>
+        <h2>The Incident Manager</h2>
+        <p>How Open TMS detects, triages, and resolves operational incidents. The AI triage agent, the issue kanban, automation rules, skills, and how decisions get logged for audit and promoted to deterministic rules.</p>
+        <span class="card-cta">Open deck <span class="arrow">→</span></span>
+      </a>
+    </div>
+
+    <div class="footer">
+      <span>Built with Open TMS</span>
+      <a href="/">Back to opentms.io</a>
+    </div>
+  </div>
+
+  <script>
+    document.querySelectorAll('.card').forEach((card) => {
+      card.addEventListener('mousemove', (e) => {
+        const rect = card.getBoundingClientRect();
+        card.style.setProperty('--mx', `${e.clientX - rect.left}px`);
+        card.style.setProperty('--my', `${e.clientY - rect.top}px`);
+      });
+    });
+  </script>
+</body>
+</html>

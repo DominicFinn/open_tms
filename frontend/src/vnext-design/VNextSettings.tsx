@@ -21,6 +21,7 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -605,7 +606,7 @@ function BrokerageTab() {
               </div>
               <div className="space-y-2">
                 <Label>Bond expiration</Label>
-                <Input type="date" value={bondExpiration} onChange={e => setBondExpiration(e.target.value)} />
+                <DatePicker type="date" value={bondExpiration} onChange={e => setBondExpiration(e.target.value)} />
               </div>
             </CardContent>
           </Card>

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { KeyRound, Loader2, Plus, UserCog, Users, UserX } from 'lucide-react';
+import { KeyRound, Loader2, Lock, LockOpen, Plus, UserCog, Users, UserX } from 'lucide-react';
 
 import { API_URL } from '../api';
 import { Button } from '@/components/ui/button';
@@ -31,6 +31,12 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 
+interface LockoutStatus {
+  isLocked: boolean;
+  lockedUntil: string | null;
+  failedAttempts: number;
+}
+
 interface CustomerUser {
   id: string;
   customerId: string;
@@ -40,6 +46,7 @@ interface CustomerUser {
   active: boolean;
   lastLoginAt: string | null;
   createdAt: string;
+  lockoutStatus?: LockoutStatus;
 }
 
 interface Props {
@@ -129,6 +136,22 @@ export default function CustomerUserManagement({ customerId, customerName }: Pro
       setSuccess('Password reset successfully');
       setShowResetPassword(null);
       setResetPassword('');
+      await fetchUsers();
+    }
+  }
+
+  async function handleUnlock(user: CustomerUser) {
+    setError('');
+    setSuccess('');
+    const res = await fetch(`${API_URL}/api/v1/customers/${customerId}/users/${user.id}/unlock`, {
+      method: 'POST',
+    });
+    const json = await res.json();
+    if (json.error) {
+      setError(json.error);
+    } else {
+      setSuccess(`Cleared lockout for ${user.email}`);
+      await fetchUsers();
     }
   }
 
@@ -190,15 +213,38 @@ export default function CustomerUserManagement({ customerId, customerName }: Pro
                     <Badge variant={u.role === 'admin' ? 'default' : 'muted'}>{u.role}</Badge>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={u.active ? 'success' : 'destructive'}>
-                      {u.active ? 'Active' : 'Inactive'}
-                    </Badge>
+                    <div className="flex flex-wrap items-center gap-1">
+                      <Badge variant={u.active ? 'success' : 'destructive'}>
+                        {u.active ? 'Active' : 'Inactive'}
+                      </Badge>
+                      {u.lockoutStatus?.isLocked && (
+                        <Badge variant="destructive" className="gap-1">
+                          <Lock className="h-3 w-3" />
+                          Locked
+                        </Badge>
+                      )}
+                      {!u.lockoutStatus?.isLocked && (u.lockoutStatus?.failedAttempts ?? 0) > 0 && (
+                        <Badge variant="warning" title={`${u.lockoutStatus?.failedAttempts} failed attempt(s) since last success`}>
+                          {u.lockoutStatus?.failedAttempts} failed
+                        </Badge>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString() : 'Never'}
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-1">
+                      {u.lockoutStatus?.isLocked && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          title="Unlock account"
+                          onClick={() => handleUnlock(u)}
+                        >
+                          <LockOpen className="h-4 w-4 text-success" />
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="icon"

@@ -21,6 +21,8 @@ import { WarehouseZoneRepository } from '../repositories/WarehouseZoneRepository
 import { ReceivingRepository } from '../repositories/ReceivingRepository.js';
 import { PutawayRuleEvaluator } from '../services/PutawayRuleEvaluator.js';
 import { CartonizationService } from '../services/CartonizationService.js';
+import { ModeRulesService } from '../services/orderLineItem/ModeRulesService.js';
+import { OrderCartonizationService } from '../services/orderLineItem/OrderCartonizationService.js';
 import { LocationResolutionService } from '../services/LocationResolutionService.js';
 import { ArrivalCriteriaEvaluationService } from '../services/ArrivalCriteriaEvaluationService.js';
 import { ShipmentAssignmentService } from '../services/ShipmentAssignmentService.js';
@@ -67,6 +69,41 @@ import { ArchiveLaneCommandHandler } from '../commands/lanes/ArchiveLaneCommand.
 import { CreateIssueCommandHandler } from '../commands/issues/CreateIssueCommand.js';
 import { UpdateIssueCommandHandler } from '../commands/issues/UpdateIssueCommand.js';
 import { EscalateIssueCommandHandler } from '../commands/issues/EscalateIssueCommand.js';
+import { AddIssueLabelCommandHandler } from '../commands/issues/AddIssueLabelCommand.js';
+import { RemoveIssueLabelCommandHandler } from '../commands/issues/RemoveIssueLabelCommand.js';
+import {
+  CreateIssueLabelCommandHandler,
+  UpdateIssueLabelCommandHandler,
+  DeleteIssueLabelCommandHandler,
+} from '../commands/issueLabels/index.js';
+import {
+  CreateCommentCommandHandler,
+  UpdateCommentCommandHandler,
+  DeleteCommentCommandHandler,
+} from '../commands/comments/index.js';
+import {
+  CreateApiKeyCommandHandler,
+  UpdateApiKeyCommandHandler,
+  DeleteApiKeyCommandHandler,
+} from '../commands/apiKeys/index.js';
+import {
+  CreateAgentConfigCommandHandler,
+  UpdateAgentConfigCommandHandler,
+  CreatePromptVersionCommandHandler,
+  ActivatePromptVersionCommandHandler,
+} from '../commands/agentConfig/index.js';
+import {
+  CreateAutomationRuleCommandHandler,
+  UpdateAutomationRuleCommandHandler,
+  DeleteAutomationRuleCommandHandler,
+  PromoteDecisionToRuleCommandHandler,
+} from '../commands/automationRules/index.js';
+import {
+  CreateCustomerWebhookCommandHandler,
+  UpdateCustomerWebhookCommandHandler,
+  DeleteCustomerWebhookCommandHandler,
+  RotateWebhookSecretCommandHandler,
+} from '../commands/customerWebhooks/index.js';
 import { CreateTenderCommandHandler } from '../commands/tenders/CreateTenderCommand.js';
 import { OpenTenderCommandHandler } from '../commands/tenders/OpenTenderCommand.js';
 import { AwardTenderCommandHandler } from '../commands/tenders/AwardTenderCommand.js';
@@ -286,6 +323,10 @@ export function registerDependencies(prisma: PrismaClient): void {
   container.singleton(TOKENS.ICartonizationService).toFactory(() => {
     return new CartonizationService(container.resolve(TOKENS.PrismaClient));
   });
+
+  // Order line-item rating services (Phase 1)
+  container.singleton(TOKENS.IModeRulesService).toFactory(() => new ModeRulesService());
+  container.singleton(TOKENS.IOrderCartonizationService).toFactory(() => new OrderCartonizationService());
 
   // Register services as singletons
   container.singleton(TOKENS.IShipmentAssignmentService).toFactory(() => {
@@ -775,6 +816,41 @@ export function registerDependencies(prisma: PrismaClient): void {
     bus.register(new CreateIssueCommandHandler(prisma, eventBus));
     bus.register(new UpdateIssueCommandHandler(prisma, eventBus));
     bus.register(new EscalateIssueCommandHandler(prisma, eventBus));
+    bus.register(new AddIssueLabelCommandHandler(prisma, eventBus));
+    bus.register(new RemoveIssueLabelCommandHandler(prisma, eventBus));
+
+    // Issue label catalogue commands
+    bus.register(new CreateIssueLabelCommandHandler(prisma, eventBus));
+    bus.register(new UpdateIssueLabelCommandHandler(prisma, eventBus));
+    bus.register(new DeleteIssueLabelCommandHandler(prisma, eventBus));
+
+    // Comment commands (polymorphic: issues, shipments, orders, etc.)
+    bus.register(new CreateCommentCommandHandler(prisma, eventBus));
+    bus.register(new UpdateCommentCommandHandler(prisma, eventBus));
+    bus.register(new DeleteCommentCommandHandler(prisma, eventBus));
+
+    // API key commands
+    bus.register(new CreateApiKeyCommandHandler(prisma, eventBus));
+    bus.register(new UpdateApiKeyCommandHandler(prisma, eventBus));
+    bus.register(new DeleteApiKeyCommandHandler(prisma, eventBus));
+
+    // Agent config commands
+    bus.register(new CreateAgentConfigCommandHandler(prisma, eventBus));
+    bus.register(new UpdateAgentConfigCommandHandler(prisma, eventBus));
+    bus.register(new CreatePromptVersionCommandHandler(prisma, eventBus));
+    bus.register(new ActivatePromptVersionCommandHandler(prisma, eventBus));
+
+    // Automation rule commands
+    bus.register(new CreateAutomationRuleCommandHandler(prisma, eventBus));
+    bus.register(new UpdateAutomationRuleCommandHandler(prisma, eventBus));
+    bus.register(new DeleteAutomationRuleCommandHandler(prisma, eventBus));
+    bus.register(new PromoteDecisionToRuleCommandHandler(prisma, eventBus));
+
+    // Customer-owned webhook commands
+    bus.register(new CreateCustomerWebhookCommandHandler(prisma, eventBus));
+    bus.register(new UpdateCustomerWebhookCommandHandler(prisma, eventBus));
+    bus.register(new DeleteCustomerWebhookCommandHandler(prisma, eventBus));
+    bus.register(new RotateWebhookSecretCommandHandler(prisma, eventBus));
 
     // Tender commands
     bus.register(new CreateTenderCommandHandler(prisma, eventBus));

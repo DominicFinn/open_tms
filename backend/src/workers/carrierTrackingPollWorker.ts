@@ -42,21 +42,30 @@ export function createCarrierTrackingPollWorker(
 
       const now = Date.now();
 
-      for (const integration of integrations) {
-        // Check if enough time has passed since last poll
+      // Filter out integrations that haven't waited long enough since their
+      // last poll. Counting these once up-front means we don't burn a
+      // concurrency slot on a no-op.
+      const due = integrations.filter((integration) => {
         const intervalMs = (integration.pollingIntervalSeconds ?? 900) * 1000;
         const lastPolledAt = integration.lastPolledAt ? new Date(integration.lastPolledAt).getTime() : 0;
-
         if (now - lastPolledAt < intervalMs) {
           skipped++;
-          continue;
+          return false;
         }
+        return true;
+      });
 
+      // Run integrations in parallel with bounded concurrency so one slow
+      // carrier (e.g. a DHL OAuth handshake hanging on auth) doesn't delay
+      // the rest. Per-provider rate limits are enforced inside each
+      // provider, so this only affects worker fan-out, not API courtesy.
+      const concurrency = Math.max(1, Math.min(parseInt(process.env.CARRIER_TRACKING_POLL_CONCURRENCY || '', 10) || 5, 20));
+
+      const pollOne = async (integration: typeof due[number]): Promise<void> => {
         try {
           const result = await trackingService.pollForUpdates(integration.id);
           polled++;
           totalEvents += result.eventsCreated;
-
           if (result.eventsCreated > 0) {
             console.log(
               `[CarrierTrackingPollWorker] Integration ${integration.id} (${integration.carrier.name}): ` +
@@ -69,40 +78,44 @@ export function createCarrierTrackingPollWorker(
             `[CarrierTrackingPollWorker] Error polling integration ${integration.id} ` +
             `(${integration.carrier.name}): ${(err as Error).message}`
           );
-          // Continue to next integration -- do not stop on individual failures
+          // Swallow so one failure doesn't poison the batch
         }
+      };
+
+      // Simple worker-pool: each "lane" pulls the next integration off a
+      // shared queue until empty. Avoids the chunked-batch problem where
+      // the slowest integration in each batch blocks the next batch.
+      const queue = [...due];
+      const lanes: Array<Promise<void>> = [];
+      for (let i = 0; i < Math.min(concurrency, queue.length); i++) {
+        lanes.push((async () => {
+          while (queue.length > 0) {
+            const next = queue.shift();
+            if (!next) return;
+            await pollOne(next);
+          }
+        })());
       }
+      await Promise.all(lanes);
     } catch (err) {
       console.error('[CarrierTrackingPollWorker] Fatal error in poll cycle:', (err as Error).message);
       throw err; // Let pg-boss retry
     }
 
+    // Structured log line for observability — was previously written to
+    // WebhookLog with fields that didn't match the schema, so the create
+    // call was a TS error and would have failed at runtime.
     console.log(
-      `[CarrierTrackingPollWorker] Cycle complete -- ` +
-      `polled: ${polled}, skipped: ${skipped}, errors: ${errors}, events: ${totalEvents}`
-    );
-
-    // Log summary to database for observability
-    await prisma.webhookLog.create({
-      data: {
-        orgId: 'system',
-        provider: 'carrier-tracking-poll',
-        direction: 'internal',
-        rawPayload: {
-          type: 'carrier_tracking_poll_run',
-          polled,
-          skipped,
-          errors,
-          totalEvents,
-          completedAt: new Date().toISOString(),
-        },
+      JSON.stringify({
+        type: 'carrier_tracking_poll_run',
+        polled,
+        skipped,
+        errors,
+        totalEvents,
         status: errors > 0 ? 'partial' : 'success',
-        processedAt: new Date(),
-      },
-    }).catch((logErr: Error) => {
-      // Non-critical: if logging fails, do not break the worker
-      console.warn('[CarrierTrackingPollWorker] Failed to log run summary:', logErr.message);
-    });
+        completedAt: new Date().toISOString(),
+      })
+    );
   };
 }
 

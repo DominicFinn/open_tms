@@ -16,6 +16,7 @@ import { IEventHandler } from '../IEventHandler.js';
 import { ILlmProvider, LlmMessage } from '../../services/llm/ILlmProvider.js';
 import { ICommandBus } from '../../commands/CommandBus.js';
 import { CREATE_AGENT_DECISION } from '../../commands/agentDecisions/CreateAgentDecisionCommand.js';
+import { CREATE_COMMENT } from '../../commands/comments/index.js';
 import { CREATE_ISSUE } from '../../commands/issues/CreateIssueCommand.js';
 import { ESCALATE_ISSUE } from '../../commands/issues/EscalateIssueCommand.js';
 import { AutomationRuleHandler } from './AutomationRuleHandler.js';
@@ -599,24 +600,23 @@ Based on this event and context, what action should be taken?`;
             + `Carrier should be contacted about: ${decision.reasoning}`;
         }
 
-        // Add comment to issue
-        await this.prisma.comment.create({
-          data: {
-            orgId: event.orgId,
+        // Add comment to issue via the command bus so the IssueProjection can
+        // own commentCount and the comment.added event reaches downstream
+        // handlers (notifications, audit log).
+        await this.commandBus.dispatch({
+          type: CREATE_COMMENT,
+          orgId: event.orgId,
+          actorId: 'system:triage-agent',
+          payload: {
             entityType: 'issue',
             entityId: issueId,
+            body: commentBody,
             authorId: null,
             authorName: 'AI Triage Agent',
             authorType: 'agent',
-            body: commentBody,
           },
+          metadata: { correlationId: event.id, source: 'agent' },
         });
-
-        // Increment comment count on read model
-        await this.prisma.issueReadModel.update({
-          where: { id: issueId },
-          data: { commentCount: { increment: 1 }, updatedAt: new Date() },
-        }).catch(() => {});
 
         return {
           actionEntityType: 'issue',

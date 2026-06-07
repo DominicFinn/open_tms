@@ -12,7 +12,10 @@ import { ICustomerAuthService } from '../services/CustomerAuthService.js';
 import { authenticateCustomerJWT } from '../middleware/jwtAuth.js';
 import { ICommandBus } from '../commands/CommandBus.js';
 import { CREATE_RMA } from '../commands/rma/CreateRmaCommand.js';
+import { CREATE_ORDER } from '../commands/orders/CreateOrderCommand.js';
+import { ARCHIVE_ORDER } from '../commands/orders/ArchiveOrderCommand.js';
 import type { IBinaryStorageProvider } from '../storage/IBinaryStorageProvider.js';
+import { attachOrgScopeFromCustomerUserHook } from '../auth/orgScopeMiddleware.js';
 
 const RETURN_REASONS = ['damaged', 'wrong_item', 'not_as_described', 'no_longer_needed', 'defective', 'ordered_extra', 'other'] as const;
 const DISPOSITIONS_SUGGEST = ['restock', 'refurb', 'scrap', 'recycle', 'donate', 'rtv', 'customer_keeps'] as const;
@@ -21,6 +24,12 @@ export async function customerPortalRoutes(server: FastifyInstance) {
   const authService = container.resolve<ICustomerAuthService>(TOKENS.ICustomerAuthService);
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
   const binaryStorage = container.resolve<IBinaryStorageProvider>(TOKENS.IBinaryStorageProvider);
+
+  // Multi-tenancy: every authed customer-portal route resolves req.orgId
+  // by walking customerUser.customerId → Customer.orgId. The hook runs
+  // after `authenticateCustomerJWT` (declared per-route in preHandler),
+  // so req.customerUser is populated by the time it fires.
+  server.addHook('preHandler', attachOrgScopeFromCustomerUserHook(server.prisma));
 
   // ── Public: Login ────────────────────────────────────────────────────
 
@@ -104,6 +113,13 @@ export async function customerPortalRoutes(server: FastifyInstance) {
   }, async (req: FastifyRequest) => {
     const customerId = req.customerUser!.customerId;
 
+    const customerShipmentIds = await server.prisma.shipment.findMany({
+      where: { customerId }, select: { id: true },
+    }).then(rows => rows.map(r => r.id));
+    const customerOrderIds = await server.prisma.order.findMany({
+      where: { customerId }, select: { id: true },
+    }).then(rows => rows.map(r => r.id));
+
     const [activeShipments, recentDeliveries, openIssues, outstandingInvoices] = await Promise.all([
       server.prisma.shipmentReadModel.count({
         where: { customerId, status: { in: ['booked', 'in_transit', 'at_pickup', 'at_delivery'] } },
@@ -111,12 +127,21 @@ export async function customerPortalRoutes(server: FastifyInstance) {
       server.prisma.shipmentReadModel.count({
         where: { customerId, status: 'delivered' },
       }),
-      server.prisma.issueReadModel.count({
-        where: {
-          sourceEntityType: 'shipment',
-          status: { in: ['open', 'in_progress'] },
-        },
-      }),
+      customerShipmentIds.length === 0 && customerOrderIds.length === 0
+        ? Promise.resolve(0)
+        : server.prisma.issueReadModel.count({
+            where: {
+              status: { in: ['open', 'in_progress'] },
+              OR: [
+                customerShipmentIds.length > 0
+                  ? { sourceEntityType: 'shipment', sourceEntityId: { in: customerShipmentIds } }
+                  : undefined,
+                customerOrderIds.length > 0
+                  ? { sourceEntityType: 'order', sourceEntityId: { in: customerOrderIds } }
+                  : undefined,
+              ].filter(Boolean) as any,
+            },
+          }),
       server.prisma.invoiceReadModel.aggregate({
         where: { customerId, status: { in: ['sent', 'partial_paid', 'overdue'] } },
         _sum: { balanceCents: true },
@@ -207,12 +232,72 @@ export async function customerPortalRoutes(server: FastifyInstance) {
         origin: true,
         destination: true,
         lineItems: true,
-        trackableUnits: true,
+        trackableUnits: { include: { packagingType: true }, orderBy: { sequenceNumber: 'asc' } },
       },
     });
 
     if (!order) { reply.code(404); return { data: null, error: 'Order not found' }; }
     return { data: order, error: null };
+  });
+
+  // Archive order (customer self-service)
+  server.delete('/api/v1/customer-portal/orders/:id', {
+    preHandler: [authenticateCustomerJWT],
+    schema: {
+      tags: ['Customer Portal'],
+      summary: 'Archive a customer order',
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const customerId = req.customerUser!.customerId;
+
+    const order = await server.prisma.order.findFirst({
+      where: { id, customerId },
+      select: { id: true, orgId: true, archived: true },
+    });
+    if (!order) { reply.code(404); return { data: null, error: 'Order not found' }; }
+    if (order.archived) { reply.code(400); return { data: null, error: 'Order is already archived' }; }
+
+    const result = await commandBus.dispatch({
+      type: ARCHIVE_ORDER,
+      orgId: order.orgId,
+      actorId: req.customerUser!.sub,
+      payload: { id },
+      metadata: { correlationId: crypto.randomUUID(), source: 'customer-portal' },
+    });
+
+    if (!result.success) {
+      reply.code(400);
+      return { data: null, error: result.error };
+    }
+    return { data: { id }, error: null };
+  });
+
+  // Packaging types catalogue (read-only, org-scoped to customer's tenant).
+  // Used by the customer portal create-order form to drive the packaging
+  // dropdown. Read-only — customers can't manage their org's catalogue.
+  server.get('/api/v1/customer-portal/packaging-types', {
+    preHandler: [authenticateCustomerJWT],
+    schema: {
+      tags: ['Customer Portal'],
+      summary: 'List active packaging types in this customer org',
+      querystring: {
+        type: 'object',
+        properties: {
+          kind: { type: 'string' },
+        },
+      },
+    },
+  }, async (req: FastifyRequest) => {
+    const orgId = req.orgId!;
+    const q = req.query as { kind?: string };
+    const where: any = { orgId, active: true };
+    if (q.kind) where.kind = q.kind;
+    const rows = await server.prisma.packagingType.findMany({
+      where,
+      orderBy: [{ kind: 'asc' }, { code: 'asc' }],
+    });
+    return { data: rows, error: null };
   });
 
   // Create order (customer self-service)
@@ -228,11 +313,23 @@ export async function customerPortalRoutes(server: FastifyInstance) {
           poNumber: { type: 'string' },
           serviceLevel: { type: 'string', enum: ['FTL', 'LTL'] },
           originName: { type: 'string' },
+          originAddress1: { type: 'string' },
+          originAddress2: { type: 'string' },
           originCity: { type: 'string' },
           originState: { type: 'string' },
+          originPostalCode: { type: 'string' },
+          originCountry: { type: 'string' },
+          originLat: { type: 'number' },
+          originLng: { type: 'number' },
           destinationName: { type: 'string' },
+          destinationAddress1: { type: 'string' },
+          destinationAddress2: { type: 'string' },
           destinationCity: { type: 'string' },
           destinationState: { type: 'string' },
+          destinationPostalCode: { type: 'string' },
+          destinationCountry: { type: 'string' },
+          destinationLat: { type: 'number' },
+          destinationLng: { type: 'number' },
           requestedPickupDate: { type: 'string', format: 'date' },
           requestedDeliveryDate: { type: 'string', format: 'date' },
           specialInstructions: { type: 'string' },
@@ -241,13 +338,53 @@ export async function customerPortalRoutes(server: FastifyInstance) {
             items: {
               type: 'object',
               properties: {
+                // Always-collected
                 description: { type: 'string' },
                 quantity: { type: 'integer', minimum: 1 },
                 weightKg: { type: 'number' },
+                weight: { type: 'number' },
+                weightUnit: { type: 'string', enum: ['kg', 'lb', 'g'] },
                 sku: { type: 'string' },
+                unitOfMeasure: { type: 'string' },
+                // Dimensions
+                length: { type: 'number' },
+                width: { type: 'number' },
+                height: { type: 'number' },
+                dimUnit: { type: 'string', enum: ['cm', 'in', 'mm'] },
+                // Pricing / declared value
+                unitPriceCents: { type: 'integer' },
+                totalPriceCents: { type: 'integer' },
+                priceCurrency: { type: 'string' },
+                // LTL classification
+                freightClass: { type: 'string' },
+                nmfcCode: { type: 'string' },
+                // Hazmat
+                hazmat: { type: 'boolean' },
+                unNumber: { type: 'string' },
+                hazmatClass: { type: 'string' },
+                packingGroup: { type: 'string' },
+                properShippingName: { type: 'string' },
+                // Customs
+                hsCode: { type: 'string' },
+                countryOfOrigin: { type: 'string' },
+                // Temperature
+                temperature: { type: 'string' },
+                tempMinC: { type: 'number' },
+                tempMaxC: { type: 'number' },
               },
             },
           },
+          packingSummary: {
+            type: 'object',
+            properties: {
+              packagingTypeId: { type: 'string', format: 'uuid', nullable: true },
+              unitCount: { type: 'integer', minimum: 1 },
+              stackable: { type: 'boolean' },
+              notes: { type: 'string' },
+            },
+          },
+          requiresHazmat: { type: 'boolean' },
+          temperatureControl: { type: 'string', enum: ['ambient', 'refrigerated', 'frozen'] },
         },
       },
     },
@@ -255,63 +392,139 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     const customerId = req.customerUser!.customerId;
     const body = (req as any).body;
 
-    const orgId = (await server.prisma.organization.findFirst({ select: { id: true } }))?.id || '';
+    // Multi-tenancy: req.orgId is populated by the customer-user hook
+    // registered above (customerUser.customerId → Customer.orgId).
+    const orgId = req.orgId!;
 
     // Generate order number
     const orderCount = await server.prisma.order.count();
     const orderNumber = `ORD-CP-${String(orderCount + 1).padStart(4, '0')}`;
 
-    // Resolve origin location
-    let originId: string | undefined;
-    if (body.originCity) {
+    const resolveLocation = async (
+      prefix: 'origin' | 'destination',
+    ): Promise<string | undefined> => {
+      const city = body[`${prefix}City`];
+      const address1 = body[`${prefix}Address1`];
+      if (!city && !address1) return undefined;
+      const state = body[`${prefix}State`];
+      const postalCode = body[`${prefix}PostalCode`];
+      const country = body[`${prefix}Country`] || 'US';
+      const name = body[`${prefix}Name`] || [address1, city, state].filter(Boolean).join(', ');
+
+      // Multi-tenancy: scope location matching + creation to the customer
+      // portal's resolved org so portal A can't reuse portal B's locations.
       const existing = await server.prisma.location.findFirst({
-        where: { city: { equals: body.originCity, mode: 'insensitive' }, state: { equals: body.originState, mode: 'insensitive' } },
+        where: {
+          orgId,
+          address1: { equals: address1 || '', mode: 'insensitive' },
+          city: { equals: city || '', mode: 'insensitive' },
+          state: state ? { equals: state, mode: 'insensitive' } : undefined,
+          postalCode: postalCode ? { equals: postalCode, mode: 'insensitive' } : undefined,
+        },
       });
-      if (existing) originId = existing.id;
-      else {
-        const created = await server.prisma.location.create({
-          data: { name: body.originName || `${body.originCity}, ${body.originState}`, address1: '', city: body.originCity, state: body.originState, country: 'US' },
-        });
-        originId = created.id;
+      if (existing) return existing.id;
+
+      const created = await server.prisma.location.create({
+        data: {
+          orgId,
+          name,
+          address1: address1 || '',
+          address2: body[`${prefix}Address2`] || undefined,
+          city: city || '',
+          state: state || undefined,
+          postalCode: postalCode || undefined,
+          country,
+          lat: typeof body[`${prefix}Lat`] === 'number' ? body[`${prefix}Lat`] : undefined,
+          lng: typeof body[`${prefix}Lng`] === 'number' ? body[`${prefix}Lng`] : undefined,
+        },
+      });
+      return created.id;
+    };
+
+    const originId = await resolveLocation('origin');
+    const destinationId = await resolveLocation('destination');
+
+    const status = originId && destinationId ? 'validated' : 'pending';
+
+    // Phase 1: server-side mode-rules re-validation. The portal form enforces
+    // the same matrix client-side; we re-check here so a tampered request
+    // can't bypass required fields (UN data on hazmat, dims on LTL, etc.).
+    const mode = (body.serviceLevel === 'FTL' ? 'ftl' : 'ltl') as 'ftl' | 'ltl';
+    const flags = {
+      hazmat: body.requiresHazmat === true || (body.lineItems ?? []).some((l: any) => l.hazmat === true),
+      international: false,
+      temperatureControlled: body.temperatureControl === 'refrigerated' || body.temperatureControl === 'frozen',
+    };
+    const modeRulesSvc = container.resolve<import('../services/orderLineItem/ModeRulesService.js').IModeRulesService>(TOKENS.IModeRulesService);
+    for (let i = 0; i < (body.lineItems ?? []).length; i++) {
+      const li = body.lineItems[i];
+      const normalised = {
+        ...li,
+        weight: li.weight ?? li.weightKg,
+        unitOfMeasure: li.unitOfMeasure ?? 'each',
+      };
+      const check = modeRulesSvc.validate(mode, flags, normalised);
+      if (!check.ok) {
+        reply.code(400);
+        return { data: null, error: `Line ${i + 1} is missing required fields for mode=${mode}: ${check.missing.join(', ')}` };
       }
     }
 
-    // Resolve destination location
-    let destinationId: string | undefined;
-    if (body.destinationCity) {
-      const existing = await server.prisma.location.findFirst({
-        where: { city: { equals: body.destinationCity, mode: 'insensitive' }, state: { equals: body.destinationState, mode: 'insensitive' } },
-      });
-      if (existing) destinationId = existing.id;
-      else {
-        const created = await server.prisma.location.create({
-          data: { name: body.destinationName || `${body.destinationCity}, ${body.destinationState}`, address1: '', city: body.destinationCity, state: body.destinationState, country: 'US' },
-        });
-        destinationId = created.id;
-      }
-    }
-
-    const order = await server.prisma.order.create({
-      data: {
-        orderNumber,
-        poNumber: body.poNumber,
-        customerId,
-        status: 'pending',
-        deliveryStatus: 'unassigned',
-        serviceLevel: body.serviceLevel || 'FTL',
-        originId,
-        destinationId,
-        specialInstructions: body.specialInstructions,
-        requestedDeliveryDate: body.requestedDeliveryDate ? new Date(body.requestedDeliveryDate) : undefined,
-        lineItems: body.lineItems ? {
-          create: body.lineItems.map((item: any, i: number) => ({
+    const result = await commandBus.dispatch({
+      type: CREATE_ORDER,
+      orgId,
+      actorId: req.customerUser!.sub,
+      payload: {
+        orderData: {
+          orderNumber,
+          poNumber: body.poNumber,
+          customerId,
+          originId,
+          destinationId,
+          requestedDeliveryDate: body.requestedDeliveryDate ? new Date(body.requestedDeliveryDate) : undefined,
+          specialInstructions: body.specialInstructions,
+          importSource: 'customer_portal',
+          lineItems: body.lineItems?.map((item: any, i: number) => ({
             sku: item.sku || `ITEM-${i + 1}`,
             description: item.description || '',
             quantity: item.quantity || 1,
-            weight: item.weightKg,
+            weight: item.weight ?? item.weightKg,
+            weightUnit: item.weightUnit ?? 'kg',
+            length: item.length,
+            width: item.width,
+            height: item.height,
+            dimUnit: item.dimUnit ?? 'cm',
+            unitOfMeasure: item.unitOfMeasure ?? 'each',
+            unitPriceCents: item.unitPriceCents,
+            totalPriceCents: item.totalPriceCents,
+            priceCurrency: item.priceCurrency,
+            freightClass: item.freightClass,
+            nmfcCode: item.nmfcCode,
+            hazmat: item.hazmat ?? false,
+            unNumber: item.unNumber,
+            hazmatClass: item.hazmatClass,
+            packingGroup: item.packingGroup,
+            properShippingName: item.properShippingName,
+            hsCode: item.hsCode,
+            countryOfOrigin: item.countryOfOrigin,
+            temperature: item.temperature,
+            tempMinC: item.tempMinC,
+            tempMaxC: item.tempMaxC,
           })),
-        } : undefined,
+          packingSummary: body.packingSummary,
+        } as any,
+        status,
       },
+      metadata: { correlationId: crypto.randomUUID(), source: 'customer_portal' },
+    });
+
+    if (!result.success) {
+      reply.code(400);
+      return { data: null, error: result.error };
+    }
+
+    const order = await server.prisma.order.findUnique({
+      where: { id: (result.data as any).id },
       include: { lineItems: true, origin: true, destination: true },
     });
 
@@ -337,7 +550,11 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     const query = req.query as { status?: string; limit?: number };
 
     const where: any = { customerId };
-    if (query.status) where.status = query.status;
+    if (query.status === 'active') {
+      where.status = { in: ['booked', 'in_transit', 'at_pickup', 'at_delivery'] };
+    } else if (query.status) {
+      where.status = query.status;
+    }
 
     const shipments = await server.prisma.shipmentReadModel.findMany({
       where,
@@ -419,12 +636,28 @@ export async function customerPortalRoutes(server: FastifyInstance) {
   // Invoices
   server.get('/api/v1/customer-portal/invoices', {
     preHandler: [authenticateCustomerJWT],
-    schema: { tags: ['Customer Portal'] },
+    schema: {
+      tags: ['Customer Portal'],
+      querystring: {
+        type: 'object',
+        properties: {
+          status: { type: 'string' },
+        },
+      },
+    },
   }, async (req: FastifyRequest) => {
     const customerId = req.customerUser!.customerId;
+    const query = req.query as { status?: string };
+
+    const where: any = { customerId };
+    if (query.status === 'outstanding') {
+      where.status = { in: ['sent', 'partial_paid', 'overdue'] };
+    } else if (query.status) {
+      where.status = query.status;
+    }
 
     const invoices = await server.prisma.invoiceReadModel.findMany({
-      where: { customerId },
+      where,
       orderBy: { createdAt: 'desc' },
       take: 500,
     });
@@ -492,6 +725,176 @@ export async function customerPortalRoutes(server: FastifyInstance) {
 
     reply.code(201);
     return { data: { queryId: query.id, queryNumber: (query as any).queryNumber }, error: null };
+  });
+
+  // ── Issues ───────────────────────────────────────────────────────────
+  //
+  // Issues are scoped to the customer by walking the source entity:
+  //   - sourceEntityType = 'shipment' → Shipment.customerId
+  //   - sourceEntityType = 'order'    → Order.customerId
+  // Anything else (carrier issues, ad-hoc issues with no source) is hidden
+  // from the customer portal — there's no chain back to a single customer.
+
+  async function customerScopedIssueIds(customerId: string): Promise<string[]> {
+    const shipments = await server.prisma.shipment.findMany({
+      where: { customerId },
+      select: { id: true },
+    });
+    const orders = await server.prisma.order.findMany({
+      where: { customerId },
+      select: { id: true },
+    });
+    const shipmentIds = shipments.map(s => s.id);
+    const orderIds = orders.map(o => o.id);
+
+    if (shipmentIds.length === 0 && orderIds.length === 0) return [];
+
+    const issues = await server.prisma.issueReadModel.findMany({
+      where: {
+        OR: [
+          shipmentIds.length > 0
+            ? { sourceEntityType: 'shipment', sourceEntityId: { in: shipmentIds } }
+            : undefined,
+          orderIds.length > 0
+            ? { sourceEntityType: 'order', sourceEntityId: { in: orderIds } }
+            : undefined,
+        ].filter(Boolean) as any,
+      },
+      select: { id: true },
+    });
+    return issues.map(i => i.id);
+  }
+
+  server.get('/api/v1/customer-portal/issues', {
+    preHandler: [authenticateCustomerJWT],
+    schema: {
+      tags: ['Customer Portal'],
+      querystring: {
+        type: 'object',
+        properties: { status: { type: 'string' } },
+      },
+    },
+  }, async (req: FastifyRequest) => {
+    const customerId = req.customerUser!.customerId;
+    const query = req.query as { status?: string };
+
+    const ids = await customerScopedIssueIds(customerId);
+    if (ids.length === 0) return { data: [], error: null };
+
+    const where: any = { id: { in: ids } };
+    if (query.status === 'open') {
+      where.status = { in: ['open', 'in_progress'] };
+    } else if (query.status) {
+      where.status = query.status;
+    }
+
+    const issues = await server.prisma.issueReadModel.findMany({
+      where,
+      orderBy: { updatedAt: 'desc' },
+      take: 200,
+    });
+    return { data: issues, error: null };
+  });
+
+  server.get('/api/v1/customer-portal/issues/:id', {
+    preHandler: [authenticateCustomerJWT],
+    schema: { tags: ['Customer Portal'] },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const customerId = req.customerUser!.customerId;
+
+    const ids = await customerScopedIssueIds(customerId);
+    if (!ids.includes(id)) {
+      reply.code(404);
+      return { data: null, error: 'Issue not found' };
+    }
+
+    const issue = await server.prisma.issueReadModel.findUnique({ where: { id } });
+    if (!issue) { reply.code(404); return { data: null, error: 'Issue not found' }; }
+    return { data: issue, error: null };
+  });
+
+  server.get('/api/v1/customer-portal/issues/:id/comments', {
+    preHandler: [authenticateCustomerJWT],
+    schema: { tags: ['Customer Portal'] },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const customerId = req.customerUser!.customerId;
+
+    const ids = await customerScopedIssueIds(customerId);
+    if (!ids.includes(id)) {
+      reply.code(404);
+      return { data: null, error: 'Issue not found' };
+    }
+
+    // Only show comments either authored by the customer side, or explicitly
+    // flagged visible by internal staff.
+    const comments = await server.prisma.comment.findMany({
+      where: {
+        entityType: 'issue',
+        entityId: id,
+        deletedAt: null,
+        OR: [
+          { authorType: 'customer' },
+          { visibleToCustomer: true },
+        ],
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+    return { data: comments, error: null };
+  });
+
+  server.post('/api/v1/customer-portal/issues/:id/comments', {
+    preHandler: [authenticateCustomerJWT],
+    schema: {
+      tags: ['Customer Portal'],
+      body: {
+        type: 'object',
+        required: ['body'],
+        properties: { body: { type: 'string' } },
+      },
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const user = req.customerUser!;
+    const { body } = z.object({ body: z.string().min(1) }).parse((req as any).body);
+
+    const ids = await customerScopedIssueIds(user.customerId);
+    if (!ids.includes(id)) {
+      reply.code(404);
+      return { data: null, error: 'Issue not found' };
+    }
+
+    const customer = await server.prisma.customer.findUnique({
+      where: { id: user.customerId },
+      select: { orgId: true, name: true },
+    });
+    if (!customer) {
+      reply.code(404);
+      return { data: null, error: 'Customer not found' };
+    }
+
+    const result = await commandBus.dispatch({
+      type: 'comment.create',
+      orgId: customer.orgId,
+      actorId: user.sub,
+      payload: {
+        entityType: 'issue',
+        entityId: id,
+        body,
+        authorId: user.sub,
+        authorName: `${customer.name} (${user.email})`,
+        authorType: 'customer',
+      },
+      metadata: { correlationId: crypto.randomUUID(), source: 'customer-portal' },
+    });
+
+    if (!result.success) {
+      reply.code(400);
+      return { data: null, error: result.error || 'Failed to add comment' };
+    }
+    reply.code(201);
+    return { data: result.data, error: null };
   });
 
   // ── Returns / RMA ────────────────────────────────────────────────────
@@ -599,11 +1002,10 @@ export async function customerPortalRoutes(server: FastifyInstance) {
       return { data: null, error: 'Order not found or does not belong to your account' };
     }
 
-    const org = await server.prisma.organization.findFirst({ select: { id: true } });
-
+    // Multi-tenancy: orgId comes from the customer-user middleware.
     const result = await commandBus.dispatch({
       type: CREATE_RMA,
-      orgId: org?.id ?? 'default-org',
+      orgId: req.orgId!,
       actorId: `customer-portal:${user.sub}`,
       payload: {
         customerId: user.customerId,

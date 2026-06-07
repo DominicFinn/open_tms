@@ -50,6 +50,7 @@ export async function emailTemplateRoutes(server: FastifyInstance) {
     const templates = await server.prisma.emailTemplate.findMany({
       where: { organizationId: org.id },
       orderBy: { eventType: 'asc' },
+      take: 500,
     });
 
     // Also return the list of supported event types so the UI can show "create" for missing ones

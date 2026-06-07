@@ -18,6 +18,8 @@ import { ILocationResolutionService } from './LocationResolutionService.js';
 import { ITradingPartnerRepository } from '../repositories/TradingPartnerRepository.js';
 
 export interface EdiImportOptions {
+  /** Multi-tenancy scope. Required post phase-2 tightening. */
+  orgId?: string;
   partnerId?: string;
   customerId?: string; // Override — if not provided, resolved from partner
   fileName?: string;
@@ -252,8 +254,19 @@ export class EdiImportService implements IEdiImportService {
             }))
           }] : [];
 
-          // Create order
+          // Create order. orgId comes from options (passed by the route
+          // from the JWT) or — for backward compat — falls back to the
+          // customer's orgId. Customer.orgId is NOT NULL post phase 2.
+          let resolvedOrgId = options.orgId;
+          if (!resolvedOrgId) {
+            const cust = await this.customersRepo.findById(orderCustomerId);
+            resolvedOrgId = cust?.orgId;
+          }
+          if (!resolvedOrgId) {
+            throw new Error('Cannot import EDI: no orgId in options and customer has no orgId');
+          }
           const order = await this.ordersRepo.create({
+            orgId: resolvedOrgId,
             orderNumber: parsedOrder.orderNumber,
             poNumber: parsedOrder.poNumber,
             customerId: orderCustomerId,

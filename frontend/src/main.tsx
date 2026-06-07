@@ -79,6 +79,7 @@ import VNextSkillChains from './vnext-design/VNextSkillChains';
 import VNextLoadBoard from './vnext-design/VNextLoadBoard';
 import VNextRoles from './vnext-design/VNextRoles';
 import VNextUsers from './vnext-design/VNextUsers';
+import VNextPortalUsers from './vnext-design/VNextPortalUsers';
 import VNextMarginReports from './vnext-design/VNextMarginReports';
 import VNextCommissions from './vnext-design/VNextCommissions';
 import VNextReportsDashboard from './vnext-design/VNextReportsDashboard';
@@ -91,6 +92,9 @@ import { CustomerPortalLayout } from './customer-portal-layout';
 import CustomerLogin from './pages/customer-portal/CustomerLogin';
 import CustomerDashboard from './pages/customer-portal/CustomerDashboard';
 import CustomerOrders from './pages/customer-portal/CustomerOrders';
+import CustomerOrderDetail from './pages/customer-portal/CustomerOrderDetail';
+import CustomerIssues from './pages/customer-portal/CustomerIssues';
+import CustomerIssueDetail from './pages/customer-portal/CustomerIssueDetail';
 import CustomerShipments from './pages/customer-portal/CustomerShipments';
 import CustomerShipmentDetail from './pages/customer-portal/CustomerShipmentDetail';
 import CustomerDocuments from './pages/customer-portal/CustomerDocuments';
@@ -150,7 +154,7 @@ import VNextQualityCapaEffectiveness from './vnext-design/VNextQualityCapaEffect
 // WMS Pages (VNext)
 import VNextWmsDashboard from './vnext-design/VNextWmsDashboard';
 import VNextWmsOperationsDashboard from './vnext-design/VNextWmsOperationsDashboard';
-import VNextPalletTypes from './vnext-design/VNextPalletTypes';
+import VNextPackagingTypes from './vnext-design/VNextPackagingTypes';
 import VNextWmsZones from './vnext-design/VNextWmsZones';
 import VNextWmsInventory from './vnext-design/VNextWmsInventory';
 import VNextWmsReceiving from './vnext-design/VNextWmsReceiving';
@@ -250,8 +254,11 @@ root.render(
           <Route index element={<CustomerDashboard />} />
           <Route path="orders" element={<CustomerOrders />} />
           <Route path="orders/create" element={<CustomerCreateOrder />} />
+          <Route path="orders/:id" element={<CustomerOrderDetail />} />
           <Route path="shipments" element={<CustomerShipments />} />
           <Route path="shipments/:id" element={<CustomerShipmentDetail />} />
+          <Route path="issues" element={<CustomerIssues />} />
+          <Route path="issues/:id" element={<CustomerIssueDetail />} />
           <Route path="documents" element={<CustomerDocuments />} />
           <Route path="invoices" element={<CustomerInvoices />} />
           <Route path="returns" element={<CustomerReturns />} />
@@ -392,6 +399,7 @@ root.render(
           <Route path="settings/skill-chains" element={<VNextSkillChains />} />
           <Route path="settings/roles" element={<VNextRoles />} />
           <Route path="settings/users" element={<VNextUsers />} />
+          <Route path="settings/portal-users" element={<VNextPortalUsers />} />
           <Route path="settings/shipment-types" element={<VNextShipmentTypes />} />
 
           {/* Finance */}
@@ -416,7 +424,7 @@ root.render(
           {/* WMS */}
           <Route path="wms" element={<VNextWmsDashboard />} />
           <Route path="wms/operations" element={<VNextWmsOperationsDashboard />} />
-          <Route path="wms/pallet-types" element={<VNextPalletTypes />} />
+          <Route path="wms/packaging-types" element={<VNextPackagingTypes />} />
           <Route path="wms/zones" element={<VNextWmsZones />} />
           <Route path="wms/zones/create" element={<VNextWmsCreateZone />} />
           <Route path="wms/zones/:id" element={<VNextWmsZoneDetail />} />

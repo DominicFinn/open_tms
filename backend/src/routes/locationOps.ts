@@ -6,8 +6,11 @@
  */
 
 import { FastifyPluginAsync } from 'fastify';
+import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 
 export const locationOpsRoutes: FastifyPluginAsync = async (server) => {
+  await registerOrgScope(server);
+
   // GET /api/v1/locations/:id/operations — full operational snapshot
   server.get<{ Params: { id: string } }>('/api/v1/locations/:id/operations', {
     schema: {
@@ -30,9 +33,10 @@ export const locationOpsRoutes: FastifyPluginAsync = async (server) => {
     },
   }, async (request, reply) => {
     const { id } = request.params;
+    const orgId = request.orgId!;
 
-    const location = await server.prisma.location.findUnique({
-      where: { id },
+    const location = await server.prisma.location.findFirst({
+      where: { id, orgId },
       select: {
         id: true, name: true, address1: true, city: true, state: true, country: true,
         locationType: true, facilityCapabilities: true, operatingHours: true,
@@ -47,9 +51,11 @@ export const locationOpsRoutes: FastifyPluginAsync = async (server) => {
       return { data: null, error: 'Location not found' };
     }
 
-    // All stops at this location
+    // All stops at this location, scoped to the requesting tenant.
+    // ShipmentStop has no direct orgId, so we scope through the related
+    // Shipment.
     const allStops = await server.prisma.shipmentStop.findMany({
-      where: { locationId: id },
+      where: { locationId: id, shipment: { orgId } },
       select: {
         id: true,
         shipmentId: true,
@@ -84,7 +90,7 @@ export const locationOpsRoutes: FastifyPluginAsync = async (server) => {
 
     // Shipments with this location as origin
     const outboundShipments = await server.prisma.shipment.findMany({
-      where: { originId: id, archived: false, status: { in: ['draft', 'dispatched', 'in_transit'] } },
+      where: { orgId, originId: id, archived: false, status: { in: ['draft', 'dispatched', 'in_transit'] } },
       select: {
         id: true, reference: true, status: true, pickupDate: true,
         customer: { select: { name: true } },
@@ -97,7 +103,7 @@ export const locationOpsRoutes: FastifyPluginAsync = async (server) => {
 
     // Shipments with this location as destination
     const inboundShipments = await server.prisma.shipment.findMany({
-      where: { destinationId: id, archived: false, status: { in: ['dispatched', 'in_transit'] } },
+      where: { orgId, destinationId: id, archived: false, status: { in: ['dispatched', 'in_transit'] } },
       select: {
         id: true, reference: true, status: true, deliveryDate: true,
         customer: { select: { name: true } },

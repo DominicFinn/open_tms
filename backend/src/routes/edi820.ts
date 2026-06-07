@@ -22,11 +22,15 @@ interface PaymentResult {
   message: string;
 }
 
+import { registerOrgScopeForEdi } from '../auth/orgScopeMiddleware.js';
+
 export async function edi820Routes(server: FastifyInstance) {
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
   const tradingPartnerRepo = container.resolve<ITradingPartnerRepository>(TOKENS.ITradingPartnerRepository);
   const prisma = container.resolve<PrismaClient>(TOKENS.PrismaClient);
   const edi820ParseService = new EDI820ParseService();
+
+  await registerOrgScopeForEdi(server);
 
   // Inbound EDI 820 — parse and auto-record payments
   server.post('/api/v1/edi/820/inbound', {
@@ -51,6 +55,7 @@ export async function edi820Routes(server: FastifyInstance) {
 
     // Create transaction log entry
     const logEntry = await tradingPartnerRepo.createLog({
+      orgId: req.orgId!,
       partnerId: body.partnerId || null,
       transactionType: '820',
       direction: 'inbound',

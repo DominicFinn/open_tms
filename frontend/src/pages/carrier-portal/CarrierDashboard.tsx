@@ -16,25 +16,27 @@ import {
 } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
 
+import {
+  getCarrierToken as _getCarrierToken,
+  getCarrierUser as _getCarrierUser,
+  type CarrierSessionUser,
+} from './carrierSession';
+
 function getCarrierToken() {
-  return localStorage.getItem('carrier_token') || '';
+  return _getCarrierToken();
 }
 
-function getCarrierUser() {
-  try {
-    return JSON.parse(localStorage.getItem('carrier_user') || '{}');
-  } catch { return {}; }
+function getCarrierUser(): Partial<CarrierSessionUser> {
+  return _getCarrierUser() ?? {};
 }
 
 function carrierFetch(url: string, opts?: RequestInit) {
-  return fetch(url, {
-    ...opts,
-    headers: {
-      ...opts?.headers,
-      Authorization: `Bearer ${getCarrierToken()}`,
-      'Content-Type': 'application/json',
-    },
-  });
+  const headers: Record<string, string> = {
+    ...(opts?.headers as Record<string, string> | undefined),
+    Authorization: `Bearer ${getCarrierToken()}`,
+  };
+  if (opts?.body != null) headers['Content-Type'] = 'application/json';
+  return fetch(url, { ...opts, headers });
 }
 
 interface TenderOffer {

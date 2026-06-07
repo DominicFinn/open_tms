@@ -22,6 +22,8 @@ export interface ICustomerUserRepository {
   update(id: string, data: UpdateCustomerUserDTO): Promise<CustomerUser>;
   updatePassword(id: string, passwordHash: string): Promise<CustomerUser>;
   updateLastLogin(id: string): Promise<CustomerUser>;
+  applyFailedAttempt(id: string, failedLoginAttempts: number, lockedUntil: Date | null): Promise<CustomerUser>;
+  clearLockout(id: string): Promise<CustomerUser>;
 }
 
 export class CustomerUserRepository implements ICustomerUserRepository {
@@ -70,7 +72,21 @@ export class CustomerUserRepository implements ICustomerUserRepository {
   async updateLastLogin(id: string): Promise<CustomerUser> {
     return this.prisma.customerUser.update({
       where: { id },
-      data: { lastLoginAt: new Date() },
+      data: { lastLoginAt: new Date(), failedLoginAttempts: 0, lockedUntil: null },
+    });
+  }
+
+  async applyFailedAttempt(id: string, failedLoginAttempts: number, lockedUntil: Date | null): Promise<CustomerUser> {
+    return this.prisma.customerUser.update({
+      where: { id },
+      data: { failedLoginAttempts, lockedUntil },
+    });
+  }
+
+  async clearLockout(id: string): Promise<CustomerUser> {
+    return this.prisma.customerUser.update({
+      where: { id },
+      data: { failedLoginAttempts: 0, lockedUntil: null },
     });
   }
 }

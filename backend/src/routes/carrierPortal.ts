@@ -5,11 +5,17 @@ import { ITenderService } from '../services/TenderService.js';
 import { ITenderRepository } from '../repositories/TenderRepository.js';
 import { authenticateCarrierJWT } from '../middleware/jwtAuth.js';
 import { container, TOKENS } from '../di/index.js';
+import { attachOrgScopeFromCarrierUserHook } from '../auth/orgScopeMiddleware.js';
 
 export async function carrierPortalRoutes(server: FastifyInstance) {
   const authService = container.resolve<ICarrierAuthService>(TOKENS.ICarrierAuthService);
   const tenderService = container.resolve<ITenderService>(TOKENS.ITenderService);
   const tenderRepo = container.resolve<ITenderRepository>(TOKENS.ITenderRepository);
+
+  // Multi-tenancy: resolve req.orgId by walking carrierUser.carrierId →
+  // Carrier.orgId. Runs after authenticateCarrierJWT (declared per-route
+  // in preHandler), so req.carrierUser is populated when this fires.
+  server.addHook('preHandler', attachOrgScopeFromCarrierUserHook(server.prisma));
 
   // ── Auth (no middleware needed) ──
 

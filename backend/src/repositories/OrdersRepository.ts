@@ -12,6 +12,24 @@ export interface CreateOrderLineItemDTO {
   dimUnit?: string;
   hazmat?: boolean;
   temperature?: string;
+
+  // Phase 1 additions — surfaced from existing schema
+  unitOfMeasure?: string;        // each | pieces | cases | pallets | cartons | kg | lb
+  unitPriceCents?: number;
+  totalPriceCents?: number;
+  priceCurrency?: string;
+  freightClass?: string;
+  nmfcCode?: string;
+
+  // Phase 1 additions — new fields
+  unNumber?: string;
+  hazmatClass?: string;
+  packingGroup?: string;
+  properShippingName?: string;
+  hsCode?: string;
+  countryOfOrigin?: string;
+  tempMinC?: number;
+  tempMaxC?: number;
 }
 
 export interface CreateTrackableUnitDTO {
@@ -20,10 +38,24 @@ export interface CreateTrackableUnitDTO {
   customTypeName?: string;
   barcode?: string;
   notes?: string;
+  packagingTypeId?: string | null;
   lineItems: CreateOrderLineItemDTO[];
 }
 
+/**
+ * Order-level "packing summary" — what the portal asks customers for instead
+ * of building handling units manually. Auto-generates N TrackableUnits.
+ */
+export interface PackingSummaryDTO {
+  packagingTypeId?: string | null;
+  unitCount: number;
+  stackable?: boolean;
+  notes?: string;
+}
+
 export interface CreateOrderDTO {
+  /** Multi-tenancy scope. Required post phase-2 tightening. */
+  orgId: string;
   orderNumber: string;
   poNumber?: string;
   customerId: string;
@@ -48,6 +80,13 @@ export interface CreateOrderDTO {
 
   // Line items (legacy - for backward compatibility)
   lineItems?: CreateOrderLineItemDTO[];
+
+  /**
+   * Order-level packing summary. When provided (and trackableUnits is not),
+   * the create command auto-generates `unitCount` TrackableUnits with the
+   * given packaging type + stackable flag. This is the Phase 1 portal flow.
+   */
+  packingSummary?: PackingSummaryDTO;
 
   // Additional info
   specialInstructions?: string;
@@ -104,10 +143,10 @@ export interface OrderWithRelations extends Order {
 }
 
 export interface IOrdersRepository {
-  all(): Promise<OrderWithRelations[]>;
-  findById(id: string): Promise<OrderWithRelations | null>;
-  findByOrderNumber(orderNumber: string): Promise<OrderWithRelations | null>;
-  findByCustomerId(customerId: string, options?: { status?: string; limit?: number; offset?: number }): Promise<OrderWithRelations[]>;
+  all(orgId?: string | null): Promise<OrderWithRelations[]>;
+  findById(id: string, orgId?: string | null): Promise<OrderWithRelations | null>;
+  findByOrderNumber(orderNumber: string, orgId?: string | null): Promise<OrderWithRelations | null>;
+  findByCustomerId(customerId: string, options?: { orgId?: string | null; status?: string; limit?: number; offset?: number }): Promise<OrderWithRelations[]>;
   create(data: CreateOrderDTO): Promise<OrderWithRelations>;
   update(id: string, data: UpdateOrderDTO): Promise<Order>;
   archive(id: string): Promise<Order>;
@@ -136,9 +175,13 @@ export interface IOrdersRepository {
 export class OrdersRepository implements IOrdersRepository {
   constructor(private prisma: PrismaClient) {}
 
-  async all(): Promise<OrderWithRelations[]> {
+  async all(orgId?: string | null): Promise<OrderWithRelations[]> {
+    const where: any = { archived: false };
+    // Scope to the requesting tenant when supplied. Legacy NULL-orgId
+    // rows are excluded from scoped queries.
+    if (orgId) where.orgId = orgId;
     return this.prisma.order.findMany({
-      where: { archived: false },
+      where,
       include: {
         customer: {
           select: {
@@ -183,8 +226,9 @@ export class OrdersRepository implements IOrdersRepository {
     }) as Promise<OrderWithRelations[]>;
   }
 
-  async findByCustomerId(customerId: string, options?: { status?: string; limit?: number; offset?: number }): Promise<OrderWithRelations[]> {
+  async findByCustomerId(customerId: string, options?: { orgId?: string | null; status?: string; limit?: number; offset?: number }): Promise<OrderWithRelations[]> {
     const where: any = { customerId, archived: false };
+    if (options?.orgId) where.orgId = options.orgId;
     if (options?.status) {
       where.status = options.status;
     }
@@ -236,9 +280,11 @@ export class OrdersRepository implements IOrdersRepository {
     }) as Promise<OrderWithRelations[]>;
   }
 
-  async findById(id: string): Promise<OrderWithRelations | null> {
+  async findById(id: string, orgId?: string | null): Promise<OrderWithRelations | null> {
+    const where: any = { id, archived: false };
+    if (orgId) where.orgId = orgId;
     return this.prisma.order.findFirst({
-      where: { id, archived: false },
+      where,
       include: {
         customer: {
           select: {
@@ -282,9 +328,11 @@ export class OrdersRepository implements IOrdersRepository {
     }) as Promise<OrderWithRelations | null>;
   }
 
-  async findByOrderNumber(orderNumber: string): Promise<OrderWithRelations | null> {
+  async findByOrderNumber(orderNumber: string, orgId?: string | null): Promise<OrderWithRelations | null> {
+    const where: any = { orderNumber, archived: false };
+    if (orgId) where.orgId = orgId;
     return this.prisma.order.findFirst({
-      where: { orderNumber, archived: false },
+      where,
       include: {
         customer: {
           select: {

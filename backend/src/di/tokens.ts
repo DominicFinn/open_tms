@@ -128,6 +128,10 @@ export const TOKENS = {
   IPutawayRuleEvaluator: Symbol.for('IPutawayRuleEvaluator'),
   ICartonizationService: Symbol.for('ICartonizationService'),
 
+  // Order line-item rating tokens (Phase 1)
+  IModeRulesService: Symbol.for('IModeRulesService'),
+  IOrderCartonizationService: Symbol.for('IOrderCartonizationService'),
+
   // Infrastructure tokens
   PrismaClient: Symbol.for('PrismaClient'),
   IFileStorageProvider: Symbol.for('IFileStorageProvider'),

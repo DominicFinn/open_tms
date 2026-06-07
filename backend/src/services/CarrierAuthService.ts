@@ -1,5 +1,14 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
 import { ICarrierUserRepository } from '../repositories/CarrierUserRepository.js';
+import {
+  computeLockoutStatus,
+  isLockedOut,
+  LOCKOUT_MINUTES,
+  LockoutStatus,
+  MAX_FAILED_ATTEMPTS,
+  minutesUntilUnlocked,
+  nextFailedAttemptState,
+} from './auth/lockout.js';
 
 if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
   throw new Error('JWT_SECRET environment variable is required in production');
@@ -7,8 +16,6 @@ if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
 const JWT_SECRET = process.env.JWT_SECRET || 'open-tms-dev-secret-change-in-production';
 const CARRIER_JWT_ISSUER = 'open-tms-carrier';
 const TOKEN_EXPIRY_HOURS = 24;
-const MAX_FAILED_ATTEMPTS = 5;
-const LOCKOUT_MINUTES = 15;
 
 export interface CarrierJWTPayload {
   sub: string;
@@ -38,6 +45,8 @@ export interface PasswordValidation {
   errors: string[];
 }
 
+export type { LockoutStatus } from './auth/lockout.js';
+
 export interface ICarrierAuthService {
   register(carrierId: string, email: string, password: string, name: string, role?: string): Promise<any>;
   login(email: string, password: string): Promise<LoginResult>;
@@ -45,19 +54,9 @@ export interface ICarrierAuthService {
   adminResetPassword(userId: string, newPassword: string): Promise<void>;
   validatePasswordStrength(password: string): PasswordValidation;
   verifyToken(token: string): CarrierJWTPayload;
+  unlockAccount(userId: string): Promise<void>;
+  getLockoutStatus(userId: string): Promise<LockoutStatus>;
 }
-
-// In-memory failed attempt tracking (per email)
-// In production, this would use Redis or a DB column
-const failedAttempts = new Map<string, { count: number; lockedUntil: Date | null }>();
-
-// Prune expired lockout entries every 15 minutes to prevent unbounded growth
-setInterval(() => {
-  const now = new Date();
-  for (const [key, value] of failedAttempts) {
-    if (value.lockedUntil && value.lockedUntil < now) failedAttempts.delete(key);
-  }
-}, 15 * 60 * 1000).unref();
 
 export class CarrierAuthService implements ICarrierAuthService {
   constructor(private carrierUserRepo: ICarrierUserRepository) {}
@@ -90,38 +89,35 @@ export class CarrierAuthService implements ICarrierAuthService {
   }
 
   async login(email: string, password: string): Promise<LoginResult> {
-    // Check lockout
-    const attempts = failedAttempts.get(email);
-    if (attempts?.lockedUntil && attempts.lockedUntil > new Date()) {
-      const minutesLeft = Math.ceil((attempts.lockedUntil.getTime() - Date.now()) / 60000);
+    const user = await this.carrierUserRepo.findByEmail(email);
+    if (!user) {
+      // No user row to track attempts against; surface the generic error so we
+      // don't leak email-existence information.
+      throw new Error('Invalid email or password');
+    }
+
+    if (isLockedOut(user)) {
+      const minutesLeft = minutesUntilUnlocked(user);
       throw new Error(`Account is temporarily locked. Try again in ${minutesLeft} minutes.`);
     }
 
-    const user = await this.carrierUserRepo.findByEmail(email);
-    if (!user) {
-      this.recordFailedAttempt(email);
-      throw new Error('Invalid email or password');
-    }
     if (!user.active) throw new Error('Account is deactivated');
 
     const valid = await this.verifyPassword(password, user.passwordHash);
     if (!valid) {
-      this.recordFailedAttempt(email);
-      const current = failedAttempts.get(email);
-      const remaining = MAX_FAILED_ATTEMPTS - (current?.count || 0);
-      if (remaining <= 0) {
+      const next = nextFailedAttemptState(user);
+      await this.carrierUserRepo.applyFailedAttempt(user.id, next.failedLoginAttempts, next.lockedUntil);
+      if (next.triggeredLock) {
         throw new Error(`Account is temporarily locked due to too many failed attempts. Try again in ${LOCKOUT_MINUTES} minutes.`);
       }
+      const remaining = MAX_FAILED_ATTEMPTS - next.failedLoginAttempts;
       if (remaining <= 2) {
         throw new Error(`Invalid email or password. ${remaining} attempt(s) remaining before lockout.`);
       }
       throw new Error('Invalid email or password');
     }
 
-    // Clear failed attempts on successful login
-    failedAttempts.delete(email);
-
-    // Update last login
+    // updateLastLogin also clears any lingering lockout state
     await this.carrierUserRepo.updateLastLogin(user.id);
 
     const carrier = (user as any).carrier;
@@ -169,9 +165,16 @@ export class CarrierAuthService implements ICarrierAuthService {
 
     const newHash = await this.hashPassword(newPassword);
     await this.carrierUserRepo.updatePassword(userId, newHash);
+    await this.carrierUserRepo.clearLockout(userId);
+  }
 
-    // Clear any lockout for this user's email
-    failedAttempts.delete(user.email);
+  async unlockAccount(userId: string): Promise<void> {
+    await this.carrierUserRepo.clearLockout(userId);
+  }
+
+  async getLockoutStatus(userId: string): Promise<LockoutStatus> {
+    const user = await this.carrierUserRepo.findById(userId);
+    return computeLockoutStatus(user);
   }
 
   verifyToken(token: string): CarrierJWTPayload {
@@ -202,15 +205,6 @@ export class CarrierAuthService implements ICarrierAuthService {
   }
 
   // ── Private helpers ──
-
-  private recordFailedAttempt(email: string): void {
-    const current = failedAttempts.get(email) || { count: 0, lockedUntil: null };
-    current.count += 1;
-    if (current.count >= MAX_FAILED_ATTEMPTS) {
-      current.lockedUntil = new Date(Date.now() + LOCKOUT_MINUTES * 60 * 1000);
-    }
-    failedAttempts.set(email, current);
-  }
 
   private generateToken(claims: Omit<CarrierJWTPayload, 'iat' | 'exp' | 'iss'>): string {
     const now = Math.floor(Date.now() / 1000);

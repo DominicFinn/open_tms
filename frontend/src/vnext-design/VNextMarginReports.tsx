@@ -3,6 +3,7 @@ import { Loader2 } from 'lucide-react';
 
 import { API_URL } from '../api';
 import { Card, CardContent } from '@/components/ui/card';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Input } from '@/components/ui/input';
 import {
   Table,
@@ -137,18 +138,18 @@ export default function VNextMarginReports() {
               <TabsTrigger value="time">Over Time</TabsTrigger>
             </TabsList>
           </Tabs>
-          <Input
+          <DatePicker
             type="date"
             value={dateFrom}
             onChange={e => setDateFrom(e.target.value)}
-            className="w-[150px]"
+            className="w-[170px]"
           />
           <span className="text-sm text-muted-foreground">to</span>
-          <Input
+          <DatePicker
             type="date"
             value={dateTo}
             onChange={e => setDateTo(e.target.value)}
-            className="w-[150px]"
+            className="w-[170px]"
           />
         </div>
       </Card>

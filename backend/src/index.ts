@@ -11,12 +11,18 @@ import { TOKENS } from './di/tokens.js';
 import { IQueueAdapter } from './queue/IQueueAdapter.js';
 import { QUEUES } from './queue/events.js';
 import { createInboundWebhookWorker } from './workers/inboundWebhookWorker.js';
+import { createDocumentGenerationWorker } from './workers/documentGenerationWorker.js';
+import type { IDocumentGenerationService } from './services/DocumentGenerationService.js';
 import { createEtaMonitorWorker, registerEtaMonitorSchedule, ETA_MONITOR_QUEUE } from './workers/etaMonitorWorker.js';
 import { createSlaMonitorWorker, registerSlaMonitorSchedule, SLA_MONITOR_QUEUE } from './workers/slaMonitorWorker.js';
 import { createCutoffMonitorWorker, registerCutoffMonitorSchedule, CUTOFF_MONITOR_QUEUE } from './workers/cutoffMonitorWorker.js';
 import { ShipmentCutoffMonitorService } from './services/cutoff/ShipmentCutoffMonitorService.js';
 import { createWaveAutoReleaseWorker, registerWaveAutoReleaseSchedule, WAVE_AUTO_RELEASE_QUEUE } from './workers/waveAutoReleaseWorker.js';
 import { WaveAutoReleaseService } from './services/waves/WaveAutoReleaseService.js';
+import { createOrderAutoArchiveWorker, registerOrderAutoArchiveSchedule, ORDER_AUTO_ARCHIVE_QUEUE } from './workers/orderAutoArchiveWorker.js';
+import { OrderAutoArchiveService } from './services/OrderAutoArchiveService.js';
+import { registerEventHandlers } from './events/registerHandlers.js';
+import type { IEventBus } from './events/IEventBus.js';
 import { createWebhookRetryWorker, registerWebhookRetrySchedule, WEBHOOK_RETRY_QUEUE } from './workers/webhookRetryWorker.js';
 import { CustomerWebhookDeliveryService } from './services/webhooks/CustomerWebhookDeliveryService.js';
 import {
@@ -97,7 +103,8 @@ import { rmaRoutes } from './routes/rma.js';
 import { packAuditRoutes } from './routes/packAudit.js';
 import { cutoffMonitorRoutes } from './routes/cutoffMonitor.js';
 import { warehouseOperationsDashboardRoutes } from './routes/warehouseOperationsDashboard.js';
-import { palletTypesRoutes } from './routes/palletTypes.js';
+import { packagingTypesRoutes } from './routes/packagingTypes.js';
+import { orderLineItemRulesRoutes } from './routes/orderLineItemRules.js';
 import { containerIntelligenceRoutes } from './routes/containerIntelligence.js';
 import { edi940Routes } from './routes/edi940.js';
 import { customerRmaApiRoutes } from './routes/customerRmaApi.js';
@@ -278,7 +285,8 @@ async function start() {
     await app.register(packAuditRoutes);
     await app.register(cutoffMonitorRoutes);
     await app.register(warehouseOperationsDashboardRoutes);
-    await app.register(palletTypesRoutes);
+    await app.register(packagingTypesRoutes);
+    await app.register(orderLineItemRulesRoutes);
     await app.register(containerIntelligenceRoutes);
     await app.register(edi940Routes);
     await app.register(customerRmaApiRoutes);
@@ -313,10 +321,33 @@ async function start() {
     // Register embedded workers ONLY if no separate worker container is running.
     // Set DISABLE_EMBEDDED_WORKERS=true when using `docker compose up` with the worker service.
     if (process.env.DISABLE_EMBEDDED_WORKERS !== 'true') {
+      // CQRS event handlers (projections, audit, notifications) — wired in the
+      // backend process for dev. In prod with a separate worker container,
+      // DISABLE_EMBEDDED_WORKERS=true keeps these out so they aren't processed twice.
+      try {
+        const eventBus = container.resolve<IEventBus>(TOKENS.IEventBus);
+        await registerEventHandlers(eventBus, server.prisma);
+        await eventBus.start();
+        server.log.info('Embedded event handlers registered (projections + audit + notifications)');
+      } catch (err) {
+        server.log.warn('Failed to register embedded event handlers: ' + (err as Error).message);
+      }
+
       const deliveryService = new OrderDeliveryService(server.prisma);
       const arrivalCriteriaService = new ArrivalCriteriaEvaluationService(server.prisma, deliveryService);
       // Legacy outbound carrier/tracking workers removed — replaced by Edi856AutoSendHandler + Edi810AutoSendHandler
       await queue.subscribe(QUEUES.INBOUND_WEBHOOK, createInboundWebhookWorker(server.prisma, deliveryService, arrivalCriteriaService));
+
+      // Async document generation worker. Pulls PDF rendering off the
+      // request path; clients poll /api/v1/documents/jobs/:correlationId
+      // for completion.
+      try {
+        const docService = container.resolve<IDocumentGenerationService>(TOKENS.IDocumentGenerationService);
+        await queue.subscribe(QUEUES.DOCUMENT_GENERATION, createDocumentGenerationWorker(docService, server.prisma));
+        server.log.info('Document generation worker registered');
+      } catch (err) {
+        server.log.warn('Document generation worker failed to register: ' + (err as Error).message);
+      }
 
       // ETA Monitor — register cron schedule and worker if routing provider is configured
       if (process.env.ROUTING_PROVIDER && process.env.ROUTING_PROVIDER !== 'none') {
@@ -359,6 +390,21 @@ async function start() {
         }
       } catch (err) {
         server.log.warn('Wave auto-release worker failed to register: ' + (err as Error).message);
+      }
+
+      // Order auto-archive worker — archives delivered/cancelled orders after the retention window
+      try {
+        const archiveBoss = (queue as any).boss;
+        if (archiveBoss) {
+          const commandBus = container.resolve<any>(TOKENS.ICommandBus);
+          const retentionDays = Number(process.env.ORDER_AUTO_ARCHIVE_DAYS) || 30;
+          const archiveService = new OrderAutoArchiveService(server.prisma, commandBus, retentionDays);
+          await registerOrderAutoArchiveSchedule(archiveBoss);
+          await queue.subscribe(ORDER_AUTO_ARCHIVE_QUEUE, createOrderAutoArchiveWorker(archiveService));
+          server.log.info(`Order auto-archive worker registered (retention: ${retentionDays} days)`);
+        }
+      } catch (err) {
+        server.log.warn('Order auto-archive worker failed to register: ' + (err as Error).message);
       }
 
       // Webhook retry worker — re-sends failed CustomerWebhookDelivery rows with exponential backoff

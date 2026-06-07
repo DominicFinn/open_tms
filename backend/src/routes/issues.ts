@@ -13,6 +13,13 @@ import { ICommandBus } from '../commands/CommandBus.js';
 import { CREATE_ISSUE } from '../commands/issues/CreateIssueCommand.js';
 import { UPDATE_ISSUE } from '../commands/issues/UpdateIssueCommand.js';
 import { ESCALATE_ISSUE } from '../commands/issues/EscalateIssueCommand.js';
+import { ADD_ISSUE_LABEL } from '../commands/issues/AddIssueLabelCommand.js';
+import { REMOVE_ISSUE_LABEL } from '../commands/issues/RemoveIssueLabelCommand.js';
+import {
+  CREATE_ISSUE_LABEL,
+  UPDATE_ISSUE_LABEL,
+  DELETE_ISSUE_LABEL,
+} from '../commands/issueLabels/index.js';
 
 export const issueRoutes: FastifyPluginAsync = async (server) => {
   const issueRepo = container.resolve<IIssueRepository>(TOKENS.IIssueRepository);
@@ -427,31 +434,48 @@ export const issueRoutes: FastifyPluginAsync = async (server) => {
     },
   }, async (req: FastifyRequest<{ Params: { id: string } }>, reply) => {
     const body = req.body as { labelId: string };
-    try {
-      const assignment = await prisma.issueLabelAssignment.create({
-        data: { issueId: req.params.id, labelId: body.labelId },
-        include: { label: true },
-      });
-      // Update labels cache in read model
-      await issueRepo.updateLabelsCache(req.params.id);
-      return { data: assignment, error: null };
-    } catch (err: any) {
-      if (err.code === 'P2002') {
-        reply.code(409);
-        return { data: null, error: 'Label already assigned' };
-      }
-      throw err;
+    const orgId = (req as any).orgId || 'default-org';
+    const actorId = req.user?.sub ?? null;
+
+    const result = await commandBus.dispatch({
+      type: ADD_ISSUE_LABEL,
+      orgId,
+      actorId,
+      payload: { issueId: req.params.id, labelId: body.labelId },
+      metadata: { correlationId: crypto.randomUUID(), source: 'api' },
+    });
+
+    if (!result.success) {
+      reply.code(400);
+      return { data: null, error: result.error ?? 'Failed to add label' };
     }
+    const data = result.data as { alreadyAssigned: boolean };
+    if (data.alreadyAssigned) {
+      reply.code(409);
+      return { data: null, error: 'Label already assigned' };
+    }
+    return { data: result.data, error: null };
   });
 
   // DELETE /api/v1/issues/:id/labels/:labelId — remove label
   server.delete<{ Params: { id: string; labelId: string } }>('/api/v1/issues/:id/labels/:labelId', {
     schema: { tags: ['Issues'], summary: 'Remove a label from an issue' },
   }, async (req, reply) => {
-    await prisma.issueLabelAssignment.deleteMany({
-      where: { issueId: req.params.id, labelId: req.params.labelId },
+    const orgId = (req as any).orgId || 'default-org';
+    const actorId = req.user?.sub ?? null;
+
+    const result = await commandBus.dispatch({
+      type: REMOVE_ISSUE_LABEL,
+      orgId,
+      actorId,
+      payload: { issueId: req.params.id, labelId: req.params.labelId },
+      metadata: { correlationId: crypto.randomUUID(), source: 'api' },
     });
-    await issueRepo.updateLabelsCache(req.params.id);
+
+    if (!result.success) {
+      reply.code(400);
+      return { data: null, error: result.error ?? 'Failed to remove label' };
+    }
     return { data: { success: true }, error: null };
   });
 
@@ -491,6 +515,7 @@ export const issueRoutes: FastifyPluginAsync = async (server) => {
         authorName: c.authorName,
         authorType: c.authorType,
         body: c.body,
+        visibleToCustomer: c.visibleToCustomer,
         timestamp: c.createdAt.toISOString(),
       })),
     ].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
@@ -564,19 +589,29 @@ export const issueRoutes: FastifyPluginAsync = async (server) => {
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const body = req.body as { name: string; color?: string };
     const orgId = (req as any).orgId || 'default-org';
-    try {
-      const label = await prisma.issueLabel.create({
-        data: { orgId, name: body.name, color: body.color || '#6B7280' },
-      });
-      reply.code(201);
-      return { data: label, error: null };
-    } catch (err: any) {
-      if (err.code === 'P2002') {
+    const actorId = req.user?.sub ?? null;
+
+    const result = await commandBus.dispatch({
+      type: CREATE_ISSUE_LABEL,
+      orgId,
+      actorId,
+      payload: { name: body.name, color: body.color },
+      metadata: { correlationId: crypto.randomUUID(), source: 'api' },
+    });
+
+    if (!result.success) {
+      // Prisma's unique-constraint violation surfaces as a generic error here;
+      // pattern-match on the error message because the command layer doesn't
+      // re-throw raw Prisma codes.
+      if ((result.error || '').includes('Unique constraint') || (result.error || '').includes('P2002')) {
         reply.code(409);
         return { data: null, error: 'Label with this name already exists' };
       }
-      throw err;
+      reply.code(400);
+      return { data: null, error: result.error ?? 'Failed to create label' };
     }
+    reply.code(201);
+    return { data: result.data, error: null };
   });
 
   // PUT /api/v1/issue-labels/:id
@@ -594,29 +629,53 @@ export const issueRoutes: FastifyPluginAsync = async (server) => {
     },
   }, async (req, reply) => {
     const body = req.body as { name?: string; color?: string };
-    try {
-      const label = await prisma.issueLabel.update({
-        where: { id: req.params.id },
-        data: body,
-      });
-      return { data: label, error: null };
-    } catch (err: any) {
-      reply.code(404);
-      return { data: null, error: 'Label not found' };
+    const orgId = (req as any).orgId || 'default-org';
+    const actorId = req.user?.sub ?? null;
+
+    const result = await commandBus.dispatch({
+      type: UPDATE_ISSUE_LABEL,
+      orgId,
+      actorId,
+      payload: { id: req.params.id, data: body },
+      metadata: { correlationId: crypto.randomUUID(), source: 'api' },
+    });
+
+    if (!result.success) {
+      // Prisma raises P2025 ("record not found") via the message
+      if ((result.error || '').includes('Record to update not found') || (result.error || '').includes('P2025')) {
+        reply.code(404);
+        return { data: null, error: 'Label not found' };
+      }
+      reply.code(400);
+      return { data: null, error: result.error ?? 'Failed to update label' };
     }
+    return { data: result.data, error: null };
   });
 
   // DELETE /api/v1/issue-labels/:id
   server.delete<{ Params: { id: string } }>('/api/v1/issue-labels/:id', {
     schema: { tags: ['Issue Labels'], summary: 'Delete an issue label' },
   }, async (req, reply) => {
-    try {
-      await prisma.issueLabel.delete({ where: { id: req.params.id } });
-      return { data: { success: true }, error: null };
-    } catch (err: any) {
-      reply.code(404);
-      return { data: null, error: 'Label not found' };
+    const orgId = (req as any).orgId || 'default-org';
+    const actorId = req.user?.sub ?? null;
+
+    const result = await commandBus.dispatch({
+      type: DELETE_ISSUE_LABEL,
+      orgId,
+      actorId,
+      payload: { id: req.params.id },
+      metadata: { correlationId: crypto.randomUUID(), source: 'api' },
+    });
+
+    if (!result.success) {
+      if ((result.error || '').includes('Record to delete') || (result.error || '').includes('P2025')) {
+        reply.code(404);
+        return { data: null, error: 'Label not found' };
+      }
+      reply.code(400);
+      return { data: null, error: result.error ?? 'Failed to delete label' };
     }
+    return { data: { success: true }, error: null };
   });
 
   // ─── Kanban Views ────────────────────────────────────────────────────────

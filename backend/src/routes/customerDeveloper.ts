@@ -12,9 +12,20 @@
 
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import crypto from 'crypto';
 import { createHash, randomBytes } from 'crypto';
 import { authenticateCustomerJWT } from '../middleware/jwtAuth.js';
 import { CustomerWebhookDeliveryService } from '../services/webhooks/CustomerWebhookDeliveryService.js';
+import { container, TOKENS } from '../di/index.js';
+import { ICommandBus } from '../commands/CommandBus.js';
+import { CREATE_API_KEY, UPDATE_API_KEY, DELETE_API_KEY, type CreateApiKeyResult } from '../commands/apiKeys/index.js';
+import {
+  CREATE_CUSTOMER_WEBHOOK,
+  UPDATE_CUSTOMER_WEBHOOK,
+  DELETE_CUSTOMER_WEBHOOK,
+  ROTATE_WEBHOOK_SECRET,
+  type RotateWebhookSecretResult,
+} from '../commands/customerWebhooks/index.js';
 
 function hashApiKey(key: string): string {
   return createHash('sha256').update(key).digest('hex');
@@ -44,6 +55,15 @@ const ALLOWED_EVENT_PATTERNS = [
 
 export async function customerDeveloperRoutes(server: FastifyInstance) {
   const deliveryService = new CustomerWebhookDeliveryService(server.prisma);
+  const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
+
+  // Customer-portal users authenticate via req.customerUser, not req.user;
+  // the surrounding tables don't carry orgId so for now we resolve a fallback
+  // org for the command envelope. See orgId-survey snag for the bigger fix.
+  const resolveOrgId = async (): Promise<string> => {
+    const org = await server.prisma.organization.findFirst({ select: { id: true } });
+    return org?.id ?? 'default-org';
+  };
 
   // ── Dashboard summary ────────────────────────────────────────────────
 
@@ -105,12 +125,35 @@ export async function customerDeveloperRoutes(server: FastifyInstance) {
     const customerId = req.customerUser!.customerId;
     const body = z.object({ name: z.string().min(1).max(100) }).parse((req as any).body);
     const { key, keyHash, keyPrefix } = generateApiKey();
-    const created = await server.prisma.apiKey.create({
-      data: { name: body.name, keyHash, keyPrefix, active: true, customerId },
-      select: { id: true, name: true, keyPrefix: true, active: true, createdAt: true },
+    const orgId = await resolveOrgId();
+
+    const result = await commandBus.dispatch({
+      type: CREATE_API_KEY,
+      orgId,
+      actorId: req.customerUser?.sub ?? null,
+      payload: { name: body.name, customerId, keyHash, keyPrefix },
+      metadata: { correlationId: crypto.randomUUID(), source: 'customer-portal' },
     });
+
+    if (!result.success) {
+      reply.code(400);
+      return { data: null, error: result.error ?? 'Failed to create API key' };
+    }
+
+    const created = result.data as CreateApiKeyResult;
     reply.code(201);
-    return { data: { ...created, key }, error: null };
+    return {
+      data: {
+        id: created.id,
+        name: created.name,
+        keyPrefix: created.keyPrefix,
+        active: created.active,
+        createdAt: created.createdAt,
+        // Plaintext key returned ONCE — never logged or persisted by the command.
+        key,
+      },
+      error: null,
+    };
   });
 
   server.put('/api/v1/customer-portal/developer/api-keys/:id', {
@@ -127,14 +170,27 @@ export async function customerDeveloperRoutes(server: FastifyInstance) {
     const customerId = req.customerUser!.customerId;
     const { id } = req.params as { id: string };
     const body = z.object({ name: z.string().min(1).max(100).optional(), active: z.boolean().optional() }).parse((req as any).body);
+    // Cross-tenant guard before dispatching — the customer-facing UpdateApiKey
+    // command itself is org-scoped via orgId but doesn't know about
+    // customerId. Refusing here keeps a malicious customer from updating
+    // someone else's key by ID.
     const existing = await server.prisma.apiKey.findFirst({ where: { id, customerId }, select: { id: true } });
     if (!existing) { reply.code(404); return { data: null, error: 'API key not found' }; }
-    const updated = await server.prisma.apiKey.update({
-      where: { id },
-      data: body,
-      select: { id: true, name: true, keyPrefix: true, active: true, lastUsedAt: true, updatedAt: true },
+
+    const orgId = await resolveOrgId();
+    const result = await commandBus.dispatch({
+      type: UPDATE_API_KEY,
+      orgId,
+      actorId: req.customerUser?.sub ?? null,
+      payload: { id, data: body },
+      metadata: { correlationId: crypto.randomUUID(), source: 'customer-portal' },
     });
-    return { data: updated, error: null };
+
+    if (!result.success) {
+      reply.code(400);
+      return { data: null, error: result.error ?? 'Failed to update API key' };
+    }
+    return { data: result.data, error: null };
   });
 
   server.delete('/api/v1/customer-portal/developer/api-keys/:id', {
@@ -145,7 +201,20 @@ export async function customerDeveloperRoutes(server: FastifyInstance) {
     const { id } = req.params as { id: string };
     const existing = await server.prisma.apiKey.findFirst({ where: { id, customerId }, select: { id: true } });
     if (!existing) { reply.code(404); return { data: null, error: 'API key not found' }; }
-    await server.prisma.apiKey.delete({ where: { id } });
+
+    const orgId = await resolveOrgId();
+    const result = await commandBus.dispatch({
+      type: DELETE_API_KEY,
+      orgId,
+      actorId: req.customerUser?.sub ?? null,
+      payload: { id },
+      metadata: { correlationId: crypto.randomUUID(), source: 'customer-portal' },
+    });
+
+    if (!result.success) {
+      reply.code(400);
+      return { data: null, error: result.error ?? 'Failed to revoke API key' };
+    }
     return { data: { success: true }, error: null };
   });
 
@@ -200,17 +269,29 @@ export async function customerDeveloperRoutes(server: FastifyInstance) {
       return { data: null, error: `Unsupported event patterns: ${invalid.join(', ')}` };
     }
 
-    const org = await server.prisma.organization.findFirst({ select: { id: true } });
-    const created = await server.prisma.customerWebhook.create({
-      data: {
+    const orgId = await resolveOrgId();
+    const result = await commandBus.dispatch({
+      type: CREATE_CUSTOMER_WEBHOOK,
+      orgId,
+      actorId: user.sub,
+      payload: {
         customerId: user.customerId,
-        orgId: org?.id ?? 'default-org',
         name: body.name,
         url: body.url,
         secret: generateWebhookSecret(),
         events: body.events,
         description: body.description ?? null,
       },
+      metadata: { correlationId: crypto.randomUUID(), source: 'customer-portal' },
+    });
+
+    if (!result.success) {
+      reply.code(400);
+      return { data: null, error: result.error ?? 'Failed to register webhook' };
+    }
+
+    const created = await server.prisma.customerWebhook.findUnique({
+      where: { id: (result.data as { id: string }).id },
     });
     reply.code(201);
     return { data: created, error: null };
@@ -254,7 +335,21 @@ export async function customerDeveloperRoutes(server: FastifyInstance) {
       }
     }
 
-    const updated = await server.prisma.customerWebhook.update({ where: { id }, data: body });
+    const orgId = await resolveOrgId();
+    const result = await commandBus.dispatch({
+      type: UPDATE_CUSTOMER_WEBHOOK,
+      orgId,
+      actorId: req.customerUser?.sub ?? null,
+      payload: { id, customerId, data: body },
+      metadata: { correlationId: crypto.randomUUID(), source: 'customer-portal' },
+    });
+
+    if (!result.success) {
+      reply.code(400);
+      return { data: null, error: result.error ?? 'Failed to update webhook' };
+    }
+
+    const updated = await server.prisma.customerWebhook.findUnique({ where: { id } });
     return { data: updated, error: null };
   });
 
@@ -266,7 +361,20 @@ export async function customerDeveloperRoutes(server: FastifyInstance) {
     const { id } = req.params as { id: string };
     const existing = await server.prisma.customerWebhook.findFirst({ where: { id, customerId }, select: { id: true } });
     if (!existing) { reply.code(404); return { data: null, error: 'Webhook not found' }; }
-    await server.prisma.customerWebhook.delete({ where: { id } });
+
+    const orgId = await resolveOrgId();
+    const result = await commandBus.dispatch({
+      type: DELETE_CUSTOMER_WEBHOOK,
+      orgId,
+      actorId: req.customerUser?.sub ?? null,
+      payload: { id, customerId },
+      metadata: { correlationId: crypto.randomUUID(), source: 'customer-portal' },
+    });
+
+    if (!result.success) {
+      reply.code(400);
+      return { data: null, error: result.error ?? 'Failed to delete webhook' };
+    }
     return { data: { success: true }, error: null };
   });
 
@@ -278,8 +386,22 @@ export async function customerDeveloperRoutes(server: FastifyInstance) {
     const { id } = req.params as { id: string };
     const existing = await server.prisma.customerWebhook.findFirst({ where: { id, customerId }, select: { id: true } });
     if (!existing) { reply.code(404); return { data: null, error: 'Webhook not found' }; }
-    const updated = await server.prisma.customerWebhook.update({ where: { id }, data: { secret: generateWebhookSecret() } });
-    return { data: { secret: updated.secret }, error: null };
+
+    const orgId = await resolveOrgId();
+    const result = await commandBus.dispatch({
+      type: ROTATE_WEBHOOK_SECRET,
+      orgId,
+      actorId: req.customerUser?.sub ?? null,
+      payload: { id, customerId, newSecret: generateWebhookSecret() },
+      metadata: { correlationId: crypto.randomUUID(), source: 'customer-portal' },
+    });
+
+    if (!result.success) {
+      reply.code(400);
+      return { data: null, error: result.error ?? 'Failed to rotate secret' };
+    }
+    const data = result.data as RotateWebhookSecretResult;
+    return { data: { secret: data.secret }, error: null };
   });
 
   server.post('/api/v1/customer-portal/developer/webhooks/:id/test', {

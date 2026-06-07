@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 
 import { API_URL } from '../../api';
+import { saveCarrierSession } from './carrierSession';
 import { Logo } from '@/components/brand/Logo';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,8 +33,7 @@ export default function CarrierLogin() {
       if (json.error) {
         setError(json.error);
       } else {
-        localStorage.setItem('carrier_token', json.data.token);
-        localStorage.setItem('carrier_user', JSON.stringify(json.data.user));
+        saveCarrierSession(json.data.token, json.data.user);
         navigate('/carrier-portal');
       }
     } catch {
@@ -49,10 +49,15 @@ export default function CarrierLogin() {
         <CardHeader className="items-center text-center">
           <div className="mb-2 flex flex-col items-center gap-4">
             <Logo size="lg" showWordmark={false} />
+            <span className="inline-flex items-center rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-primary">
+              For carriers &amp; brokers
+            </span>
             <h1 className="text-2xl font-bold tracking-tight">
               Carrier <span className="text-primary">Portal</span>
             </h1>
-            <p className="text-sm text-muted-foreground">Sign in to view tenders and submit bids</p>
+            <p className="text-sm text-muted-foreground">
+              View load tenders, submit bids, and track your award &amp; bid history.
+            </p>
           </div>
         </CardHeader>
         <CardContent>
@@ -99,6 +104,17 @@ export default function CarrierLogin() {
               {loading ? 'Signing in...' : 'Sign in'}
             </Button>
           </form>
+
+          <div className="mt-6 border-t border-border pt-4 text-center text-xs text-muted-foreground">
+            Wrong portal?{' '}
+            <Link to="/customer-portal/login" className="font-medium text-primary hover:underline">
+              Customer sign in
+            </Link>
+            {' · '}
+            <Link to="/login" className="font-medium text-primary hover:underline">
+              Staff sign in
+            </Link>
+          </div>
         </CardContent>
       </Card>
     </div>

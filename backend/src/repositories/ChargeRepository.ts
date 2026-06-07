@@ -33,6 +33,7 @@ export interface UpdateChargeDTO {
 export interface ChargeFilters {
   orgId?: string;
   shipmentId?: string;
+  shipmentIds?: string[];
   orderId?: string;
   chargeCategory?: string;
   chargeType?: string;
@@ -48,6 +49,7 @@ export interface IChargeRepository {
   findByShipmentId(shipmentId: string): Promise<Charge[]>;
   findByOrderId(orderId: string): Promise<Charge[]>;
   update(id: string, data: UpdateChargeDTO): Promise<Charge>;
+  updateMany(ids: string[], data: UpdateChargeDTO): Promise<{ count: number }>;
   delete(id: string): Promise<void>;
   sumByShipment(shipmentId: string, chargeCategory: string): Promise<number>;
 }
@@ -90,6 +92,9 @@ export class ChargeRepository implements IChargeRepository {
       where: {
         ...(filters.orgId && { orgId: filters.orgId }),
         ...(filters.shipmentId && { shipmentId: filters.shipmentId }),
+        ...(filters.shipmentIds && filters.shipmentIds.length > 0 && {
+          shipmentId: { in: filters.shipmentIds },
+        }),
         ...(filters.orderId && { orderId: filters.orderId }),
         ...(filters.chargeCategory && { chargeCategory: filters.chargeCategory }),
         ...(filters.chargeType && { chargeType: filters.chargeType }),
@@ -118,6 +123,15 @@ export class ChargeRepository implements IChargeRepository {
       where: { id },
       data,
     });
+  }
+
+  async updateMany(ids: string[], data: UpdateChargeDTO): Promise<{ count: number }> {
+    if (ids.length === 0) return { count: 0 };
+    const result = await this.prisma.charge.updateMany({
+      where: { id: { in: ids } },
+      data,
+    });
+    return { count: result.count };
   }
 
   async delete(id: string): Promise<void> {

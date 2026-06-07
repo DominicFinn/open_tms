@@ -1,8 +1,11 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { DistanceService } from '../services/distanceService.js';
+import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 
 export async function distanceRoutes(server: FastifyInstance) {
+  await registerOrgScope(server);
+
   // Distance calculation endpoint
   server.post('/api/v1/distance/calculate', async (req: FastifyRequest, reply: FastifyReply) => {
     const body = z.object({
@@ -11,10 +14,13 @@ export async function distanceRoutes(server: FastifyInstance) {
     }).parse((req as any).body);
 
     try {
-      // Get locations from database
+      // Multi-tenancy: only locations owned by the requesting tenant are
+      // visible. Without this, an attacker could probe Location.lat/lng
+      // across orgs by guessing UUIDs.
+      const orgId = req.orgId!;
       const [origin, destination] = await Promise.all([
-        server.prisma.location.findUnique({ where: { id: body.originId } }),
-        server.prisma.location.findUnique({ where: { id: body.destinationId } })
+        server.prisma.location.findFirst({ where: { id: body.originId, orgId } }),
+        server.prisma.location.findFirst({ where: { id: body.destinationId, orgId } })
       ]);
 
       if (!origin || !destination) {

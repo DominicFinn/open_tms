@@ -6,11 +6,15 @@ import { ITradingPartnerRepository } from '../repositories/TradingPartnerReposit
 import { container, TOKENS } from '../di/index.js';
 import { PrismaClient } from '@prisma/client';
 
+import { registerOrgScopeForEdi } from '../auth/orgScopeMiddleware.js';
+
 export async function ediImportRoutes(server: FastifyInstance) {
   const ediImportService = container.resolve<IEdiImportService>(TOKENS.IEdiImportService);
   const edi855Service = container.resolve<IEDI855Service>(TOKENS.IEDI855Service);
   const tradingPartnerRepo = container.resolve<ITradingPartnerRepository>(TOKENS.ITradingPartnerRepository);
   const prisma = container.resolve<PrismaClient>(TOKENS.PrismaClient);
+
+  await registerOrgScopeForEdi(server);
 
   // Import EDI content — creates orders
   server.post('/api/v1/orders/import/edi', async (req: FastifyRequest, reply: FastifyReply) => {
@@ -155,6 +159,7 @@ export async function ediImportRoutes(server: FastifyInstance) {
 
     // Log the generation
     await tradingPartnerRepo.createLog({
+      orgId: req.orgId!,
       transactionType: '855',
       direction: 'outbound',
       fileName: `855_${order.orderNumber}_${Date.now()}.edi`,

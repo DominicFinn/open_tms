@@ -19,12 +19,18 @@ import { IOutboundEdiDeliveryService } from '../services/OutboundEdiDeliveryServ
 import { X12EnvelopeParser } from '../services/edi/X12EnvelopeParser.js';
 import * as crypto from 'crypto';
 
+import { registerOrgScopeForEdi } from '../auth/orgScopeMiddleware.js';
+
 export async function ediInboundRoutes(server: FastifyInstance) {
   const ediRouter = container.resolve<IEdiRouterService>(TOKENS.IEdiRouterService);
   const partnerRepo = container.resolve<ITradingPartnerRepository>(TOKENS.ITradingPartnerRepository);
   const edi997Service = container.resolve<IEDI997Service>(TOKENS.IEDI997Service);
   const outboundDelivery = container.resolve<IOutboundEdiDeliveryService>(TOKENS.IOutboundEdiDeliveryService);
   const x12Parser = new X12EnvelopeParser();
+
+  // Multi-tenancy: hybrid hook so unauthed webhook ingest derives orgId
+  // from body.partnerId; authed admin calls use the JWT.
+  await registerOrgScopeForEdi(server);
 
   server.post('/api/v1/edi/inbound', {
     schema: {
@@ -92,6 +98,7 @@ export async function ediInboundRoutes(server: FastifyInstance) {
 
     // 5. Create transaction log entry
     const logEntry = await partnerRepo.createLog({
+      orgId: req.orgId!,
       partnerId: body.partnerId || null,
       transactionType,
       direction: 'inbound',

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 
 import { API_URL } from '../../api';
@@ -44,9 +44,16 @@ function statusVariant(s: string): StatusVariant {
 }
 
 export default function CustomerShipments() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [shipments, setShipments] = useState<Shipment[]>([]);
-  const [statusFilter, setStatusFilter] = useState('all');
+  const statusFilter = searchParams.get('status') || 'all';
   const [loading, setLoading] = useState(true);
+
+  const setStatusFilter = (next: string) => {
+    const params = new URLSearchParams(searchParams);
+    if (next === 'all') params.delete('status'); else params.set('status', next);
+    setSearchParams(params, { replace: true });
+  };
 
   useEffect(() => {
     setLoading(true);
@@ -70,6 +77,7 @@ export default function CustomerShipments() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All statuses</SelectItem>
+              <SelectItem value="active">Active (in flight)</SelectItem>
               <SelectItem value="booked">Booked</SelectItem>
               <SelectItem value="in_transit">In transit</SelectItem>
               <SelectItem value="at_pickup">At pickup</SelectItem>

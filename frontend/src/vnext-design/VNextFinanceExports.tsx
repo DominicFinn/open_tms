@@ -11,6 +11,7 @@ import {
 import { API_URL } from '../api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -125,11 +126,11 @@ export default function VNextFinanceExports() {
           <div className="flex flex-wrap items-end gap-4">
             <div className="space-y-1.5">
               <Label htmlFor="from">From</Label>
-              <Input id="from" type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+              <DatePicker id="from" type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-[170px]" />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="to">To</Label>
-              <Input id="to" type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+              <DatePicker id="to" type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-[170px]" />
             </div>
             <div className="flex flex-wrap gap-2">
               <Button

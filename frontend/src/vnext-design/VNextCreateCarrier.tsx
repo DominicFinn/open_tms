@@ -18,6 +18,7 @@ import {
 import { API_URL } from '../api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -342,7 +343,7 @@ export default function VNextCreateCarrier() {
           </div>
           <div className="space-y-2">
             <Label>Expiry date</Label>
-            <Input type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)} />
+            <DatePicker type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)} />
           </div>
           <div className="space-y-2 md:col-span-2">
             <Label>Notes</Label>

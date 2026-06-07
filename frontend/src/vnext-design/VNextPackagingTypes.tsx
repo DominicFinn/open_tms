@@ -23,38 +23,44 @@ import {
   TableRow,
 } from '@/components/ui/table';
 
-interface PalletType {
+type PackagingKind = 'pallet' | 'carton' | 'crate' | 'drum' | 'roll' | 'bag' | 'tote' | 'loose' | 'custom';
+
+interface PackagingType {
   id: string;
   code: string;
   name: string;
   description: string | null;
+  kind: PackagingKind;
   lengthMm: number;
   widthMm: number;
   heightMm: number;
-  tareWeightGrams: number;
-  maxLoadGrams: number;
+  tareWeightGrams: number | null;
+  maxLoadGrams: number | null;
   maxStackHeightMm: number | null;
-  material: string;
+  material: string | null;
   reusable: boolean;
   isoCertified: boolean;
   stackable: boolean;
   active: boolean;
 }
 
-const MATERIALS = ['wood', 'plastic', 'metal', 'cardboard', 'composite'];
+const KINDS: PackagingKind[] = ['pallet', 'carton', 'crate', 'drum', 'roll', 'bag', 'tote', 'loose', 'custom'];
+const MATERIALS = ['wood', 'plastic', 'metal', 'cardboard', 'composite', 'fiber', 'textile'];
 
-function kg(g: number) { return (g / 1000).toFixed(1); }
+function kg(g: number | null) { return g == null ? '-' : (g / 1000).toFixed(1) + ' kg'; }
 function cm(mm: number) { return (mm / 10).toFixed(0); }
 
-export default function VNextPalletTypes() {
-  const [rows, setRows] = useState<PalletType[]>([]);
+export default function VNextPackagingTypes() {
+  const [rows, setRows] = useState<PackagingType[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [editing, setEditing] = useState<PalletType | null>(null);
+  const [editing, setEditing] = useState<PackagingType | null>(null);
   const [error, setError] = useState('');
   const [seeding, setSeeding] = useState(false);
+  const [kindFilter, setKindFilter] = useState<PackagingKind | 'all'>('all');
+
   const emptyForm = {
-    code: '', name: '', description: '',
+    code: '', name: '', description: '', kind: 'pallet' as PackagingKind,
     lengthMm: '1200', widthMm: '800', heightMm: '144',
     tareWeightGrams: '25000', maxLoadGrams: '1500000', maxStackHeightMm: '2400',
     material: 'wood', reusable: true, isoCertified: false, stackable: true, active: true,
@@ -63,7 +69,7 @@ export default function VNextPalletTypes() {
 
   const load = () => {
     setLoading(true);
-    fetch(`${API_URL}/api/v1/pallet-types`)
+    fetch(`${API_URL}/api/v1/packaging-types`)
       .then(r => r.json())
       .then(json => setRows(json.data || []))
       .finally(() => setLoading(false));
@@ -75,14 +81,16 @@ export default function VNextPalletTypes() {
     setForm(emptyForm);
     setShowForm(true);
   };
-  const openEdit = (p: PalletType) => {
+  const openEdit = (p: PackagingType) => {
     setEditing(p);
     setForm({
-      code: p.code, name: p.name, description: p.description ?? '',
+      code: p.code, name: p.name, description: p.description ?? '', kind: p.kind,
       lengthMm: String(p.lengthMm), widthMm: String(p.widthMm), heightMm: String(p.heightMm),
-      tareWeightGrams: String(p.tareWeightGrams), maxLoadGrams: String(p.maxLoadGrams),
+      tareWeightGrams: p.tareWeightGrams != null ? String(p.tareWeightGrams) : '',
+      maxLoadGrams: p.maxLoadGrams != null ? String(p.maxLoadGrams) : '',
       maxStackHeightMm: p.maxStackHeightMm ? String(p.maxStackHeightMm) : '',
-      material: p.material, reusable: p.reusable, isoCertified: p.isoCertified, stackable: p.stackable, active: p.active,
+      material: p.material ?? '',
+      reusable: p.reusable, isoCertified: p.isoCertified, stackable: p.stackable, active: p.active,
     });
     setShowForm(true);
   };
@@ -93,19 +101,20 @@ export default function VNextPalletTypes() {
       code: form.code.trim(),
       name: form.name.trim(),
       description: form.description || undefined,
+      kind: form.kind,
       lengthMm: parseInt(form.lengthMm),
       widthMm: parseInt(form.widthMm),
       heightMm: parseInt(form.heightMm),
-      tareWeightGrams: parseInt(form.tareWeightGrams),
-      maxLoadGrams: parseInt(form.maxLoadGrams),
+      tareWeightGrams: form.tareWeightGrams ? parseInt(form.tareWeightGrams) : null,
+      maxLoadGrams: form.maxLoadGrams ? parseInt(form.maxLoadGrams) : null,
       maxStackHeightMm: form.maxStackHeightMm ? parseInt(form.maxStackHeightMm) : null,
-      material: form.material,
+      material: form.material || null,
       reusable: form.reusable,
       isoCertified: form.isoCertified,
       stackable: form.stackable,
       active: form.active,
     };
-    const url = editing ? `${API_URL}/api/v1/pallet-types/${editing.id}` : `${API_URL}/api/v1/pallet-types`;
+    const url = editing ? `${API_URL}/api/v1/packaging-types/${editing.id}` : `${API_URL}/api/v1/packaging-types`;
     const method = editing ? 'PUT' : 'POST';
     const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     const data = await res.json();
@@ -114,29 +123,31 @@ export default function VNextPalletTypes() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Delete this pallet type? If it is referenced by any trackable units it will be deactivated instead.')) return;
-    await fetch(`${API_URL}/api/v1/pallet-types/${id}`, { method: 'DELETE' });
+    if (!confirm('Delete this packaging type? If it is referenced by any trackable units it will be deactivated instead.')) return;
+    await fetch(`${API_URL}/api/v1/packaging-types/${id}`, { method: 'DELETE' });
     load();
   };
 
   const handleSeed = async () => {
-    if (!confirm('Add any missing standard pallet types (EUR, US GMA, CHEP, etc.) to your catalogue?')) return;
+    if (!confirm('Add any missing standard packaging types (pallets + cartons + crates + drums + ...) to your catalogue?')) return;
     setSeeding(true);
     try {
-      const res = await fetch(`${API_URL}/api/v1/pallet-types/seed-standards`, { method: 'POST' });
+      const res = await fetch(`${API_URL}/api/v1/packaging-types/seed-standards`, { method: 'POST' });
       const data = await res.json();
       alert(`Seed complete. Created: ${data.data.created}, skipped (already exist): ${data.data.skipped}.`);
       load();
     } finally { setSeeding(false); }
   };
 
+  const filteredRows = kindFilter === 'all' ? rows : rows.filter(r => r.kind === kindFilter);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Pallet Types</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Packaging Types</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Standard pallet specs used for palletization planning, load plans, and BOL weight totals.
+            Catalogue of pallets, cartons, crates, drums, totes, and more. Used for cartonization, palletization planning, and BOL totals.
           </p>
         </div>
         <div className="flex gap-2">
@@ -150,6 +161,19 @@ export default function VNextPalletTypes() {
         </div>
       </div>
 
+      <div className="flex items-center gap-2 text-sm">
+        <span className="text-muted-foreground">Filter by kind:</span>
+        <Select value={kindFilter} onValueChange={v => setKindFilter(v as any)}>
+          <SelectTrigger className="w-40">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All kinds</SelectItem>
+            {KINDS.map(k => (<SelectItem key={k} value={k}>{k}</SelectItem>))}
+          </SelectContent>
+        </Select>
+      </div>
+
       {error && (
         <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
           <CircleAlert className="h-5 w-5" />
@@ -160,15 +184,26 @@ export default function VNextPalletTypes() {
       {showForm && (
         <Card>
           <CardHeader>
-            <CardTitle>{editing ? 'Edit pallet type' : 'New pallet type'}</CardTitle>
+            <CardTitle>{editing ? 'Edit packaging type' : 'New packaging type'}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label>Code</Label>
-                <Input value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value }))} placeholder="EUR1" disabled={!!editing} />
+                <Label>Kind</Label>
+                <Select value={form.kind} onValueChange={v => setForm(f => ({ ...f, kind: v as PackagingKind }))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {KINDS.map(k => (<SelectItem key={k} value={k}>{k}</SelectItem>))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
+                <Label>Code</Label>
+                <Input value={form.code} onChange={e => setForm(f => ({ ...f, code: e.target.value }))} placeholder="EUR1, CARTON_M, DRUM_55GAL..." disabled={!!editing} />
+              </div>
+              <div className="space-y-2 md:col-span-2">
                 <Label>Name</Label>
                 <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
               </div>
@@ -185,7 +220,7 @@ export default function VNextPalletTypes() {
                 <Input type="number" value={form.widthMm} onChange={e => setForm(f => ({ ...f, widthMm: e.target.value }))} />
               </div>
               <div className="space-y-2">
-                <Label>Deck height (mm)</Label>
+                <Label>Height (mm)</Label>
                 <Input type="number" value={form.heightMm} onChange={e => setForm(f => ({ ...f, heightMm: e.target.value }))} />
               </div>
               <div className="space-y-2">
@@ -193,20 +228,21 @@ export default function VNextPalletTypes() {
                 <Input type="number" value={form.maxStackHeightMm} onChange={e => setForm(f => ({ ...f, maxStackHeightMm: e.target.value }))} placeholder="unlimited" />
               </div>
               <div className="space-y-2">
-                <Label>Tare weight (g)</Label>
-                <Input type="number" value={form.tareWeightGrams} onChange={e => setForm(f => ({ ...f, tareWeightGrams: e.target.value }))} />
+                <Label>Tare weight (g, optional)</Label>
+                <Input type="number" value={form.tareWeightGrams} onChange={e => setForm(f => ({ ...f, tareWeightGrams: e.target.value }))} placeholder="n/a" />
               </div>
               <div className="space-y-2">
-                <Label>Max load (g, SWL)</Label>
-                <Input type="number" value={form.maxLoadGrams} onChange={e => setForm(f => ({ ...f, maxLoadGrams: e.target.value }))} />
+                <Label>Max load (g, SWL, optional)</Label>
+                <Input type="number" value={form.maxLoadGrams} onChange={e => setForm(f => ({ ...f, maxLoadGrams: e.target.value }))} placeholder="n/a" />
               </div>
               <div className="space-y-2">
-                <Label>Material</Label>
-                <Select value={form.material} onValueChange={v => setForm(f => ({ ...f, material: v }))}>
+                <Label>Material (optional)</Label>
+                <Select value={form.material || 'none'} onValueChange={v => setForm(f => ({ ...f, material: v === 'none' ? '' : v }))}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="none">- none -</SelectItem>
                     {MATERIALS.map(m => (
                       <SelectItem key={m} value={m}>{m}</SelectItem>
                     ))}
@@ -240,6 +276,7 @@ export default function VNextPalletTypes() {
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead>Kind</TableHead>
               <TableHead>Code</TableHead>
               <TableHead>Name</TableHead>
               <TableHead>Size (L x W x H cm)</TableHead>
@@ -255,30 +292,31 @@ export default function VNextPalletTypes() {
           <TableBody>
             {loading && (
               <TableRow>
-                <TableCell colSpan={10} className="py-12 text-center">
+                <TableCell colSpan={11} className="py-12 text-center">
                   <Loader2 className="mx-auto h-6 w-6 animate-spin text-muted-foreground" />
                 </TableCell>
               </TableRow>
             )}
-            {!loading && rows.length === 0 && (
+            {!loading && filteredRows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={10} className="py-12 text-center text-sm text-muted-foreground">
-                  No pallet types yet. Click <strong>Load standard types</strong> to seed EUR, US GMA, CHEP, and more.
+                <TableCell colSpan={11} className="py-12 text-center text-sm text-muted-foreground">
+                  No packaging types yet. Click <strong>Load standard types</strong> to seed EUR pallets, cartons, drums, totes, and more.
                 </TableCell>
               </TableRow>
             )}
-            {rows.map(p => (
+            {filteredRows.map(p => (
               <TableRow key={p.id}>
+                <TableCell><Badge variant="secondary">{p.kind}</Badge></TableCell>
                 <TableCell><code className="text-xs">{p.code}</code></TableCell>
                 <TableCell>
                   <div className="font-semibold">{p.name}</div>
                   {p.description && <div className="text-xs text-muted-foreground">{p.description}</div>}
                 </TableCell>
                 <TableCell>{cm(p.lengthMm)}x{cm(p.widthMm)}x{cm(p.heightMm)}</TableCell>
-                <TableCell>{kg(p.tareWeightGrams)} kg</TableCell>
-                <TableCell>{kg(p.maxLoadGrams)} kg</TableCell>
+                <TableCell>{kg(p.tareWeightGrams)}</TableCell>
+                <TableCell>{kg(p.maxLoadGrams)}</TableCell>
                 <TableCell>{p.maxStackHeightMm ? `${cm(p.maxStackHeightMm)} cm` : '-'}</TableCell>
-                <TableCell>{p.material}</TableCell>
+                <TableCell>{p.material ?? '-'}</TableCell>
                 <TableCell>
                   <div className="flex flex-wrap gap-1">
                     {p.reusable && <Badge variant="secondary">reusable</Badge>}

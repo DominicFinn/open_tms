@@ -7,27 +7,26 @@ import { ICommandBus } from '../commands/CommandBus.js';
 import { CREATE_CARRIER } from '../commands/carriers/CreateCarrierCommand.js';
 import { UPDATE_CARRIER } from '../commands/carriers/UpdateCarrierCommand.js';
 import { ARCHIVE_CARRIER } from '../commands/carriers/ArchiveCarrierCommand.js';
+import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 
 export async function carrierRoutes(server: FastifyInstance) {
   const carriersRepo = container.resolve<ICarriersRepository>(TOKENS.ICarriersRepository);
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
 
-  // Resolve org ID once
-  const getOrgId = async () => {
-    const org = await server.prisma.organization.findFirst({ select: { id: true } });
-    return org?.id || 'default';
-  };
+  await registerOrgScope(server);
 
-  // Get all carriers
-  server.get('/api/v1/carriers', async (_req: FastifyRequest, _reply: FastifyReply) => {
-    const carriers = await carriersRepo.all();
+  // Get all carriers — scoped to the requesting JWT's org.
+  server.get('/api/v1/carriers', async (req: FastifyRequest, _reply: FastifyReply) => {
+    const orgId = req.orgId!;
+    const carriers = await carriersRepo.all(orgId);
     return { data: carriers, error: null };
   });
 
-  // Get carrier by ID
+  // Get carrier by ID — 404 (not 403) when the row belongs to another tenant.
   server.get('/api/v1/carriers/:id', async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const carrier = await carriersRepo.findById(id);
+    const orgId = req.orgId!;
+    const carrier = await carriersRepo.findById(id, orgId);
     if (!carrier) {
       reply.code(404);
       return { data: null, error: 'Carrier not found' };
@@ -64,11 +63,12 @@ export async function carrierRoutes(server: FastifyInstance) {
       })
       .parse((req as any).body);
 
+    const orgId = req.orgId!;
     const result = await commandBus.dispatch({
       type: CREATE_CARRIER,
-      orgId: await getOrgId(),
-      actorId: null,
-      payload: body,
+      orgId,
+      actorId: req.user?.sub ?? null,
+      payload: { ...body, orgId },
       metadata: { correlationId: randomUUID(), source: 'api' },
     });
 
@@ -78,7 +78,7 @@ export async function carrierRoutes(server: FastifyInstance) {
     }
 
     // Fetch full carrier for response (command returns minimal data)
-    const created = await carriersRepo.findById((result.data as any).id);
+    const created = await carriersRepo.findById((result.data as any).id, orgId);
     reply.code(201);
     return { data: created, error: null };
   });
@@ -111,10 +111,19 @@ export async function carrierRoutes(server: FastifyInstance) {
       validatedBy: z.string().optional()
     }).parse((req as any).body);
 
+    const orgId = req.orgId!;
+    // Guard cross-tenant updates: if the row is owned by another org we
+    // hide its existence and return 404, never reaching the command bus.
+    const existing = await carriersRepo.findById(id, orgId);
+    if (!existing) {
+      reply.code(404);
+      return { data: null, error: 'Carrier not found' };
+    }
+
     const result = await commandBus.dispatch({
       type: UPDATE_CARRIER,
-      orgId: await getOrgId(),
-      actorId: null,
+      orgId,
+      actorId: req.user?.sub ?? null,
       payload: { id, data: body },
       metadata: { correlationId: randomUUID(), source: 'api' },
     });
@@ -124,18 +133,24 @@ export async function carrierRoutes(server: FastifyInstance) {
       return { data: null, error: result.error };
     }
 
-    const updated = await carriersRepo.findById(id);
+    const updated = await carriersRepo.findById(id, orgId);
     return { data: updated, error: null };
   });
 
   // Delete (archive) carrier
   server.delete('/api/v1/carriers/:id', async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
+    const orgId = req.orgId!;
+    const existing = await carriersRepo.findById(id, orgId);
+    if (!existing) {
+      reply.code(404);
+      return { data: null, error: 'Carrier not found' };
+    }
 
     const result = await commandBus.dispatch({
       type: ARCHIVE_CARRIER,
-      orgId: await getOrgId(),
-      actorId: null,
+      orgId,
+      actorId: req.user?.sub ?? null,
       payload: { id },
       metadata: { correlationId: randomUUID(), source: 'api' },
     });
@@ -145,7 +160,7 @@ export async function carrierRoutes(server: FastifyInstance) {
       return { data: null, error: result.error };
     }
 
-    const archived = await carriersRepo.findById(id);
+    const archived = await carriersRepo.findById(id, orgId);
     return { data: archived, error: null };
   });
 }

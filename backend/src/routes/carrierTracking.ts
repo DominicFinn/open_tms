@@ -14,7 +14,7 @@ import { container, TOKENS } from '../di/index.js';
 const dataErrorResponse = {
   type: 'object' as const,
   properties: {
-    data: { type: 'object' as const },
+    data: {},
     error: { type: ['string', 'null'] as const },
   },
 };

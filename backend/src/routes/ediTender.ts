@@ -8,6 +8,8 @@ import { EDI990ParseService } from '../services/EDI990ParseService.js';
 import { container, TOKENS } from '../di/index.js';
 import { PrismaClient } from '@prisma/client';
 
+import { registerOrgScopeForEdi } from '../auth/orgScopeMiddleware.js';
+
 export async function ediTenderRoutes(server: FastifyInstance) {
   const tenderRepo = container.resolve<ITenderRepository>(TOKENS.ITenderRepository);
   const tenderService = container.resolve<ITenderService>(TOKENS.ITenderService);
@@ -15,6 +17,8 @@ export async function ediTenderRoutes(server: FastifyInstance) {
   const prisma = container.resolve<PrismaClient>(TOKENS.PrismaClient);
   const edi204Service = new EDI204Service();
   const edi990Parser = new EDI990ParseService();
+
+  await registerOrgScopeForEdi(server);
 
   // Preview EDI 204 for a tender offer
   server.post('/api/v1/edi/tender/204/preview', {
@@ -150,6 +154,7 @@ export async function ediTenderRoutes(server: FastifyInstance) {
 
     // Create transaction log entry
     const logEntry = await tradingPartnerRepo.createLog({
+      orgId: req.orgId!,
       partnerId: partnerId || null,
       transactionType: '990',
       direction: 'inbound',

@@ -221,6 +221,9 @@ export class OrderConversionService implements IOrderConversionService {
 
       const shipment = await tx.shipment.create({
         data: {
+          // Multi-tenancy: copy orgId from the source Order so the shipment
+          // lands in the same tenant.
+          orgId: order.orgId,
           reference,
           customerId: order.customerId,
           originId: order.originId!,
@@ -319,6 +322,7 @@ export class OrderConversionService implements IOrderConversionService {
 
         const shipment = await tx.shipment.create({
           data: {
+            orgId: firstOrder.orgId,
             reference,
             customerId: firstOrder.customerId,
             originId: firstOrder.originId!,
@@ -552,6 +556,7 @@ export class OrderConversionService implements IOrderConversionService {
 
           const shipment = await tx.shipment.create({
             data: {
+              orgId: order.orgId,
               reference,
               customerId: order.customerId,
               originId: order.originId!,

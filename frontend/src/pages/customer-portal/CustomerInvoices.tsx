@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 
 import { API_URL } from '../../api';
@@ -7,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
+import { Separator } from '@/components/ui/separator';
 import {
   Dialog,
   DialogContent,
@@ -14,6 +16,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   Table,
   TableBody,
@@ -53,22 +62,32 @@ function formatCents(cents: number): string {
 }
 
 export default function CustomerInvoices() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [disputeId, setDisputeId] = useState<string | null>(null);
   const [disputeReason, setDisputeReason] = useState('');
   const [disputing, setDisputing] = useState(false);
+  const statusFilter = searchParams.get('status') || 'all';
 
-  const load = () => {
+  const setStatusFilter = (next: string) => {
+    const params = new URLSearchParams(searchParams);
+    if (next === 'all') params.delete('status'); else params.set('status', next);
+    setSearchParams(params, { replace: true });
+  };
+
+  const load = useCallback(() => {
     setLoading(true);
-    customerFetch(`${API_URL}/api/v1/customer-portal/invoices`)
+    const params = new URLSearchParams();
+    if (statusFilter !== 'all') params.set('status', statusFilter);
+    customerFetch(`${API_URL}/api/v1/customer-portal/invoices?${params}`)
       .then(r => r.json())
       .then(json => setInvoices(json.data || []))
       .catch(() => {})
       .finally(() => setLoading(false));
-  };
+  }, [statusFilter]);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [load]);
 
   const handleDispute = async () => {
     if (!disputeId || !disputeReason.trim()) return;
@@ -94,6 +113,23 @@ export default function CustomerInvoices() {
     <div className="space-y-6">
       <h1 className="text-3xl font-bold tracking-tight">Invoices</h1>
       <Card>
+        <div className="flex flex-wrap items-center gap-3 p-4">
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-[220px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All invoices</SelectItem>
+              <SelectItem value="outstanding">Outstanding</SelectItem>
+              <SelectItem value="sent">Sent</SelectItem>
+              <SelectItem value="partial_paid">Partially paid</SelectItem>
+              <SelectItem value="overdue">Overdue</SelectItem>
+              <SelectItem value="paid">Paid</SelectItem>
+              <SelectItem value="voided">Voided</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <Separator />
         {loading ? (
           <div className="flex flex-col items-center gap-3 py-12 text-muted-foreground">
             <Loader2 className="h-6 w-6 animate-spin" />

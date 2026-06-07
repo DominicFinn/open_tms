@@ -5,6 +5,7 @@ import { AlertTriangle, ArrowLeft, Loader2 } from 'lucide-react';
 import { API_URL } from '../api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -174,7 +175,7 @@ export default function WarehouseCreateShipment() {
 
             <div className="space-y-2">
               <Label htmlFor="wh-pickup" className="text-base">Pickup Date</Label>
-              <Input
+              <DatePicker
                 id="wh-pickup"
                 type="date"
                 value={pickupDate}

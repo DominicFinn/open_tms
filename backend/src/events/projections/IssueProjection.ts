@@ -16,6 +16,9 @@ export class IssueProjection implements IEventHandler {
     priority: 5,
     retryLimit: 5,
     expireInSeconds: 600,
+    // Tight polling so the kanban board refreshes within ~half a second
+    // of a write.
+    pollingIntervalSeconds: 0.5,
   };
 
   constructor(private prisma: PrismaClient) {}

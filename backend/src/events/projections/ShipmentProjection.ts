@@ -19,6 +19,9 @@ export class ShipmentProjection implements IEventHandler {
     priority: 5,
     retryLimit: 5,
     expireInSeconds: 600,
+    // Tight polling so the shipment list refreshes within ~half a second
+    // of a write — load-bearing for the POST-then-navigate UX.
+    pollingIntervalSeconds: 0.5,
   };
 
   constructor(private prisma: PrismaClient) {}

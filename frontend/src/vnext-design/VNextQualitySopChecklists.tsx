@@ -23,6 +23,7 @@ import {
 import { API_URL } from '../api';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
@@ -315,7 +316,7 @@ function ChecklistFormModal({ open, onClose, onSaved, editChecklist }: Checklist
             </div>
             <div className="space-y-2">
               <Label>Next due date</Label>
-              <Input type="date" value={nextDueDate} onChange={(e) => setNextDueDate(e.target.value)} />
+              <DatePicker type="date" value={nextDueDate} onChange={(e) => setNextDueDate(e.target.value)} />
             </div>
             <div className="md:col-span-2 space-y-2">
               <Label>Description</Label>

@@ -15,6 +15,8 @@ import { createEvent } from '../events/createEvent.js';
 import { EVENT_TYPES } from '../events/eventTypes.js';
 
 export interface RawLocationData {
+  /** Multi-tenancy scope. Optional during the phase-3 transition. */
+  orgId?: string | null;
   name: string;
   address1: string;
   address2?: string;
@@ -55,14 +57,16 @@ export class LocationResolutionService implements ILocationResolutionService {
   ) {}
 
   async resolveOrCreate(data: RawLocationData, actorId?: string): Promise<LocationResolutionResult> {
-    // Try to find an existing location by name + city match
-    const existing = await this.prisma.location.findFirst({
-      where: {
-        archived: false,
-        name: { equals: data.name, mode: 'insensitive' },
-        city: { equals: data.city, mode: 'insensitive' },
-      },
-    });
+    // Try to find an existing location by name + city match, scoped to the
+    // tenant when supplied. Without orgId we keep legacy single-tenant
+    // behaviour so callers that pre-date phase-3 still work.
+    const where: any = {
+      archived: false,
+      name: { equals: data.name, mode: 'insensitive' },
+      city: { equals: data.city, mode: 'insensitive' },
+    };
+    if (data.orgId) where.orgId = data.orgId;
+    const existing = await this.prisma.location.findFirst({ where });
 
     if (existing) {
       // Ensure existing location has arrival criteria
@@ -72,6 +76,7 @@ export class LocationResolutionService implements ILocationResolutionService {
 
     // Create new location
     const locationData: CreateLocationDTO = {
+      orgId: data.orgId ?? null,
       name: data.name,
       address1: data.address1,
       address2: data.address2,
@@ -98,12 +103,14 @@ export class LocationResolutionService implements ILocationResolutionService {
       location.lng ?? undefined,
     );
 
-    // Emit audit event for location created via resolution
+    // Emit audit event for location created via resolution. Prefer the
+    // payload's orgId (the route resolved it from the JWT); fall back to
+    // the default-Organization probe used by legacy callers.
     if (this.eventBus) {
       try {
         await this.eventBus.publish(createEvent({
           type: EVENT_TYPES.LOCATION_CREATED,
-          orgId: org?.id || 'default',
+          orgId: data.orgId || org?.id || 'default',
           actorId: actorId ?? null,
           entityType: 'location',
           entityId: location.id,

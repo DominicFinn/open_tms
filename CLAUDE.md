@@ -376,7 +376,7 @@ The Triage Centre provides a drag-and-drop kanban board for managing operational
 
 ### Key Models
 - **Issue** - Operational problem linked to a source entity (shipment, order, carrier). Fields include status, priority, category, assigneeId, escalatedTo, snoozedUntil, snoozedBy, snoozedReason, needsCapa, closedAt, closedBy, and label associations.
-- **Comment** (polymorphic) - Attached to issues, shipments, or orders via `entityType` + `entityId`. Supports user and agent-authored comments.
+- **Comment** (polymorphic) - Attached to issues, shipments, or orders via `entityType` + `entityId`. Supports user, agent, system, and customer-authored comments. Carries a `visibleToCustomer` flag - see **Comment Visibility** below.
 - **IssueLabel** - Org-scoped labels for categorizing issues (name + color).
 - **IssueLabelAssignment** - Join table linking issues to labels.
 - **KanbanView** - Saved filter/sort configurations for the kanban board (per user or shared).
@@ -404,6 +404,29 @@ When an issue is closed, the `IssueClosureReportHandler` automatically generates
 
 ### Agent contact_driver Action
 The triage agent can execute a `contact_driver` action. It gathers driver info from Shipment -> Load -> Driver, creates or finds the related issue, and posts an agent comment with driver contact details (name, phone, email). Falls back to a "no driver assigned" message if no driver is linked.
+
+### Comment Visibility (Customer Portal)
+Comments on issues are exposed to the customer portal under a per-comment opt-in.
+
+**Rules** (enforced by `CreateCommentCommandHandler`):
+- `authorType = 'customer'` → `visibleToCustomer` is always `true`. Customers can never hide their own comment from internal staff.
+- `authorType = 'user' | 'agent' | 'system'` → defaults to `false`. The author must explicitly opt in.
+
+**Internal UI:** `VNextIssueDetail` shows a "Visible to customer in their portal" checkbox under the compose box, defaulting unchecked. Each comment in the activity feed displays a badge: "Customer" (customer-authored), "Shared with customer" (internal + visible), or "Internal only" (internal + hidden).
+
+**Customer portal:**
+- `GET /api/v1/customer-portal/issues` and `:id/comments` only return comments where `authorType = 'customer'` OR `visibleToCustomer = true`.
+- `POST /api/v1/customer-portal/issues/:id/comments` writes with `authorType: 'customer'` (so the visibility flag is forced true).
+- Customer-portal issue scoping walks from `Issue.sourceEntityType` + `sourceEntityId` to the underlying `Shipment.customerId` or `Order.customerId`. Issues with no source entity, or with a carrier source, are not exposed.
+
+### Key Files (Comment Visibility)
+- `backend/prisma/migrations/20260606_comment_visible_to_customer/migration.sql` — adds the column + index
+- `backend/src/commands/comments/CreateCommentCommand.ts` — enforces the visibility rules
+- `backend/src/routes/customerPortal.ts` — `issues` + `issues/:id/comments` endpoints, customer scoping helper
+- `backend/src/routes/issues.ts` — activity feed now includes `visibleToCustomer` on comment rows
+- `frontend/src/vnext-design/VNextIssueDetail.tsx` — checkbox + visibility badges
+- `frontend/src/pages/customer-portal/CustomerIssues.tsx` — list page
+- `frontend/src/pages/customer-portal/CustomerIssueDetail.tsx` — detail + comment compose
 
 ### Key Files
 - `backend/src/commands/issues/` — CreateIssue, UpdateIssue (handles snooze/close/reopen/needsCapa), EscalateIssue
@@ -528,6 +551,32 @@ The tendering system supports **broadcast** (all carriers simultaneously) and **
 - `frontend/src/pages/carrier-portal/` — All carrier portal pages
 - `frontend/src/carrier-portal-layout.tsx` — Carrier portal layout
 
+## Order Archival Policy
+
+Orders are archived (not deleted) when they reach end-of-life. Archiving sets `archived = true`, `status = 'archived'`, and emits `order.archived`. The `OrderProjection` removes archived orders from `OrderReadModel` so they disappear from list views in both the admin app and the customer portal. The underlying `Order` row is retained for audit/history.
+
+**Manual archive — customer portal:** Customers can archive any of their own orders from the order detail page (`DELETE /api/v1/customer-portal/orders/:id`). No status restriction — customers may have created an order by accident or no longer need it. Already-archived orders return 400.
+
+**Manual archive — admin app:** Same behavior via `DELETE /api/v1/orders/:id`.
+
+**Auto-archive:** Delivered or cancelled orders are auto-archived after a retention window (default 30 days). `OrderAutoArchiveService` is invoked by the `order-auto-archive` pg-boss cron worker daily at 02:00 UTC. Eligibility:
+- `deliveryStatus = 'delivered' AND deliveredAt < now - retentionDays`, OR
+- `status = 'cancelled' AND updatedAt < now - retentionDays`, OR
+- `deliveryStatus = 'cancelled' AND updatedAt < now - retentionDays`
+
+Configurable via `ORDER_AUTO_ARCHIVE_DAYS` (default 30) and `ORDER_AUTO_ARCHIVE_CRON` (default `0 2 * * *`).
+
+**Why a fixed 30-day window?** A delivered order is operationally closed; the read model keeps it visible long enough for the customer to download paperwork, raise an exception, or reconcile billing, then drops it from the active list. Archived orders are still accessible by ID and through reporting.
+
+### Key Files
+- `backend/src/commands/orders/ArchiveOrderCommand.ts` — `ARCHIVE_ORDER` command handler
+- `backend/src/services/OrderAutoArchiveService.ts` — Finds eligible orders and dispatches archive commands
+- `backend/src/workers/orderAutoArchiveWorker.ts` — pg-boss cron registration
+- `backend/src/events/projections/OrderProjection.ts` — `onOrderArchived` removes from read model
+- `backend/src/routes/customerPortal.ts` — Customer-facing archive endpoint
+- `backend/src/routes/orders.ts` — Admin-facing archive endpoint
+- `frontend/src/pages/customer-portal/CustomerOrderDetail.tsx` — Archive button
+
 ## Database
 
 - PostgreSQL via Prisma
@@ -543,6 +592,23 @@ The tendering system supports **broadcast** (all carriers simultaneously) and **
 - Events are collected during execution and published AFTER transaction commits
 - Register new handlers in `backend/src/di/registry.ts` inside the CommandBus factory
 - Routes dispatch commands: `commandBus.dispatch({ type, orgId, actorId, payload, metadata })`
+
+### Multi-tenancy (`orgId` + `req.orgId`)
+- Every tenant-scoped Prisma model carries `orgId String` (NOT NULL) — see `Customer`, `Carrier`, `Order`, `Shipment`, `Location`, `Lane`, `Driver`, `Vehicle`, `Device`, etc. New entities that hold tenant data MUST have one.
+- Route plugins register the org-scope hook at the top:
+  ```ts
+  import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
+  await registerOrgScope(server);
+  ```
+  After this, every handler in the plugin can read `req.orgId!` and rely on it being populated (from JWT in production, default Organization in dev/seed).
+- Handlers MUST pass `req.orgId!` into every repo read (`findById(id, req.orgId)`, `all(req.orgId)`, etc.) and onto `commandBus.dispatch({ orgId: req.orgId!, ... })`. Cross-tenant ID guesses return 404, not 403, so existence stays opaque.
+- For routes that must fail closed if no tenant context exists (rare — usually only worth it on highly-sensitive endpoints), chain `requireOrgScope` after `attachOrgScopeHook`. Use sparingly because the soft fallback covers dev/seed flows.
+- NEVER call `prisma.organization.findFirst()` inline in a route — it silently picks org-1 for everyone when multiple Organizations exist. Use the helper instead.
+- The shared `resolveOrgId`/`resolveActorId` functions in `backend/src/auth/orgScope.ts` are now mostly internal; new routes should consume `req.orgId` via the middleware.
+- **Customer portal** routes (use `authenticateCustomerJWT` + `req.customerUser`): register `attachOrgScopeFromCustomerUserHook(server.prisma)` at the top instead of `registerOrgScope`. It walks `customerUser.customerId → Customer.orgId` so portal users always operate in their customer's tenant.
+- **Carrier portal** routes (use `authenticateCarrierJWT` + `req.carrierUser`): register `attachOrgScopeFromCarrierUserHook(server.prisma)`. It walks `carrierUser.carrierId → Carrier.orgId`.
+- **Warehouse PWA** has no auth preHandlers today (known gap); it uses the standard `registerOrgScope` which falls back to the default Organization. When per-tenant warehouse auth lands, no route changes are needed — the middleware will pick up the JWT automatically.
+- **EDI inbound routes** (anything dealing with trading partners — `tradingPartners.ts`, every `edi*.ts`) serve a mix of authed admins AND unauthed webhook ingest from carriers/3PLs/SFTP collectors. Use `await registerOrgScopeForEdi(server)` at the top — it chains the partner-aware hook with the standard fallback so: authed admin → JWT, webhook with `body.partnerId` (or `params.partnerId` / `params.id`) → walk through `partner.customer.orgId` (preferred) or `partner.carrier.orgId`, otherwise default Organization. Inside handlers just read `req.orgId!` like any other route.
 
 ### Events & Projections
 - Domain events defined in `backend/src/events/eventTypes.ts`

@@ -61,16 +61,13 @@ export class InvoicingService implements IInvoicingService {
     });
     if (!customer) throw new Error('Customer not found');
 
-    // Collect all approved revenue charges across the shipments
-    const allCharges = [];
-    for (const shipmentId of input.shipmentIds) {
-      const charges = await this.chargeRepo.findAll({
-        shipmentId,
-        chargeCategory: 'revenue',
-        status: 'approved',
-      });
-      allCharges.push(...charges);
-    }
+    // Batch-fetch approved revenue charges across all selected shipments in a
+    // single query instead of N separate findAll calls.
+    const allCharges = await this.chargeRepo.findAll({
+      shipmentIds: input.shipmentIds,
+      chargeCategory: 'revenue',
+      status: 'approved',
+    });
 
     if (allCharges.length === 0) {
       throw new Error('No approved revenue charges found for the selected shipments');
@@ -125,16 +122,14 @@ export class InvoicingService implements IInvoicingService {
 
     await this.invoiceRepo.addLineItems(lineItems);
 
-    // Mark charges as invoiced
-    for (const charge of allCharges) {
-      await this.chargeRepo.update(charge.id, { status: 'invoiced' });
-    }
+    // Mark charges as invoiced — single bulk update instead of N queries.
+    await this.chargeRepo.updateMany(allCharges.map(c => c.id), { status: 'invoiced' });
 
-    // Update shipment financial summaries
+    // Update shipment financial summaries — single bulk update.
     const uniqueShipmentIds = [...new Set(allCharges.map(c => c.shipmentId).filter(Boolean) as string[])];
-    for (const shipmentId of uniqueShipmentIds) {
+    if (uniqueShipmentIds.length > 0) {
       await this.prisma.shipmentFinancialSummary.updateMany({
-        where: { shipmentId },
+        where: { shipmentId: { in: uniqueShipmentIds } },
         data: { billingStatus: 'invoiced' },
       });
     }
@@ -177,15 +172,26 @@ export class InvoicingService implements IInvoicingService {
       },
     });
 
+    // Single batch query for all approved revenue charges across all candidate
+    // shipments, then group in memory — was previously one query per shipment.
+    const allCharges = await this.chargeRepo.findAll({
+      shipmentIds: shipments.map(s => s.id),
+      chargeCategory: 'revenue',
+      status: 'approved',
+    });
+
+    const chargesByShipment = new Map<string, typeof allCharges>();
+    for (const charge of allCharges) {
+      if (!charge.shipmentId) continue;
+      const list = chargesByShipment.get(charge.shipmentId);
+      if (list) list.push(charge);
+      else chargesByShipment.set(charge.shipmentId, [charge]);
+    }
+
     const results: ReadyToInvoiceShipment[] = [];
 
     for (const shipment of shipments) {
-      const charges = await this.chargeRepo.findAll({
-        shipmentId: shipment.id,
-        chargeCategory: 'revenue',
-        status: 'approved',
-      });
-
+      const charges = chargesByShipment.get(shipment.id) ?? [];
       if (charges.length > 0) {
         results.push({
           shipmentId: shipment.id,

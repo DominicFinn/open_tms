@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { container, TOKENS } from '../di/index.js';
 import { ICustomerAuthService } from '../services/CustomerAuthService.js';
 import { ICustomerUserRepository } from '../repositories/CustomerUserRepository.js';
+import { computeLockoutStatus } from '../services/auth/lockout.js';
 
 export async function customerUserRoutes(server: FastifyInstance) {
   const authService = container.resolve<ICustomerAuthService>(TOKENS.ICustomerAuthService);
@@ -22,7 +23,11 @@ export async function customerUserRoutes(server: FastifyInstance) {
   }, async (req: FastifyRequest) => {
     const { customerId } = req.params as { customerId: string };
     const users = await userRepo.findByCustomerId(customerId);
-    return { data: users, error: null };
+    const enriched = users.map((u: any) => ({
+      ...u,
+      lockoutStatus: computeLockoutStatus(u),
+    }));
+    return { data: enriched, error: null };
   });
 
   // Create customer portal user
@@ -116,5 +121,22 @@ export async function customerUserRoutes(server: FastifyInstance) {
     const { id } = req.params as { id: string };
     await userRepo.update(id, { active: false });
     return { data: { deactivated: true }, error: null };
+  });
+
+  // Unlock a locked-out account (clears failed-attempt counter)
+  server.post('/api/v1/customers/:customerId/users/:id/unlock', {
+    schema: {
+      tags: ['Customer Users'],
+      summary: 'Clear lockout for a customer portal user',
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const user = await userRepo.findById(id);
+    if (!user) {
+      reply.code(404);
+      return { data: null, error: 'User not found' };
+    }
+    await authService.unlockAccount(user.id);
+    return { data: { unlocked: true }, error: null };
   });
 }

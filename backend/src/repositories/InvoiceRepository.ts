@@ -118,13 +118,16 @@ export class InvoiceRepository implements IInvoiceRepository {
   }
 
   async findAll(filters: InvoiceFilters): Promise<InvoiceWithLineItems[]> {
+    const dueDate: { lte?: Date; gte?: Date } = {};
+    if (filters.dueBefore) dueDate.lte = filters.dueBefore;
+    if (filters.dueAfter) dueDate.gte = filters.dueAfter;
+
     return this.prisma.invoice.findMany({
       where: {
         ...(filters.orgId && { orgId: filters.orgId }),
         ...(filters.customerId && { customerId: filters.customerId }),
         ...(filters.status && { status: filters.status }),
-        ...(filters.dueBefore && { dueDate: { lte: filters.dueBefore } }),
-        ...(filters.dueAfter && { dueDate: { gte: filters.dueAfter } }),
+        ...((filters.dueBefore || filters.dueAfter) && { dueDate }),
       },
       include: this.includeRelations,
       orderBy: { createdAt: 'desc' },

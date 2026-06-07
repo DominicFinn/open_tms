@@ -16,6 +16,8 @@ import { Command } from '../types.js';
 
 export interface CreateShipmentPayload {
   reference?: string;
+  /** Multi-tenancy scope. Route handlers thread this from the JWT. */
+  orgId?: string | null;
   customerId: string;
   laneId?: string;
   carrierId?: string;
@@ -89,6 +91,14 @@ export class CreateShipmentCommandHandler extends BaseCommandHandler<CreateShipm
   ): Promise<CreateShipmentResult> {
     const body = command.payload;
 
+    // Multi-tenancy: resolve the writing orgId once at the top so every
+    // entity created in this transaction lands in the same tenant. Both
+    // Shipment.orgId and Location.orgId are NOT NULL post phase-2/3.
+    const orgIdToWrite = body.orgId || command.orgId;
+    if (!orgIdToWrite) {
+      throw new Error('orgId is required to create a Shipment (multi-tenancy)');
+    }
+
     // Resolve origin/destination from lane, explicit IDs, or raw address data
     let finalOriginId = body.originId;
     let finalDestinationId = body.destinationId;
@@ -119,6 +129,7 @@ export class CreateShipmentCommandHandler extends BaseCommandHandler<CreateShipm
       } else {
         const created = await tx.location.create({
           data: {
+            orgId: orgIdToWrite,
             name: body.originData.name,
             address1: body.originData.address1,
             address2: body.originData.address2,
@@ -162,6 +173,7 @@ export class CreateShipmentCommandHandler extends BaseCommandHandler<CreateShipm
       } else {
         const created = await tx.location.create({
           data: {
+            orgId: orgIdToWrite,
             name: body.destinationData.name,
             address1: body.destinationData.address1,
             address2: body.destinationData.address2,
@@ -199,9 +211,16 @@ export class CreateShipmentCommandHandler extends BaseCommandHandler<CreateShipm
       ? body.reference
       : `DRAFT-${Date.now().toString(36).toUpperCase()}`;
 
+    // Multi-tenancy: prefer the explicit payload orgId (admin tools acting
+    // on behalf of a tenant); fall back to command.orgId (the JWT path).
+    // Shipment.orgId is NOT NULL post phase-2 tightening — orgIdToWrite
+    // was resolved at the top of this method so every entity in this
+    // transaction lands in the same tenant.
+
     const shipment = await tx.shipment.create({
       data: {
         reference,
+        orgId: orgIdToWrite,
         customerId: body.customerId,
         laneId: body.laneId,
         carrierId: body.carrierId,
