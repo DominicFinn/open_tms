@@ -134,3 +134,102 @@ describe('OrderCartonizationService.computeOrder', () => {
     expect(result.rolledUpFreightClass).toBeNull();
   });
 });
+
+describe('OrderCartonizationService.computeOrderFromUnits (Phase 2)', () => {
+  it('uses per-unit weight/dim overrides when provided', () => {
+    const result = svc.computeOrderFromUnits([
+      {
+        weight: 1000, weightUnit: 'lb',
+        length: 48, width: 40, height: 60, dimUnit: 'in',
+        stackable: true,
+        lines: [
+          // Per-piece line dims that would sum to a smaller cube and lighter
+          // weight; override should win.
+          { quantity: 10, weight: 1, weightUnit: 'lb', length: 6, width: 6, height: 6, dimUnit: 'in' },
+        ],
+      },
+    ]);
+
+    expect(result.units).toHaveLength(1);
+    const unit = result.units[0];
+    expect(unit.weightSource).toBe('override');
+    expect(unit.dimsSource).toBe('override');
+    expect(unit.totalWeightLbs).toBeCloseTo(1000, 0);
+    // 48 × 40 × 60 / 1728 = 66.67 cu ft
+    expect(unit.totalCubeFt).toBeCloseTo(66.67, 1);
+    expect(unit.densityLbsPerCubeFt).not.toBeNull();
+    expect(result.totalWeightLbs).toBeCloseTo(1000, 0);
+  });
+
+  it('falls back to summing line items when overrides are absent', () => {
+    const result = svc.computeOrderFromUnits([
+      {
+        stackable: true,
+        lines: [
+          { quantity: 2, weight: 100, weightUnit: 'lb', length: 12, width: 12, height: 12, dimUnit: 'in' },
+          { quantity: 1, weight: 50,  weightUnit: 'lb', length: 12, width: 12, height: 12, dimUnit: 'in' },
+        ],
+      },
+    ]);
+
+    const unit = result.units[0];
+    expect(unit.weightSource).toBe('lines');
+    expect(unit.dimsSource).toBe('lines');
+    expect(unit.totalWeightLbs).toBeCloseTo(250, 1);
+    // 3 boxes × 1 cu ft = 3 cu ft
+    expect(unit.totalCubeFt).toBeCloseTo(3, 2);
+  });
+
+  it('falls back to packaging-type external dims when neither override nor lines have dims', () => {
+    const result = svc.computeOrderFromUnits([
+      {
+        packagingTypeLengthMm: 1200, packagingTypeWidthMm: 800, packagingTypeHeightMm: 144,
+        stackable: true,
+        lines: [{ quantity: 1, weight: 100, weightUnit: 'lb' }],
+      },
+    ]);
+    const unit = result.units[0];
+    expect(unit.dimsSource).toBe('packagingType');
+    expect(unit.totalCubeFt).toBeGreaterThan(0);
+  });
+
+  it('rolls up class to the highest contained line class', () => {
+    const result = svc.computeOrderFromUnits([
+      {
+        stackable: true,
+        lines: [
+          // density ~200 → class 50
+          { quantity: 1, weight: 200, weightUnit: 'lb', length: 12, width: 12, height: 12, dimUnit: 'in' },
+          // user-supplied higher class
+          { quantity: 1, weight: 50,  weightUnit: 'lb', length: 12, width: 12, height: 12, dimUnit: 'in', freightClass: '250' },
+        ],
+      },
+    ]);
+    expect(result.rolledUpFreightClass).toBe('250');
+    expect(result.units[0].rolledUpFreightClass).toBe('250');
+  });
+
+  it('pallet positions: 4 stackable + 1 non-stackable = ceil(4/2) + 1 = 3', () => {
+    const stackUnit = { stackable: true,  lines: [{ quantity: 1, weight: 100, weightUnit: 'lb' as const }] };
+    const floorUnit = { stackable: false, lines: [{ quantity: 1, weight: 100, weightUnit: 'lb' as const }] };
+    const result = svc.computeOrderFromUnits([stackUnit, stackUnit, stackUnit, stackUnit, floorUnit]);
+    expect(result.palletPositions).toBe(3);
+  });
+
+  it('linear feet halves stackable units and counts non-stackable in full', () => {
+    const stack = { stackable: true,  length: 48, width: 40, height: 50, dimUnit: 'in' as const, lines: [{ quantity: 1, weight: 100, weightUnit: 'lb' as const }] };
+    const floor = { stackable: false, length: 48, width: 40, height: 50, dimUnit: 'in' as const, lines: [{ quantity: 1, weight: 100, weightUnit: 'lb' as const }] };
+    const result = svc.computeOrderFromUnits([stack, floor]);
+    // stackable 48" → 2 ft contribution; floor 48" → 4 ft contribution = 6
+    expect(result.linearFeet).toBeCloseTo(6, 1);
+  });
+
+  it('empty input gives an empty result', () => {
+    const result = svc.computeOrderFromUnits([]);
+    expect(result.units).toEqual([]);
+    expect(result.totalWeightLbs).toBe(0);
+    expect(result.palletPositions).toBe(0);
+    expect(result.linearFeet).toBe(0);
+    expect(result.rolledUpFreightClass).toBeNull();
+  });
+});

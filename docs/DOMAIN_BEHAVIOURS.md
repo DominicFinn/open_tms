@@ -37,23 +37,33 @@ Every event is persisted to the immutable `DomainEventLog` before handler fan-ou
 | `UpdateOrderCommand` | `PUT /api/v1/orders/:id` | `order.updated`, `order.status_changed` (if status changes) |
 | `ArchiveOrderCommand` | `DELETE /api/v1/orders/:id` | `order.archived` |
 
-### Sub-Entity Operations (Repository)
+### Sub-Entity Operations (CQRS, Phase 2 + Phase 4)
 
-These operate on order sub-entities (line items, trackable units). They currently use repositories directly — events are not yet emitted for these granular mutations.
+Per-handling-unit and per-line operations were promoted to CQRS commands across Phase 2 (handling units) and Phase 4 (line items). Each emits a `trackable_unit.*` or `order_line_item.*` event that the `OrderProjection` consumes to keep `OrderReadModel.trackableUnitCount`, `lineItemCount`, and `totalWeight` in sync.
+
+| Command | Trigger | Event Emitted |
+|---------|---------|---------------|
+| `CreateTrackableUnitCommand` | `POST /api/v1/orders/:id/trackable-units` (admin) or `POST /api/v1/customer-portal/orders/:id/trackable-units` (portal) | `trackable_unit.created` |
+| `UpdateTrackableUnitCommand` | `PUT  /api/v1/orders/:orderId/trackable-units/:unitId` or portal equivalent | `trackable_unit.updated` (with `changes` diff) |
+| `DeleteTrackableUnitCommand` | `DELETE /api/v1/orders/:orderId/trackable-units/:unitId` or portal equivalent | `trackable_unit.deleted` (with cascaded line-item count) |
+| `GenerateTrackableUnitBarcodeCommand` | `POST /api/v1/orders/:orderId/trackable-units/:unitId/generate-barcode` or portal equivalent | `trackable_unit.barcode_generated` |
+| `AddLineItemToUnitCommand` | `POST /api/v1/orders/:orderId/trackable-units/:unitId/line-items` or portal equivalent | `trackable_unit.line_item_added` |
+| `MoveLineItemBetweenUnitsCommand` | `PUT  /api/v1/orders/:orderId/line-items/:itemId/move` or portal equivalent (body `targetUnitId: null` detaches) | `trackable_unit.line_item_moved` |
+| `MergeTrackableUnitsCommand` | `POST /api/v1/orders/:orderId/trackable-units/merge` or portal equivalent | `trackable_unit.merged` |
+| `SplitTrackableUnitCommand` | `POST /api/v1/orders/:orderId/trackable-units/:unitId/split` or portal equivalent | `trackable_unit.split` |
+| `CreateLineItemCommand` | `POST /api/v1/orders/:id/line-items` or `POST /api/v1/customer-portal/orders/:id/line-items` | `order_line_item.created` |
+| `UpdateLineItemCommand` | `PUT  /api/v1/orders/:orderId/line-items/:itemId` or `PUT  /api/v1/customer-portal/line-items/:itemId` (sparse patch) | `order_line_item.updated` (with `changes` diff) |
+| `DeleteLineItemCommand` | `DELETE /api/v1/orders/:orderId/line-items/:itemId` or `DELETE /api/v1/customer-portal/line-items/:itemId` | `order_line_item.deleted` |
+
+The only remaining repository-direct operation in this area is `validateLocation`:
 
 | Operation | Trigger | What It Does |
 |-----------|---------|-------------|
-| Add line item | `POST /api/v1/orders/:id/line-items` | Creates OrderLineItem on order |
-| Remove line item | `DELETE /api/v1/orders/:orderId/line-items/:itemId` | Deletes OrderLineItem |
-| Add trackable unit | `POST /api/v1/orders/:id/trackable-units` | Creates TrackableUnit with line items, assigns sequence number |
-| Update trackable unit | `PUT /api/v1/orders/:orderId/trackable-units/:unitId` | Updates identifier, notes, barcode |
-| Remove trackable unit | `DELETE /api/v1/orders/:orderId/trackable-units/:unitId` | Cascade deletes unit + line items |
-| Add line item to unit | `POST /api/v1/orders/:orderId/trackable-units/:unitId/line-items` | Creates OrderLineItem linked to unit |
-| Move line item | `PUT /api/v1/orders/:orderId/line-items/:itemId/move` | Reassigns line item to different trackable unit |
-| Generate barcode | `POST /api/v1/orders/:orderId/trackable-units/:unitId/generate-barcode` | Sets barcode = `TU-{unitId}-{timestamp}` |
-| Merge units | `POST /api/v1/orders/:orderId/trackable-units/merge` | Moves all line items from source to target unit, deletes source |
-| Split unit | `POST /api/v1/orders/:orderId/trackable-units/:unitId/split` | Creates new unit, moves specified line items to it |
 | Validate location | `POST /api/v1/orders/:id/validate-location` | Creates Location if needed, sets originId/destinationId |
+
+**Per-unit dim/weight overrides:** `TrackableUnit` carries optional `weight`, `weightUnit`, `length`, `width`, `height`, `dimUnit`, `stackable` columns. These override the line-item totals during cartonization (`OrderCartonizationService.computeOrderFromUnits`) and the `totalWeight` aggregate in `OrderReadModel`. Used by sophisticated shippers building mixed-SKU pallets.
+
+**Ownership scoping:** customer-portal endpoints walk `customerUser.customerId → Order.customerId` to verify ownership before dispatching; the order's `orgId` becomes the command's `orgId`. Admin endpoints use the standard `req.orgId!` from the JWT.
 
 ### Service Operations (Domain Services)
 
@@ -134,6 +144,54 @@ Available as a read-only live preview at `POST /api/v1/order-line-items/cartoniz
 **Packaging catalogue (`PackagingType`)** is org-scoped with a `kind` discriminator (pallet | carton | crate | drum | roll | bag | tote | loose | custom). Pallet-specific fields (tareWeightGrams, maxLoadGrams, material) are nullable. Generalised from the original `PalletType` model in 2026-06; admin CRUD lives at `/wms/packaging-types`.
 
 **Event payload v2:** `order.created` schema version bumped to 2 — payload now carries `packingSummary` (or null if none was provided).
+
+### Line Items & Cartonization (Phase 2)
+
+Phase 2 adds optional manual handling-unit modelling for sophisticated shippers (mixed-SKU pallets, per-unit weight/dim overrides) on top of the Phase 1 "packing summary auto-generates units" flow.
+
+**Schema additions to `TrackableUnit`:** `weight`, `weightUnit`, `length`, `width`, `height`, `dimUnit`, `stackable`. Nullable per-unit overrides; when null, cartonization falls back to summing the unit's contained line items, then to the unit's `packagingType` external dims.
+
+**CQRS promotion:** the 8 per-unit ops in the table above were promoted from repo-direct to command-dispatched. Each emits a `trackable_unit.*` event; `OrderProjection` subscribes to both `order.*` and `trackable_unit.*` and recomputes `trackableUnitCount` + `lineItemCount` + `totalWeight` on every change. Per-unit weight overrides take precedence over line-item weight sums in the read model.
+
+**Unit-aware cartonization:** `OrderCartonizationService.computeOrderFromUnits(units[])` returns per-unit results (`weightSource: 'override' | 'lines' | 'empty'`, `dimsSource: 'override' | 'packagingType' | 'lines' | 'empty'`), order-level rolled-up class, total weight, total cube, pallet positions (half-floor for stackable, full for floor-loaded), and linear feet (sum of per-unit depth contributions, halved for stackable). Live preview at `POST /api/v1/order-line-items/cartonization/preview-units`.
+
+**`HandlingUnitsEditor` component:** shared between the customer portal and admin VNext detail pages. Drag-and-drop allocation via `@dnd-kit/core` (line items move between unit drop zones + "unassigned"), per-unit dim/weight edit forms, create/delete/generate-barcode/merge/split actions, and a live cartonization summary header. Both ops surface the editor through an "Edit handling units" toggle on the detail page.
+
+**Order ownership for portal:** the customer-portal endpoints walk `customerUser.customerId → Customer.orgId` and verify that any targeted unit/line item belongs to one of the customer's orders before dispatching. Cross-customer access returns 404 (not 403) to keep existence opaque.
+
+### Line Items & Cartonization (Phase 3 — bulk CSV upload)
+
+Phase 3 lets shippers create many orders at once from a single CSV. The same mode-rules engine that gates the portal form re-runs per CSV row, so a bulk import can't smuggle in an under-specified line.
+
+**Endpoints:**
+
+| Operation | Path | Notes |
+|-----------|------|-------|
+| Download CSV template | `GET /api/v1/orders/import/csv/template` (admin) or `GET /api/v1/customer-portal/orders/import/csv/template` (portal) | Header-only CSV with every column the importer accepts. |
+| Bulk import orders | `POST /api/v1/orders/import/csv` (admin) or `POST /api/v1/customer-portal/orders/import/csv` (portal) | Body: `{ csvContent: string }` (JSON) or raw `text/csv`. Returns `{ ordersCreated, errors[], orders[] }`. |
+
+**Behaviour:**
+- Each row becomes (part of) an order. Rows with the same `orderNumber` group into one order; rows with the same `unitId` within an order group into a handling unit. Rows with no `unitId` become flat line items on the order.
+- Every line item is re-validated against `ModeRulesService` using `(serviceLevel, hazmat, international, temperatureControlled)`. International is derived from the origin/destination country mismatch. Hazmat is line-level OR the order-level `requiresHazmat` flag.
+- **All-or-nothing per order.** If any line in an order fails validation (or the packagingType code is unknown, or the customer can't be resolved), the entire order is rejected with per-row errors carrying the source CSV row number. Sibling orders in the same CSV still go through.
+- The importer **dispatches `CREATE_ORDER` through the command bus** (rather than calling the repo) so `OrderProjection`, the read model, and any downstream handlers see the inserted orders.
+- The customer-portal endpoint forces `customerId` to the authenticated customer. CSVs that declare a different `customerId` get a row-level error.
+- Both endpoints return 200 with the full result on partial failure so the UI can show row-level diagnostics alongside the orders that did get created.
+
+**Supported columns** (case-insensitive, with common aliases): order header (orderNumber, poNumber, customerId/Name, origin/destination address blocks, dates, serviceLevel, temperatureControl, requiresHazmat, specialInstructions, notes), order-level packing summary (packagingTypeCode, packingUnitCount, packingStackable), handling unit (unitId, unitType, unitPackagingTypeCode, unitWeight/Length/Width/Height/DimUnit/Stackable, unitBarcode, unitNotes), commercial line (sku, description, quantity, unitOfMeasure, weight, dims, price), LTL classification (freightClass, nmfcCode), hazmat detail (itemHazmat, unNumber, hazmatClass, packingGroup, properShippingName), customs (hsCode, countryOfOrigin), temperature (temperature, tempMinC, tempMaxC).
+
+### Line Items & Cartonization (Phase 4 — full CQRS + weight consistency)
+
+Phase 4 closes the remaining CQRS gap on the line-item write surface and fixes a quiet weight-aggregation inconsistency.
+
+**Three new commands** (`backend/src/commands/lineItems/`):
+- `CreateLineItemCommand` — adds an OrderLineItem to an order, optionally attached to a TrackableUnit. Verifies the unit (if provided) belongs to the same order. Emits `order_line_item.created`.
+- `UpdateLineItemCommand` — sparse patch over every Phase 1 field (description, quantity, UoM, weight, dims, pricing, freight class, NMFC, hazmat detail, customs, temp range). Emits `order_line_item.updated` with a `changes` diff for audit.
+- `DeleteLineItemCommand` — removes a line item. Emits `order_line_item.deleted` (with the parent orderId + sku + previous trackableUnitId).
+
+The two pre-existing `/orders/:id/line-items` endpoints (POST add, DELETE remove) were rewired to dispatch these commands instead of calling the repository directly. A new PUT endpoint exposes the update command. Customer-portal mirrors live under `/api/v1/customer-portal/line-items/...` with line-item-back-to-customer ownership checks.
+
+**Weight consistency fix:** `OrderLineItem.weight` is per-piece (consistent with how `OrderCartonizationService` reads it). The `OrderProjection` weight aggregate previously summed line weights without multiplying by quantity, which silently understated total weight for any order with quantity > 1 lines. Phase 4 fixes the projection to compute `sum(weight × quantity)` and adds a regression test. Unit-weight overrides still take precedence when any TrackableUnit has an explicit weight set.
 
 ---
 

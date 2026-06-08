@@ -973,6 +973,17 @@ model TrackableUnit {
   barcode String? // Optional barcode/QR code
   notes   String?
 
+  // Phase 2: per-unit dim/weight overrides for sophisticated shippers (mixed-SKU
+  // pallets, custom-built handling units). When null, cartonization falls back
+  // to summing the contained line items.
+  weight     Float? // total weight of this unit (cargo + tare)
+  weightUnit String  @default("kg")
+  length     Float? // external footprint of this unit
+  width      Float?
+  height     Float?
+  dimUnit    String  @default("cm")
+  stackable  Boolean @default(true)
+
   // IoT device tracking at unit level
   sensorReadings SensorReading[]
   deviceEvents   DeviceEvent[]

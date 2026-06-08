@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Archive, ArrowLeft, Loader2 } from 'lucide-react';
+import { Archive, ArrowLeft, Loader2, Boxes } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { API_URL } from '../../api';
@@ -8,6 +8,7 @@ import { customerFetch } from './CustomerDashboard';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import HandlingUnitsEditor, { HUEditorEndpoints } from '../../components/HandlingUnitsEditor';
 import {
   Table,
   TableBody,
@@ -48,14 +49,31 @@ export default function CustomerOrderDetail() {
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [archiving, setArchiving] = useState(false);
+  const [editingUnits, setEditingUnits] = useState(false);
 
-  useEffect(() => {
-    customerFetch(`${API_URL}/api/v1/customer-portal/orders/${id}`)
+  const reload = useCallback(() => {
+    return customerFetch(`${API_URL}/api/v1/customer-portal/orders/${id}`)
       .then(r => r.json())
       .then(json => setOrder(json.data))
-      .catch(() => {})
-      .finally(() => setLoading(false));
+      .catch(() => {});
   }, [id]);
+
+  useEffect(() => {
+    setLoading(true);
+    reload().finally(() => setLoading(false));
+  }, [reload]);
+
+  const handlingUnitEndpoints: HUEditorEndpoints = {
+    cartonizationPreview: `${API_URL}/api/v1/order-line-items/cartonization/preview-units`,
+    packagingTypes:       `${API_URL}/api/v1/customer-portal/packaging-types`,
+    createUnit:      (orderId)     => `${API_URL}/api/v1/customer-portal/orders/${orderId}/trackable-units`,
+    updateUnit:      (unitId)      => `${API_URL}/api/v1/customer-portal/trackable-units/${unitId}`,
+    deleteUnit:      (unitId)      => `${API_URL}/api/v1/customer-portal/trackable-units/${unitId}`,
+    moveLineItem:    (lineItemId)  => `${API_URL}/api/v1/customer-portal/line-items/${lineItemId}/move`,
+    generateBarcode: (unitId)      => `${API_URL}/api/v1/customer-portal/trackable-units/${unitId}/generate-barcode`,
+    mergeUnits:      (orderId)     => `${API_URL}/api/v1/customer-portal/orders/${orderId}/trackable-units/merge`,
+    splitUnit:       (unitId)      => `${API_URL}/api/v1/customer-portal/trackable-units/${unitId}/split`,
+  };
 
   const canArchive = !!order && !order.archived;
 
@@ -345,12 +363,43 @@ export default function CustomerOrderDetail() {
         </Card>
       )}
 
-      {order.trackableUnits && order.trackableUnits.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Handling units</CardTitle>
-          </CardHeader>
-          <CardContent>
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>Handling units</CardTitle>
+          {!order.archived && (
+            <Button variant="outline" size="sm" onClick={() => setEditingUnits(e => !e)}>
+              <Boxes className="h-4 w-4" />
+              {editingUnits ? 'Done editing' : 'Edit handling units'}
+            </Button>
+          )}
+        </CardHeader>
+        <CardContent>
+          {editingUnits ? (
+            <HandlingUnitsEditor
+              orderId={order.id}
+              units={(order.trackableUnits ?? []).map((u: any) => ({
+                id: u.id,
+                identifier: u.identifier,
+                unitType: u.unitType,
+                sequenceNumber: u.sequenceNumber,
+                packagingType: u.packagingType ?? null,
+                packagingTypeId: u.packagingTypeId ?? null,
+                weight: u.weight, weightUnit: u.weightUnit,
+                length: u.length, width: u.width, height: u.height, dimUnit: u.dimUnit,
+                stackable: u.stackable,
+              }))}
+              lineItems={(order.lineItems ?? []).map((li: any) => ({
+                id: li.id, sku: li.sku, description: li.description, quantity: li.quantity,
+                weight: li.weight, weightUnit: li.weightUnit,
+                length: li.length, width: li.width, height: li.height, dimUnit: li.dimUnit,
+                freightClass: li.freightClass,
+                trackableUnitId: li.trackableUnitId ?? null,
+              }))}
+              endpoints={handlingUnitEndpoints}
+              fetcher={customerFetch as unknown as typeof fetch}
+              onChange={reload}
+            />
+          ) : order.trackableUnits && order.trackableUnits.length > 0 ? (
             <Table>
               <TableHeader>
                 <TableRow>
@@ -377,9 +426,11 @@ export default function CustomerOrderDetail() {
                 ))}
               </TableBody>
             </Table>
-          </CardContent>
-        </Card>
-      )}
+          ) : (
+            <div className="text-sm text-muted-foreground">No handling units yet. Click "Edit handling units" to build them.</div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

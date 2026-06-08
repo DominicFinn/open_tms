@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Loader2, Plus, Search } from 'lucide-react';
+import { Loader2, Plus, Search, Upload } from 'lucide-react';
 
 import { API_URL } from '../../api';
 import { customerFetch } from './CustomerDashboard';
@@ -68,12 +68,20 @@ export default function CustomerOrders() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-3xl font-bold tracking-tight">Orders</h1>
-        <Button variant="gradient" asChild>
-          <Link to="/customer-portal/orders/create">
-            <Plus className="h-4 w-4" />
-            New order
-          </Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" asChild>
+            <Link to="/customer-portal/orders/import">
+              <Upload className="h-4 w-4" />
+              Bulk upload
+            </Link>
+          </Button>
+          <Button variant="gradient" asChild>
+            <Link to="/customer-portal/orders/create">
+              <Plus className="h-4 w-4" />
+              New order
+            </Link>
+          </Button>
+        </div>
       </div>
 
       <Card>

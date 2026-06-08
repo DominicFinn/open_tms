@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { WarehouseService } from '../services/WarehouseService.js';
 import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
+import { authenticateJWT } from '../middleware/jwtAuth.js';
 
 /**
  * Warehouse App API Routes
@@ -15,12 +16,28 @@ export async function warehouseRoutes(server: FastifyInstance) {
   const prisma = server.prisma;
   const warehouseService = new WarehouseService(prisma);
 
-  // Multi-tenancy: warehouse PWA has no auth preHandlers today (a known
-  // gap on the broader review). For now we use the standard org-scope
-  // hook so routes pick up the default-Organization fallback — matches
-  // current single-tenant behaviour. When warehouse gets per-tenant auth
-  // (e.g. magic-link bound to a User with organizationId), the middleware
-  // will automatically use the JWT's orgId instead.
+  // Auth — every operational warehouse route requires a valid session JWT.
+  // The three login endpoints below are excluded (they're the way to GET
+  // the JWT in the first place), as is the admin magic-link generate
+  // endpoint (separate-concern admin action — TODO: wire it to a stricter
+  // admin role check instead of leaving it unauthed).
+  const unauthPaths = new Set<string>([
+    '/api/v1/warehouse/auth/magic-link/generate',
+    '/api/v1/warehouse/auth/magic-link/validate',
+    '/api/v1/warehouse/auth/login',
+  ]);
+  server.addHook('preHandler', async (req: FastifyRequest, reply: FastifyReply) => {
+    const matched = (req.routeOptions?.url as string | undefined)
+      ?? (req as any).routerPath
+      ?? req.url.split('?')[0];
+    if (unauthPaths.has(matched)) return;
+    await (authenticateJWT as any).call(server, req, reply);
+  });
+
+  // Multi-tenancy: now that operational routes carry a session JWT with
+  // organizationId, the standard org-scope hook works the same way as
+  // every other authed plugin. Unauthed auth endpoints fall through to
+  // the default-Organization fallback (matches their previous behaviour).
   await registerOrgScope(server);
 
   // ─── Auth: Magic Link ───────────────────────────────────────────────────────

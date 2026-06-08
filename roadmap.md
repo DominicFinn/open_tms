@@ -234,9 +234,27 @@ Every TMS needs customer self-service. The carrier portal exists but there's not
     - `OrderCartonizationService` derives density, suggested freight class (NMFC density table), rolled-up class, total weight, total cube, pallet positions, linear feet — read-only live preview at `POST /api/v1/order-line-items/cartonization/preview`
     - `PalletType` generalised → `PackagingType` (org-scoped catalogue with `kind` discriminator: pallet | carton | crate | drum | roll | bag | tote | loose | custom). Admin CRUD at `/wms/packaging-types`
     - Order-level packing summary auto-generates `TrackableUnit`s from `(packagingTypeId, unitCount, stackable)` — customers don't build pallets by hand
-  - Phase 2: per-unit manual modelling (mixed-SKU pallets, per-unit dims/weights) 🔲
+  - **Phase 2: Manual handling-unit modelling** ✅ (Jun 2026)
+    - `TrackableUnit` gains optional per-unit overrides: weight, L/W/H + units, stackable
+    - 8 per-unit operations promoted from repository-direct to CQRS commands (`CreateTrackableUnit`, `UpdateTrackableUnit`, `DeleteTrackableUnit`, `GenerateBarcode`, `AddLineItemToUnit`, `MoveLineItemBetweenUnits`, `MergeUnits`, `SplitUnit`). Each emits a `trackable_unit.*` event
+    - `OrderProjection` subscribes to `trackable_unit.*` and recomputes `trackableUnitCount`, `lineItemCount`, `totalWeight`. Per-unit weight overrides take precedence over line-item weight sums
+    - `OrderCartonizationService.computeOrderFromUnits` computes per-unit weight/cube/density/class with three-tier fallback (override → lines → packagingType external dims). Live preview at `POST /api/v1/order-line-items/cartonization/preview-units`
+    - `HandlingUnitsEditor` component (shared portal + admin): drag-and-drop line items between units via `@dnd-kit`, per-unit dim/weight edit fields, create/delete/merge/split actions, generate-barcode, live cartonization summary
+    - Customer portal mirrors the 8 admin endpoints under `/customer-portal/...` with customer-owns-order ownership checks
   - Order templates for recurring shipments 🔲
-  - Bulk order upload (CSV) through portal 🔲
+  - **Bulk order upload (CSV) through portal** ✅ (Jun 2026, Phase 3 of Order Line Items work)
+    - CSVImportService rewritten to dispatch `CREATE_ORDER` per order through the command bus (events fire, OrderProjection stays in sync — previously bypassed)
+    - Per-line `ModeRulesService` validation: each row checked against `(serviceLevel, hazmat, international, temp-controlled)`. International derived from origin/destination country mismatch
+    - All-or-nothing per order: any failing line rejects that whole order with row-level errors carrying source CSV row numbers; sibling orders still go through
+    - Customer-portal endpoint at `POST /api/v1/customer-portal/orders/import/csv` forces customerId to the authed customer (rejects CSVs that declare a different one)
+    - CSV template download at `GET /customer-portal/orders/import/csv/template` (admin: `/orders/import/csv/template`)
+    - Full Phase 1/2 column coverage: UoM, declared value, freight class, NMFC, UN/class/PG/PSN, HS/CoO, temp range, order-level packing summary, per-unit dim/weight/stackable overrides, packagingTypeCode resolution against the org catalogue
+    - Polished upload UI in both admin and portal: drag-drop, staged spinner (reading → validating → creating), per-row error display with order number tag, quick-links to created orders, template download
+  - **Phase 4: Line item CQRS + weight consistency** ✅ (Jun 2026)
+    - `CreateLineItemCommand` / `UpdateLineItemCommand` / `DeleteLineItemCommand` close the last CQRS gap in the order write surface. Each emits an `order_line_item.*` event consumed by `OrderProjection`
+    - New `PUT /api/v1/orders/:orderId/line-items/:itemId` lets operators (and customers, via portal mirror) edit any Phase 1 field on an existing line via sparse patch — no more delete-and-recreate
+    - The two legacy `/line-items` endpoints (POST add, DELETE remove) now dispatch commands instead of hitting the repo, so the read model and audit trail finally see them
+    - Weight aggregation bug fix: `OrderReadModel.totalWeight` now correctly sums `weight × quantity` per line (line weights are per-piece, matching cartonization). Unit-weight overrides still take precedence. Regression test included
 - **Shareable Tracking Links** ✅
   - HMAC-signed tracking tokens (no login required)
   - Public tracking page at /track/:token with status, route, stops timeline, tracking events

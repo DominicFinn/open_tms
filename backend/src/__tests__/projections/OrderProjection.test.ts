@@ -26,6 +26,11 @@ const mockPrisma = {
   },
   orderLineItem: {
     findMany: jest.fn().mockResolvedValue([{ weight: 500 }, { weight: 200 }]),
+    count: jest.fn().mockResolvedValue(2),
+  },
+  trackableUnit: {
+    findMany: jest.fn().mockResolvedValue([]),
+    count: jest.fn().mockResolvedValue(1),
   },
 } as any;
 
@@ -156,6 +161,117 @@ describe('OrderProjection', () => {
             exceptionType: null,
           }),
         })
+      );
+    });
+  });
+
+  describe('trackable_unit.* events (Phase 2)', () => {
+    it('subscribes to trackable_unit.* in addition to order.*', () => {
+      expect(projection.eventPatterns).toEqual(expect.arrayContaining(['order.*', 'trackable_unit.*']));
+    });
+
+    it('refreshes count + weight aggregates when a unit is created', async () => {
+      mockPrisma.trackableUnit.count.mockResolvedValueOnce(4);
+      mockPrisma.orderLineItem.count.mockResolvedValueOnce(7);
+      const event = createTestEvent(EVENT_TYPES.TRACKABLE_UNIT_CREATED, 'trackable_unit', 'tu-1', { orderId: 'order-1' });
+
+      await projection.handle(event);
+
+      expect(mockPrisma.trackableUnit.count).toHaveBeenCalledWith({ where: { orderId: 'order-1' } });
+      expect(mockPrisma.orderReadModel.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'order-1' },
+          data: expect.objectContaining({ trackableUnitCount: 4, lineItemCount: 7 }),
+        }),
+      );
+    });
+
+    it('prefers per-unit weight overrides when any unit has weight set', async () => {
+      mockPrisma.trackableUnit.findMany.mockResolvedValueOnce([{ weight: 1000 }, { weight: null }, { weight: 500 }]);
+      mockPrisma.trackableUnit.count.mockResolvedValueOnce(3);
+      mockPrisma.orderLineItem.count.mockResolvedValueOnce(10);
+
+      const event = createTestEvent(EVENT_TYPES.TRACKABLE_UNIT_UPDATED, 'trackable_unit', 'tu-1', { orderId: 'order-1' });
+      await projection.handle(event);
+
+      expect(mockPrisma.orderReadModel.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ totalWeight: 1500 }) }),
+      );
+    });
+
+    it('barcode_generated does not trigger a read-model update', async () => {
+      const event = createTestEvent(EVENT_TYPES.TRACKABLE_UNIT_BARCODE_GENERATED, 'trackable_unit', 'tu-1', { orderId: 'order-1' });
+      await projection.handle(event);
+      expect(mockPrisma.orderReadModel.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('order_line_item.* events (Phase 4)', () => {
+    it('subscribes to order_line_item.* in addition to order.* and trackable_unit.*', () => {
+      expect(projection.eventPatterns).toEqual(expect.arrayContaining(['order.*', 'trackable_unit.*', 'order_line_item.*']));
+    });
+
+    it('refreshes counts + total weight when a line item is created', async () => {
+      mockPrisma.orderLineItem.count.mockResolvedValueOnce(5);
+      mockPrisma.trackableUnit.count.mockResolvedValueOnce(2);
+      mockPrisma.trackableUnit.findMany.mockResolvedValueOnce([]);
+      mockPrisma.orderLineItem.findMany.mockResolvedValueOnce([{ weight: 10, quantity: 3 }, { weight: 5, quantity: 1 }]);
+
+      const event = createTestEvent(EVENT_TYPES.ORDER_LINE_ITEM_CREATED, 'order_line_item', 'li-1', { orderId: 'order-1' });
+      await projection.handle(event);
+
+      expect(mockPrisma.orderLineItem.count).toHaveBeenCalledWith({ where: { orderId: 'order-1' } });
+      expect(mockPrisma.orderReadModel.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'order-1' },
+          data: expect.objectContaining({ lineItemCount: 5, trackableUnitCount: 2, totalWeight: 10 * 3 + 5 * 1 }),
+        }),
+      );
+    });
+
+    it('refreshes after delete and update too', async () => {
+      mockPrisma.orderLineItem.count.mockResolvedValue(0);
+      mockPrisma.trackableUnit.count.mockResolvedValue(1);
+      mockPrisma.trackableUnit.findMany.mockResolvedValue([]);
+      mockPrisma.orderLineItem.findMany.mockResolvedValue([]);
+
+      await projection.handle(createTestEvent(EVENT_TYPES.ORDER_LINE_ITEM_UPDATED, 'order_line_item', 'li-1', { orderId: 'order-1' }));
+      await projection.handle(createTestEvent(EVENT_TYPES.ORDER_LINE_ITEM_DELETED, 'order_line_item', 'li-1', { orderId: 'order-1' }));
+
+      // Both events triggered a refresh; the empty-lines + no-unit-override case yields totalWeight=null.
+      expect(mockPrisma.orderReadModel.update).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('weight aggregation (per-piece × quantity)', () => {
+    it('multiplies line weight by quantity (regression fix for the per-piece bug)', async () => {
+      mockPrisma.orderLineItem.count.mockResolvedValueOnce(2);
+      mockPrisma.trackableUnit.count.mockResolvedValueOnce(0);
+      mockPrisma.trackableUnit.findMany.mockResolvedValueOnce([]);
+      mockPrisma.orderLineItem.findMany.mockResolvedValueOnce([
+        { weight: 25, quantity: 4 }, // 100
+        { weight: 50, quantity: 2 }, // 100
+      ]);
+
+      const event = createTestEvent(EVENT_TYPES.ORDER_LINE_ITEM_CREATED, 'order_line_item', 'li-1', { orderId: 'order-1' });
+      await projection.handle(event);
+
+      expect(mockPrisma.orderReadModel.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ totalWeight: 200 }) }),
+      );
+    });
+
+    it('still prefers per-unit overrides when any unit has weight set', async () => {
+      mockPrisma.orderLineItem.count.mockResolvedValueOnce(2);
+      mockPrisma.trackableUnit.count.mockResolvedValueOnce(2);
+      mockPrisma.trackableUnit.findMany.mockResolvedValueOnce([{ weight: 750 }, { weight: 250 }]);
+      mockPrisma.orderLineItem.findMany.mockResolvedValueOnce([{ weight: 1, quantity: 1 }]);
+
+      const event = createTestEvent(EVENT_TYPES.ORDER_LINE_ITEM_CREATED, 'order_line_item', 'li-1', { orderId: 'order-1' });
+      await projection.handle(event);
+
+      expect(mockPrisma.orderReadModel.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ totalWeight: 1000 }) }),
       );
     });
   });

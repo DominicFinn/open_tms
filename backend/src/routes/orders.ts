@@ -14,6 +14,21 @@ import { ICommandBus } from '../commands/CommandBus.js';
 import { CREATE_ORDER } from '../commands/orders/CreateOrderCommand.js';
 import { UPDATE_ORDER } from '../commands/orders/UpdateOrderCommand.js';
 import { ARCHIVE_ORDER } from '../commands/orders/ArchiveOrderCommand.js';
+import {
+  CREATE_TRACKABLE_UNIT,
+  UPDATE_TRACKABLE_UNIT,
+  DELETE_TRACKABLE_UNIT,
+  GENERATE_TRACKABLE_UNIT_BARCODE,
+  ADD_LINE_ITEM_TO_UNIT,
+  MOVE_LINE_ITEM_BETWEEN_UNITS,
+  MERGE_TRACKABLE_UNITS,
+  SPLIT_TRACKABLE_UNIT,
+} from '../commands/trackableUnits/index.js';
+import {
+  CREATE_LINE_ITEM,
+  UPDATE_LINE_ITEM,
+  DELETE_LINE_ITEM,
+} from '../commands/lineItems/index.js';
 import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 
 // Validation schemas (exported for reuse by customerApi.ts)
@@ -373,40 +388,84 @@ export async function orderRoutes(server: FastifyInstance) {
     return { data: updatedOrder, error: null };
   });
 
-  // Add line item to order
-  server.post('/api/v1/orders/:id/line-items', async (req: FastifyRequest, reply: FastifyReply) => {
+  // Add a flat line item to an order (no specific handling unit). Phase 4
+  // dispatches a command so the projection updates and the audit trail
+  // captures the change.
+  server.post('/api/v1/orders/:id/line-items', {
+    schema: { tags: ['Orders - Line Items'], summary: 'Add a line item directly to an order (no unit allocation)' },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
     const body = lineItemSchema.parse((req as any).body);
 
     const orgId = req.orgId!;
     const order = await ordersRepo.findById(id, orgId);
-    if (!order) {
-      reply.code(404);
-      return { data: null, error: 'Order not found' };
-    }
+    if (!order) { reply.code(404); return { data: null, error: 'Order not found' }; }
 
-    const lineItem = await ordersRepo.addLineItem(id, body);
+    const result = await commandBus.dispatch({
+      type: CREATE_LINE_ITEM,
+      orgId,
+      actorId: req.user?.sub ?? null,
+      payload: { orderId: id, item: body },
+      metadata: { correlationId: randomUUID(), source: 'api' },
+    });
+
+    if (!result.success) { reply.code(400); return { data: null, error: result.error }; }
     reply.code(201);
-    return { data: lineItem, error: null };
+    return { data: result.data, error: null };
+  });
+
+  // Edit an existing line item. New in Phase 4 (previously editable only by
+  // delete-and-recreate). Sparse payload — only the fields you pass get
+  // patched. Emits order_line_item.updated with a changes diff.
+  server.put('/api/v1/orders/:orderId/line-items/:itemId', {
+    schema: { tags: ['Orders - Line Items'], summary: 'Update a line item (sparse patch)' },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { orderId, itemId } = req.params as { orderId: string; itemId: string };
+    const body = lineItemSchema.partial().parse((req as any).body);
+
+    const orgId = req.orgId!;
+    const order = await ordersRepo.findById(orderId, orgId);
+    if (!order) { reply.code(404); return { data: null, error: 'Order not found' }; }
+
+    const result = await commandBus.dispatch({
+      type: UPDATE_LINE_ITEM,
+      orgId,
+      actorId: req.user?.sub ?? null,
+      payload: { id: itemId, data: body },
+      metadata: { correlationId: randomUUID(), source: 'api' },
+    });
+
+    if (!result.success) { reply.code(400); return { data: null, error: result.error }; }
+    return { data: result.data, error: null };
   });
 
   // Remove line item
-  server.delete('/api/v1/orders/:orderId/line-items/:itemId', async (req: FastifyRequest, reply: FastifyReply) => {
+  server.delete('/api/v1/orders/:orderId/line-items/:itemId', {
+    schema: { tags: ['Orders - Line Items'], summary: 'Delete a line item' },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { orderId, itemId } = req.params as { orderId: string; itemId: string };
 
     const orgId = req.orgId!;
     const order = await ordersRepo.findById(orderId, orgId);
-    if (!order) {
-      reply.code(404);
-      return { data: null, error: 'Order not found' };
-    }
+    if (!order) { reply.code(404); return { data: null, error: 'Order not found' }; }
 
-    await ordersRepo.removeLineItem(itemId);
+    const result = await commandBus.dispatch({
+      type: DELETE_LINE_ITEM,
+      orgId,
+      actorId: req.user?.sub ?? null,
+      payload: { id: itemId },
+      metadata: { correlationId: randomUUID(), source: 'api' },
+    });
+
+    if (!result.success) { reply.code(400); return { data: null, error: result.error }; }
     return { data: { success: true }, error: null };
   });
 
-  // Add trackable unit to order
-  server.post('/api/v1/orders/:id/trackable-units', async (req: FastifyRequest, reply: FastifyReply) => {
+  // Add trackable unit to order — Phase 2 dispatches a command so the
+  // creation emits trackable_unit.created and the read model stays in sync.
+  server.post('/api/v1/orders/:id/trackable-units', {
+    schema: { tags: ['Orders - Handling Units'], summary: 'Add a trackable unit to an order' },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
     const body = trackableUnitSchema.parse((req as any).body);
 
@@ -417,18 +476,50 @@ export async function orderRoutes(server: FastifyInstance) {
       return { data: null, error: 'Order not found' };
     }
 
-    const unit = await ordersRepo.addTrackableUnit(id, body);
+    const result = await commandBus.dispatch({
+      type: CREATE_TRACKABLE_UNIT,
+      orgId,
+      actorId: req.user?.sub ?? null,
+      payload: {
+        orderId: id,
+        identifier: body.identifier,
+        unitType: body.unitType,
+        customTypeName: body.customTypeName,
+        barcode: body.barcode,
+        notes: body.notes,
+        packagingTypeId: body.packagingTypeId ?? null,
+      },
+      metadata: { correlationId: randomUUID(), source: 'api' },
+    });
+
+    if (!result.success) {
+      reply.code(400);
+      return { data: null, error: result.error };
+    }
     reply.code(201);
-    return { data: unit, error: null };
+    return { data: result.data, error: null };
   });
 
-  // Update trackable unit
-  server.put('/api/v1/orders/:orderId/trackable-units/:unitId', async (req: FastifyRequest, reply: FastifyReply) => {
+  // Update trackable unit. Phase 2 widens this beyond identifier/notes/barcode
+  // to include per-unit dim/weight overrides + stackable + packagingType.
+  server.put('/api/v1/orders/:orderId/trackable-units/:unitId', {
+    schema: { tags: ['Orders - Handling Units'], summary: 'Update a trackable unit (identifier, notes, barcode, dims, weight, stackable)' },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { orderId, unitId } = req.params as { orderId: string; unitId: string };
     const body = z.object({
       identifier: z.string().min(1).optional(),
-      notes: z.string().optional(),
-      barcode: z.string().optional()
+      notes: z.string().nullable().optional(),
+      barcode: z.string().nullable().optional(),
+      packagingTypeId: z.string().uuid().nullable().optional(),
+      customTypeName: z.string().nullable().optional(),
+      weight: z.number().nullable().optional(),
+      weightUnit: z.string().optional(),
+      length: z.number().nullable().optional(),
+      width: z.number().nullable().optional(),
+      height: z.number().nullable().optional(),
+      dimUnit: z.string().optional(),
+      stackable: z.boolean().optional(),
+      condition: z.string().optional(),
     }).parse((req as any).body);
 
     const orgId = req.orgId!;
@@ -438,12 +529,25 @@ export async function orderRoutes(server: FastifyInstance) {
       return { data: null, error: 'Order not found' };
     }
 
-    const updated = await ordersRepo.updateTrackableUnit(unitId, body);
-    return { data: updated, error: null };
+    const result = await commandBus.dispatch({
+      type: UPDATE_TRACKABLE_UNIT,
+      orgId,
+      actorId: req.user?.sub ?? null,
+      payload: { id: unitId, data: body },
+      metadata: { correlationId: randomUUID(), source: 'api' },
+    });
+
+    if (!result.success) {
+      reply.code(400);
+      return { data: null, error: result.error };
+    }
+    return { data: result.data, error: null };
   });
 
   // Remove trackable unit
-  server.delete('/api/v1/orders/:orderId/trackable-units/:unitId', async (req: FastifyRequest, reply: FastifyReply) => {
+  server.delete('/api/v1/orders/:orderId/trackable-units/:unitId', {
+    schema: { tags: ['Orders - Handling Units'], summary: 'Delete a trackable unit (cascade-deletes its line items)' },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { orderId, unitId } = req.params as { orderId: string; unitId: string };
 
     const orgId = req.orgId!;
@@ -453,12 +557,25 @@ export async function orderRoutes(server: FastifyInstance) {
       return { data: null, error: 'Order not found' };
     }
 
-    await ordersRepo.removeTrackableUnit(unitId);
+    const result = await commandBus.dispatch({
+      type: DELETE_TRACKABLE_UNIT,
+      orgId,
+      actorId: req.user?.sub ?? null,
+      payload: { id: unitId },
+      metadata: { correlationId: randomUUID(), source: 'api' },
+    });
+
+    if (!result.success) {
+      reply.code(400);
+      return { data: null, error: result.error };
+    }
     return { data: { success: true }, error: null };
   });
 
   // Add line item to trackable unit
-  server.post('/api/v1/orders/:orderId/trackable-units/:unitId/line-items', async (req: FastifyRequest, reply: FastifyReply) => {
+  server.post('/api/v1/orders/:orderId/trackable-units/:unitId/line-items', {
+    schema: { tags: ['Orders - Handling Units'], summary: 'Add a new line item directly to a trackable unit' },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { orderId, unitId } = req.params as { orderId: string; unitId: string };
     const body = lineItemSchema.parse((req as any).body);
 
@@ -469,16 +586,30 @@ export async function orderRoutes(server: FastifyInstance) {
       return { data: null, error: 'Order not found' };
     }
 
-    const lineItem = await ordersRepo.addLineItemToUnit(unitId, body);
+    const result = await commandBus.dispatch({
+      type: ADD_LINE_ITEM_TO_UNIT,
+      orgId,
+      actorId: req.user?.sub ?? null,
+      payload: { unitId, item: body },
+      metadata: { correlationId: randomUUID(), source: 'api' },
+    });
+
+    if (!result.success) {
+      reply.code(400);
+      return { data: null, error: result.error };
+    }
     reply.code(201);
-    return { data: lineItem, error: null };
+    return { data: result.data, error: null };
   });
 
-  // Move line item to another trackable unit
-  server.put('/api/v1/orders/:orderId/line-items/:itemId/move', async (req: FastifyRequest, reply: FastifyReply) => {
+  // Move line item to another trackable unit (drag-and-drop reallocation).
+  // `targetUnitId: null` detaches the line from any unit.
+  server.put('/api/v1/orders/:orderId/line-items/:itemId/move', {
+    schema: { tags: ['Orders - Handling Units'], summary: 'Move a line item to another trackable unit (or detach)' },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { orderId, itemId } = req.params as { orderId: string; itemId: string };
     const body = z.object({
-      targetUnitId: z.string().uuid()
+      targetUnitId: z.string().uuid().nullable(),
     }).parse((req as any).body);
 
     const orgId = req.orgId!;
@@ -488,12 +619,25 @@ export async function orderRoutes(server: FastifyInstance) {
       return { data: null, error: 'Order not found' };
     }
 
-    const lineItem = await ordersRepo.moveLineItemToUnit(itemId, body.targetUnitId);
-    return { data: lineItem, error: null };
+    const result = await commandBus.dispatch({
+      type: MOVE_LINE_ITEM_BETWEEN_UNITS,
+      orgId,
+      actorId: req.user?.sub ?? null,
+      payload: { lineItemId: itemId, targetUnitId: body.targetUnitId },
+      metadata: { correlationId: randomUUID(), source: 'api' },
+    });
+
+    if (!result.success) {
+      reply.code(400);
+      return { data: null, error: result.error };
+    }
+    return { data: result.data, error: null };
   });
 
   // Generate barcode for trackable unit
-  server.post('/api/v1/orders/:orderId/trackable-units/:unitId/generate-barcode', async (req: FastifyRequest, reply: FastifyReply) => {
+  server.post('/api/v1/orders/:orderId/trackable-units/:unitId/generate-barcode', {
+    schema: { tags: ['Orders - Handling Units'], summary: 'Generate a barcode (TU-{unitId}-{timestamp}) for a unit' },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { orderId, unitId } = req.params as { orderId: string; unitId: string };
 
     const orgId = req.orgId!;
@@ -503,8 +647,19 @@ export async function orderRoutes(server: FastifyInstance) {
       return { data: null, error: 'Order not found' };
     }
 
-    const updated = await ordersRepo.generateBarcode(unitId);
-    return { data: updated, error: null };
+    const result = await commandBus.dispatch({
+      type: GENERATE_TRACKABLE_UNIT_BARCODE,
+      orgId,
+      actorId: req.user?.sub ?? null,
+      payload: { id: unitId },
+      metadata: { correlationId: randomUUID(), source: 'api' },
+    });
+
+    if (!result.success) {
+      reply.code(400);
+      return { data: null, error: result.error };
+    }
+    return { data: result.data, error: null };
   });
 
   // Convert order to shipment
@@ -602,58 +757,71 @@ export async function orderRoutes(server: FastifyInstance) {
     return { data: timeline, error: null };
   });
 
-  // Merge trackable units
-  server.post('/api/v1/orders/:orderId/trackable-units/merge', async (req: FastifyRequest, reply: FastifyReply) => {
+  // Merge trackable units — moves all of source's line items onto target
+  // then deletes source. Both must belong to the same order.
+  server.post('/api/v1/orders/:orderId/trackable-units/merge', {
+    schema: { tags: ['Orders - Handling Units'], summary: 'Merge two trackable units (source -> target, source deleted)' },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { orderId } = req.params as { orderId: string };
     const body = z.object({
       sourceUnitId: z.string().uuid(),
       targetUnitId: z.string().uuid()
     }).parse((req as any).body);
 
-    try {
-      const orgId = req.orgId!;
-      const order = await ordersRepo.findById(orderId, orgId);
-      if (!order) {
-        reply.code(404);
-        return { data: null, error: 'Order not found' };
-      }
-
-      await ordersRepo.mergeUnits(body.sourceUnitId, body.targetUnitId);
-      return { data: { success: true }, error: null };
-    } catch (err: any) {
-      reply.code(400);
-      return { data: null, error: err.message || 'Failed to merge units' };
+    const orgId = req.orgId!;
+    const order = await ordersRepo.findById(orderId, orgId);
+    if (!order) {
+      reply.code(404);
+      return { data: null, error: 'Order not found' };
     }
+
+    const result = await commandBus.dispatch({
+      type: MERGE_TRACKABLE_UNITS,
+      orgId,
+      actorId: req.user?.sub ?? null,
+      payload: { sourceUnitId: body.sourceUnitId, targetUnitId: body.targetUnitId },
+      metadata: { correlationId: randomUUID(), source: 'api' },
+    });
+
+    if (!result.success) {
+      reply.code(400);
+      return { data: null, error: result.error };
+    }
+    return { data: result.data, error: null };
   });
 
   // Split trackable unit
-  server.post('/api/v1/orders/:orderId/trackable-units/:unitId/split', async (req: FastifyRequest, reply: FastifyReply) => {
+  server.post('/api/v1/orders/:orderId/trackable-units/:unitId/split', {
+    schema: { tags: ['Orders - Handling Units'], summary: 'Split a trackable unit by moving specified line items to a new unit' },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { orderId, unitId } = req.params as { orderId: string; unitId: string };
     const body = z.object({
-      itemIdsToMove: z.array(z.string().uuid()),
+      itemIdsToMove: z.array(z.string().uuid()).min(1),
       newIdentifier: z.string().min(1),
       notes: z.string().optional()
     }).parse((req as any).body);
 
-    try {
-      const orgId = req.orgId!;
-      const order = await ordersRepo.findById(orderId, orgId);
-      if (!order) {
-        reply.code(404);
-        return { data: null, error: 'Order not found' };
-      }
-
-      const newUnit = await ordersRepo.splitUnit(unitId, body.itemIdsToMove, {
-        identifier: body.newIdentifier,
-        notes: body.notes
-      });
-
-      reply.code(201);
-      return { data: newUnit, error: null };
-    } catch (err: any) {
-      reply.code(400);
-      return { data: null, error: err.message || 'Failed to split unit' };
+    const orgId = req.orgId!;
+    const order = await ordersRepo.findById(orderId, orgId);
+    if (!order) {
+      reply.code(404);
+      return { data: null, error: 'Order not found' };
     }
+
+    const result = await commandBus.dispatch({
+      type: SPLIT_TRACKABLE_UNIT,
+      orgId,
+      actorId: req.user?.sub ?? null,
+      payload: { unitId, lineItemIds: body.itemIdsToMove, newIdentifier: body.newIdentifier },
+      metadata: { correlationId: randomUUID(), source: 'api' },
+    });
+
+    if (!result.success) {
+      reply.code(400);
+      return { data: null, error: result.error };
+    }
+    reply.code(201);
+    return { data: result.data, error: null };
   });
 
   // Export order to CSV
@@ -723,41 +891,67 @@ export async function orderRoutes(server: FastifyInstance) {
       .send(csvContent);
   });
 
-  // CSV Import endpoint
-  server.post('/api/v1/orders/import/csv', async (req: FastifyRequest, reply: FastifyReply) => {
+  // CSV Import endpoint. Accepts either a JSON body `{ csvContent }` (default,
+  // matches the frontend uploader) OR a raw text/csv body (handy for curl).
+  // Per-line mode-rules validation runs server-side; orders with any failing
+  // line are rejected with row-level errors while siblings still go through.
+  server.post('/api/v1/orders/import/csv', {
+    schema: {
+      tags: ['Orders - Bulk Import'],
+      summary: 'Bulk-import orders from a CSV',
+      description: 'Accepts a JSON body with `csvContent`. Validates every line against the active mode rules (FTL/LTL × hazmat × international × temp-controlled). All-or-nothing per order: an order is rejected entirely if any of its lines fail.',
+      body: {
+        type: 'object',
+        required: ['csvContent'],
+        properties: { csvContent: { type: 'string' } },
+      },
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
     try {
-      const body = req.body as { csvContent: string };
+      let csvContent: string | undefined;
+      const ct = (req.headers['content-type'] ?? '').toString().toLowerCase();
+      if (ct.includes('text/csv') || ct.includes('text/plain')) {
+        csvContent = typeof req.body === 'string' ? req.body : undefined;
+      } else {
+        const body = req.body as { csvContent?: string };
+        csvContent = body?.csvContent;
+      }
 
-      if (!body.csvContent) {
+      if (!csvContent) {
         reply.code(400);
-        return {
-          data: null,
-          error: 'CSV content is required'
-        };
+        return { data: null, error: 'csvContent is required' };
       }
 
       const orgId = req.orgId!;
-      const result = await csvImportService.importOrders(body.csvContent, orgId);
+      const result = await csvImportService.importOrders(csvContent, {
+        orgId,
+        actorId: req.user?.sub ?? null,
+        source: 'csv',
+      });
 
-      if (!result.success && result.errors.length > 0) {
-        reply.code(400);
-        return {
-          data: result,
-          error: `Import completed with errors: ${result.errors.length} errors occurred`
-        };
-      }
-
-      return {
-        data: result,
-        error: null
-      };
+      // Return 200 with the full result even on partial errors so the UI can
+      // show row-level diagnostics + the orders that did get created.
+      return { data: result, error: null };
     } catch (err: any) {
       reply.code(500);
-      return {
-        data: null,
-        error: err.message || 'CSV import failed'
-      };
+      return { data: null, error: err.message || 'CSV import failed' };
     }
+  });
+
+  // CSV template download — header-only CSV with every column the importer
+  // understands. Customers download this, fill it in, upload it back.
+  server.get('/api/v1/orders/import/csv/template', {
+    schema: {
+      tags: ['Orders - Bulk Import'],
+      summary: 'Download a blank CSV template with all supported columns',
+      response: { 200: { type: 'string' } },
+    },
+  }, async (_req: FastifyRequest, reply: FastifyReply) => {
+    const template = csvImportService.buildTemplate();
+    return reply
+      .header('Content-Type', 'text/csv')
+      .header('Content-Disposition', 'attachment; filename="order-import-template.csv"')
+      .send(template);
   });
 
   // EDI Import endpoint — handled by ediImport.ts route module

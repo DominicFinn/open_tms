@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'crypto';
+import { signInternalJWT } from '../auth/internalJWT.js';
 
 /**
  * WarehouseService — Business logic for the warehouse shipment launch app.
@@ -26,6 +27,13 @@ export interface WarehouseUser {
 }
 
 export interface LoginResult {
+  /**
+   * Session JWT — accepted by `authenticateJWT` (same shape as the
+   * regular admin login). Frontends send it in the `Authorization:
+   * Bearer <token>` header on every subsequent warehouse request so
+   * `req.user` (and downstream `req.orgId`) is populated.
+   */
+  token: string;
   user: WarehouseUser;
 }
 
@@ -147,7 +155,11 @@ export class WarehouseService {
       failReason: null,
     });
 
-    return { success: true, data: { user: this.buildUserPayload(magicLink.user) } };
+    const userPayload = this.buildUserPayload(magicLink.user);
+    return {
+      success: true,
+      data: { token: this.signSessionToken(userPayload), user: userPayload },
+    };
   }
 
   async passwordLogin(
@@ -199,7 +211,28 @@ export class WarehouseService {
     });
     await this.logLoginAttempt({ userId: user.id, method: 'password', ipAddress, userAgent, success: true, failReason: null });
 
-    return { success: true, data: { user: this.buildUserPayload(user) } };
+    const userPayload = this.buildUserPayload(user);
+    return {
+      success: true,
+      data: { token: this.signSessionToken(userPayload), user: userPayload },
+    };
+  }
+
+  /**
+   * Sign a session JWT for a warehouse login. Format matches the
+   * regular admin login so `authenticateJWT` accepts it on every
+   * subsequent warehouse request.
+   */
+  private signSessionToken(user: WarehouseUser): string {
+    return signInternalJWT({
+      sub: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      roles: user.roles,
+      permissions: user.permissions,
+      organizationId: user.organizationId ?? undefined,
+    });
   }
 
   // ─── Shipment Operations ────────────────────────────────────────────────

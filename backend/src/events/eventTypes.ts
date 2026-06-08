@@ -34,6 +34,21 @@ export const EVENT_TYPES = {
   ORDER_DELIVERED: 'order.delivered',
   ORDER_ARCHIVED: 'order.archived',
 
+  // Trackable Units (per-handling-unit ops, Phase 2)
+  TRACKABLE_UNIT_CREATED: 'trackable_unit.created',
+  TRACKABLE_UNIT_UPDATED: 'trackable_unit.updated',
+  TRACKABLE_UNIT_DELETED: 'trackable_unit.deleted',
+  TRACKABLE_UNIT_BARCODE_GENERATED: 'trackable_unit.barcode_generated',
+  TRACKABLE_UNIT_LINE_ITEM_ADDED: 'trackable_unit.line_item_added',
+  TRACKABLE_UNIT_LINE_ITEM_MOVED: 'trackable_unit.line_item_moved',
+  TRACKABLE_UNITS_MERGED: 'trackable_unit.merged',
+  TRACKABLE_UNIT_SPLIT: 'trackable_unit.split',
+
+  // Order Line Items (per-line ops, Phase 4)
+  ORDER_LINE_ITEM_CREATED: 'order_line_item.created',
+  ORDER_LINE_ITEM_UPDATED: 'order_line_item.updated',
+  ORDER_LINE_ITEM_DELETED: 'order_line_item.deleted',
+
   // Carriers
   CARRIER_CREATED: 'carrier.created',
   CARRIER_UPDATED: 'carrier.updated',
@@ -384,6 +399,17 @@ export const EVENT_SCHEMA_VERSIONS: Record<string, number> = {
   [EVENT_TYPES.ORDER_EXCEPTION_RESOLVED]: 1,
   [EVENT_TYPES.ORDER_DELIVERED]: 1,
   [EVENT_TYPES.ORDER_ARCHIVED]: 1,
+  [EVENT_TYPES.TRACKABLE_UNIT_CREATED]: 1,
+  [EVENT_TYPES.TRACKABLE_UNIT_UPDATED]: 1,
+  [EVENT_TYPES.TRACKABLE_UNIT_DELETED]: 1,
+  [EVENT_TYPES.TRACKABLE_UNIT_BARCODE_GENERATED]: 1,
+  [EVENT_TYPES.TRACKABLE_UNIT_LINE_ITEM_ADDED]: 1,
+  [EVENT_TYPES.TRACKABLE_UNIT_LINE_ITEM_MOVED]: 1,
+  [EVENT_TYPES.TRACKABLE_UNITS_MERGED]: 1,
+  [EVENT_TYPES.TRACKABLE_UNIT_SPLIT]: 1,
+  [EVENT_TYPES.ORDER_LINE_ITEM_CREATED]: 1,
+  [EVENT_TYPES.ORDER_LINE_ITEM_UPDATED]: 1,
+  [EVENT_TYPES.ORDER_LINE_ITEM_DELETED]: 1,
   [EVENT_TYPES.CARRIER_CREATED]: 1,
   [EVENT_TYPES.CARRIER_UPDATED]: 1,
   [EVENT_TYPES.CARRIER_ARCHIVED]: 1,

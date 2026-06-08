@@ -49,6 +49,21 @@ import { CommandBus } from '../commands/CommandBus.js';
 import { CreateOrderCommandHandler } from '../commands/orders/CreateOrderCommand.js';
 import { UpdateOrderCommandHandler } from '../commands/orders/UpdateOrderCommand.js';
 import { ArchiveOrderCommandHandler } from '../commands/orders/ArchiveOrderCommand.js';
+import {
+  CreateTrackableUnitCommandHandler,
+  UpdateTrackableUnitCommandHandler,
+  DeleteTrackableUnitCommandHandler,
+  GenerateTrackableUnitBarcodeCommandHandler,
+  AddLineItemToUnitCommandHandler,
+  MoveLineItemBetweenUnitsCommandHandler,
+  MergeTrackableUnitsCommandHandler,
+  SplitTrackableUnitCommandHandler,
+} from '../commands/trackableUnits/index.js';
+import {
+  CreateLineItemCommandHandler,
+  UpdateLineItemCommandHandler,
+  DeleteLineItemCommandHandler,
+} from '../commands/lineItems/index.js';
 import { CreateShipmentCommandHandler } from '../commands/shipments/CreateShipmentCommand.js';
 import { UpdateShipmentCommandHandler } from '../commands/shipments/UpdateShipmentCommand.js';
 import { ArchiveShipmentCommandHandler } from '../commands/shipments/ArchiveShipmentCommand.js';
@@ -336,9 +351,10 @@ export function registerDependencies(prisma: PrismaClient): void {
   container.singleton(TOKENS.ICSVImportService).toFactory(() => {
     return new CSVImportService(
       container.resolve(TOKENS.PrismaClient),
-      container.resolve(TOKENS.IOrdersRepository),
       container.resolve(TOKENS.ICustomersRepository),
-      container.resolve(TOKENS.ILocationsRepository)
+      container.resolve(TOKENS.ILocationsRepository),
+      container.resolve(TOKENS.ICommandBus),
+      container.resolve(TOKENS.IModeRulesService),
     );
   });
 
@@ -784,6 +800,17 @@ export function registerDependencies(prisma: PrismaClient): void {
     bus.register(new CreateOrderCommandHandler(prisma, eventBus));
     bus.register(new UpdateOrderCommandHandler(prisma, eventBus));
     bus.register(new ArchiveOrderCommandHandler(prisma, eventBus));
+    bus.register(new CreateTrackableUnitCommandHandler(prisma, eventBus));
+    bus.register(new UpdateTrackableUnitCommandHandler(prisma, eventBus));
+    bus.register(new DeleteTrackableUnitCommandHandler(prisma, eventBus));
+    bus.register(new GenerateTrackableUnitBarcodeCommandHandler(prisma, eventBus));
+    bus.register(new AddLineItemToUnitCommandHandler(prisma, eventBus));
+    bus.register(new MoveLineItemBetweenUnitsCommandHandler(prisma, eventBus));
+    bus.register(new MergeTrackableUnitsCommandHandler(prisma, eventBus));
+    bus.register(new SplitTrackableUnitCommandHandler(prisma, eventBus));
+    bus.register(new CreateLineItemCommandHandler(prisma, eventBus));
+    bus.register(new UpdateLineItemCommandHandler(prisma, eventBus));
+    bus.register(new DeleteLineItemCommandHandler(prisma, eventBus));
 
     // Shipment commands
     bus.register(new CreateShipmentCommandHandler(prisma, eventBus, queue));

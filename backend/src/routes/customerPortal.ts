@@ -14,6 +14,22 @@ import { ICommandBus } from '../commands/CommandBus.js';
 import { CREATE_RMA } from '../commands/rma/CreateRmaCommand.js';
 import { CREATE_ORDER } from '../commands/orders/CreateOrderCommand.js';
 import { ARCHIVE_ORDER } from '../commands/orders/ArchiveOrderCommand.js';
+import { ICSVImportService } from '../services/CSVImportService.js';
+import {
+  CREATE_TRACKABLE_UNIT,
+  UPDATE_TRACKABLE_UNIT,
+  DELETE_TRACKABLE_UNIT,
+  GENERATE_TRACKABLE_UNIT_BARCODE,
+  ADD_LINE_ITEM_TO_UNIT,
+  MOVE_LINE_ITEM_BETWEEN_UNITS,
+  MERGE_TRACKABLE_UNITS,
+  SPLIT_TRACKABLE_UNIT,
+} from '../commands/trackableUnits/index.js';
+import {
+  CREATE_LINE_ITEM,
+  UPDATE_LINE_ITEM,
+  DELETE_LINE_ITEM,
+} from '../commands/lineItems/index.js';
 import type { IBinaryStorageProvider } from '../storage/IBinaryStorageProvider.js';
 import { attachOrgScopeFromCustomerUserHook } from '../auth/orgScopeMiddleware.js';
 
@@ -24,6 +40,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
   const authService = container.resolve<ICustomerAuthService>(TOKENS.ICustomerAuthService);
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
   const binaryStorage = container.resolve<IBinaryStorageProvider>(TOKENS.IBinaryStorageProvider);
+  const csvImportService = container.resolve<ICSVImportService>(TOKENS.ICSVImportService);
 
   // Multi-tenancy: every authed customer-portal route resolves req.orgId
   // by walking customerUser.customerId → Customer.orgId. The hook runs
@@ -271,6 +288,346 @@ export async function customerPortalRoutes(server: FastifyInstance) {
       return { data: null, error: result.error };
     }
     return { data: { id }, error: null };
+  });
+
+  // ─── Handling Units (Phase 2: sophisticated shippers edit handling units after order create) ───
+  //
+  // Customer-portal mirrors of the admin trackable-unit endpoints. Each one
+  // first verifies the order belongs to the authed customer, then dispatches
+  // the same command as the admin path (so events, projection, and audit
+  // are consistent across portal + admin).
+
+  /** Walks `unitId` (or order id) back to the customer's order; returns the order or 404-style result. */
+  async function ensureCustomerOwnsOrder(orderId: string, customerId: string): Promise<{ id: string; orgId: string } | null> {
+    return server.prisma.order.findFirst({
+      where: { id: orderId, customerId },
+      select: { id: true, orgId: true },
+    });
+  }
+  async function customerOwnsUnit(unitId: string, customerId: string): Promise<{ id: string; orgId: string } | null> {
+    const unit = await server.prisma.trackableUnit.findUnique({
+      where: { id: unitId },
+      select: { order: { select: { id: true, orgId: true, customerId: true } } },
+    });
+    if (!unit?.order || unit.order.customerId !== customerId) return null;
+    return { id: unit.order.id, orgId: unit.order.orgId };
+  }
+
+  server.post('/api/v1/customer-portal/orders/:id/trackable-units', {
+    preHandler: [authenticateCustomerJWT],
+    schema: { tags: ['Customer Portal - Handling Units'], summary: 'Add a handling unit to an order' },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const body = (req as any).body ?? {};
+    const order = await ensureCustomerOwnsOrder(id, req.customerUser!.customerId);
+    if (!order) { reply.code(404); return { data: null, error: 'Order not found' }; }
+
+    const result = await commandBus.dispatch({
+      type: CREATE_TRACKABLE_UNIT,
+      orgId: order.orgId,
+      actorId: req.customerUser!.sub,
+      payload: {
+        orderId: id,
+        identifier: body.identifier,
+        unitType: body.unitType ?? 'pallet',
+        customTypeName: body.customTypeName,
+        barcode: body.barcode,
+        notes: body.notes,
+        packagingTypeId: body.packagingTypeId ?? null,
+        weight: body.weight,
+        weightUnit: body.weightUnit,
+        length: body.length,
+        width: body.width,
+        height: body.height,
+        dimUnit: body.dimUnit,
+        stackable: body.stackable,
+      },
+      metadata: { correlationId: crypto.randomUUID(), source: 'customer-portal' },
+    });
+
+    if (!result.success) { reply.code(400); return { data: null, error: result.error }; }
+    reply.code(201);
+    return { data: result.data, error: null };
+  });
+
+  server.put('/api/v1/customer-portal/trackable-units/:unitId', {
+    preHandler: [authenticateCustomerJWT],
+    schema: { tags: ['Customer Portal - Handling Units'], summary: 'Update a handling unit (identifier, notes, packaging, dims, weight, stackable)' },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { unitId } = req.params as { unitId: string };
+    const order = await customerOwnsUnit(unitId, req.customerUser!.customerId);
+    if (!order) { reply.code(404); return { data: null, error: 'Unit not found' }; }
+    const body = (req as any).body ?? {};
+
+    const result = await commandBus.dispatch({
+      type: UPDATE_TRACKABLE_UNIT,
+      orgId: order.orgId,
+      actorId: req.customerUser!.sub,
+      payload: { id: unitId, data: body },
+      metadata: { correlationId: crypto.randomUUID(), source: 'customer-portal' },
+    });
+
+    if (!result.success) { reply.code(400); return { data: null, error: result.error }; }
+    return { data: result.data, error: null };
+  });
+
+  server.delete('/api/v1/customer-portal/trackable-units/:unitId', {
+    preHandler: [authenticateCustomerJWT],
+    schema: { tags: ['Customer Portal - Handling Units'], summary: 'Delete a handling unit (cascade-deletes its line items)' },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { unitId } = req.params as { unitId: string };
+    const order = await customerOwnsUnit(unitId, req.customerUser!.customerId);
+    if (!order) { reply.code(404); return { data: null, error: 'Unit not found' }; }
+
+    const result = await commandBus.dispatch({
+      type: DELETE_TRACKABLE_UNIT,
+      orgId: order.orgId,
+      actorId: req.customerUser!.sub,
+      payload: { id: unitId },
+      metadata: { correlationId: crypto.randomUUID(), source: 'customer-portal' },
+    });
+    if (!result.success) { reply.code(400); return { data: null, error: result.error }; }
+    return { data: { success: true }, error: null };
+  });
+
+  server.post('/api/v1/customer-portal/trackable-units/:unitId/line-items', {
+    preHandler: [authenticateCustomerJWT],
+    schema: { tags: ['Customer Portal - Handling Units'], summary: 'Add a new line item directly to a handling unit' },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { unitId } = req.params as { unitId: string };
+    const order = await customerOwnsUnit(unitId, req.customerUser!.customerId);
+    if (!order) { reply.code(404); return { data: null, error: 'Unit not found' }; }
+    const body = (req as any).body ?? {};
+
+    const result = await commandBus.dispatch({
+      type: ADD_LINE_ITEM_TO_UNIT,
+      orgId: order.orgId,
+      actorId: req.customerUser!.sub,
+      payload: { unitId, item: body },
+      metadata: { correlationId: crypto.randomUUID(), source: 'customer-portal' },
+    });
+    if (!result.success) { reply.code(400); return { data: null, error: result.error }; }
+    reply.code(201);
+    return { data: result.data, error: null };
+  });
+
+  server.put('/api/v1/customer-portal/line-items/:itemId/move', {
+    preHandler: [authenticateCustomerJWT],
+    schema: { tags: ['Customer Portal - Handling Units'], summary: 'Move a line item to another handling unit (or detach with null)' },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { itemId } = req.params as { itemId: string };
+    const body = (req as any).body ?? {};
+
+    // Ownership: the line item must belong to a customer's order.
+    const lineItem = await server.prisma.orderLineItem.findUnique({
+      where: { id: itemId },
+      select: { order: { select: { id: true, orgId: true, customerId: true } } },
+    });
+    if (!lineItem?.order || lineItem.order.customerId !== req.customerUser!.customerId) {
+      reply.code(404);
+      return { data: null, error: 'Line item not found' };
+    }
+
+    const result = await commandBus.dispatch({
+      type: MOVE_LINE_ITEM_BETWEEN_UNITS,
+      orgId: lineItem.order.orgId,
+      actorId: req.customerUser!.sub,
+      payload: { lineItemId: itemId, targetUnitId: body.targetUnitId ?? null },
+      metadata: { correlationId: crypto.randomUUID(), source: 'customer-portal' },
+    });
+    if (!result.success) { reply.code(400); return { data: null, error: result.error }; }
+    return { data: result.data, error: null };
+  });
+
+  server.post('/api/v1/customer-portal/trackable-units/:unitId/generate-barcode', {
+    preHandler: [authenticateCustomerJWT],
+    schema: { tags: ['Customer Portal - Handling Units'], summary: 'Generate a barcode for a handling unit' },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { unitId } = req.params as { unitId: string };
+    const order = await customerOwnsUnit(unitId, req.customerUser!.customerId);
+    if (!order) { reply.code(404); return { data: null, error: 'Unit not found' }; }
+    const result = await commandBus.dispatch({
+      type: GENERATE_TRACKABLE_UNIT_BARCODE,
+      orgId: order.orgId,
+      actorId: req.customerUser!.sub,
+      payload: { id: unitId },
+      metadata: { correlationId: crypto.randomUUID(), source: 'customer-portal' },
+    });
+    if (!result.success) { reply.code(400); return { data: null, error: result.error }; }
+    return { data: result.data, error: null };
+  });
+
+  server.post('/api/v1/customer-portal/orders/:id/trackable-units/merge', {
+    preHandler: [authenticateCustomerJWT],
+    schema: { tags: ['Customer Portal - Handling Units'], summary: 'Merge two handling units (source -> target, source deleted)' },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const body = (req as any).body ?? {};
+    const order = await ensureCustomerOwnsOrder(id, req.customerUser!.customerId);
+    if (!order) { reply.code(404); return { data: null, error: 'Order not found' }; }
+    const result = await commandBus.dispatch({
+      type: MERGE_TRACKABLE_UNITS,
+      orgId: order.orgId,
+      actorId: req.customerUser!.sub,
+      payload: { sourceUnitId: body.sourceUnitId, targetUnitId: body.targetUnitId },
+      metadata: { correlationId: crypto.randomUUID(), source: 'customer-portal' },
+    });
+    if (!result.success) { reply.code(400); return { data: null, error: result.error }; }
+    return { data: result.data, error: null };
+  });
+
+  server.post('/api/v1/customer-portal/trackable-units/:unitId/split', {
+    preHandler: [authenticateCustomerJWT],
+    schema: { tags: ['Customer Portal - Handling Units'], summary: 'Split a handling unit by moving specified line items to a new unit' },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { unitId } = req.params as { unitId: string };
+    const body = (req as any).body ?? {};
+    const order = await customerOwnsUnit(unitId, req.customerUser!.customerId);
+    if (!order) { reply.code(404); return { data: null, error: 'Unit not found' }; }
+
+    const result = await commandBus.dispatch({
+      type: SPLIT_TRACKABLE_UNIT,
+      orgId: order.orgId,
+      actorId: req.customerUser!.sub,
+      payload: { unitId, lineItemIds: body.itemIdsToMove ?? [], newIdentifier: body.newIdentifier },
+      metadata: { correlationId: crypto.randomUUID(), source: 'customer-portal' },
+    });
+    if (!result.success) { reply.code(400); return { data: null, error: result.error }; }
+    reply.code(201);
+    return { data: result.data, error: null };
+  });
+
+  // ─── Line items (Phase 4: full CRUD over commands) ───
+  //
+  // Customer-portal mirrors of the admin line-item endpoints. Ownership is
+  // verified by walking from the line item back to its order, then to the
+  // customer.
+
+  async function customerOwnsLineItem(itemId: string, customerId: string): Promise<{ id: string; orgId: string } | null> {
+    const li = await server.prisma.orderLineItem.findUnique({
+      where: { id: itemId },
+      select: { order: { select: { id: true, orgId: true, customerId: true } } },
+    });
+    if (!li?.order || li.order.customerId !== customerId) return null;
+    return { id: li.order.id, orgId: li.order.orgId };
+  }
+
+  server.post('/api/v1/customer-portal/orders/:id/line-items', {
+    preHandler: [authenticateCustomerJWT],
+    schema: { tags: ['Customer Portal - Line Items'], summary: 'Add a flat line item to one of your orders' },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const body = (req as any).body ?? {};
+    const order = await ensureCustomerOwnsOrder(id, req.customerUser!.customerId);
+    if (!order) { reply.code(404); return { data: null, error: 'Order not found' }; }
+
+    const result = await commandBus.dispatch({
+      type: CREATE_LINE_ITEM,
+      orgId: order.orgId,
+      actorId: req.customerUser!.sub,
+      payload: { orderId: id, trackableUnitId: body.trackableUnitId ?? null, item: body },
+      metadata: { correlationId: crypto.randomUUID(), source: 'customer-portal' },
+    });
+    if (!result.success) { reply.code(400); return { data: null, error: result.error }; }
+    reply.code(201);
+    return { data: result.data, error: null };
+  });
+
+  server.put('/api/v1/customer-portal/line-items/:itemId', {
+    preHandler: [authenticateCustomerJWT],
+    schema: { tags: ['Customer Portal - Line Items'], summary: 'Update fields on a line item (sparse patch)' },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { itemId } = req.params as { itemId: string };
+    const order = await customerOwnsLineItem(itemId, req.customerUser!.customerId);
+    if (!order) { reply.code(404); return { data: null, error: 'Line item not found' }; }
+    const body = (req as any).body ?? {};
+
+    const result = await commandBus.dispatch({
+      type: UPDATE_LINE_ITEM,
+      orgId: order.orgId,
+      actorId: req.customerUser!.sub,
+      payload: { id: itemId, data: body },
+      metadata: { correlationId: crypto.randomUUID(), source: 'customer-portal' },
+    });
+    if (!result.success) { reply.code(400); return { data: null, error: result.error }; }
+    return { data: result.data, error: null };
+  });
+
+  server.delete('/api/v1/customer-portal/line-items/:itemId', {
+    preHandler: [authenticateCustomerJWT],
+    schema: { tags: ['Customer Portal - Line Items'], summary: 'Delete a line item' },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { itemId } = req.params as { itemId: string };
+    const order = await customerOwnsLineItem(itemId, req.customerUser!.customerId);
+    if (!order) { reply.code(404); return { data: null, error: 'Line item not found' }; }
+
+    const result = await commandBus.dispatch({
+      type: DELETE_LINE_ITEM,
+      orgId: order.orgId,
+      actorId: req.customerUser!.sub,
+      payload: { id: itemId },
+      metadata: { correlationId: crypto.randomUUID(), source: 'customer-portal' },
+    });
+    if (!result.success) { reply.code(400); return { data: null, error: result.error }; }
+    return { data: { success: true }, error: null };
+  });
+
+  // ─── Bulk CSV upload (customer self-service) ───
+  //
+  // Customer-portal mirror of the admin CSV importer. Forces customerId on
+  // every parsed order to the authenticated customer so they can't smuggle
+  // orders onto someone else's account.
+
+  server.get('/api/v1/customer-portal/orders/import/csv/template', {
+    preHandler: [authenticateCustomerJWT],
+    schema: {
+      tags: ['Customer Portal - Bulk Import'],
+      summary: 'Download a blank CSV template for bulk order upload',
+      response: { 200: { type: 'string' } },
+    },
+  }, async (_req: FastifyRequest, reply: FastifyReply) => {
+    const template = csvImportService.buildTemplate();
+    return reply
+      .header('Content-Type', 'text/csv')
+      .header('Content-Disposition', 'attachment; filename="order-import-template.csv"')
+      .send(template);
+  });
+
+  server.post('/api/v1/customer-portal/orders/import/csv', {
+    preHandler: [authenticateCustomerJWT],
+    schema: {
+      tags: ['Customer Portal - Bulk Import'],
+      summary: 'Bulk-upload orders from a CSV',
+      description: 'Per-line validation against the active mode rules. customerId on every order is forced to the authenticated customer. Per-order rejection on failure; successful orders still go through.',
+      body: {
+        type: 'object',
+        required: ['csvContent'],
+        properties: { csvContent: { type: 'string' } },
+      },
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const customerId = req.customerUser!.customerId;
+    const orgId = req.orgId!;
+    const ct = (req.headers['content-type'] ?? '').toString().toLowerCase();
+    let csvContent: string | undefined;
+    if (ct.includes('text/csv') || ct.includes('text/plain')) {
+      csvContent = typeof req.body === 'string' ? req.body : undefined;
+    } else {
+      csvContent = (req.body as { csvContent?: string })?.csvContent;
+    }
+    if (!csvContent) {
+      reply.code(400);
+      return { data: null, error: 'csvContent is required' };
+    }
+
+    const result = await csvImportService.importOrders(csvContent, {
+      orgId,
+      forceCustomerId: customerId,
+      actorId: req.customerUser!.sub,
+      source: 'customer_portal_csv',
+    });
+
+    return { data: result, error: null };
   });
 
   // Packaging types catalogue (read-only, org-scoped to customer's tenant).

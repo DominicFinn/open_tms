@@ -12,8 +12,10 @@ import {
   X,
   XCircle,
 } from 'lucide-react';
+import { toast } from 'sonner';
 
-import { API_URL } from '../api';
+import { API_URL } from '../../api';
+import { customerFetch } from './CustomerDashboard';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
@@ -33,7 +35,7 @@ interface ImportResult {
 
 type Stage = 'idle' | 'reading' | 'validating' | 'creating' | 'done';
 
-export default function VNextOrderImportCSV() {
+export default function CustomerImportOrdersCSV() {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -64,7 +66,6 @@ export default function VNextOrderImportCSV() {
     setFile(null); setResult(null); setError(''); setStage('idle');
     if (fileInputRef.current) fileInputRef.current.value = '';
   }
-
   function formatFileSize(bytes: number): string {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -79,12 +80,10 @@ export default function VNextOrderImportCSV() {
       setStage('reading');
       const csvContent = await file.text();
       setStage('validating');
-      // Tiny pause so the user perceives the stage change.
       await new Promise(r => setTimeout(r, 60));
       setStage('creating');
-      const res = await fetch(`${API_URL}/api/v1/orders/import/csv`, {
+      const res = await customerFetch(`${API_URL}/api/v1/customer-portal/orders/import/csv`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ csvContent }),
       });
       const json = await res.json().catch(() => null);
@@ -92,14 +91,39 @@ export default function VNextOrderImportCSV() {
       if (json?.error) throw new Error(json.error);
       setResult(json.data as ImportResult);
       setStage('done');
+      const created = json.data?.ordersCreated ?? 0;
+      const failed = json.data?.errors?.length ?? 0;
+      if (created > 0 && failed === 0) {
+        toast.success(`${created} order${created === 1 ? '' : 's'} created`);
+      } else if (created > 0) {
+        toast.warning(`${created} created, ${failed} errors`);
+      } else {
+        toast.error(`Import failed: ${failed} errors`);
+      }
     } catch (err: any) {
       setError(err.message || 'Import failed');
+      toast.error('Failed to import CSV', { description: err?.message || 'Network error' });
       setStage('idle');
     }
   }
 
-  function downloadTemplate() {
-    window.location.href = `${API_URL}/api/v1/orders/import/csv/template`;
+  async function downloadTemplate() {
+    try {
+      const res = await customerFetch(`${API_URL}/api/v1/customer-portal/orders/import/csv/template`);
+      if (!res.ok) throw new Error(`Failed (${res.status})`);
+      const text = await res.text();
+      const blob = new Blob([text], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'order-import-template.csv';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      toast.error('Failed to download template', { description: err?.message || 'Network error' });
+    }
   }
 
   const stageLabel: Record<Stage, string> = {
@@ -112,19 +136,18 @@ export default function VNextOrderImportCSV() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-2">
-        <Button variant="ghost" size="sm" onClick={() => navigate('/orders')}>
+      <div>
+        <Button variant="ghost" size="sm" onClick={() => navigate('/customer-portal/orders')}>
           <ArrowLeft className="h-4 w-4" />
           Orders
         </Button>
-        <span className="text-sm text-muted-foreground">/ Import CSV</span>
       </div>
-
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Import orders from CSV</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Bulk upload orders</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Upload a CSV to create orders in bulk. Each line is re-validated against the active mode rules
-          (LTL needs dimensions and class, hazmat needs UN/class/PG/PSN, etc.). Any order with a failing line is rejected with row-level errors.
+          Upload a CSV to create orders in bulk. Each line is validated against the active mode rules
+          (LTL needs dimensions and class, hazmat needs UN/class/packing group/proper shipping name, etc.).
+          Orders with any failing line are rejected with row-level errors; sibling orders still go through.
         </p>
       </div>
 
@@ -248,7 +271,7 @@ export default function VNextOrderImportCSV() {
                     <div className="mb-2 text-sm font-semibold">Created orders</div>
                     <div className="flex flex-wrap gap-2">
                       {result.orders.map(o => (
-                        <Button key={o.id} variant="outline" size="sm" onClick={() => navigate(`/orders/${o.id}`)}>
+                        <Button key={o.id} variant="outline" size="sm" onClick={() => navigate(`/customer-portal/orders/${o.id}`)}>
                           {o.orderNumber}
                         </Button>
                       ))}
@@ -267,21 +290,18 @@ export default function VNextOrderImportCSV() {
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground">
-                Download the template to see every column the importer accepts, including the Phase 1 logistics fields
-                (UoM, declared value, freight class, hazmat detail, customs, temperature range) and the Phase 2
-                handling-unit + packing-summary columns.
+                Download the template to see every column the importer accepts. Required fields depend on the mode and flags:
+                LTL needs dimensions and class; hazmat needs UN/class/packing group/proper shipping name; international needs HS code and country of origin; temperature-controlled needs min/max degrees C.
               </p>
               <Button variant="outline" className="mt-4 w-full" onClick={downloadTemplate}>
                 <Download className="h-4 w-4" />
                 Download template
               </Button>
               <div className="mt-6 space-y-2 text-xs text-muted-foreground">
-                <div><span className="font-semibold">Required per row:</span> orderNumber, sku, quantity</div>
-                <div><span className="font-semibold">Required per order:</span> customerId or customerName, weight, unitOfMeasure</div>
-                <div><span className="font-semibold">Required for LTL:</span> length, width, height, freightClass, nmfcCode, stackable</div>
-                <div><span className="font-semibold">Required for hazmat lines:</span> unNumber, hazmatClass, packingGroup, properShippingName</div>
-                <div><span className="font-semibold">Required for international:</span> hsCode, countryOfOrigin</div>
-                <div><span className="font-semibold">Group rows</span> for one order by repeating the same orderNumber.</div>
+                <div><span className="font-semibold">Per row:</span> orderNumber, sku, quantity (required)</div>
+                <div><span className="font-semibold">Per order:</span> always include weight + unitOfMeasure</div>
+                <div><span className="font-semibold">Group rows for one order</span> by repeating the same orderNumber</div>
+                <div><span className="font-semibold">customerId</span> is forced to your account, you can omit it</div>
               </div>
             </CardContent>
           </Card>

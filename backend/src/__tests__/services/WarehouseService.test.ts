@@ -208,6 +208,14 @@ describe('WarehouseService', () => {
         expect(result.data.user.email).toBe('warehouse@test.com');
         expect(result.data.user.roles).toEqual(['warehouse']);
         expect(result.data.user.permissions).toEqual(['shipments:read', 'devices:read']);
+        // Session JWT is now returned alongside the user payload so the
+        // PWA can include it on every subsequent operational request.
+        expect(typeof result.data.token).toBe('string');
+        expect(result.data.token.split('.')).toHaveLength(3);
+        const payload = JSON.parse(Buffer.from(result.data.token.split('.')[1], 'base64url').toString());
+        expect(payload.iss).toBe('open-tms-auth');
+        expect(payload.sub).toBe('user-1');
+        expect(payload.organizationId).toBe(mockUser.organizationId);
       }
     });
 
@@ -343,6 +351,24 @@ describe('WarehouseService', () => {
       if (result.success) {
         expect(result.data.user.id).toBe('user-1');
         expect(result.data.user.email).toBe('warehouse@test.com');
+      }
+    });
+
+    it('returns a session JWT alongside the user payload', async () => {
+      const result = await service.passwordLogin(
+        'warehouse@test.com', 'password123', null, null, compareTrue,
+      );
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(typeof result.data.token).toBe('string');
+        const payload = JSON.parse(
+          Buffer.from(result.data.token.split('.')[1], 'base64url').toString(),
+        );
+        expect(payload.iss).toBe('open-tms-auth');
+        expect(payload.sub).toBe('user-1');
+        expect(payload.organizationId).toBe(mockUser.organizationId);
+        expect(payload.roles).toEqual(['warehouse']);
       }
     });
 

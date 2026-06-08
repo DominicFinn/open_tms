@@ -50,6 +50,25 @@ const CartonizationBody = z.object({
   packingSummary: PackingSummarySchema,
 });
 
+const UnitSchema = z.object({
+  id: z.string().optional(),
+  packagingTypeLengthMm: z.number().nullable().optional(),
+  packagingTypeWidthMm: z.number().nullable().optional(),
+  packagingTypeHeightMm: z.number().nullable().optional(),
+  weight: z.number().nullable().optional(),
+  weightUnit: z.enum(['kg', 'lb', 'g']).optional(),
+  length: z.number().nullable().optional(),
+  width: z.number().nullable().optional(),
+  height: z.number().nullable().optional(),
+  dimUnit: z.enum(['cm', 'in', 'mm']).optional(),
+  stackable: z.boolean().optional(),
+  lines: z.array(LineSchema).default([]),
+});
+
+const UnitsBody = z.object({
+  units: z.array(UnitSchema).default([]),
+});
+
 export async function orderLineItemRulesRoutes(server: FastifyInstance) {
   const modeRules = container.resolve<IModeRulesService>(TOKENS.IModeRulesService);
   const cartonization = container.resolve<IOrderCartonizationService>(TOKENS.IOrderCartonizationService);
@@ -137,6 +156,31 @@ export async function orderLineItemRulesRoutes(server: FastifyInstance) {
   }, async (req: FastifyRequest) => {
     const body = CartonizationBody.parse((req as any).body ?? {});
     const result = cartonization.computeOrder(body.lines, body.packingSummary as any);
+    return { data: result, error: null };
+  });
+
+  // Phase 2: unit-aware cartonization. Caller supplies the explicit handling
+  // units (with optional per-unit dim/weight overrides + their line items) and
+  // we compute the rolled-up class, total weight, total cube, pallet positions,
+  // and linear feet from the actual unit composition.
+  server.post('/api/v1/order-line-items/cartonization/preview-units', {
+    schema: {
+      tags: ['Orders - Line Items'],
+      summary: 'Unit-aware cartonization preview (Phase 2)',
+      description: 'Compute cartonization from explicit handling units. Per-unit weight/dims override the sum of contained lines. Used by the handling-units editor live preview.',
+      body: {
+        type: 'object',
+        properties: {
+          units: {
+            type: 'array',
+            items: { type: 'object' },
+          },
+        },
+      },
+    },
+  }, async (req: FastifyRequest) => {
+    const body = UnitsBody.parse((req as any).body ?? {});
+    const result = cartonization.computeOrderFromUnits(body.units as any);
     return { data: result, error: null };
   });
 }

@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
+  Boxes,
   CircleAlert,
   ExternalLink,
   FileText,
@@ -23,6 +24,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import HandlingUnitsEditor, { HUEditorEndpoints } from '../components/HandlingUnitsEditor';
 
 type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning' | 'info' | 'muted';
 
@@ -147,28 +149,42 @@ export default function VNextOrderDetail() {
   const [order, setOrder] = useState<OrderData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [editingUnits, setEditingUnits] = useState(false);
+
+  const loadOrder = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/v1/orders/${id}`);
+      if (!res.ok) throw new Error(`Failed to load order (${res.status})`);
+      const json = await res.json();
+      if (json.error) throw new Error(json.error);
+      setOrder(json.data);
+      setError('');
+    } catch (err: any) {
+      setError(err.message || 'Failed to load order');
+    }
+  }, [id]);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      try {
-        setLoading(true);
-        const res = await fetch(`${API_URL}/api/v1/orders/${id}`);
-        if (!res.ok) throw new Error(`Failed to load order (${res.status})`);
-        const json = await res.json();
-        if (json.error) throw new Error(json.error);
-        if (!cancelled) {
-          setOrder(json.data);
-          setError('');
-        }
-      } catch (err: any) {
-        if (!cancelled) setError(err.message || 'Failed to load order');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
+      setLoading(true);
+      await loadOrder();
+      if (!cancelled) setLoading(false);
     })();
     return () => { cancelled = true; };
-  }, [id]);
+  }, [loadOrder]);
+
+  const handlingUnitEndpoints: HUEditorEndpoints = {
+    cartonizationPreview: `${API_URL}/api/v1/order-line-items/cartonization/preview-units`,
+    packagingTypes:       `${API_URL}/api/v1/packaging-types?activeOnly=true`,
+    createUnit:      (orderId)     => `${API_URL}/api/v1/orders/${orderId}/trackable-units`,
+    updateUnit:      (unitId)      => `${API_URL}/api/v1/orders/${id}/trackable-units/${unitId}`,
+    deleteUnit:      (unitId)      => `${API_URL}/api/v1/orders/${id}/trackable-units/${unitId}`,
+    moveLineItem:    (lineItemId)  => `${API_URL}/api/v1/orders/${id}/line-items/${lineItemId}/move`,
+    generateBarcode: (unitId)      => `${API_URL}/api/v1/orders/${id}/trackable-units/${unitId}/generate-barcode`,
+    mergeUnits:      (orderId)     => `${API_URL}/api/v1/orders/${orderId}/trackable-units/merge`,
+    splitUnit:       (unitId)      => `${API_URL}/api/v1/orders/${id}/trackable-units/${unitId}/split`,
+  };
 
   if (loading) {
     return (
@@ -400,14 +416,46 @@ export default function VNextOrderDetail() {
             </CardContent>
           </Card>
 
-          {order.trackableUnits && order.trackableUnits.length > 0 && (
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>Trackable units</CardTitle>
-                <span className="text-sm text-muted-foreground">{order.trackableUnits.length} units</span>
-              </CardHeader>
-              <CardContent className="p-0">
-                <Separator />
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Handling units</CardTitle>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">{order.trackableUnits?.length ?? 0} units</span>
+                <Button variant="outline" size="sm" onClick={() => setEditingUnits(s => !s)}>
+                  <Boxes className="h-4 w-4" />
+                  {editingUnits ? 'Done editing' : 'Edit handling units'}
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className={editingUnits ? '' : 'p-0'}>
+              {!editingUnits && <Separator />}
+              {editingUnits ? (
+                <HandlingUnitsEditor
+                  orderId={order.id}
+                  units={(order.trackableUnits ?? []).map((tu: any) => ({
+                    id: tu.id,
+                    identifier: tu.identifier,
+                    unitType: tu.unitType,
+                    sequenceNumber: tu.sequenceNumber,
+                    packagingType: tu.packagingType ?? null,
+                    packagingTypeId: tu.packagingTypeId ?? null,
+                    weight: tu.weight, weightUnit: tu.weightUnit,
+                    length: tu.length, width: tu.width, height: tu.height, dimUnit: tu.dimUnit,
+                    stackable: tu.stackable,
+                  }))}
+                  lineItems={(order.lineItems ?? []).concat(
+                    (order.trackableUnits ?? []).flatMap((tu: any) => (tu.lineItems ?? []).map((li: any) => ({ ...li, trackableUnitId: tu.id })))
+                  ).map((li: any) => ({
+                    id: li.id, sku: li.sku, description: li.description, quantity: li.quantity,
+                    weight: li.weight, weightUnit: li.weightUnit,
+                    length: li.length, width: li.width, height: li.height, dimUnit: li.dimUnit,
+                    freightClass: li.freightClass,
+                    trackableUnitId: li.trackableUnitId ?? null,
+                  }))}
+                  endpoints={handlingUnitEndpoints}
+                  onChange={loadOrder}
+                />
+              ) : (order.trackableUnits && order.trackableUnits.length > 0) ? (
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -428,9 +476,13 @@ export default function VNextOrderDetail() {
                     ))}
                   </TableBody>
                 </Table>
-              </CardContent>
-            </Card>
-          )}
+              ) : (
+                <div className="p-6 text-sm text-muted-foreground">
+                  No handling units yet. Click "Edit handling units" to build them.
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">

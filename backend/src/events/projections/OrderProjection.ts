@@ -18,7 +18,7 @@ import { EVENT_TYPES } from '../eventTypes.js';
 
 export class OrderProjection implements IEventHandler {
   readonly name = 'projection.order';
-  readonly eventPatterns = ['order.*'];
+  readonly eventPatterns = ['order.*', 'trackable_unit.*', 'order_line_item.*'];
   readonly options: SubscribeOptions = {
     concurrency: 3,
     priority: 5,
@@ -48,10 +48,49 @@ export class OrderProjection implements IEventHandler {
         return this.onExceptionResolved(event);
       case EVENT_TYPES.ORDER_ARCHIVED:
         return this.onOrderArchived(event);
+      case EVENT_TYPES.TRACKABLE_UNIT_CREATED:
+      case EVENT_TYPES.TRACKABLE_UNIT_UPDATED:
+      case EVENT_TYPES.TRACKABLE_UNIT_DELETED:
+      case EVENT_TYPES.TRACKABLE_UNIT_LINE_ITEM_ADDED:
+      case EVENT_TYPES.TRACKABLE_UNIT_LINE_ITEM_MOVED:
+      case EVENT_TYPES.TRACKABLE_UNITS_MERGED:
+      case EVENT_TYPES.TRACKABLE_UNIT_SPLIT:
+        return this.onTrackableUnitChanged(event);
+      case EVENT_TYPES.TRACKABLE_UNIT_BARCODE_GENERATED:
+        // No read-model impact — barcode is a per-unit attribute only.
+        break;
+      case EVENT_TYPES.ORDER_LINE_ITEM_CREATED:
+      case EVENT_TYPES.ORDER_LINE_ITEM_UPDATED:
+      case EVENT_TYPES.ORDER_LINE_ITEM_DELETED:
+        return this.onLineItemChanged(event);
       default:
         // Unknown order event — skip
         break;
     }
+  }
+
+  /**
+   * Trackable-unit mutations affect the order's denormalised counts +
+   * aggregate weight. All trackable_unit.* events carry `orderId` in the
+   * payload so we can recompute targeted at the right order.
+   */
+  private async onTrackableUnitChanged(event: DomainEvent): Promise<void> {
+    const orderId = (event.payload as { orderId?: string })?.orderId;
+    if (!orderId) return;
+
+    const [unitCount, totalWeight] = await Promise.all([
+      this.prisma.trackableUnit.count({ where: { orderId } }),
+      this.calculateTotalWeight(orderId),
+    ]);
+
+    const lineItemCount = await this.prisma.orderLineItem.count({ where: { orderId } });
+
+    await this.prisma.orderReadModel.update({
+      where: { id: orderId },
+      data: { trackableUnitCount: unitCount, lineItemCount, totalWeight, updatedAt: new Date() },
+    }).catch((err: Error) => {
+      console.error(`[OrderProjection] Failed to refresh counts for order ${orderId}: ${err.message}`);
+    });
   }
 
   private async onOrderCreated(event: DomainEvent): Promise<void> {
@@ -239,13 +278,55 @@ export class OrderProjection implements IEventHandler {
     });
   }
 
+  /**
+   * Line-item mutations affect the order's `lineItemCount` + `totalWeight` in
+   * the read model. All order_line_item.* events carry `orderId` in the
+   * payload so we can target the recompute precisely.
+   */
+  private async onLineItemChanged(event: DomainEvent): Promise<void> {
+    const orderId = (event.payload as { orderId?: string })?.orderId;
+    if (!orderId) return;
+
+    const [lineItemCount, trackableUnitCount, totalWeight] = await Promise.all([
+      this.prisma.orderLineItem.count({ where: { orderId } }),
+      this.prisma.trackableUnit.count({ where: { orderId } }),
+      this.calculateTotalWeight(orderId),
+    ]);
+
+    await this.prisma.orderReadModel.update({
+      where: { id: orderId },
+      data: { lineItemCount, trackableUnitCount, totalWeight, updatedAt: new Date() },
+    }).catch((err: Error) => {
+      console.error(`[OrderProjection] Failed to refresh counts after line-item event on ${orderId}: ${err.message}`);
+    });
+  }
+
+  /**
+   * Order weight aggregation. Line weight is treated as PER-PIECE: total =
+   * sum(weight × quantity). Cartonization treats it the same way (per-piece),
+   * so this keeps the two layers consistent.
+   *
+   * Phase 2 override: if any TrackableUnit has an explicit weight set
+   * (sophisticated shipper built mixed-SKU pallets), trust the unit totals
+   * rather than re-deriving from lines.
+   */
   private async calculateTotalWeight(orderId: string): Promise<number | null> {
-    const items = await this.prisma.orderLineItem.findMany({
+    const units = await this.prisma.trackableUnit.findMany({
       where: { orderId },
       select: { weight: true },
     });
+    const hasUnitOverride = units.some(u => u.weight != null && u.weight > 0);
+    if (hasUnitOverride) {
+      const total = units.reduce((sum, u) => sum + (u.weight ?? 0), 0);
+      return total > 0 ? total : null;
+    }
+
+    const items = await this.prisma.orderLineItem.findMany({
+      where: { orderId },
+      select: { weight: true, quantity: true },
+    });
     if (items.length === 0) return null;
-    const total = items.reduce((sum, item) => sum + (item.weight ?? 0), 0);
+    const total = items.reduce((sum, item) => sum + ((item.weight ?? 0) * (item.quantity ?? 1)), 0);
     return total > 0 ? total : null;
   }
 }

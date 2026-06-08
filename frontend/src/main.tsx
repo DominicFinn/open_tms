@@ -101,6 +101,7 @@ import CustomerDocuments from './pages/customer-portal/CustomerDocuments';
 import CustomerInvoices from './pages/customer-portal/CustomerInvoices';
 import CustomerProfile from './pages/customer-portal/CustomerProfile';
 import CustomerCreateOrder from './pages/customer-portal/CustomerCreateOrder';
+import CustomerImportOrdersCSV from './pages/customer-portal/CustomerImportOrdersCSV';
 import CustomerReturns from './pages/customer-portal/CustomerReturns';
 import CustomerRequestReturn from './pages/customer-portal/CustomerRequestReturn';
 import CustomerReturnDetail from './pages/customer-portal/CustomerReturnDetail';
@@ -254,6 +255,7 @@ root.render(
           <Route index element={<CustomerDashboard />} />
           <Route path="orders" element={<CustomerOrders />} />
           <Route path="orders/create" element={<CustomerCreateOrder />} />
+          <Route path="orders/import" element={<CustomerImportOrdersCSV />} />
           <Route path="orders/:id" element={<CustomerOrderDetail />} />
           <Route path="shipments" element={<CustomerShipments />} />
           <Route path="shipments/:id" element={<CustomerShipmentDetail />} />

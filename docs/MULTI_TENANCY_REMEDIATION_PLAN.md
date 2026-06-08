@@ -177,10 +177,20 @@ As part of the remediation work that produced this document:
   - `edi214` is special: it had `(shipment as any).orgId ?? req.user?.organizationId ?? 'default-org'`. Since `Shipment.orgId` is NOT NULL post phase 2, the shipment is now the authoritative source and `req.orgId!` is the explicit fallback path.
 - **Tests** (+10 in [orgScopeMiddleware.test.ts](backend/src/__tests__/auth/orgScopeMiddleware.test.ts)) cover the hybrid hook end-to-end: JWT-wins precedence, body partnerId walk via customer, fallback via carrier, URL `params.partnerId` and `params.id`, idempotence, non-string partnerId safety, DB error → leave undefined (not null) so the fallback hook fires, plus an end-to-end chain test showing partner-hook → fallback-hook → default Organization.
 
-### What's left (Phase 7+)
-- **Per-tenant auth on warehouse PWA** — warehouse routes have no auth preHandlers today. Once magic-link → User JWT lands properly, the existing `registerOrgScope` automatically picks up the JWT's orgId.
+### Phase 7 (this round) — warehouse PWA per-tenant auth
+- **Root cause confirmed**: `WarehouseService.validateMagicLink` and `passwordLogin` returned a `user` payload but **no session token at all**. Every operational warehouse route was running unauthenticated, and the standard `registerOrgScope` was silently picking the default Organization for whoever happened to call.
+- **Shared JWT helper** [auth/internalJWT.ts](backend/src/auth/internalJWT.ts) — `signInternalJWT(claims, ttlHours?)` produces tokens with the same shape as `AuthService.generateToken` (HS256, `open-tms-auth` issuer). The existing `authenticateJWT` middleware accepts them as-is — no new verifier needed.
+- **Warehouse login flows now mint a session token** ([WarehouseService.ts](backend/src/services/WarehouseService.ts)) — both `validateMagicLink` and `passwordLogin` return `{ token, user }`. `LoginResult.token` is documented as the value to send in the `Authorization: Bearer …` header on every subsequent warehouse request.
+- **Warehouse plugin preHandler** ([warehouse.ts](backend/src/routes/warehouse.ts)) — a single plugin-level hook runs `authenticateJWT` on every route except an allow-list of three login endpoints (`/auth/magic-link/generate`, `/auth/magic-link/validate`, `/auth/login`). After auth fires, `req.user.organizationId` flows through the standard `registerOrgScope` chain that was already wired up, so `req.orgId` is now driven by the JWT instead of falling back to the default Organization on every call.
+- **Tests** (+13):
+  - 7 in [internalJWT.test.ts](backend/src/__tests__/auth/internalJWT.test.ts) cover the JWT shape — 3 segments, HS256 header, every claim makes it into the payload, iat/exp/iss correctness, custom TTL, signature verifies against `JWT_SECRET`, optional claims are correctly omitted.
+  - 2 added to [WarehouseService.test.ts](backend/src/__tests__/services/WarehouseService.test.ts) assert both login paths return a valid `open-tms-auth` JWT whose payload includes the right sub, organizationId, and roles.
+
+### What's left (Phase 8+)
+- **Admin role check on `/warehouse/auth/magic-link/generate`** — left allow-listed (unauthed) in this round for back-compat. Should require an admin-role JWT before the next deploy.
 - **`prisma.shipment` direct queries in workers / handlers / projections** — operate inside event-scoped context where orgId is already known, so the cross-tenant risk is lower; still worth a sweep for consistency.
 - **`EdiTransactionLog.orgId` tightening** — once a Phase 2.5 backfill exists for the manual-import rows.
 - **Live-DB integration tests** — the cross-tenant unit suites lock the WHERE-clause shape. A small `pg-mem` or Docker-postgres suite would catch any Prisma behaviour drift.
 - **`SystemLocoAdapter` multi-tenant routing** — accept an org hint from the webhook config rather than falling back to the first Organization.
+- **Migrate `AuthService.generateToken` to use the shared `signInternalJWT`** — would dedupe the HMAC plumbing; safe but cosmetic.
 - **Shared logistics catalogue** (future product feature) — if we want some Locations or Lanes to be cross-tenant reference data, add an `isShared` flag and update the repo to OR (`{ orgId: requestingOrg } OR { isShared: true }`) on reads.

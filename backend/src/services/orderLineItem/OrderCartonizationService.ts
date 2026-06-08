@@ -89,9 +89,52 @@ export function maxClass(a: string | null, b: string | null): string | null {
   return parseFloat(a) >= parseFloat(b) ? a : b;
 }
 
+/**
+ * Phase 2: explicit handling-unit modelling. Each unit has its own dims/weight/
+ * stackable plus a list of line items assigned to it. When the unit's weight
+ * or dims are set, they override the sum of the contained line items.
+ */
+export interface CartonizationUnitInput {
+  id?: string;
+  packagingTypeLengthMm?: number | null;
+  packagingTypeWidthMm?: number | null;
+  packagingTypeHeightMm?: number | null;
+  weight?: number | null;
+  weightUnit?: WeightUnit;
+  length?: number | null;
+  width?: number | null;
+  height?: number | null;
+  dimUnit?: DimUnit;
+  stackable?: boolean;
+  lines: CartonizationLineInput[];
+}
+
+export interface CartonizationUnitResult {
+  id?: string;
+  totalWeightLbs: number;
+  totalCubeFt: number;
+  densityLbsPerCubeFt: number | null;
+  rolledUpFreightClass: string | null;
+  linearFeetContribution: number;
+  stackable: boolean;
+  weightSource: 'override' | 'lines' | 'empty';
+  dimsSource: 'override' | 'packagingType' | 'lines' | 'empty';
+}
+
+export interface OrderCartonizationFromUnitsResult {
+  units: CartonizationUnitResult[];
+  rolledUpFreightClass: string | null;
+  totalWeightLbs: number;
+  totalCubeFt: number;
+  unitCount: number;
+  palletPositions: number;
+  linearFeet: number;
+}
+
 export interface IOrderCartonizationService {
   computeLine(line: CartonizationLineInput): CartonizationLineResult;
   computeOrder(lines: CartonizationLineInput[], packingSummary?: PackingSummaryInput | null): OrderCartonizationResult;
+  computeOrderFromUnits(units: CartonizationUnitInput[]): OrderCartonizationFromUnitsResult;
 }
 
 export class OrderCartonizationService implements IOrderCartonizationService {
@@ -178,6 +221,109 @@ export class OrderCartonizationService implements IOrderCartonizationService {
       totalCubeFt: Number(totalCubeFt.toFixed(4)),
       palletPositions,
       linearFeet,
+    };
+  }
+
+  /**
+   * Phase 2: compute cartonization from explicit handling units. Each unit's
+   * weight/dims override the sum of its contained line items; when neither
+   * override nor lines are present, the packagingType's external dims are the
+   * fallback. Rolled-up class on a unit is the max of its line classes.
+   */
+  computeOrderFromUnits(units: CartonizationUnitInput[]): OrderCartonizationFromUnitsResult {
+    const unitResults: CartonizationUnitResult[] = units.map(u => this.computeUnit(u));
+
+    const totalWeightLbs = unitResults.reduce((s, r) => s + r.totalWeightLbs, 0);
+    const totalCubeFt    = unitResults.reduce((s, r) => s + r.totalCubeFt, 0);
+
+    let rolledUp: string | null = null;
+    for (const r of unitResults) rolledUp = maxClass(rolledUp, r.rolledUpFreightClass);
+
+    // Pallet positions: stackable units share floor space (2-deep), unstackable
+    // ones each take their own. Compute the partition then sum.
+    const stackableCount = unitResults.filter(r => r.stackable).length;
+    const unstackableCount = unitResults.length - stackableCount;
+    const palletPositions = Math.ceil(stackableCount / 2) + unstackableCount;
+
+    const linearFeet = unitResults.reduce((s, r) => s + r.linearFeetContribution, 0);
+
+    return {
+      units: unitResults,
+      rolledUpFreightClass: rolledUp,
+      totalWeightLbs: Number(totalWeightLbs.toFixed(2)),
+      totalCubeFt: Number(totalCubeFt.toFixed(4)),
+      unitCount: unitResults.length,
+      palletPositions,
+      linearFeet: Number(linearFeet.toFixed(2)),
+    };
+  }
+
+  private computeUnit(unit: CartonizationUnitInput): CartonizationUnitResult {
+    const stackable = unit.stackable !== false;
+    const lineResults = unit.lines.map(l => this.computeLine(l));
+    const linesTotalWeightLbs = lineResults.reduce((s, r) => s + r.totalWeightLbs, 0);
+    const linesTotalCubeFt    = lineResults.reduce((s, r) => s + r.totalCubeFt, 0);
+
+    // Weight: override wins over sum of lines.
+    let totalWeightLbs = linesTotalWeightLbs;
+    let weightSource: CartonizationUnitResult['weightSource'] = linesTotalWeightLbs > 0 ? 'lines' : 'empty';
+    if (unit.weight != null && unit.weight > 0) {
+      totalWeightLbs = toLbs(unit.weight, unit.weightUnit ?? 'kg');
+      weightSource = 'override';
+    }
+
+    // Dimensions: explicit override > packagingType external dims > sum of lines.
+    let totalCubeFt = linesTotalCubeFt;
+    let dimsSource: CartonizationUnitResult['dimsSource'] = linesTotalCubeFt > 0 ? 'lines' : 'empty';
+    let unitLengthIn: number | null = null;
+    const hasOverrideDims = (unit.length ?? 0) > 0 && (unit.width ?? 0) > 0 && (unit.height ?? 0) > 0;
+    if (hasOverrideDims) {
+      const dimUnit: DimUnit = unit.dimUnit ?? 'cm';
+      const Lin = toInches(unit.length!, dimUnit);
+      const Win = toInches(unit.width!, dimUnit);
+      const Hin = toInches(unit.height!, dimUnit);
+      totalCubeFt = (Lin * Win * Hin) / 1728;
+      unitLengthIn = Lin;
+      dimsSource = 'override';
+    } else if (unit.packagingTypeLengthMm && unit.packagingTypeWidthMm && unit.packagingTypeHeightMm) {
+      const Lin = toInches(unit.packagingTypeLengthMm, 'mm');
+      const Win = toInches(unit.packagingTypeWidthMm, 'mm');
+      const Hin = toInches(unit.packagingTypeHeightMm, 'mm');
+      totalCubeFt = (Lin * Win * Hin) / 1728;
+      unitLengthIn = Lin;
+      dimsSource = 'packagingType';
+    }
+
+    const densityLbsPerCubeFt = (totalCubeFt > 0 && totalWeightLbs > 0)
+      ? Number((totalWeightLbs / totalCubeFt).toFixed(2))
+      : null;
+
+    // Rolled-up class for this unit = highest class across its lines (user-supplied
+    // or density-derived). For unit-level density-based class we'd need the
+    // packaging-type density, which we don't compute here; defer to lines.
+    let rolledUp: string | null = null;
+    for (let i = 0; i < unit.lines.length; i++) {
+      const userClass = unit.lines[i].freightClass ?? null;
+      const suggested = lineResults[i].suggestedFreightClass;
+      rolledUp = maxClass(rolledUp, maxClass(userClass, suggested));
+    }
+
+    // Linear feet contribution. If stackable, this unit shares a floor
+    // position; we model that by halving its depth contribution. If we don't
+    // know the unit length, fall back to 4 ft (48" GMA depth).
+    const depthFt = (unitLengthIn ?? 48) * IN_TO_FT;
+    const linearFeetContribution = stackable ? depthFt / 2 : depthFt;
+
+    return {
+      id: unit.id,
+      totalWeightLbs: Number(totalWeightLbs.toFixed(2)),
+      totalCubeFt: Number(totalCubeFt.toFixed(4)),
+      densityLbsPerCubeFt,
+      rolledUpFreightClass: rolledUp,
+      linearFeetContribution: Number(linearFeetContribution.toFixed(2)),
+      stackable,
+      weightSource,
+      dimsSource,
     };
   }
 }
