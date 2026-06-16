@@ -390,7 +390,10 @@ export const EVENT_SCHEMA_VERSIONS: Record<string, number> = {
   [EVENT_TYPES.SHIPMENT_STOP_ARRIVED]: 1,
   [EVENT_TYPES.SHIPMENT_STOP_COMPLETED]: 1,
   [EVENT_TYPES.SHIPMENT_ARCHIVED]: 1,
-  [EVENT_TYPES.ORDER_CREATED]: 2, // v2: payload includes packingSummary (Phase 1 cartonization)
+  // v2 added optional `packingSummary` (Phase 1 cartonization). All v2 additions
+  // are nullable / optional — v1-style payloads remain valid as long as
+  // emitters set the new fields to null when unused (see AcceptQuoteCommand).
+  [EVENT_TYPES.ORDER_CREATED]: 2,
   [EVENT_TYPES.ORDER_UPDATED]: 1,
   [EVENT_TYPES.ORDER_STATUS_CHANGED]: 1,
   [EVENT_TYPES.ORDER_DELIVERY_STATUS_CHANGED]: 1,

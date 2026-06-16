@@ -165,6 +165,25 @@ export async function orderRoutes(server: FastifyInstance) {
   const orgRepo = container.resolve<IOrganizationRepository>(TOKENS.IOrganizationRepository);
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
   const locationResolution = container.resolve<ILocationResolutionService>(TOKENS.ILocationResolutionService);
+  const prisma = container.resolve<import('@prisma/client').PrismaClient>(TOKENS.PrismaClient);
+
+  /**
+   * Belt-and-braces check that a child entity actually belongs to the URL-path
+   * order. Without this, a request like
+   *   PUT /orders/MY-ORDER/trackable-units/<some-other-tenant's-unit-id>
+   * would dispatch the command against the foreign unit, since the command
+   * handler only fetches by id (not by orderId). Cross-tenant write.
+   *
+   * Returns the unit's orderId if present and matching, otherwise null.
+   */
+  async function unitBelongsToOrder(unitId: string, orderId: string): Promise<boolean> {
+    const u = await prisma.trackableUnit.findUnique({ where: { id: unitId }, select: { orderId: true } });
+    return !!u && u.orderId === orderId;
+  }
+  async function lineItemBelongsToOrder(itemId: string, orderId: string): Promise<boolean> {
+    const li = await prisma.orderLineItem.findUnique({ where: { id: itemId }, select: { orderId: true } });
+    return !!li && li.orderId === orderId;
+  }
 
   await registerOrgScope(server);
 
@@ -426,6 +445,9 @@ export async function orderRoutes(server: FastifyInstance) {
     const orgId = req.orgId!;
     const order = await ordersRepo.findById(orderId, orgId);
     if (!order) { reply.code(404); return { data: null, error: 'Order not found' }; }
+    if (!(await lineItemBelongsToOrder(itemId, orderId))) {
+      reply.code(404); return { data: null, error: 'Line item not found' };
+    }
 
     const result = await commandBus.dispatch({
       type: UPDATE_LINE_ITEM,
@@ -448,6 +470,9 @@ export async function orderRoutes(server: FastifyInstance) {
     const orgId = req.orgId!;
     const order = await ordersRepo.findById(orderId, orgId);
     if (!order) { reply.code(404); return { data: null, error: 'Order not found' }; }
+    if (!(await lineItemBelongsToOrder(itemId, orderId))) {
+      reply.code(404); return { data: null, error: 'Line item not found' };
+    }
 
     const result = await commandBus.dispatch({
       type: DELETE_LINE_ITEM,
@@ -506,6 +531,9 @@ export async function orderRoutes(server: FastifyInstance) {
     schema: { tags: ['Orders - Handling Units'], summary: 'Update a trackable unit (identifier, notes, barcode, dims, weight, stackable)' },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { orderId, unitId } = req.params as { orderId: string; unitId: string };
+    if (!(await unitBelongsToOrder(unitId, orderId))) {
+      reply.code(404); return { data: null, error: 'Unit not found' };
+    }
     const body = z.object({
       identifier: z.string().min(1).optional(),
       notes: z.string().nullable().optional(),
@@ -549,6 +577,9 @@ export async function orderRoutes(server: FastifyInstance) {
     schema: { tags: ['Orders - Handling Units'], summary: 'Delete a trackable unit (cascade-deletes its line items)' },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { orderId, unitId } = req.params as { orderId: string; unitId: string };
+    if (!(await unitBelongsToOrder(unitId, orderId))) {
+      reply.code(404); return { data: null, error: 'Unit not found' };
+    }
 
     const orgId = req.orgId!;
     const order = await ordersRepo.findById(orderId, orgId);
@@ -577,6 +608,9 @@ export async function orderRoutes(server: FastifyInstance) {
     schema: { tags: ['Orders - Handling Units'], summary: 'Add a new line item directly to a trackable unit' },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { orderId, unitId } = req.params as { orderId: string; unitId: string };
+    if (!(await unitBelongsToOrder(unitId, orderId))) {
+      reply.code(404); return { data: null, error: 'Unit not found' };
+    }
     const body = lineItemSchema.parse((req as any).body);
 
     const orgId = req.orgId!;
@@ -618,6 +652,12 @@ export async function orderRoutes(server: FastifyInstance) {
       reply.code(404);
       return { data: null, error: 'Order not found' };
     }
+    if (!(await lineItemBelongsToOrder(itemId, orderId))) {
+      reply.code(404); return { data: null, error: 'Line item not found' };
+    }
+    if (body.targetUnitId && !(await unitBelongsToOrder(body.targetUnitId, orderId))) {
+      reply.code(404); return { data: null, error: 'Target unit not found' };
+    }
 
     const result = await commandBus.dispatch({
       type: MOVE_LINE_ITEM_BETWEEN_UNITS,
@@ -639,6 +679,9 @@ export async function orderRoutes(server: FastifyInstance) {
     schema: { tags: ['Orders - Handling Units'], summary: 'Generate a barcode (TU-{unitId}-{timestamp}) for a unit' },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { orderId, unitId } = req.params as { orderId: string; unitId: string };
+    if (!(await unitBelongsToOrder(unitId, orderId))) {
+      reply.code(404); return { data: null, error: 'Unit not found' };
+    }
 
     const orgId = req.orgId!;
     const order = await ordersRepo.findById(orderId, orgId);
@@ -774,6 +817,14 @@ export async function orderRoutes(server: FastifyInstance) {
       reply.code(404);
       return { data: null, error: 'Order not found' };
     }
+    // Both source and target must belong to the URL-path order. Without this,
+    // an admin could merge units from another tenant by guessing IDs.
+    if (!(await unitBelongsToOrder(body.sourceUnitId, orderId))) {
+      reply.code(404); return { data: null, error: 'Source unit not found' };
+    }
+    if (!(await unitBelongsToOrder(body.targetUnitId, orderId))) {
+      reply.code(404); return { data: null, error: 'Target unit not found' };
+    }
 
     const result = await commandBus.dispatch({
       type: MERGE_TRACKABLE_UNITS,
@@ -806,6 +857,16 @@ export async function orderRoutes(server: FastifyInstance) {
     if (!order) {
       reply.code(404);
       return { data: null, error: 'Order not found' };
+    }
+    if (!(await unitBelongsToOrder(unitId, orderId))) {
+      reply.code(404); return { data: null, error: 'Unit not found' };
+    }
+    // Verify every itemIdsToMove belongs to this order. The command also checks
+    // the items belong to the source unit, but cheaper to fail fast here.
+    for (const itemId of body.itemIdsToMove) {
+      if (!(await lineItemBelongsToOrder(itemId, orderId))) {
+        reply.code(404); return { data: null, error: `Line item ${itemId} not found` };
+      }
     }
 
     const result = await commandBus.dispatch({

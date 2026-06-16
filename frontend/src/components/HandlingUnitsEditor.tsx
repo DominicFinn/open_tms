@@ -21,6 +21,7 @@ import {
   DragEndEvent,
   DragOverlay,
   DragStartEvent,
+  KeyboardSensor,
   PointerSensor,
   useDraggable,
   useDroppable,
@@ -159,7 +160,12 @@ function DraggableLineItem({ line, disabled }: { line: HUEditorLineItem; disable
       style={style}
       {...listeners}
       {...attributes}
-      className={`rounded-md border border-border bg-card p-2 text-xs ${disabled ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'}`}
+      // Spread `attributes` already adds role / tabIndex / aria-roledescription
+      // from dnd-kit, but we override tabIndex for the disabled case so a
+      // read-only listing isn't keyboard-focusable.
+      tabIndex={disabled ? -1 : attributes.tabIndex}
+      aria-label={`Line item ${line.sku}, quantity ${line.quantity}. Use space and arrows to move.`}
+      className={`rounded-md border border-border bg-card p-2 text-xs ${disabled ? 'cursor-default' : 'cursor-grab focus:outline-none focus:ring-2 focus:ring-primary active:cursor-grabbing'}`}
     >
       <div className="flex items-start justify-between gap-2">
         <div>
@@ -265,7 +271,13 @@ export default function HandlingUnitsEditor({
     return () => clearTimeout(t);
   }, [units, lineItems, unitEdits, packagingTypes, linesByUnit, endpoints.cartonizationPreview, f]);
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  // Keep keyboard users in the game: KeyboardSensor lets them tab to a draggable
+  // (we add tabIndex/role on the wrapper below) and use space + arrow keys to
+  // move it. Without it the editor was mouse-only — WCAG 2.1.1 violation.
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor),
+  );
 
   const handleDragStart = (e: DragStartEvent) => {
     const id = String(e.active.id);
@@ -340,7 +352,12 @@ export default function HandlingUnitsEditor({
   };
 
   const deleteUnit = async (unitId: string) => {
-    if (!window.confirm('Delete this handling unit? Its line items will be cascade-deleted.')) return;
+    // Surface the cascade impact so the user sees what they're about to lose.
+    const lineCount = (linesByUnit[unitId] ?? []).length;
+    const msg = lineCount > 0
+      ? `Delete this handling unit and its ${lineCount} line item${lineCount === 1 ? '' : 's'}? This cannot be undone.`
+      : 'Delete this handling unit?';
+    if (!window.confirm(msg)) return;
     try {
       const res = await f(endpoints.deleteUnit(unitId), patchOptions('DELETE'));
       const json = await res.json();
@@ -389,8 +406,10 @@ export default function HandlingUnitsEditor({
   const doSplit = async () => {
     if (!splitDialog) return;
     if (splitDialog.selected.size === 0) { setError('Select at least one line item to peel off'); return; }
-    const newIdentifier = window.prompt('Identifier for the new unit?', '');
-    if (!newIdentifier) return;
+    const newIdentifierRaw = window.prompt('Identifier for the new unit?', '');
+    if (newIdentifierRaw == null) return; // user cancelled
+    const newIdentifier = newIdentifierRaw.trim();
+    if (!newIdentifier) { setError('Identifier cannot be blank'); return; }
     try {
       const res = await f(endpoints.splitUnit(splitDialog.unitId), patchOptions('POST', {
         itemIdsToMove: Array.from(splitDialog.selected),

@@ -273,7 +273,15 @@ export class CSVImportService implements ICSVImportService {
           customerId = options.forceCustomerId;
         }
       } else if (cells.customerId) {
-        customerId = cells.customerId;
+        // Verify the declared customerId belongs to this org. Without this an
+        // admin in Org A could supply Customer IDs from Org B and create
+        // cross-tenant order references.
+        const inOrg = customers.some(c => c.id === cells.customerId);
+        if (!inOrg) {
+          orderErrors.push({ row: headerRow.rowNumber, orderNumber, message: `customerId "${cells.customerId}" not found in this org` });
+        } else {
+          customerId = cells.customerId;
+        }
       } else if (cells.customerName) {
         const match = customers.find(c => c.name.toLowerCase() === cells.customerName!.toLowerCase());
         if (!match) {
@@ -286,15 +294,33 @@ export class CSVImportService implements ICSVImportService {
       }
 
       // ── Location resolution (id, then fuzzy name+city, else raw data) ──
+      //
+      // Importantly: if the CSV provides originId / destinationId directly, we
+      // verify they belong to the caller's org. Without this a customer-portal
+      // CSV could reference foreign-tenant Location IDs and create an order
+      // whose origin/destination row belongs to another org (the order itself
+      // stays in the right org, but it now holds a cross-tenant pointer).
       let originId = cells.originId;
       let destinationId = cells.destinationId;
+      const orgLocationIds = new Set(locations.map(l => l.id));
+      if (originId && !orgLocationIds.has(originId)) {
+        orderErrors.push({ row: headerRow.rowNumber, orderNumber, message: `originId "${originId}" not found in this org` });
+        originId = undefined;
+      }
+      if (destinationId && !orgLocationIds.has(destinationId)) {
+        orderErrors.push({ row: headerRow.rowNumber, orderNumber, message: `destinationId "${destinationId}" not found in this org` });
+        destinationId = undefined;
+      }
       const originData  = (!originId      && (cells.originName      || cells.originAddress1))      ? this.buildLocationData('origin', cells)      : undefined;
       const destinationData = (!destinationId && (cells.destinationName || cells.destinationAddress1)) ? this.buildLocationData('destination', cells) : undefined;
-      if (!originId && originData) {
+      // Fuzzy match only when the CSV gave us a real city — falling back to
+      // an empty string matches any other location with null/empty city,
+      // potentially pulling in the wrong warehouse.
+      if (!originId && originData && originData.city) {
         const fuzzy = locations.find(l => l.name.toLowerCase() === originData.name.toLowerCase() && (l.city?.toLowerCase() ?? '') === originData.city.toLowerCase());
         if (fuzzy) originId = fuzzy.id;
       }
-      if (!destinationId && destinationData) {
+      if (!destinationId && destinationData && destinationData.city) {
         const fuzzy = locations.find(l => l.name.toLowerCase() === destinationData.name.toLowerCase() && (l.city?.toLowerCase() ?? '') === destinationData.city.toLowerCase());
         if (fuzzy) destinationId = fuzzy.id;
       }
@@ -304,8 +330,18 @@ export class CSVImportService implements ICSVImportService {
       const temperatureControl = this.normalizeTemperatureControl(cells.temperatureControl);
       const requiresHazmatOrder = this.parseBoolean(cells.requiresHazmat);
       const mode: Mode = serviceLevel === 'FTL' ? 'ftl' : 'ltl';
-      const international = !!(cells.originCountry && cells.destinationCountry &&
-        cells.originCountry.toUpperCase() !== cells.destinationCountry.toUpperCase());
+      // International detection: both countries must be present and differ. If
+      // ONLY one is present, treat the row as international (conservative) so
+      // we don't silently let a misconfigured row skip HS code + country of
+      // origin validation. The customer can explicitly fill the matching field
+      // to mark it domestic.
+      const oc = cells.originCountry?.toUpperCase();
+      const dc = cells.destinationCountry?.toUpperCase();
+      const international = !!(
+        (oc && dc && oc !== dc) ||
+        (oc && !dc) ||
+        (!oc && dc)
+      );
 
       // ── Build line items + trackable units from the rows ──
       type LineItem = ReturnType<CSVImportService['buildLineItem']>;

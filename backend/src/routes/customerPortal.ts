@@ -418,21 +418,33 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     const { itemId } = req.params as { itemId: string };
     const body = (req as any).body ?? {};
 
-    // Ownership: the line item must belong to a customer's order.
+    // Ownership: the line item must belong to a customer's order, AND the
+    // optional target unit must belong to the SAME order (the command also
+    // checks this, but failing here keeps the existence opaque rather than
+    // surfacing "Cannot move line item across orders" with order ids).
     const lineItem = await server.prisma.orderLineItem.findUnique({
       where: { id: itemId },
-      select: { order: { select: { id: true, orgId: true, customerId: true } } },
+      select: { orderId: true, order: { select: { id: true, orgId: true, customerId: true } } },
     });
     if (!lineItem?.order || lineItem.order.customerId !== req.customerUser!.customerId) {
       reply.code(404);
       return { data: null, error: 'Line item not found' };
+    }
+    const targetUnitId = body.targetUnitId ?? null;
+    if (targetUnitId) {
+      const targetUnit = await server.prisma.trackableUnit.findUnique({
+        where: { id: targetUnitId }, select: { orderId: true },
+      });
+      if (!targetUnit || targetUnit.orderId !== lineItem.orderId) {
+        reply.code(404); return { data: null, error: 'Target unit not found' };
+      }
     }
 
     const result = await commandBus.dispatch({
       type: MOVE_LINE_ITEM_BETWEEN_UNITS,
       orgId: lineItem.order.orgId,
       actorId: req.customerUser!.sub,
-      payload: { lineItemId: itemId, targetUnitId: body.targetUnitId ?? null },
+      payload: { lineItemId: itemId, targetUnitId },
       metadata: { correlationId: crypto.randomUUID(), source: 'customer-portal' },
     });
     if (!result.success) { reply.code(400); return { data: null, error: result.error }; }
@@ -457,6 +469,16 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     return { data: result.data, error: null };
   });
 
+  /** True iff `unitId` exists and belongs to `orderId`. Cheap belongs-to check. */
+  async function unitBelongsToCustomerOrder(unitId: string, orderId: string): Promise<boolean> {
+    const u = await server.prisma.trackableUnit.findUnique({ where: { id: unitId }, select: { orderId: true } });
+    return !!u && u.orderId === orderId;
+  }
+  async function lineItemBelongsToCustomerOrder(itemId: string, orderId: string): Promise<boolean> {
+    const li = await server.prisma.orderLineItem.findUnique({ where: { id: itemId }, select: { orderId: true } });
+    return !!li && li.orderId === orderId;
+  }
+
   server.post('/api/v1/customer-portal/orders/:id/trackable-units/merge', {
     preHandler: [authenticateCustomerJWT],
     schema: { tags: ['Customer Portal - Handling Units'], summary: 'Merge two handling units (source -> target, source deleted)' },
@@ -465,6 +487,18 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     const body = (req as any).body ?? {};
     const order = await ensureCustomerOwnsOrder(id, req.customerUser!.customerId);
     if (!order) { reply.code(404); return { data: null, error: 'Order not found' }; }
+    // Body-supplied source/target unit ids must belong to this customer's
+    // order. Without this a customer could merge units between other tenants'
+    // orders by guessing UUIDs (the command bus would happily oblige).
+    if (!body.sourceUnitId || !body.targetUnitId) {
+      reply.code(400); return { data: null, error: 'sourceUnitId and targetUnitId are required' };
+    }
+    if (!(await unitBelongsToCustomerOrder(body.sourceUnitId, id))) {
+      reply.code(404); return { data: null, error: 'Source unit not found' };
+    }
+    if (!(await unitBelongsToCustomerOrder(body.targetUnitId, id))) {
+      reply.code(404); return { data: null, error: 'Target unit not found' };
+    }
     const result = await commandBus.dispatch({
       type: MERGE_TRACKABLE_UNITS,
       orgId: order.orgId,
@@ -484,12 +518,21 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     const body = (req as any).body ?? {};
     const order = await customerOwnsUnit(unitId, req.customerUser!.customerId);
     if (!order) { reply.code(404); return { data: null, error: 'Unit not found' }; }
+    // Every line being peeled off must belong to the same order. The command
+    // also checks they live on the source unit, but failing here gives a
+    // clearer error and avoids triggering the command bus on bad input.
+    const itemIds: string[] = body.itemIdsToMove ?? [];
+    for (const itemId of itemIds) {
+      if (!(await lineItemBelongsToCustomerOrder(itemId, order.id))) {
+        reply.code(404); return { data: null, error: `Line item ${itemId} not found` };
+      }
+    }
 
     const result = await commandBus.dispatch({
       type: SPLIT_TRACKABLE_UNIT,
       orgId: order.orgId,
       actorId: req.customerUser!.sub,
-      payload: { unitId, lineItemIds: body.itemIdsToMove ?? [], newIdentifier: body.newIdentifier },
+      payload: { unitId, lineItemIds: itemIds, newIdentifier: body.newIdentifier },
       metadata: { correlationId: crypto.randomUUID(), source: 'customer-portal' },
     });
     if (!result.success) { reply.code(400); return { data: null, error: result.error }; }
@@ -520,6 +563,10 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     const body = (req as any).body ?? {};
     const order = await ensureCustomerOwnsOrder(id, req.customerUser!.customerId);
     if (!order) { reply.code(404); return { data: null, error: 'Order not found' }; }
+    // Optional trackableUnitId must belong to the same order.
+    if (body.trackableUnitId && !(await unitBelongsToCustomerOrder(body.trackableUnitId, id))) {
+      reply.code(404); return { data: null, error: 'Trackable unit not found' };
+    }
 
     const result = await commandBus.dispatch({
       type: CREATE_LINE_ITEM,
@@ -753,8 +800,16 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     // registered above (customerUser.customerId → Customer.orgId).
     const orgId = req.orgId!;
 
-    // Generate order number
-    const orderCount = await server.prisma.order.count();
+    // Generate order number. The count MUST be org-scoped: a global
+    // `order.count()` here leaks total cross-tenant order volume into every
+    // generated portal order number (a customer sees `ORD-CP-0142` and knows
+    // there are ~142 portal orders platform-wide). Org-scoped count keeps
+    // the sequence per-tenant and exposes nothing about other tenants.
+    //
+    // The `@@unique([orgId, orderNumber])` constraint catches the residual
+    // race when two customers in the same org concurrently grab the same
+    // number; the loser surfaces as a command-bus error and retries.
+    const orderCount = await server.prisma.order.count({ where: { orgId } });
     const orderNumber = `ORD-CP-${String(orderCount + 1).padStart(4, '0')}`;
 
     const resolveLocation = async (

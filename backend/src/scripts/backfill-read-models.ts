@@ -25,8 +25,8 @@ async function backfillOrders(orgId: string): Promise<number> {
       customer: { select: { id: true, name: true } },
       origin: { select: { name: true, city: true, state: true } },
       destination: { select: { name: true, city: true, state: true } },
-      trackableUnits: { select: { id: true } },
-      lineItems: { select: { id: true, weight: true } },
+      trackableUnits: { select: { id: true, weight: true } },
+      lineItems: { select: { id: true, weight: true, quantity: true } },
       orderShipments: {
         include: { shipment: { select: { id: true, reference: true } } },
         take: 1,
@@ -36,7 +36,14 @@ async function backfillOrders(orgId: string): Promise<number> {
 
   let count = 0;
   for (const order of orders) {
-    const totalWeight = order.lineItems.reduce((sum, item) => sum + (item.weight ?? 0), 0);
+    // Match OrderProjection.calculateTotalWeight: prefer per-unit overrides
+    // when any unit has weight set; otherwise sum line weight × quantity.
+    // Line `weight` is per-piece (consistent with cartonization).
+    const unitOverrideTotal = order.trackableUnits.reduce((s, u) => s + (u.weight ?? 0), 0);
+    const hasUnitOverride = order.trackableUnits.some(u => u.weight != null && u.weight > 0);
+    const lineTotal = order.lineItems.reduce((s, li) => s + ((li.weight ?? 0) * (li.quantity ?? 1)), 0);
+    const totalWeightRaw = hasUnitOverride ? unitOverrideTotal : lineTotal;
+    const totalWeight = totalWeightRaw > 0 ? totalWeightRaw : null;
     const shipment = order.orderShipments[0]?.shipment;
 
     await prisma.orderReadModel.upsert({

@@ -29,6 +29,10 @@ const mockTx = {
   packagingType: {
     findUnique: jest.fn().mockResolvedValue({ kind: 'pallet' }),
   },
+  // Phase 1+4 review fix: CreateOrderCommand verifies customer belongs to org.
+  customer: {
+    findFirst: jest.fn().mockResolvedValue({ id: 'cust-1' }),
+  },
   domainEventLog: {
     create: jest.fn().mockResolvedValue({}),
     findFirst: jest.fn().mockResolvedValue(null),

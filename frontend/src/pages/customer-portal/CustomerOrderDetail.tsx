@@ -63,7 +63,9 @@ export default function CustomerOrderDetail() {
     reload().finally(() => setLoading(false));
   }, [reload]);
 
-  const handlingUnitEndpoints: HUEditorEndpoints = {
+  // Memoised so the HandlingUnitsEditor's effects (which depend on this object's
+  // identity) don't re-fetch the packaging-types catalogue on every parent render.
+  const handlingUnitEndpoints: HUEditorEndpoints = React.useMemo(() => ({
     cartonizationPreview: `${API_URL}/api/v1/order-line-items/cartonization/preview-units`,
     packagingTypes:       `${API_URL}/api/v1/customer-portal/packaging-types`,
     createUnit:      (orderId)     => `${API_URL}/api/v1/customer-portal/orders/${orderId}/trackable-units`,
@@ -73,7 +75,7 @@ export default function CustomerOrderDetail() {
     generateBarcode: (unitId)      => `${API_URL}/api/v1/customer-portal/trackable-units/${unitId}/generate-barcode`,
     mergeUnits:      (orderId)     => `${API_URL}/api/v1/customer-portal/orders/${orderId}/trackable-units/merge`,
     splitUnit:       (unitId)      => `${API_URL}/api/v1/customer-portal/trackable-units/${unitId}/split`,
-  };
+  }), []);
 
   const canArchive = !!order && !order.archived;
 

@@ -54,10 +54,15 @@ export class MoveLineItemBetweenUnitsCommandHandler extends BaseCommandHandler<M
       data: { trackableUnitId: targetUnitId },
     });
 
+    // The event's entity is the line item being moved — its identity is what
+    // downstream handlers should look up if they want richer detail. Previous
+    // code stamped entityType=trackable_unit with an entityId that could fall
+    // through to the orderId when both source and target were null, which
+    // would mis-route any handler that did `prisma.trackableUnit.findUnique`.
     emit(this.createEvent(command, {
       type: EVENT_TYPES.TRACKABLE_UNIT_LINE_ITEM_MOVED,
-      entityType: 'trackable_unit',
-      entityId: targetUnitId ?? lineItem.trackableUnitId ?? lineItem.orderId,
+      entityType: 'order_line_item',
+      entityId: lineItemId,
       payload: {
         orderId: lineItem.orderId,
         lineItemId,

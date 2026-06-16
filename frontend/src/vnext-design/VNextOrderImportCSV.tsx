@@ -98,8 +98,25 @@ export default function VNextOrderImportCSV() {
     }
   }
 
-  function downloadTemplate() {
-    window.location.href = `${API_URL}/api/v1/orders/import/csv/template`;
+  async function downloadTemplate() {
+    // window.location.href would bypass the authFetch interceptor and 401, so
+    // fetch the template explicitly and trigger a blob download.
+    try {
+      const res = await fetch(`${API_URL}/api/v1/orders/import/csv/template`);
+      if (!res.ok) throw new Error(`Failed (${res.status})`);
+      const text = await res.text();
+      const blob = new Blob([text], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'order-import-template.csv';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      setError(err?.message ?? 'Failed to download template');
+    }
   }
 
   const stageLabel: Record<Stage, string> = {
@@ -136,27 +153,28 @@ export default function VNextOrderImportCSV() {
             </CardHeader>
             <CardContent>
               {!file ? (
-                <div
-                  onClick={() => fileInputRef.current?.click()}
+                <label
+                  htmlFor="csv-file-input-admin"
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
                   onDrop={handleDrop}
                   className={cn(
-                    'cursor-pointer rounded-md border-2 border-dashed p-12 text-center transition-colors',
+                    'block cursor-pointer rounded-md border-2 border-dashed p-12 text-center transition-colors focus-within:ring-2 focus-within:ring-primary',
                     dragOver ? 'border-primary bg-primary/5' : 'border-border bg-muted/30 hover:border-primary/40',
                   )}
                 >
                   <CloudUpload className="mx-auto h-12 w-12 text-muted-foreground/60" />
                   <div className="mt-3 text-base font-medium">Drop your CSV file here</div>
-                  <div className="mt-1 text-sm text-muted-foreground">or click to browse</div>
+                  <div className="mt-1 text-sm text-muted-foreground">or press Enter to browse</div>
                   <input
                     ref={fileInputRef}
+                    id="csv-file-input-admin"
                     type="file"
                     accept=".csv,text/csv"
                     onChange={handleFileChange}
-                    className="hidden"
+                    className="sr-only"
                   />
-                </div>
+                </label>
               ) : (
                 <div className="flex items-center gap-3 rounded-md border border-border bg-muted/30 p-4">
                   <FileText className="h-8 w-8 text-primary" />

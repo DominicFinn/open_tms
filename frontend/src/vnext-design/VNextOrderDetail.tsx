@@ -174,7 +174,9 @@ export default function VNextOrderDetail() {
     return () => { cancelled = true; };
   }, [loadOrder]);
 
-  const handlingUnitEndpoints: HUEditorEndpoints = {
+  // Memoised on `id` so the HandlingUnitsEditor doesn't re-trigger its effects
+  // (packaging-types fetch, cartonization preview) on every parent render.
+  const handlingUnitEndpoints: HUEditorEndpoints = React.useMemo(() => ({
     cartonizationPreview: `${API_URL}/api/v1/order-line-items/cartonization/preview-units`,
     packagingTypes:       `${API_URL}/api/v1/packaging-types?activeOnly=true`,
     createUnit:      (orderId)     => `${API_URL}/api/v1/orders/${orderId}/trackable-units`,
@@ -184,7 +186,7 @@ export default function VNextOrderDetail() {
     generateBarcode: (unitId)      => `${API_URL}/api/v1/orders/${id}/trackable-units/${unitId}/generate-barcode`,
     mergeUnits:      (orderId)     => `${API_URL}/api/v1/orders/${orderId}/trackable-units/merge`,
     splitUnit:       (unitId)      => `${API_URL}/api/v1/orders/${id}/trackable-units/${unitId}/split`,
-  };
+  }), [id]);
 
   if (loading) {
     return (

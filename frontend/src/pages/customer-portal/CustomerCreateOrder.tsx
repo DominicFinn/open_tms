@@ -143,10 +143,16 @@ export default function CustomerCreateOrder() {
     }
   }, [origin.country, destination.country]);
 
-  // Fetch mode rules whenever mode/flags change
+  // Mode rules depend on whether ANY line is hazmat. Memoise this so the
+  // effect below doesn't refire on every keystroke against the lineItems
+  // array reference.
+  const anyLineHazmat = lineItems.some(l => l.hazmat);
+
+  // Fetch mode rules whenever mode/flags change. Debounced 200ms so toggling
+  // checkboxes rapidly doesn't hammer the endpoint.
   useEffect(() => {
     const flags = {
-      hazmat: requiresHazmat || lineItems.some(l => l.hazmat),
+      hazmat: requiresHazmat || anyLineHazmat,
       international,
       temperatureControlled: temperatureControl !== 'ambient',
     };
@@ -156,11 +162,14 @@ export default function CustomerCreateOrder() {
       international: String(flags.international),
       temperatureControlled: String(flags.temperatureControlled),
     });
-    customerFetch(`${API_URL}/api/v1/order-line-items/mode-rules?${params.toString()}`)
-      .then(r => r.json())
-      .then(json => json.data && setRules(json.data))
-      .catch(() => { /* ignore — UI degrades to all-optional */ });
-  }, [mode, requiresHazmat, international, temperatureControl, lineItems]);
+    const t = setTimeout(() => {
+      customerFetch(`${API_URL}/api/v1/order-line-items/mode-rules?${params.toString()}`)
+        .then(r => r.json())
+        .then(json => json.data && setRules(json.data))
+        .catch(() => { /* ignore — UI degrades to all-optional */ });
+    }, 200);
+    return () => clearTimeout(t);
+  }, [mode, requiresHazmat, international, temperatureControl, anyLineHazmat]);
 
   // Load packaging types catalogue once
   useEffect(() => {
@@ -257,32 +266,40 @@ export default function CustomerCreateOrder() {
         destinationLng: destination.lng,
         requestedDeliveryDate: requestedDeliveryDate || undefined,
         specialInstructions: specialInstructions || undefined,
+        // When mode-rules hide a field (e.g. LTL → switching to FTL hides
+        // freightClass/NMFC/stackable, parcel hides hazmat detail), strip the
+        // stored value so we don't silently submit data the customer can no
+        // longer see and edit. `undef` returns undefined when hidden, the
+        // value otherwise.
         lineItems: lineItems
           .filter(li => li.description.trim())
-          .map(li => ({
-            description: li.description,
-            sku: li.sku || undefined,
-            quantity: li.quantity,
-            unitOfMeasure: li.unitOfMeasure,
-            weight: li.weight ? parseFloat(li.weight) : undefined,
-            weightUnit: li.weightUnit,
-            length: li.length ? parseFloat(li.length) : undefined,
-            width: li.width ? parseFloat(li.width) : undefined,
-            height: li.height ? parseFloat(li.height) : undefined,
-            dimUnit: li.dimUnit,
-            unitPriceCents: li.unitPriceCents ? Math.round(parseFloat(li.unitPriceCents) * 100) : undefined,
-            hazmat: li.hazmat,
-            unNumber: li.unNumber || undefined,
-            hazmatClass: li.hazmatClass || undefined,
-            packingGroup: li.packingGroup || undefined,
-            properShippingName: li.properShippingName || undefined,
-            freightClass: li.freightClass || undefined,
-            nmfcCode: li.nmfcCode || undefined,
-            hsCode: li.hsCode || undefined,
-            countryOfOrigin: li.countryOfOrigin || undefined,
-            tempMinC: li.tempMinC ? parseFloat(li.tempMinC) : undefined,
-            tempMaxC: li.tempMaxC ? parseFloat(li.tempMaxC) : undefined,
-          })),
+          .map(li => {
+            const undef = <T,>(field: string, value: T) => isHidden(field) ? undefined : value;
+            return {
+              description: li.description,
+              sku: undef('sku', li.sku || undefined),
+              quantity: li.quantity,
+              unitOfMeasure: li.unitOfMeasure,
+              weight: li.weight ? parseFloat(li.weight) : undefined,
+              weightUnit: li.weightUnit,
+              length: undef('length', li.length ? parseFloat(li.length) : undefined),
+              width:  undef('width',  li.width  ? parseFloat(li.width)  : undefined),
+              height: undef('height', li.height ? parseFloat(li.height) : undefined),
+              dimUnit: li.dimUnit,
+              unitPriceCents: undef('declaredValue', li.unitPriceCents ? Math.round(parseFloat(li.unitPriceCents) * 100) : undefined),
+              hazmat: li.hazmat,
+              unNumber:           undef('unNumber',           li.unNumber           || undefined),
+              hazmatClass:        undef('hazmatClass',        li.hazmatClass        || undefined),
+              packingGroup:       undef('packingGroup',       li.packingGroup       || undefined),
+              properShippingName: undef('properShippingName', li.properShippingName || undefined),
+              freightClass:       undef('freightClass',       li.freightClass       || undefined),
+              nmfcCode:           undef('nmfcCode',           li.nmfcCode           || undefined),
+              hsCode:             undef('hsCode',             li.hsCode             || undefined),
+              countryOfOrigin:    undef('countryOfOrigin',    li.countryOfOrigin    || undefined),
+              tempMinC: undef('tempMinC', li.tempMinC ? parseFloat(li.tempMinC) : undefined),
+              tempMaxC: undef('tempMaxC', li.tempMaxC ? parseFloat(li.tempMaxC) : undefined),
+            };
+          }),
       };
 
       if (packingSummary.unitCount) {

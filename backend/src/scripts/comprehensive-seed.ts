@@ -161,6 +161,33 @@ async function wipe() {
   await prisma.coldChainProfile.deleteMany();
   await prisma.packagingType.deleteMany();
 
+  // Warehouse PWA — wipe before Location (these all carry locationId FKs without cascade)
+  await prisma.indoorZoneAnchor.deleteMany();
+  await prisma.allocation.deleteMany();
+  await prisma.inventoryTransaction.deleteMany();
+  await prisma.packAudit.deleteMany();
+  await prisma.packLine.deleteMany();
+  await prisma.pickLine.deleteMany();
+  await prisma.receivingLine.deleteMany();
+  await prisma.waveOrder.deleteMany();
+
+  await prisma.putawayTask.deleteMany();
+  await prisma.packTask.deleteMany();
+  await prisma.pickTask.deleteMany();
+  await prisma.stagingAssignment.deleteMany();
+  await prisma.inventoryRecord.deleteMany();
+  await prisma.receivingTask.deleteMany();
+  await prisma.receivingAppointment.deleteMany();
+
+  await prisma.wave.deleteMany();
+  await prisma.waveTemplate.deleteMany();
+  await prisma.putawayRule.deleteMany();
+  await prisma.manifestUpload.deleteMany();
+
+  await prisma.warehouseBin.deleteMany();
+  await prisma.warehouseAisle.deleteMany();
+  await prisma.warehouseZone.deleteMany();
+
   await prisma.arrivalCriteria.deleteMany();
   await prisma.location.deleteMany();
 
@@ -451,7 +478,7 @@ async function seedIssueLabels(orgId: string) {
 
 // ─── Locations ───────────────────────────────────────────────────────────────
 
-async function seedLocations() {
+async function seedLocations(orgId: string) {
   const locs = [
     // Our own 3PL hubs
     {
@@ -671,7 +698,7 @@ async function seedLocations() {
 
   const created = [];
   for (const l of locs) {
-    const loc = await prisma.location.create({ data: l as any });
+    const loc = await prisma.location.create({ data: { ...l, orgId } as any });
     // Add a default geofence arrival criteria
     await prisma.arrivalCriteria.create({
       data: {
@@ -689,7 +716,7 @@ async function seedLocations() {
 
 // ─── Customers + CustomerUsers ───────────────────────────────────────────────
 
-async function seedCustomers() {
+async function seedCustomers(orgId: string) {
   const defs = [
     {
       name: 'Nordic Frost Foods',
@@ -778,7 +805,7 @@ async function seedCustomers() {
   const created = [];
   for (const d of defs) {
     const c = await prisma.customer.create({
-      data: { ...d, currency: 'USD', billingCountry: 'USA' } as any,
+      data: { ...d, currency: 'USD', billingCountry: 'USA', orgId } as any,
     });
     // Customer portal users
     const portalPwd = hashPassword('Portal123!');
@@ -909,6 +936,7 @@ async function seedCarriers(orgId: string) {
     const carrier = await prisma.carrier.create({
       data: {
         ...d,
+        orgId,
         country: 'USA',
         currency: 'USD',
         validatedAt: d.validationTier ? daysAgo(90) : null,
@@ -2571,8 +2599,8 @@ async function backfillReadModels(orgId: string) {
       customer: { select: { id: true, name: true } },
       origin: { select: { name: true, city: true, state: true } },
       destination: { select: { name: true, city: true, state: true } },
-      trackableUnits: { select: { id: true } },
-      lineItems: { select: { id: true, weight: true } },
+      trackableUnits: { select: { id: true, weight: true } },
+      lineItems: { select: { id: true, weight: true, quantity: true } },
       orderShipments: {
         include: { shipment: { select: { id: true, reference: true } } },
         take: 1,
@@ -2580,7 +2608,13 @@ async function backfillReadModels(orgId: string) {
     },
   });
   for (const o of orders) {
-    const totalWeight = o.lineItems.reduce((sum, item) => sum + (item.weight ?? 0), 0);
+    // Match OrderProjection: per-unit overrides win when set, else sum line
+    // weight × quantity (line `weight` is per-piece).
+    const unitOverrideTotal = o.trackableUnits.reduce((s, u) => s + (u.weight ?? 0), 0);
+    const hasUnitOverride = o.trackableUnits.some(u => u.weight != null && u.weight > 0);
+    const lineTotal = o.lineItems.reduce((s, li) => s + ((li.weight ?? 0) * (li.quantity ?? 1)), 0);
+    const totalWeightRaw = hasUnitOverride ? unitOverrideTotal : lineTotal;
+    const totalWeight = totalWeightRaw > 0 ? totalWeightRaw : null;
     const shipment = o.orderShipments[0]?.shipment;
     await prisma.orderReadModel.upsert({
       where: { id: o.id },
@@ -2771,11 +2805,11 @@ async function main() {
   console.log(`✓ Labels: ${labels.length}`);
 
   console.log('Seeding locations...');
-  const locations = await seedLocations();
+  const locations = await seedLocations(org.id);
   console.log(`✓ Locations: ${locations.length}`);
 
   console.log('Seeding customers + portal users...');
-  const customers = await seedCustomers();
+  const customers = await seedCustomers(org.id);
   console.log(`✓ Customers: ${customers.length} (+${customers.length * 2} portal users)`);
 
   console.log('Seeding carriers + users + vehicles + drivers...');

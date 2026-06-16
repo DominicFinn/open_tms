@@ -147,6 +147,18 @@ export class CreateOrderCommandHandler extends BaseCommandHandler<CreateOrderPay
       throw new Error('orgId is required to create an Order (multi-tenancy)');
     }
 
+    // Belt-and-braces: confirm the customer belongs to the org we're writing
+    // under. Routes already scope, but a forged command from anywhere else
+    // (CSV import, internal automation) could otherwise create a cross-tenant
+    // pointer (Order.customerId references a Customer from another org).
+    const customer = await tx.customer.findFirst({
+      where: { id: orderData.customerId, orgId: orgIdToWrite },
+      select: { id: true },
+    });
+    if (!customer) {
+      throw new Error(`Customer ${orderData.customerId} does not belong to org ${orgIdToWrite}`);
+    }
+
     const order = await tx.order.create({
       data: {
         orgId: orgIdToWrite,

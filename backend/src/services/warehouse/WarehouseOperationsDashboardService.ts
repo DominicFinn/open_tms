@@ -87,7 +87,7 @@ export class WarehouseOperationsDashboardService {
       this.prisma.putawayTask.count({ where: { orgId, status: 'completed', updatedAt: { gte: since } } }),
       this.prisma.pickTask.count({ where: { orgId, status: 'completed', completedAt: { gte: since } } }),
       this.prisma.packTask.count({ where: { orgId, status: 'completed', updatedAt: { gte: since } } }),
-      this.prisma.shipment.count({ where: { status: { in: ['in_transit', 'delivered'] }, updatedAt: { gte: since } } }),
+      this.prisma.shipment.count({ where: { orgId, status: { in: ['in_transit', 'delivered'] }, updatedAt: { gte: since } } }),
     ]);
 
     const [r1, p1, pick1, pack1, ship1] = await countCompleted(startOfToday);
@@ -224,8 +224,8 @@ export class WarehouseOperationsDashboardService {
     const [openIssues, criticalIssues, cutoffCritical, cutoffWarning, pendingRmas, packFailures] = await Promise.all([
       this.prisma.issue.count({ where: { orgId, status: { in: ['open', 'in_progress'] } } }),
       this.prisma.issue.count({ where: { orgId, status: { in: ['open', 'in_progress'] }, priority: 'critical' } }),
-      this.prisma.shipment.count({ where: { lastCutoffRiskSeverity: 'critical' } }),
-      this.prisma.shipment.count({ where: { lastCutoffRiskSeverity: 'warning' } }),
+      this.prisma.shipment.count({ where: { orgId, lastCutoffRiskSeverity: 'critical' } }),
+      this.prisma.shipment.count({ where: { orgId, lastCutoffRiskSeverity: 'warning' } }),
       this.prisma.rma.count({ where: { orgId, status: { in: ['authorized', 'in_transit', 'received', 'inspecting'] } } }),
       this.prisma.packAudit.count({
         where: {

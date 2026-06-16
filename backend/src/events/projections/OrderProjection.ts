@@ -77,20 +77,7 @@ export class OrderProjection implements IEventHandler {
   private async onTrackableUnitChanged(event: DomainEvent): Promise<void> {
     const orderId = (event.payload as { orderId?: string })?.orderId;
     if (!orderId) return;
-
-    const [unitCount, totalWeight] = await Promise.all([
-      this.prisma.trackableUnit.count({ where: { orderId } }),
-      this.calculateTotalWeight(orderId),
-    ]);
-
-    const lineItemCount = await this.prisma.orderLineItem.count({ where: { orderId } });
-
-    await this.prisma.orderReadModel.update({
-      where: { id: orderId },
-      data: { trackableUnitCount: unitCount, lineItemCount, totalWeight, updatedAt: new Date() },
-    }).catch((err: Error) => {
-      console.error(`[OrderProjection] Failed to refresh counts for order ${orderId}: ${err.message}`);
-    });
+    await this.refreshAggregates(orderId, event.orgId);
   }
 
   private async onOrderCreated(event: DomainEvent): Promise<void> {
@@ -286,18 +273,91 @@ export class OrderProjection implements IEventHandler {
   private async onLineItemChanged(event: DomainEvent): Promise<void> {
     const orderId = (event.payload as { orderId?: string })?.orderId;
     if (!orderId) return;
+    await this.refreshAggregates(orderId, event.orgId);
+  }
 
-    const [lineItemCount, trackableUnitCount, totalWeight] = await Promise.all([
-      this.prisma.orderLineItem.count({ where: { orderId } }),
+  /**
+   * Recompute trackableUnitCount/lineItemCount/totalWeight on the read model.
+   *
+   * Race-safe: pg-boss may deliver `trackable_unit.created` before
+   * `order.created` is fully projected, in which case the `.update` would
+   * fail with P2025 and the row would permanently drift. When that happens we
+   * fall back to materialising the row from the live `Order` (same code path
+   * as `onOrderCreated`), then re-apply the count update.
+   */
+  private async refreshAggregates(orderId: string, orgId: string): Promise<void> {
+    const [unitCount, lineItemCount, totalWeight] = await Promise.all([
       this.prisma.trackableUnit.count({ where: { orderId } }),
+      this.prisma.orderLineItem.count({ where: { orderId } }),
       this.calculateTotalWeight(orderId),
     ]);
+    const data = { trackableUnitCount: unitCount, lineItemCount, totalWeight, updatedAt: new Date() };
 
-    await this.prisma.orderReadModel.update({
+    try {
+      await this.prisma.orderReadModel.update({ where: { id: orderId }, data });
+    } catch (err: any) {
+      if (err?.code !== 'P2025') {
+        console.error(`[OrderProjection] Failed to refresh aggregates for order ${orderId}: ${err?.message ?? err}`);
+        return;
+      }
+      // Read-model row doesn't exist yet — recover by materialising from the
+      // live Order. Then re-apply the aggregates so the upsert's "update" path
+      // also reflects the latest counts.
+      await this.materialiseFromOrder(orderId, orgId);
+      await this.prisma.orderReadModel.update({ where: { id: orderId }, data }).catch((e: Error) => {
+        console.error(`[OrderProjection] Recovery upsert succeeded but follow-up aggregate update failed for ${orderId}: ${e.message}`);
+      });
+    }
+  }
+
+  /**
+   * Idempotent upsert of OrderReadModel from the live Order row. Same logic as
+   * `onOrderCreated` but reusable from the race-recovery path.
+   */
+  private async materialiseFromOrder(orderId: string, orgId: string): Promise<void> {
+    const order = await this.prisma.order.findUnique({
       where: { id: orderId },
-      data: { lineItemCount, trackableUnitCount, totalWeight, updatedAt: new Date() },
+      include: {
+        customer: { select: { id: true, name: true } },
+        origin: { select: { name: true, city: true, state: true } },
+        destination: { select: { name: true, city: true, state: true } },
+        trackableUnits: { select: { id: true } },
+        lineItems: { select: { id: true, weight: true } },
+      },
+    });
+    if (!order) return;
+    const totalWeight = await this.calculateTotalWeight(orderId);
+    await this.prisma.orderReadModel.upsert({
+      where: { id: order.id },
+      create: {
+        id: order.id,
+        orgId,
+        orderNumber: order.orderNumber,
+        poNumber: order.poNumber,
+        status: order.status,
+        deliveryStatus: order.deliveryStatus || 'unassigned',
+        customerName: order.customer.name,
+        customerId: order.customerId,
+        originName: order.origin?.name ?? null,
+        originCity: order.origin?.city ?? null,
+        originState: order.origin?.state ?? null,
+        destinationName: order.destination?.name ?? null,
+        destinationCity: order.destination?.city ?? null,
+        destinationState: order.destination?.state ?? null,
+        serviceLevel: order.serviceLevel,
+        temperatureRequired: order.temperatureControl !== 'ambient',
+        hazmat: order.requiresHazmat || false,
+        trackableUnitCount: order.trackableUnits?.length ?? 0,
+        lineItemCount: order.lineItems?.length ?? 0,
+        totalWeight,
+        requestedDeliveryDate: order.requestedDeliveryDate,
+        importSource: order.importSource,
+        createdAt: order.createdAt,
+        updatedAt: order.updatedAt,
+      },
+      update: { updatedAt: order.updatedAt },
     }).catch((err: Error) => {
-      console.error(`[OrderProjection] Failed to refresh counts after line-item event on ${orderId}: ${err.message}`);
+      console.error(`[OrderProjection] Materialise failed for order ${orderId}: ${err.message}`);
     });
   }
 

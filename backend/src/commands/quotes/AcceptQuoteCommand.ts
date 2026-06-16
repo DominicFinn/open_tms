@@ -182,6 +182,10 @@ export class AcceptQuoteCommandHandler extends BaseCommandHandler<AcceptQuotePay
       },
     }));
 
+    // ORDER_CREATED v2 added optional fields (packingSummary, location ids,
+    // counts, importSource). Quote acceptance doesn't carry packaging info, so
+    // emit the v1 core + explicit nulls for the v2 additions to keep the
+    // contract conformant.
     emit(this.createEvent(command, {
       type: EVENT_TYPES.ORDER_CREATED,
       entityType: 'order',
@@ -190,6 +194,12 @@ export class AcceptQuoteCommandHandler extends BaseCommandHandler<AcceptQuotePay
         orderReference: orderNumber,
         customerId: quote.customerId,
         status: 'validated',
+        originId: null,
+        destinationId: null,
+        trackableUnitCount: 0,
+        lineItemCount: 0,
+        importSource: 'quote',
+        packingSummary: null,
       },
     }));
 
