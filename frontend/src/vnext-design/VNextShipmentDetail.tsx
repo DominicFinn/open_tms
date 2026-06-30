@@ -420,6 +420,7 @@ function TelemetryTab({ shipmentId }: { shipmentId: string }) {
                 <TableHead>Time</TableHead>
                 <TableHead>Temp</TableHead>
                 <TableHead>Humidity</TableHead>
+                <TableHead>Pressure</TableHead>
                 <TableHead>Battery</TableHead>
                 <TableHead>Location</TableHead>
                 <TableHead>Alert</TableHead>
@@ -428,11 +429,23 @@ function TelemetryTab({ shipmentId }: { shipmentId: string }) {
             <TableBody>
               {readings.slice(0, 25).map((r: any, i: number) => (
                 <TableRow key={r.id || i}>
-                  <TableCell className="text-sm">{new Date(r.recordedAt).toLocaleString()}</TableCell>
+                  <TableCell className="text-sm">{r.eventTime ? new Date(r.eventTime).toLocaleString() : '-'}</TableCell>
                   <TableCell>{r.temperature != null ? `${r.temperature}°` : '-'}</TableCell>
                   <TableCell>{r.humidity != null ? `${r.humidity}%` : '-'}</TableCell>
+                  <TableCell>{r.atmosphericPressure != null ? `${r.atmosphericPressure} hPa` : '-'}</TableCell>
                   <TableCell>{r.batteryLevel != null ? `${r.batteryLevel}%` : '-'}</TableCell>
-                  <TableCell className="text-xs">{r.lat != null && r.lng != null ? `${r.lat.toFixed(4)}, ${r.lng.toFixed(4)}` : '-'}</TableCell>
+                  <TableCell className="text-xs">
+                    {r.lat != null && r.lng != null ? (
+                      <span>
+                        {r.lat.toFixed(4)}, {r.lng.toFixed(4)}
+                        {(r.locationType || r.locationAccuracy != null) && (
+                          <span className="text-muted-foreground">
+                            {' · '}{r.locationType || 'fix'}{r.locationAccuracy != null ? ` ±${Math.round(r.locationAccuracy)}m` : ''}
+                          </span>
+                        )}
+                      </span>
+                    ) : '-'}
+                  </TableCell>
                   <TableCell>
                     {r.isAlert
                       ? <Badge variant="destructive">Alert</Badge>
@@ -442,7 +455,7 @@ function TelemetryTab({ shipmentId }: { shipmentId: string }) {
               ))}
               {readings.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-6 text-center text-muted-foreground">No readings available</TableCell>
+                  <TableCell colSpan={7} className="py-6 text-center text-muted-foreground">No readings available</TableCell>
                 </TableRow>
               )}
             </TableBody>

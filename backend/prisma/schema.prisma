@@ -2449,19 +2449,22 @@ model SensorReading {
   eventTime       DateTime // When the reading occurred
 
   // Sensor values (nullable — only populated when present)
-  temperature    Float?
-  humidity       Float?
-  lightLevel     Int?
-  batteryLevel   Int?
-  batteryVoltage Float?
-  impactG        Float?
-  tiltAngle      Float?
-  movement       String? // "stationary" | "moving"
+  temperature         Float?
+  humidity            Float?
+  atmosphericPressure Float? // hPa
+  lightLevel          Int?
+  batteryLevel        Int?
+  batteryVoltage      Float?
+  impactG             Float?
+  tiltAngle           Float?
+  movement            String? // "stationary" | "moving"
 
   // Location at time of reading
-  lat     Float?
-  lng     Float?
-  address String?
+  lat              Float?
+  lng              Float?
+  address          String?
+  locationType     String? // gps | cell | wifi | indoor | uwb | fixed | app
+  locationAccuracy Float? // accuracy radius in metres (System Loco "cep")
 
   // Thresholds (from device config, for context)
   tempMin  Float?
