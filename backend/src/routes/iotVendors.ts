@@ -38,11 +38,13 @@ export async function iotVendorRoutes(server: FastifyInstance) {
       });
     }
 
-    const vendors = await server.prisma.iotVendor.findMany({
+    const rows = await server.prisma.iotVendor.findMany({
       where: { orgId },
       orderBy: { name: 'asc' },
-      select: { vendorKey: true, name: true, enabled: true },
+      select: { vendorKey: true, name: true, enabled: true, webhookSecret: true },
     });
+    // Never return the raw secret — only whether one is configured.
+    const vendors = rows.map(({ webhookSecret, ...v }) => ({ ...v, hasWebhookSecret: !!webhookSecret }));
     return { data: vendors, error: null };
   });
 
@@ -53,11 +55,21 @@ export async function iotVendorRoutes(server: FastifyInstance) {
       tags: ['Settings'],
       summary: 'Enable or disable an IoT vendor',
       params: { type: 'object', properties: { vendorKey: { type: 'string' } }, required: ['vendorKey'] },
-      body: { type: 'object', required: ['enabled'], properties: { enabled: { type: 'boolean' } } },
+      body: {
+        type: 'object',
+        properties: {
+          enabled: { type: 'boolean' },
+          // null/empty string clears the secret; a value sets it.
+          webhookSecret: { type: 'string', nullable: true },
+        },
+      },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { vendorKey } = req.params as { vendorKey: string };
-    const { enabled } = z.object({ enabled: z.boolean() }).parse((req as any).body);
+    const { enabled, webhookSecret } = z.object({
+      enabled: z.boolean().optional(),
+      webhookSecret: z.string().nullable().optional(),
+    }).parse((req as any).body);
     const orgId = req.orgId!;
 
     const known = KNOWN_VENDORS.find(v => v.vendorKey === vendorKey);
@@ -66,12 +78,16 @@ export async function iotVendorRoutes(server: FastifyInstance) {
       return { data: null, error: 'Unknown IoT vendor' };
     }
 
+    const update: Record<string, unknown> = {};
+    if (enabled !== undefined) update.enabled = enabled;
+    if (webhookSecret !== undefined) update.webhookSecret = webhookSecret ? webhookSecret : null;
+
     const vendor = await server.prisma.iotVendor.upsert({
       where: { orgId_vendorKey: { orgId, vendorKey } },
-      update: { enabled },
-      create: { orgId, vendorKey, name: known.name, enabled },
-      select: { vendorKey: true, name: true, enabled: true },
+      update,
+      create: { orgId, vendorKey, name: known.name, enabled: enabled ?? true, webhookSecret: webhookSecret || null },
+      select: { vendorKey: true, name: true, enabled: true, webhookSecret: true },
     });
-    return { data: vendor, error: null };
+    return { data: { vendorKey: vendor.vendorKey, name: vendor.name, enabled: vendor.enabled, hasWebhookSecret: !!vendor.webhookSecret }, error: null };
   });
 }

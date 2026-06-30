@@ -2426,6 +2426,9 @@ model IotVendor {
   vendorKey String // 'system_loco'
   name      String // 'System Loco'
   enabled   Boolean  @default(true)
+  // Shared secret for verifying inbound webhook signatures (HMAC-SHA256).
+  // When set, the webhook endpoint verifies X-LocoAware-Signature against it.
+  webhookSecret String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

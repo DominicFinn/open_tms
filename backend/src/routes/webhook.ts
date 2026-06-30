@@ -1,11 +1,46 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { createHmac, timingSafeEqual } from 'crypto';
 import { authenticateApiKey, checkRateLimit, redactApiKey } from '../middleware/apiKeyAuth.js';
 import { container } from '../di/container.js';
 import { TOKENS } from '../di/tokens.js';
 import { IQueueAdapter } from '../queue/IQueueAdapter.js';
 import { QUEUES } from '../queue/events.js';
 
+/**
+ * Verify a System Loco webhook signature: base64(HMAC-SHA256(rawBody, secret))
+ * in the X-LocoAware-Signature header, timing-safe. The secret comes from the
+ * org's IoT vendor config (falling back to LOCOAWARE_WEBHOOK_SECRET). Webhooks
+ * carry no tenant context, so we use the fallback (first) organization.
+ */
+async function verifyLocoSignature(server: FastifyInstance, req: FastifyRequest, signature: string): Promise<boolean> {
+  const raw = (req as any).rawBody as Buffer | undefined;
+  if (!raw) return false;
+  const org = await server.prisma.organization.findFirst({ select: { id: true } });
+  if (!org) return false;
+  const vendor = await server.prisma.iotVendor.findUnique({
+    where: { orgId_vendorKey: { orgId: org.id, vendorKey: 'system_loco' } },
+    select: { webhookSecret: true },
+  });
+  const secret = vendor?.webhookSecret || process.env.LOCOAWARE_WEBHOOK_SECRET;
+  if (!secret) return false; // signature sent but no secret configured — cannot verify
+  const expected = createHmac('sha256', secret).update(raw).digest();
+  let received: Buffer;
+  try { received = Buffer.from(signature, 'base64'); } catch { return false; }
+  return received.length === expected.length && timingSafeEqual(received, expected);
+}
+
 export async function webhookRoutes(server: FastifyInstance) {
+  // Capture the raw request body (scoped to this plugin) so we can verify the
+  // HMAC signature over the exact bytes System Loco signed, then parse JSON.
+  server.addContentTypeParser('application/json', { parseAs: 'buffer' }, (req, body, done) => {
+    (req as any).rawBody = body;
+    try {
+      done(null, (body as Buffer).length ? JSON.parse(body.toString()) : {});
+    } catch (err) {
+      done(err as Error, undefined);
+    }
+  });
+
   // Webhook endpoint
   server.post('/api/v1/webhook', async (req: FastifyRequest, reply: FastifyReply) => {
     // Rate limiting check
@@ -23,35 +58,65 @@ export async function webhookRoutes(server: FastifyInstance) {
     let apiKeyId: string | null = null;
 
     try {
-      // Authenticate API key
-      const authResult = await authenticateApiKey(server, req, reply);
-      if (authResult.error) {
-        // Create log entry for failed auth
-        const logEntry = await server.prisma.webhookLog.create({
-          data: {
-            apiKeyId: null,
-            method: req.method,
-            path: req.url,
-            ipAddress: req.ip,
-            userAgent: req.headers['user-agent'] || undefined,
-            headers: redactApiKey(req.headers),
-            status: 'error',
-            shipmentFound: false,
-            shipmentUpdated: false,
-            errorMessage: authResult.error,
-            responseCode: reply.statusCode,
-            rawPayload: (req.body as any) || {},
-            receivedAt: timestamp,
-            processedAt: new Date()
-          }
-        });
+      // Authenticate: prefer the System Loco HMAC signature; fall back to the
+      // API key for existing/manual integrations that don't sign.
+      const signature = req.headers['x-locoaware-signature'] as string | undefined;
+      if (signature) {
+        const valid = await verifyLocoSignature(server, req, signature);
+        if (!valid) {
+          reply.code(401);
+          await server.prisma.webhookLog.create({
+            data: {
+              apiKeyId: null,
+              method: req.method,
+              path: req.url,
+              ipAddress: req.ip,
+              userAgent: req.headers['user-agent'] || undefined,
+              headers: redactApiKey(req.headers),
+              status: 'error',
+              shipmentFound: false,
+              shipmentUpdated: false,
+              errorMessage: 'Invalid webhook signature',
+              responseCode: 401,
+              rawPayload: (req.body as any) || {},
+              receivedAt: timestamp,
+              processedAt: new Date(),
+            },
+          });
+          return { error: 'Invalid webhook signature', timestamp: timestamp.toISOString() };
+        }
+        // Authenticated via signature; apiKeyId stays null.
+      } else {
+        // Authenticate API key
+        const authResult = await authenticateApiKey(server, req, reply);
+        if (authResult.error) {
+          // Create log entry for failed auth
+          const logEntry = await server.prisma.webhookLog.create({
+            data: {
+              apiKeyId: null,
+              method: req.method,
+              path: req.url,
+              ipAddress: req.ip,
+              userAgent: req.headers['user-agent'] || undefined,
+              headers: redactApiKey(req.headers),
+              status: 'error',
+              shipmentFound: false,
+              shipmentUpdated: false,
+              errorMessage: authResult.error,
+              responseCode: reply.statusCode,
+              rawPayload: (req.body as any) || {},
+              receivedAt: timestamp,
+              processedAt: new Date()
+            }
+          });
 
-        return {
-          error: authResult.error,
-          timestamp: timestamp.toISOString()
-        };
+          return {
+            error: authResult.error,
+            timestamp: timestamp.toISOString()
+          };
+        }
+        apiKeyId = authResult.apiKeyId!;
       }
-      apiKeyId = authResult.apiKeyId!;
 
       // Validate request body
       if (!req.body || Object.keys(req.body as any).length === 0) {
