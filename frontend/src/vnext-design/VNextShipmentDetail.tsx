@@ -9,6 +9,7 @@ import {
   Bot,
   Box,
   CheckCircle2,
+  ChevronDown,
   CircleHelp,
   Clock,
   CreditCard,
@@ -58,9 +59,38 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Separator } from '@/components/ui/separator';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { getDeviceImageUrl } from './deviceImages';
+import {
+  SHIPMENT_STATUS_LABELS,
+  allowedTransitions,
+  canTransition,
+  validateShipmentReadiness,
+  SHIPMENT_FIELD_LABELS,
+} from '../shared/shipmentTypeValidator';
+
+// Maps a canonical lifecycle status to a Badge variant.
+function shipmentStatusVariant(status: string): 'muted' | 'warning' | 'info' | 'success' {
+  switch (status) {
+    case 'ready': return 'warning';
+    case 'in_progress': return 'info';
+    case 'complete': return 'success';
+    default: return 'muted'; // draft + anything unknown
+  }
+}
+
+function shipmentStatusLabel(status: string): string {
+  return SHIPMENT_STATUS_LABELS[status] ?? status;
+}
 
 // Hex colors used inside Leaflet HTML strings (cannot use Tailwind/var(--*))
 const COLOR_INFO = '#3b82f6';
@@ -1321,10 +1351,11 @@ export default function VNextShipmentDetail() {
   const [documents, setDocuments] = useState<any[]>([]);
   const [generating, setGenerating] = useState<string | null>(null);
   const [routeDeviation, setRouteDeviation] = useState<any>(null);
+  const [transitioning, setTransitioning] = useState(false);
 
-  useEffect(() => {
+  const loadShipment = useCallback((showSpinner = true) => {
     if (!id) return;
-    setLoading(true);
+    if (showSpinner) setLoading(true);
     fetch(`${API_URL}/api/v1/shipments/${id}`)
       .then(res => {
         if (!res.ok) throw new Error('Failed to load shipment');
@@ -1341,8 +1372,33 @@ export default function VNextShipmentDetail() {
         }
       })
       .catch(err => setError(err.message))
-      .finally(() => setLoading(false));
+      .finally(() => { if (showSpinner) setLoading(false); });
   }, [id]);
+
+  useEffect(() => { loadShipment(); }, [loadShipment]);
+
+  const handleTransition = useCallback(async (toStatus: string) => {
+    if (!id) return;
+    setTransitioning(true);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/shipments/${id}/transition`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ toStatus }),
+      });
+      const json = await res.json();
+      if (!res.ok || json.error) {
+        toast.error(json.error || 'Failed to change status', { duration: 8000 });
+        return;
+      }
+      toast.success(`Moved to ${shipmentStatusLabel(toStatus)}`);
+      loadShipment(false);
+    } catch {
+      toast.error('Failed to change status');
+    } finally {
+      setTransitioning(false);
+    }
+  }, [id, loadShipment]);
 
   const loadDocuments = useCallback(() => {
     if (!id) return;
@@ -1357,7 +1413,7 @@ export default function VNextShipmentDetail() {
   // Check route deviation for in-transit shipments with a lane
   useEffect(() => {
     if (!shipment?.laneId) return;
-    const inTransit = ['in_transit', 'dispatched', 'picked_up', 'at_stop'].includes(shipment.status);
+    const inTransit = shipment.status === 'in_progress';
     if (!inTransit) return;
 
     const lat = shipment.currentLat;
@@ -1523,7 +1579,66 @@ export default function VNextShipmentDetail() {
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-3xl font-bold tracking-tight">{shipment.reference || id}</h1>
-            <Badge variant="info">{shipment.status || 'Unknown'}</Badge>
+            {(() => {
+              const status = shipment.status || 'draft';
+              const readiness = validateShipmentReadiness(shipment, shipmentType);
+              const targets = allowedTransitions(status);
+              const isForward = (to: string) => {
+                const order = ['draft', 'ready', 'in_progress', 'complete'];
+                return order.indexOf(to) > order.indexOf(status);
+              };
+              return (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 gap-1.5 px-2"
+                      disabled={transitioning || targets.length === 0}
+                      title="Change lifecycle status"
+                    >
+                      <Badge variant={shipmentStatusVariant(status)}>{shipmentStatusLabel(status)}</Badge>
+                      <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-72">
+                    <DropdownMenuLabel>Move shipment to</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    {targets.map(to => {
+                      // Forward moves into ready/in_progress/complete are gated.
+                      const blocked = isForward(to) && to !== 'draft' && !readiness.isValid;
+                      return (
+                        <DropdownMenuItem
+                          key={to}
+                          disabled={blocked || transitioning}
+                          onSelect={(e) => {
+                            if (blocked) { e.preventDefault(); return; }
+                            handleTransition(to);
+                          }}
+                          className="flex flex-col items-start gap-1"
+                        >
+                          <span className="font-medium">{shipmentStatusLabel(to)}</span>
+                          {blocked && (
+                            <span className="text-xs text-muted-foreground">
+                              Missing: {readiness.missing.map(f => SHIPMENT_FIELD_LABELS[f] ?? f).join(', ')}
+                            </span>
+                          )}
+                        </DropdownMenuItem>
+                      );
+                    })}
+                    {targets.length === 0 && (
+                      <DropdownMenuItem disabled>No transitions available</DropdownMenuItem>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              );
+            })()}
+            {shipment.hasException && (
+              <Badge variant="destructive" className="gap-1">
+                <AlertTriangle className="h-3 w-3" />
+                Exception
+              </Badge>
+            )}
             {shipmentType && <Badge variant="muted">{shipmentType.name}</Badge>}
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -1845,7 +1960,7 @@ export default function VNextShipmentDetail() {
               <Detail label="Customer" value={shipment.customer?.name || '-'} />
               <Detail label="Carrier" value={shipment.carrier?.name || '-'} />
               <Detail label="PRO Number" value={shipment.proNumber || '-'} />
-              <Detail label="Status" value={shipment.status || '-'} />
+              <Detail label="Status" value={shipment.status ? shipmentStatusLabel(shipment.status) : '-'} />
               <Detail label="Pickup Date" value={shipment.pickupDate ? new Date(shipment.pickupDate).toLocaleDateString() : '-'} />
               <Detail label="Delivery Date" value={shipment.deliveryDate ? new Date(shipment.deliveryDate).toLocaleDateString() : '-'} />
               <Detail
