@@ -69,6 +69,7 @@ import { UpdateShipmentCommandHandler } from '../commands/shipments/UpdateShipme
 import { ArchiveShipmentCommandHandler } from '../commands/shipments/ArchiveShipmentCommand.js';
 import { TransitionShipmentStatusCommandHandler } from '../commands/shipments/TransitionShipmentStatusCommand.js';
 import { SoftDeleteShipmentCommandHandler } from '../commands/shipments/SoftDeleteShipmentCommand.js';
+import { UnarchiveShipmentCommandHandler } from '../commands/shipments/UnarchiveShipmentCommand.js';
 import { CreateCarrierCommandHandler } from '../commands/carriers/CreateCarrierCommand.js';
 import { UpdateCarrierCommandHandler } from '../commands/carriers/UpdateCarrierCommand.js';
 import { ArchiveCarrierCommandHandler } from '../commands/carriers/ArchiveCarrierCommand.js';
@@ -820,6 +821,7 @@ export function registerDependencies(prisma: PrismaClient): void {
     bus.register(new ArchiveShipmentCommandHandler(prisma, eventBus));
     bus.register(new TransitionShipmentStatusCommandHandler(prisma, eventBus));
     bus.register(new SoftDeleteShipmentCommandHandler(prisma, eventBus));
+    bus.register(new UnarchiveShipmentCommandHandler(prisma, eventBus));
 
     // Carrier commands
     bus.register(new CreateCarrierCommandHandler(prisma, eventBus));

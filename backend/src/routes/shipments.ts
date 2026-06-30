@@ -9,6 +9,7 @@ import { UPDATE_SHIPMENT } from '../commands/shipments/UpdateShipmentCommand.js'
 import { ARCHIVE_SHIPMENT } from '../commands/shipments/ArchiveShipmentCommand.js';
 import { TRANSITION_SHIPMENT_STATUS } from '../commands/shipments/TransitionShipmentStatusCommand.js';
 import { SOFT_DELETE_SHIPMENT } from '../commands/shipments/SoftDeleteShipmentCommand.js';
+import { UNARCHIVE_SHIPMENT } from '../commands/shipments/UnarchiveShipmentCommand.js';
 import {
   SHIPMENT_LIFECYCLE,
   allowedTransitions,
@@ -221,7 +222,7 @@ export async function shipmentRoutes(server: FastifyInstance) {
     const { id } = req.params as { id: string };
     const orgId = req.orgId!;
     const shipment = await server.prisma.shipment.findFirst({
-      where: { id, archived: false, orgId, deletedAt: null },
+      where: { id, orgId, deletedAt: null },
       include: {
         customer: true,
         origin: true,
@@ -272,7 +273,7 @@ export async function shipmentRoutes(server: FastifyInstance) {
   server.get('/api/v1/shipments/:id/events', async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
     const orgId = req.orgId!;
-    const shipment = await server.prisma.shipment.findFirst({ where: { id, archived: false, orgId, deletedAt: null } });
+    const shipment = await server.prisma.shipment.findFirst({ where: { id, orgId, deletedAt: null } });
     if (!shipment) {
       reply.code(404);
       return { data: null, error: 'Shipment not found' };
@@ -435,6 +436,45 @@ export async function shipmentRoutes(server: FastifyInstance) {
     return { data: { id, deleted: true }, error: null };
   });
 
+  // Unarchive (restore). Admin action (shipments:delete), mirroring archive's
+  // privileged counterpart. Re-inserts the shipment into active lists.
+  server.post('/api/v1/shipments/:id/unarchive', {
+    preHandler: requirePermission('shipments:delete'),
+    schema: {
+      tags: ['Shipments'],
+      summary: 'Unarchive shipment (admin)',
+      description: 'Restores an archived shipment to active lists. Requires shipments:delete.',
+      params: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const orgId = req.orgId!;
+
+    const existing = await server.prisma.shipment.findFirst({
+      where: { id, orgId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!existing) {
+      reply.code(404);
+      return { data: null, error: 'Shipment not found' };
+    }
+
+    const result = await commandBus.dispatch({
+      type: UNARCHIVE_SHIPMENT,
+      orgId,
+      actorId: req.user?.sub ?? null,
+      payload: { id },
+      metadata: { correlationId: randomUUID(), source: 'api' },
+    });
+
+    if (!result.success) {
+      reply.code(400);
+      return { data: null, error: result.error };
+    }
+
+    return { data: { id, archived: false }, error: null };
+  });
+
   // Readiness + allowed transitions for the lifecycle control on the detail page.
   server.get('/api/v1/shipments/:id/readiness', {
     schema: {
@@ -447,7 +487,7 @@ export async function shipmentRoutes(server: FastifyInstance) {
     const { id } = req.params as { id: string };
     const orgId = req.orgId!;
     const shipment = await server.prisma.shipment.findFirst({
-      where: { id, archived: false, orgId, deletedAt: null },
+      where: { id, orgId, deletedAt: null },
       include: { shipmentType: { select: { requiredFields: true } } },
     });
     if (!shipment) {

@@ -124,6 +124,22 @@ describe('ShipmentProjection', () => {
     });
   });
 
+  describe('onShipmentUnarchived', () => {
+    it('re-inserts the restored shipment into the read model', async () => {
+      const event = createTestEvent(
+        EVENT_TYPES.SHIPMENT_UNARCHIVED, 'shipment', 'ship-1',
+        { shipmentReference: 'SH-001' }
+      );
+
+      await projection.handle(event);
+
+      // Routed through the create/upsert path now that archived is cleared.
+      expect(mockPrisma.shipmentReadModel.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'ship-1' } })
+      );
+    });
+  });
+
   describe('onShipmentCreated guard', () => {
     it('does not resurrect a shipment already archived/deleted (out-of-order events)', async () => {
       const findUnique = jest.fn().mockResolvedValue({

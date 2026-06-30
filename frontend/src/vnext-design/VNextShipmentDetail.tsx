@@ -5,6 +5,7 @@ import 'leaflet/dist/leaflet.css';
 import {
   AlertTriangle,
   Archive,
+  ArchiveRestore,
   ArrowLeft,
   BatteryFull,
   Bot,
@@ -1363,18 +1364,25 @@ export default function VNextShipmentDetail() {
   const [transitioning, setTransitioning] = useState(false);
   const [archiving, setArchiving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [unarchiving, setUnarchiving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [notFound, setNotFound] = useState(false);
   const { hasPermission } = useCurrentUser();
 
   const loadShipment = useCallback((showSpinner = true) => {
     if (!id) return;
     if (showSpinner) setLoading(true);
+    setNotFound(false);
     fetch(`${API_URL}/api/v1/shipments/${id}`)
       .then(res => {
+        // A soft-deleted (or genuinely missing) shipment 404s — render the
+        // styled not-found screen rather than a generic error.
+        if (res.status === 404) { setNotFound(true); return null; }
         if (!res.ok) throw new Error('Failed to load shipment');
         return res.json();
       })
       .then(json => {
+        if (!json) return;
         if (json.error) throw new Error(json.error);
         setShipment(json.data);
         if (json.data?.shipmentTypeId) {
@@ -1431,6 +1439,25 @@ export default function VNextShipmentDetail() {
       setArchiving(false);
     }
   }, [id, navigate]);
+
+  const handleUnarchive = useCallback(async () => {
+    if (!id) return;
+    setUnarchiving(true);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/shipments/${id}/unarchive`, { method: 'POST' });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json.error) {
+        toast.error(json.error || 'Failed to unarchive shipment', { duration: 8000 });
+        return;
+      }
+      toast.success('Shipment restored');
+      loadShipment(false);
+    } catch {
+      toast.error('Failed to unarchive shipment');
+    } finally {
+      setUnarchiving(false);
+    }
+  }, [id, loadShipment]);
 
   const handleSoftDelete = useCallback(async () => {
     if (!id) return;
@@ -1582,6 +1609,25 @@ export default function VNextShipmentDetail() {
     return (
       <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
         <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+  if (notFound || (!error && !shipment)) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-5 px-6 py-24 text-center">
+        <div className="flex h-28 w-28 items-center justify-center rounded-full bg-muted text-6xl" role="img" aria-label="Magnifying glass">
+          🔍
+        </div>
+        <div className="space-y-1">
+          <h2 className="text-2xl font-semibold tracking-tight">Shipment not found</h2>
+          <p className="max-w-md text-sm text-muted-foreground">
+            We couldn't find this shipment. It may have been deleted, or the link is incorrect.
+          </p>
+        </div>
+        <Button onClick={() => navigate('/shipments')}>
+          <ArrowLeft className="h-4 w-4" />
+          Back to shipments
+        </Button>
       </div>
     );
   }
@@ -1744,6 +1790,23 @@ export default function VNextShipmentDetail() {
           )}
         </div>
       </div>
+
+      {/* Archived banner */}
+      {shipment.archived && (
+        <div className="flex flex-wrap items-center gap-3 rounded-md border border-warning/30 bg-warning/10 p-4 text-sm">
+          <Archive className="h-5 w-5 text-warning" />
+          <div className="flex-1">
+            <span className="font-medium text-warning">This shipment is archived.</span>
+            <span className="ml-1 text-muted-foreground">It does not appear in active shipment lists.</span>
+          </div>
+          {hasPermission('shipments:delete') && (
+            <Button variant="outline" size="sm" onClick={handleUnarchive} disabled={unarchiving}>
+              {unarchiving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArchiveRestore className="h-4 w-4" />}
+              Unarchive
+            </Button>
+          )}
+        </div>
+      )}
 
       {/* Soft-delete confirmation (admin) */}
       <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>

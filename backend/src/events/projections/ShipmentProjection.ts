@@ -40,6 +40,10 @@ export class ShipmentProjection implements IEventHandler {
         return this.onShipmentDelivered(event);
       case EVENT_TYPES.SHIPMENT_ARCHIVED:
         return this.onShipmentArchived(event);
+      case EVENT_TYPES.SHIPMENT_UNARCHIVED:
+        // Restore re-projects the live shipment into the read model (same path
+        // as create — the archived guard in onShipmentCreated now passes).
+        return this.onShipmentCreated(event);
       case EVENT_TYPES.SHIPMENT_DELETED:
         return this.onShipmentDeleted(event);
       case EVENT_TYPES.SHIPMENT_EXCEPTION:

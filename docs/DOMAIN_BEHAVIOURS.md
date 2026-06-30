@@ -215,6 +215,7 @@ Shipments follow a canonical lifecycle: **`draft` → `ready` → `in_progress` 
 | `UpdateShipmentCommand` | `PUT /api/v1/shipments/:id` | `shipment.updated`, `shipment.status_changed`, `shipment.carrier_assigned` |
 | `TransitionShipmentStatusCommand` | `POST /api/v1/shipments/:id/transition`, `POST /api/v1/shipments/bulk-transition` | `shipment.status_changed` (gated: adjacency + readiness) |
 | `ArchiveShipmentCommand` | `DELETE /api/v1/shipments/:id` (requires `shipments:write`) | `shipment.archived` |
+| `UnarchiveShipmentCommand` | `POST /api/v1/shipments/:id/unarchive` (requires `shipments:delete`) | `shipment.unarchived` |
 | `SoftDeleteShipmentCommand` | `POST /api/v1/shipments/:id/soft-delete` (requires `shipments:delete`) | `shipment.deleted` |
 | `ProcessInbound214Command` | `POST /api/v1/edi/214/inbound` | `edi_214.received`, `shipment.status_changed`, `shipment.stop_arrived`, `shipment.stop_completed`, `shipment.exception`, `shipment.delivered` |
 
@@ -224,7 +225,7 @@ Shipments follow a canonical lifecycle: **`draft` → `ready` → `in_progress` 
 
 Two independent removal states, both retaining the row for audit:
 
-- **Archive** (`archived`/`archivedAt`) — recoverable, available to any operational user (`shipments:write`). Removed from active lists; intended to surface in a future "archived shipments" screen.
+- **Archive** (`archived`/`archivedAt`) — recoverable, available to any operational user (`shipments:write`). Removed from active lists, but the shipment **detail page still loads** and shows an "archived" banner. Admins (`shipments:delete`) can **unarchive** (`POST /:id/unarchive`) to restore it to active lists. Intended to also surface in a future "archived shipments" screen.
 - **Soft delete** (`deletedAt`/`deletedBy`) — admin-only (`shipments:delete`). Hidden from **every** view, including the future archived screen. The row is kept only for audit/compliance; idempotent (re-deleting is a no-op). Soft-deleted shipments are filtered out of all read/mutation routes via `deletedAt: null`, so the detail page 404s.
 
 ### Side Effects
@@ -239,6 +240,7 @@ Two independent removal states, both retaining the row for audit:
 | `shipment.stop_arrived` | ShipmentReadModel.stopCount updated | In-app | Orders at stop → delivery_status_changed |
 | `shipment.stop_completed` | ShipmentReadModel.stopCount updated | In-app | Orders at stop → delivered |
 | `shipment.archived` | ShipmentReadModel row removed | — | — |
+| `shipment.unarchived` | ShipmentReadModel row re-inserted | — | — |
 | `shipment.deleted` | ShipmentReadModel row removed | — | — |
 | `edi_214.received` | — | — | Auto-forward outbound 214 to customer trading partners |
 | `edi_214.sent` | — | — | — |

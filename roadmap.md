@@ -14,7 +14,7 @@
 - **Customer Management** - Manage customers with contact/billing info, customer-specific preferences
 - **Shipment Creation (Basic)** - Create shipments with references, customer, origin, destination, status, templates
 - **Shipment Lifecycle States** - Canonical draft → ready → in_progress → complete lifecycle with a readiness gate (customer, route/lane, carrier, dates, reference, shipment-type fields), forward/step-back-only manual transitions, audit logging of who/when, an orthogonal exception flag, and bulk status updates on the list page
-- **Shipment Archive & Soft Delete** - Users archive shipments (recoverable, `shipments:write`); admins soft-delete (`shipments:delete`, hidden everywhere, retained for audit). Both audit-logged. _Future: an archived-shipments screen to browse/restore archived records._
+- **Shipment Archive & Soft Delete** - Users archive shipments (recoverable, `shipments:write`); an archived shipment still opens with an "archived" banner and admins can unarchive it (`shipments:delete`). Admins soft-delete (`shipments:delete`, hidden everywhere, deleted shipments show a styled not-found screen, retained for audit). All actions audit-logged. _Future: an archived-shipments screen to browse/restore archived records._
 - **Item/Line Items** - Model SKUs, quantities, weights, dimensions, CSV/Excel bulk import
 
 ### **Phase 2: Orders & Ingestion** DONE
