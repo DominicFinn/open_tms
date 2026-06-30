@@ -68,6 +68,28 @@ export function createInboundWebhookWorker(
           }
         }
 
+        // Idempotency: System Loco may redeliver an event (3 attempts, 14-day
+        // DLQ). If we've already processed this event id, no-op so we don't
+        // double-write readings or re-move the shipment's position.
+        if (rawPayload.id) {
+          const already = await prisma.deviceEvent.findUnique({
+            where: { externalEventId: rawPayload.id },
+            select: { id: true },
+          });
+          if (already) {
+            await prisma.webhookLog.update({
+              where: { id: webhookLogId },
+              data: {
+                status: 'duplicate',
+                processedAt: new Date(),
+                responseCode: 200,
+                responseBody: { skipped: true, reason: 'Duplicate event id (already processed)' },
+              },
+            });
+            return;
+          }
+        }
+
         const result = feedType === 'device_event'
           ? await systemLoco.processDeviceEvent(rawPayload)
           : await systemLoco.processShipmentEvent(rawPayload);

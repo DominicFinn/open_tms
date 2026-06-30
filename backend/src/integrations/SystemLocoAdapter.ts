@@ -192,6 +192,7 @@ export class SystemLocoAdapter {
           lat: location.lat ? Number(location.lat) : null,
           lng: location.lon ? Number(location.lon) : null,
           address: location.address || null,
+          sourceReportId: payload.id || null,
           rawPayload: payload,
         },
       });
@@ -217,6 +218,7 @@ export class SystemLocoAdapter {
           address: location.address || null,
           isAlert: true,
           alertType: eventType,
+          sourceReportId: payload.id || null,
           rawPayload: payload,
         },
       });
@@ -403,6 +405,7 @@ export class SystemLocoAdapter {
         lightMax: p.maxLightLevel != null ? Number(p.maxLightLevel) : null,
         isAlert,
         alertType: isAlert ? eventType : null,
+        sourceReportId: payload.id || null,
         rawPayload: payload,
       },
     });

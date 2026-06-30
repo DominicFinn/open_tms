@@ -2470,6 +2470,10 @@ model SensorReading {
   isAlert   Boolean @default(false)
   alertType String? // "temperature" | "impact" | "light" | "tip" | "battery"
 
+  // Idempotency: the originating System Loco report/event id, so a redelivered
+  // webhook cannot create a duplicate reading.
+  sourceReportId String? @unique
+
   rawPayload Json?
   createdAt  DateTime @default(now())
 
