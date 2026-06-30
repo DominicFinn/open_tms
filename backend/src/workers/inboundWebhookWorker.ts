@@ -5,6 +5,11 @@ import { IOrderDeliveryService } from '../services/OrderDeliveryService.js';
 import { IArrivalCriteriaEvaluationService } from '../services/ArrivalCriteriaEvaluationService.js';
 import { SystemLocoAdapter } from '../integrations/SystemLocoAdapter.js';
 import { ColdChainService } from '../services/ColdChainService.js';
+import { container } from '../di/container.js';
+import { TOKENS } from '../di/tokens.js';
+import { IEventBus } from '../events/IEventBus.js';
+import { createEvent } from '../events/createEvent.js';
+import { EVENT_TYPES } from '../events/eventTypes.js';
 
 export function createInboundWebhookWorker(
   prisma: PrismaClient,
@@ -15,6 +20,11 @@ export function createInboundWebhookWorker(
   // Wire cold chain monitoring into the sensor ingestion pipeline
   const coldChainService = new ColdChainService(prisma);
   systemLoco.setColdChainService(coldChainService);
+
+  // Event bus for publishing tracking.location_received so the shipment read
+  // model's current position updates (drives the map/list dot).
+  let eventBus: IEventBus | null = null;
+  try { eventBus = container.resolve<IEventBus>(TOKENS.IEventBus); } catch { /* not available in some contexts */ }
 
   return async (message: QueueMessage<WebhookEvent>) => {
     const { webhookLogId, rawPayload } = message.payload;
@@ -85,6 +95,27 @@ export function createInboundWebhookWorker(
             responseBody: { processed: true, ...result },
           }
         });
+
+        // Publish the resolved position so the shipment read model's current
+        // location updates (ShipmentProjection.onLocationReceived → map/list dot).
+        if (result.shipmentId && location.lat && eventBus && gateOrg) {
+          try {
+            const lat = Number(location.lat);
+            const lng = Number(location.lon || location.lng);
+            const eventTime = rawPayload.startTime || rawPayload.time || new Date().toISOString();
+            await eventBus.publish(createEvent({
+              type: EVENT_TYPES.TRACKING_LOCATION_RECEIVED,
+              orgId: gateOrg.id,
+              actorId: 'system',
+              entityType: 'shipment',
+              entityId: result.shipmentId,
+              payload: { shipmentId: result.shipmentId, lat, lng, eventTime },
+              source: 'system_loco_webhook',
+            }));
+          } catch (err) {
+            console.error(`[WebhookWorker] Failed to publish location event: ${(err as Error).message}`);
+          }
+        }
 
         // Trigger geofence check if we have a shipment + location
         if (result.shipmentId && location.lat) {
