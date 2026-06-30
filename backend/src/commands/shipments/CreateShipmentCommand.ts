@@ -13,6 +13,7 @@ import { IQueueAdapter } from '../../queue/IQueueAdapter.js';
 import { QUEUES } from '../../queue/events.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { Command } from '../types.js';
+import { reconcileShipmentDevices } from './reconcileShipmentDevices.js';
 
 export interface CreateShipmentPayload {
   reference?: string;
@@ -61,6 +62,7 @@ export interface CreateShipmentPayload {
     weightKg?: number;
     volumeM3?: number;
   }>;
+  devices?: Array<{ name: string; externalId: string }>;
 }
 
 export interface CreateShipmentResult {
@@ -263,6 +265,26 @@ export class CreateShipmentCommandHandler extends BaseCommandHandler<CreateShipm
         },
       })
     );
+
+    // Assign any IoT devices entered on the form (creates Device + active
+    // DeviceAssignment so System Loco webhooks resolve to this shipment).
+    await reconcileShipmentDevices(tx, {
+      orgId: orgIdToWrite,
+      shipmentId: shipment.id,
+      devices: body.devices,
+      emitAssigned: (deviceId, assignmentId) => emit(this.createEvent(command, {
+        type: EVENT_TYPES.DEVICE_ASSIGNED,
+        entityType: 'device',
+        entityId: deviceId,
+        payload: { assignmentId, shipmentId: shipment.id },
+      })),
+      emitUnassigned: (deviceId, assignmentId) => emit(this.createEvent(command, {
+        type: EVENT_TYPES.DEVICE_UNASSIGNED,
+        entityType: 'device',
+        entityId: deviceId,
+        payload: { assignmentId, shipmentId: shipment.id },
+      })),
+    });
 
     // Enqueue for outbound integrations (fire-and-forget, after tx commits)
     // Note: queue publishing happens in execute() override below

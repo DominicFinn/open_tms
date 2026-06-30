@@ -111,6 +111,7 @@ import { customerRmaApiRoutes } from './routes/customerRmaApi.js';
 import { edi180Routes } from './routes/edi180.js';
 import { agentDecisionRoutes } from './routes/agentDecisions.js';
 import { llmSettingsRoutes } from './routes/llmSettings.js';
+import { iotVendorRoutes } from './routes/iotVendors.js';
 import { agentConfigRoutes } from './routes/agentConfig.js';
 import { automationRuleRoutes } from './routes/automationRules.js';
 import { skillRoutes } from './routes/skills.js';
@@ -293,6 +294,7 @@ async function start() {
     await app.register(edi180Routes);
     await app.register(agentDecisionRoutes);
     await app.register(llmSettingsRoutes);
+    await app.register(iotVendorRoutes);
     await app.register(agentConfigRoutes);
     await app.register(automationRuleRoutes);
     await app.register(skillRoutes);

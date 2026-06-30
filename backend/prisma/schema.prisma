@@ -2417,6 +2417,22 @@ model DeviceAssignment {
   @@index([orderId])
 }
 
+// Per-org registry of IoT tracking vendors that can be switched on/off in admin
+// settings. When a vendor is disabled, its inbound webhooks are skipped and the
+// shipment form hides the IoT devices section. System Loco is vendor #1.
+model IotVendor {
+  id        String   @id @default(uuid())
+  orgId     String
+  vendorKey String // 'system_loco'
+  name      String // 'System Loco'
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([orgId, vendorKey])
+  @@index([orgId])
+}
+
 model SensorReading {
   id              String         @id @default(uuid())
   device          Device         @relation(fields: [deviceId], references: [id], onDelete: Cascade)

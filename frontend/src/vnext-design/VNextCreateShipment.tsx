@@ -13,6 +13,7 @@ import {
   MapPin,
   PencilLine,
   Plus,
+  Radio,
   Save,
   StickyNote,
   Tag,
@@ -80,6 +81,9 @@ export default function VNextCreateShipment() {
   const [notes, setNotes] = useState('');
   const [laneId, setLaneId] = useState('');
 
+  const [iotEnabled, setIotEnabled] = useState(false);
+  const [devices, setDevices] = useState<Array<{ name: string; externalId: string }>>([]);
+
   const [customers, setCustomers] = useState<any[]>([]);
   const [locations, setLocations] = useState<any[]>([]);
   const [, setLanes] = useState<any[]>([]);
@@ -104,7 +108,18 @@ export default function VNextCreateShipment() {
       setLanes(laRes.data || []);
       setShipmentTypes(stRes.data || []);
     }).catch(() => {});
+
+    // Show the IoT section only if an admin has enabled at least one IoT vendor.
+    fetch(`${API_URL}/api/v1/settings/iot-vendors`)
+      .then(r => r.json())
+      .then(j => setIotEnabled((j.data || []).some((v: any) => v.enabled)))
+      .catch(() => {});
   }, []);
+
+  const addDevice = () => setDevices(d => [...d, { name: '', externalId: '' }]);
+  const removeDevice = (idx: number) => setDevices(d => d.filter((_, i) => i !== idx));
+  const updateDevice = (idx: number, field: 'name' | 'externalId', value: string) =>
+    setDevices(d => d.map((dev, i) => i === idx ? { ...dev, [field]: value } : dev));
 
   const applyTypeDefaults = (typeId: string) => {
     setShipmentTypeId(typeId);
@@ -159,6 +174,11 @@ export default function VNextCreateShipment() {
         }
         setShipmentTypeId(s.shipmentTypeId || '');
         setLaneId(s.laneId || '');
+        if (Array.isArray(s.deviceAssignments)) {
+          setDevices(s.deviceAssignments
+            .filter((a: any) => a.device)
+            .map((a: any) => ({ name: a.device.name || '', externalId: a.device.externalId || '' })));
+        }
       })
       .catch(err => setSubmitError(err.message))
       .finally(() => setLoading(false));
@@ -232,6 +252,9 @@ export default function VNextCreateShipment() {
         deliveryWindowStart: hasDeliveryWindow && deliveryWindowStart ? deliveryWindowStart : undefined,
         deliveryWindowEnd: hasDeliveryWindow && deliveryWindowEnd ? deliveryWindowEnd : undefined,
       };
+      if (iotEnabled) {
+        body.devices = devices.filter(d => d.name.trim() && d.externalId.trim());
+      }
       if (!isEdit) body.status = 'draft';
       const url = isEdit ? `${API_URL}/api/v1/shipments/${id}` : `${API_URL}/api/v1/shipments`;
       const res = await fetch(url, {
@@ -608,6 +631,56 @@ export default function VNextCreateShipment() {
           </div>
         </CardContent>
       </Card>
+
+      {iotEnabled && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Radio className="h-4 w-4 text-primary" />
+              IoT Devices
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              Attach one or more tracking devices to this shipment. The external ID is used to match
+              inbound tracking webhooks to this shipment.
+            </p>
+            {devices.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No devices attached.</p>
+            ) : (
+              <div className="space-y-2">
+                {devices.map((device, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <Input
+                      placeholder="Device name"
+                      value={device.name}
+                      onChange={e => updateDevice(idx, 'name', e.target.value)}
+                    />
+                    <Input
+                      placeholder="External ID"
+                      value={device.externalId}
+                      onChange={e => updateDevice(idx, 'externalId', e.target.value)}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeDevice(idx)}
+                      aria-label="Remove device"
+                    >
+                      <Ban className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <Button type="button" variant="outline" size="sm" onClick={addDevice}>
+              <Plus className="h-4 w-4" />
+              Add device
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>

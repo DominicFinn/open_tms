@@ -266,6 +266,17 @@ Two independent removal states, both retaining the row for audit:
 | `tracking.geofence_entered` | Geofence calculation | ShipmentStop marked arrived, orders updated |
 | `tracking.eta_updated` | ETA recalculation | — |
 
+### IoT Devices & Vendors
+
+**Admin vendor toggle.** `IotVendor` is a per-org registry (`@@unique([orgId, vendorKey])`) of IoT tracking vendors. System Loco is vendor #1, enabled by default. Managed at `/settings/iot-vendors`:
+- `GET /api/v1/settings/iot-vendors` (any authed user; auto-seeds known vendors) — the shipment form uses it to decide whether to show the IoT section.
+- `PUT /api/v1/settings/iot-vendors/:vendorKey` (`settings:write`) toggles `enabled`.
+- When a vendor is **disabled**, the inbound webhook worker logs its webhooks as `disabled` and skips processing.
+
+**Device assignment on shipments.** The shipment create/edit form (when any vendor is enabled) accepts `devices: [{ name, externalId }]`. `reconcileShipmentDevices` (called inside `CreateShipmentCommand` / `UpdateShipmentCommand`) upserts a `Device` per `externalId` and maintains active `DeviceAssignment` rows: adds new ones (releasing the device's prior assignment), and on edit deactivates assignments dropped from the list. Emits `device.assigned` / `device.unassigned`. Idempotent. Shipment-level only for now.
+
+**Webhook resolution (unchanged).** `SystemLocoAdapter.resolveAssignment` resolves a device to a shipment by: (1) active `DeviceAssignment` for the device id, then (2) device name → `Shipment.reference`, then (3) device name → `Order.orderNumber`. Creating devices on the shipment form populates path (1). Lookups use existing indexes: `Device.name`, `Device.externalId` (`@unique`), `DeviceAssignment[deviceId, active]`, `Shipment.reference`, `Order.orderNumber` (`@unique`).
+
 ---
 
 ## Carriers

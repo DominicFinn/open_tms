@@ -163,7 +163,11 @@ export async function shipmentRoutes(server: FastifyInstance) {
         quantity: z.number().int().positive(),
         weightKg: z.number().nonnegative().optional(),
         volumeM3: z.number().nonnegative().optional()
-      })).default([])
+      })).default([]),
+      devices: z.array(z.object({
+        name: z.string().min(1),
+        externalId: z.string().min(1),
+      })).optional()
     }).refine((data) => {
       return (data.laneId) ||
         (data.originId && data.destinationId) ||
@@ -238,6 +242,10 @@ export async function shipmentRoutes(server: FastifyInstance) {
         carrier: true,
         loads: { include: { vehicle: true, driver: true } },
         events: { orderBy: { eventTime: 'desc' } },
+        deviceAssignments: {
+          where: { active: true },
+          include: { device: { select: { id: true, name: true, externalId: true } } },
+        },
         stops: {
           include: {
             location: true,
@@ -344,6 +352,10 @@ export async function shipmentRoutes(server: FastifyInstance) {
         quantity: z.number().int().positive(),
         weightKg: z.number().nonnegative().optional(),
         volumeM3: z.number().nonnegative().optional()
+      })).optional(),
+      devices: z.array(z.object({
+        name: z.string().min(1),
+        externalId: z.string().min(1),
       })).optional()
     }).refine((data) => {
       const hasRouteFields = data.laneId !== undefined || data.originId !== undefined || data.destinationId !== undefined;

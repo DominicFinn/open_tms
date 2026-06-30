@@ -3,6 +3,7 @@ import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { Command } from '../types.js';
+import { reconcileShipmentDevices } from './reconcileShipmentDevices.js';
 
 export interface UpdateShipmentPayload {
   id: string;
@@ -23,6 +24,7 @@ export interface UpdateShipmentPayload {
     originId?: string;
     destinationId?: string;
     items?: Array<{ sku: string; description?: string; quantity: number; weightKg?: number; volumeM3?: number }>;
+    devices?: Array<{ name: string; externalId: string }>;
   };
 }
 
@@ -46,6 +48,8 @@ export class UpdateShipmentCommandHandler extends BaseCommandHandler<UpdateShipm
 
     // Resolve lane origin/destination if laneId provided
     const updateData: any = { ...data };
+    // `devices` is not a Shipment column — it's reconciled separately below.
+    delete updateData.devices;
     if (data.laneId) {
       const lane = await tx.lane.findFirstOrThrow({ where: { id: data.laneId, archived: false } });
       updateData.originId = lane.originId;
@@ -82,6 +86,25 @@ export class UpdateShipmentCommandHandler extends BaseCommandHandler<UpdateShipm
         payload: { carrierId: data.carrierId, shipmentReference: updated.reference },
       }));
     }
+
+    // Reconcile IoT device assignments (no-op when `devices` is omitted).
+    await reconcileShipmentDevices(tx, {
+      orgId: command.orgId,
+      shipmentId: id,
+      devices: data.devices,
+      emitAssigned: (deviceId, assignmentId) => emit(this.createEvent(command, {
+        type: EVENT_TYPES.DEVICE_ASSIGNED,
+        entityType: 'device',
+        entityId: deviceId,
+        payload: { assignmentId, shipmentId: id },
+      })),
+      emitUnassigned: (deviceId, assignmentId) => emit(this.createEvent(command, {
+        type: EVENT_TYPES.DEVICE_UNASSIGNED,
+        entityType: 'device',
+        entityId: deviceId,
+        payload: { assignmentId, shipmentId: id },
+      })),
+    });
 
     return { id };
   }

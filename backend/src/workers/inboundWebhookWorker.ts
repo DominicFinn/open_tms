@@ -35,6 +35,29 @@ export function createInboundWebhookWorker(
 
       if (feedType) {
         // ── System Loco path ──────────────────────────────
+        // Vendor gate: if an admin has switched System Loco off for the org,
+        // log the webhook as disabled and skip processing. Webhooks have no
+        // tenant context, so we check the fallback (first) organization.
+        const gateOrg = await prisma.organization.findFirst({ select: { id: true } });
+        if (gateOrg) {
+          const vendor = await prisma.iotVendor.findUnique({
+            where: { orgId_vendorKey: { orgId: gateOrg.id, vendorKey: 'system_loco' } },
+            select: { enabled: true },
+          });
+          if (vendor && !vendor.enabled) {
+            await prisma.webhookLog.update({
+              where: { id: webhookLogId },
+              data: {
+                status: 'disabled',
+                processedAt: new Date(),
+                responseCode: 200,
+                responseBody: { skipped: true, reason: 'System Loco vendor disabled' },
+              },
+            });
+            return;
+          }
+        }
+
         const result = feedType === 'device_event'
           ? await systemLoco.processDeviceEvent(rawPayload)
           : await systemLoco.processShipmentEvent(rawPayload);

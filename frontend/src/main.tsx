@@ -71,6 +71,7 @@ import VNextLocationOps from './vnext-design/VNextLocationOps';
 import VNextAgentDecisions from './vnext-design/VNextAgentDecisions';
 import VNextAgentDecisionDetail from './vnext-design/VNextAgentDecisionDetail';
 import VNextLlmSettings from './vnext-design/VNextLlmSettings';
+import VNextIotVendors from './vnext-design/VNextIotVendors';
 import VNextAgentConfig from './vnext-design/VNextAgentConfig';
 import VNextAutomationRules from './vnext-design/VNextAutomationRules';
 import VNextAutomationRuleDetail from './vnext-design/VNextAutomationRuleDetail';
@@ -396,6 +397,7 @@ root.render(
           <Route path="settings/maps" element={<VNextMapsSettings />} />
           <Route path="settings/sla" element={<VNextSlaPolicies />} />
           <Route path="settings/llm" element={<VNextLlmSettings />} />
+          <Route path="settings/iot-vendors" element={<VNextIotVendors />} />
           <Route path="settings/agents" element={<VNextAgentConfig />} />
           <Route path="settings/skills" element={<VNextSkillsConfig />} />
           <Route path="settings/skill-chains" element={<VNextSkillChains />} />
