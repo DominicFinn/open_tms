@@ -149,3 +149,19 @@
     color: black;
   }
 }
+
+/*
+ * Leaflet stacking fix.
+ *
+ * Leaflet gives its internal panes and controls explicit z-index values up to
+ * ~1000, which would otherwise paint over Radix overlays (dropdown menus,
+ * popovers, dialogs) that are portaled to <body> at z-50 — e.g. the shipment
+ * lifecycle "Move shipment to" menu rendering behind the map. Giving the map
+ * container its own low stacking context confines all of Leaflet's z-indexes
+ * inside it, so app overlays always render above the map. The map's internal
+ * pane/marker/popup ordering is preserved (it is relative to this container).
+ */
+.leaflet-container {
+  position: relative;
+  z-index: 0;
+}
