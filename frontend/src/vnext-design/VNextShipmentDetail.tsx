@@ -89,6 +89,7 @@ import { SHIPMENT_EVENT_TYPES, shipmentEventLabel } from '../shared/shipmentEven
 import { cn } from '@/lib/utils';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { getDeviceImageUrl } from './deviceImages';
+import { keepMapSized } from '../lib/leafletMap';
 import {
   SHIPMENT_STATUS_LABELS,
   allowedTransitions,
@@ -1500,6 +1501,7 @@ export default function VNextShipmentDetail() {
   const [unarchiving, setUnarchiving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [notFound, setNotFound] = useState(false);
+  const [mapLoading, setMapLoading] = useState(true);
   const { hasPermission } = useCurrentUser();
 
   const loadShipment = useCallback((showSpinner = true) => {
@@ -1687,8 +1689,14 @@ export default function VNextShipmentDetail() {
     const origin = shipment.origin;
     const destination = shipment.destination;
 
+    setMapLoading(true);
     const map = L.map(mapRef.current, { zoomControl: true, attributionControl: false });
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 19 }).addTo(map);
+    const tiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 19 });
+    // Hide the spinner once tiles have rendered (with a fallback in case the
+    // load event doesn't fire, e.g. fully cached).
+    tiles.on('load', () => setMapLoading(false));
+    const loadFallback = setTimeout(() => setMapLoading(false), 2500);
+    tiles.addTo(map);
 
     const allCoords: [number, number][] = [];
 
@@ -1733,9 +1741,13 @@ export default function VNextShipmentDetail() {
       map.setView(allCoords[0], 12);
     }
 
-    setTimeout(() => map.invalidateSize(), 100);
+    const stopSizing = keepMapSized(map, mapRef.current);
 
-    return () => { map.remove(); };
+    return () => {
+      clearTimeout(loadFallback);
+      stopSizing();
+      map.remove();
+    };
   }, [shipment, hasAnyCoords, hasOriginCoords, hasDestCoords]);
 
   if (loading) {
@@ -1989,20 +2001,21 @@ export default function VNextShipmentDetail() {
 
       {/* Map */}
       {hasAnyCoords ? (
-        <div className="overflow-hidden rounded-lg border border-border">
+        <div className="relative overflow-hidden rounded-lg border border-border">
           <div ref={mapRef} className="h-[480px] w-full" />
+          {mapLoading && (
+            <div className="pointer-events-none absolute inset-0 z-[500] flex items-center justify-center bg-muted/40">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          )}
         </div>
       ) : (
-        <div className="relative flex h-[480px] items-center justify-center overflow-hidden rounded-lg border border-border">
-          <img
-            src="https://basemaps.cartocdn.com/dark_all/4/4/6.png"
-            alt=""
-            className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-15 grayscale"
-          />
-          <div className="relative z-10 text-center text-muted-foreground">
-            <MapPin className="mx-auto h-12 w-12 opacity-40" />
-            <div className="mt-2 text-sm font-medium">No coordinates to plot yet</div>
-            <div className="mt-1 text-xs">Add coordinates to the origin or destination location to see the route map</div>
+        <div className="flex h-[480px] flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border bg-muted/30 px-6 text-center">
+          <div className="text-5xl" role="img" aria-label="Map">🗺️</div>
+          <div className="text-sm font-medium">No location data yet</div>
+          <div className="max-w-sm text-xs text-muted-foreground">
+            Does this shipment have a carrier link and/or an IoT device on it? Live position appears here once a
+            carrier-tracking integration or an assigned IoT device reports a location.
           </div>
         </div>
       )}

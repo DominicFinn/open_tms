@@ -35,6 +35,7 @@ import {
 import { API_URL } from '../api';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { keepMapSized } from '../lib/leafletMap';
 import { getLocationTypeMeta } from './locationTypesMeta';
 
 // Fix for default markers in Leaflet with Vite
@@ -320,6 +321,7 @@ export default function VNextShipmentMap() {
     issuesLayer.current = L.layerGroup().addTo(map);
     locationsLayer.current = L.layerGroup().addTo(map);
     mapInstance.current = map;
+    const stopSizing = mapRef.current ? keepMapSized(map, mapRef.current) : () => {};
 
     let moveTimeout: ReturnType<typeof setTimeout>;
     map.on('moveend', () => {
@@ -333,6 +335,7 @@ export default function VNextShipmentMap() {
 
     return () => {
       clearTimeout(moveTimeout);
+      stopSizing();
       if (mapInstance.current) {
         mapInstance.current.remove();
         mapInstance.current = null;

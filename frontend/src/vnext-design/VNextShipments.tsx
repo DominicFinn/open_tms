@@ -47,6 +47,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
+import { keepMapSized } from '../lib/leafletMap';
 
 interface Shipment {
   id: string;
@@ -244,8 +245,9 @@ export default function VNextShipments() {
     }).addTo(map);
     markersRef.current = L.layerGroup().addTo(map);
     mapInstance.current = map;
-    setTimeout(() => map.invalidateSize(), 100);
+    const stopSizing = keepMapSized(map, mapRef.current);
     return () => {
+      stopSizing();
       map.remove();
       mapInstance.current = null;
       markersRef.current = null;

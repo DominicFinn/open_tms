@@ -18,6 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
+import { keepMapSized } from '../lib/leafletMap';
 
 type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning' | 'info' | 'muted';
 
@@ -168,10 +169,10 @@ export default function VNextCarrierBidding() {
     L.marker(selectedLane.destCoords, { icon: dIcon }).addTo(map).bindPopup(`<strong>Destination</strong><br/>${selectedLane.dest}`);
 
     map.fitBounds(L.latLngBounds([selectedLane.originCoords, selectedLane.destCoords]).pad(0.3));
-    setTimeout(() => map.invalidateSize(), 100);
     mapInstance.current = map;
+    const stopSizing = mapRef.current ? keepMapSized(map, mapRef.current) : () => {};
 
-    return () => { map.remove(); mapInstance.current = null; };
+    return () => { stopSizing(); map.remove(); mapInstance.current = null; };
   }, [selectedLane?.id]);
 
   if (loading) {
