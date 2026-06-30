@@ -83,6 +83,7 @@ export class ShipmentProjection implements IEventHandler {
         orgId: event.orgId,
         reference: shipment.reference,
         status: shipment.status,
+        hasException: shipment.hasException,
         customerName: shipment.customer.name,
         customerId: shipment.customerId,
         originName: shipment.origin?.name ?? null,
@@ -105,6 +106,7 @@ export class ShipmentProjection implements IEventHandler {
       },
       update: {
         status: shipment.status,
+        hasException: shipment.hasException,
         customerName: shipment.customer.name,
         updatedAt: shipment.updatedAt,
       },
@@ -132,6 +134,7 @@ export class ShipmentProjection implements IEventHandler {
       data: {
         reference: shipment.reference,
         status: shipment.status,
+        hasException: shipment.hasException,
         customerName: shipment.customer.name,
         originName: shipment.origin?.name ?? null,
         originCity: shipment.origin?.city ?? null,
@@ -192,7 +195,7 @@ export class ShipmentProjection implements IEventHandler {
   private async onShipmentDelivered(event: DomainEvent): Promise<void> {
     await this.prisma.shipmentReadModel.update({
       where: { id: event.entityId },
-      data: { status: 'delivered', updatedAt: new Date() },
+      data: { status: 'complete', updatedAt: new Date() },
     }).catch((err: Error) => {
       console.error(`[ShipmentProjection] Failed to update read model for ${event.entityId}: ${err.message}`);
     });
@@ -208,11 +211,13 @@ export class ShipmentProjection implements IEventHandler {
   }
 
   private async onShipmentException(event: DomainEvent): Promise<void> {
+    // Exceptions are orthogonal to the lifecycle status — set the flag,
+    // never overwrite draft/ready/in_progress/complete.
     await this.prisma.shipmentReadModel.update({
       where: { id: event.entityId },
-      data: { status: 'exception', updatedAt: new Date() },
+      data: { hasException: true, updatedAt: new Date() },
     }).catch((err: Error) => {
-      console.error(`[ShipmentProjection] Failed to update exception status for ${event.entityId}: ${err.message}`);
+      console.error(`[ShipmentProjection] Failed to update exception flag for ${event.entityId}: ${err.message}`);
     });
   }
 

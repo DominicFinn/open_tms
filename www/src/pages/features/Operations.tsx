@@ -6,6 +6,28 @@ import LiveActivityFeed from '../../components/previews/LiveActivityFeed'
 
 const sections = [
   {
+    problem: 'Half-finished shipments get pushed live with no carrier, no dates, and no one notices until it is too late',
+    solution: 'Guarded shipment lifecycle',
+    description: 'Every shipment moves through a clear lifecycle: draft, ready, in progress, complete. Drafts save freely while you gather details, but a shipment cannot leave draft until the essentials are in place: a customer, a route or lane, a carrier, pickup and delivery dates, a reference, and any fields your shipment type requires. Moves are one step at a time, every change records who did it and when, and operational exceptions are flagged separately so they never hide the real status. Promote one shipment from its detail page, or select many and bulk-update them from the list.',
+    illustration: (
+      <svg viewBox="0 0 280 200" fill="none" className="w-full h-auto">
+        <rect x="20" y="84" width="48" height="32" rx="8" fill="rgba(148,163,184,0.15)" stroke="rgba(148,163,184,0.35)" strokeWidth="1" />
+        <rect x="88" y="84" width="48" height="32" rx="8" fill="rgba(234,179,8,0.15)" stroke="rgba(234,179,8,0.4)" strokeWidth="1" />
+        <rect x="156" y="84" width="48" height="32" rx="8" fill="rgba(59,130,246,0.15)" stroke="rgba(59,130,246,0.4)" strokeWidth="1" />
+        <rect x="224" y="84" width="40" height="32" rx="8" fill="rgba(34,197,94,0.15)" stroke="rgba(34,197,94,0.45)" strokeWidth="1" />
+        <path d="M68 100 l20 0" stroke="rgba(148,163,184,0.5)" strokeWidth="1.5" strokeLinecap="round" />
+        <path d="M136 100 l20 0" stroke="rgba(234,179,8,0.5)" strokeWidth="1.5" strokeLinecap="round" />
+        <path d="M204 100 l20 0" stroke="rgba(59,130,246,0.5)" strokeWidth="1.5" strokeLinecap="round" />
+        <rect x="30" y="96" width="28" height="6" rx="3" fill="rgba(148,163,184,0.3)" />
+        <rect x="98" y="96" width="28" height="6" rx="3" fill="rgba(234,179,8,0.35)" />
+        <rect x="166" y="96" width="28" height="6" rx="3" fill="rgba(59,130,246,0.35)" />
+        <rect x="232" y="96" width="24" height="6" rx="3" fill="rgba(34,197,94,0.4)" />
+        <circle cx="92" cy="150" r="9" fill="rgba(239,68,68,0.15)" stroke="rgba(239,68,68,0.4)" strokeWidth="1" />
+        <path d="M92 146 l0 4 M92 153 l0 0.5" stroke="rgba(239,68,68,0.7)" strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+    ),
+  },
+  {
     problem: 'You\'re running shipments across spreadsheets, emails, and three different portals',
     solution: 'Single pane of glass',
     description: 'Every shipment, order, carrier assignment, and status update lives in one place. Search, filter, and act on your entire operation from a unified dashboard  - no more tab-switching between carrier portals.',

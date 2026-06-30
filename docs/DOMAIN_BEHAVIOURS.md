@@ -197,24 +197,37 @@ The two pre-existing `/orders/:id/line-items` endpoints (POST add, DELETE remove
 
 ## Shipments
 
+### Lifecycle States
+
+Shipments follow a canonical lifecycle: **`draft` → `ready` → `in_progress` → `complete`**.
+
+- A **draft** can be saved with missing fields. Any field the user does enter is still validated.
+- Promoting **out of draft** requires the **readiness gate**: customer, a route (origin+destination OR a lane), a carrier, pickup date, delivery date, a non-empty reference, plus any `ShipmentType.requiredFields`. Validated by `validateShipmentReadiness()` in `shared/shipmentTypeValidator.ts` (mirrored to the frontend).
+- Manual transitions are **forward one step or back one step only** (no skipping), enforced by `canTransition()`.
+- **Exceptions are orthogonal** to the lifecycle: a carrier/tracking exception sets `Shipment.hasException = true` (and emits `shipment.exception`) without changing the lifecycle status.
+- Automatic handlers (carrier tracking, geofence completion) map onto the lifecycle and bypass the manual gate: in-transit milestones → `in_progress`, delivery → `complete`.
+
 ### Commands
 
 | Command | Trigger | Events Emitted |
 |---------|---------|----------------|
-| `CreateShipmentCommand` | `POST /api/v1/shipments` | `shipment.created` |
+| `CreateShipmentCommand` | `POST /api/v1/shipments` | `shipment.created` (always `draft`) |
 | `UpdateShipmentCommand` | `PUT /api/v1/shipments/:id` | `shipment.updated`, `shipment.status_changed`, `shipment.carrier_assigned` |
+| `TransitionShipmentStatusCommand` | `POST /api/v1/shipments/:id/transition`, `POST /api/v1/shipments/bulk-transition` | `shipment.status_changed` (gated: adjacency + readiness) |
 | `ArchiveShipmentCommand` | `DELETE /api/v1/shipments/:id` | `shipment.archived` |
 | `ProcessInbound214Command` | `POST /api/v1/edi/214/inbound` | `edi_214.received`, `shipment.status_changed`, `shipment.stop_arrived`, `shipment.stop_completed`, `shipment.exception`, `shipment.delivered` |
+
+`GET /api/v1/shipments/:id/readiness` returns `{ status, missing, isValid, allowedTransitions }` for the detail-page control. Every `shipment.status_changed` is captured by the `AuditHandler` as an immutable `AuditLog` row recording the actor ("who did it") — this is the audit event for manual lifecycle moves.
 
 ### Side Effects
 
 | Event | Projection | Notification | Integration |
 |-------|-----------|--------------|-------------|
-| `shipment.created` | ShipmentReadModel inserted | — | Outbound carrier queue (EDI 856), outbound tracking queue |
+| `shipment.created` | ShipmentReadModel inserted (status `draft`) | — | Outbound carrier queue (EDI 856), outbound tracking queue |
 | `shipment.status_changed` | ShipmentReadModel.status updated | In-app + email | — |
 | `shipment.carrier_assigned` | ShipmentReadModel.carrierName updated | — | — |
-| `shipment.delivered` | ShipmentReadModel.status = 'delivered' | In-app + email | — |
-| `shipment.exception` | — | In-app + email | — |
+| `shipment.delivered` | ShipmentReadModel.status = 'complete' | In-app + email | — |
+| `shipment.exception` | ShipmentReadModel.hasException = true (status unchanged) | In-app + email | — |
 | `shipment.stop_arrived` | ShipmentReadModel.stopCount updated | In-app | Orders at stop → delivery_status_changed |
 | `shipment.stop_completed` | ShipmentReadModel.stopCount updated | In-app | Orders at stop → delivered |
 | `edi_214.received` | — | — | Auto-forward outbound 214 to customer trading partners |

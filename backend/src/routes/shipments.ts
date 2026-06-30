@@ -7,6 +7,12 @@ import { ICommandBus } from '../commands/CommandBus.js';
 import { CREATE_SHIPMENT } from '../commands/shipments/CreateShipmentCommand.js';
 import { UPDATE_SHIPMENT } from '../commands/shipments/UpdateShipmentCommand.js';
 import { ARCHIVE_SHIPMENT } from '../commands/shipments/ArchiveShipmentCommand.js';
+import { TRANSITION_SHIPMENT_STATUS } from '../commands/shipments/TransitionShipmentStatusCommand.js';
+import {
+  SHIPMENT_LIFECYCLE,
+  allowedTransitions,
+  validateShipmentReadiness,
+} from '../shared/shipmentTypeValidator.js';
 import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 
 // Accepts YYYY-MM-DD (HTML date input), YYYY-MM-DDTHH:mm[:ss[.sss]][Z] (datetime-local), or full ISO.
@@ -377,5 +383,133 @@ export async function shipmentRoutes(server: FastifyInstance) {
     }
 
     return { data: { id, archived: true }, error: null };
+  });
+
+  // Readiness + allowed transitions for the lifecycle control on the detail page.
+  server.get('/api/v1/shipments/:id/readiness', {
+    schema: {
+      tags: ['Shipments'],
+      summary: 'Shipment lifecycle readiness',
+      description: 'Returns missing mandatory fields, validity, current status and the allowed next statuses.',
+      params: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const orgId = req.orgId!;
+    const shipment = await server.prisma.shipment.findFirst({
+      where: { id, archived: false, orgId },
+      include: { shipmentType: { select: { requiredFields: true } } },
+    });
+    if (!shipment) {
+      reply.code(404);
+      return { data: null, error: 'Shipment not found' };
+    }
+    const { missing, isValid } = validateShipmentReadiness(shipment as any, shipment.shipmentType);
+    return {
+      data: {
+        status: shipment.status,
+        missing,
+        isValid,
+        allowedTransitions: allowedTransitions(shipment.status),
+      },
+      error: null,
+    };
+  });
+
+  // Manual, gated lifecycle transition. Audit of who/when is handled by the
+  // SHIPMENT_STATUS_CHANGED event -> AuditHandler.
+  server.post('/api/v1/shipments/:id/transition', {
+    schema: {
+      tags: ['Shipments'],
+      summary: 'Transition shipment lifecycle status',
+      description: 'Moves a shipment one step forward or back on draft -> ready -> in_progress -> complete. Enforces the readiness gate.',
+      params: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+      body: {
+        type: 'object',
+        required: ['toStatus'],
+        properties: { toStatus: { type: 'string', enum: [...SHIPMENT_LIFECYCLE] } },
+      },
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const { toStatus } = z.object({
+      toStatus: z.enum(SHIPMENT_LIFECYCLE as unknown as [string, ...string[]]),
+    }).parse((req as any).body);
+
+    const orgId = req.orgId!;
+    const existing = await server.prisma.shipment.findFirst({
+      where: { id, orgId },
+      select: { id: true },
+    });
+    if (!existing) {
+      reply.code(404);
+      return { data: null, error: 'Shipment not found' };
+    }
+
+    const result = await commandBus.dispatch({
+      type: TRANSITION_SHIPMENT_STATUS,
+      orgId,
+      actorId: req.user?.sub ?? null,
+      payload: { id, toStatus },
+      metadata: { correlationId: randomUUID(), source: 'api' },
+    });
+
+    if (!result.success) {
+      reply.code(result.error?.includes('not found') ? 404 : 400);
+      return { data: null, error: result.error };
+    }
+
+    return { data: result.data, error: null };
+  });
+
+  // Bulk lifecycle transition from the list page. Each shipment is transitioned
+  // independently; per-row results report which ones failed the gate.
+  server.post('/api/v1/shipments/bulk-transition', {
+    schema: {
+      tags: ['Shipments'],
+      summary: 'Bulk transition shipment lifecycle status',
+      description: 'Transitions multiple shipments to the target status, returning per-shipment success/failure.',
+      body: {
+        type: 'object',
+        required: ['ids', 'toStatus'],
+        properties: {
+          ids: { type: 'array', items: { type: 'string' } },
+          toStatus: { type: 'string', enum: [...SHIPMENT_LIFECYCLE] },
+        },
+      },
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { ids, toStatus } = z.object({
+      ids: z.array(z.string().uuid()).min(1).max(500),
+      toStatus: z.enum(SHIPMENT_LIFECYCLE as unknown as [string, ...string[]]),
+    }).parse((req as any).body);
+
+    const orgId = req.orgId!;
+    const actorId = req.user?.sub ?? null;
+
+    // Scope to this tenant up front; ids not in the tenant are reported as not found.
+    const owned = await server.prisma.shipment.findMany({
+      where: { id: { in: ids }, orgId },
+      select: { id: true },
+    });
+    const ownedIds = new Set(owned.map(s => s.id));
+
+    const results: Array<{ id: string; success: boolean; error: string | null }> = [];
+    for (const id of ids) {
+      if (!ownedIds.has(id)) {
+        results.push({ id, success: false, error: 'Shipment not found' });
+        continue;
+      }
+      const result = await commandBus.dispatch({
+        type: TRANSITION_SHIPMENT_STATUS,
+        orgId,
+        actorId,
+        payload: { id, toStatus },
+        metadata: { correlationId: randomUUID(), source: 'api' },
+      });
+      results.push({ id, success: result.success, error: result.success ? null : (result.error ?? 'Unknown error') });
+    }
+
+    return { data: { results }, error: null };
   });
 }

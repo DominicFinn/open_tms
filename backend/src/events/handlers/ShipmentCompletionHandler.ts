@@ -88,8 +88,8 @@ export class ShipmentCompletionHandler implements IEventHandler {
 
     if (!shipment) return;
 
-    // Only process shipments that are in transit or dispatched
-    if (!['in_transit', 'dispatched'].includes(shipment.status)) return;
+    // Only process shipments that are actively in progress
+    if (!['in_progress'].includes(shipment.status)) return;
 
     // Check if the final stop (destination) has been arrived at
     // Final stop = highest sequence number, or the stop at the destination location
@@ -105,7 +105,7 @@ export class ShipmentCompletionHandler implements IEventHandler {
       await this.prisma.shipment.update({
         where: { id: shipmentId },
         data: {
-          status: 'delivered',
+          status: 'complete',
           deliveryDate: new Date(),
         },
       });
@@ -135,7 +135,7 @@ export class ShipmentCompletionHandler implements IEventHandler {
         entityId: shipmentId,
         payload: {
           previousStatus,
-          newStatus: 'delivered',
+          newStatus: 'complete',
           shipmentReference: shipment.reference,
         },
         source: 'completion_handler',

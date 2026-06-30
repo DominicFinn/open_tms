@@ -10,7 +10,7 @@ function buildMockPrisma(overrides: any = {}) {
       findUnique: jest.fn().mockResolvedValue({
         id: 'ship-1',
         reference: 'SH-001',
-        status: 'in_transit',
+        status: 'in_progress',
         carrierId: 'carrier-1',
         ...overrides.shipment,
       }),
@@ -30,7 +30,7 @@ describe('CarrierTrackingHandler', () => {
   /* ---- CARRIER_TRACKING_DELIVERED ---- */
 
   describe('CARRIER_TRACKING_DELIVERED', () => {
-    it('updates shipment status to delivered when in_transit', async () => {
+    it('completes the shipment when in_progress', async () => {
       const prisma = buildMockPrisma();
       const { bus } = mockEventBus();
       const handler = new CarrierTrackingHandler(prisma, bus);
@@ -54,7 +54,7 @@ describe('CarrierTrackingHandler', () => {
       expect(prisma.shipment.update).toHaveBeenCalledWith({
         where: { id: 'ship-1' },
         data: {
-          status: 'delivered',
+          status: 'complete',
           deliveryDate: new Date('2026-04-12T15:00:00Z'),
         },
       });
@@ -97,14 +97,14 @@ describe('CarrierTrackingHandler', () => {
       expect(statusEvent).toBeDefined();
       expect(statusEvent!.payload).toEqual(
         expect.objectContaining({
-          previousStatus: 'in_transit',
-          newStatus: 'delivered',
+          previousStatus: 'in_progress',
+          newStatus: 'complete',
         }),
       );
     });
 
-    it('skips delivery for already-delivered shipment', async () => {
-      const prisma = buildMockPrisma({ shipment: { status: 'delivered' } });
+    it('skips delivery for already-completed shipment', async () => {
+      const prisma = buildMockPrisma({ shipment: { status: 'complete' } });
       const { bus } = mockEventBus();
       const handler = new CarrierTrackingHandler(prisma, bus);
 
@@ -138,8 +138,8 @@ describe('CarrierTrackingHandler', () => {
       expect(prisma.shipment.update).not.toHaveBeenCalled();
     });
 
-    it('handles dispatched shipment as deliverable', async () => {
-      const prisma = buildMockPrisma({ shipment: { status: 'dispatched' } });
+    it('skips delivery for a ready (not yet in progress) shipment', async () => {
+      const prisma = buildMockPrisma({ shipment: { status: 'ready' } });
       const { bus } = mockEventBus();
       const handler = new CarrierTrackingHandler(prisma, bus);
 
@@ -152,11 +152,7 @@ describe('CarrierTrackingHandler', () => {
 
       await handler.handle(event);
 
-      expect(prisma.shipment.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({ status: 'delivered' }),
-        }),
-      );
+      expect(prisma.shipment.update).not.toHaveBeenCalled();
     });
 
     it('skips delivery when shipmentId is missing', async () => {
@@ -180,7 +176,7 @@ describe('CarrierTrackingHandler', () => {
   /* ---- CARRIER_TRACKING_EXCEPTION ---- */
 
   describe('CARRIER_TRACKING_EXCEPTION', () => {
-    it('transitions shipment to exception status', async () => {
+    it('flags the shipment with hasException (orthogonal to lifecycle status)', async () => {
       const prisma = buildMockPrisma();
       const { bus } = mockEventBus();
       const handler = new CarrierTrackingHandler(prisma, bus);
@@ -202,11 +198,11 @@ describe('CarrierTrackingHandler', () => {
 
       expect(prisma.shipment.update).toHaveBeenCalledWith({
         where: { id: 'ship-1' },
-        data: { status: 'exception' },
+        data: { hasException: true },
       });
     });
 
-    it('emits SHIPMENT_EXCEPTION and SHIPMENT_STATUS_CHANGED events', async () => {
+    it('emits SHIPMENT_EXCEPTION only and does not change lifecycle status', async () => {
       const prisma = buildMockPrisma();
       const { bus, persisted } = mockEventBus();
       const handler = new CarrierTrackingHandler(prisma, bus);
@@ -225,8 +221,9 @@ describe('CarrierTrackingHandler', () => {
 
       await handler.handle(event);
 
-      // Should emit SHIPMENT_EXCEPTION + SHIPMENT_STATUS_CHANGED
-      expect(bus.publish).toHaveBeenCalledTimes(2);
+      // Only SHIPMENT_EXCEPTION — no SHIPMENT_STATUS_CHANGED, since the
+      // exception is an orthogonal flag, not a lifecycle transition.
+      expect(bus.publish).toHaveBeenCalledTimes(1);
 
       const exceptionEvent = persisted.find(e => e.type === EVENT_TYPES.SHIPMENT_EXCEPTION);
       expect(exceptionEvent).toBeDefined();
@@ -238,43 +235,11 @@ describe('CarrierTrackingHandler', () => {
         }),
       );
 
-      const statusEvent = persisted.find(e => e.type === EVENT_TYPES.SHIPMENT_STATUS_CHANGED);
-      expect(statusEvent).toBeDefined();
-      expect(statusEvent!.payload).toEqual(
-        expect.objectContaining({
-          previousStatus: 'in_transit',
-          newStatus: 'exception',
-        }),
-      );
+      expect(persisted.find(e => e.type === EVENT_TYPES.SHIPMENT_STATUS_CHANGED)).toBeUndefined();
     });
 
-    it('emits exception event but does not re-transition if already in exception', async () => {
-      const prisma = buildMockPrisma({ shipment: { status: 'exception' } });
-      const { bus, persisted } = mockEventBus();
-      const handler = new CarrierTrackingHandler(prisma, bus);
-
-      const event = createTestEvent(
-        EVENT_TYPES.CARRIER_TRACKING_EXCEPTION,
-        'carrier_tracking_event',
-        'evt-1',
-        {
-          shipmentId: 'ship-1',
-          trackingNumber: 'T123',
-          providerType: 'dhl',
-          statusDetail: 'Address unknown',
-        },
-      );
-
-      await handler.handle(event);
-
-      // Should still emit SHIPMENT_EXCEPTION but NOT update status
-      expect(bus.publish).toHaveBeenCalledTimes(1);
-      expect(persisted[0].type).toBe(EVENT_TYPES.SHIPMENT_EXCEPTION);
-      expect(prisma.shipment.update).not.toHaveBeenCalled();
-    });
-
-    it('skips exception for already-delivered shipment', async () => {
-      const prisma = buildMockPrisma({ shipment: { status: 'delivered' } });
+    it('skips exception for already-completed shipment', async () => {
+      const prisma = buildMockPrisma({ shipment: { status: 'complete' } });
       const { bus } = mockEventBus();
       const handler = new CarrierTrackingHandler(prisma, bus);
 
@@ -336,7 +301,7 @@ describe('CarrierTrackingHandler', () => {
   /* ---- CARRIER_TRACKING_UPDATE_RECEIVED (status bridging) ---- */
 
   describe('CARRIER_TRACKING_UPDATE_RECEIVED', () => {
-    it('advances shipment from draft to in_transit on in_transit tracking event', async () => {
+    it('advances shipment from draft to in_progress on in_transit tracking event', async () => {
       const prisma = buildMockPrisma({ shipment: { status: 'draft' } });
       const { bus, persisted } = mockEventBus();
       const handler = new CarrierTrackingHandler(prisma, bus);
@@ -357,7 +322,7 @@ describe('CarrierTrackingHandler', () => {
 
       expect(prisma.shipment.update).toHaveBeenCalledWith({
         where: { id: 'ship-1' },
-        data: { status: 'in_transit' },
+        data: { status: 'in_progress' },
       });
 
       const statusEvent = persisted.find(e => e.type === EVENT_TYPES.SHIPMENT_STATUS_CHANGED);
@@ -365,13 +330,13 @@ describe('CarrierTrackingHandler', () => {
       expect(statusEvent!.payload).toEqual(
         expect.objectContaining({
           previousStatus: 'draft',
-          newStatus: 'in_transit',
+          newStatus: 'in_progress',
         }),
       );
     });
 
-    it('does not regress status from in_transit to draft on info_received', async () => {
-      const prisma = buildMockPrisma({ shipment: { status: 'in_transit' } });
+    it('does not regress status from in_progress to draft on info_received', async () => {
+      const prisma = buildMockPrisma({ shipment: { status: 'in_progress' } });
       const { bus } = mockEventBus();
       const handler = new CarrierTrackingHandler(prisma, bus);
 
@@ -394,7 +359,7 @@ describe('CarrierTrackingHandler', () => {
     });
 
     it('does not process delivered status (handled by dedicated handler)', async () => {
-      const prisma = buildMockPrisma({ shipment: { status: 'in_transit' } });
+      const prisma = buildMockPrisma({ shipment: { status: 'in_progress' } });
       const { bus } = mockEventBus();
       const handler = new CarrierTrackingHandler(prisma, bus);
 
@@ -416,7 +381,7 @@ describe('CarrierTrackingHandler', () => {
     });
 
     it('does not process exception status (handled by dedicated handler)', async () => {
-      const prisma = buildMockPrisma({ shipment: { status: 'in_transit' } });
+      const prisma = buildMockPrisma({ shipment: { status: 'in_progress' } });
       const { bus } = mockEventBus();
       const handler = new CarrierTrackingHandler(prisma, bus);
 

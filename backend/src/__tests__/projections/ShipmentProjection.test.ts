@@ -3,7 +3,7 @@ import { EVENT_TYPES } from '../../events/eventTypes';
 import { createTestEvent } from '../helpers/testUtils';
 
 const mockShipment = {
-  id: 'ship-1', reference: 'SH-001', status: 'draft',
+  id: 'ship-1', reference: 'SH-001', status: 'draft', hasException: false,
   customerId: 'cust-1', carrierId: null, laneId: null,
   proNumber: null, pickupDate: null, deliveryDate: null,
   createdAt: new Date(), updatedAt: new Date(),
@@ -76,7 +76,7 @@ describe('ShipmentProjection', () => {
     it('updates status in read model', async () => {
       const event = createTestEvent(
         EVENT_TYPES.SHIPMENT_STATUS_CHANGED, 'shipment', 'ship-1',
-        { previousStatus: 'draft', newStatus: 'in_transit', shipmentReference: 'SH-001' }
+        { previousStatus: 'draft', newStatus: 'in_progress', shipmentReference: 'SH-001' }
       );
 
       await projection.handle(event);
@@ -84,9 +84,43 @@ describe('ShipmentProjection', () => {
       expect(mockPrisma.shipmentReadModel.update).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: 'ship-1' },
-          data: expect.objectContaining({ status: 'in_transit' }),
+          data: expect.objectContaining({ status: 'in_progress' }),
         })
       );
+    });
+  });
+
+  describe('onShipmentDelivered', () => {
+    it('marks the read model complete', async () => {
+      const event = createTestEvent(
+        EVENT_TYPES.SHIPMENT_DELIVERED, 'shipment', 'ship-1',
+        { shipmentReference: 'SH-001', deliveredAt: '2026-07-03T10:00:00Z' }
+      );
+
+      await projection.handle(event);
+
+      expect(mockPrisma.shipmentReadModel.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'ship-1' },
+          data: expect.objectContaining({ status: 'complete' }),
+        })
+      );
+    });
+  });
+
+  describe('onShipmentException', () => {
+    it('sets the hasException flag without changing lifecycle status', async () => {
+      const event = createTestEvent(
+        EVENT_TYPES.SHIPMENT_EXCEPTION, 'shipment', 'ship-1',
+        { shipmentReference: 'SH-001', exceptionType: 'carrier_exception' }
+      );
+
+      await projection.handle(event);
+
+      const call = mockPrisma.shipmentReadModel.update.mock.calls[0][0];
+      expect(call.where).toEqual({ id: 'ship-1' });
+      expect(call.data).toEqual(expect.objectContaining({ hasException: true }));
+      expect(call.data.status).toBeUndefined();
     });
   });
 

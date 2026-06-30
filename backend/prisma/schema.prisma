@@ -165,7 +165,13 @@ model Shipment {
   // Tightened to NOT NULL after Phase 2 backfill verification.
   orgId               String
   reference           String
+  // Canonical lifecycle: draft -> ready -> in_progress -> complete.
+  // Manual transitions are gated (see TransitionShipmentStatusCommand);
+  // automatic tracking handlers map carrier milestones onto these values.
   status              String        @default("draft")
+  // Orthogonal exception flag — set when a carrier/tracking exception fires,
+  // so the lifecycle status is never clobbered by an operational problem.
+  hasException        Boolean       @default(false)
   pickupDate          DateTime?
   deliveryDate        DateTime?
   pickupWindowStart   DateTime?
@@ -1676,7 +1682,8 @@ model ShipmentReadModel {
   organization     Organization @relation(fields: [orgId], references: [id])
   orgId            String
   reference        String       @unique
-  status           String // draft, in_transit, delivered, etc.
+  status           String // Canonical lifecycle: draft, ready, in_progress, complete
+  hasException     Boolean      @default(false) // Orthogonal exception flag (drives Issues filter)
   customer         Customer     @relation(fields: [customerId], references: [id])
   customerId       String
   customerName     String

@@ -73,8 +73,8 @@ export class CarrierTrackingHandler implements IEventHandler {
 
     if (!shipment) return;
 
-    // Only transition if shipment is still in an active status
-    if (!['in_transit', 'dispatched', 'picked_up'].includes(shipment.status)) {
+    // Only transition if shipment is still actively in progress
+    if (!['in_progress'].includes(shipment.status)) {
       console.log(
         `[CarrierTrackingHandler] Skipping delivery bridge for ${shipmentId} — status is "${shipment.status}"`
       );
@@ -83,11 +83,11 @@ export class CarrierTrackingHandler implements IEventHandler {
 
     const previousStatus = shipment.status;
 
-    // Update shipment to delivered
+    // Update shipment to complete
     await this.prisma.shipment.update({
       where: { id: shipmentId },
       data: {
-        status: 'delivered',
+        status: 'complete',
         deliveryDate: payload.occurredAt ? new Date(payload.occurredAt) : new Date(),
       },
     });
@@ -126,7 +126,7 @@ export class CarrierTrackingHandler implements IEventHandler {
       entityId: shipmentId,
       payload: {
         previousStatus,
-        newStatus: 'delivered',
+        newStatus: 'complete',
         shipmentReference: shipment.reference,
         source: 'carrier_tracking',
       },
@@ -160,10 +160,10 @@ export class CarrierTrackingHandler implements IEventHandler {
 
     if (!shipment) return;
 
-    // Don't re-raise exception on already-delivered shipments
-    if (shipment.status === 'delivered') {
+    // Don't re-raise exception on already-completed shipments
+    if (shipment.status === 'complete') {
       console.log(
-        `[CarrierTrackingHandler] Skipping exception bridge for delivered shipment ${shipmentId}`
+        `[CarrierTrackingHandler] Skipping exception bridge for completed shipment ${shipmentId}`
       );
       return;
     }
@@ -195,31 +195,14 @@ export class CarrierTrackingHandler implements IEventHandler {
 
     await this.eventBus.publish(exceptionEvent);
 
-    // If shipment isn't already in exception status, transition it
-    if (shipment.status !== 'exception') {
-      const previousStatus = shipment.status;
-      await this.prisma.shipment.update({
-        where: { id: shipmentId },
-        data: { status: 'exception' },
-      });
-
-      const statusEvent = createEvent({
-        type: EVENT_TYPES.SHIPMENT_STATUS_CHANGED,
-        orgId: event.orgId,
-        actorId: 'system',
-        entityType: 'shipment',
-        entityId: shipmentId,
-        payload: {
-          previousStatus,
-          newStatus: 'exception',
-          shipmentReference: shipment.reference,
-          source: 'carrier_tracking',
-        },
-        source: 'carrier_tracking_handler',
-      });
-
-      await this.eventBus.publish(statusEvent);
-    }
+    // Exceptions are orthogonal to the lifecycle status — flag the shipment
+    // instead of clobbering its draft/ready/in_progress/complete state. The
+    // SHIPMENT_EXCEPTION event above drives triage, notifications, and the
+    // read-model flag via ShipmentProjection.onShipmentException.
+    await this.prisma.shipment.update({
+      where: { id: shipmentId },
+      data: { hasException: true },
+    });
   }
 
   /**
@@ -269,12 +252,13 @@ export class CarrierTrackingHandler implements IEventHandler {
     const shipmentId = payload.shipmentId;
     if (!shipmentId || !payload.status) return;
 
-    // Only process milestone statuses that should update shipment status
-    // Delivered and exception are handled by their dedicated handlers
+    // Only process milestone statuses that should update shipment status.
+    // Delivered and exception are handled by their dedicated handlers.
+    // Carrier milestones map onto the canonical lifecycle.
     const milestoneMap: Record<string, string> = {
       'info_received': 'draft',
-      'in_transit': 'in_transit',
-      'out_for_delivery': 'in_transit',
+      'in_transit': 'in_progress',
+      'out_for_delivery': 'in_progress',
     };
 
     const targetStatus = milestoneMap[payload.status];
@@ -288,11 +272,11 @@ export class CarrierTrackingHandler implements IEventHandler {
     if (!shipment) return;
 
     // Only advance status forward, never backwards
-    const statusOrder = ['draft', 'picked_up', 'dispatched', 'in_transit', 'delivered'];
+    const statusOrder = ['draft', 'ready', 'in_progress', 'complete'];
     const currentIdx = statusOrder.indexOf(shipment.status);
     const targetIdx = statusOrder.indexOf(targetStatus);
 
-    // Don't regress status (e.g., don't go from in_transit back to draft)
+    // Don't regress status (e.g., don't go from in_progress back to draft)
     if (currentIdx >= targetIdx) return;
 
     const previousStatus = shipment.status;

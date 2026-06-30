@@ -21,7 +21,10 @@ import {
   X,
 } from 'lucide-react';
 
+import { toast } from 'sonner';
+
 import { API_URL } from '../api';
+import { SHIPMENT_LIFECYCLE, SHIPMENT_STATUS_LABELS } from '../shared/shipmentTypeValidator';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { DatePicker } from '@/components/ui/date-picker';
@@ -49,6 +52,7 @@ interface Shipment {
   id: string;
   reference?: string;
   status: string;
+  hasException?: boolean;
   pickupDate?: string;
   deliveryDate?: string;
   proNumber?: string;
@@ -74,13 +78,18 @@ type SortOrder = 'asc' | 'desc';
 
 type StatusVariant = 'success' | 'info' | 'warning' | 'destructive' | 'muted';
 
+// Canonical lifecycle: draft -> ready -> in_progress -> complete.
 function statusVariant(status: string): StatusVariant {
-  const s = status?.toLowerCase().replace(/[_ ]/g, '');
-  if (s === 'intransit') return 'info';
-  if (s === 'delivered') return 'success';
-  if (s === 'booked' || s === 'atpickup') return 'warning';
-  if (s === 'issue' || s === 'exception') return 'destructive';
-  return 'muted';
+  switch (status) {
+    case 'ready': return 'warning';
+    case 'in_progress': return 'info';
+    case 'complete': return 'success';
+    default: return 'muted'; // draft + anything unknown
+  }
+}
+
+function statusLabel(status: string): string {
+  return SHIPMENT_STATUS_LABELS[status] ?? status;
 }
 
 function formatDate(d?: string): string {
@@ -137,9 +146,9 @@ function exportShipmentsCsv(rows: Shipment[]): void {
 
 const STAT_TONES = {
   draft: 'bg-muted text-muted-foreground',
-  transit: 'bg-info/15 text-info',
-  booked: 'bg-primary/10 text-primary',
-  delivered: 'bg-success/15 text-success',
+  ready: 'bg-warning/15 text-warning',
+  in_progress: 'bg-info/15 text-info',
+  complete: 'bg-success/15 text-success',
   issue: 'bg-destructive/10 text-destructive',
 } as const;
 
@@ -169,6 +178,10 @@ export default function VNextShipments() {
   const [shipmentTypes, setShipmentTypes] = useState<Record<string, ShipmentTypeSummary>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkStatus, setBulkStatus] = useState('');
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   useEffect(() => {
     fetch(`${API_URL}/api/v1/shipment-types`)
@@ -212,15 +225,15 @@ export default function VNextShipments() {
     return () => {
       cancelled = true;
     };
-  }, [createdFrom, createdTo, updatedFrom, updatedTo, sortBy, sortOrder]);
+  }, [createdFrom, createdTo, updatedFrom, updatedTo, sortBy, sortOrder, refreshKey]);
 
   const statusCounts = useMemo(() => ({
     all: shipments.length,
-    draft: shipments.filter(s => s.status?.toLowerCase() === 'draft').length,
-    transit: shipments.filter(s => s.status?.toLowerCase().replace(/[_ ]/g, '') === 'intransit').length,
-    delivered: shipments.filter(s => s.status?.toLowerCase() === 'delivered').length,
-    booked: shipments.filter(s => s.status?.toLowerCase() === 'booked').length,
-    issue: shipments.filter(s => ['issue', 'exception'].includes(s.status?.toLowerCase())).length,
+    draft: shipments.filter(s => s.status === 'draft').length,
+    ready: shipments.filter(s => s.status === 'ready').length,
+    in_progress: shipments.filter(s => s.status === 'in_progress').length,
+    complete: shipments.filter(s => s.status === 'complete').length,
+    issue: shipments.filter(s => !!s.hasException).length,
   }), [shipments]);
 
   useEffect(() => {
@@ -267,12 +280,11 @@ export default function VNextShipments() {
   }, [viewMode]);
 
   const filtered = shipments.filter(s => {
-    const sNorm = s.status?.toLowerCase().replace(/[_ ]/g, '');
-    if (statusFilter === 'draft' && s.status?.toLowerCase() !== 'draft') return false;
-    if (statusFilter === 'transit' && sNorm !== 'intransit') return false;
-    if (statusFilter === 'delivered' && sNorm !== 'delivered') return false;
-    if (statusFilter === 'booked' && sNorm !== 'booked') return false;
-    if (statusFilter === 'issue' && !['issue', 'exception'].includes(s.status?.toLowerCase())) return false;
+    if (statusFilter === 'issue') {
+      if (!s.hasException) return false;
+    } else if (statusFilter !== 'all' && s.status !== statusFilter) {
+      return false;
+    }
     if (search) {
       const q = search.toLowerCase();
       const customerName = s.customer?.name?.toLowerCase() || '';
@@ -295,11 +307,75 @@ export default function VNextShipments() {
 
   const stats = [
     { key: 'draft', label: 'Draft', value: statusCounts.draft, icon: FilePenLine },
-    { key: 'transit', label: 'In transit', value: statusCounts.transit, icon: Truck },
-    { key: 'booked', label: 'Booked', value: statusCounts.booked, icon: CalendarCheck },
-    { key: 'delivered', label: 'Delivered', value: statusCounts.delivered, icon: CheckCircle2 },
+    { key: 'ready', label: 'Ready', value: statusCounts.ready, icon: CalendarCheck },
+    { key: 'in_progress', label: 'In progress', value: statusCounts.in_progress, icon: Truck },
+    { key: 'complete', label: 'Complete', value: statusCounts.complete, icon: CheckCircle2 },
     { key: 'issue', label: 'Issues', value: statusCounts.issue, icon: AlertTriangle },
   ] as const;
+
+  const filteredIds = filtered.map(s => s.id);
+  const selectedInView = filteredIds.filter(idv => selected.has(idv));
+  const allSelected = filtered.length > 0 && selectedInView.length === filtered.length;
+
+  const toggleOne = (shipmentId: string) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(shipmentId)) next.delete(shipmentId); else next.add(shipmentId);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (allSelected) {
+        filteredIds.forEach(idv => next.delete(idv));
+      } else {
+        filteredIds.forEach(idv => next.add(idv));
+      }
+      return next;
+    });
+  };
+
+  const clearSelection = () => setSelected(new Set());
+
+  const handleBulkApply = async () => {
+    if (!bulkStatus || selected.size === 0) return;
+    setBulkBusy(true);
+    try {
+      const ids = Array.from(selected);
+      const res = await fetch(`${API_URL}/api/v1/shipments/bulk-transition`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids, toStatus: bulkStatus }),
+      });
+      const json = await res.json();
+      if (!res.ok || json.error) {
+        toast.error(json.error || 'Bulk update failed', { duration: 8000 });
+        return;
+      }
+      const results: Array<{ id: string; success: boolean; error: string | null }> = json.data?.results ?? [];
+      const ok = results.filter(r => r.success);
+      const failed = results.filter(r => !r.success);
+      if (failed.length === 0) {
+        toast.success(`${ok.length} shipment${ok.length === 1 ? '' : 's'} moved to ${statusLabel(bulkStatus)}`);
+      } else {
+        // Surface the first distinct reason so skips aren't silent.
+        const reason = failed[0]?.error ?? 'blocked';
+        toast.warning(
+          `${ok.length} moved, ${failed.length} skipped. e.g. ${reason}`,
+          { duration: 9000 },
+        );
+      }
+      clearSelection();
+      setBulkStatus('');
+      setRefreshKey(k => k + 1);
+    } catch {
+      toast.error('Bulk update failed');
+    } finally {
+      setBulkBusy(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -386,10 +462,10 @@ export default function VNextShipments() {
             <SelectContent>
               <SelectItem value="all">All statuses ({statusCounts.all})</SelectItem>
               <SelectItem value="draft">Draft ({statusCounts.draft})</SelectItem>
-              <SelectItem value="transit">In transit ({statusCounts.transit})</SelectItem>
-              <SelectItem value="booked">Booked ({statusCounts.booked})</SelectItem>
-              <SelectItem value="delivered">Delivered ({statusCounts.delivered})</SelectItem>
-              <SelectItem value="issue">Issue ({statusCounts.issue})</SelectItem>
+              <SelectItem value="ready">Ready ({statusCounts.ready})</SelectItem>
+              <SelectItem value="in_progress">In progress ({statusCounts.in_progress})</SelectItem>
+              <SelectItem value="complete">Complete ({statusCounts.complete})</SelectItem>
+              <SelectItem value="issue">Issues ({statusCounts.issue})</SelectItem>
             </SelectContent>
           </Select>
 
@@ -483,10 +559,51 @@ export default function VNextShipments() {
 
         <Separator />
 
+        {selected.size > 0 && (
+          <div className="flex flex-wrap items-center gap-3 border-b border-border bg-muted/40 px-4 py-3 md:px-6">
+            <span className="text-sm font-medium">{selected.size} selected</span>
+            <Button variant="ghost" size="sm" onClick={clearSelection}>
+              <X className="h-4 w-4" />
+              Clear
+            </Button>
+            <div className="ml-auto flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Move to</span>
+              <Select value={bulkStatus} onValueChange={setBulkStatus}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Select status..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {SHIPMENT_LIFECYCLE.map(st => (
+                    <SelectItem key={st} value={st}>{statusLabel(st)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                variant="gradient"
+                size="sm"
+                disabled={!bulkStatus || bulkBusy}
+                onClick={handleBulkApply}
+              >
+                {bulkBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Apply'}
+              </Button>
+            </div>
+          </div>
+        )}
+
         {viewMode === 'table' && (
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-10">
+                  <input
+                    type="checkbox"
+                    aria-label="Select all shipments"
+                    className="h-4 w-4 cursor-pointer accent-primary"
+                    checked={allSelected}
+                    ref={el => { if (el) el.indeterminate = selectedInView.length > 0 && !allSelected; }}
+                    onChange={toggleAll}
+                  />
+                </TableHead>
                 <TableHead>Shipment</TableHead>
                 <TableHead>Customer</TableHead>
                 <TableHead>Route</TableHead>
@@ -507,8 +624,17 @@ export default function VNextShipments() {
                   <TableRow
                     key={s.id}
                     onClick={() => navigate(`/shipments/${s.id}`)}
-                    className="cursor-pointer"
+                    className={cn('cursor-pointer', selected.has(s.id) && 'bg-primary/5')}
                   >
+                    <TableCell onClick={e => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ${s.reference || s.id}`}
+                        className="h-4 w-4 cursor-pointer accent-primary"
+                        checked={selected.has(s.id)}
+                        onChange={() => toggleOne(s.id)}
+                      />
+                    </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2 font-mono text-sm font-semibold">
                         {type && (
@@ -542,7 +668,14 @@ export default function VNextShipments() {
                       {formatDateTime(s.updatedAt)}
                     </TableCell>
                     <TableCell>
-                      <Badge variant={statusVariant(s.status)}>{s.status}</Badge>
+                      <div className="flex items-center gap-1.5">
+                        <Badge variant={statusVariant(s.status)}>{statusLabel(s.status)}</Badge>
+                        {s.hasException && (
+                          <Badge variant="destructive" className="gap-1" title="Has an open exception">
+                            <AlertTriangle className="h-3 w-3" />
+                          </Badge>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
