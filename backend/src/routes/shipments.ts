@@ -269,17 +269,50 @@ export async function shipmentRoutes(server: FastifyInstance) {
     return { data: shipment, error: null };
   });
 
-  // Get shipment events
-  server.get('/api/v1/shipments/:id/events', async (req: FastifyRequest, reply: FastifyReply) => {
+  // Get shipment events (read-only, platform-generated timeline).
+  // Supports filtering by eventType and an eventTime range (fromDate/toDate).
+  server.get('/api/v1/shipments/:id/events', {
+    schema: {
+      tags: ['Shipments'],
+      summary: 'Shipment event timeline',
+      description: 'Returns the read-only timeline of platform-generated events for a shipment, newest first. Filterable by event type and date range.',
+      params: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+      querystring: {
+        type: 'object',
+        properties: {
+          eventType: { type: 'string' },
+          fromDate: { type: 'string' },
+          toDate: { type: 'string' },
+        },
+      },
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
+    const { eventType, fromDate, toDate } = (req.query as any) || {};
     const orgId = req.orgId!;
     const shipment = await server.prisma.shipment.findFirst({ where: { id, orgId, deletedAt: null } });
     if (!shipment) {
       reply.code(404);
       return { data: null, error: 'Shipment not found' };
     }
+
+    const parseDate = (v: unknown): Date | null => {
+      if (typeof v !== 'string' || v.length === 0) return null;
+      const candidate = /^\d{4}-\d{2}-\d{2}$/.test(v) ? `${v}T00:00:00Z` : v;
+      const d = new Date(candidate);
+      return isNaN(d.getTime()) ? null : d;
+    };
+
+    const where: any = { shipmentId: id };
+    if (typeof eventType === 'string' && eventType.length > 0) where.eventType = eventType;
+    const from = parseDate(fromDate);
+    const to = parseDate(toDate);
+    if (from || to) {
+      where.eventTime = { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) };
+    }
+
     const events = await server.prisma.shipmentEvent.findMany({
-      where: { shipmentId: id },
+      where,
       orderBy: { eventTime: 'desc' },
       take: 500,
     });

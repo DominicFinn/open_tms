@@ -221,6 +221,19 @@ Shipments follow a canonical lifecycle: **`draft` → `ready` → `in_progress` 
 
 `GET /api/v1/shipments/:id/readiness` returns `{ status, missing, isValid, allowedTransitions }` for the detail-page control. Every `shipment.status_changed` is captured by the `AuditHandler` as an immutable `AuditLog` row recording the actor ("who did it") — this is the audit event for manual lifecycle moves.
 
+### Event Timeline (read-only)
+
+The shipment detail "Events" tab shows a **platform-generated, read-only** timeline — there is no manual event creation. `ShipmentTimelineProjection` (`backend/src/events/projections/ShipmentTimelineProjection.ts`) subscribes to `shipment.*` and materializes a `ShipmentEvent` row per mapped domain event (deduped on `sourceEventId`; pg-boss may redeliver). The canonical `eventType` taxonomy lives in `backend/src/shared/shipmentEventTypes.ts` (mirrored to the frontend):
+
+| Timeline type | Source domain event |
+|---------------|---------------------|
+| `created` / `updated` / `status_changed` / `carrier_assigned` / `exception` / `delivered` / `archived` / `unarchived` / `deleted` | the matching `shipment.*` event |
+| `leaves_origin` | `shipment.stop_completed` at the first stop |
+| `enters_destination` | `shipment.stop_arrived` at the last stop |
+| `entered_waypoint` / `exited_waypoint` | `shipment.stop_arrived` / `stop_completed` at an intermediate stop |
+
+`GET /api/v1/shipments/:id/events` returns the timeline newest-first, filterable by `eventType`, `fromDate`, `toDate`. IoT/EDI writers still add their own rows (`location`, `edi_214`, …) independently. Backfill historical timelines with `npx tsx backend/src/scripts/backfill-shipment-timeline.ts`.
+
 ### Archive vs Soft Delete
 
 Two independent removal states, both retaining the row for audit:

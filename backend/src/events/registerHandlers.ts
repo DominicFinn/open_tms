@@ -13,6 +13,7 @@ import { CustomerWebhookHandler } from './handlers/CustomerWebhookHandler.js';
 import { EmailHandler } from './handlers/EmailHandler.js';
 import { OrderProjection } from './projections/OrderProjection.js';
 import { ShipmentProjection } from './projections/ShipmentProjection.js';
+import { ShipmentTimelineProjection } from './projections/ShipmentTimelineProjection.js';
 import { CarrierProjection } from './projections/CarrierProjection.js';
 import { CustomerProjection } from './projections/CustomerProjection.js';
 import { LaneProjection } from './projections/LaneProjection.js';
@@ -65,6 +66,7 @@ const CONCURRENCY_OVERRIDES: Record<string, () => number> = {
   'audit': () => envInt('AUDIT_CONCURRENCY', 5),
   'projection.order': () => envInt('PROJECTION_CONCURRENCY', 3),
   'projection.shipment': () => envInt('PROJECTION_CONCURRENCY', 3),
+  'projection.shipment_timeline': () => envInt('PROJECTION_CONCURRENCY', 3),
   'projection.carrier': () => envInt('PROJECTION_CONCURRENCY', 3),
   'projection.customer': () => envInt('PROJECTION_CONCURRENCY', 3),
   'projection.lane': () => envInt('PROJECTION_CONCURRENCY', 3),
@@ -92,6 +94,7 @@ export async function registerEventHandlers(
     // CQRS read model projections
     new OrderProjection(prisma),
     new ShipmentProjection(prisma),
+    new ShipmentTimelineProjection(prisma),
     new CarrierProjection(prisma),
     new CustomerProjection(prisma),
     new LaneProjection(prisma),

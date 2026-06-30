@@ -375,7 +375,10 @@ model ShipmentEvent {
   id              String   @id @default(uuid())
   shipment        Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
   shipmentId      String
-  eventType       String // "location", "status_change", "note", etc.
+  eventType       String // Canonical timeline type (see shared/shipmentEventTypes.ts) or legacy device/edi type
+  description     String? // User-facing summary of what happened
+  source          String? // Provenance: system | device | edi
+  sourceEventId   String? // Originating DomainEventLog id — idempotency key for the timeline projection
   deviceId        String? // External device ID (e.g., "72308628872889491")
   deviceName      String? // Device display name (e.g., "SH-0001")
   lat             Float? // Latitude from GPS
@@ -389,6 +392,8 @@ model ShipmentEvent {
 
   @@index([shipmentId])
   @@index([eventTime])
+  @@index([eventType])
+  @@index([sourceEventId])
 }
 
 // Carrier cutoff times: latest handoff time for same-day pickup or a service-level guarantee.

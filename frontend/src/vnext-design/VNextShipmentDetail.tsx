@@ -77,6 +77,15 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { DatePicker } from '@/components/ui/date-picker';
+import { SHIPMENT_EVENT_TYPES, shipmentEventLabel } from '../shared/shipmentEventTypes';
 import { cn } from '@/lib/utils';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { getDeviceImageUrl } from './deviceImages';
@@ -1348,6 +1357,117 @@ function CarrierTrackingTab({ shipmentId }: { shipmentId: string }) {
   );
 }
 
+// ─── Events Tab (read-only, platform-generated timeline) ───────────────
+function eventTone(eventType: string): string {
+  switch (eventType) {
+    case 'delivered':
+    case 'enters_destination':
+      return 'border-success/30 bg-success/10 text-success';
+    case 'exception':
+      return 'border-destructive/30 bg-destructive/10 text-destructive';
+    case 'leaves_origin':
+    case 'entered_waypoint':
+    case 'exited_waypoint':
+      return 'border-warning/30 bg-warning/10 text-warning';
+    case 'archived':
+    case 'unarchived':
+    case 'deleted':
+      return 'border-muted bg-muted text-muted-foreground';
+    default:
+      return 'border-info/30 bg-info/10 text-info';
+  }
+}
+
+function EventsTab({ shipmentId }: { shipmentId: string }) {
+  const [events, setEvents] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [eventType, setEventType] = useState('all');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    const params = new URLSearchParams();
+    if (eventType !== 'all') params.set('eventType', eventType);
+    if (fromDate) params.set('fromDate', fromDate);
+    if (toDate) params.set('toDate', `${toDate}T23:59:59Z`);
+    const qs = params.toString();
+    fetch(`${API_URL}/api/v1/shipments/${shipmentId}/events${qs ? `?${qs}` : ''}`)
+      .then(r => r.json())
+      .then(j => { if (!cancelled && !j.error) setEvents(j.data || []); })
+      .catch(() => { })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [shipmentId, eventType, fromDate, toDate]);
+
+  const hasFilters = eventType !== 'all' || !!fromDate || !!toDate;
+  const clearFilters = () => { setEventType('all'); setFromDate(''); setToDate(''); };
+
+  return (
+    <Card>
+      <CardHeader className="space-y-3">
+        <CardTitle className="text-base">Event Timeline</CardTitle>
+        <div className="flex flex-wrap items-center gap-2">
+          <Select value={eventType} onValueChange={setEventType}>
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="All event types" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All event types</SelectItem>
+              {SHIPMENT_EVENT_TYPES.map(t => (
+                <SelectItem key={t.type} value={t.type}>{t.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <DatePicker type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} aria-label="From date" className="w-[160px]" />
+          <span className="text-xs text-muted-foreground">to</span>
+          <DatePicker type="date" value={toDate} onChange={e => setToDate(e.target.value)} aria-label="To date" className="w-[160px]" />
+          {hasFilters && (
+            <Button variant="ghost" size="sm" onClick={clearFilters}>
+              <X className="h-4 w-4" />
+              Clear
+            </Button>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading events...
+          </div>
+        ) : events.length === 0 ? (
+          <div className="flex flex-col items-center gap-2 py-10 text-muted-foreground">
+            <Clock className="h-8 w-8 opacity-50" />
+            <p className="text-sm">{hasFilters ? 'No events match these filters.' : 'No events recorded yet.'}</p>
+          </div>
+        ) : (
+          <ol className="relative space-y-6 border-l border-border pl-6">
+            {events.map((ev: any, i: number) => (
+              <li key={ev.id || i} className="relative">
+                <span className={cn('absolute -left-[35px] flex h-6 w-6 items-center justify-center rounded-full border', eventTone(ev.eventType))}>
+                  <Clock className="h-3 w-3" />
+                </span>
+                <div className="text-xs uppercase tracking-wider text-muted-foreground">
+                  {ev.eventTime ? new Date(ev.eventTime).toLocaleString() : ''}
+                </div>
+                <div className="mt-1 text-sm font-medium">{shipmentEventLabel(ev.eventType)}</div>
+                {ev.description && <div className="mt-0.5 text-xs text-muted-foreground">{ev.description}</div>}
+                {(ev.address || ev.locationSummary) && (
+                  <div className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+                    <MapPin className="h-3 w-3" />
+                    {ev.address || ev.locationSummary}
+                  </div>
+                )}
+              </li>
+            ))}
+          </ol>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────
 export default function VNextShipmentDetail() {
   const { id } = useParams();
@@ -1650,7 +1770,6 @@ export default function VNextShipmentDetail() {
 
   const origin = shipment.origin || {};
   const destination = shipment.destination || {};
-  const events = shipment.events || [];
   const orders = shipment.orderShipments || [];
 
   const tabs = [
@@ -1912,53 +2031,7 @@ export default function VNextShipmentDetail() {
             </TabsList>
 
             <TabsContent value="events" className="mt-4">
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0">
-                  <CardTitle className="text-base">Event Timeline</CardTitle>
-                  <div className="flex gap-2">
-                    <Button variant="ghost" size="sm">
-                      <Search className="h-4 w-4" />
-                      Filter
-                    </Button>
-                    <Button variant="outline" size="sm">
-                      <Plus className="h-4 w-4" />
-                      Add Event
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  {events.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No events recorded yet.</p>
-                  ) : (
-                    <ol className="relative space-y-6 border-l border-border pl-6">
-                      {events.map((ev: any, i: number) => {
-                        const tone =
-                          ev.type === 'pickup' ? 'border-success/30 bg-success/10 text-success' :
-                            ev.type === 'delivery' ? 'border-primary/30 bg-primary/10 text-primary' :
-                              'border-info/30 bg-info/10 text-info';
-                        return (
-                          <li key={ev.id || i} className="relative">
-                            <span className={cn('absolute -left-[35px] flex h-6 w-6 items-center justify-center rounded-full border', tone)}>
-                              <Clock className="h-3 w-3" />
-                            </span>
-                            <div className="text-xs uppercase tracking-wider text-muted-foreground">
-                              {ev.occurredAt ? new Date(ev.occurredAt).toLocaleString() : ''}
-                            </div>
-                            <div className="mt-1 text-sm font-medium">{ev.type || ev.title || 'Event'}</div>
-                            <div className="mt-0.5 text-xs text-muted-foreground">{ev.description || ev.notes || ''}</div>
-                            {ev.location && (
-                              <div className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
-                                <MapPin className="h-3 w-3" />
-                                {ev.location}
-                              </div>
-                            )}
-                          </li>
-                        );
-                      })}
-                    </ol>
-                  )}
-                </CardContent>
-              </Card>
+              {id && <EventsTab shipmentId={id} />}
             </TabsContent>
 
             <TabsContent value="documents" className="mt-4">
