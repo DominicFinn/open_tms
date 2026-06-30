@@ -31,14 +31,9 @@ export class PgBossQueueAdapter implements IQueueAdapter {
   async start(): Promise<void> {
     await this.boss.start();
 
-    // Create dead letter queues for each main queue
-    const queueNames = Object.values(QUEUES);
-    for (const name of queueNames) {
-      const dlq = name + DEAD_LETTER_SUFFIX;
-      await this.boss.createQueue(dlq, {
-        retryLimit: 0,
-        deleteAfterSeconds: 2592000, // 30 days retention for DLQ
-      }).catch(() => {});
+    // Pre-create the static queues + their dead-letter queues.
+    for (const name of Object.values(QUEUES)) {
+      await this.ensureQueue(name);
     }
 
     console.log('[Queue] pg-boss started');
@@ -49,11 +44,31 @@ export class PgBossQueueAdapter implements IQueueAdapter {
     console.log('[Queue] pg-boss stopped');
   }
 
-  async publish(queueName: string, message: QueueMessage): Promise<string> {
+  /**
+   * Idempotently ensure a work queue and its dead-letter queue both exist.
+   *
+   * pg-boss v10+ rejects createQueue({ deadLetter }) when the referenced
+   * dead-letter queue does not exist yet, so the DLQ MUST be created first.
+   * Without this ordering the main createQueue throws, the error is swallowed,
+   * the queue is never created, and boss.work()/boss.send() then fail with
+   * "Queue <name> does not exist" — silently dropping every event fanned out
+   * to dynamic evt.* handler queues (projections, audit, notifications, ...).
+   */
+  private async ensureQueue(queueName: string): Promise<void> {
+    const dlq = queueName + DEAD_LETTER_SUFFIX;
+    // DLQ first (no nested dead-letter so it can't recurse), then the main queue.
+    await this.boss.createQueue(dlq, {
+      retryLimit: 0,
+      deleteAfterSeconds: 2592000, // 30 days retention for DLQ
+    }).catch(() => {});
     await this.boss.createQueue(queueName, {
       ...QUEUE_DEFAULTS,
-      deadLetter: queueName + DEAD_LETTER_SUFFIX,
+      deadLetter: dlq,
     }).catch(() => {});
+  }
+
+  async publish(queueName: string, message: QueueMessage): Promise<string> {
+    await this.ensureQueue(queueName);
 
     const jobId = await this.boss.send(queueName, {
       ...message,
@@ -75,10 +90,7 @@ export class PgBossQueueAdapter implements IQueueAdapter {
     handler: (message: QueueMessage) => Promise<void>,
     options?: SubscribeAdapterOptions,
   ): Promise<void> {
-    await this.boss.createQueue(queueName, {
-      ...QUEUE_DEFAULTS,
-      deadLetter: queueName + DEAD_LETTER_SUFFIX,
-    }).catch(() => {});
+    await this.ensureQueue(queueName);
 
     // Default to a 2-second poll: with ~20 subscribers a 0.5s default would
     // be ~40 polling round-trips per second even when the queues are empty.
