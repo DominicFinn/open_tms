@@ -4,6 +4,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
   AlertTriangle,
+  Archive,
   ArrowLeft,
   BatteryFull,
   Bot,
@@ -67,6 +68,14 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogFooter,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { getDeviceImageUrl } from './deviceImages';
@@ -1352,6 +1361,10 @@ export default function VNextShipmentDetail() {
   const [generating, setGenerating] = useState<string | null>(null);
   const [routeDeviation, setRouteDeviation] = useState<any>(null);
   const [transitioning, setTransitioning] = useState(false);
+  const [archiving, setArchiving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const { hasPermission } = useCurrentUser();
 
   const loadShipment = useCallback((showSpinner = true) => {
     if (!id) return;
@@ -1399,6 +1412,45 @@ export default function VNextShipmentDetail() {
       setTransitioning(false);
     }
   }, [id, loadShipment]);
+
+  const handleArchive = useCallback(async () => {
+    if (!id) return;
+    setArchiving(true);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/shipments/${id}`, { method: 'DELETE' });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json.error) {
+        toast.error(json.error || 'Failed to archive shipment', { duration: 8000 });
+        return;
+      }
+      toast.success('Shipment archived');
+      navigate('/shipments');
+    } catch {
+      toast.error('Failed to archive shipment');
+    } finally {
+      setArchiving(false);
+    }
+  }, [id, navigate]);
+
+  const handleSoftDelete = useCallback(async () => {
+    if (!id) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/shipments/${id}/soft-delete`, { method: 'POST' });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json.error) {
+        toast.error(json.error || 'Failed to delete shipment', { duration: 8000 });
+        return;
+      }
+      toast.success('Shipment deleted');
+      navigate('/shipments');
+    } catch {
+      toast.error('Failed to delete shipment');
+    } finally {
+      setDeleting(false);
+      setConfirmDelete(false);
+    }
+  }, [id, navigate]);
 
   const loadDocuments = useCallback(() => {
     if (!id) return;
@@ -1677,8 +1729,41 @@ export default function VNextShipmentDetail() {
             <Target className="h-4 w-4" />
             Track
           </Button>
+          {hasPermission('shipments:write') && !shipment.archived && !shipment.deletedAt && (
+            <Button variant="outline" size="sm" onClick={handleArchive} disabled={archiving}>
+              {archiving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Archive className="h-4 w-4" />}
+              Archive
+            </Button>
+          )}
+          {hasPermission('shipments:delete') && !shipment.deletedAt && (
+            <Button variant="outline" size="sm" onClick={() => setConfirmDelete(true)} disabled={deleting}
+              className="text-destructive hover:text-destructive">
+              <Trash2 className="h-4 w-4" />
+              Delete
+            </Button>
+          )}
         </div>
       </div>
+
+      {/* Soft-delete confirmation (admin) */}
+      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete this shipment?</DialogTitle>
+            <DialogDescription>
+              {shipment.reference || id} will be removed from all views. The record is retained for audit
+              but cannot be restored from the UI. This is different from archiving.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmDelete(false)} disabled={deleting}>Cancel</Button>
+            <Button variant="destructive" onClick={handleSoftDelete} disabled={deleting}>
+              {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              Delete shipment
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Route Deviation Alert */}
       {routeDeviation && (

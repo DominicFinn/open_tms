@@ -108,6 +108,43 @@ describe('ShipmentProjection', () => {
     });
   });
 
+  describe('onShipmentDeleted', () => {
+    it('removes the soft-deleted shipment from the read model', async () => {
+      const deleteFn = jest.fn().mockResolvedValue({});
+      const prisma = { shipmentReadModel: { delete: deleteFn } } as any;
+      const proj = new ShipmentProjection(prisma);
+      const event = createTestEvent(
+        EVENT_TYPES.SHIPMENT_DELETED, 'shipment', 'ship-1',
+        { shipmentReference: 'SH-001', softDelete: true }
+      );
+
+      await proj.handle(event);
+
+      expect(deleteFn).toHaveBeenCalledWith({ where: { id: 'ship-1' } });
+    });
+  });
+
+  describe('onShipmentCreated guard', () => {
+    it('does not resurrect a shipment already archived/deleted (out-of-order events)', async () => {
+      const findUnique = jest.fn().mockResolvedValue({
+        ...mockShipment, archived: true, customer: { id: 'cust-1', name: 'Acme' },
+      });
+      const upsert = jest.fn();
+      const del = jest.fn().mockResolvedValue({});
+      const prisma = {
+        shipment: { findUnique },
+        shipmentReadModel: { upsert, delete: del },
+      } as any;
+      const proj = new ShipmentProjection(prisma);
+      const event = createTestEvent(EVENT_TYPES.SHIPMENT_CREATED, 'shipment', 'ship-1', {});
+
+      await proj.handle(event);
+
+      expect(upsert).not.toHaveBeenCalled();
+      expect(del).toHaveBeenCalledWith({ where: { id: 'ship-1' } });
+    });
+  });
+
   describe('onShipmentException', () => {
     it('sets the hasException flag without changing lifecycle status', async () => {
       const event = createTestEvent(

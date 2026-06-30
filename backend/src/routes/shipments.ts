@@ -8,12 +8,14 @@ import { CREATE_SHIPMENT } from '../commands/shipments/CreateShipmentCommand.js'
 import { UPDATE_SHIPMENT } from '../commands/shipments/UpdateShipmentCommand.js';
 import { ARCHIVE_SHIPMENT } from '../commands/shipments/ArchiveShipmentCommand.js';
 import { TRANSITION_SHIPMENT_STATUS } from '../commands/shipments/TransitionShipmentStatusCommand.js';
+import { SOFT_DELETE_SHIPMENT } from '../commands/shipments/SoftDeleteShipmentCommand.js';
 import {
   SHIPMENT_LIFECYCLE,
   allowedTransitions,
   validateShipmentReadiness,
 } from '../shared/shipmentTypeValidator.js';
 import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
+import { requirePermission } from '../middleware/jwtAuth.js';
 
 // Accepts YYYY-MM-DD (HTML date input), YYYY-MM-DDTHH:mm[:ss[.sss]][Z] (datetime-local), or full ISO.
 // Normalizes to a full ISO string.
@@ -219,7 +221,7 @@ export async function shipmentRoutes(server: FastifyInstance) {
     const { id } = req.params as { id: string };
     const orgId = req.orgId!;
     const shipment = await server.prisma.shipment.findFirst({
-      where: { id, archived: false, orgId },
+      where: { id, archived: false, orgId, deletedAt: null },
       include: {
         customer: true,
         origin: true,
@@ -270,7 +272,7 @@ export async function shipmentRoutes(server: FastifyInstance) {
   server.get('/api/v1/shipments/:id/events', async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
     const orgId = req.orgId!;
-    const shipment = await server.prisma.shipment.findFirst({ where: { id, archived: false, orgId } });
+    const shipment = await server.prisma.shipment.findFirst({ where: { id, archived: false, orgId, deletedAt: null } });
     if (!shipment) {
       reply.code(404);
       return { data: null, error: 'Shipment not found' };
@@ -322,7 +324,7 @@ export async function shipmentRoutes(server: FastifyInstance) {
     // Cross-tenant guard before we hit the command bus. If the row belongs
     // to a different tenant we 404 without ever invoking the command.
     const existing = await server.prisma.shipment.findFirst({
-      where: { id, orgId },
+      where: { id, orgId, deletedAt: null },
       select: { id: true },
     });
     if (!existing) {
@@ -344,7 +346,7 @@ export async function shipmentRoutes(server: FastifyInstance) {
     }
 
     const updated = await server.prisma.shipment.findFirst({
-      where: { id, orgId },
+      where: { id, orgId, deletedAt: null },
       include: {
         customer: true, origin: true, destination: true,
         lane: body.laneId ? { include: { origin: true, destination: true } } : false
@@ -356,12 +358,21 @@ export async function shipmentRoutes(server: FastifyInstance) {
   });
 
   // Delete (archive) shipment
-  server.delete('/api/v1/shipments/:id', async (req: FastifyRequest, reply: FastifyReply) => {
+  // Archive (recoverable). Any operational user with shipments:write may archive.
+  server.delete('/api/v1/shipments/:id', {
+    preHandler: requirePermission('shipments:write'),
+    schema: {
+      tags: ['Shipments'],
+      summary: 'Archive shipment',
+      description: 'Archives a shipment (recoverable). Removes it from active lists; the row is retained for audit.',
+      params: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
     const orgId = req.orgId!;
 
     const existing = await server.prisma.shipment.findFirst({
-      where: { id, orgId },
+      where: { id, orgId, deletedAt: null },
       select: { id: true },
     });
     if (!existing) {
@@ -385,6 +396,45 @@ export async function shipmentRoutes(server: FastifyInstance) {
     return { data: { id, archived: true }, error: null };
   });
 
+  // Soft delete (admin-only, shipments:delete). Hidden from every view; the row
+  // is retained for audit with a deletedAt/deletedBy tombstone.
+  server.post('/api/v1/shipments/:id/soft-delete', {
+    preHandler: requirePermission('shipments:delete'),
+    schema: {
+      tags: ['Shipments'],
+      summary: 'Soft delete shipment (admin)',
+      description: 'Marks a shipment deleted (deletedAt/deletedBy). Removes it from all views; retained for audit. Requires shipments:delete.',
+      params: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const orgId = req.orgId!;
+
+    const existing = await server.prisma.shipment.findFirst({
+      where: { id, orgId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!existing) {
+      reply.code(404);
+      return { data: null, error: 'Shipment not found' };
+    }
+
+    const result = await commandBus.dispatch({
+      type: SOFT_DELETE_SHIPMENT,
+      orgId,
+      actorId: req.user?.sub ?? null,
+      payload: { id },
+      metadata: { correlationId: randomUUID(), source: 'api' },
+    });
+
+    if (!result.success) {
+      reply.code(400);
+      return { data: null, error: result.error };
+    }
+
+    return { data: { id, deleted: true }, error: null };
+  });
+
   // Readiness + allowed transitions for the lifecycle control on the detail page.
   server.get('/api/v1/shipments/:id/readiness', {
     schema: {
@@ -397,7 +447,7 @@ export async function shipmentRoutes(server: FastifyInstance) {
     const { id } = req.params as { id: string };
     const orgId = req.orgId!;
     const shipment = await server.prisma.shipment.findFirst({
-      where: { id, archived: false, orgId },
+      where: { id, archived: false, orgId, deletedAt: null },
       include: { shipmentType: { select: { requiredFields: true } } },
     });
     if (!shipment) {
@@ -438,7 +488,7 @@ export async function shipmentRoutes(server: FastifyInstance) {
 
     const orgId = req.orgId!;
     const existing = await server.prisma.shipment.findFirst({
-      where: { id, orgId },
+      where: { id, orgId, deletedAt: null },
       select: { id: true },
     });
     if (!existing) {
@@ -489,7 +539,7 @@ export async function shipmentRoutes(server: FastifyInstance) {
 
     // Scope to this tenant up front; ids not in the tenant are reported as not found.
     const owned = await server.prisma.shipment.findMany({
-      where: { id: { in: ids }, orgId },
+      where: { id: { in: ids }, orgId, deletedAt: null },
       select: { id: true },
     });
     const ownedIds = new Set(owned.map(s => s.id));

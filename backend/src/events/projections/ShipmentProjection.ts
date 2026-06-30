@@ -40,6 +40,8 @@ export class ShipmentProjection implements IEventHandler {
         return this.onShipmentDelivered(event);
       case EVENT_TYPES.SHIPMENT_ARCHIVED:
         return this.onShipmentArchived(event);
+      case EVENT_TYPES.SHIPMENT_DELETED:
+        return this.onShipmentDeleted(event);
       case EVENT_TYPES.SHIPMENT_EXCEPTION:
         return this.onShipmentException(event);
       case EVENT_TYPES.SHIPMENT_STOP_ARRIVED:
@@ -73,6 +75,14 @@ export class ShipmentProjection implements IEventHandler {
 
     if (!shipment) {
       console.warn(`[ShipmentProjection] Shipment ${event.entityId} not found for created event`);
+      return;
+    }
+
+    // Guard against out-of-order delivery: if a terminal event (archive or
+    // soft-delete) was processed before this create event, don't resurrect the
+    // row into the read model.
+    if (shipment.archived || shipment.deletedAt) {
+      await this.prisma.shipmentReadModel.delete({ where: { id: shipment.id } }).catch(() => {});
       return;
     }
 
@@ -207,6 +217,15 @@ export class ShipmentProjection implements IEventHandler {
       where: { id: event.entityId },
     }).catch((err: Error) => {
       console.error(`[ShipmentProjection] Failed to delete archived shipment ${event.entityId}: ${err.message}`);
+    });
+  }
+
+  private async onShipmentDeleted(event: DomainEvent): Promise<void> {
+    // Soft-deleted shipments are hidden from every view — drop them from the read model.
+    await this.prisma.shipmentReadModel.delete({
+      where: { id: event.entityId },
+    }).catch((err: Error) => {
+      console.error(`[ShipmentProjection] Failed to remove soft-deleted shipment ${event.entityId}: ${err.message}`);
     });
   }
 

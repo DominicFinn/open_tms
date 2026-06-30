@@ -214,10 +214,18 @@ Shipments follow a canonical lifecycle: **`draft` → `ready` → `in_progress` 
 | `CreateShipmentCommand` | `POST /api/v1/shipments` | `shipment.created` (always `draft`) |
 | `UpdateShipmentCommand` | `PUT /api/v1/shipments/:id` | `shipment.updated`, `shipment.status_changed`, `shipment.carrier_assigned` |
 | `TransitionShipmentStatusCommand` | `POST /api/v1/shipments/:id/transition`, `POST /api/v1/shipments/bulk-transition` | `shipment.status_changed` (gated: adjacency + readiness) |
-| `ArchiveShipmentCommand` | `DELETE /api/v1/shipments/:id` | `shipment.archived` |
+| `ArchiveShipmentCommand` | `DELETE /api/v1/shipments/:id` (requires `shipments:write`) | `shipment.archived` |
+| `SoftDeleteShipmentCommand` | `POST /api/v1/shipments/:id/soft-delete` (requires `shipments:delete`) | `shipment.deleted` |
 | `ProcessInbound214Command` | `POST /api/v1/edi/214/inbound` | `edi_214.received`, `shipment.status_changed`, `shipment.stop_arrived`, `shipment.stop_completed`, `shipment.exception`, `shipment.delivered` |
 
 `GET /api/v1/shipments/:id/readiness` returns `{ status, missing, isValid, allowedTransitions }` for the detail-page control. Every `shipment.status_changed` is captured by the `AuditHandler` as an immutable `AuditLog` row recording the actor ("who did it") — this is the audit event for manual lifecycle moves.
+
+### Archive vs Soft Delete
+
+Two independent removal states, both retaining the row for audit:
+
+- **Archive** (`archived`/`archivedAt`) — recoverable, available to any operational user (`shipments:write`). Removed from active lists; intended to surface in a future "archived shipments" screen.
+- **Soft delete** (`deletedAt`/`deletedBy`) — admin-only (`shipments:delete`). Hidden from **every** view, including the future archived screen. The row is kept only for audit/compliance; idempotent (re-deleting is a no-op). Soft-deleted shipments are filtered out of all read/mutation routes via `deletedAt: null`, so the detail page 404s.
 
 ### Side Effects
 
@@ -230,6 +238,8 @@ Shipments follow a canonical lifecycle: **`draft` → `ready` → `in_progress` 
 | `shipment.exception` | ShipmentReadModel.hasException = true (status unchanged) | In-app + email | — |
 | `shipment.stop_arrived` | ShipmentReadModel.stopCount updated | In-app | Orders at stop → delivery_status_changed |
 | `shipment.stop_completed` | ShipmentReadModel.stopCount updated | In-app | Orders at stop → delivered |
+| `shipment.archived` | ShipmentReadModel row removed | — | — |
+| `shipment.deleted` | ShipmentReadModel row removed | — | — |
 | `edi_214.received` | — | — | Auto-forward outbound 214 to customer trading partners |
 | `edi_214.sent` | — | — | — |
 

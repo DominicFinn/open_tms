@@ -184,6 +184,10 @@ model Shipment {
   items               Json?
   archived            Boolean       @default(false)
   archivedAt          DateTime?
+  // Soft delete (admin-only, distinct from archive): the row is retained for
+  // audit but hidden from every view, including the future archived screen.
+  deletedAt           DateTime?
+  deletedBy           String?
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
   customer            Customer      @relation(fields: [customerId], references: [id])
@@ -259,6 +263,7 @@ model Shipment {
   @@index([carrierId])
   @@index([laneId])
   @@index([archived])
+  @@index([deletedAt])
   @@index([createdAt])
   @@index([reference])
   @@index([trackingNumber])
