@@ -123,25 +123,28 @@ export class X12EnvelopeBuilder {
   // ── Formatting utilities (public so services can use them directly) ──
 
   /** Format date as YYMMDD (for ISA) */
+  // EDI timestamps are formatted in UTC so output is deterministic and
+  // independent of the server's timezone (a status date of 08:00Z always
+  // emits 0800, not a local-offset time).
   formatDateShort(date: Date): string {
-    const y = date.getFullYear().toString().slice(2);
-    const m = (date.getMonth() + 1).toString().padStart(2, '0');
-    const d = date.getDate().toString().padStart(2, '0');
+    const y = date.getUTCFullYear().toString().slice(2);
+    const m = (date.getUTCMonth() + 1).toString().padStart(2, '0');
+    const d = date.getUTCDate().toString().padStart(2, '0');
     return `${y}${m}${d}`;
   }
 
   /** Format date as CCYYMMDD (for GS and transaction segments) */
   formatDateLong(date: Date): string {
-    const y = date.getFullYear().toString();
-    const m = (date.getMonth() + 1).toString().padStart(2, '0');
-    const d = date.getDate().toString().padStart(2, '0');
+    const y = date.getUTCFullYear().toString();
+    const m = (date.getUTCMonth() + 1).toString().padStart(2, '0');
+    const d = date.getUTCDate().toString().padStart(2, '0');
     return `${y}${m}${d}`;
   }
 
   /** Format time as HHMM */
   formatTime(date: Date): string {
-    const h = date.getHours().toString().padStart(2, '0');
-    const m = date.getMinutes().toString().padStart(2, '0');
+    const h = date.getUTCHours().toString().padStart(2, '0');
+    const m = date.getUTCMinutes().toString().padStart(2, '0');
     return `${h}${m}`;
   }
 

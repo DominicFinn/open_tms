@@ -701,10 +701,12 @@ Items from the unified trading partner model that are not yet complete:
 - Geofence-based auto-transition from "ready" to "in_transit" 🔲
 
 ### **IoT Integration (System Loco)**
-- Device-shipment linking (associate IoT devices with shipments) 🔲
-- Real-time data ingestion from System Loco IoT platform (temperature, humidity, shock, light, GPS) 🔲
-- Sensor stream visualization on shipment detail pages 🔲
+- Device-shipment linking (associate IoT devices with shipments) ✅
+- Real-time data ingestion from System Loco IoT platform (temperature, humidity, pressure, shock, light, GPS) ✅ — hardened webhook pipeline (verify→enqueue→202, HMAC signature, idempotency), resolves to shipment, updates live position, enriched telemetry. See `docs/SYSTEM_LOCO_INTEGRATION.md`
+- Sensor stream visualization on shipment detail pages ✅ (Telemetry tab)
 - IoT-based alerts and automation (excursion alerts, geofence+sensor triggers) 🔲
+- _Future:_ **Device Reports V2 feed** — continuous full-sensor snapshots + `timeSeries` arrays (denser telemetry than Device Events) 🔲
+- _Future:_ **System Loco Shipments feed** — consume their shipment lifecycle / `leavesOrigin` / `entersDestination` / `leavesRoute` events and map onto our lifecycle + timeline 🔲
 
 ### **Miscellaneous**
 - Multi-language support (JSON language files, user-selectable, RTL support) 🔲
