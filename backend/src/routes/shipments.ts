@@ -124,7 +124,7 @@ export async function shipmentRoutes(server: FastifyInstance) {
   });
 
   // Create shipment
-  server.post('/api/v1/shipments', async (req: FastifyRequest, reply: FastifyReply) => {
+  server.post('/api/v1/shipments', { preHandler: requirePermission('shipments:write') }, async (req: FastifyRequest, reply: FastifyReply) => {
     const addressSchema = z.object({
       name: z.string().min(1),
       address1: z.string().min(1),
@@ -326,7 +326,7 @@ export async function shipmentRoutes(server: FastifyInstance) {
   });
 
   // Update shipment
-  server.put('/api/v1/shipments/:id', async (req: FastifyRequest, reply: FastifyReply) => {
+  server.put('/api/v1/shipments/:id', { preHandler: requirePermission('shipments:write') }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
     const body = z.object({
       reference: z.string().min(1).optional(),

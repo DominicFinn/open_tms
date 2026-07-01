@@ -6,6 +6,7 @@ import { ILocationResolutionService } from '../services/LocationResolutionServic
 import { container, TOKENS } from '../di/index.js';
 import { IEventBus, EVENT_TYPES, createEvent } from '../events/index.js';
 import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
+import { guardWrites } from '../auth/guardWrites.js';
 
 export async function locationRoutes(server: FastifyInstance) {
   const locationsRepo = container.resolve<ILocationsRepository>(TOKENS.ILocationsRepository);
@@ -13,6 +14,7 @@ export async function locationRoutes(server: FastifyInstance) {
   const locationResolutionService = container.resolve<ILocationResolutionService>(TOKENS.ILocationResolutionService);
 
   await registerOrgScope(server);
+  server.addHook('preHandler', guardWrites('locations'));
 
   /** Publish a location domain event (best-effort, non-blocking) */
   async function publishLocationEvent(

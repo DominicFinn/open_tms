@@ -10,6 +10,7 @@ import { ARCHIVE_CARRIER } from '../commands/carriers/ArchiveCarrierCommand.js';
 import { UNARCHIVE_CARRIER } from '../commands/carriers/UnarchiveCarrierCommand.js';
 import { SOFT_DELETE_CARRIER } from '../commands/carriers/SoftDeleteCarrierCommand.js';
 import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
+import { guardWrites } from '../auth/guardWrites.js';
 
 // Treat an empty string as "not provided" so a blank optional field (e.g. a
 // carrier with no email yet) doesn't fail format validation.
@@ -21,6 +22,8 @@ export async function carrierRoutes(server: FastifyInstance) {
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
 
   await registerOrgScope(server);
+  // Writes require carriers:write; DELETE (soft-delete) requires carriers:delete.
+  server.addHook('preHandler', guardWrites('carriers'));
 
   // Get all carriers — scoped to the requesting JWT's org.
   server.get('/api/v1/carriers', async (req: FastifyRequest, _reply: FastifyReply) => {
@@ -151,10 +154,9 @@ export async function carrierRoutes(server: FastifyInstance) {
     return { data: updated, error: null };
   });
 
-  // Archive a carrier — normal-user action. Stops it being selected/used and
-  // logs out its portal users, but keeps it available to finance/admin.
-  // TODO(auth): gate with requirePermission(CARRIERS_WRITE) once the app
-  // frontend attaches JWTs (dev currently runs unauthenticated).
+  // Archive a carrier (carriers:write via guardWrites) — stops it being
+  // selected/used and logs out its portal users, but keeps it available to
+  // finance/admin.
   server.post('/api/v1/carriers/:id/archive', async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
     const orgId = req.orgId!;
@@ -202,11 +204,9 @@ export async function carrierRoutes(server: FastifyInstance) {
     return { data: await carriersRepo.findById(id, orgId), error: null };
   });
 
-  // Soft-delete a carrier — admin action, for accidental creates / dev cleanup.
-  // A carrier assigned to any lane cannot be deleted (only archived); the
-  // command enforces this and the error surfaces as a 400.
-  // TODO(auth): gate with requirePermission(CARRIERS_DELETE) once the frontend
-  // attaches JWTs; for now the UI only shows Delete to admins.
+  // Soft-delete a carrier (carriers:delete via guardWrites) — for accidental
+  // creates / dev cleanup. A carrier assigned to any lane cannot be deleted
+  // (only archived); the command enforces this and surfaces a 400.
   server.delete('/api/v1/carriers/:id', async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
     const orgId = req.orgId!;
