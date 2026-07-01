@@ -71,7 +71,9 @@ export default function VNextCarriers() {
     (async () => {
       try {
         setLoading(true);
-        const res = await fetch(`${API_URL}/api/v1/carriers`);
+        // Include archived carriers so the management list + "Archived" stat
+        // filter can surface them (they show an "Inactive" badge).
+        const res = await fetch(`${API_URL}/api/v1/carriers?includeArchived=true`);
         if (!res.ok) throw new Error(`Failed to load carriers (${res.status})`);
         const json = await res.json();
         if (!cancelled) {
