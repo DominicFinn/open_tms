@@ -51,6 +51,7 @@ export default function GoogleMapsRouteEditor({
   origin,
   destination,
   stops = [],
+  existingPolyline,
   corridorMeters: _corridorMeters = 5000,
   onRouteChange,
   height = 450,
@@ -61,6 +62,8 @@ export default function GoogleMapsRouteEditor({
   const mapInstanceRef = useRef<google.maps.Map | null>(null);
   const directionsRendererRef = useRef<google.maps.DirectionsRenderer | null>(null);
   const directionsServiceRef = useRef<google.maps.DirectionsService | null>(null);
+  const savedRoutePolylineRef = useRef<google.maps.Polyline | null>(null);
+  const savedRouteMarkersRef = useRef<google.maps.Marker[]>([]);
   const [routeInfo, setRouteInfo] = useState<{
     distance: string;
     duration: string;
@@ -158,8 +161,55 @@ export default function GoogleMapsRouteEditor({
     directionsRendererRef.current = directionsRenderer;
   }, [provider, isLoaded, editable, handleDirectionsResult, origin]);
 
-  // Calculate route when origin/destination/stops change
+  // Read-only view of a previously saved route: draw the actual stored polyline
+  // instead of silently firing a fresh Directions request, which would discard
+  // any manual drag adjustments made when the route was planned and could show
+  // a different path than what was actually saved (e.g. two lanes sharing an
+  // origin/destination but with different saved routes would otherwise both
+  // render the same freshly-recalculated default route).
   useEffect(() => {
+    if (editable || !existingPolyline) return;
+    if (provider !== 'google' || !isLoaded || !mapInstanceRef.current) return;
+
+    const google = (window as any).google;
+    if (!google?.maps?.geometry) return;
+
+    const path = google.maps.geometry.encoding.decodePath(existingPolyline);
+    if (!path.length) return;
+
+    directionsRendererRef.current?.setMap(null);
+
+    savedRoutePolylineRef.current?.setMap(null);
+    savedRoutePolylineRef.current = new google.maps.Polyline({
+      path,
+      map: mapInstanceRef.current,
+      strokeColor: POLYLINE_COLOR,
+      strokeWeight: 5,
+      strokeOpacity: 0.8,
+    });
+
+    savedRouteMarkersRef.current.forEach(m => m.setMap(null));
+    savedRouteMarkersRef.current = [
+      new google.maps.Marker({ position: origin ?? path[0], map: mapInstanceRef.current }),
+      new google.maps.Marker({ position: destination ?? path[path.length - 1], map: mapInstanceRef.current }),
+    ];
+
+    const bounds = new google.maps.LatLngBounds();
+    path.forEach((p: google.maps.LatLng) => bounds.extend(p));
+    mapInstanceRef.current.fitBounds(bounds);
+
+    return () => {
+      savedRoutePolylineRef.current?.setMap(null);
+      savedRoutePolylineRef.current = null;
+      savedRouteMarkersRef.current.forEach(m => m.setMap(null));
+      savedRouteMarkersRef.current = [];
+    };
+  }, [editable, existingPolyline, provider, isLoaded, origin?.lat, origin?.lng, destination?.lat, destination?.lng]);
+
+  // Calculate route when origin/destination/stops change (skipped for the
+  // read-only saved-route case above, which renders the stored polyline directly)
+  useEffect(() => {
+    if (!editable && existingPolyline) return;
     if (provider !== 'google' || !isLoaded) return;
     if (!directionsServiceRef.current || !directionsRendererRef.current) return;
     if (!origin || !destination) return;
@@ -192,7 +242,7 @@ export default function GoogleMapsRouteEditor({
         }
       },
     );
-  }, [provider, isLoaded, origin?.lat, origin?.lng, destination?.lat, destination?.lng, stops.length, handleDirectionsResult, destination, origin, stops]);
+  }, [editable, existingPolyline, provider, isLoaded, origin?.lat, origin?.lng, destination?.lat, destination?.lng, stops.length, handleDirectionsResult, destination, origin, stops]);
 
   // No Google Maps available
   if (provider !== 'google' || !isLoaded) {

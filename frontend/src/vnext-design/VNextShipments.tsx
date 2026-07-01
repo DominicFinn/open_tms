@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -163,7 +163,6 @@ const MARKER_COLORS: Record<StatusVariant, string> = {
 
 export default function VNextShipments() {
   const navigate = useNavigate();
-  const mapRef = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<L.Map | null>(null);
   const markersRef = useRef<L.LayerGroup | null>(null);
   const [search, setSearch] = useState('');
@@ -237,21 +236,33 @@ export default function VNextShipments() {
     issue: shipments.filter(s => !!s.hasException).length,
   }), [shipments]);
 
-  useEffect(() => {
-    if (!mapRef.current || mapInstance.current) return;
-    const map = L.map(mapRef.current, { zoomControl: true, attributionControl: false }).setView([39.5, -98.5], 4);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      maxZoom: 19,
-    }).addTo(map);
-    markersRef.current = L.layerGroup().addTo(map);
-    mapInstance.current = map;
-    const stopSizing = keepMapSized(map, mapRef.current);
-    return () => {
-      stopSizing();
-      map.remove();
-      mapInstance.current = null;
-      markersRef.current = null;
-    };
+  // Callback ref (not a plain useRef + mount-effect): the map container is behind
+  // the `loading` early-return below, so a `useEffect(..., [])` fires once at
+  // first mount - while still loading and the container doesn't exist yet - and
+  // never gets another chance to run once the real DOM node shows up. A callback
+  // ref instead fires exactly when the node attaches/detaches, however that comes
+  // about (initial load, or a later refetch that re-triggers the loading branch).
+  const mapCleanupRef = useRef<(() => void) | null>(null);
+  const setMapRef = useCallback((node: HTMLDivElement | null) => {
+    if (node) {
+      if (mapInstance.current) return;
+      const map = L.map(node, { zoomControl: true, attributionControl: false }).setView([39.5, -98.5], 4);
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        maxZoom: 19,
+      }).addTo(map);
+      markersRef.current = L.layerGroup().addTo(map);
+      mapInstance.current = map;
+      const stopSizing = keepMapSized(map, node);
+      mapCleanupRef.current = () => {
+        stopSizing();
+        map.remove();
+        mapInstance.current = null;
+        markersRef.current = null;
+      };
+    } else {
+      mapCleanupRef.current?.();
+      mapCleanupRef.current = null;
+    }
   }, []);
 
   useEffect(() => {
@@ -442,7 +453,7 @@ export default function VNextShipments() {
       </div>
 
       <div className={cn('rounded-lg border border-border bg-card', viewMode !== 'map' && 'hidden')}>
-        <div ref={mapRef} className="h-[600px] w-full overflow-hidden rounded-lg" />
+        <div ref={setMapRef} className="h-[600px] w-full overflow-hidden rounded-lg" />
       </div>
 
       <Card>
