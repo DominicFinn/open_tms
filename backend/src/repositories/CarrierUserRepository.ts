@@ -46,7 +46,7 @@ export class CarrierUserRepository implements ICarrierUserRepository {
     return this.prisma.carrierUser.findUnique({
       where: { email },
       include: {
-        carrier: { select: { id: true, name: true } },
+        carrier: { select: { id: true, name: true, archived: true, deletedAt: true } },
       },
     });
   }

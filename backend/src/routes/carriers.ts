@@ -7,6 +7,8 @@ import { ICommandBus } from '../commands/CommandBus.js';
 import { CREATE_CARRIER } from '../commands/carriers/CreateCarrierCommand.js';
 import { UPDATE_CARRIER } from '../commands/carriers/UpdateCarrierCommand.js';
 import { ARCHIVE_CARRIER } from '../commands/carriers/ArchiveCarrierCommand.js';
+import { UNARCHIVE_CARRIER } from '../commands/carriers/UnarchiveCarrierCommand.js';
+import { SOFT_DELETE_CARRIER } from '../commands/carriers/SoftDeleteCarrierCommand.js';
 import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 
 // Treat an empty string as "not provided" so a blank optional field (e.g. a
@@ -23,7 +25,9 @@ export async function carrierRoutes(server: FastifyInstance) {
   // Get all carriers — scoped to the requesting JWT's org.
   server.get('/api/v1/carriers', async (req: FastifyRequest, _reply: FastifyReply) => {
     const orgId = req.orgId!;
-    const carriers = await carriersRepo.all(orgId);
+    // ?includeArchived=true returns archived carriers too (management list).
+    const includeArchived = (req.query as any)?.includeArchived === 'true';
+    const carriers = await carriersRepo.all(orgId, { includeArchived });
     return { data: carriers, error: null };
   });
 
@@ -147,8 +151,11 @@ export async function carrierRoutes(server: FastifyInstance) {
     return { data: updated, error: null };
   });
 
-  // Delete (archive) carrier
-  server.delete('/api/v1/carriers/:id', async (req: FastifyRequest, reply: FastifyReply) => {
+  // Archive a carrier — normal-user action. Stops it being selected/used and
+  // logs out its portal users, but keeps it available to finance/admin.
+  // TODO(auth): gate with requirePermission(CARRIERS_WRITE) once the app
+  // frontend attaches JWTs (dev currently runs unauthenticated).
+  server.post('/api/v1/carriers/:id/archive', async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
     const orgId = req.orgId!;
     const existing = await carriersRepo.findById(id, orgId);
@@ -164,13 +171,64 @@ export async function carrierRoutes(server: FastifyInstance) {
       payload: { id },
       metadata: { correlationId: randomUUID(), source: 'api' },
     });
+    if (!result.success) {
+      reply.code(400);
+      return { data: null, error: result.error };
+    }
+    return { data: await carriersRepo.findById(id, orgId), error: null };
+  });
+
+  // Unarchive — finance/admin action to bring a carrier back into circulation.
+  server.post('/api/v1/carriers/:id/unarchive', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const orgId = req.orgId!;
+    const existing = await carriersRepo.findById(id, orgId);
+    if (!existing) {
+      reply.code(404);
+      return { data: null, error: 'Carrier not found' };
+    }
+
+    const result = await commandBus.dispatch({
+      type: UNARCHIVE_CARRIER,
+      orgId,
+      actorId: req.user?.sub ?? null,
+      payload: { id },
+      metadata: { correlationId: randomUUID(), source: 'api' },
+    });
+    if (!result.success) {
+      reply.code(400);
+      return { data: null, error: result.error };
+    }
+    return { data: await carriersRepo.findById(id, orgId), error: null };
+  });
+
+  // Soft-delete a carrier — admin action, for accidental creates / dev cleanup.
+  // A carrier assigned to any lane cannot be deleted (only archived); the
+  // command enforces this and the error surfaces as a 400.
+  // TODO(auth): gate with requirePermission(CARRIERS_DELETE) once the frontend
+  // attaches JWTs; for now the UI only shows Delete to admins.
+  server.delete('/api/v1/carriers/:id', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const orgId = req.orgId!;
+    const existing = await carriersRepo.findById(id, orgId);
+    if (!existing) {
+      reply.code(404);
+      return { data: null, error: 'Carrier not found' };
+    }
+
+    const result = await commandBus.dispatch({
+      type: SOFT_DELETE_CARRIER,
+      orgId,
+      actorId: req.user?.sub ?? null,
+      payload: { id },
+      metadata: { correlationId: randomUUID(), source: 'api' },
+    });
 
     if (!result.success) {
-      reply.code(404);
+      reply.code(result.error?.includes('not found') ? 404 : 400);
       return { data: null, error: result.error };
     }
 
-    const archived = await carriersRepo.findById(id, orgId);
-    return { data: archived, error: null };
+    return { data: { id, deleted: true }, error: null };
   });
 }

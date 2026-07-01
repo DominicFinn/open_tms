@@ -440,6 +440,10 @@ model Carrier {
   country      String?
   archived     Boolean         @default(false)
   archivedAt   DateTime?
+  // Soft delete (tombstone). Deleted carriers 404 everywhere but are retained
+  // for audit/finance history. Only allowed when not assigned to any lane.
+  deletedAt    DateTime?
+  deletedBy    String?
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
   vehicles     Vehicle[]
@@ -2244,6 +2248,9 @@ model CarrierUser {
   lastLoginAt         DateTime?
   failedLoginAttempts Int       @default(0)
   lockedUntil         DateTime?
+  // PII scrub tombstone — set when the user is anonymised (1 year after the
+  // carrier is archived/deleted). email/name/phone are replaced with placeholders.
+  anonymizedAt        DateTime?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
