@@ -9,6 +9,7 @@ import { CREATE_CARRIER_TRACKING_INTEGRATION } from '../commands/carrierTracking
 import { UPDATE_CARRIER_TRACKING_INTEGRATION } from '../commands/carrierTracking/UpdateCarrierTrackingIntegrationCommand.js';
 import { DELETE_CARRIER_TRACKING_INTEGRATION } from '../commands/carrierTracking/DeleteCarrierTrackingIntegrationCommand.js';
 import { container, TOKENS } from '../di/index.js';
+import { openCredentials } from '../security/secretVault.js';
 
 /** Standard { data, error } response schema for Swagger */
 const dataErrorResponse = {
@@ -51,7 +52,7 @@ function mapIntegration(i: any) {
     errorCount: i.lastErrorMessage ? 1 : 0,
     callsToday: i.rateLimitCallsToday ?? 0,
     dailyMax: i.rateLimitDailyMax ?? null,
-    credentials: maskCredentials(i.credentials as Record<string, any>),
+    credentials: maskCredentials(openCredentials(i.credentials) as Record<string, any>),
     notes: i.notes ?? null,
     createdAt: i.createdAt,
     updatedAt: i.updatedAt,

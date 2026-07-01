@@ -10,6 +10,7 @@
 import { PrismaClient } from '@prisma/client';
 import type { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { createEvent } from '../../events/createEvent.js';
+import { openCredentials } from '../../security/secretVault.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import type { CarrierTrackingProviderRegistry } from './ProviderRegistry.js';
 import type { NormalizedTrackingStatus, TrackingPollResult } from './ICarrierTrackingProvider.js';
@@ -55,7 +56,7 @@ export class CarrierTrackingService {
 
     // Authenticate
     try {
-      const credentials = (integration.credentials as Record<string, unknown>) ?? {};
+      const credentials = openCredentials(integration.credentials);
       await provider.authenticate(credentials);
     } catch (err) {
       await this.recordIntegrationError(integrationId, err);
@@ -212,7 +213,7 @@ export class CarrierTrackingService {
     }
 
     const provider = this.providerRegistry.create(integration.providerType);
-    const credentials = (integration.credentials as Record<string, unknown>) ?? {};
+    const credentials = openCredentials(integration.credentials);
 
     try {
       await provider.authenticate(credentials);

@@ -1,4 +1,5 @@
 import { Prisma, PrismaClient, CarrierTrackingIntegration } from '@prisma/client';
+import { sealCredentials } from '../security/secretVault.js';
 
 export interface CreateCarrierTrackingIntegrationDTO {
   carrierId: string;
@@ -95,7 +96,7 @@ export class CarrierTrackingIntegrationRepository implements ICarrierTrackingInt
         carrierId: data.carrierId,
         providerType: data.providerType,
         status: data.status ?? 'pending_setup',
-        credentials: data.credentials ? (data.credentials as Prisma.InputJsonValue) : undefined,
+        credentials: (sealCredentials(data.credentials) as Prisma.InputJsonValue) ?? undefined,
         webhookEnabled: data.webhookEnabled ?? false,
         webhookSecret: data.webhookSecret ?? undefined,
         webhookEndpointId: data.webhookEndpointId ?? undefined,
@@ -108,9 +109,13 @@ export class CarrierTrackingIntegrationRepository implements ICarrierTrackingInt
   }
 
   async update(id: string, data: UpdateCarrierTrackingIntegrationDTO): Promise<CarrierTrackingIntegration> {
+    const dataToWrite: Record<string, unknown> = { ...data };
+    if (data.credentials !== undefined) {
+      dataToWrite.credentials = sealCredentials(data.credentials) ?? Prisma.JsonNull;
+    }
     return this.prisma.carrierTrackingIntegration.update({
       where: { id },
-      data: data as Record<string, unknown>,
+      data: dataToWrite,
     });
   }
 
