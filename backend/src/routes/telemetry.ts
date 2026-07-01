@@ -4,16 +4,50 @@ export default async function telemetryRoutes(server: FastifyInstance) {
   const prisma = server.prisma;
 
   // GET /api/v1/shipments/:id/telemetry — Sensor time-series for a shipment
-  server.get('/api/v1/shipments/:id/telemetry', async (req, reply) => {
+  server.get('/api/v1/shipments/:id/telemetry', {
+    schema: {
+      tags: ['Telemetry'],
+      summary: 'Get sensor time-series readings for a shipment',
+      params: {
+        type: 'object',
+        properties: { id: { type: 'string', format: 'uuid' } },
+        required: ['id'],
+      },
+      querystring: {
+        type: 'object',
+        properties: {
+          since: { type: 'string', format: 'date-time', description: 'Only return readings at or after this time' },
+          until: { type: 'string', format: 'date-time', description: 'Only return readings at or before this time' },
+          limit: { type: 'string', description: 'Max readings to return (default 500, max 2000)' },
+        },
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            data: { type: ['object', 'null'] },
+            error: { type: ['string', 'null'] },
+          },
+        },
+      },
+    },
+  }, async (req, reply) => {
     const { id } = req.params as { id: string };
-    const query = req.query as { since?: string; limit?: string };
+    const query = req.query as { since?: string; until?: string; limit?: string };
     const limit = Math.min(parseInt(query.limit || '500'), 2000);
 
     try {
       const readings = await prisma.sensorReading.findMany({
         where: {
           shipmentId: id,
-          ...(query.since ? { eventTime: { gte: new Date(query.since) } } : {}),
+          ...(query.since || query.until
+            ? {
+                eventTime: {
+                  ...(query.since ? { gte: new Date(query.since) } : {}),
+                  ...(query.until ? { lte: new Date(query.until) } : {}),
+                },
+              }
+            : {}),
         },
         orderBy: { eventTime: 'asc' },
         take: limit,
@@ -46,16 +80,50 @@ export default async function telemetryRoutes(server: FastifyInstance) {
   });
 
   // GET /api/v1/orders/:id/telemetry — Sensor time-series for an order
-  server.get('/api/v1/orders/:id/telemetry', async (req, reply) => {
+  server.get('/api/v1/orders/:id/telemetry', {
+    schema: {
+      tags: ['Telemetry'],
+      summary: 'Get sensor time-series readings for an order',
+      params: {
+        type: 'object',
+        properties: { id: { type: 'string', format: 'uuid' } },
+        required: ['id'],
+      },
+      querystring: {
+        type: 'object',
+        properties: {
+          since: { type: 'string', format: 'date-time', description: 'Only return readings at or after this time' },
+          until: { type: 'string', format: 'date-time', description: 'Only return readings at or before this time' },
+          limit: { type: 'string', description: 'Max readings to return (default 500, max 2000)' },
+        },
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            data: { type: ['object', 'null'] },
+            error: { type: ['string', 'null'] },
+          },
+        },
+      },
+    },
+  }, async (req, reply) => {
     const { id } = req.params as { id: string };
-    const query = req.query as { since?: string; limit?: string };
+    const query = req.query as { since?: string; until?: string; limit?: string };
     const limit = Math.min(parseInt(query.limit || '500'), 2000);
 
     try {
       const readings = await prisma.sensorReading.findMany({
         where: {
           orderId: id,
-          ...(query.since ? { eventTime: { gte: new Date(query.since) } } : {}),
+          ...(query.since || query.until
+            ? {
+                eventTime: {
+                  ...(query.since ? { gte: new Date(query.since) } : {}),
+                  ...(query.until ? { lte: new Date(query.until) } : {}),
+                },
+              }
+            : {}),
         },
         orderBy: { eventTime: 'asc' },
         take: limit,
