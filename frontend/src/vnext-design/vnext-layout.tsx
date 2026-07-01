@@ -134,6 +134,9 @@ interface AppDef {
   label: string;
   basePath: string;
   sections: { title: string; items: NavItem[] }[];
+  // If set, the app is only shown/accessible when the user holds ANY of these
+  // permissions. Omitted = visible to every authenticated user (reads are open).
+  requiredAnyPermission?: string[];
 }
 
 const APPS: AppDef[] = [
@@ -265,6 +268,7 @@ const APPS: AppDef[] = [
   },
   {
     key: 'integrations', icon: Network, label: 'Integrations', basePath: '/integrations',
+    requiredAnyPermission: ['integrations:write', 'edi:write'],
     sections: [
       { title: 'Integrations', items: [
         { to: '/integrations', icon: LayoutDashboard, label: 'Overview', end: true },
@@ -280,6 +284,7 @@ const APPS: AppDef[] = [
   },
   {
     key: 'admin', icon: Shield, label: 'Admin', basePath: '/settings',
+    requiredAnyPermission: ['settings:write', 'users:write', 'roles:write'],
     sections: [
       { title: 'Settings', items: [
         { to: '/settings', icon: SettingsIcon, label: 'General', end: true },
@@ -327,14 +332,24 @@ export default function VNextLayout() {
   const theme = useThemeMode();
   const location = useLocation();
   const navigate = useNavigate();
-  const { user } = useCurrentUser();
+  const { user, hasPermission } = useCurrentUser();
 
   const initials = user
     ? `${(user.firstName?.[0] || user.email[0] || '').toUpperCase()}${(user.lastName?.[0] || '').toUpperCase()}`
     : '';
 
+  const canAccessApp = (app: AppDef) =>
+    !app.requiredAnyPermission || app.requiredAnyPermission.some(p => hasPermission(p));
+  const visibleApps = APPS.filter(canAccessApp);
+
   const activeAppKey = detectApp(location.pathname);
   const activeApp = APPS.find(a => a.key === activeAppKey) || APPS[0];
+
+  // Keep users out of apps they can't access (e.g. a dispatcher deep-linking to
+  // /settings). Wait for the user to load so admins aren't bounced mid-fetch.
+  useEffect(() => {
+    if (user && !canAccessApp(activeApp)) navigate('/');
+  }, [user, activeApp, navigate]);
 
   const switchApp = (app: AppDef) => {
     setAppGridOpen(false);
@@ -506,7 +521,7 @@ export default function VNextLayout() {
             <DialogTitle>Switch app</DialogTitle>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-            {APPS.map(app => {
+            {visibleApps.map(app => {
               const AppIcon = app.icon;
               const isActive = app.key === activeAppKey;
               return (
