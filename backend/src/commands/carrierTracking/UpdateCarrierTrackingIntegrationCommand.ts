@@ -1,8 +1,9 @@
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { Command } from '../types.js';
+import { sealCredentials } from '../../security/secretVault.js';
 
 export interface UpdateCarrierTrackingIntegrationPayload {
   id: string;
@@ -37,16 +38,23 @@ export class UpdateCarrierTrackingIntegrationCommandHandler extends BaseCommandH
   ): Promise<{ id: string }> {
     const { id, ...updateData } = command.payload;
 
+    // Encrypt credentials at rest before persisting.
+    const dataToWrite: Record<string, unknown> = { ...updateData };
+    if (updateData.credentials !== undefined) {
+      dataToWrite.credentials = sealCredentials(updateData.credentials) ?? Prisma.JsonNull;
+    }
+
     const before = await tx.carrierTrackingIntegration.findUniqueOrThrow({ where: { id } });
 
     const updated = await tx.carrierTrackingIntegration.update({
       where: { id },
-      data: updateData as Record<string, unknown>,
+      data: dataToWrite,
     });
 
-    // Build a changes object for the event payload
+    // Build a changes object for the event payload (never surface credentials).
     const changes: Record<string, { before: unknown; after: unknown }> = {};
     for (const key of Object.keys(updateData) as (keyof typeof updateData)[]) {
+      if (key === 'credentials') continue;
       const beforeVal = (before as Record<string, unknown>)[key];
       const afterVal = (updated as Record<string, unknown>)[key];
       if (JSON.stringify(beforeVal) !== JSON.stringify(afterVal)) {

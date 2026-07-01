@@ -168,13 +168,10 @@ export async function shipmentRoutes(server: FastifyInstance) {
         name: z.string().min(1),
         externalId: z.string().min(1),
       })).optional()
-    }).refine((data) => {
-      return (data.laneId) ||
-        (data.originId && data.destinationId) ||
-        (data.originData && data.destinationData);
-    }, {
-      message: "Provide laneId, both originId/destinationId, or both originData/destinationData"
     });
+    // No route requirement at create — a draft may be saved with a partial or
+    // absent route (lane / origin / destination). Completeness is enforced when
+    // the shipment leaves draft, via the readiness gate.
 
     const body = schema.parse((req as any).body);
     const orgId = req.orgId!;
@@ -357,14 +354,10 @@ export async function shipmentRoutes(server: FastifyInstance) {
         name: z.string().min(1),
         externalId: z.string().min(1),
       })).optional()
-    }).refine((data) => {
-      const hasRouteFields = data.laneId !== undefined || data.originId !== undefined || data.destinationId !== undefined;
-      if (!hasRouteFields) return true;
-      return (data.laneId && !data.originId && !data.destinationId) ||
-        (!data.laneId && data.originId && data.destinationId);
-    }, {
-      message: "Either laneId or both originId and destinationId must be provided"
     }).parse((req as any).body);
+    // No route requirement on edit — lane and origin/destination may coexist
+    // (a lane resolves to origin/destination), and a draft may hold a partial
+    // route. Completeness is enforced only at the ready transition.
 
     const orgId = req.orgId!;
     // Cross-tenant guard before we hit the command bus. If the row belongs

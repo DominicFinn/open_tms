@@ -69,8 +69,8 @@ export interface CreateShipmentResult {
   id: string;
   reference: string;
   status: string;
-  originId: string;
-  destinationId: string;
+  originId: string | null;
+  destinationId: string | null;
 }
 
 export const CREATE_SHIPMENT = 'shipment.create';
@@ -205,9 +205,8 @@ export class CreateShipmentCommandHandler extends BaseCommandHandler<CreateShipm
       }
     }
 
-    if (!finalOriginId || !finalDestinationId) {
-      throw new Error('Either laneId, both originId/destinationId, or both originData/destinationData must be provided');
-    }
+    // A draft may be created with a partial/absent route; completeness (lane OR
+    // origin+destination) is enforced only at the ready transition.
 
     const reference = body.reference && body.reference.trim().length > 0
       ? body.reference
@@ -226,8 +225,8 @@ export class CreateShipmentCommandHandler extends BaseCommandHandler<CreateShipm
         customerId: body.customerId,
         laneId: body.laneId,
         carrierId: body.carrierId,
-        originId: finalOriginId,
-        destinationId: finalDestinationId,
+        originId: finalOriginId ?? null,
+        destinationId: finalDestinationId ?? null,
         pickupDate: body.pickupDate ? new Date(body.pickupDate) : undefined,
         deliveryDate: body.deliveryDate ? new Date(body.deliveryDate) : undefined,
         pickupWindowStart: body.pickupWindowStart ? new Date(body.pickupWindowStart) : undefined,
@@ -299,8 +298,8 @@ export class CreateShipmentCommandHandler extends BaseCommandHandler<CreateShipm
       id: shipment.id,
       reference: shipment.reference,
       status: 'draft',
-      originId: finalOriginId,
-      destinationId: finalDestinationId,
+      originId: finalOriginId ?? null,
+      destinationId: finalDestinationId ?? null,
     };
   }
 

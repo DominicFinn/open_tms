@@ -128,6 +128,19 @@ const PROVIDERS: ProviderDef[] = [
     infoText: 'Get your API key at easypost.com/account',
   },
   {
+    key: 'aftership',
+    name: 'AfterShip',
+    icon: Inbox,
+    description: 'Tracking-only aggregator covering 900+ carriers through a single API key.',
+    supportsWebhook: true,
+    supportsPolling: true,
+    fields: [
+      { key: 'apiKey', label: 'API key', type: 'password', required: true, placeholder: 'Your AfterShip API key' },
+    ],
+    infoUrl: 'https://admin.aftership.com/settings/api-keys',
+    infoText: 'Get your API key at admin.aftership.com/settings/api-keys',
+  },
+  {
     key: 'edi_214',
     name: 'EDI 214',
     icon: Repeat,

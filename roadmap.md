@@ -734,15 +734,16 @@ Base login (email + password, JWT, admin password reset, RequireAuth guard, glob
 
 ## Priorities
 
-1. **Immediate:** **Track 1 (Brokerage)** - Broker entity model, margin tracking, quoting workflow. This unlocks the largest market segment currently unserved.
-2. **Immediate:** **Track 2 (Reporting)** - Executive dashboard, carrier scorecards, on-time %. The single biggest credibility gap in a demo.
-3. **Short term:** **Track 3 (Customer Portal)** - Customer user management, order entry, shipment tracking. Table stakes for any TMS.
-4. **Short term:** **Track 4 (Route Optimization)** - Multi-stop optimization, consolidation, mode selection. This is the ROI pitch.
-5. **Medium term:** **Track 5 (Cold Chain Completion)** - Regulatory audit trail UI, compliance reporting, cold chain dashboard. Finish what's started.
-6. **Medium term:** **Track 6 (Routes & Maps)** - Route lines on map, spatial indexing. Visual polish on existing infrastructure.
-7. **Medium-to-long term:** **Track 7 (WMS v1)** - Foundation WMS bolt-on. Unlocks true end-to-end coverage (order → warehouse → shipment → delivery) and is the single largest domain expansion on the roadmap. v1 sequence in `docs/WMS_SPECIFICATION.md`.
-8. **Long term:** **Track 7 (WMS v2)** - 3PL billing, VAS/kitting, parcel/rate-shop, serial tracking, appointment portal. Differentiation vs commercial tier-1.
-9. **Ongoing:** EDI hub completion, audit trail, SRE/observability, AI enhancements, warehouse app improvements.
+1. **NEXT (Immediate):** **Carrier API Integration** - Real-time shipment tracking through carrier APIs is table stakes. FedEx/UPS/DHL first-party tracking already exist (real, sandbox-ready). Expand with **multi-carrier aggregators** (EasyPost, AfterShip) so one integration pools dozens of carriers, then broaden. Poll + webhook, all sandbox/ngrok-testable. Landscape + selection in `docs/CARRIER_INTEGRATIONS.md`; testing in `docs/CARRIER_TESTING.md`.
+2. **Immediate:** **Track 1 (Brokerage)** - Broker entity model, margin tracking, quoting workflow. This unlocks the largest market segment currently unserved.
+3. **Immediate:** **Track 2 (Reporting)** - Executive dashboard, carrier scorecards, on-time %. The single biggest credibility gap in a demo.
+4. **Short term:** **Track 3 (Customer Portal)** - Customer user management, order entry, shipment tracking. Table stakes for any TMS.
+5. **Short term:** **Track 4 (Route Optimization)** - Multi-stop optimization, consolidation, mode selection. This is the ROI pitch.
+6. **Medium term:** **Track 5 (Cold Chain Completion)** - Regulatory audit trail UI, compliance reporting, cold chain dashboard. Finish what's started.
+7. **Medium term:** **Track 6 (Routes & Maps)** - Route lines on map, spatial indexing. Visual polish on existing infrastructure.
+8. **Medium-to-long term:** **Track 7 (WMS v1)** - Foundation WMS bolt-on. Unlocks true end-to-end coverage (order → warehouse → shipment → delivery) and is the single largest domain expansion on the roadmap. v1 sequence in `docs/WMS_SPECIFICATION.md`.
+9. **Long term:** **Track 7 (WMS v2)** - 3PL billing, VAS/kitting, parcel/rate-shop, serial tracking, appointment portal. Differentiation vs commercial tier-1.
+10. **Ongoing:** EDI hub completion, audit trail, SRE/observability, AI enhancements, warehouse app improvements.
 
 ---
 

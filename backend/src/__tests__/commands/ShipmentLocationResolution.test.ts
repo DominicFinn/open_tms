@@ -110,19 +110,21 @@ describe('CreateShipmentCommand — Location Auto-Resolution', () => {
     expect(mockTx.location.create).toHaveBeenCalledTimes(1); // Only destination created
   });
 
-  it('errors when no origin/destination provided in any form', async () => {
+  it('creates a draft with no route (route completeness is enforced at the ready gate, not create)', async () => {
     const { bus } = mockEventBus();
     const handler = new CreateShipmentCommandHandler(mockPrisma, bus, mockQueue);
 
     const result = await handler.execute(
       createTestCommand(CREATE_SHIPMENT, {
-        reference: 'SH-FAIL',
+        reference: 'SH-NOROUTE',
         customerId: 'cust-1',
       })
     );
 
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('originData/destinationData');
+    expect(result.success).toBe(true);
+    expect((result.data as any).originId).toBeNull();
+    expect((result.data as any).destinationId).toBeNull();
+    expect(result.events.some((e) => e.type === EVENT_TYPES.SHIPMENT_CREATED)).toBe(true);
   });
 
   it('emits LOCATION_CREATED events for auto-created locations then SHIPMENT_CREATED', async () => {

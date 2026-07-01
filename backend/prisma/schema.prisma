@@ -192,10 +192,13 @@ model Shipment {
   updatedAt           DateTime      @updatedAt
   customer            Customer      @relation(fields: [customerId], references: [id])
   customerId          String
-  origin              Location      @relation("Origin", fields: [originId], references: [id])
-  originId            String
-  destination         Location      @relation("Destination", fields: [destinationId], references: [id])
-  destinationId       String
+  // Nullable so a draft can be saved with a partial/absent route. Route
+  // completeness (a lane OR origin+destination) is enforced only when the
+  // shipment leaves draft, via the readiness gate.
+  origin              Location?     @relation("Origin", fields: [originId], references: [id])
+  originId            String?
+  destination         Location?     @relation("Destination", fields: [destinationId], references: [id])
+  destinationId       String?
 
   // Cutoff-at-risk monitoring: dedupes notifications, only re-fires on severity escalation
   lastCutoffRiskSeverity String?

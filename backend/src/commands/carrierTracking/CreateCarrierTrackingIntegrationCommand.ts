@@ -3,6 +3,7 @@ import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { Command } from '../types.js';
+import { sealCredentials } from '../../security/secretVault.js';
 
 export interface CreateCarrierTrackingIntegrationPayload {
   carrierId: string;
@@ -41,7 +42,7 @@ export class CreateCarrierTrackingIntegrationCommandHandler extends BaseCommandH
         carrierId,
         providerType,
         status: rest.status ?? 'pending_setup',
-        credentials: rest.credentials ? (rest.credentials as Prisma.InputJsonValue) : undefined,
+        credentials: (sealCredentials(rest.credentials) as Prisma.InputJsonValue) ?? undefined,
         webhookEnabled: rest.webhookEnabled ?? false,
         webhookSecret: rest.webhookSecret ?? undefined,
         pollingEnabled: rest.pollingEnabled ?? false,
