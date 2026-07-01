@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 
 import { API_URL } from '../api';
+import { useCurrentUser } from '../hooks/useCurrentUser';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -58,6 +59,7 @@ function carrierStatus(c: Carrier): { label: string; variant: StatusVariant } {
 
 export default function VNextCarriers() {
   const navigate = useNavigate();
+  const { hasPermission } = useCurrentUser();
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState<'table' | 'cards'>('cards');
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -158,10 +160,12 @@ export default function VNextCarriers() {
               <ListIcon className="h-4 w-4" />
             </Button>
           </div>
-          <Button variant="gradient" onClick={() => navigate('/carriers/create')}>
-            <Plus className="h-4 w-4" />
-            Add carrier
-          </Button>
+          {hasPermission('carriers:write') && (
+            <Button variant="gradient" onClick={() => navigate('/carriers/create')}>
+              <Plus className="h-4 w-4" />
+              Add carrier
+            </Button>
+          )}
         </div>
       </div>
 

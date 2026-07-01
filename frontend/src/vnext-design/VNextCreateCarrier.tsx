@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 
 import { API_URL } from '../api';
+import { useCurrentUser } from '../hooks/useCurrentUser';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DatePicker } from '@/components/ui/date-picker';
@@ -72,9 +73,9 @@ export default function VNextCreateCarrier() {
   const [archived, setArchived] = useState(false);
   const [notFound, setNotFound] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
-  // TODO(auth): derive from the logged-in user's role once the app attaches
-  // JWTs. Delete is an admin-only action; for now it is always offered.
-  const isAdmin = true;
+  const { hasPermission } = useCurrentUser();
+  const canWrite = hasPermission('carriers:write');
+  const canDelete = hasPermission('carriers:delete');
 
   useEffect(() => {
     if (!id) return;
@@ -226,9 +227,9 @@ export default function VNextCreateCarrier() {
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-3xl font-bold tracking-tight">{isEdit ? 'Edit carrier' : 'New carrier'}</h1>
-        {isEdit && (
+        {isEdit && (canWrite || canDelete) && (
           <div className="flex items-center gap-2">
-            {archived ? (
+            {canWrite && (archived ? (
               <Button variant="outline" onClick={handleUnarchive} disabled={actionBusy}>
                 <ArchiveRestore className="h-4 w-4" /> Unarchive
               </Button>
@@ -236,8 +237,8 @@ export default function VNextCreateCarrier() {
               <Button variant="outline" onClick={handleArchive} disabled={actionBusy}>
                 <Archive className="h-4 w-4" /> Archive
               </Button>
-            )}
-            {isAdmin && (
+            ))}
+            {canDelete && (
               <Button variant="outline" className="text-destructive hover:text-destructive" onClick={handleDelete} disabled={actionBusy}>
                 <Trash2 className="h-4 w-4" /> Delete
               </Button>
