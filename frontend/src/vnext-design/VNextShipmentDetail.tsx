@@ -91,6 +91,13 @@ import { useCurrentUser } from '../hooks/useCurrentUser';
 import { getDeviceImageUrl } from './deviceImages';
 import { keepMapSized } from '../lib/leafletMap';
 import {
+  TimeSeriesChart,
+  TelemetryPeriodFilter,
+  readingsToSeries,
+  computeTelemetryRange,
+  TelemetryPeriodKey,
+} from './TelemetryChart';
+import {
   SHIPMENT_STATUS_LABELS,
   allowedTransitions,
   canTransition,
@@ -118,51 +125,6 @@ const COLOR_SUCCESS = '#22c55e';
 const COLOR_WARNING = '#eab308';
 const COLOR_DESTRUCTIVE = '#ef4444';
 const COLOR_MUTED = '#94a3b8';
-
-// ─── Temperature Chart ──────────────────────────────────────────────────
-function ShipmentTempChart({ readings }: { readings: any[] }) {
-  const temps = readings.filter(r => r.temperature != null);
-  if (temps.length < 2) {
-    return (
-      <div className="flex flex-col items-center gap-2 py-8 text-muted-foreground">
-        <Thermometer className="h-8 w-8" />
-        <h3 className="text-base font-medium">Not enough data</h3>
-      </div>
-    );
-  }
-
-  const w = 600, h = 200, pad = 40;
-  const minT = Math.min(...temps.map(r => r.temperature));
-  const maxT = Math.max(...temps.map(r => r.temperature));
-  const range = maxT - minT || 1;
-
-  const points = temps.map((r: any, i: number) => ({
-    x: pad + (i / (temps.length - 1)) * (w - pad * 2),
-    y: pad + (1 - (r.temperature - minT) / range) * (h - pad * 2),
-    alert: r.isAlert,
-  }));
-
-  const line = points.map((p: any, i: number) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ');
-
-  return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="h-auto w-full">
-      <text x={pad} y={pad - 10} fill="currentColor" className="fill-muted-foreground text-[11px]">{maxT.toFixed(1)}°</text>
-      <text x={pad} y={h - pad + 16} fill="currentColor" className="fill-muted-foreground text-[11px]">{minT.toFixed(1)}°</text>
-      <line x1={pad} y1={pad} x2={pad} y2={h - pad} className="stroke-border" strokeWidth="1" />
-      <line x1={pad} y1={h - pad} x2={w - pad} y2={h - pad} className="stroke-border" strokeWidth="1" />
-      <path d={line} fill="none" className="stroke-primary" strokeWidth="2" />
-      {points.map((p: any, i: number) => (
-        <circle
-          key={i}
-          cx={p.x}
-          cy={p.y}
-          r={p.alert ? 5 : 3}
-          className={p.alert ? 'fill-destructive' : 'fill-primary'}
-        />
-      ))}
-    </svg>
-  );
-}
 
 // ─── Financials Tab ─────────────────────────────────────────────────────
 function FinancialsTab({ shipmentId }: { shipmentId: string }) {
@@ -273,13 +235,21 @@ function TelemetryTab({ shipmentId }: { shipmentId: string }) {
   const [telemetry, setTelemetry] = useState<any>(null);
   const [tLoading, setTLoading] = useState(true);
   const [tError, setTError] = useState('');
+  const [period, setPeriod] = useState<TelemetryPeriodKey>('all');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
+
+  const range = computeTelemetryRange(period, customFrom, customTo);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         setTLoading(true);
-        const res = await fetch(`${API_URL}/api/v1/shipments/${shipmentId}/telemetry`);
+        const params = new URLSearchParams({ limit: '2000' });
+        if (range.since) params.set('since', range.since);
+        if (range.until) params.set('until', range.until);
+        const res = await fetch(`${API_URL}/api/v1/shipments/${shipmentId}/telemetry?${params}`);
         if (!res.ok) throw new Error(`Failed to load telemetry (${res.status})`);
         const json = await res.json();
         if (json.error) throw new Error(json.error);
@@ -294,31 +264,39 @@ function TelemetryTab({ shipmentId }: { shipmentId: string }) {
       }
     })();
     return () => { cancelled = true; };
-  }, [shipmentId]);
+  }, [shipmentId, range.since, range.until]);
 
-  if (tLoading) {
-    return (
-      <div className="flex flex-col items-center gap-2 py-12 text-muted-foreground">
-        <Loader2 className="h-6 w-6 animate-spin" />
-        <h3 className="text-base font-medium">Loading telemetry...</h3>
-      </div>
-    );
-  }
+  const periodFilter = (
+    <TelemetryPeriodFilter
+      period={period}
+      onPeriodChange={setPeriod}
+      customFrom={customFrom}
+      customTo={customTo}
+      onCustomFromChange={setCustomFrom}
+      onCustomToChange={setCustomTo}
+    />
+  );
 
   if (tError) {
     return (
-      <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
-        <XCircle className="h-5 w-5" />
-        {tError}
+      <div className="space-y-4">
+        {periodFilter}
+        <div className="flex items-center gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+          <XCircle className="h-5 w-5" />
+          {tError}
+        </div>
       </div>
     );
   }
 
-  if (!telemetry) {
+  if (tLoading || !telemetry) {
     return (
-      <div className="flex flex-col items-center gap-2 py-12 text-muted-foreground">
-        <Thermometer className="h-8 w-8" />
-        <h3 className="text-base font-medium">No telemetry data</h3>
+      <div className="space-y-4">
+        {periodFilter}
+        <div className="flex flex-col items-center gap-2 py-12 text-muted-foreground">
+          <Loader2 className="h-6 w-6 animate-spin" />
+          <h3 className="text-base font-medium">Loading telemetry...</h3>
+        </div>
       </div>
     );
   }
@@ -341,8 +319,20 @@ function TelemetryTab({ shipmentId }: { shipmentId: string }) {
   });
   const trackerDevices = Array.from(deviceMap.values());
 
+  const tempSeries = readingsToSeries(readings, 'temperature');
+  const humiditySeries = readingsToSeries(readings, 'humidity');
+  const pressureSeries = readingsToSeries(readings, 'atmosphericPressure');
+  const batterySeries = readingsToSeries(readings, 'batteryLevel');
+
+  const thresholdReading = [...readings].reverse().find((r: any) => r.tempMin != null || r.tempMax != null);
+  const tempBand = thresholdReading
+    ? { min: thresholdReading.tempMin ?? null, max: thresholdReading.tempMax ?? null }
+    : null;
+
   return (
     <div className="space-y-6">
+      {periodFilter}
+
       {trackerDevices.length > 0 && (
         <Card>
           <CardHeader><CardTitle className="text-base">Tracking Devices</CardTitle></CardHeader>
@@ -405,12 +395,54 @@ function TelemetryTab({ shipmentId }: { shipmentId: string }) {
         </Card>
       </div>
 
-      <Card>
-        <CardHeader><CardTitle className="text-base">Temperature</CardTitle></CardHeader>
-        <CardContent>
-          <ShipmentTempChart readings={readings} />
-        </CardContent>
-      </Card>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader><CardTitle className="text-base">Temperature over time</CardTitle></CardHeader>
+          <CardContent>
+            <TimeSeriesChart
+              points={tempSeries}
+              unit="°"
+              band={tempBand}
+              lineClassName="stroke-primary"
+              pointClassName="fill-primary"
+            />
+            {tempBand && (tempBand.min != null || tempBand.max != null) && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Shaded band shows the acceptable range
+                {tempBand.min != null ? ` (${tempBand.min}°` : ' (up to'}
+                {tempBand.max != null ? ` to ${tempBand.max}°)` : ')'}.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        {humiditySeries.length >= 2 && (
+          <Card>
+            <CardHeader><CardTitle className="text-base">Humidity over time</CardTitle></CardHeader>
+            <CardContent>
+              <TimeSeriesChart points={humiditySeries} unit="%" lineClassName="stroke-info" pointClassName="fill-info" />
+            </CardContent>
+          </Card>
+        )}
+
+        {pressureSeries.length >= 2 && (
+          <Card>
+            <CardHeader><CardTitle className="text-base">Atmospheric pressure over time</CardTitle></CardHeader>
+            <CardContent>
+              <TimeSeriesChart points={pressureSeries} unit=" hPa" lineClassName="stroke-warning" pointClassName="fill-warning" />
+            </CardContent>
+          </Card>
+        )}
+
+        {batterySeries.length >= 2 && (
+          <Card>
+            <CardHeader><CardTitle className="text-base">Battery over time</CardTitle></CardHeader>
+            <CardContent>
+              <TimeSeriesChart points={batterySeries} unit="%" lineClassName="stroke-success" pointClassName="fill-success" />
+            </CardContent>
+          </Card>
+        )}
+      </div>
 
       <Card>
         <CardHeader><CardTitle className="text-base">Recent Readings</CardTitle></CardHeader>

@@ -3,7 +3,6 @@ import { Link, useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
   Activity,
-  Thermometer,
   MapPin,
   Loader2,
   Link as LinkIcon,
@@ -12,6 +11,7 @@ import {
 
 import { API_URL } from '../api';
 import { getDeviceImageUrl } from './deviceImages';
+import { TimeSeriesChart, readingsToSeries } from './TelemetryChart';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -30,12 +30,14 @@ interface SensorReading {
   temperature: number | null;
   humidity: number | null;
   batteryLevel: number | null;
-  light: number | null;
-  impact: number | null;
+  lightLevel: number | null;
+  impactG: number | null;
+  tempMin: number | null;
+  tempMax: number | null;
   lat: number | null;
   lng: number | null;
   isAlert: boolean;
-  recordedAt: string;
+  eventTime: string;
 }
 
 interface DeviceEvent {
@@ -87,50 +89,6 @@ function relativeTime(dateStr: string | null): string {
   const hours = Math.floor(mins / 60);
   if (hours < 24) return `${hours}h ago`;
   return new Date(dateStr).toLocaleDateString();
-}
-
-function TempChart({ readings }: { readings: SensorReading[] }) {
-  const temps = readings.filter(r => r.temperature != null);
-  if (temps.length < 2) {
-    return (
-      <div className="flex flex-col items-center gap-2 py-8 text-muted-foreground">
-        <Thermometer className="h-8 w-8" />
-        <h3 className="text-sm font-medium">Not enough data</h3>
-      </div>
-    );
-  }
-
-  const w = 600, h = 200, pad = 40;
-  const minT = Math.min(...temps.map(r => r.temperature!));
-  const maxT = Math.max(...temps.map(r => r.temperature!));
-  const range = maxT - minT || 1;
-
-  const points = temps.map((r, i) => ({
-    x: pad + (i / (temps.length - 1)) * (w - pad * 2),
-    y: pad + (1 - (r.temperature! - minT) / range) * (h - pad * 2),
-    alert: r.isAlert,
-  }));
-
-  const line = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ');
-
-  return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="h-auto w-full">
-      <text x={pad} y={pad - 10} className="fill-muted-foreground text-[11px]">{maxT.toFixed(1)}°</text>
-      <text x={pad} y={h - pad + 16} className="fill-muted-foreground text-[11px]">{minT.toFixed(1)}°</text>
-      <line x1={pad} y1={pad} x2={pad} y2={h - pad} className="stroke-border" strokeWidth="1" />
-      <line x1={pad} y1={h - pad} x2={w - pad} y2={h - pad} className="stroke-border" strokeWidth="1" />
-      <path d={line} fill="none" className="stroke-primary" strokeWidth="2" />
-      {points.map((p, i) => (
-        <circle
-          key={i}
-          cx={p.x}
-          cy={p.y}
-          r={p.alert ? 5 : 3}
-          className={p.alert ? 'fill-destructive' : 'fill-primary'}
-        />
-      ))}
-    </svg>
-  );
 }
 
 function categoryVariant(category: string): 'destructive' | 'warning' | 'info' | 'secondary' {
@@ -253,7 +211,16 @@ export default function VNextDeviceDetail() {
               <span className="text-sm text-muted-foreground">{readings.length} readings</span>
             </CardHeader>
             <CardContent>
-              <TempChart readings={readings} />
+              <TimeSeriesChart
+                points={readingsToSeries(readings, 'temperature')}
+                unit="°"
+                band={(() => {
+                  const t = [...readings].find(r => r.tempMin != null || r.tempMax != null);
+                  return t ? { min: t.tempMin ?? null, max: t.tempMax ?? null } : null;
+                })()}
+                lineClassName="stroke-primary"
+                pointClassName="fill-primary"
+              />
             </CardContent>
             <CardContent className="p-0">
               <Table>
@@ -272,12 +239,12 @@ export default function VNextDeviceDetail() {
                 <TableBody>
                   {readings.slice(0, 20).map(r => (
                     <TableRow key={r.id}>
-                      <TableCell className="text-sm">{new Date(r.recordedAt).toLocaleString()}</TableCell>
+                      <TableCell className="text-sm">{new Date(r.eventTime).toLocaleString()}</TableCell>
                       <TableCell>{r.temperature != null ? `${r.temperature}°` : '-'}</TableCell>
                       <TableCell>{r.humidity != null ? `${r.humidity}%` : '-'}</TableCell>
                       <TableCell>{r.batteryLevel != null ? `${r.batteryLevel}%` : '-'}</TableCell>
-                      <TableCell>{r.light != null ? r.light : '-'}</TableCell>
-                      <TableCell>{r.impact != null ? r.impact : '-'}</TableCell>
+                      <TableCell>{r.lightLevel != null ? r.lightLevel : '-'}</TableCell>
+                      <TableCell>{r.impactG != null ? r.impactG : '-'}</TableCell>
                       <TableCell className="text-xs">
                         {r.lat != null && r.lng != null ? `${r.lat.toFixed(4)}, ${r.lng.toFixed(4)}` : '-'}
                       </TableCell>
