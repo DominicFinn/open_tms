@@ -57,6 +57,7 @@ export const EVENT_TYPES = {
   CARRIER_ARCHIVED: 'carrier.archived',
   CARRIER_UNARCHIVED: 'carrier.unarchived',
   CARRIER_DELETED: 'carrier.deleted',
+  CARRIER_USERS_NOTIFIED: 'carrier.users_notified',
 
   // Customers
   CUSTOMER_CREATED: 'customer.created',
