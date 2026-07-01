@@ -99,23 +99,33 @@ export default function VNextCreateCarrier() {
 
   const handleSubmit = async () => {
     setSubmitError('');
+    if (!name.trim()) {
+      setSubmitError('Carrier name is required.');
+      return;
+    }
     setSubmitting(true);
     try {
-      const body: any = {
-        name, mcNumber, dotNumber, contactName, contactEmail: email, contactPhone: phone,
+      // Only send fields that have a value — blank optional fields (e.g. no
+      // email) must be omitted, not sent as "" (which fails format validation).
+      const raw: Record<string, any> = {
+        mcNumber, dotNumber, contactName, contactEmail: email, contactPhone: phone,
         address1, address2, city, state, postalCode, country,
-        paymentTermsDays: parseInt(paymentTermsDays) || 30,
         currency: carrierCurrency,
       };
+      const body: any = { name: name.trim(), paymentTermsDays: parseInt(paymentTermsDays) || 30 };
+      for (const [k, v] of Object.entries(raw)) {
+        if (typeof v === 'string' ? v.trim() !== '' : v != null) body[k] = v;
+      }
       const url = isEdit ? `${API_URL}/api/v1/carriers/${id}` : `${API_URL}/api/v1/carriers`;
       const res = await fetch(url, {
         method: isEdit ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      if (!res.ok) throw new Error('Failed to save carrier');
-      const json = await res.json();
-      if (json.error) throw new Error(json.error);
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json.error) {
+        throw new Error(json.error || `Failed to save carrier (HTTP ${res.status})`);
+      }
       const newId = json.data?.id ?? id;
       const label = json.data?.name || name || newId?.slice(0, 8);
       if (isEdit) {
@@ -164,8 +174,9 @@ export default function VNextCreateCarrier() {
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-3">
           <div className="space-y-2 md:col-span-3">
-            <Label>Name</Label>
-            <Input type="text" placeholder="Carrier name" value={name} onChange={e => setName(e.target.value)} />
+            <Label>Name <span className="text-destructive">*</span></Label>
+            <Input type="text" placeholder="Carrier name" value={name} onChange={e => setName(e.target.value)} required aria-required />
+            <p className="text-xs text-muted-foreground">Name is the only required field. Everything else is optional.</p>
           </div>
           <div className="space-y-2">
             <Label>MC number</Label>

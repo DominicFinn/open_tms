@@ -9,6 +9,11 @@ import { UPDATE_CARRIER } from '../commands/carriers/UpdateCarrierCommand.js';
 import { ARCHIVE_CARRIER } from '../commands/carriers/ArchiveCarrierCommand.js';
 import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 
+// Treat an empty string as "not provided" so a blank optional field (e.g. a
+// carrier with no email yet) doesn't fail format validation.
+const emptyToUndef = <T extends z.ZodTypeAny>(schema: T) =>
+  z.preprocess((v) => (v === '' ? undefined : v), schema);
+
 export async function carrierRoutes(server: FastifyInstance) {
   const carriersRepo = container.resolve<ICarriersRepository>(TOKENS.ICarriersRepository);
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
@@ -41,9 +46,10 @@ export async function carrierRoutes(server: FastifyInstance) {
         name: z.string().min(1),
         mcNumber: z.string().optional(),
         dotNumber: z.string().optional(),
-        scacCode: z.string().max(4).optional(),
+        scacCode: emptyToUndef(z.string().max(4).optional()),
         contactName: z.string().optional(),
-        contactEmail: z.string().email().optional(),
+        // Optional — a blank email must not fail validation.
+        contactEmail: emptyToUndef(z.string().email().optional()),
         contactPhone: z.string().optional(),
         address1: z.string().optional(),
         address2: z.string().optional(),
@@ -51,6 +57,8 @@ export async function carrierRoutes(server: FastifyInstance) {
         state: z.string().optional(),
         postalCode: z.string().optional(),
         country: z.string().optional(),
+        paymentTermsDays: z.coerce.number().int().nonnegative().optional(),
+        currency: z.string().optional(),
         validationTier: z.string().optional(),
         registrationChecked: z.boolean().optional(),
         insuranceDocReceived: z.boolean().optional(),
@@ -58,7 +66,7 @@ export async function carrierRoutes(server: FastifyInstance) {
         identityConfirmed: z.boolean().optional(),
         complianceChecked: z.boolean().optional(),
         validationNotes: z.string().optional(),
-        validatedAt: z.string().datetime().optional(),
+        validatedAt: emptyToUndef(z.string().datetime().optional()),
         validatedBy: z.string().optional()
       })
       .parse((req as any).body);
@@ -90,9 +98,9 @@ export async function carrierRoutes(server: FastifyInstance) {
       name: z.string().min(1).optional(),
       mcNumber: z.string().optional(),
       dotNumber: z.string().optional(),
-      scacCode: z.string().max(4).optional(),
+      scacCode: emptyToUndef(z.string().max(4).optional()),
       contactName: z.string().optional(),
-      contactEmail: z.string().email().optional(),
+      contactEmail: emptyToUndef(z.string().email().optional()),
       contactPhone: z.string().optional(),
       address1: z.string().optional(),
       address2: z.string().optional(),
@@ -100,6 +108,8 @@ export async function carrierRoutes(server: FastifyInstance) {
       state: z.string().optional(),
       postalCode: z.string().optional(),
       country: z.string().optional(),
+      paymentTermsDays: z.coerce.number().int().nonnegative().optional(),
+      currency: z.string().optional(),
       validationTier: z.string().optional(),
       registrationChecked: z.boolean().optional(),
       insuranceDocReceived: z.boolean().optional(),
@@ -107,7 +117,7 @@ export async function carrierRoutes(server: FastifyInstance) {
       identityConfirmed: z.boolean().optional(),
       complianceChecked: z.boolean().optional(),
       validationNotes: z.string().optional(),
-      validatedAt: z.string().datetime().optional(),
+      validatedAt: emptyToUndef(z.string().datetime().optional()),
       validatedBy: z.string().optional()
     }).parse((req as any).body);
 
