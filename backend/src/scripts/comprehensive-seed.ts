@@ -133,6 +133,7 @@ async function wipe() {
   await prisma.shipmentStop.deleteMany();
   await prisma.shipmentReadModel.deleteMany();
   await prisma.shipment.deleteMany();
+  await prisma.shipmentType.deleteMany();
 
   await prisma.pendingLaneRequest.deleteMany();
   await prisma.orderReadModel.deleteMany();
@@ -1508,7 +1509,31 @@ async function seedBulkOrders(
   return created;
 }
 
-// ─── Shipments with Stops + Loads + OrderShipment links ─────────────────────
+// ─── Shipment Types ─────────────────────────────────────────────────────────
+
+async function seedShipmentTypes() {
+  const defs = [
+    { key: 'standard', name: 'Standard', icon: 'local_shipping', color: '#6366F1', description: 'General dry freight.', defaults: {} },
+    { key: 'refrigerated', name: 'Refrigerated', icon: 'ac_unit', color: '#3b82f6', description: 'Cold chain 2-8°C.', defaults: { temperatureControlled: true, tempMode: 'refrigerated' } },
+    { key: 'frozen', name: 'Frozen', icon: 'severe_cold', color: '#06b6d4', description: 'Cold chain frozen.', defaults: { temperatureControlled: true, tempMode: 'frozen' } },
+    { key: 'hazmat', name: 'Hazmat', icon: 'warning', color: '#ef4444', description: 'Hazardous materials.', defaults: { hazmat: true } },
+    { key: 'ltl', name: 'LTL', icon: 'inventory_2', color: '#8b5cf6', description: 'Less-than-truckload.', defaults: { mode: 'LTL' } },
+  ];
+  const byKey: Record<string, any> = {};
+  for (const d of defs) {
+    // requiredFields kept empty so the readiness gate (customer, route, carrier,
+    // dates, reference) is the only thing to satisfy during lifecycle testing.
+    byKey[d.key] = await prisma.shipmentType.create({
+      data: { name: d.name, icon: d.icon, color: d.color, description: d.description, defaults: d.defaults, requiredFields: [], isBuiltIn: true },
+    });
+  }
+  return byKey;
+}
+
+// ─── Shipments with Stops + OrderShipment links ─────────────────────────────
+// Fresh, clean DRAFT shipments for lifecycle testing: real customer + origin/
+// destination locations, a shipment type, and cold-chain profile where relevant.
+// Deliberately NO carrier, NO IoT device, NO tracking — the tester assigns those.
 
 async function seedShipments(
   orders: any[],
@@ -1516,6 +1541,7 @@ async function seedShipments(
   carriers: any[],
   locations: any[],
   coldChainProfiles: any[],
+  shipmentTypes: Record<string, any>,
   orgId: string,
 ) {
   const created: any[] = [];
@@ -1528,25 +1554,14 @@ async function seedShipments(
   const refrigProfile = coldChainProfiles.find((p) => p.name.startsWith('Refrigerated'));
   const ultraColdProfile = coldChainProfiles.find((p) => p.name.startsWith('Ultra-Cold'));
 
+  // Silence unused-parameter lint now that shipments carry no carrier/lane.
+  void lanes; void carriers;
+
   let refCounter = 1;
   for (const order of shippableOrders) {
-    const lane = lanes.find((l) => l.originId === order.originId && l.destinationId === order.destinationId);
-    // Pick a carrier with a lane contract
-    let carrier: any = null;
-    if (lane) {
-      const lc = await prisma.laneCarrier.findFirst({ where: { laneId: lane.id, assigned: true } });
-      if (lc) carrier = carriers.find((c) => c.id === lc.carrierId);
-    }
-    if (!carrier) carrier = pick(carriers);
+    const status = 'draft'; // fresh shipments start in draft for lifecycle testing
 
-    const status =
-      order.deliveryStatus === 'delivered' ? 'delivered'
-      : order.deliveryStatus === 'in_transit' ? 'in_transit'
-      : order.deliveryStatus === 'exception' ? 'exception'
-      : order.deliveryStatus === 'assigned' ? 'in_transit'
-      : 'draft';
-
-    // Cold chain profile based on temp
+    // Cold chain profile based on temp (backing data — kept even in draft).
     let profileId: string | null = null;
     let effMin: number | null = null;
     let effMax: number | null = null;
@@ -1561,29 +1576,40 @@ async function seedShipments(
       effMax = profile.maxTemperature;
       effAlertMin = profile.alertMinTemperature;
       effAlertMax = profile.alertMaxTemperature;
-      disposition = status === 'delivered' ? 'released' : 'monitoring';
+      disposition = 'monitoring';
     } else if (order.temperatureControl === 'refrigerated') {
       profileId = refrigProfile.id;
       effMin = refrigProfile.minTemperature;
       effMax = refrigProfile.maxTemperature;
       effAlertMin = refrigProfile.alertMinTemperature;
       effAlertMax = refrigProfile.alertMaxTemperature;
-      disposition = status === 'delivered' ? 'released' : 'monitoring';
+      disposition = 'monitoring';
     }
+
+    // Shipment type variety from the order's characteristics.
+    const typeKey = order.requiresHazmat ? 'hazmat'
+      : order.temperatureControl === 'frozen' ? 'frozen'
+      : order.temperatureControl === 'refrigerated' ? 'refrigerated'
+      : order.serviceLevel === 'LTL' ? 'ltl'
+      : 'standard';
+    const shipmentTypeId = shipmentTypes[typeKey]?.id ?? null;
 
     const shipment = await prisma.shipment.create({
       data: {
         orgId,
         reference: `SHP-${String(refCounter++).padStart(5, '0')}`,
         status,
+        shipmentTypeId,
         pickupDate: order.requestedPickupDate,
         deliveryDate: order.requestedDeliveryDate,
-        proNumber: `PRO-${randomBytes(4).toString('hex').toUpperCase()}`,
         customerId: order.customerId,
         originId: order.originId,
         destinationId: order.destinationId,
-        laneId: lane?.id || null,
-        carrierId: carrier.id,
+        // No carrier, lane, tracking number, or launch — the tester assigns these.
+        laneId: null,
+        carrierId: null,
+        trackingNumber: null,
+        launchedAt: null,
         coldChainProfileId: profileId,
         effectiveMinTemp: effMin,
         effectiveMaxTemp: effMax,
@@ -1591,8 +1617,6 @@ async function seedShipments(
         effectiveAlertMaxTemp: effAlertMax,
         coldChainDisposition: disposition,
         dispositionSetAt: disposition !== 'not_applicable' ? new Date() : null,
-        trackingNumber: `TRK${randomBytes(5).toString('hex').toUpperCase()}`,
-        launchedAt: status !== 'draft' ? (order.requestedPickupDate || daysAgo(1)) : null,
         items: {
           totalWeight: 2500,
           totalPallets: 10,
@@ -1600,77 +1624,37 @@ async function seedShipments(
       },
     });
 
-    // Stops: pickup + delivery
-    const pickupActual = order.requestedPickupDate || daysAgo(1);
+    // Stops: pickup + delivery (both pending — nothing has happened yet).
     const pickup = await prisma.shipmentStop.create({
       data: {
         shipmentId: shipment.id,
         locationId: order.originId,
         sequenceNumber: 1,
         stopType: 'pickup',
-        status: status === 'delivered' || status === 'in_transit' ? 'completed' : 'pending',
+        status: 'pending',
         estimatedArrival: order.requestedPickupDate,
-        actualArrival: status !== 'draft' ? pickupActual : null,
-        actualDeparture: status !== 'draft' ? pickupActual : null,
         geofenceEnabled: true,
         geofenceRadius: 250,
         instructions: 'Check in at dock office. Bring BOL.',
       },
     });
-    const deliveryActual = order.deliveredAt || order.requestedDeliveryDate || daysAgo(0);
     const delivery = await prisma.shipmentStop.create({
       data: {
         shipmentId: shipment.id,
         locationId: order.destinationId,
         sequenceNumber: 2,
         stopType: 'delivery',
-        status: status === 'delivered' ? 'completed' : 'pending',
+        status: 'pending',
         estimatedArrival: order.requestedDeliveryDate,
-        actualArrival: status === 'delivered' ? deliveryActual : null,
-        actualDeparture: status === 'delivered' ? deliveryActual : null,
         geofenceEnabled: true,
         geofenceRadius: 250,
-        instructions: status === 'delivered' ? 'Delivered to receiving.' : 'Call ahead 30 min. Signature required.',
-        signatureUrl: status === 'delivered' ? 'demo-signature.png' : null,
+        instructions: 'Call ahead 30 min. Signature required.',
       },
     });
 
-    // Link delivery stop to the order
-    await prisma.order.update({
-      where: { id: order.id },
-      data: { deliveryStopId: delivery.id },
-    });
-
-    // Order <-> Shipment link
-    await prisma.orderShipment.create({
-      data: { orderId: order.id, shipmentId: shipment.id },
-    });
-
-    // Load
-    const vehicle = await prisma.vehicle.findFirst({ where: { carrierId: carrier.id } });
-    const driver = await prisma.driver.findFirst({ where: { carrierId: carrier.id } });
-    if (vehicle && driver) {
-      await prisma.load.create({
-        data: {
-          shipmentId: shipment.id,
-          vehicleId: vehicle.id,
-          driverId: driver.id,
-          assignedAt: status !== 'draft' ? daysAgo(2) : null,
-        },
-      });
-    }
-
-    // Shipment events (for in_transit)
-    if (status === 'in_transit' || status === 'exception') {
-      await prisma.shipmentEvent.create({
-        data: {
-          shipmentId: shipment.id,
-          eventType: 'status_change',
-          eventTime: daysAgo(1),
-          locationSummary: `Picked up at ${order.originId}`,
-        },
-      });
-    }
+    // Link delivery stop to the order + order<->shipment junction.
+    await prisma.order.update({ where: { id: order.id }, data: { deliveryStopId: delivery.id } });
+    await prisma.orderShipment.create({ data: { orderId: order.id, shipmentId: shipment.id } });
 
     created.push({ shipment, order, pickup, delivery });
   }
@@ -2824,33 +2808,22 @@ async function main() {
   const orders = await seedOrders(customers, locations, palletTypes, org.id);
   console.log(`✓ Orders: ${orders.length}`);
 
-  console.log('Seeding shipments + stops + loads...');
-  const shipmentRecords = await seedShipments(orders, lanes, carriers, locations, ccProfiles, org.id);
-  console.log(`✓ Shipments: ${shipmentRecords.length}`);
+  console.log('Seeding shipment types...');
+  const shipmentTypes = await seedShipmentTypes();
+  console.log(`✓ Shipment types: ${Object.keys(shipmentTypes).length}`);
 
-  console.log('Seeding devices + sensor readings...');
-  const devices = await seedDevices(shipmentRecords, org.id);
-  console.log(`✓ Devices: ${devices.length}`);
+  console.log('Seeding fresh draft shipments + stops...');
+  const shipmentRecords = await seedShipments(orders, lanes, carriers, locations, ccProfiles, shipmentTypes, org.id);
+  console.log(`✓ Shipments (draft): ${shipmentRecords.length}`);
 
-  console.log('Seeding tenders + offers + bids...');
-  const tenders = await seedTenders(shipmentRecords, carriers, users[1].id);
-  console.log(`✓ Tenders: ${tenders.length}`);
-
-  console.log('Seeding charges + financial summaries...');
-  await seedCharges(shipmentRecords, org.id);
-  console.log('✓ Charges + summaries');
+  // Fresh draft shipments carry no carrier / IoT device / tracking, so the
+  // in-flight demo seeders (devices, tenders, charges, AR/AP invoices) are
+  // intentionally skipped — testers drive shipments through the lifecycle and
+  // assign carriers/devices to generate this data themselves.
 
   console.log('Seeding quotes...');
   await seedQuotes(customers, locations, org.id, users[4].id);
   console.log('✓ Quotes');
-
-  console.log('Seeding invoices (AR)...');
-  await seedInvoices(shipmentRecords, org.id);
-  console.log('✓ Invoices');
-
-  console.log('Seeding carrier invoices (AP)...');
-  await seedCarrierInvoices(shipmentRecords, org.id);
-  console.log('✓ Carrier invoices');
 
   console.log('Seeding issues + comments + labels...');
   await seedIssues(org.id, shipmentRecords, labels, users[1].id);
