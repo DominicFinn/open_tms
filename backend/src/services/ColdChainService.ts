@@ -1,7 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { createHash, randomUUID } from 'crypto';
 
-/** Default temperature ranges for orders with temperatureControl but no profile. */
+/** Default temperature ranges by order temperatureControl. */
 const TEMP_DEFAULTS: Record<string, { min: number; max: number; alertMin: number; alertMax: number }> = {
   refrigerated: { min: 2, max: 8, alertMin: 3, alertMax: 7 },
   frozen: { min: -25, max: -18, alertMin: -23, alertMax: -20 },
@@ -12,7 +12,6 @@ export interface EffectiveRange {
   effectiveMaxTemp: number | null;
   effectiveAlertMinTemp: number | null;
   effectiveAlertMaxTemp: number | null;
-  profileName: string | null;
 }
 
 export interface TemperatureReadingParams {
@@ -22,7 +21,6 @@ export interface TemperatureReadingParams {
   orderId?: string;
   trackableUnitId?: string;
   temperature: number;
-  humidity?: number;
   lat?: number;
   lng?: number;
   recordedAt: Date;
@@ -56,13 +54,11 @@ export class ColdChainService {
    * Compute effective temperature range for a shipment from its orders.
    * Takes the widest bounds (lowest min, highest max) from all orders that
    * have temperature requirements (refrigerated or frozen).
-   * If a ColdChainProfile is assigned, its thresholds take precedence.
    */
   async computeEffectiveRange(shipmentId: string): Promise<EffectiveRange> {
     const shipment = await this.prisma.shipment.findUnique({
       where: { id: shipmentId },
       include: {
-        coldChainProfile: true,
         orderShipments: {
           include: { order: true },
         },
@@ -73,19 +69,7 @@ export class ColdChainService {
       throw new Error(`Shipment not found: ${shipmentId}`);
     }
 
-    // If a ColdChainProfile is explicitly assigned, use its values.
-    if (shipment.coldChainProfile) {
-      const p = shipment.coldChainProfile;
-      return {
-        effectiveMinTemp: p.minTemperature,
-        effectiveMaxTemp: p.maxTemperature,
-        effectiveAlertMinTemp: p.alertMinTemperature,
-        effectiveAlertMaxTemp: p.alertMaxTemperature,
-        profileName: p.name,
-      };
-    }
-
-    // Otherwise derive from linked orders' temperatureControl.
+    // Derive from linked orders' temperatureControl.
     let minTemp: number | null = null;
     let maxTemp: number | null = null;
     let alertMinTemp: number | null = null;
@@ -112,7 +96,6 @@ export class ColdChainService {
         effectiveMaxTemp: null,
         effectiveAlertMinTemp: null,
         effectiveAlertMaxTemp: null,
-        profileName: null,
       };
     }
 
@@ -121,13 +104,12 @@ export class ColdChainService {
       effectiveMaxTemp: maxTemp,
       effectiveAlertMinTemp: alertMinTemp,
       effectiveAlertMaxTemp: alertMaxTemp,
-      profileName: null,
     };
   }
 
   /**
    * Update the shipment with computed effective temperature range.
-   * Called when orders are added/removed or profile is changed.
+   * Called when orders are added/removed.
    */
   async updateShipmentEffectiveRange(shipmentId: string): Promise<void> {
     const range = await this.computeEffectiveRange(shipmentId);
@@ -179,21 +161,21 @@ export class ColdChainService {
       throw new Error(`Shipment not found: ${params.shipmentId}`);
     }
 
-    const profileMinTemp = shipment.effectiveMinTemp;
-    const profileMaxTemp = shipment.effectiveMaxTemp;
-    const profileAlertMinTemp = shipment.effectiveAlertMinTemp;
-    const profileAlertMaxTemp = shipment.effectiveAlertMaxTemp;
+    const effMinTemp = shipment.effectiveMinTemp;
+    const effMaxTemp = shipment.effectiveMaxTemp;
+    const effAlertMinTemp = shipment.effectiveAlertMinTemp;
+    const effAlertMaxTemp = shipment.effectiveAlertMaxTemp;
 
     // Determine compliance flags.
-    const hasThresholds = profileMinTemp !== null && profileMaxTemp !== null;
-    const hasAlertThresholds = profileAlertMinTemp !== null && profileAlertMaxTemp !== null;
+    const hasThresholds = effMinTemp !== null && effMaxTemp !== null;
+    const hasAlertThresholds = effAlertMinTemp !== null && effAlertMaxTemp !== null;
 
     const isWithinRange = hasThresholds
-      ? params.temperature >= profileMinTemp! && params.temperature <= profileMaxTemp!
+      ? params.temperature >= effMinTemp! && params.temperature <= effMaxTemp!
       : true;
 
     const isWithinAlertRange = hasAlertThresholds
-      ? params.temperature >= profileAlertMinTemp! && params.temperature <= profileAlertMaxTemp!
+      ? params.temperature >= effAlertMinTemp! && params.temperature <= effAlertMaxTemp!
       : true;
 
     const isExcursion = hasThresholds && !isWithinRange;
@@ -205,8 +187,8 @@ export class ColdChainService {
       deviceId: params.deviceId,
       temperature: params.temperature,
       recordedAt: params.recordedAt,
-      profileMinTemp: profileMinTemp ?? undefined,
-      profileMaxTemp: profileMaxTemp ?? undefined,
+      effectiveMinTemp: effMinTemp ?? undefined,
+      effectiveMaxTemp: effMaxTemp ?? undefined,
     });
 
     // Create the immutable log entry (WRITE-ONLY — never update or delete).
@@ -220,15 +202,13 @@ export class ColdChainService {
         orderId: params.orderId ?? null,
         trackableUnitId: params.trackableUnitId ?? null,
         temperature: params.temperature,
-        humidity: params.humidity ?? null,
         lat: params.lat ?? null,
         lng: params.lng ?? null,
         recordedAt: params.recordedAt,
-        profileMinTemp: profileMinTemp,
-        profileMaxTemp: profileMaxTemp,
-        profileAlertMinTemp: profileAlertMinTemp,
-        profileAlertMaxTemp: profileAlertMaxTemp,
-        profileName: null,
+        effectiveMinTemp: effMinTemp,
+        effectiveMaxTemp: effMaxTemp,
+        effectiveAlertMinTemp: effAlertMinTemp,
+        effectiveAlertMaxTemp: effAlertMaxTemp,
         isWithinRange,
         isWithinAlertRange,
         isExcursion,
@@ -245,18 +225,18 @@ export class ColdChainService {
       // Determine excursion type and severity.
       const excursionType = this.classifyExcursionType(
         params.temperature,
-        profileMinTemp,
-        profileMaxTemp,
-        profileAlertMinTemp,
-        profileAlertMaxTemp,
+        effMinTemp,
+        effMaxTemp,
+        effAlertMinTemp,
+        effAlertMaxTemp,
       );
       const severity = isExcursion ? 'critical' : 'warning';
       const thresholdValue = this.getBreachedThreshold(
         params.temperature,
-        profileMinTemp,
-        profileMaxTemp,
-        profileAlertMinTemp,
-        profileAlertMaxTemp,
+        effMinTemp,
+        effMaxTemp,
+        effAlertMinTemp,
+        effAlertMaxTemp,
       );
 
       // Look for an existing active excursion for this device+shipment+type.
@@ -346,16 +326,16 @@ export class ColdChainService {
     deviceId?: string;
     temperature: number;
     recordedAt: Date;
-    profileMinTemp?: number;
-    profileMaxTemp?: number;
+    effectiveMinTemp?: number;
+    effectiveMaxTemp?: number;
   }): string {
     const data = [
       params.shipmentId ?? '',
       params.deviceId ?? '',
       params.temperature.toFixed(4),
       params.recordedAt.toISOString(),
-      params.profileMinTemp?.toFixed(4) ?? '',
-      params.profileMaxTemp?.toFixed(4) ?? '',
+      params.effectiveMinTemp?.toFixed(4) ?? '',
+      params.effectiveMaxTemp?.toFixed(4) ?? '',
     ].join('|');
     return createHash('sha256').update(data).digest('hex');
   }

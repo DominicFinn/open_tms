@@ -35,7 +35,6 @@ export async function containerIntelligenceRoutes(server: FastifyInstance) {
                 hazmatClass: { type: 'string' },
                 valueClass: { type: 'string', enum: ['standard', 'high_value'] },
                 fragile: { type: 'boolean' },
-                humiditySensitive: { type: 'boolean' },
               },
             },
           },

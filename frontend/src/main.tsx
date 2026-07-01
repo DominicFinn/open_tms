@@ -30,6 +30,7 @@ import VNextDailyReport from './vnext-design/VNextDailyReport';
 import VNextLocationReport from './vnext-design/VNextLocationReport';
 import VNextSettings from './vnext-design/VNextSettings';
 import VNextShipmentTypes from './vnext-design/VNextShipmentTypes';
+import VNextArchives from './vnext-design/VNextArchives';
 import VNextStyleGuide from './vnext-design/VNextStyleGuide';
 
 // VNext Create/Edit Pages
@@ -140,7 +141,6 @@ import CarrierTenderView from './pages/carrier-portal/CarrierTenderView';
 import CarrierBidHistory from './pages/carrier-portal/CarrierBidHistory';
 import CarrierTenderHistory from './pages/carrier-portal/CarrierTenderHistory';
 import CarrierProfile from './pages/carrier-portal/CarrierProfile';
-import VNextColdChainProfiles from './pages/VNextColdChainProfiles';
 import VNextCAPAReports from './pages/VNextCAPAReports';
 
 // VNext Quality Centre Pages
@@ -367,7 +367,6 @@ root.render(
           <Route path="lanes/:id" element={<VNextLaneDetail />} />
 
           {/* Cold Chain & Compliance */}
-          <Route path="cold-chain/profiles" element={<VNextColdChainProfiles />} />
           <Route path="cold-chain/capa" element={<VNextCAPAReports />} />
 
           {/* Quality Centre */}
@@ -405,6 +404,7 @@ root.render(
           <Route path="settings/users" element={<VNextUsers />} />
           <Route path="settings/portal-users" element={<VNextPortalUsers />} />
           <Route path="settings/shipment-types" element={<VNextShipmentTypes />} />
+          <Route path="settings/archives" element={<VNextArchives />} />
 
           {/* Finance */}
           <Route path="finance" element={<VNextFinanceDashboard />} />

@@ -14,7 +14,7 @@ import {
   SHIPMENT_LIFECYCLE,
   allowedTransitions,
   validateShipmentReadiness,
-} from '../shared/shipmentTypeValidator.js';
+} from '@open-tms/shared';
 import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 import { requirePermission } from '../middleware/jwtAuth.js';
 
@@ -121,6 +121,31 @@ export async function shipmentRoutes(server: FastifyInstance) {
       lane: s.laneId ? { id: s.laneId, name: s.laneName } : null,
     }));
     return { data: enriched, error: null };
+  });
+
+  // Archived shipments (admin-only). Backs the Archives page. Archiving a
+  // shipment deletes its ShipmentReadModel row (see ShipmentProjection), so
+  // this reads the live table directly rather than the read model.
+  server.get('/api/v1/shipments/archived', {
+    preHandler: requirePermission('shipments:delete'),
+    schema: {
+      tags: ['Shipments'],
+      summary: 'List archived shipments (admin)',
+      description: 'Returns all archived shipments for the current org. Requires shipments:delete.',
+    },
+  }, async (req: FastifyRequest, _reply: FastifyReply) => {
+    const orgId = req.orgId!;
+    const shipments = await server.prisma.shipment.findMany({
+      where: { orgId, archived: true, deletedAt: null },
+      include: {
+        customer: { select: { id: true, name: true } },
+        origin: { select: { id: true, name: true, city: true, state: true } },
+        destination: { select: { id: true, name: true, city: true, state: true } },
+        carrier: { select: { id: true, name: true } },
+      },
+      orderBy: { archivedAt: 'desc' },
+    });
+    return { data: shipments, error: null };
   });
 
   // Create shipment
@@ -633,6 +658,104 @@ export async function shipmentRoutes(server: FastifyInstance) {
         orgId,
         actorId,
         payload: { id, toStatus },
+        metadata: { correlationId: randomUUID(), source: 'api' },
+      });
+      results.push({ id, success: result.success, error: result.success ? null : (result.error ?? 'Unknown error') });
+    }
+
+    return { data: { results }, error: null };
+  });
+
+  // Bulk archive from the list page. Each shipment is archived independently;
+  // per-row results report which ones failed (e.g. already archived/deleted).
+  server.post('/api/v1/shipments/bulk-archive', {
+    preHandler: requirePermission('shipments:write'),
+    schema: {
+      tags: ['Shipments'],
+      summary: 'Bulk archive shipments',
+      description: 'Archives multiple shipments (recoverable), returning per-shipment success/failure.',
+      body: {
+        type: 'object',
+        required: ['ids'],
+        properties: {
+          ids: { type: 'array', items: { type: 'string' } },
+        },
+      },
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { ids } = z.object({
+      ids: z.array(z.string().uuid()).min(1).max(500),
+    }).parse((req as any).body);
+
+    const orgId = req.orgId!;
+    const actorId = req.user?.sub ?? null;
+
+    const owned = await server.prisma.shipment.findMany({
+      where: { id: { in: ids }, orgId, deletedAt: null },
+      select: { id: true },
+    });
+    const ownedIds = new Set(owned.map(s => s.id));
+
+    const results: Array<{ id: string; success: boolean; error: string | null }> = [];
+    for (const id of ids) {
+      if (!ownedIds.has(id)) {
+        results.push({ id, success: false, error: 'Shipment not found' });
+        continue;
+      }
+      const result = await commandBus.dispatch({
+        type: ARCHIVE_SHIPMENT,
+        orgId,
+        actorId,
+        payload: { id },
+        metadata: { correlationId: randomUUID(), source: 'api' },
+      });
+      results.push({ id, success: result.success, error: result.success ? null : (result.error ?? 'Unknown error') });
+    }
+
+    return { data: { results }, error: null };
+  });
+
+  // Bulk soft delete from the list page (admin-only, shipments:delete). Each
+  // shipment is deleted independently; per-row results report failures.
+  server.post('/api/v1/shipments/bulk-delete', {
+    preHandler: requirePermission('shipments:delete'),
+    schema: {
+      tags: ['Shipments'],
+      summary: 'Bulk soft delete shipments (admin)',
+      description: 'Marks multiple shipments deleted (deletedAt/deletedBy), returning per-shipment success/failure. Requires shipments:delete.',
+      body: {
+        type: 'object',
+        required: ['ids'],
+        properties: {
+          ids: { type: 'array', items: { type: 'string' } },
+        },
+      },
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { ids } = z.object({
+      ids: z.array(z.string().uuid()).min(1).max(500),
+    }).parse((req as any).body);
+
+    const orgId = req.orgId!;
+    const actorId = req.user?.sub ?? null;
+
+    const owned = await server.prisma.shipment.findMany({
+      where: { id: { in: ids }, orgId, deletedAt: null },
+      select: { id: true },
+    });
+    const ownedIds = new Set(owned.map(s => s.id));
+
+    const results: Array<{ id: string; success: boolean; error: string | null }> = [];
+    for (const id of ids) {
+      if (!ownedIds.has(id)) {
+        results.push({ id, success: false, error: 'Shipment not found' });
+        continue;
+      }
+      const result = await commandBus.dispatch({
+        type: SOFT_DELETE_SHIPMENT,
+        orgId,
+        actorId,
+        payload: { id },
         metadata: { correlationId: randomUUID(), source: 'api' },
       });
       results.push({ id, success: result.success, error: result.success ? null : (result.error ?? 'Unknown error') });

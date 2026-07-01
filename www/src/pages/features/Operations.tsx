@@ -156,7 +156,7 @@ const sections = [
   {
     problem: 'Your IoT data is trapped in a vendor dashboard you can\'t query or act on',
     solution: 'Integrated IoT & sensor telemetry',
-    description: 'GPS, temperature, humidity, shock, and light sensor data flows directly into your shipment records. Set thresholds, trigger automatic exceptions, and generate compliance breadcrumb reports  - all without leaving the TMS.',
+    description: 'GPS, temperature, shock, and light sensor data flows directly into your shipment records. Set thresholds, trigger automatic exceptions, and generate compliance breadcrumb reports  - all without leaving the TMS.',
     illustration: (
       <svg viewBox="0 0 280 200" fill="none" className="w-full h-auto">
         <circle cx="140" cy="100" r="50" stroke="rgba(99,102,241,0.15)" strokeWidth="1" fill="none" />

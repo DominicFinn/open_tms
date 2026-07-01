@@ -1,8 +1,7 @@
 /**
- * Canonical shipment-type validator. Used by the backend for enforcement.
- * A byte-for-byte mirror lives at frontend/src/shared/shipmentTypeValidator.ts
- * so the UI produces the same missing-field list without an API round trip.
- * If you change this file, update the mirror.
+ * Canonical shipment-type validator, shared by backend enforcement and the
+ * frontend UI so both produce the same missing-field list without an API
+ * round trip.
  */
 
 export interface ShipmentTypeConfig {

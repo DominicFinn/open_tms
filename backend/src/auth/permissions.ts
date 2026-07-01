@@ -98,8 +98,6 @@ export const PERMISSIONS = {
   ALL: '*',
 } as const;
 
-export type Permission = typeof PERMISSIONS[keyof typeof PERMISSIONS];
-
 // ── System Role Definitions ────────────────────────────────────────────
 
 export interface RoleDefinition {

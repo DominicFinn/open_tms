@@ -159,7 +159,6 @@ async function wipe() {
   await prisma.customerReadModel.deleteMany();
   await prisma.customer.deleteMany();
 
-  await prisma.coldChainProfile.deleteMany();
   await prisma.packagingType.deleteMany();
 
   // Warehouse PWA — wipe before Location (these all carry locationId FKs without cascade)
@@ -388,71 +387,6 @@ async function seedPalletTypes(orgId: string) {
   for (const t of types) {
     created.push(
       await prisma.packagingType.create({ data: { ...t, orgId } })
-    );
-  }
-  return created;
-}
-
-// ─── Cold Chain Profiles ─────────────────────────────────────────────────────
-
-async function seedColdChainProfiles(orgId: string, createdBy: string) {
-  const profiles = [
-    {
-      name: 'Frozen (-25 to -18°C)',
-      description: 'Ice cream, frozen seafood, long-haul frozen',
-      minTemperature: -25,
-      maxTemperature: -18,
-      alertMinTemperature: -24,
-      alertMaxTemperature: -19,
-    },
-    {
-      name: 'Refrigerated (2 to 8°C)',
-      description: 'Dairy, produce, fresh meat, cold-chain pharma',
-      minTemperature: 2,
-      maxTemperature: 8,
-      alertMinTemperature: 3,
-      alertMaxTemperature: 7,
-      minHumidity: 30,
-      maxHumidity: 80,
-      alertMinHumidity: 35,
-      alertMaxHumidity: 75,
-    },
-    {
-      name: 'Controlled Ambient (15 to 25°C)',
-      description: 'Pharmaceuticals, chocolate, wine',
-      minTemperature: 15,
-      maxTemperature: 25,
-      alertMinTemperature: 16,
-      alertMaxTemperature: 24,
-    },
-    {
-      name: 'Ultra-Cold (-80°C)',
-      description: 'mRNA vaccines, biological samples',
-      minTemperature: -86,
-      maxTemperature: -60,
-      alertMinTemperature: -85,
-      alertMaxTemperature: -65,
-    },
-    {
-      name: 'Chilled Produce (0 to 4°C)',
-      description: 'Fresh fruit and vegetables',
-      minTemperature: 0,
-      maxTemperature: 4,
-      alertMinTemperature: 1,
-      alertMaxTemperature: 3,
-      minHumidity: 85,
-      maxHumidity: 95,
-      alertMinHumidity: 88,
-      alertMaxHumidity: 93,
-    },
-  ];
-
-  const created = [];
-  for (const p of profiles) {
-    created.push(
-      await prisma.coldChainProfile.create({
-        data: { ...p, orgId, createdBy },
-      })
     );
   }
   return created;
@@ -1532,15 +1466,24 @@ async function seedShipmentTypes() {
 
 // ─── Shipments with Stops + OrderShipment links ─────────────────────────────
 // Fresh, clean DRAFT shipments for lifecycle testing: real customer + origin/
-// destination locations, a shipment type, and cold-chain profile where relevant.
-// Deliberately NO carrier, NO IoT device, NO tracking — the tester assigns those.
+// destination locations, a shipment type, and cold-chain temperature range
+// where relevant. Deliberately NO carrier, NO IoT device, NO tracking — the
+// tester assigns those.
+
+// Effective temperature ranges by order.temperatureControl — mirrors
+// ColdChainService.TEMP_DEFAULTS, plus an ultra-cold range for StellarMed's
+// frozen mRNA/biological shipments.
+const SEED_TEMP_RANGES = {
+  frozen: { min: -25, max: -18, alertMin: -24, alertMax: -19 },
+  ultraCold: { min: -86, max: -60, alertMin: -85, alertMax: -65 },
+  refrigerated: { min: 2, max: 8, alertMin: 3, alertMax: 7 },
+};
 
 async function seedShipments(
   orders: any[],
   lanes: any[],
   carriers: any[],
   locations: any[],
-  coldChainProfiles: any[],
   shipmentTypes: Record<string, any>,
   orgId: string,
 ) {
@@ -1549,10 +1492,6 @@ async function seedShipments(
   const shippableOrders = orders.filter((o) =>
     ['converted', 'validated'].includes(o.status) && o.deliveryStatus !== 'cancelled'
   );
-
-  const frozenProfile = coldChainProfiles.find((p) => p.name.startsWith('Frozen'));
-  const refrigProfile = coldChainProfiles.find((p) => p.name.startsWith('Refrigerated'));
-  const ultraColdProfile = coldChainProfiles.find((p) => p.name.startsWith('Ultra-Cold'));
 
   let refCounter = 1;
   for (const order of shippableOrders) {
@@ -1583,8 +1522,7 @@ async function seedShipments(
       launchedAt = order.requestedPickupDate || daysAgo(1);
     }
 
-    // Cold chain profile based on temp (backing data — kept even in draft).
-    let profileId: string | null = null;
+    // Effective temperature range based on order temp control (backing data — kept even in draft).
     let effMin: number | null = null;
     let effMax: number | null = null;
     let effAlertMin: number | null = null;
@@ -1592,19 +1530,18 @@ async function seedShipments(
     let disposition = 'not_applicable';
     if (order.temperatureControl === 'frozen' && order.customerId) {
       const isStellar = (await prisma.customer.findUnique({ where: { id: order.customerId } }))?.name === 'StellarMed Laboratories';
-      const profile = isStellar ? ultraColdProfile : frozenProfile;
-      profileId = profile.id;
-      effMin = profile.minTemperature;
-      effMax = profile.maxTemperature;
-      effAlertMin = profile.alertMinTemperature;
-      effAlertMax = profile.alertMaxTemperature;
+      const range = isStellar ? SEED_TEMP_RANGES.ultraCold : SEED_TEMP_RANGES.frozen;
+      effMin = range.min;
+      effMax = range.max;
+      effAlertMin = range.alertMin;
+      effAlertMax = range.alertMax;
       disposition = delivered ? 'released' : 'monitoring';
     } else if (order.temperatureControl === 'refrigerated') {
-      profileId = refrigProfile.id;
-      effMin = refrigProfile.minTemperature;
-      effMax = refrigProfile.maxTemperature;
-      effAlertMin = refrigProfile.alertMinTemperature;
-      effAlertMax = refrigProfile.alertMaxTemperature;
+      const range = SEED_TEMP_RANGES.refrigerated;
+      effMin = range.min;
+      effMax = range.max;
+      effAlertMin = range.alertMin;
+      effAlertMax = range.alertMax;
       disposition = delivered ? 'released' : 'monitoring';
     }
 
@@ -1634,7 +1571,6 @@ async function seedShipments(
         carrierId,
         trackingNumber,
         launchedAt,
-        coldChainProfileId: profileId,
         effectiveMinTemp: effMin,
         effectiveMaxTemp: effMax,
         effectiveAlertMinTemp: effAlertMin,
@@ -1755,7 +1691,7 @@ async function seedDevices(shipmentRecords: any[], orgId: string) {
     });
 
     // Calibration for cold-chain devices
-    if (r.shipment.coldChainProfileId) {
+    if (r.shipment.effectiveMinTemp !== null) {
       await prisma.deviceCalibration.create({
         data: {
           orgId: (await prisma.organization.findFirst())!.id,
@@ -1778,7 +1714,7 @@ async function seedDevices(shipmentRecords: any[], orgId: string) {
     for (let h = 0; h < 12; h++) {
       // Inject an excursion for an exception shipment
       const isExcursion = r.shipment.hasException && h === 6;
-      const temp = r.shipment.coldChainProfileId
+      const temp = r.shipment.effectiveMinTemp !== null
         ? isExcursion ? max + 3 : centreTemp + (Math.random() - 0.5) * (max - min) * 0.6
         : 20 + (Math.random() - 0.5) * 5;
 
@@ -1789,7 +1725,6 @@ async function seedDevices(shipmentRecords: any[], orgId: string) {
           orderId: r.order.id,
           eventTime: minutesAgo(h * 120),
           temperature: temp,
-          humidity: r.shipment.coldChainProfileId ? 55 + Math.random() * 20 : null,
           batteryLevel: 60 + Math.floor(Math.random() * 40) - h,
           movement: h < 10 ? 'moving' : 'stationary',
           lat: 37.5 + Math.random() * 10,
@@ -1836,7 +1771,7 @@ async function seedTenders(shipmentRecords: any[], carriers: any[], creatorUserI
         tenderDurationMinutes: 180,
         targetRate: 1800 + idx * 200,
         currency: 'USD',
-        equipmentType: r.shipment.coldChainProfileId ? "53' Reefer" : "53' Dry Van",
+        equipmentType: r.shipment.effectiveMinTemp !== null ? "53' Reefer" : "53' Dry Van",
         notes: `Auto-created from shipment ${r.shipment.reference}`,
         specialInstructions: 'Temperature-controlled, contract lane carriers preferred.',
         openedAt: state !== 'draft' ? daysAgo(1) : null,
@@ -2836,10 +2771,6 @@ async function main() {
   const palletTypes = await seedPalletTypes(org.id);
   console.log(`✓ Pallet types: ${palletTypes.length}`);
 
-  console.log('Seeding cold chain profiles...');
-  const ccProfiles = await seedColdChainProfiles(org.id, users[0].id);
-  console.log(`✓ Cold chain profiles: ${ccProfiles.length}`);
-
   console.log('Seeding issue labels...');
   const labels = await seedIssueLabels(org.id);
   console.log(`✓ Labels: ${labels.length}`);
@@ -2869,7 +2800,7 @@ async function main() {
   console.log(`✓ Shipment types: ${Object.keys(shipmentTypes).length}`);
 
   console.log('Seeding shipments + stops (mostly fresh drafts, a subset launched)...');
-  const shipmentRecords = await seedShipments(orders, lanes, carriers, locations, ccProfiles, shipmentTypes, org.id);
+  const shipmentRecords = await seedShipments(orders, lanes, carriers, locations, shipmentTypes, org.id);
   console.log(`✓ Shipments: ${shipmentRecords.length}`);
 
   console.log('Seeding devices + sensor readings for in-progress shipments...');

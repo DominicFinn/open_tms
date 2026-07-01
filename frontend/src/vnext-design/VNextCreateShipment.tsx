@@ -25,7 +25,7 @@ import {
   applyShipmentTypeDefaults,
   SHIPMENT_FIELD_LABELS,
   ShipmentTypeConfig,
-} from '../shared/shipmentTypeValidator';
+} from '@open-tms/shared';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DatePicker } from '@/components/ui/date-picker';

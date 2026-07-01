@@ -13,7 +13,7 @@ The result is a system that's **mid-migration to multi-tenancy**, with real cros
 ## Schema inventory
 
 ### Tables with `orgId` enforced
-`Quote`, `Tender` (via `Shipment.orgId` join), `Invoice`, `Charge`, `Issue`, `AgentConfig`, `AutomationRule`, `AgentDecision`, `ColdChainProfile`, `CAPAReport`, `EmailTemplate`, `ShipmentFinancialSummary`, `CarrierInvoice`, `Payment`, plus all `*ReadModel` tables (`CustomerReadModel`, `CarrierReadModel`, `ShipmentReadModel`, `OrderReadModel`, `InvoiceReadModel`, `LaneReadModel`, `IssueReadModel`, `AgentDecisionReadModel`).
+`Quote`, `Tender` (via `Shipment.orgId` join), `Invoice`, `Charge`, `Issue`, `AgentConfig`, `AutomationRule`, `AgentDecision`, `CAPAReport`, `EmailTemplate`, `ShipmentFinancialSummary`, `CarrierInvoice`, `Payment`, plus all `*ReadModel` tables (`CustomerReadModel`, `CarrierReadModel`, `ShipmentReadModel`, `OrderReadModel`, `InvoiceReadModel`, `LaneReadModel`, `IssueReadModel`, `AgentDecisionReadModel`).
 
 ### Tables WITHOUT `orgId` (the gap)
 `Customer`, `Carrier`, `Shipment`, `TradingPartner`, `ApiKey`, `Order`, `Rma`. These are the source-of-truth tables that the read models project from. The denormalized read models pick up `orgId` somewhere along the way; the live tables can't filter on it.

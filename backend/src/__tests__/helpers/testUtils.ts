@@ -109,29 +109,3 @@ export function createTestEvent<T>(
     ...overrides,
   };
 }
-
-/**
- * Creates a minimal mock Prisma transaction client.
- * Each model method returns a jest.fn() that you can configure per test.
- */
-export function mockPrismaTransaction() {
-  const createModelProxy = () => {
-    return new Proxy({}, {
-      get: (_target, prop) => {
-        if (typeof prop === 'string') {
-          return jest.fn();
-        }
-        return undefined;
-      },
-    });
-  };
-
-  return new Proxy({}, {
-    get: (_target, prop) => {
-      if (typeof prop === 'string' && prop !== 'then') {
-        return createModelProxy();
-      }
-      return undefined;
-    },
-  });
-}

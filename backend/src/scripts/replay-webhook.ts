@@ -55,7 +55,7 @@ async function main(): Promise<void> {
     startTime: new Date().toISOString(),
     device: { id: externalId, name: `Replay ${externalId}` },
     location: { type: 'gps', global: { lat, lon, cep: 12.5, address: 'Replay location' } },
-    payload: { temperature: temp, humidity: 55.3, atmosphericPressure: 1012.4, maxTemperature: 8, minTemperature: 2 },
+    payload: { temperature: temp, atmosphericPressure: 1012.4, maxTemperature: 8, minTemperature: 2 },
   };
   const bodyStr = JSON.stringify(payload);
 

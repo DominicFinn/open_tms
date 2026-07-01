@@ -21,6 +21,9 @@ module.exports = {
   },
   moduleNameMapper: {
     '\\.(css|less|scss|sass)$': 'identity-obj-proxy',
+    // packages/shared ships ESM-only output; point tests at the TS source instead
+    // so ts-jest compiles it inline rather than requiring the built ESM dist.
+    '^@open-tms/shared$': '<rootDir>/../packages/shared/src/index.ts',
   },
   transformIgnorePatterns: [
     'node_modules/(?!(leaflet)/)',

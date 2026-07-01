@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
+  Archive,
   Check,
   ChevronDown,
   CircleAlert,
@@ -14,16 +15,29 @@ import {
   Pencil,
   Plus,
   Search,
+  Trash2,
   Truck,
   Upload,
+  X,
 } from 'lucide-react';
 
+import { toast } from 'sonner';
+
 import { API_URL } from '../api';
+import { useCurrentUser } from '../hooks/useCurrentUser';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   Select,
   SelectContent,
@@ -83,6 +97,7 @@ function formatDate(d?: string): string {
 
 export default function VNextOrders() {
   const navigate = useNavigate();
+  const { hasPermission } = useCurrentUser();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [activeTab, setActiveTab] = useState('all');
@@ -91,6 +106,11 @@ export default function VNextOrders() {
   const [customerFilter, setCustomerFilter] = useState('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkArchiving, setBulkArchiving] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -113,7 +133,7 @@ export default function VNextOrders() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [refreshKey]);
 
   useEffect(() => {
     fetch(`${API_URL}/api/v1/customers`)
@@ -146,6 +166,99 @@ export default function VNextOrders() {
     }
     return true;
   });
+
+  const filteredIds = filtered.map(o => o.id);
+  const selectedInView = filteredIds.filter(idv => selected.has(idv));
+  const allSelected = filtered.length > 0 && selectedInView.length === filtered.length;
+
+  const toggleOne = (orderId: string) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(orderId)) next.delete(orderId); else next.add(orderId);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (allSelected) {
+        filteredIds.forEach(idv => next.delete(idv));
+      } else {
+        filteredIds.forEach(idv => next.add(idv));
+      }
+      return next;
+    });
+  };
+
+  const clearSelection = () => setSelected(new Set());
+
+  const handleBulkArchive = async () => {
+    if (selected.size === 0) return;
+    setBulkArchiving(true);
+    try {
+      const ids = Array.from(selected);
+      const res = await fetch(`${API_URL}/api/v1/orders/bulk-archive`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      });
+      const json = await res.json();
+      if (!res.ok || json.error) {
+        toast.error(json.error || 'Bulk archive failed', { duration: 8000 });
+        return;
+      }
+      const results: Array<{ id: string; success: boolean; error: string | null }> = json.data?.results ?? [];
+      const ok = results.filter(r => r.success);
+      const failed = results.filter(r => !r.success);
+      if (failed.length === 0) {
+        toast.success(`${ok.length} order${ok.length === 1 ? '' : 's'} archived`);
+      } else {
+        const reason = failed[0]?.error ?? 'blocked';
+        toast.warning(`${ok.length} archived, ${failed.length} skipped. e.g. ${reason}`, { duration: 9000 });
+      }
+      clearSelection();
+      setRefreshKey(k => k + 1);
+    } catch {
+      toast.error('Bulk archive failed');
+    } finally {
+      setBulkArchiving(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selected.size === 0) return;
+    setBulkDeleting(true);
+    try {
+      const ids = Array.from(selected);
+      const res = await fetch(`${API_URL}/api/v1/orders/bulk-delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      });
+      const json = await res.json();
+      if (!res.ok || json.error) {
+        toast.error(json.error || 'Bulk delete failed', { duration: 8000 });
+        return;
+      }
+      const results: Array<{ id: string; success: boolean; error: string | null }> = json.data?.results ?? [];
+      const ok = results.filter(r => r.success);
+      const failed = results.filter(r => !r.success);
+      if (failed.length === 0) {
+        toast.success(`${ok.length} order${ok.length === 1 ? '' : 's'} deleted`);
+      } else {
+        const reason = failed[0]?.error ?? 'blocked';
+        toast.warning(`${ok.length} deleted, ${failed.length} skipped. e.g. ${reason}`, { duration: 9000 });
+      }
+      clearSelection();
+      setRefreshKey(k => k + 1);
+    } catch {
+      toast.error('Bulk delete failed');
+    } finally {
+      setBulkDeleting(false);
+      setConfirmBulkDelete(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -296,9 +409,49 @@ export default function VNextOrders() {
 
         <Separator />
 
+        {selected.size > 0 && (
+          <div className="flex flex-wrap items-center gap-3 border-b border-border bg-muted/40 px-4 py-3 md:px-6">
+            <span className="text-sm font-medium">{selected.size} selected</span>
+            <Button variant="ghost" size="sm" onClick={clearSelection}>
+              <X className="h-4 w-4" />
+              Clear
+            </Button>
+            <div className="ml-auto flex items-center gap-2">
+              {hasPermission('orders:write') && (
+                <Button variant="outline" size="sm" disabled={bulkArchiving} onClick={handleBulkArchive}>
+                  {bulkArchiving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Archive className="h-4 w-4" />}
+                  Archive
+                </Button>
+              )}
+              {hasPermission('orders:delete') && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={bulkDeleting}
+                  onClick={() => setConfirmBulkDelete(true)}
+                  className="text-destructive hover:text-destructive"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-10">
+                <input
+                  type="checkbox"
+                  aria-label="Select all orders"
+                  className="h-4 w-4 cursor-pointer accent-primary"
+                  checked={allSelected}
+                  ref={el => { if (el) el.indeterminate = selectedInView.length > 0 && !allSelected; }}
+                  onChange={toggleAll}
+                />
+              </TableHead>
               <TableHead>Order</TableHead>
               <TableHead>Customer</TableHead>
               <TableHead>Route</TableHead>
@@ -318,8 +471,17 @@ export default function VNextOrders() {
                 <TableRow
                   key={o.id}
                   onClick={() => navigate(`/orders/${o.id}`)}
-                  className="cursor-pointer"
+                  className={cn('cursor-pointer', selected.has(o.id) && 'bg-primary/5')}
                 >
+                  <TableCell onClick={e => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      aria-label={`Select ${o.orderNumber || o.id}`}
+                      className="h-4 w-4 cursor-pointer accent-primary"
+                      checked={selected.has(o.id)}
+                      onChange={() => toggleOne(o.id)}
+                    />
+                  </TableCell>
                   <TableCell>
                     <div className="font-mono text-sm font-semibold">{o.orderNumber || o.id}</div>
                     {o.poNumber && <div className="text-xs text-muted-foreground">PO# {o.poNumber}</div>}
@@ -388,6 +550,26 @@ export default function VNextOrders() {
           </TableBody>
         </Table>
       </Card>
+
+      {/* Bulk soft-delete confirmation (admin) */}
+      <Dialog open={confirmBulkDelete} onOpenChange={setConfirmBulkDelete}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete {selected.size} order{selected.size === 1 ? '' : 's'}?</DialogTitle>
+            <DialogDescription>
+              Selected orders will be removed from all views. Records are retained for audit
+              but cannot be restored from the UI. This is different from archiving.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmBulkDelete(false)} disabled={bulkDeleting}>Cancel</Button>
+            <Button variant="destructive" onClick={handleBulkDelete} disabled={bulkDeleting}>
+              {bulkDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              Delete {selected.size} order{selected.size === 1 ? '' : 's'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

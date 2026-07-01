@@ -123,7 +123,6 @@ export class SystemLocoAdapter {
             orderId: orderId ?? undefined,
             trackableUnitId: trackableUnitId ?? undefined,
             temperature,
-            humidity: p.humidity != null ? Number(p.humidity) : undefined,
             lat: location?.lat ? Number(location.lat) : undefined,
             lng: (location?.lon || location?.lng) ? Number(location.lon || location.lng) : undefined,
             recordedAt: eventTime,
@@ -276,9 +275,6 @@ export class SystemLocoAdapter {
             orderId: orderId ?? undefined,
             trackableUnitId: trackableUnitId ?? undefined,
             temperature,
-            humidity: reportPayload.humidity != null ? Number(reportPayload.humidity)
-              : reportPayload.sensors?.humidity != null ? Number(reportPayload.sensors.humidity)
-              : undefined,
             lat: location.lat ? Number(location.lat) : undefined,
             lng: (location.lon || location.lng) ? Number(location.lon || location.lng) : undefined,
             recordedAt: eventTime,
@@ -391,7 +387,6 @@ export class SystemLocoAdapter {
         trackableUnitId,
         eventTime,
         temperature: p.temperature != null ? Number(p.temperature) : null,
-        humidity: p.humidity != null ? Number(p.humidity) : null,
         atmosphericPressure: p.atmosphericPressure != null ? Number(p.atmosphericPressure) : null,
         lightLevel: p.lightLevel != null ? Number(p.lightLevel) : null,
         impactG: p.g != null ? Number(p.g) : null,

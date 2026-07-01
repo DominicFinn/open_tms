@@ -18,13 +18,6 @@ export interface DocumentGenerationJob {
   orgId?: string | null;
 }
 
-export interface ShipmentEvent {
-  shipmentId: string;
-  eventType: 'created' | 'updated' | 'status_changed' | 'delivered';
-  shipmentReference: string;
-  carrierId?: string;
-}
-
 export interface WebhookEvent {
   webhookLogId: string;
   rawPayload: any;

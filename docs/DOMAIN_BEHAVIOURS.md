@@ -35,9 +35,11 @@ Every event is persisted to the immutable `DomainEventLog` before handler fan-ou
 |---------|---------|----------------|
 | `CreateOrderCommand` | `POST /api/v1/orders` | `order.created` |
 | `UpdateOrderCommand` | `PUT /api/v1/orders/:id` | `order.updated`, `order.status_changed` (if status changes) |
-| `ArchiveOrderCommand` | `DELETE /api/v1/orders/:id` (`orders:write`) | `order.archived` |
-| `SoftDeleteOrderCommand` | `POST /api/v1/orders/:id/soft-delete` (admin, `orders:delete`) | `order.deleted` |
+| `ArchiveOrderCommand` | `DELETE /api/v1/orders/:id`, `POST /api/v1/orders/bulk-archive` (`orders:write`) | `order.archived` |
+| `SoftDeleteOrderCommand` | `POST /api/v1/orders/:id/soft-delete`, `POST /api/v1/orders/bulk-delete` (admin, `orders:delete`) | `order.deleted` |
 | `UnarchiveOrderCommand` | `POST /api/v1/orders/:id/unarchive` (admin, `orders:delete`) | `order.unarchived` |
+
+**Bulk archive/delete:** the orders list page's multi-select checkboxes drive `POST /api/v1/orders/bulk-archive` and `POST /api/v1/orders/bulk-delete`, which dispatch the same commands per-id (up to 500 ids) and return per-order `{ id, success, error }` results, mirroring the shipment list page's `bulk-archive`/`bulk-delete`/`bulk-transition` pattern.
 
 ### Sub-Entity Operations (CQRS, Phase 2 + Phase 4)
 
@@ -218,9 +220,9 @@ Shipments follow a canonical lifecycle: **`draft` → `ready` → `in_progress` 
 | `CreateShipmentCommand` | `POST /api/v1/shipments` | `shipment.created` (always `draft`) |
 | `UpdateShipmentCommand` | `PUT /api/v1/shipments/:id` | `shipment.updated`, `shipment.status_changed`, `shipment.carrier_assigned` |
 | `TransitionShipmentStatusCommand` | `POST /api/v1/shipments/:id/transition`, `POST /api/v1/shipments/bulk-transition` | `shipment.status_changed` (gated: adjacency + readiness) |
-| `ArchiveShipmentCommand` | `DELETE /api/v1/shipments/:id` (requires `shipments:write`) | `shipment.archived` |
+| `ArchiveShipmentCommand` | `DELETE /api/v1/shipments/:id`, `POST /api/v1/shipments/bulk-archive` (requires `shipments:write`) | `shipment.archived` |
 | `UnarchiveShipmentCommand` | `POST /api/v1/shipments/:id/unarchive` (requires `shipments:delete`) | `shipment.unarchived` |
-| `SoftDeleteShipmentCommand` | `POST /api/v1/shipments/:id/soft-delete` (requires `shipments:delete`) | `shipment.deleted` |
+| `SoftDeleteShipmentCommand` | `POST /api/v1/shipments/:id/soft-delete`, `POST /api/v1/shipments/bulk-delete` (requires `shipments:delete`) | `shipment.deleted` |
 | `ProcessInbound214Command` | `POST /api/v1/edi/214/inbound` | `edi_214.received`, `shipment.status_changed`, `shipment.stop_arrived`, `shipment.stop_completed`, `shipment.exception`, `shipment.delivered` |
 
 `GET /api/v1/shipments/:id/readiness` returns `{ status, missing, isValid, allowedTransitions }` for the detail-page control. Every `shipment.status_changed` is captured by the `AuditHandler` as an immutable `AuditLog` row recording the actor ("who did it") — this is the audit event for manual lifecycle moves.
@@ -244,6 +246,7 @@ Two independent removal states, both retaining the row for audit:
 
 - **Archive** (`archived`/`archivedAt`) — recoverable, available to any operational user (`shipments:write`). Removed from active lists, but the shipment **detail page still loads** and shows an "archived" banner. Admins (`shipments:delete`) can **unarchive** (`POST /:id/unarchive`) to restore it to active lists. Intended to also surface in a future "archived shipments" screen.
 - **Soft delete** (`deletedAt`/`deletedBy`) — admin-only (`shipments:delete`). Hidden from **every** view, including the future archived screen. The row is kept only for audit/compliance; idempotent (re-deleting is a no-op). Soft-deleted shipments are filtered out of all read/mutation routes via `deletedAt: null`, so the detail page 404s.
+- **Bulk archive/delete** — the shipment list page's multi-select checkboxes drive `POST /api/v1/shipments/bulk-archive` and `POST /api/v1/shipments/bulk-delete`, which dispatch the same commands per-id (up to 500 ids) and return per-shipment `{ id, success, error }` results, mirroring `bulk-transition`'s pattern.
 
 ### Side Effects
 
@@ -281,7 +284,7 @@ Two independent removal states, both retaining the row for audit:
 
 **Webhook resolution.** `SystemLocoAdapter.resolveAssignment` resolves a device to a shipment by: (1) active `DeviceAssignment` for the device id, then (2) device name → `Shipment.reference`, then (3) device name → `Order.orderNumber`. Creating devices on the shipment form populates path (1). Lookups use existing indexes: `Device.name`, `Device.externalId` (`@unique`), `DeviceAssignment[deviceId, active]`, `Shipment.reference`, `Order.orderNumber` (`@unique`).
 
-**Webhook ingestion (`POST /api/v1/webhook`).** Verify → enqueue (pg-boss `INBOUND_WEBHOOK`) → 202, real work in `inboundWebhookWorker`. Auth: `X-LocoAware-Signature` HMAC-SHA256 (timing-safe, raw body; secret on `IotVendor.webhookSecret`) when present, else API key. **Idempotent**: the worker skips events whose `id` already exists as `DeviceEvent.externalEventId` (logged `duplicate`); `SensorReading.sourceReportId` is a unique backstop. When a resolved event carries a location, the worker publishes `tracking.location_received` → `ShipmentProjection` updates `ShipmentReadModel.currentLat/lng/lastLocationAt` (map/list position). Sensor data is stored on `SensorReading` (hot columns incl. humidity, atmosphericPressure, locationType, locationAccuracy + full `rawPayload`) and surfaced on the Telemetry tab. Full details: `docs/SYSTEM_LOCO_INTEGRATION.md`.
+**Webhook ingestion (`POST /api/v1/webhook`).** Verify → enqueue (pg-boss `INBOUND_WEBHOOK`) → 202, real work in `inboundWebhookWorker`. Auth: `X-LocoAware-Signature` HMAC-SHA256 (timing-safe, raw body; secret on `IotVendor.webhookSecret`) when present, else API key. **Idempotent**: the worker skips events whose `id` already exists as `DeviceEvent.externalEventId` (logged `duplicate`); `SensorReading.sourceReportId` is a unique backstop. When a resolved event carries a location, the worker publishes `tracking.location_received` → `ShipmentProjection` updates `ShipmentReadModel.currentLat/lng/lastLocationAt` (map/list position). Sensor data is stored on `SensorReading` (hot columns incl. atmosphericPressure, locationType, locationAccuracy + full `rawPayload`) and surfaced on the Telemetry tab. Full details: `docs/SYSTEM_LOCO_INTEGRATION.md`.
 
 ---
 
@@ -908,27 +911,6 @@ Scale handler throughput via environment variables:
 
 ---
 
-## Cold Chain Profile
-
-Cold chain profiles define allowable temperature and humidity bands for shipments carrying temperature-sensitive cargo.
-
-### Commands
-
-| Command | Trigger | Events Emitted |
-|---------|---------|----------------|
-| `cold_chain_profile.create` | `POST /api/v1/cold-chain-profiles` | `cold_chain_profile.created` |
-| `cold_chain_profile.update` | `PUT /api/v1/cold-chain-profiles/:id` | `cold_chain_profile.updated` |
-
-### Side Effects
-
-| Event | What Happens |
-|-------|-------------|
-| `cold_chain_profile.created` | — |
-| `cold_chain_profile.updated` | — |
-| `cold_chain_profile.deactivated` | — |
-
----
-
 ## Cold Chain Monitoring
 
 Monitors temperature telemetry on shipments, detects excursions, and manages the cold chain disposition lifecycle.
@@ -944,7 +926,7 @@ Monitors temperature telemetry on shipments, detects excursions, and manages the
 | Event | Trigger |
 |-------|---------|
 | `cold_chain.temperature_logged` | IoT sensor telemetry ingested |
-| `cold_chain.excursion_detected` | Temperature reading outside profile alert range |
+| `cold_chain.excursion_detected` | Temperature reading outside the shipment's effective alert range |
 | `cold_chain.excursion_acknowledged` | User acknowledges an active excursion |
 | `cold_chain.excursion_resolved` | Temperature returns to acceptable range or manual resolution |
 
@@ -967,7 +949,7 @@ monitoring → pending_review → released
 
 ## Device Calibration
 
-Tracks calibration records for IoT temperature/humidity devices used in cold chain monitoring.
+Tracks calibration records for IoT temperature devices used in cold chain monitoring.
 
 ### Commands
 
@@ -1851,7 +1833,6 @@ Incompatible UN classes cannot share a package even if both appear in the carton
 Automatically attached to the package suggestion based on cargo + carton:
 - `gel_pack` - refrigerated packages (always)
 - `dry_ice` - frozen or dry_ice packages; also added to refrigerated packages when `transitHours > 24`
-- `desiccant` - when any item is `humiditySensitive`
 - `fragile_padding` - when any item is `fragile`
 - `tamper_seal` - high-value group using a carton that isn't already tamper-evident
 
@@ -1874,7 +1855,7 @@ Each `PackageSuggestion` carries the selected `cartonId` + name, items, ancillar
 - `backend/src/services/containers/ContainerIntelligenceService.ts` - service + segregation matrix
 - `backend/src/routes/containerIntelligence.ts` - recommend endpoint
 - `frontend/src/vnext-design/VNextWmsCartonCatalogue.tsx` - extended admin form + chips in table
-- `backend/src/__tests__/services/ContainerIntelligenceService.test.ts` - 37 tests (input validation, best-fit, temperature splits, hazmat segregation including the real-world class 3 vs class 5.1 case, value/fragile/humidity ancillaries, multi-constraint splits, cost + weight totals)
+- `backend/src/__tests__/services/ContainerIntelligenceService.test.ts` - 36 tests (input validation, best-fit, temperature splits, hazmat segregation including the real-world class 3 vs class 5.1 case, value/fragile ancillaries, multi-constraint splits, cost + weight totals)
 
 ---
 

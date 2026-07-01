@@ -144,6 +144,8 @@ export interface OrderWithRelations extends Order {
 
 export interface IOrdersRepository {
   all(orgId?: string | null): Promise<OrderWithRelations[]>;
+  // Mirrors all() but returns only archived orders — backs the Archives admin page.
+  findArchived(orgId?: string | null): Promise<OrderWithRelations[]>;
   findById(id: string, orgId?: string | null): Promise<OrderWithRelations | null>;
   // Same shape as findById but does not exclude archived orders — used by the
   // order detail page (and the unarchive/soft-delete routes) so an archived
@@ -227,6 +229,44 @@ export class OrdersRepository implements IOrdersRepository {
         }
       },
       orderBy: { createdAt: 'desc' }
+    }) as Promise<OrderWithRelations[]>;
+  }
+
+  async findArchived(orgId?: string | null): Promise<OrderWithRelations[]> {
+    const where: any = { archived: true, deletedAt: null };
+    if (orgId) where.orgId = orgId;
+    return this.prisma.order.findMany({
+      where,
+      include: {
+        customer: {
+          select: {
+            id: true,
+            name: true,
+            contactEmail: true
+          }
+        },
+        origin: {
+          select: {
+            id: true,
+            name: true,
+            address1: true,
+            city: true,
+            state: true,
+            country: true
+          }
+        },
+        destination: {
+          select: {
+            id: true,
+            name: true,
+            address1: true,
+            city: true,
+            state: true,
+            country: true
+          }
+        }
+      },
+      orderBy: { archivedAt: 'desc' }
     }) as Promise<OrderWithRelations[]>;
   }
 

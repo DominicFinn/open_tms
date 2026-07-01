@@ -224,9 +224,7 @@ model Shipment {
   orderReadModels OrderReadModel[]
 
   // Cold chain
-  coldChainProfile      ColdChainProfile?         @relation(fields: [coldChainProfileId], references: [id])
-  coldChainProfileId    String?
-  effectiveMinTemp      Float? // Computed from orders or profile (°C canonical)
+  effectiveMinTemp      Float? // Computed from orders (°C canonical)
   effectiveMaxTemp      Float?
   effectiveAlertMinTemp Float? // Warning thresholds (tighter than min/max)
   effectiveAlertMaxTemp Float?
@@ -2457,7 +2455,6 @@ model SensorReading {
 
   // Sensor values (nullable — only populated when present)
   temperature         Float?
-  humidity            Float?
   atmosphericPressure Float? // hPa
   lightLevel          Int?
   batteryLevel        Int?
@@ -2608,39 +2605,6 @@ model CargoDiscrepancy {
 // Cold Chain & Compliance
 // ============================================================
 
-// Named temperature/humidity profile — e.g. "Frozen Goods (-25°C to -18°C)"
-model ColdChainProfile {
-  id          String  @id @default(uuid())
-  orgId       String
-  name        String // e.g. "Frozen Goods", "Refrigerated Pharma"
-  description String?
-
-  // Acceptable temperature range (°C — canonical metric)
-  minTemperature Float // Lower acceptable limit
-  maxTemperature Float // Upper acceptable limit
-
-  // Alert thresholds — tighter than acceptable range, triggers warning before breach
-  alertMinTemperature Float // Lower warning threshold
-  alertMaxTemperature Float // Upper warning threshold
-
-  // Optional humidity range (% RH)
-  minHumidity      Float?
-  maxHumidity      Float?
-  alertMinHumidity Float?
-  alertMaxHumidity Float?
-
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  createdBy String? // User ID who created
-  updatedBy String? // User ID who last modified
-
-  shipments Shipment[]
-
-  @@index([orgId])
-  @@index([active])
-}
-
 // Device calibration records — tracks whether temperature sensors are signed off
 model DeviceCalibration {
   id       String @id @default(uuid())
@@ -2670,7 +2634,7 @@ model DeviceCalibration {
 }
 
 // Immutable temperature log — WRITE-ONLY. No updates or deletes. CFR 21 Part 11 compliant.
-// Each row is a tamper-evident record of a temperature reading with a snapshot of the active profile thresholds.
+// Each row is a tamper-evident record of a temperature reading with a snapshot of the shipment's effective thresholds.
 model ImmutableTemperatureLog {
   id    String @id @default(uuid())
   orgId String
@@ -2685,7 +2649,6 @@ model ImmutableTemperatureLog {
 
   // Sensor values
   temperature Float // °C — canonical metric
-  humidity    Float? // % RH
 
   // Location at time of reading
   lat Float?
@@ -2695,20 +2658,19 @@ model ImmutableTemperatureLog {
   recordedAt DateTime // When the device captured the reading
   capturedAt DateTime @default(now()) // When the system received it
 
-  // Profile thresholds at time of capture — snapshot for audit trail
-  profileMinTemp      Float?
-  profileMaxTemp      Float?
-  profileAlertMinTemp Float?
-  profileAlertMaxTemp Float?
-  profileName         String? // Name of profile at time of capture
+  // Effective thresholds at time of capture — snapshot for audit trail
+  effectiveMinTemp      Float?
+  effectiveMaxTemp      Float?
+  effectiveAlertMinTemp Float?
+  effectiveAlertMaxTemp Float?
 
   // Compliance flags
-  isWithinRange      Boolean // temperature within [profileMinTemp, profileMaxTemp]
-  isWithinAlertRange Boolean // temperature within [profileAlertMinTemp, profileAlertMaxTemp]
+  isWithinRange      Boolean // temperature within [effectiveMinTemp, effectiveMaxTemp]
+  isWithinAlertRange Boolean // temperature within [effectiveAlertMinTemp, effectiveAlertMaxTemp]
   isExcursion        Boolean @default(false) // Outside acceptable range
   isAlert            Boolean @default(false) // Outside alert range but within acceptable
 
-  // Tamper evidence — SHA-256 hash of (shipmentId + deviceId + temperature + recordedAt + profileMinTemp + profileMaxTemp)
+  // Tamper evidence — SHA-256 hash of (shipmentId + deviceId + temperature + recordedAt + effectiveMinTemp + effectiveMaxTemp)
   integrityHash String
 
   // Original raw payload for forensic analysis
@@ -2735,7 +2697,7 @@ model ColdChainExcursion {
   deviceId   String?
 
   // Excursion classification
-  excursionType String // high_temp, low_temp, high_humidity, low_humidity
+  excursionType String // high_temp, low_temp
   severity      String // warning (alert range), critical (acceptable range breach)
 
   // Duration

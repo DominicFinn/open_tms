@@ -67,7 +67,7 @@ System Loco may redeliver an event. The worker pre-checks the event `id` against
 - **Shipment position** — publishes `tracking.location_received`; `ShipmentProjection`
   updates `ShipmentReadModel.currentLat/lng/lastLocationAt` (the map/list dot).
 - **Telemetry** — a `SensorReading` (hybrid storage: hot columns + full `rawPayload`):
-  temperature, humidity, atmosphericPressure, light, battery, impact/tilt, movement, lat/lng,
+  temperature, atmosphericPressure, light, battery, impact/tilt, movement, lat/lng,
   `locationType`, `locationAccuracy` (cep). Shown on the shipment **Telemetry** tab.
 - **Timeline** — a location-bearing `ShipmentEvent`.
 - **Geofencing / arrival** — stop arrival + arrival-criteria evaluation.

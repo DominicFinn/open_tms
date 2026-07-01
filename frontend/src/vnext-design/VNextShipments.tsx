@@ -4,6 +4,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
   AlertTriangle,
+  Archive,
   ArrowDown,
   ArrowUp,
   CalendarCheck,
@@ -17,6 +18,7 @@ import {
   Plus,
   Search,
   SearchX,
+  Trash2,
   Truck,
   X,
 } from 'lucide-react';
@@ -24,13 +26,22 @@ import {
 import { toast } from 'sonner';
 
 import { API_URL } from '../api';
-import { SHIPMENT_LIFECYCLE, SHIPMENT_STATUS_LABELS } from '../shared/shipmentTypeValidator';
+import { SHIPMENT_LIFECYCLE, SHIPMENT_STATUS_LABELS } from '@open-tms/shared';
+import { useCurrentUser } from '../hooks/useCurrentUser';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   Select,
   SelectContent,
@@ -163,6 +174,7 @@ const MARKER_COLORS: Record<StatusVariant, string> = {
 
 export default function VNextShipments() {
   const navigate = useNavigate();
+  const { hasPermission } = useCurrentUser();
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<L.Map | null>(null);
   const markersRef = useRef<L.LayerGroup | null>(null);
@@ -184,6 +196,9 @@ export default function VNextShipments() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkStatus, setBulkStatus] = useState('');
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkArchiving, setBulkArchiving] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
 
   useEffect(() => {
     fetch(`${API_URL}/api/v1/shipment-types`)
@@ -385,6 +400,73 @@ export default function VNextShipments() {
       toast.error('Bulk update failed');
     } finally {
       setBulkBusy(false);
+    }
+  };
+
+  const handleBulkArchive = async () => {
+    if (selected.size === 0) return;
+    setBulkArchiving(true);
+    try {
+      const ids = Array.from(selected);
+      const res = await fetch(`${API_URL}/api/v1/shipments/bulk-archive`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      });
+      const json = await res.json();
+      if (!res.ok || json.error) {
+        toast.error(json.error || 'Bulk archive failed', { duration: 8000 });
+        return;
+      }
+      const results: Array<{ id: string; success: boolean; error: string | null }> = json.data?.results ?? [];
+      const ok = results.filter(r => r.success);
+      const failed = results.filter(r => !r.success);
+      if (failed.length === 0) {
+        toast.success(`${ok.length} shipment${ok.length === 1 ? '' : 's'} archived`);
+      } else {
+        const reason = failed[0]?.error ?? 'blocked';
+        toast.warning(`${ok.length} archived, ${failed.length} skipped. e.g. ${reason}`, { duration: 9000 });
+      }
+      clearSelection();
+      setRefreshKey(k => k + 1);
+    } catch {
+      toast.error('Bulk archive failed');
+    } finally {
+      setBulkArchiving(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selected.size === 0) return;
+    setBulkDeleting(true);
+    try {
+      const ids = Array.from(selected);
+      const res = await fetch(`${API_URL}/api/v1/shipments/bulk-delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      });
+      const json = await res.json();
+      if (!res.ok || json.error) {
+        toast.error(json.error || 'Bulk delete failed', { duration: 8000 });
+        return;
+      }
+      const results: Array<{ id: string; success: boolean; error: string | null }> = json.data?.results ?? [];
+      const ok = results.filter(r => r.success);
+      const failed = results.filter(r => !r.success);
+      if (failed.length === 0) {
+        toast.success(`${ok.length} shipment${ok.length === 1 ? '' : 's'} deleted`);
+      } else {
+        const reason = failed[0]?.error ?? 'blocked';
+        toast.warning(`${ok.length} deleted, ${failed.length} skipped. e.g. ${reason}`, { duration: 9000 });
+      }
+      clearSelection();
+      setRefreshKey(k => k + 1);
+    } catch {
+      toast.error('Bulk delete failed');
+    } finally {
+      setBulkDeleting(false);
+      setConfirmBulkDelete(false);
     }
   };
 
@@ -617,6 +699,24 @@ export default function VNextShipments() {
               >
                 {bulkBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Apply'}
               </Button>
+              {hasPermission('shipments:write') && (
+                <Button variant="outline" size="sm" disabled={bulkArchiving} onClick={handleBulkArchive}>
+                  {bulkArchiving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Archive className="h-4 w-4" />}
+                  Archive
+                </Button>
+              )}
+              {hasPermission('shipments:delete') && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={bulkDeleting}
+                  onClick={() => setConfirmBulkDelete(true)}
+                  className="text-destructive hover:text-destructive"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete
+                </Button>
+              )}
             </div>
           </div>
         )}
@@ -723,6 +823,26 @@ export default function VNextShipments() {
           </div>
         )}
       </Card>
+
+      {/* Bulk soft-delete confirmation (admin) */}
+      <Dialog open={confirmBulkDelete} onOpenChange={setConfirmBulkDelete}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete {selected.size} shipment{selected.size === 1 ? '' : 's'}?</DialogTitle>
+            <DialogDescription>
+              Selected shipments will be removed from all views. Records are retained for audit
+              but cannot be restored from the UI. This is different from archiving.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmBulkDelete(false)} disabled={bulkDeleting}>Cancel</Button>
+            <Button variant="destructive" onClick={handleBulkDelete} disabled={bulkDeleting}>
+              {bulkDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              Delete {selected.size} shipment{selected.size === 1 ? '' : 's'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

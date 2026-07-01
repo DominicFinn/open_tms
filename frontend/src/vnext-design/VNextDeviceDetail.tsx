@@ -28,7 +28,6 @@ import { cn } from '@/lib/utils';
 interface SensorReading {
   id: string;
   temperature: number | null;
-  humidity: number | null;
   batteryLevel: number | null;
   lightLevel: number | null;
   impactG: number | null;
@@ -228,7 +227,6 @@ export default function VNextDeviceDetail() {
                   <TableRow>
                     <TableHead>Time</TableHead>
                     <TableHead>Temp</TableHead>
-                    <TableHead>Humidity</TableHead>
                     <TableHead>Battery</TableHead>
                     <TableHead>Light</TableHead>
                     <TableHead>Impact</TableHead>
@@ -241,7 +239,6 @@ export default function VNextDeviceDetail() {
                     <TableRow key={r.id}>
                       <TableCell className="text-sm">{new Date(r.eventTime).toLocaleString()}</TableCell>
                       <TableCell>{r.temperature != null ? `${r.temperature}°` : '-'}</TableCell>
-                      <TableCell>{r.humidity != null ? `${r.humidity}%` : '-'}</TableCell>
                       <TableCell>{r.batteryLevel != null ? `${r.batteryLevel}%` : '-'}</TableCell>
                       <TableCell>{r.lightLevel != null ? r.lightLevel : '-'}</TableCell>
                       <TableCell>{r.impactG != null ? r.impactG : '-'}</TableCell>

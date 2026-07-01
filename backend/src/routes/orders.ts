@@ -200,6 +200,21 @@ export async function orderRoutes(server: FastifyInstance) {
     return { data: orders, error: null };
   });
 
+  // Archived orders (admin-only). Backs the Archives page. Registered as a
+  // static path so it is matched ahead of the /:id param route.
+  server.get('/api/v1/orders/archived', {
+    preHandler: requirePermission('orders:delete'),
+    schema: {
+      tags: ['Orders'],
+      summary: 'List archived orders (admin)',
+      description: 'Returns all archived orders for the current org. Requires orders:delete.',
+    },
+  }, async (req: FastifyRequest, _reply: FastifyReply) => {
+    const orgId = req.orgId!;
+    const orders = await ordersRepo.findArchived(orgId);
+    return { data: orders, error: null };
+  });
+
   // Create order
   server.post('/api/v1/orders', async (req: FastifyRequest, reply: FastifyReply) => {
     const body = createOrderSchema.parse((req as any).body);
@@ -451,6 +466,106 @@ export async function orderRoutes(server: FastifyInstance) {
     }
 
     return { data: { id, archived: false }, error: null };
+  });
+
+  // Bulk archive from the list page. Each order is archived independently;
+  // per-row results report which ones failed (e.g. already archived/deleted).
+  // Mirrors POST /api/v1/shipments/bulk-archive.
+  server.post('/api/v1/orders/bulk-archive', {
+    preHandler: requirePermission('orders:write'),
+    schema: {
+      tags: ['Orders'],
+      summary: 'Bulk archive orders',
+      description: 'Archives multiple orders (recoverable), returning per-order success/failure.',
+      body: {
+        type: 'object',
+        required: ['ids'],
+        properties: {
+          ids: { type: 'array', items: { type: 'string' } },
+        },
+      },
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { ids } = z.object({
+      ids: z.array(z.string().uuid()).min(1).max(500),
+    }).parse((req as any).body);
+
+    const orgId = req.orgId!;
+    const actorId = req.user?.sub ?? null;
+
+    const owned = await prisma.order.findMany({
+      where: { id: { in: ids }, orgId, deletedAt: null },
+      select: { id: true },
+    });
+    const ownedIds = new Set(owned.map((o: { id: string }) => o.id));
+
+    const results: Array<{ id: string; success: boolean; error: string | null }> = [];
+    for (const id of ids) {
+      if (!ownedIds.has(id)) {
+        results.push({ id, success: false, error: 'Order not found' });
+        continue;
+      }
+      const result = await commandBus.dispatch({
+        type: ARCHIVE_ORDER,
+        orgId,
+        actorId,
+        payload: { id },
+        metadata: { correlationId: randomUUID(), source: 'api' },
+      });
+      results.push({ id, success: result.success, error: result.success ? null : (result.error ?? 'Unknown error') });
+    }
+
+    return { data: { results }, error: null };
+  });
+
+  // Bulk soft delete from the list page (admin-only, orders:delete). Each
+  // order is deleted independently; per-row results report failures.
+  // Mirrors POST /api/v1/shipments/bulk-delete.
+  server.post('/api/v1/orders/bulk-delete', {
+    preHandler: requirePermission('orders:delete'),
+    schema: {
+      tags: ['Orders'],
+      summary: 'Bulk soft delete orders (admin)',
+      description: 'Marks multiple orders deleted (deletedAt/deletedBy), returning per-order success/failure. Requires orders:delete.',
+      body: {
+        type: 'object',
+        required: ['ids'],
+        properties: {
+          ids: { type: 'array', items: { type: 'string' } },
+        },
+      },
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { ids } = z.object({
+      ids: z.array(z.string().uuid()).min(1).max(500),
+    }).parse((req as any).body);
+
+    const orgId = req.orgId!;
+    const actorId = req.user?.sub ?? null;
+
+    const owned = await prisma.order.findMany({
+      where: { id: { in: ids }, orgId, deletedAt: null },
+      select: { id: true },
+    });
+    const ownedIds = new Set(owned.map((o: { id: string }) => o.id));
+
+    const results: Array<{ id: string; success: boolean; error: string | null }> = [];
+    for (const id of ids) {
+      if (!ownedIds.has(id)) {
+        results.push({ id, success: false, error: 'Order not found' });
+        continue;
+      }
+      const result = await commandBus.dispatch({
+        type: SOFT_DELETE_ORDER,
+        orgId,
+        actorId,
+        payload: { id },
+        metadata: { correlationId: randomUUID(), source: 'api' },
+      });
+      results.push({ id, success: result.success, error: result.success ? null : (result.error ?? 'Unknown error') });
+    }
+
+    return { data: { results }, error: null };
   });
 
   // Validate and create location if needed
