@@ -62,12 +62,15 @@ export class CarrierTrackingService {
       throw err;
     }
 
-    // Find in-transit shipments for this carrier that have tracking numbers
+    // Find actively in-progress shipments for this carrier that have tracking
+    // numbers. (Uses the canonical lifecycle status; the old in_transit/
+    // dispatched/picked_up values were retired in the lifecycle change.)
     const shipments = await this.prisma.shipment.findMany({
       where: {
         carrierId: integration.carrierId,
-        status: { in: ['in_transit', 'dispatched', 'picked_up'] },
+        status: { in: ['in_progress'] },
         trackingNumber: { not: null },
+        deletedAt: null,
       },
       select: { id: true, trackingNumber: true, reference: true },
     });
