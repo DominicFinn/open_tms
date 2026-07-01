@@ -25,7 +25,7 @@ export default async function telemetryRoutes(server: FastifyInstance) {
         200: {
           type: 'object',
           properties: {
-            data: { type: ['object', 'null'] },
+            data: { type: ['object', 'null'], additionalProperties: true },
             error: { type: ['string', 'null'] },
           },
         },
@@ -101,7 +101,7 @@ export default async function telemetryRoutes(server: FastifyInstance) {
         200: {
           type: 'object',
           properties: {
-            data: { type: ['object', 'null'] },
+            data: { type: ['object', 'null'], additionalProperties: true },
             error: { type: ['string', 'null'] },
           },
         },
