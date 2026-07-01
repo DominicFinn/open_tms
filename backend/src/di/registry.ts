@@ -224,6 +224,8 @@ import { CarrierTrackingService } from '../services/carrierTracking/CarrierTrack
 import { FedExTrackingProvider } from '../services/carrierTracking/providers/FedExTrackingProvider.js';
 import { UPSTrackingProvider } from '../services/carrierTracking/providers/UPSTrackingProvider.js';
 import { DHLTrackingProvider } from '../services/carrierTracking/providers/DHLTrackingProvider.js';
+import { EasyPostTrackingProvider } from '../services/carrierTracking/providers/EasyPostTrackingProvider.js';
+import { AfterShipTrackingProvider } from '../services/carrierTracking/providers/AfterShipTrackingProvider.js';
 import { CreateCarrierTrackingIntegrationCommandHandler } from '../commands/carrierTracking/CreateCarrierTrackingIntegrationCommand.js';
 import { UpdateCarrierTrackingIntegrationCommandHandler } from '../commands/carrierTracking/UpdateCarrierTrackingIntegrationCommand.js';
 import { DeleteCarrierTrackingIntegrationCommandHandler } from '../commands/carrierTracking/DeleteCarrierTrackingIntegrationCommand.js';
@@ -712,6 +714,8 @@ export function registerDependencies(prisma: PrismaClient): void {
     registry.register('fedex', () => new FedExTrackingProvider());
     registry.register('ups', () => new UPSTrackingProvider());
     registry.register('dhl', () => new DHLTrackingProvider());
+    registry.register('easypost', () => new EasyPostTrackingProvider());
+    registry.register('aftership', () => new AfterShipTrackingProvider());
     return registry;
   });
 
