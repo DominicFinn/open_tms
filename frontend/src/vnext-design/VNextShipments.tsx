@@ -168,6 +168,7 @@ export default function VNextShipments() {
   const markersRef = useRef<L.LayerGroup | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [typeFilter, setTypeFilter] = useState('all');
   const [createdFrom, setCreatedFrom] = useState('');
   const [createdTo, setCreatedTo] = useState('');
   const [updatedFrom, setUpdatedFrom] = useState('');
@@ -281,10 +282,18 @@ export default function VNextShipments() {
     }
   }, [viewMode]);
 
+  const sortedShipmentTypes = useMemo(
+    () => Object.values(shipmentTypes).sort((a, b) => a.name.localeCompare(b.name)),
+    [shipmentTypes],
+  );
+
   const filtered = shipments.filter(s => {
     if (statusFilter === 'issue') {
       if (!s.hasException) return false;
     } else if (statusFilter !== 'all' && s.status !== statusFilter) {
+      return false;
+    }
+    if (typeFilter !== 'all' && (s.shipmentTypeId || '') !== typeFilter) {
       return false;
     }
     if (search) {
@@ -468,6 +477,26 @@ export default function VNextShipments() {
               <SelectItem value="in_progress">In progress ({statusCounts.in_progress})</SelectItem>
               <SelectItem value="complete">Complete ({statusCounts.complete})</SelectItem>
               <SelectItem value="issue">Issues ({statusCounts.issue})</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={typeFilter} onValueChange={setTypeFilter}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="All types" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All types</SelectItem>
+              {sortedShipmentTypes.map(t => (
+                <SelectItem key={t.id} value={t.id}>
+                  <span className="inline-flex items-center gap-2">
+                    <span
+                      className="inline-flex h-2 w-2 rounded-full"
+                      style={{ background: t.color }}
+                    />
+                    {t.name}
+                  </span>
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
 
