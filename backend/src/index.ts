@@ -21,6 +21,8 @@ import { createWaveAutoReleaseWorker, registerWaveAutoReleaseSchedule, WAVE_AUTO
 import { WaveAutoReleaseService } from './services/waves/WaveAutoReleaseService.js';
 import { createOrderAutoArchiveWorker, registerOrderAutoArchiveSchedule, ORDER_AUTO_ARCHIVE_QUEUE } from './workers/orderAutoArchiveWorker.js';
 import { OrderAutoArchiveService } from './services/OrderAutoArchiveService.js';
+import { createCarrierUserAnonymizeWorker, registerCarrierUserAnonymizeSchedule, CARRIER_USER_ANONYMIZE_QUEUE } from './workers/carrierUserAnonymizeWorker.js';
+import { CarrierUserAnonymizationService } from './services/CarrierUserAnonymizationService.js';
 import { registerEventHandlers } from './events/registerHandlers.js';
 import type { IEventBus } from './events/IEventBus.js';
 import { createWebhookRetryWorker, registerWebhookRetrySchedule, WEBHOOK_RETRY_QUEUE } from './workers/webhookRetryWorker.js';
@@ -407,6 +409,21 @@ async function start() {
         }
       } catch (err) {
         server.log.warn('Order auto-archive worker failed to register: ' + (err as Error).message);
+      }
+
+      // Carrier-user anonymisation worker — scrubs PII from portal users whose
+      // carrier has been archived/deleted for longer than the retention window.
+      try {
+        const anonBoss = (queue as any).boss;
+        if (anonBoss) {
+          const anonDays = Number(process.env.CARRIER_USER_ANONYMIZE_DAYS) || 365;
+          const anonService = new CarrierUserAnonymizationService(server.prisma, anonDays);
+          await registerCarrierUserAnonymizeSchedule(anonBoss);
+          await queue.subscribe(CARRIER_USER_ANONYMIZE_QUEUE, createCarrierUserAnonymizeWorker(anonService));
+          server.log.info(`Carrier-user anonymisation worker registered (retention: ${anonDays} days)`);
+        }
+      } catch (err) {
+        server.log.warn('Carrier-user anonymisation worker failed to register: ' + (err as Error).message);
       }
 
       // Webhook retry worker — re-sends failed CustomerWebhookDelivery rows with exponential backoff
