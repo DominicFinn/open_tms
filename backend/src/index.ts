@@ -167,9 +167,22 @@ async function start() {
             in: 'header',
             name: 'x-api-key',
             description: 'Customer-scoped API key. Create one via POST /api/v1/api-keys with a customerId. Can also be passed as Authorization: Bearer <key>.'
+          },
+          BearerAuth: {
+            type: 'http',
+            scheme: 'bearer',
+            bearerFormat: 'JWT',
+            description: 'Internal user JWT from POST /api/v1/auth/login. Required for most admin/back-office endpoints.'
           }
         }
-      }
+      },
+      // Default security requirement for any operation that doesn't declare
+      // its own `security` array. Most routes sit behind the global
+      // authenticateJWT hook (see the authenticatedRoutes block below), so
+      // BearerAuth is the sane default; self-authenticating routes (login,
+      // customer/carrier portals, ApiKeyAuth-scoped endpoints, etc.) already
+      // override this with their own per-route `security`.
+      security: [{ BearerAuth: [] }]
     }
   });
   // Only expose Swagger UI in non-production environments
