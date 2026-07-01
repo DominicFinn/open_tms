@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 
 import { API_URL } from '../api';
+import { useCurrentUser } from '../hooks/useCurrentUser';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -83,6 +84,7 @@ function formatDate(d?: string): string {
 
 export default function VNextOrders() {
   const navigate = useNavigate();
+  const { hasPermission } = useCurrentUser();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [activeTab, setActiveTab] = useState('all');
@@ -213,10 +215,12 @@ export default function VNextOrders() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button variant="gradient" onClick={() => navigate('/orders/create')}>
-            <Plus className="h-4 w-4" />
-            New order
-          </Button>
+          {hasPermission('orders:write') && (
+            <Button variant="gradient" onClick={() => navigate('/orders/create')}>
+              <Plus className="h-4 w-4" />
+              New order
+            </Button>
+          )}
         </div>
       </div>
 

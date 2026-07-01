@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 
 import { API_URL } from '../api';
+import { useCurrentUser } from '../hooks/useCurrentUser';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -54,6 +55,7 @@ interface Lane {
 
 export default function VNextLanes() {
   const navigate = useNavigate();
+  const { hasPermission } = useCurrentUser();
   const [lanes, setLanes] = useState<Lane[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -130,10 +132,12 @@ export default function VNextLanes() {
           <p className="mt-1 text-sm text-muted-foreground">{lanes.length} lanes configured</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="gradient" onClick={() => navigate('/lanes/create')}>
-            <Plus className="h-4 w-4" />
-            New lane
-          </Button>
+          {hasPermission('lanes:write') && (
+            <Button variant="gradient" onClick={() => navigate('/lanes/create')}>
+              <Plus className="h-4 w-4" />
+              New lane
+            </Button>
+          )}
         </div>
       </div>
 
