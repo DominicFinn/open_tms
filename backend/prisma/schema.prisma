@@ -711,8 +711,11 @@ model Order {
   notes               String?
 
   // Tracking
-  archived   Boolean   @default(false)
-  archivedAt DateTime?
+  archived            Boolean   @default(false)
+  archivedAt          DateTime?
+  statusBeforeArchive  String? // Captured on archive so unarchive can restore the prior lifecycle status
+  deletedAt            DateTime? // Soft delete - set when order is deleted
+  deletedBy            String? // User ID who deleted the order
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 
@@ -739,6 +742,7 @@ model Order {
   @@index([customerId])
   @@index([status])
   @@index([archived])
+  @@index([deletedAt])
   @@index([createdAt])
   @@index([deliveryStatus])
   @@index([originId])

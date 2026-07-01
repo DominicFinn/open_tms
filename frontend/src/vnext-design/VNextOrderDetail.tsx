@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
+  Archive,
+  ArchiveRestore,
   ArrowLeft,
   Boxes,
   CircleAlert,
@@ -8,8 +10,10 @@ import {
   FileText,
   Loader2,
   Pencil,
+  Trash2,
   User,
 } from 'lucide-react';
+import { toast } from 'sonner';
 
 import { API_URL } from '../api';
 import { Button } from '@/components/ui/button';
@@ -24,7 +28,16 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogFooter,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 import HandlingUnitsEditor, { HUEditorEndpoints } from '../components/HandlingUnitsEditor';
+import { useCurrentUser } from '../hooks/useCurrentUser';
 
 type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning' | 'info' | 'muted';
 
@@ -98,6 +111,9 @@ interface OrderData {
   trackableUnits: TrackableUnit[];
   orderShipments: OrderShipment[];
   auditLogs: AuditLog[];
+  archived?: boolean;
+  archivedAt?: string;
+  deletedAt?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -146,10 +162,15 @@ function InfoItem({ label, children }: { label: string; children: React.ReactNod
 export default function VNextOrderDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { hasPermission } = useCurrentUser();
   const [order, setOrder] = useState<OrderData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [editingUnits, setEditingUnits] = useState(false);
+  const [archiving, setArchiving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [unarchiving, setUnarchiving] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const loadOrder = useCallback(async () => {
     try {
@@ -173,6 +194,64 @@ export default function VNextOrderDetail() {
     })();
     return () => { cancelled = true; };
   }, [loadOrder]);
+
+  const handleArchive = useCallback(async () => {
+    if (!id) return;
+    setArchiving(true);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/orders/${id}`, { method: 'DELETE' });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json.error) {
+        toast.error(json.error || 'Failed to archive order', { duration: 8000 });
+        return;
+      }
+      toast.success('Order archived');
+      navigate('/orders');
+    } catch {
+      toast.error('Failed to archive order');
+    } finally {
+      setArchiving(false);
+    }
+  }, [id, navigate]);
+
+  const handleUnarchive = useCallback(async () => {
+    if (!id) return;
+    setUnarchiving(true);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/orders/${id}/unarchive`, { method: 'POST' });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json.error) {
+        toast.error(json.error || 'Failed to unarchive order', { duration: 8000 });
+        return;
+      }
+      toast.success('Order restored');
+      loadOrder();
+    } catch {
+      toast.error('Failed to unarchive order');
+    } finally {
+      setUnarchiving(false);
+    }
+  }, [id, loadOrder]);
+
+  const handleSoftDelete = useCallback(async () => {
+    if (!id) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/orders/${id}/soft-delete`, { method: 'POST' });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json.error) {
+        toast.error(json.error || 'Failed to delete order', { duration: 8000 });
+        return;
+      }
+      toast.success('Order deleted');
+      navigate('/orders');
+    } catch {
+      toast.error('Failed to delete order');
+    } finally {
+      setDeleting(false);
+      setConfirmDelete(false);
+    }
+  }, [id, navigate]);
 
   // Memoised on `id` so the HandlingUnitsEditor doesn't re-trigger its effects
   // (packaging-types fetch, cartonization preview) on every parent render.
@@ -238,8 +317,58 @@ export default function VNextOrderDetail() {
             <FileText className="h-4 w-4" />
             Documents
           </Button>
+          {hasPermission('orders:write') && !order.archived && !order.deletedAt && (
+            <Button variant="outline" size="sm" onClick={handleArchive} disabled={archiving}>
+              {archiving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Archive className="h-4 w-4" />}
+              Archive
+            </Button>
+          )}
+          {hasPermission('orders:delete') && !order.deletedAt && (
+            <Button variant="outline" size="sm" onClick={() => setConfirmDelete(true)} disabled={deleting}
+              className="text-destructive hover:text-destructive">
+              <Trash2 className="h-4 w-4" />
+              Delete
+            </Button>
+          )}
         </div>
       </div>
+
+      {/* Archived banner */}
+      {order.archived && (
+        <div className="flex flex-wrap items-center gap-3 rounded-md border border-warning/30 bg-warning/10 p-4 text-sm">
+          <Archive className="h-5 w-5 text-warning" />
+          <div className="flex-1">
+            <span className="font-medium text-warning">This order is archived.</span>
+            <span className="ml-1 text-muted-foreground">It does not appear in active order lists.</span>
+          </div>
+          {hasPermission('orders:delete') && (
+            <Button variant="outline" size="sm" onClick={handleUnarchive} disabled={unarchiving}>
+              {unarchiving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArchiveRestore className="h-4 w-4" />}
+              Unarchive
+            </Button>
+          )}
+        </div>
+      )}
+
+      {/* Soft-delete confirmation (admin) */}
+      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete this order?</DialogTitle>
+            <DialogDescription>
+              {order.orderNumber || order.id} will be removed from all views. The record is retained for audit
+              but cannot be restored from the UI. This is different from archiving.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmDelete(false)} disabled={deleting}>Cancel</Button>
+            <Button variant="destructive" onClick={handleSoftDelete} disabled={deleting}>
+              {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              Delete order
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
         <div className="space-y-6">

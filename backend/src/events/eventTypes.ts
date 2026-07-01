@@ -35,6 +35,8 @@ export const EVENT_TYPES = {
   ORDER_EXCEPTION_RESOLVED: 'order.exception_resolved',
   ORDER_DELIVERED: 'order.delivered',
   ORDER_ARCHIVED: 'order.archived',
+  ORDER_UNARCHIVED: 'order.unarchived',
+  ORDER_DELETED: 'order.deleted',
 
   // Trackable Units (per-handling-unit ops, Phase 2)
   TRACKABLE_UNIT_CREATED: 'trackable_unit.created',
@@ -406,6 +408,8 @@ export const EVENT_SCHEMA_VERSIONS: Record<string, number> = {
   [EVENT_TYPES.ORDER_EXCEPTION_RESOLVED]: 1,
   [EVENT_TYPES.ORDER_DELIVERED]: 1,
   [EVENT_TYPES.ORDER_ARCHIVED]: 1,
+  [EVENT_TYPES.ORDER_UNARCHIVED]: 1,
+  [EVENT_TYPES.ORDER_DELETED]: 1,
   [EVENT_TYPES.TRACKABLE_UNIT_CREATED]: 1,
   [EVENT_TYPES.TRACKABLE_UNIT_UPDATED]: 1,
   [EVENT_TYPES.TRACKABLE_UNIT_DELETED]: 1,

@@ -145,6 +145,10 @@ export interface OrderWithRelations extends Order {
 export interface IOrdersRepository {
   all(orgId?: string | null): Promise<OrderWithRelations[]>;
   findById(id: string, orgId?: string | null): Promise<OrderWithRelations | null>;
+  // Same shape as findById but does not exclude archived orders — used by the
+  // order detail page (and the unarchive/soft-delete routes) so an archived
+  // order can still be viewed/restored. Still excludes soft-deleted orders.
+  findByIdIncludingArchived(id: string, orgId?: string | null): Promise<OrderWithRelations | null>;
   findByOrderNumber(orderNumber: string, orgId?: string | null): Promise<OrderWithRelations | null>;
   findByCustomerId(customerId: string, options?: { orgId?: string | null; status?: string; limit?: number; offset?: number }): Promise<OrderWithRelations[]>;
   create(data: CreateOrderDTO): Promise<OrderWithRelations>;
@@ -176,7 +180,7 @@ export class OrdersRepository implements IOrdersRepository {
   constructor(private prisma: PrismaClient) {}
 
   async all(orgId?: string | null): Promise<OrderWithRelations[]> {
-    const where: any = { archived: false };
+    const where: any = { archived: false, deletedAt: null };
     // Scope to the requesting tenant when supplied. Legacy NULL-orgId
     // rows are excluded from scoped queries.
     if (orgId) where.orgId = orgId;
@@ -227,7 +231,7 @@ export class OrdersRepository implements IOrdersRepository {
   }
 
   async findByCustomerId(customerId: string, options?: { orgId?: string | null; status?: string; limit?: number; offset?: number }): Promise<OrderWithRelations[]> {
-    const where: any = { customerId, archived: false };
+    const where: any = { customerId, archived: false, deletedAt: null };
     if (options?.orgId) where.orgId = options.orgId;
     if (options?.status) {
       where.status = options.status;
@@ -281,7 +285,59 @@ export class OrdersRepository implements IOrdersRepository {
   }
 
   async findById(id: string, orgId?: string | null): Promise<OrderWithRelations | null> {
-    const where: any = { id, archived: false };
+    const where: any = { id, archived: false, deletedAt: null };
+    if (orgId) where.orgId = orgId;
+    return this.prisma.order.findFirst({
+      where,
+      include: {
+        customer: {
+          select: {
+            id: true,
+            name: true,
+            contactEmail: true
+          }
+        },
+        origin: {
+          select: {
+            id: true,
+            name: true,
+            address1: true,
+            city: true,
+            state: true,
+            country: true
+          }
+        },
+        destination: {
+          select: {
+            id: true,
+            name: true,
+            address1: true,
+            city: true,
+            state: true,
+            country: true
+          }
+        },
+        trackableUnits: {
+          include: {
+            lineItems: true
+          },
+          orderBy: { sequenceNumber: 'asc' }
+        },
+        lineItems: {
+          where: {
+            trackableUnitId: null
+          }
+        }
+      }
+    }) as Promise<OrderWithRelations | null>;
+  }
+
+  // Same as findById but omits the `archived: false` filter, so an archived
+  // order can still be viewed/unarchived from its detail page (mirrors
+  // ShipmentsRepository's GET-by-id, which likewise only excludes
+  // soft-deleted rows, not archived ones).
+  async findByIdIncludingArchived(id: string, orgId?: string | null): Promise<OrderWithRelations | null> {
+    const where: any = { id, deletedAt: null };
     if (orgId) where.orgId = orgId;
     return this.prisma.order.findFirst({
       where,
@@ -329,7 +385,7 @@ export class OrdersRepository implements IOrdersRepository {
   }
 
   async findByOrderNumber(orderNumber: string, orgId?: string | null): Promise<OrderWithRelations | null> {
-    const where: any = { orderNumber, archived: false };
+    const where: any = { orderNumber, archived: false, deletedAt: null };
     if (orgId) where.orgId = orgId;
     return this.prisma.order.findFirst({
       where,

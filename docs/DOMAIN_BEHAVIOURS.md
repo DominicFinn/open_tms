@@ -35,7 +35,9 @@ Every event is persisted to the immutable `DomainEventLog` before handler fan-ou
 |---------|---------|----------------|
 | `CreateOrderCommand` | `POST /api/v1/orders` | `order.created` |
 | `UpdateOrderCommand` | `PUT /api/v1/orders/:id` | `order.updated`, `order.status_changed` (if status changes) |
-| `ArchiveOrderCommand` | `DELETE /api/v1/orders/:id` | `order.archived` |
+| `ArchiveOrderCommand` | `DELETE /api/v1/orders/:id` (`orders:write`) | `order.archived` |
+| `SoftDeleteOrderCommand` | `POST /api/v1/orders/:id/soft-delete` (admin, `orders:delete`) | `order.deleted` |
+| `UnarchiveOrderCommand` | `POST /api/v1/orders/:id/unarchive` (admin, `orders:delete`) | `order.unarchived` |
 
 ### Sub-Entity Operations (CQRS, Phase 2 + Phase 4)
 
@@ -96,7 +98,9 @@ These call domain services with complex orchestration logic. They currently crea
 | `order.delivered` | OrderReadModel.deliveredAt set | In-app notification | — |
 | `order.exception` | OrderReadModel.exceptionType set | In-app + email | — |
 | `order.exception_resolved` | OrderReadModel.exceptionType cleared | — | — |
-| `order.archived` | — | — | Audit log |
+| `order.archived` | OrderReadModel deleted (removed from active lists; captures prior `status` in `statusBeforeArchive` for restore) | — | Audit log |
+| `order.deleted` (soft delete) | OrderReadModel deleted | — | Sets `deletedAt`/`deletedBy`; hidden from every view, not recoverable from the UI |
+| `order.unarchived` | OrderReadModel re-inserted (reuses the `order.created` projection path) | — | Restores `status` from `statusBeforeArchive` (falls back to `pending`) |
 
 ### Status Lifecycle
 

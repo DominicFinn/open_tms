@@ -49,6 +49,8 @@ import { CommandBus } from '../commands/CommandBus.js';
 import { CreateOrderCommandHandler } from '../commands/orders/CreateOrderCommand.js';
 import { UpdateOrderCommandHandler } from '../commands/orders/UpdateOrderCommand.js';
 import { ArchiveOrderCommandHandler } from '../commands/orders/ArchiveOrderCommand.js';
+import { SoftDeleteOrderCommandHandler } from '../commands/orders/SoftDeleteOrderCommand.js';
+import { UnarchiveOrderCommandHandler } from '../commands/orders/UnarchiveOrderCommand.js';
 import {
   CreateTrackableUnitCommandHandler,
   UpdateTrackableUnitCommandHandler,
@@ -803,6 +805,8 @@ export function registerDependencies(prisma: PrismaClient): void {
     bus.register(new CreateOrderCommandHandler(prisma, eventBus));
     bus.register(new UpdateOrderCommandHandler(prisma, eventBus));
     bus.register(new ArchiveOrderCommandHandler(prisma, eventBus));
+    bus.register(new SoftDeleteOrderCommandHandler(prisma, eventBus));
+    bus.register(new UnarchiveOrderCommandHandler(prisma, eventBus));
     bus.register(new CreateTrackableUnitCommandHandler(prisma, eventBus));
     bus.register(new UpdateTrackableUnitCommandHandler(prisma, eventBus));
     bus.register(new DeleteTrackableUnitCommandHandler(prisma, eventBus));

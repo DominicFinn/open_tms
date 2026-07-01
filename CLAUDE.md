@@ -557,7 +557,9 @@ Orders are archived (not deleted) when they reach end-of-life. Archiving sets `a
 
 **Manual archive — customer portal:** Customers can archive any of their own orders from the order detail page (`DELETE /api/v1/customer-portal/orders/:id`). No status restriction — customers may have created an order by accident or no longer need it. Already-archived orders return 400.
 
-**Manual archive — admin app:** Same behavior via `DELETE /api/v1/orders/:id`.
+**Manual archive — admin app:** Same behavior via `DELETE /api/v1/orders/:id`, gated on `orders:write` (any operational user). Archiving captures the order's pre-archive `status` in `statusBeforeArchive` (since archiving overwrites `status` to `'archived'`, unlike Shipment's boolean-only `archived` flag) so unarchive can restore it instead of guessing.
+
+**Manual delete + unarchive — admin app:** Mirrors the Shipment archive/delete/unarchive trio. `POST /api/v1/orders/:id/soft-delete` (admin-only, `orders:delete`) sets `deletedAt`/`deletedBy` and hides the order from every view (list, detail, customer portal) via `SoftDeleteOrderCommand` — distinct from archive, and not recoverable from the UI. `POST /api/v1/orders/:id/unarchive` (admin-only, `orders:delete`) clears `archived`/`archivedAt` via `UnarchiveOrderCommand`, restores `status` from `statusBeforeArchive` (falls back to `pending` if none was captured), and re-inserts the order into `OrderReadModel`. `GET /api/v1/orders/:id` uses `OrdersRepository.findByIdIncludingArchived` (not `findById`) so an archived order still loads on its detail page to show the archived banner + Unarchive action; soft-deleted orders still 404. The `VNextOrderDetail` page (Archive/Delete buttons, archived banner, delete confirmation dialog) mirrors `VNextShipmentDetail`.
 
 **Auto-archive:** Delivered or cancelled orders are auto-archived after a retention window (default 30 days). `OrderAutoArchiveService` is invoked by the `order-auto-archive` pg-boss cron worker daily at 02:00 UTC. Eligibility:
 - `deliveryStatus = 'delivered' AND deliveredAt < now - retentionDays`, OR
@@ -570,12 +572,16 @@ Configurable via `ORDER_AUTO_ARCHIVE_DAYS` (default 30) and `ORDER_AUTO_ARCHIVE_
 
 ### Key Files
 - `backend/src/commands/orders/ArchiveOrderCommand.ts` — `ARCHIVE_ORDER` command handler
+- `backend/src/commands/orders/SoftDeleteOrderCommand.ts` — `SOFT_DELETE_ORDER` command handler (admin-only, idempotent)
+- `backend/src/commands/orders/UnarchiveOrderCommand.ts` — `UNARCHIVE_ORDER` command handler (admin-only, restores prior status, idempotent)
 - `backend/src/services/OrderAutoArchiveService.ts` — Finds eligible orders and dispatches archive commands
 - `backend/src/workers/orderAutoArchiveWorker.ts` — pg-boss cron registration
-- `backend/src/events/projections/OrderProjection.ts` — `onOrderArchived` removes from read model
+- `backend/src/events/projections/OrderProjection.ts` — `onOrderArchived`/`onOrderDeleted` remove from read model; `order.unarchived` reuses `onOrderCreated` to re-insert
+- `backend/src/repositories/OrdersRepository.ts` — `findByIdIncludingArchived` (detail-page + unarchive/soft-delete existence checks bypass the `archived: false` filter that other mutation routes rely on)
 - `backend/src/routes/customerPortal.ts` — Customer-facing archive endpoint
-- `backend/src/routes/orders.ts` — Admin-facing archive endpoint
+- `backend/src/routes/orders.ts` — Admin-facing archive/soft-delete/unarchive endpoints
 - `frontend/src/pages/customer-portal/CustomerOrderDetail.tsx` — Archive button
+- `frontend/src/vnext-design/VNextOrderDetail.tsx` — Archive/Delete buttons, archived banner, Unarchive, delete confirmation dialog
 
 ## Database
 

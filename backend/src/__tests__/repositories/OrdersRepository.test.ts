@@ -33,7 +33,7 @@ describe('OrdersRepository', () => {
       await repo.findByCustomerId('cust-1');
 
       const where = prisma.order.findMany.mock.calls[0][0].where;
-      expect(where).toEqual({ customerId: 'cust-1', archived: false });
+      expect(where).toEqual({ customerId: 'cust-1', archived: false, deletedAt: null });
     });
 
     it('layers on status when supplied', async () => {
@@ -80,7 +80,7 @@ describe('OrdersRepository', () => {
       await repo.findById('o-1');
 
       const where = prisma.order.findFirst.mock.calls[0][0].where;
-      expect(where).toEqual({ id: 'o-1', archived: false });
+      expect(where).toEqual({ id: 'o-1', archived: false, deletedAt: null });
     });
   });
 
