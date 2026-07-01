@@ -289,15 +289,44 @@ Two independent removal states, both retaining the row for audit:
 |---------|---------|----------------|
 | `CreateCarrierCommand` | `POST /api/v1/carriers` | `carrier.created` |
 | `UpdateCarrierCommand` | `PUT /api/v1/carriers/:id` | `carrier.updated` |
-| `ArchiveCarrierCommand` | `DELETE /api/v1/carriers/:id` | `carrier.archived` |
+| `ArchiveCarrierCommand` | `POST /api/v1/carriers/:id/archive` | `carrier.archived` |
+| `UnarchiveCarrierCommand` | `POST /api/v1/carriers/:id/unarchive` | `carrier.unarchived` |
+| `SoftDeleteCarrierCommand` | `DELETE /api/v1/carriers/:id` | `carrier.deleted` |
+
+### Carrier Lifecycle (Archive / Delete)
+
+- **Archive** — normal-user action. Stops the carrier being selected for new work
+  and deactivates its portal users (they can no longer log in), but it stays
+  visible to finance/admin (detail page shows an "archived" banner). Reversible
+  via **Unarchive** (finance/admin), which reactivates non-anonymised users.
+- **Soft delete** — admin action for accidental creates / dev cleanup. Sets a
+  `deletedAt`/`deletedBy` tombstone; the carrier 404s everywhere but the row is
+  retained for audit/finance history. **A carrier assigned to any lane cannot be
+  deleted — only archived** (the command throws, surfaced as a 400).
+- **Validation (#93)** — optional format fields treat "" as absent (a blank email
+  no longer fails save); only `name` is mandatory. `paymentTermsDays`/`currency`
+  now persist.
+- **Listing** — `GET /carriers` excludes soft-deleted and (by default) archived;
+  `?includeArchived=true` returns archived too for the management list. `findById`
+  returns archived (for the banner) but not deleted.
+- **Notification** — `CarrierArchivalNotificationHandler` messages the carrier's
+  portal users on archive/delete (email **stubbed**) and emits an auditable
+  `carrier.users_notified` event (recipients, reason, channel).
+- **Anonymisation** — `CarrierUserAnonymizationService` (daily pg-boss cron,
+  `CARRIER_USER_ANONYMIZE_DAYS`, default 365) scrubs portal-user PII 1 year after
+  the carrier is archived/deleted: email → unique placeholder, name blanked,
+  password invalidated, `anonymizedAt` stamped, account deactivated.
 
 ### Side Effects
 
-| Event | Projection |
+| Event | Projection / Handler |
 |-------|-----------|
 | `carrier.created` | CarrierReadModel inserted (vehicle/driver/lane counts) |
 | `carrier.updated` | CarrierReadModel fields updated |
-| `carrier.archived` | CarrierReadModel.status = 'archived' |
+| `carrier.archived` | CarrierReadModel.status = 'archived'; portal users deactivated; users notified (stub email) |
+| `carrier.unarchived` | CarrierReadModel.status = 'active'; non-anonymised users reactivated |
+| `carrier.deleted` | CarrierReadModel removed; portal users deactivated; users notified (stub email) |
+| `carrier.users_notified` | Auditable record of who was messaged, why, and via which channel |
 
 ---
 
