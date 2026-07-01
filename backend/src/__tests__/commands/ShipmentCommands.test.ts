@@ -31,6 +31,10 @@ const mockTx = {
     update: jest.fn().mockResolvedValue(mockShipment),
     findFirstOrThrow: jest.fn().mockResolvedValue(mockShipment),
   },
+  shipmentStop: {
+    deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+    createMany: jest.fn().mockResolvedValue({ count: 0 }),
+  },
   lane: {
     findFirst: jest.fn(),
     findFirstOrThrow: jest.fn(),
