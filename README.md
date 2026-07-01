@@ -54,6 +54,7 @@ Deploy your own Open TMS instance with one click:
 - **Shipment Archive & Soft Delete** - Operational users can archive shipments (recoverable, removed from active lists); admins can soft-delete (hidden everywhere, retained for audit). Both actions are permission-gated and audit-logged
 - **Shipment Event Timeline** - Read-only, platform-generated event timeline on each shipment (created, updated, status changed, carrier assigned, exception, delivered, archive/delete, origin/destination/waypoint movements), filterable by event type and date range
 - **IoT Device Tracking** - Admin toggle for IoT vendors (System Loco), then attach one or many tracking devices to a shipment (name + external ID) directly on the shipment form. Inbound device webhooks (HMAC-verified, idempotent, queued) resolve to the shipment via the device assignment, update its live map position, and feed enriched telemetry (temperature, humidity, pressure, location accuracy), the event timeline, and cold-chain monitoring. See `docs/SYSTEM_LOCO_INTEGRATION.md`
+- **Order Archive, Soft Delete & Auto-Archive** - Customers and operational users can archive an order (recoverable, removed from active lists); admins can soft-delete (hidden everywhere, retained for audit) or unarchive (restores prior status). Delivered/cancelled orders auto-archive after a configurable retention window (default 30 days)
 - **Order-to-Shipment Conversion** - Combine multiple orders into one shipment, split large orders across multiple shipments, or convert individually with a conversion wizard
 - **CSV Import** - Bulk order creation from CSV files with automatic customer/location matching, downloadable CSV template, per-line mode-rules validation (LTL/hazmat/international/temperature-controlled), all-or-nothing per order with row-level error reporting, and a customer-portal upload path scoped to the authenticated customer
 - **EDI Communication Hub** - 12 X12 transaction types (850, 856, 204, 990, 997, 214, 210, 810, 820, 180, 940, 945) with unified Trading Partner model, universal inbound endpoint, event-driven outbound (856 on delivery, 810 on invoice, 180 for return authorization, 945 on shipment-delivered for 3PL warehouse shipping advice), 997 auto-ack, SFTP/HTTP delivery, shared X12 envelope utilities, and EDI Portal UI
@@ -485,6 +486,8 @@ On first run, call `POST /api/v1/auth/setup` to seed default roles (admin, dispa
 - `GET /api/v1/orders/:id` - Get order details
 - `PUT /api/v1/orders/:id` - Update order
 - `DELETE /api/v1/orders/:id` - Archive order
+- `POST /api/v1/orders/:id/soft-delete` - Soft-delete order (admin-only, hidden everywhere, retained for audit)
+- `POST /api/v1/orders/:id/unarchive` - Unarchive order, restoring its pre-archive status (admin-only)
 - `POST /api/v1/orders/:id/assign-to-shipment` - Auto-assign order to a shipment via lane matching
 - `POST /api/v1/orders/:id/convert-to-shipment` - Convert order directly to a shipment
 - `POST /api/v1/orders/check-compatibility` - Check if orders can be combined into one shipment
