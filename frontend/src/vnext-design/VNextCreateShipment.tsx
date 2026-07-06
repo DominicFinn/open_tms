@@ -4,7 +4,6 @@ import { toast } from 'sonner';
 import {
   ArrowLeft,
   Ban,
-  Box,
   ChevronRight,
   CircleAlert,
   FlagTriangleRight,
@@ -15,7 +14,6 @@ import {
   Plus,
   Radio,
   Save,
-  StickyNote,
   Tag,
 } from 'lucide-react';
 
@@ -55,7 +53,6 @@ export default function VNextCreateShipment() {
 
   const [customer, setCustomer] = useState('');
   const [reference, setReference] = useState('');
-  const [mode, setMode] = useState('');
   const [proNumber, setProNumber] = useState('');
 
   const [originLocation, setOriginLocation] = useState('');
@@ -70,15 +67,6 @@ export default function VNextCreateShipment() {
   const [deliveryWindowStart, setDeliveryWindowStart] = useState('');
   const [deliveryWindowEnd, setDeliveryWindowEnd] = useState('');
 
-  const [weight, setWeight] = useState('');
-  const [weightUnit, setWeightUnit] = useState('lb');
-  const [pieces, setPieces] = useState('');
-  const [commodity, setCommodity] = useState('');
-  const [tempControlled, setTempControlled] = useState(false);
-  const [tempMode, setTempMode] = useState('ambient');
-  const [hazmat, setHazmat] = useState(false);
-
-  const [notes, setNotes] = useState('');
   const [laneId, setLaneId] = useState('');
 
   const [iotEnabled, setIotEnabled] = useState(false);
@@ -409,18 +397,6 @@ export default function VNextCreateShipment() {
             />
           </div>
           <div className="space-y-2">
-            <Label>Mode</Label>
-            <Select value={mode} onValueChange={setMode}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select mode..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ftl">FTL</SelectItem>
-                <SelectItem value="ltl">LTL</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
             <Label>PRO number{reqMark('proNumber')}</Label>
             <Input
               type="text"
@@ -637,88 +613,6 @@ export default function VNextCreateShipment() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Box className="h-4 w-4 text-primary" />
-            Cargo
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <Label>Weight</Label>
-            <div className="flex gap-2">
-              <Input
-                type="number"
-                placeholder="0"
-                value={weight}
-                onChange={e => setWeight(e.target.value)}
-                className="flex-1"
-              />
-              <Select value={weightUnit} onValueChange={setWeightUnit}>
-                <SelectTrigger className="w-20">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="lb">lb</SelectItem>
-                  <SelectItem value="kg">kg</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label>Pieces</Label>
-            <Input
-              type="number"
-              placeholder="0"
-              value={pieces}
-              onChange={e => setPieces(e.target.value)}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Commodity</Label>
-            <Input
-              type="text"
-              placeholder="Enter commodity description"
-              value={commodity}
-              onChange={e => setCommodity(e.target.value)}
-            />
-          </div>
-          <div className="space-y-3">
-            <label className="flex items-center gap-2 text-sm font-medium">
-              <input
-                type="checkbox"
-                checked={tempControlled}
-                onChange={e => setTempControlled(e.target.checked)}
-                className="h-4 w-4 rounded border border-input bg-background accent-primary"
-              />
-              Temperature controlled
-            </label>
-            {tempControlled && (
-              <Select value={tempMode} onValueChange={setTempMode}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ambient">Ambient</SelectItem>
-                  <SelectItem value="refrigerated">Refrigerated</SelectItem>
-                  <SelectItem value="frozen">Frozen</SelectItem>
-                </SelectContent>
-              </Select>
-            )}
-            <label className="flex items-center gap-2 text-sm font-medium">
-              <input
-                type="checkbox"
-                checked={hazmat}
-                onChange={e => setHazmat(e.target.checked)}
-                className="h-4 w-4 rounded border border-input bg-background accent-primary"
-              />
-              Hazmat
-            </label>
-          </div>
-        </CardContent>
-      </Card>
-
       {iotEnabled && (
         <Card>
           <CardHeader>
@@ -768,24 +662,6 @@ export default function VNextCreateShipment() {
           </CardContent>
         </Card>
       )}
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <StickyNote className="h-4 w-4 text-primary" />
-            Notes
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <textarea
-            rows={4}
-            placeholder="Enter any additional notes or special instructions..."
-            value={notes}
-            onChange={e => setNotes(e.target.value)}
-            className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          />
-        </CardContent>
-      </Card>
 
       {missingRequired.length > 0 && (
         <div className="flex items-start gap-3 rounded-md border border-warning/30 bg-warning/10 p-4 text-sm text-warning">
