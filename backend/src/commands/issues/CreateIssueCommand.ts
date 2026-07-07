@@ -16,6 +16,10 @@ export interface CreateIssuePayload {
   description?: string;
   priority?: string;
   category: string;
+  /** Deterministic issue engine: stable Issue Type registry key. */
+  issueType?: string;
+  /** Latched issues cannot be auto-resolved when the condition clears. */
+  latched?: boolean;
   sourceEntityType?: string;
   sourceEntityId?: string;
   sourceEventId?: string;
@@ -52,6 +56,8 @@ export class CreateIssueCommandHandler extends BaseCommandHandler<CreateIssuePay
         title: issue.title,
         priority: issue.priority,
         category: issue.category,
+        issueType: issue.issueType,
+        latched: issue.latched,
         sourceEntityType: issue.sourceEntityType,
         sourceEntityId: issue.sourceEntityId,
       },

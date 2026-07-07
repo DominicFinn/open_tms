@@ -938,6 +938,7 @@ model Organization {
 
   // Issue & Read model relations
   issues             Issue[]
+  issueSignals       IssueSignal[]
   carrierReadModels  CarrierReadModel[]
   customerReadModels CustomerReadModel[]
   issueReadModels    IssueReadModel[]
@@ -1847,6 +1848,14 @@ model Issue {
   priority     String       @default("medium") // low, medium, high, critical
   category     String // exception, delay, damage, compliance, other
 
+  // Deterministic issue engine: stable Issue Type registry key (e.g.
+  // "shipment_cutoff_risk"). Null for manually/legacy-created issues. Used for
+  // reporting and to look up the type's behaviour (latching, thresholds).
+  issueType String?
+  // Latched issues cannot be auto-resolved when the underlying condition clears
+  // ("it happened" — must be investigated). Snapshot of the type's `latched`.
+  latched Boolean @default(false)
+
   // Source entity that triggered the issue
   sourceEntityType String? // "shipment", "order", "carrier"
   sourceEntityId   String?
@@ -1881,6 +1890,9 @@ model Issue {
   // Labels
   labelAssignments IssueLabelAssignment[]
 
+  // Exception signals that contributed to / are attached to this issue
+  signals IssueSignal[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1895,6 +1907,41 @@ model Issue {
   @@index([orgId, status, priority])
   @@index([orgId, assigneeId, status])
   @@index([orgId, snoozedUntil])
+  @@index([issueType])
+  @@index([orgId, issueType, status])
+  @@index([sourceEntityType, sourceEntityId, status])
+}
+
+// ─── Issue Signal ledger ─────────────────────────────────────────────
+// Append-only record of every exception signal the deterministic Issue Engine
+// sees. Drives two things: (1) the raise accumulator ("N signals in a window OR
+// severity >= floor" per Issue Type), and (2) the per-shipment "events / issues
+// over time" graphs. A signal is linked to the Issue it contributed to once one
+// is open for its (issueType, source entity).
+model IssueSignal {
+  id           String       @id @default(uuid())
+  organization Organization @relation(fields: [orgId], references: [id])
+  orgId        String
+
+  issueType        String // registry key, e.g. "shipment_cutoff_risk"
+  eventType        String // triggering domain event, e.g. "shipment.cutoff_at_risk"
+  sourceEntityType String // "shipment"
+  sourceEntityId   String
+  priority         String // signal severity mapped onto the priority band at emit time
+  sourceEventId    String? // DomainEventLog.id that produced this signal
+
+  // Set once this signal contributes to (or lands on) an open issue.
+  issue   Issue?  @relation(fields: [issueId], references: [id])
+  issueId String?
+
+  occurredAt DateTime // when the underlying condition occurred (event time)
+  createdAt  DateTime @default(now())
+
+  @@index([orgId])
+  @@index([issueType, sourceEntityId, occurredAt])
+  @@index([sourceEntityType, sourceEntityId, occurredAt])
+  @@index([issueId])
+  @@index([orgId, occurredAt])
 }
 
 model ProjectionCheckpoint {
@@ -1914,6 +1961,8 @@ model IssueReadModel {
   status           String
   priority         String
   category         String
+  issueType        String?
+  latched          Boolean      @default(false)
   sourceEntityType String?
   sourceEntityId   String?
   sourceEventId    String?
@@ -1941,6 +1990,7 @@ model IssueReadModel {
   @@index([snoozedUntil])
   @@index([orgId, status, priority])
   @@index([orgId, snoozedUntil])
+  @@index([orgId, issueType, status])
 }
 
 // ─── SLA (Service Level Agreements) ────────────────────────────
