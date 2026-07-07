@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 
 import { API_URL } from '../api';
+import { useCurrentUser } from '../hooks/useCurrentUser';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -48,6 +49,7 @@ interface Customer {
 
 export default function VNextCustomers() {
   const navigate = useNavigate();
+  const { hasPermission } = useCurrentUser();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -122,10 +124,12 @@ export default function VNextCustomers() {
             {customers.length} customers in your account
           </p>
         </div>
-        <Button variant="gradient" onClick={() => navigate('/customers/create')}>
-          <Plus className="h-4 w-4" />
-          New customer
-        </Button>
+        {hasPermission('customers:write') && (
+          <Button variant="gradient" onClick={() => navigate('/customers/create')}>
+            <Plus className="h-4 w-4" />
+            New customer
+          </Button>
+        )}
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

@@ -3,10 +3,13 @@ import { z } from 'zod';
 import { ITenderService } from '../services/TenderService.js';
 import { ITenderRepository } from '../repositories/TenderRepository.js';
 import { container, TOKENS } from '../di/index.js';
+import { guardWrites } from '../auth/guardWrites.js';
 
 export async function tenderRoutes(server: FastifyInstance) {
   const tenderService = container.resolve<ITenderService>(TOKENS.ITenderService);
   const tenderRepo = container.resolve<ITenderRepository>(TOKENS.ITenderRepository);
+
+  server.addHook('preHandler', guardWrites('tenders'));
 
   // List tenders
   server.get('/api/v1/tenders', {

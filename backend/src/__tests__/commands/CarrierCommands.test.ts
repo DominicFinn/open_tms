@@ -14,6 +14,8 @@ const mockTx = {
     create: jest.fn().mockResolvedValue(mockCarrier),
     update: jest.fn().mockResolvedValue(mockCarrier),
   },
+  carrierUser: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+  laneCarrier: { count: jest.fn().mockResolvedValue(0) },
   domainEventLog: { create: jest.fn().mockResolvedValue({}) },
 } as any;
 

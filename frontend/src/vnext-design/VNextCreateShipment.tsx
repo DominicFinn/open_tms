@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
   ArrowLeft,
+  Ban,
   ChevronDown,
   ChevronRight,
   CircleAlert,
@@ -161,6 +162,7 @@ export default function VNextCreateShipment() {
   const [laneSearch, setLaneSearch] = useState('');
   const [laneOpen, setLaneOpen] = useState(false);
   const [carriers, setCarriers] = useState<any[]>([]);
+  const [waypoints, setWaypoints] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -396,6 +398,13 @@ export default function VNextCreateShipment() {
     }).catch(() => {});
   }, []);
 
+
+  const addWaypoint = () => setWaypoints(w => [...w, '']);
+  const removeWaypoint = (idx: number) => setWaypoints(w => w.filter((_, i) => i !== idx));
+  const updateWaypoint = (idx: number, value: string) =>
+    setWaypoints(w => w.map((wp, i) => i === idx ? value : wp));
+
+
   useEffect(() => {
     if (!id) return;
     setLoading(true);
@@ -442,6 +451,10 @@ export default function VNextCreateShipment() {
         setHumidityMinPct(s.humidityMinPct != null ? String(s.humidityMinPct) : '');
         setHumidityMaxPct(s.humidityMaxPct != null ? String(s.humidityMaxPct) : '');
         setEquipmentType(s.requiredEquipmentType || '');
+        // Intermediate stops (between the origin and destination stops).
+        if (Array.isArray(s.stops) && s.stops.length > 2) {
+          setWaypoints(s.stops.slice(1, -1).map((st: any) => st.locationId).filter(Boolean));
+        }
         if (Array.isArray(s.deviceAssignments)) {
           const initial = s.deviceAssignments.map((a: any) => ({
             deviceId: a.deviceId,
@@ -524,6 +537,7 @@ export default function VNextCreateShipment() {
         properShippingName: hazmat && properShippingName ? properShippingName : null,
         requiredEquipmentType: equipmentType || null,
       };
+      body.waypoints = waypoints.filter(Boolean);
       if (!isEdit) body.status = 'draft';
       const url = isEdit ? `${API_URL}/api/v1/shipments/${id}` : `${API_URL}/api/v1/shipments`;
       const res = await fetch(url, {
@@ -932,8 +946,44 @@ export default function VNextCreateShipment() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
+            <MapPin className="h-4 w-4 text-primary" />
+            Waypoints <span className="text-xs font-normal text-muted-foreground">(optional intermediate stops, in order)</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {waypoints.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No waypoints. Add intermediate stops between origin and destination.</p>
+          ) : (
+            waypoints.map((wp, idx) => (
+              <div key={idx} className="flex items-center gap-2">
+                <span className="w-5 text-xs text-muted-foreground">{idx + 1}</span>
+                <Select value={wp} onValueChange={v => updateWaypoint(idx, v)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select stop location..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {locations.map((l: any) => (
+                      <SelectItem key={l.id} value={l.id}>{l.name} - {l.city}, {l.state}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button type="button" variant="ghost" size="icon" onClick={() => removeWaypoint(idx)} aria-label="Remove waypoint">
+                  <Ban className="h-4 w-4" />
+                </Button>
+              </div>
+            ))
+          )}
+          <Button type="button" variant="outline" size="sm" onClick={addWaypoint}>
+            <Plus className="h-4 w-4" />
+            Add waypoint
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
             <ShieldAlert className="h-4 w-4 text-primary" />
-            Restrictions
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">

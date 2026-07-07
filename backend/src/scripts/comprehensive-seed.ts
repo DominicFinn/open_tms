@@ -866,12 +866,33 @@ async function seedCarriers(orgId: string) {
     },
   ];
 
+  const carrierCities = [
+    { city: 'Chicago', state: 'IL', postalCode: '60601', area: '312' },
+    { city: 'Minneapolis', state: 'MN', postalCode: '55401', area: '612' },
+    { city: 'Dallas', state: 'TX', postalCode: '75201', area: '214' },
+    { city: 'Atlanta', state: 'GA', postalCode: '30303', area: '404' },
+    { city: 'Houston', state: 'TX', postalCode: '77002', area: '713' },
+    { city: 'Columbus', state: 'OH', postalCode: '43215', area: '614' },
+    { city: 'Charlotte', state: 'NC', postalCode: '28202', area: '704' },
+    { city: 'Denver', state: 'CO', postalCode: '80202', area: '303' },
+    { city: 'Seattle', state: 'WA', postalCode: '98101', area: '206' },
+  ];
+
   const created: any[] = [];
   for (const [i, d] of defs.entries()) {
+    const slug = d.name.toLowerCase().split(' ')[0];
+    const loc = carrierCities[i % carrierCities.length];
     const carrier = await prisma.carrier.create({
       data: {
         ...d,
         orgId,
+        contactName: `${slug.charAt(0).toUpperCase() + slug.slice(1)} Operations`,
+        contactEmail: `ops@${slug}.demo`,
+        contactPhone: `(${loc.area}) 555-${String(1000 + i * 11).slice(-4)}`,
+        address1: `${100 + i * 25} Logistics Parkway`,
+        city: loc.city,
+        state: loc.state,
+        postalCode: loc.postalCode,
         country: 'USA',
         currency: 'USD',
         validatedAt: d.validationTier ? daysAgo(90) : null,
@@ -879,7 +900,6 @@ async function seedCarriers(orgId: string) {
     });
 
     const portalPwd = hashPassword('Carrier123!');
-    const slug = d.name.toLowerCase().split(' ')[0];
     await prisma.carrierUser.create({
       data: {
         carrierId: carrier.id,

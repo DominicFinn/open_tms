@@ -4,10 +4,14 @@ import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { Command } from '../types.js';
 
-export const ARCHIVE_CARRIER = 'carrier.archive';
+export const UNARCHIVE_CARRIER = 'carrier.unarchive';
 
-export class ArchiveCarrierCommandHandler extends BaseCommandHandler<{ id: string }, { id: string }> {
-  readonly commandType = ARCHIVE_CARRIER;
+/**
+ * Restore an archived carrier back to active. Finance/admin use this to bring a
+ * carrier back into circulation. A soft-deleted carrier cannot be unarchived.
+ */
+export class UnarchiveCarrierCommandHandler extends BaseCommandHandler<{ id: string }, { id: string }> {
+  readonly commandType = UNARCHIVE_CARRIER;
 
   constructor(prisma: PrismaClient, eventBus: PgBossEventBus) {
     super(prisma, eventBus);
@@ -19,16 +23,22 @@ export class ArchiveCarrierCommandHandler extends BaseCommandHandler<{ id: strin
     emit: EmitFn
   ): Promise<{ id: string }> {
     const { id } = command.payload;
+
+    const existing = await tx.carrier.findFirstOrThrow({ where: { id, deletedAt: null } });
+    if (!existing.archived) {
+      return { id };
+    }
+
     const carrier = await tx.carrier.update({
       where: { id },
-      data: { archived: true, archivedAt: new Date() },
+      data: { archived: false, archivedAt: null },
     });
 
-    // Archived carriers can no longer be used, so their portal users lose access.
-    await tx.carrierUser.updateMany({ where: { carrierId: id }, data: { active: false } });
+    // Reactivate the carrier's portal users.
+    await tx.carrierUser.updateMany({ where: { carrierId: id, anonymizedAt: null }, data: { active: true } });
 
     emit(this.createEvent(command, {
-      type: EVENT_TYPES.CARRIER_ARCHIVED,
+      type: EVENT_TYPES.CARRIER_UNARCHIVED,
       entityType: 'carrier',
       entityId: id,
       payload: { name: carrier.name },

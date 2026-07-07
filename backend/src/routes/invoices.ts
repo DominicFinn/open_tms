@@ -9,11 +9,14 @@ import { APPROVE_INVOICE, ApproveInvoicePayload } from '../commands/invoices/App
 import { SEND_INVOICE, SendInvoicePayload } from '../commands/invoices/SendInvoiceCommand.js';
 import { RECORD_PAYMENT, RecordPaymentPayload } from '../commands/invoices/RecordPaymentCommand.js';
 import { VOID_INVOICE, VoidInvoicePayload } from '../commands/invoices/VoidInvoiceCommand.js';
+import { guardWrites } from '../auth/guardWrites.js';
 
 export async function invoiceRoutes(server: FastifyInstance) {
   const invoiceRepo = container.resolve<IInvoiceRepository>(TOKENS.IInvoiceRepository);
   const invoicingService = container.resolve<IInvoicingService>(TOKENS.IInvoicingService);
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
+
+  server.addHook('preHandler', guardWrites('invoices'));
 
   // List invoices
   server.get('/api/v1/invoices', {

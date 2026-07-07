@@ -29,6 +29,10 @@ export class CarrierProjection implements IEventHandler {
         return this.onCarrierUpdated(event);
       case EVENT_TYPES.CARRIER_ARCHIVED:
         return this.onCarrierArchived(event);
+      case EVENT_TYPES.CARRIER_UNARCHIVED:
+        return this.onCarrierUnarchived(event);
+      case EVENT_TYPES.CARRIER_DELETED:
+        return this.onCarrierDeleted(event);
       default:
         break;
     }
@@ -110,6 +114,24 @@ export class CarrierProjection implements IEventHandler {
       data: { status: 'archived', updatedAt: new Date() },
     }).catch((err: Error) => {
       console.error(`[CarrierProjection] Failed to archive read model for ${event.entityId}: ${err.message}`);
+    });
+  }
+
+  private async onCarrierUnarchived(event: DomainEvent): Promise<void> {
+    await this.prisma.carrierReadModel.update({
+      where: { id: event.entityId },
+      data: { status: 'active', updatedAt: new Date() },
+    }).catch((err: Error) => {
+      console.error(`[CarrierProjection] Failed to unarchive read model for ${event.entityId}: ${err.message}`);
+    });
+  }
+
+  private async onCarrierDeleted(event: DomainEvent): Promise<void> {
+    // Soft-deleted carriers drop out of the read model entirely.
+    await this.prisma.carrierReadModel.delete({
+      where: { id: event.entityId },
+    }).catch((err: Error) => {
+      console.error(`[CarrierProjection] Failed to delete read model for ${event.entityId}: ${err.message}`);
     });
   }
 }

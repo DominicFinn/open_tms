@@ -33,6 +33,7 @@ import {
 } from '../commands/lineItems/index.js';
 import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 import { requirePermission } from '../middleware/jwtAuth.js';
+import { guardWrites } from '../auth/guardWrites.js';
 
 // Validation schemas (exported for reuse by customerApi.ts)
 export const lineItemSchema = z.object({
@@ -189,6 +190,8 @@ export async function orderRoutes(server: FastifyInstance) {
   }
 
   await registerOrgScope(server);
+  // check-compatibility is a read-only preview (no mutation).
+  server.addHook('preHandler', guardWrites('orders', { readPaths: ['/check-compatibility'] }));
 
   // Get all orders (optionally filtered by customer) — scoped to JWT org.
   server.get('/api/v1/orders', async (req: FastifyRequest, _reply: FastifyReply) => {

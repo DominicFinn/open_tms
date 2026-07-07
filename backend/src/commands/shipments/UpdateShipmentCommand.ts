@@ -4,6 +4,7 @@ import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { Command } from '../types.js';
 import { reconcileShipmentDevices } from './reconcileShipmentDevices.js';
+import { syncShipmentStops } from './syncShipmentStops.js';
 
 export interface UpdateShipmentPayload {
   id: string;
@@ -38,6 +39,7 @@ export interface UpdateShipmentPayload {
     packingGroup?: string | null;
     properShippingName?: string | null;
     requiredEquipmentType?: string | null;
+    waypoints?: string[];
   };
 }
 
@@ -61,8 +63,10 @@ export class UpdateShipmentCommandHandler extends BaseCommandHandler<UpdateShipm
 
     // Resolve lane origin/destination if laneId provided
     const updateData: any = { ...data };
-    // `devices` is not a Shipment column — it's reconciled separately below.
+    // `devices` and `waypoints` are not Shipment columns — they are reconciled
+    // separately below.
     delete updateData.devices;
+    delete updateData.waypoints;
     if (data.laneId) {
       const lane = await tx.lane.findFirstOrThrow({ where: { id: data.laneId, archived: false } });
       updateData.originId = lane.originId;
@@ -70,6 +74,17 @@ export class UpdateShipmentCommandHandler extends BaseCommandHandler<UpdateShipm
     }
 
     const updated = await tx.shipment.update({ where: { id }, data: updateData });
+
+    // Rebuild the stop list from the route, but ONLY while the shipment is a
+    // draft — in-flight shipments carry stop-level progress we must not wipe.
+    if (data.waypoints !== undefined && updated.status === 'draft') {
+      await syncShipmentStops(tx, {
+        shipmentId: id,
+        originId: updated.originId,
+        waypoints: data.waypoints,
+        destinationId: updated.destinationId,
+      });
+    }
 
     emit(this.createEvent(command, {
       type: EVENT_TYPES.SHIPMENT_UPDATED,

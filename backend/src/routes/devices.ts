@@ -1,10 +1,12 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
+import { guardWrites } from '../auth/guardWrites.js';
 
 export default async function deviceRoutes(server: FastifyInstance) {
   const prisma = server.prisma;
   await registerOrgScope(server);
+  server.addHook('preHandler', guardWrites('devices'));
 
   // GET /api/v1/devices — List devices for the requesting tenant.
   // `limit` and `offset` query params drive pagination; X-Total-Count surfaces

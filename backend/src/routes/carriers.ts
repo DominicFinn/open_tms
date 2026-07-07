@@ -7,18 +7,30 @@ import { ICommandBus } from '../commands/CommandBus.js';
 import { CREATE_CARRIER } from '../commands/carriers/CreateCarrierCommand.js';
 import { UPDATE_CARRIER } from '../commands/carriers/UpdateCarrierCommand.js';
 import { ARCHIVE_CARRIER } from '../commands/carriers/ArchiveCarrierCommand.js';
+import { UNARCHIVE_CARRIER } from '../commands/carriers/UnarchiveCarrierCommand.js';
+import { SOFT_DELETE_CARRIER } from '../commands/carriers/SoftDeleteCarrierCommand.js';
 import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
+import { guardWrites } from '../auth/guardWrites.js';
+
+// Treat an empty string as "not provided" so a blank optional field (e.g. a
+// carrier with no email yet) doesn't fail format validation.
+const emptyToUndef = <T extends z.ZodTypeAny>(schema: T) =>
+  z.preprocess((v) => (v === '' ? undefined : v), schema);
 
 export async function carrierRoutes(server: FastifyInstance) {
   const carriersRepo = container.resolve<ICarriersRepository>(TOKENS.ICarriersRepository);
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
 
   await registerOrgScope(server);
+  // Writes require carriers:write; DELETE (soft-delete) requires carriers:delete.
+  server.addHook('preHandler', guardWrites('carriers'));
 
   // Get all carriers — scoped to the requesting JWT's org.
   server.get('/api/v1/carriers', async (req: FastifyRequest, _reply: FastifyReply) => {
     const orgId = req.orgId!;
-    const carriers = await carriersRepo.all(orgId);
+    // ?includeArchived=true returns archived carriers too (management list).
+    const includeArchived = (req.query as any)?.includeArchived === 'true';
+    const carriers = await carriersRepo.all(orgId, { includeArchived });
     return { data: carriers, error: null };
   });
 
@@ -41,9 +53,10 @@ export async function carrierRoutes(server: FastifyInstance) {
         name: z.string().min(1),
         mcNumber: z.string().optional(),
         dotNumber: z.string().optional(),
-        scacCode: z.string().max(4).optional(),
+        scacCode: emptyToUndef(z.string().max(4).optional()),
         contactName: z.string().optional(),
-        contactEmail: z.string().email().optional(),
+        // Optional — a blank email must not fail validation.
+        contactEmail: emptyToUndef(z.string().email().optional()),
         contactPhone: z.string().optional(),
         address1: z.string().optional(),
         address2: z.string().optional(),
@@ -51,6 +64,8 @@ export async function carrierRoutes(server: FastifyInstance) {
         state: z.string().optional(),
         postalCode: z.string().optional(),
         country: z.string().optional(),
+        paymentTermsDays: z.coerce.number().int().nonnegative().optional(),
+        currency: z.string().optional(),
         validationTier: z.string().optional(),
         registrationChecked: z.boolean().optional(),
         insuranceDocReceived: z.boolean().optional(),
@@ -58,7 +73,7 @@ export async function carrierRoutes(server: FastifyInstance) {
         identityConfirmed: z.boolean().optional(),
         complianceChecked: z.boolean().optional(),
         validationNotes: z.string().optional(),
-        validatedAt: z.string().datetime().optional(),
+        validatedAt: emptyToUndef(z.string().datetime().optional()),
         validatedBy: z.string().optional()
       })
       .parse((req as any).body);
@@ -90,9 +105,9 @@ export async function carrierRoutes(server: FastifyInstance) {
       name: z.string().min(1).optional(),
       mcNumber: z.string().optional(),
       dotNumber: z.string().optional(),
-      scacCode: z.string().max(4).optional(),
+      scacCode: emptyToUndef(z.string().max(4).optional()),
       contactName: z.string().optional(),
-      contactEmail: z.string().email().optional(),
+      contactEmail: emptyToUndef(z.string().email().optional()),
       contactPhone: z.string().optional(),
       address1: z.string().optional(),
       address2: z.string().optional(),
@@ -100,6 +115,8 @@ export async function carrierRoutes(server: FastifyInstance) {
       state: z.string().optional(),
       postalCode: z.string().optional(),
       country: z.string().optional(),
+      paymentTermsDays: z.coerce.number().int().nonnegative().optional(),
+      currency: z.string().optional(),
       validationTier: z.string().optional(),
       registrationChecked: z.boolean().optional(),
       insuranceDocReceived: z.boolean().optional(),
@@ -107,7 +124,7 @@ export async function carrierRoutes(server: FastifyInstance) {
       identityConfirmed: z.boolean().optional(),
       complianceChecked: z.boolean().optional(),
       validationNotes: z.string().optional(),
-      validatedAt: z.string().datetime().optional(),
+      validatedAt: emptyToUndef(z.string().datetime().optional()),
       validatedBy: z.string().optional()
     }).parse((req as any).body);
 
@@ -137,8 +154,10 @@ export async function carrierRoutes(server: FastifyInstance) {
     return { data: updated, error: null };
   });
 
-  // Delete (archive) carrier
-  server.delete('/api/v1/carriers/:id', async (req: FastifyRequest, reply: FastifyReply) => {
+  // Archive a carrier (carriers:write via guardWrites) — stops it being
+  // selected/used and logs out its portal users, but keeps it available to
+  // finance/admin.
+  server.post('/api/v1/carriers/:id/archive', async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
     const orgId = req.orgId!;
     const existing = await carriersRepo.findById(id, orgId);
@@ -154,13 +173,62 @@ export async function carrierRoutes(server: FastifyInstance) {
       payload: { id },
       metadata: { correlationId: randomUUID(), source: 'api' },
     });
+    if (!result.success) {
+      reply.code(400);
+      return { data: null, error: result.error };
+    }
+    return { data: await carriersRepo.findById(id, orgId), error: null };
+  });
+
+  // Unarchive — finance/admin action to bring a carrier back into circulation.
+  server.post('/api/v1/carriers/:id/unarchive', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const orgId = req.orgId!;
+    const existing = await carriersRepo.findById(id, orgId);
+    if (!existing) {
+      reply.code(404);
+      return { data: null, error: 'Carrier not found' };
+    }
+
+    const result = await commandBus.dispatch({
+      type: UNARCHIVE_CARRIER,
+      orgId,
+      actorId: req.user?.sub ?? null,
+      payload: { id },
+      metadata: { correlationId: randomUUID(), source: 'api' },
+    });
+    if (!result.success) {
+      reply.code(400);
+      return { data: null, error: result.error };
+    }
+    return { data: await carriersRepo.findById(id, orgId), error: null };
+  });
+
+  // Soft-delete a carrier (carriers:delete via guardWrites) — for accidental
+  // creates / dev cleanup. A carrier assigned to any lane cannot be deleted
+  // (only archived); the command enforces this and surfaces a 400.
+  server.delete('/api/v1/carriers/:id', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const orgId = req.orgId!;
+    const existing = await carriersRepo.findById(id, orgId);
+    if (!existing) {
+      reply.code(404);
+      return { data: null, error: 'Carrier not found' };
+    }
+
+    const result = await commandBus.dispatch({
+      type: SOFT_DELETE_CARRIER,
+      orgId,
+      actorId: req.user?.sub ?? null,
+      payload: { id },
+      metadata: { correlationId: randomUUID(), source: 'api' },
+    });
 
     if (!result.success) {
-      reply.code(404);
+      reply.code(result.error?.includes('not found') ? 404 : 400);
       return { data: null, error: result.error };
     }
 
-    const archived = await carriersRepo.findById(id, orgId);
-    return { data: archived, error: null };
+    return { data: { id, deleted: true }, error: null };
   });
 }
