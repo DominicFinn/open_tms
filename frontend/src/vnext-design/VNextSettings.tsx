@@ -571,7 +571,7 @@ function BrokerageTab() {
             </Select>
           </div>
           <p className="text-xs text-muted-foreground">
-            This determines the default UI experience and available features. Brokers and 3PLs get the load board, margin tracking, and broker-specific workflows.
+            This determines the default UI experience and available features. Brokers and 3PLs get margin tracking and broker-specific workflows.
           </p>
         </CardContent>
       </Card>

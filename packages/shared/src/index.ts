@@ -1,3 +1,6 @@
+export * from './shipmentTypeValidator.js';
+export * from './shipmentEventTypes.js';
+
 export type ID = string;
 
 export type Timestamped = {

@@ -2,7 +2,7 @@
  * ComplianceReportService
  *
  * Generates a Cold Chain Compliance Report PDF for a shipment.
- * The report includes shipment details, cold chain profile, device info,
+ * The report includes shipment details, effective temperature range, device info,
  * temperature monitoring summary, excursion details, and disposition.
  *
  * Stored via IBinaryStorageProvider and recorded as a GeneratedDocument.
@@ -20,7 +20,6 @@ interface ReportContext {
   origin: any;
   destination: any;
   carrier: any;
-  profile: any;
   devices: any[];
   calibrations: Map<string, any>;
   summary: any;
@@ -81,7 +80,6 @@ export class ComplianceReportService {
         origin: true,
         destination: true,
         carrier: true,
-        coldChainProfile: true,
       },
     });
 
@@ -125,7 +123,6 @@ export class ComplianceReportService {
       origin: shipment.origin,
       destination: shipment.destination,
       carrier: shipment.carrier,
-      profile: shipment.coldChainProfile,
       devices,
       calibrations,
       summary,
@@ -212,23 +209,14 @@ export class ComplianceReportService {
       labelValue('Disposition Notes', ctx.shipment.dispositionNotes);
     }
 
-    // ── Cold Chain Profile ──
-    sectionHeader('2. Cold Chain Profile');
-    if (ctx.profile) {
-      labelValue('Profile Name', ctx.profile.name);
-      labelValue('Acceptable Range', `${ctx.profile.minTemperature}°C to ${ctx.profile.maxTemperature}°C`);
-      labelValue('Alert Range', `${ctx.profile.alertMinTemperature}°C to ${ctx.profile.alertMaxTemperature}°C`);
-      if (ctx.profile.minHumidity != null) {
-        labelValue('Humidity Range', `${ctx.profile.minHumidity}% to ${ctx.profile.maxHumidity}% RH`);
-      }
-    } else {
-      labelValue('Effective Min Temp', ctx.shipment.effectiveMinTemp != null ? `${ctx.shipment.effectiveMinTemp}°C` : 'Not set');
-      labelValue('Effective Max Temp', ctx.shipment.effectiveMaxTemp != null ? `${ctx.shipment.effectiveMaxTemp}°C` : 'Not set');
-      labelValue('Alert Min Temp', ctx.shipment.effectiveAlertMinTemp != null ? `${ctx.shipment.effectiveAlertMinTemp}°C` : 'Not set');
-      labelValue('Alert Max Temp', ctx.shipment.effectiveAlertMaxTemp != null ? `${ctx.shipment.effectiveAlertMaxTemp}°C` : 'Not set');
-      drawText('(Derived from order temperature requirements)', margin, y, 8, font, rgb(0.5, 0.5, 0.5));
-      y -= 16;
-    }
+    // ── Cold Chain Temperature Range ──
+    sectionHeader('2. Cold Chain Temperature Range');
+    labelValue('Effective Min Temp', ctx.shipment.effectiveMinTemp != null ? `${ctx.shipment.effectiveMinTemp}°C` : 'Not set');
+    labelValue('Effective Max Temp', ctx.shipment.effectiveMaxTemp != null ? `${ctx.shipment.effectiveMaxTemp}°C` : 'Not set');
+    labelValue('Alert Min Temp', ctx.shipment.effectiveAlertMinTemp != null ? `${ctx.shipment.effectiveAlertMinTemp}°C` : 'Not set');
+    labelValue('Alert Max Temp', ctx.shipment.effectiveAlertMaxTemp != null ? `${ctx.shipment.effectiveAlertMaxTemp}°C` : 'Not set');
+    drawText('(Derived from order temperature requirements)', margin, y, 8, font, rgb(0.5, 0.5, 0.5));
+    y -= 16;
 
     // ── Device Information ──
     sectionHeader('3. Monitoring Devices');
@@ -318,12 +306,11 @@ export class ComplianceReportService {
 
       // Table header
       addNewPageIfNeeded(30);
-      const tcols = [margin, margin + 120, margin + 190, margin + 260, margin + 340];
+      const tcols = [margin, margin + 120, margin + 220, margin + 320];
       drawText('Time', tcols[0], y, 8, fontBold, rgb(0.3, 0.3, 0.3));
       drawText('Temp (°C)', tcols[1], y, 8, fontBold, rgb(0.3, 0.3, 0.3));
-      drawText('Humidity (%)', tcols[2], y, 8, fontBold, rgb(0.3, 0.3, 0.3));
-      drawText('Status', tcols[3], y, 8, fontBold, rgb(0.3, 0.3, 0.3));
-      drawText('Hash (first 8)', tcols[4], y, 8, fontBold, rgb(0.3, 0.3, 0.3));
+      drawText('Status', tcols[2], y, 8, fontBold, rgb(0.3, 0.3, 0.3));
+      drawText('Hash (first 8)', tcols[3], y, 8, fontBold, rgb(0.3, 0.3, 0.3));
       y -= 4;
       drawLine(y);
       y -= 12;
@@ -341,9 +328,8 @@ export class ComplianceReportService {
 
         drawText(timeStr, tcols[0], y, 7);
         drawText(log.temperature.toFixed(1), tcols[1], y, 7);
-        drawText(log.humidity != null ? log.humidity.toFixed(1) : '-', tcols[2], y, 7);
-        drawText(status, tcols[3], y, 7, font, statusColor);
-        drawText(log.integrityHash.substring(0, 8), tcols[4], y, 6, font, rgb(0.5, 0.5, 0.5));
+        drawText(status, tcols[2], y, 7, font, statusColor);
+        drawText(log.integrityHash.substring(0, 8), tcols[3], y, 6, font, rgb(0.5, 0.5, 0.5));
         y -= 12;
       }
 

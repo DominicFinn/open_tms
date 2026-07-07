@@ -4,7 +4,7 @@ import {
   validateShipmentReadiness,
   canTransition,
   allowedTransitions,
-} from '../../shared/shipmentTypeValidator';
+} from '@open-tms/shared';
 
 describe('validateShipmentAgainstType', () => {
   it('returns no missing fields when type is null', () => {

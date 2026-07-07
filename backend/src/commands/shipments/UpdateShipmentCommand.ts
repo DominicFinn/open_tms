@@ -18,6 +18,7 @@ export interface UpdateShipmentPayload {
     deliveryWindowStart?: Date | string;
     deliveryWindowEnd?: Date | string;
     shipmentTypeId?: string | null;
+    serviceLevel?: string | null;
     customerId?: string;
     laneId?: string;
     carrierId?: string | null;
@@ -26,6 +27,18 @@ export interface UpdateShipmentPayload {
     destinationId?: string;
     items?: Array<{ sku: string; description?: string; quantity: number; weightKg?: number; volumeM3?: number }>;
     devices?: Array<{ name: string; externalId: string }>;
+    tempControlled?: boolean;
+    tempMinC?: number | null;
+    tempMaxC?: number | null;
+    humidityControlled?: boolean;
+    humidityMinPct?: number | null;
+    humidityMaxPct?: number | null;
+    hazmat?: boolean;
+    unNumber?: string | null;
+    hazmatClass?: string | null;
+    packingGroup?: string | null;
+    properShippingName?: string | null;
+    requiredEquipmentType?: string | null;
     waypoints?: string[];
   };
 }

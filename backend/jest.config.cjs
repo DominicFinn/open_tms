@@ -19,6 +19,9 @@ module.exports = {
   },
   // Strip .js extensions from imports so ts-jest can resolve .ts files
   moduleNameMapper: {
+    // packages/shared ships ESM-only output; point tests at the TS source instead
+    // so ts-jest compiles it inline rather than requiring the built ESM dist.
+    '^@open-tms/shared$': '<rootDir>/../packages/shared/src/index.ts',
     '^(\\.{1,2}/.*)\\.js$': '$1',
   },
 };

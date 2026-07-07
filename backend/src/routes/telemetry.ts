@@ -25,7 +25,7 @@ export default async function telemetryRoutes(server: FastifyInstance) {
         200: {
           type: 'object',
           properties: {
-            data: { type: ['object', 'null'] },
+            data: { type: ['object', 'null'], additionalProperties: true },
             error: { type: ['string', 'null'] },
           },
         },
@@ -68,7 +68,6 @@ export default async function telemetryRoutes(server: FastifyInstance) {
           latest: temps[temps.length - 1],
         } : null,
         latestBattery: readings.filter(r => r.batteryLevel != null).at(-1)?.batteryLevel ?? null,
-        latestHumidity: readings.filter(r => r.humidity != null).at(-1)?.humidity ?? null,
         latestPressure: readings.filter(r => r.atmosphericPressure != null).at(-1)?.atmosphericPressure ?? null,
         devices: [...new Set(readings.map(r => r.deviceId))].length,
       };
@@ -101,7 +100,7 @@ export default async function telemetryRoutes(server: FastifyInstance) {
         200: {
           type: 'object',
           properties: {
-            data: { type: ['object', 'null'] },
+            data: { type: ['object', 'null'], additionalProperties: true },
             error: { type: ['string', 'null'] },
           },
         },

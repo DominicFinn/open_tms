@@ -108,7 +108,7 @@ Your software costs should be hosting and database, not per-seat licensing. EDI 
 
 ## What's Actually In Here
 
-This isn't a proof of concept. It's a working TMS with 87+ database models, 20+ CQRS command handlers, a full EDI suite (850, 856, 204, 990, 214, 997), carrier tendering with broadcast and waterfall strategies, a dedicated carrier portal, cold chain compliance with CFR 21 Part 11 logging, IoT integration for GPS and temperature and humidity sensors, traffic-aware ETA monitoring, and cargo reconciliation at the pallet level.
+This isn't a proof of concept. It's a working TMS with 87+ database models, 20+ CQRS command handlers, a full EDI suite (850, 856, 204, 990, 214, 997), carrier tendering with broadcast and waterfall strategies, a dedicated carrier portal, cold chain compliance with CFR 21 Part 11 logging, IoT integration for GPS and temperature sensors, traffic-aware ETA monitoring, and cargo reconciliation at the pallet level.
 
 It's a lot. And it's all MIT licensed. No catch.
 
@@ -206,9 +206,9 @@ If you're shipping pharmaceuticals or temperature-sensitive food products, you'r
 
 Most TMS platforms either don't handle this at all, or they charge you extra for a bolt-on module. Open TMS includes cold chain compliance as a core feature. It's not an add-on. It's just there.
 
-## Temperature Profiles
+## Temperature Ranges
 
-You set up a profile that defines what's acceptable - target temperature range (say 2-8°C for vaccines), alert thresholds, humidity limits if relevant. Assign the profile to a shipment and the system watches it automatically.
+Mark an order as refrigerated or frozen and the shipment automatically gets an acceptable temperature range and a tighter alert range derived from that setting - no separate setup step. The system watches it automatically from there.
 
 ## The Logging Bit
 
@@ -241,10 +241,9 @@ When excursions reveal a pattern - say the same carrier keeps having temperature
 
 ## Getting Set Up
 
-1. Create a cold chain profile in Admin
-2. Assign it to a shipment
-3. Connect your IoT sensors (System Loco devices work out of the box)
-4. Readings flow in, excursions get caught, reports generate themselves
+1. Mark the order's temperature control (refrigerated or frozen) - the shipment's acceptable and alert ranges are set automatically
+2. Connect your IoT sensors (System Loco devices work out of the box)
+3. Readings flow in, excursions get caught, reports generate themselves
 
 No premium license. No per-feature pricing. It's just part of the platform.
     `,

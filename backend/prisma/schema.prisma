@@ -181,6 +181,10 @@ model Shipment {
   shipmentType        ShipmentType? @relation(fields: [shipmentTypeId], references: [id])
   shipmentTypeId      String?
   proNumber           String?
+  // Transport mode — "FTL" (Full Truck Load) or "LTL" (Less Than Truck Load).
+  // Distinct from shipmentType, which drives physical restrictions (temp,
+  // hazmat, humidity, equipment), not mode/service level.
+  serviceLevel        String?
   items               Json?
   archived            Boolean       @default(false)
   archivedAt          DateTime?
@@ -224,9 +228,7 @@ model Shipment {
   orderReadModels OrderReadModel[]
 
   // Cold chain
-  coldChainProfile      ColdChainProfile?         @relation(fields: [coldChainProfileId], references: [id])
-  coldChainProfileId    String?
-  effectiveMinTemp      Float? // Computed from orders or profile (°C canonical)
+  effectiveMinTemp      Float? // Computed from orders (°C canonical)
   effectiveMaxTemp      Float?
   effectiveAlertMinTemp Float? // Warning thresholds (tighter than min/max)
   effectiveAlertMaxTemp Float?
@@ -237,6 +239,21 @@ model Shipment {
   temperatureLogs       ImmutableTemperatureLog[]
   coldChainExcursions   ColdChainExcursion[]
   capaReports           CAPAReport[]
+
+  // Declared restrictions (set at shipment creation, distinct from the
+  // effective* fields above which are computed from linked orders)
+  tempControlled     Boolean @default(false)
+  tempMinC           Float?
+  tempMaxC           Float?
+  humidityControlled Boolean @default(false)
+  humidityMinPct     Float?
+  humidityMaxPct     Float?
+  hazmat             Boolean @default(false)
+  unNumber           String? // e.g. "UN1203"
+  hazmatClass        String? // e.g. "3" (flammable liquid)
+  packingGroup       String? // I | II | III
+  properShippingName String?
+  requiredEquipmentType String? // dryVan, reefer, flatbed, tanker, intermodal
 
   // Custom fields
   customFieldVersionId String?
@@ -648,6 +665,9 @@ model LaneStop {
   locationId String
   order      Int // Order of the stop in the lane (1, 2, 3, etc.)
   notes      String? // Optional notes for this specific stop
+  // What this stop is for — informational only, doesn't affect routing/rating.
+  // pickup | dropoff | cross_dock | fuel | rest | hub | customs | other
+  purpose    String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
@@ -718,8 +738,11 @@ model Order {
   notes               String?
 
   // Tracking
-  archived   Boolean   @default(false)
-  archivedAt DateTime?
+  archived            Boolean   @default(false)
+  archivedAt          DateTime?
+  statusBeforeArchive  String? // Captured on archive so unarchive can restore the prior lifecycle status
+  deletedAt            DateTime? // Soft delete - set when order is deleted
+  deletedBy            String? // User ID who deleted the order
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 
@@ -746,6 +769,7 @@ model Order {
   @@index([customerId])
   @@index([status])
   @@index([archived])
+  @@index([deletedAt])
   @@index([createdAt])
   @@index([deliveryStatus])
   @@index([originId])
@@ -2421,6 +2445,9 @@ model DeviceAssignment {
   active          Boolean   @default(true)
   assignedAt      DateTime  @default(now())
   unassignedAt    DateTime?
+  // Why this device is on the shipment/order — informational only, doesn't
+  // change alerting/compliance logic. cargo_condition | security | location | general
+  purpose         String?
 
   @@index([deviceId, active])
   @@index([shipmentId])
@@ -2460,7 +2487,6 @@ model SensorReading {
 
   // Sensor values (nullable — only populated when present)
   temperature         Float?
-  humidity            Float?
   atmosphericPressure Float? // hPa
   lightLevel          Int?
   batteryLevel        Int?
@@ -2611,39 +2637,6 @@ model CargoDiscrepancy {
 // Cold Chain & Compliance
 // ============================================================
 
-// Named temperature/humidity profile — e.g. "Frozen Goods (-25°C to -18°C)"
-model ColdChainProfile {
-  id          String  @id @default(uuid())
-  orgId       String
-  name        String // e.g. "Frozen Goods", "Refrigerated Pharma"
-  description String?
-
-  // Acceptable temperature range (°C — canonical metric)
-  minTemperature Float // Lower acceptable limit
-  maxTemperature Float // Upper acceptable limit
-
-  // Alert thresholds — tighter than acceptable range, triggers warning before breach
-  alertMinTemperature Float // Lower warning threshold
-  alertMaxTemperature Float // Upper warning threshold
-
-  // Optional humidity range (% RH)
-  minHumidity      Float?
-  maxHumidity      Float?
-  alertMinHumidity Float?
-  alertMaxHumidity Float?
-
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  createdBy String? // User ID who created
-  updatedBy String? // User ID who last modified
-
-  shipments Shipment[]
-
-  @@index([orgId])
-  @@index([active])
-}
-
 // Device calibration records — tracks whether temperature sensors are signed off
 model DeviceCalibration {
   id       String @id @default(uuid())
@@ -2673,7 +2666,7 @@ model DeviceCalibration {
 }
 
 // Immutable temperature log — WRITE-ONLY. No updates or deletes. CFR 21 Part 11 compliant.
-// Each row is a tamper-evident record of a temperature reading with a snapshot of the active profile thresholds.
+// Each row is a tamper-evident record of a temperature reading with a snapshot of the shipment's effective thresholds.
 model ImmutableTemperatureLog {
   id    String @id @default(uuid())
   orgId String
@@ -2688,7 +2681,6 @@ model ImmutableTemperatureLog {
 
   // Sensor values
   temperature Float // °C — canonical metric
-  humidity    Float? // % RH
 
   // Location at time of reading
   lat Float?
@@ -2698,20 +2690,19 @@ model ImmutableTemperatureLog {
   recordedAt DateTime // When the device captured the reading
   capturedAt DateTime @default(now()) // When the system received it
 
-  // Profile thresholds at time of capture — snapshot for audit trail
-  profileMinTemp      Float?
-  profileMaxTemp      Float?
-  profileAlertMinTemp Float?
-  profileAlertMaxTemp Float?
-  profileName         String? // Name of profile at time of capture
+  // Effective thresholds at time of capture — snapshot for audit trail
+  effectiveMinTemp      Float?
+  effectiveMaxTemp      Float?
+  effectiveAlertMinTemp Float?
+  effectiveAlertMaxTemp Float?
 
   // Compliance flags
-  isWithinRange      Boolean // temperature within [profileMinTemp, profileMaxTemp]
-  isWithinAlertRange Boolean // temperature within [profileAlertMinTemp, profileAlertMaxTemp]
+  isWithinRange      Boolean // temperature within [effectiveMinTemp, effectiveMaxTemp]
+  isWithinAlertRange Boolean // temperature within [effectiveAlertMinTemp, effectiveAlertMaxTemp]
   isExcursion        Boolean @default(false) // Outside acceptable range
   isAlert            Boolean @default(false) // Outside alert range but within acceptable
 
-  // Tamper evidence — SHA-256 hash of (shipmentId + deviceId + temperature + recordedAt + profileMinTemp + profileMaxTemp)
+  // Tamper evidence — SHA-256 hash of (shipmentId + deviceId + temperature + recordedAt + effectiveMinTemp + effectiveMaxTemp)
   integrityHash String
 
   // Original raw payload for forensic analysis
@@ -2738,7 +2729,7 @@ model ColdChainExcursion {
   deviceId   String?
 
   // Excursion classification
-  excursionType String // high_temp, low_temp, high_humidity, low_humidity
+  excursionType String // high_temp, low_temp
   severity      String // warning (alert range), critical (acceptable range breach)
 
   // Duration
@@ -3734,6 +3725,7 @@ model Comment {
   authorName         String
   authorType         String    @default("user") // "user", "agent", "system", "customer"
   body               String // Markdown text
+  tag                String? // Optional free-form categorization, e.g. "issue", "requirement"
   // Visibility for the customer portal. Internal user/agent comments default to
   // false (internal-only) and must be opted into. Customer-authored comments
   // are always set to true so internal staff sees them.

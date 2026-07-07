@@ -29,6 +29,17 @@ import {
   TableRow,
 } from '@/components/ui/table';
 
+const STOP_PURPOSE_LABELS: Record<string, string> = {
+  pickup: 'Pickup',
+  dropoff: 'Dropoff',
+  cross_dock: 'Cross-dock',
+  fuel: 'Fuel',
+  rest: 'Rest',
+  hub: 'Hub',
+  customs: 'Customs',
+  other: 'Other',
+};
+
 export default function VNextLaneDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -379,8 +390,11 @@ export default function VNextLaneDetail() {
                     {i + 1}
                   </div>
                   <div>
-                    <div className="text-sm font-medium">
+                    <div className="flex items-center gap-2 text-sm font-medium">
                       {stop.location?.name || stop.name || `Stop ${i + 1}`}
+                      {STOP_PURPOSE_LABELS[stop.purpose] && (
+                        <Badge variant="muted" className="text-[10px]">{STOP_PURPOSE_LABELS[stop.purpose]}</Badge>
+                      )}
                     </div>
                     <div className="mt-0.5 text-xs text-muted-foreground">
                       {stop.location?.city || stop.city || ''}

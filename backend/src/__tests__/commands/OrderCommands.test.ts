@@ -25,6 +25,7 @@ const mockTx = {
     create: jest.fn().mockResolvedValue(mockOrder),
     update: jest.fn().mockResolvedValue({ ...mockOrder, status: 'validated' }),
     findUniqueOrThrow: jest.fn().mockResolvedValue(mockOrder),
+    findFirstOrThrow: jest.fn().mockResolvedValue(mockOrder),
   },
   packagingType: {
     findUnique: jest.fn().mockResolvedValue({ kind: 'pallet' }),
@@ -274,7 +275,8 @@ describe('Order Command Handlers', () => {
   });
 
   describe('ArchiveOrderCommandHandler', () => {
-    it('archives order and emits ORDER_ARCHIVED event', async () => {
+    it('archives order, captures the prior status, and emits ORDER_ARCHIVED event', async () => {
+      mockTx.order.findFirstOrThrow.mockResolvedValueOnce({ ...mockOrder, status: 'validated' });
       mockTx.order.update.mockResolvedValueOnce({ ...mockOrder, archived: true, status: 'archived' });
       const { bus } = mockEventBus();
       const handler = new ArchiveOrderCommandHandler(mockPrisma, bus);
@@ -284,6 +286,10 @@ describe('Order Command Handlers', () => {
       );
 
       expect(result.success).toBe(true);
+      expect(mockTx.order.update).toHaveBeenCalledWith(expect.objectContaining({
+        where: { id: 'order-1' },
+        data: expect.objectContaining({ status: 'archived', statusBeforeArchive: 'validated' }),
+      }));
       expect(result.events).toHaveLength(1);
       expect(result.events[0].type).toBe(EVENT_TYPES.ORDER_ARCHIVED);
     });

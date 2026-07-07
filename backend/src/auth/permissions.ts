@@ -68,8 +68,6 @@ export const PERMISSIONS = {
   TENDERS_WRITE: 'tenders:write',
 
   // Brokerage
-  LOADBOARD_READ: 'loadboard:read',
-  LOADBOARD_ASSIGN: 'loadboard:assign',
   MARGIN_VIEW: 'margin:view',
   CREDIT_CHECK: 'credit:check',
   RATE_CONFIRMATION: 'rate_confirmation:generate',
@@ -97,8 +95,6 @@ export const PERMISSIONS = {
   // Wildcard
   ALL: '*',
 } as const;
-
-export type Permission = typeof PERMISSIONS[keyof typeof PERMISSIONS];
 
 // ── System Role Definitions ────────────────────────────────────────────
 
@@ -128,7 +124,7 @@ export const SYSTEM_ROLES: RoleDefinition[] = [
       'locations:read', 'lanes:read', 'devices:read',
       'issues:*', 'documents:*', 'tenders:*',
       'quotes:read', 'charges:read', 'invoices:read',
-      'loadboard:*', 'margin:view', 'credit:check', 'rate_confirmation:generate',
+      'margin:view', 'credit:check', 'rate_confirmation:generate',
     ],
     isSystem: true,
   },
@@ -141,7 +137,7 @@ export const SYSTEM_ROLES: RoleDefinition[] = [
       'issues:*', 'documents:*', 'tenders:*',
       'quotes:*', 'charges:*', 'invoices:*', 'carrier_invoices:*',
       'financial_reports:read',
-      'loadboard:*', 'margin:view', 'credit:check', 'rate_confirmation:generate',
+      'margin:view', 'credit:check', 'rate_confirmation:generate',
       'edi:*', 'integrations:*',
       'agent_decisions:*', 'automation_rules:*',
       'settings:*', 'users:*', 'roles:read',
@@ -150,7 +146,7 @@ export const SYSTEM_ROLES: RoleDefinition[] = [
   },
   {
     name: 'broker_agent',
-    description: 'Brokerage agent/sales rep. Can quote customers, manage loads on the load board, assign carriers, and view margins. Cannot manage users or settings.',
+    description: 'Brokerage agent/sales rep. Can quote customers, assign carriers to shipments, and view margins. Cannot manage users or settings.',
     permissions: [
       'shipments:read', 'shipments:write', 'orders:read', 'orders:write',
       'carriers:read', 'customers:read',
@@ -160,7 +156,7 @@ export const SYSTEM_ROLES: RoleDefinition[] = [
       'tenders:read', 'tenders:write',
       'quotes:*', 'charges:read',
       'invoices:read',
-      'loadboard:*', 'margin:view', 'credit:check', 'rate_confirmation:generate',
+      'margin:view', 'credit:check', 'rate_confirmation:generate',
     ],
     isSystem: true,
   },
@@ -184,7 +180,7 @@ export const SYSTEM_ROLES: RoleDefinition[] = [
       'issues:read', 'documents:read',
       'quotes:read', 'charges:read', 'invoices:read', 'carrier_invoices:read',
       'financial_reports:read',
-      'loadboard:read', 'margin:view',
+      'margin:view',
       'tenders:read',
       'agent_decisions:read', 'automation_rules:read',
     ],

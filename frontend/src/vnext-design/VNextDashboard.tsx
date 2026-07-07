@@ -72,19 +72,17 @@ interface SlaSummary {
 }
 
 const STATUS_VARIANT = {
-  delivered: 'success',
-  in_transit: 'info',
-  pickup: 'warning',
-  picked_up: 'warning',
-  booked: 'muted',
+  draft: 'muted',
+  ready: 'warning',
+  in_progress: 'info',
+  complete: 'success',
 } as const;
 
 const STATUS_LABEL: Record<string, string> = {
-  delivered: 'Delivered',
-  in_transit: 'In transit',
-  pickup: 'Pickup',
-  picked_up: 'Pickup',
-  booked: 'Booked',
+  draft: 'Draft',
+  ready: 'Ready',
+  in_progress: 'In progress',
+  complete: 'Completed',
 };
 
 function statusToBadge(status?: string) {
@@ -195,7 +193,11 @@ export default function VNextDashboard() {
 
   const shipmentsThisWeek = shipments.filter(s => inRange(s.createdAt, weekStart, now));
   const ordersThisWeek = orders.filter(o => inRange(o.createdAt, weekStart, now));
-  const inTransitThisWeek = shipmentsThisWeek.filter(s => s.status === 'in_transit');
+  // Current status mix across ALL shipments, not just ones created this week —
+  // "in progress" / "complete" describe a shipment's present state, so scoping
+  // them to this week's creations would hide the bulk of what's actually active.
+  const inProgressCount = shipments.filter(s => s.status === 'in_progress').length;
+  const completedCount = shipments.filter(s => s.status === 'complete').length;
   const deliveredThisWeek = orders.filter(o => inRange(o.deliveredAt, weekStart, now));
   const exceptionsThisWeek = issues.filter(i => inRange(i.createdAt, weekStart, now));
 
@@ -234,8 +236,8 @@ export default function VNextDashboard() {
   const stats = [
     { label: 'Shipments created', value: shipmentsThisWeek.length, icon: Truck, tone: 'primary', onClick: () => navigate('/shipments') },
     { label: 'Orders created', value: ordersThisWeek.length, icon: Package, tone: 'accent', onClick: () => navigate('/orders') },
-    { label: 'In transit', value: inTransitThisWeek.length, icon: Truck, tone: 'warning', onClick: () => navigate('/shipments') },
-    { label: 'Delivered', value: deliveredThisWeek.length, icon: CheckCircle2, tone: 'success', onClick: () => navigate('/orders') },
+    { label: 'In progress', value: inProgressCount, icon: Truck, tone: 'warning', onClick: () => navigate('/shipments') },
+    { label: 'Completed', value: completedCount, icon: CheckCircle2, tone: 'success', onClick: () => navigate('/shipments') },
     { label: 'On-time delivery', value: onTimeRate === null ? '—' : `${onTimeRate}%`, icon: Percent, tone: onTimeTone },
   ];
 
@@ -488,17 +490,15 @@ export default function VNextDashboard() {
       <Card>
         <CardHeader>
           <CardTitle>Delivery performance</CardTitle>
-          <CardDescription>Status of shipments created this week.</CardDescription>
+          <CardDescription>Status of all shipments.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
           {(() => {
-            const deliveredCount = shipmentsThisWeek.filter(s => s.status === 'delivered').length;
-            const inTransitCount = inTransitThisWeek.length;
-            const total = shipmentsThisWeek.length || 1;
-            const otherCount = shipmentsThisWeek.length - deliveredCount - inTransitCount;
+            const total = shipments.length || 1;
+            const otherCount = shipments.length - completedCount - inProgressCount;
             return [
-              { label: 'Delivered', count: deliveredCount, pct: parseFloat(((deliveredCount / total) * 100).toFixed(1)), tone: 'bg-success' },
-              { label: 'In transit', count: inTransitCount, pct: parseFloat(((inTransitCount / total) * 100).toFixed(1)), tone: 'bg-warning' },
+              { label: 'Completed', count: completedCount, pct: parseFloat(((completedCount / total) * 100).toFixed(1)), tone: 'bg-success' },
+              { label: 'In progress', count: inProgressCount, pct: parseFloat(((inProgressCount / total) * 100).toFixed(1)), tone: 'bg-warning' },
               { label: 'Other', count: otherCount, pct: parseFloat(((otherCount / total) * 100).toFixed(1)), tone: 'bg-destructive' },
             ];
           })().map(row => (

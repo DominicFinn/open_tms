@@ -17,7 +17,6 @@ export interface GeocodingResult {
 
 let autocompleteService: google.maps.places.AutocompleteService | null = null;
 let placesService: google.maps.places.PlacesService | null = null;
-let geocoder: google.maps.Geocoder | null = null;
 
 function getAutocompleteService(): google.maps.places.AutocompleteService {
   if (!autocompleteService) {
@@ -33,13 +32,6 @@ function getPlacesService(): google.maps.places.PlacesService {
     placesService = new google.maps.places.PlacesService(div);
   }
   return placesService;
-}
-
-function getGeocoder(): google.maps.Geocoder {
-  if (!geocoder) {
-    geocoder = new google.maps.Geocoder();
-  }
-  return geocoder;
 }
 
 export async function googleAutocomplete(input: string): Promise<{ placeId: string; description: string }[]> {
@@ -64,19 +56,6 @@ export async function googleGetPlaceDetails(placeId: string): Promise<GeocodingR
         return;
       }
       resolve(parseGoogleResult(place));
-    });
-  });
-}
-
-export async function googleReverseGeocode(lat: number, lng: number): Promise<GeocodingResult | null> {
-  const gc = getGeocoder();
-  return new Promise((resolve) => {
-    gc.geocode({ location: { lat, lng } }, (results, status) => {
-      if (status !== 'OK' || !results?.[0]) {
-        resolve({ lat, lng, formattedAddress: `${lat.toFixed(6)}, ${lng.toFixed(6)}` });
-        return;
-      }
-      resolve(parseGoogleResult(results[0]));
     });
   });
 }
@@ -157,8 +136,4 @@ export async function nominatimReverse(lat: number, lng: number): Promise<Geocod
     postalCode: addr.postcode || undefined,
     country: addr.country || undefined,
   };
-}
-
-export function nominatimGetDetails(_lat: number, _lng: number): Promise<GeocodingResult | null> {
-  return nominatimReverse(_lat, _lng);
 }

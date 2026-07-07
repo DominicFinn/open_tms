@@ -14,6 +14,8 @@ import { ICommandBus } from '../commands/CommandBus.js';
 import { CREATE_ORDER } from '../commands/orders/CreateOrderCommand.js';
 import { UPDATE_ORDER } from '../commands/orders/UpdateOrderCommand.js';
 import { ARCHIVE_ORDER } from '../commands/orders/ArchiveOrderCommand.js';
+import { SOFT_DELETE_ORDER } from '../commands/orders/SoftDeleteOrderCommand.js';
+import { UNARCHIVE_ORDER } from '../commands/orders/UnarchiveOrderCommand.js';
 import {
   CREATE_TRACKABLE_UNIT,
   UPDATE_TRACKABLE_UNIT,
@@ -30,6 +32,7 @@ import {
   DELETE_LINE_ITEM,
 } from '../commands/lineItems/index.js';
 import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
+import { requirePermission } from '../middleware/jwtAuth.js';
 import { guardWrites } from '../auth/guardWrites.js';
 
 // Validation schemas (exported for reuse by customerApi.ts)
@@ -200,6 +203,21 @@ export async function orderRoutes(server: FastifyInstance) {
     return { data: orders, error: null };
   });
 
+  // Archived orders (admin-only). Backs the Archives page. Registered as a
+  // static path so it is matched ahead of the /:id param route.
+  server.get('/api/v1/orders/archived', {
+    preHandler: requirePermission('orders:delete'),
+    schema: {
+      tags: ['Orders'],
+      summary: 'List archived orders (admin)',
+      description: 'Returns all archived orders for the current org. Requires orders:delete.',
+    },
+  }, async (req: FastifyRequest, _reply: FastifyReply) => {
+    const orgId = req.orgId!;
+    const orders = await ordersRepo.findArchived(orgId);
+    return { data: orders, error: null };
+  });
+
   // Create order
   server.post('/api/v1/orders', async (req: FastifyRequest, reply: FastifyReply) => {
     const body = createOrderSchema.parse((req as any).body);
@@ -288,11 +306,13 @@ export async function orderRoutes(server: FastifyInstance) {
     return { data: created, error: null };
   });
 
-  // Get order by ID
+  // Get order by ID. Uses findByIdIncludingArchived (not findById) so an
+  // archived order still loads — the detail page needs this to show the
+  // archived banner + Unarchive action. Soft-deleted orders still 404.
   server.get('/api/v1/orders/:id', async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
     const orgId = req.orgId!;
-    const order = await ordersRepo.findById(id, orgId);
+    const order = await ordersRepo.findByIdIncludingArchived(id, orgId);
     if (!order) {
       reply.code(404);
       return { data: null, error: 'Order not found' };
@@ -335,8 +355,17 @@ export async function orderRoutes(server: FastifyInstance) {
     return { data: updated, error: null };
   });
 
-  // Delete (archive) order
-  server.delete('/api/v1/orders/:id', async (req: FastifyRequest, reply: FastifyReply) => {
+  // Archive order (recoverable). Any operational user with orders:write may
+  // archive. Mirrors DELETE /api/v1/shipments/:id.
+  server.delete('/api/v1/orders/:id', {
+    preHandler: requirePermission('orders:write'),
+    schema: {
+      tags: ['Orders'],
+      summary: 'Archive order',
+      description: 'Archives an order (recoverable). Removes it from active lists; the row is retained for audit.',
+      params: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
 
     const orgId = req.orgId!;
@@ -359,8 +388,187 @@ export async function orderRoutes(server: FastifyInstance) {
       return { data: null, error: result.error };
     }
 
-    const archived = await ordersRepo.findById(id, orgId);
-    return { data: archived, error: null };
+    return { data: { id, archived: true }, error: null };
+  });
+
+  // Soft delete (admin-only, orders:delete). Hidden from every view; the row
+  // is retained for audit with a deletedAt/deletedBy tombstone. Mirrors
+  // POST /api/v1/shipments/:id/soft-delete.
+  server.post('/api/v1/orders/:id/soft-delete', {
+    preHandler: requirePermission('orders:delete'),
+    schema: {
+      tags: ['Orders'],
+      summary: 'Soft delete order (admin)',
+      description: 'Marks an order deleted (deletedAt/deletedBy). Removes it from all views; retained for audit. Requires orders:delete.',
+      params: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const orgId = req.orgId!;
+
+    const existing = await prisma.order.findFirst({
+      where: { id, orgId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!existing) {
+      reply.code(404);
+      return { data: null, error: 'Order not found' };
+    }
+
+    const result = await commandBus.dispatch({
+      type: SOFT_DELETE_ORDER,
+      orgId,
+      actorId: req.user?.sub ?? null,
+      payload: { id },
+      metadata: { correlationId: randomUUID(), source: 'api' },
+    });
+
+    if (!result.success) {
+      reply.code(400);
+      return { data: null, error: result.error };
+    }
+
+    return { data: { id, deleted: true }, error: null };
+  });
+
+  // Unarchive (restore). Admin action (orders:delete), mirroring archive's
+  // privileged counterpart. Re-inserts the order into active lists and
+  // restores its pre-archive status. Mirrors POST /api/v1/shipments/:id/unarchive.
+  server.post('/api/v1/orders/:id/unarchive', {
+    preHandler: requirePermission('orders:delete'),
+    schema: {
+      tags: ['Orders'],
+      summary: 'Unarchive order (admin)',
+      description: 'Restores an archived order to active lists. Requires orders:delete.',
+      params: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const orgId = req.orgId!;
+
+    const existing = await prisma.order.findFirst({
+      where: { id, orgId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!existing) {
+      reply.code(404);
+      return { data: null, error: 'Order not found' };
+    }
+
+    const result = await commandBus.dispatch({
+      type: UNARCHIVE_ORDER,
+      orgId,
+      actorId: req.user?.sub ?? null,
+      payload: { id },
+      metadata: { correlationId: randomUUID(), source: 'api' },
+    });
+
+    if (!result.success) {
+      reply.code(404);
+      return { data: null, error: result.error };
+    }
+
+    return { data: { id, archived: false }, error: null };
+  });
+
+  // Bulk archive from the list page. Each order is archived independently;
+  // per-row results report which ones failed (e.g. already archived/deleted).
+  // Mirrors POST /api/v1/shipments/bulk-archive.
+  server.post('/api/v1/orders/bulk-archive', {
+    preHandler: requirePermission('orders:write'),
+    schema: {
+      tags: ['Orders'],
+      summary: 'Bulk archive orders',
+      description: 'Archives multiple orders (recoverable), returning per-order success/failure.',
+      body: {
+        type: 'object',
+        required: ['ids'],
+        properties: {
+          ids: { type: 'array', items: { type: 'string' } },
+        },
+      },
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { ids } = z.object({
+      ids: z.array(z.string().uuid()).min(1).max(500),
+    }).parse((req as any).body);
+
+    const orgId = req.orgId!;
+    const actorId = req.user?.sub ?? null;
+
+    const owned = await prisma.order.findMany({
+      where: { id: { in: ids }, orgId, deletedAt: null },
+      select: { id: true },
+    });
+    const ownedIds = new Set(owned.map((o: { id: string }) => o.id));
+
+    const results: Array<{ id: string; success: boolean; error: string | null }> = [];
+    for (const id of ids) {
+      if (!ownedIds.has(id)) {
+        results.push({ id, success: false, error: 'Order not found' });
+        continue;
+      }
+      const result = await commandBus.dispatch({
+        type: ARCHIVE_ORDER,
+        orgId,
+        actorId,
+        payload: { id },
+        metadata: { correlationId: randomUUID(), source: 'api' },
+      });
+      results.push({ id, success: result.success, error: result.success ? null : (result.error ?? 'Unknown error') });
+    }
+
+    return { data: { results }, error: null };
+  });
+
+  // Bulk soft delete from the list page (admin-only, orders:delete). Each
+  // order is deleted independently; per-row results report failures.
+  // Mirrors POST /api/v1/shipments/bulk-delete.
+  server.post('/api/v1/orders/bulk-delete', {
+    preHandler: requirePermission('orders:delete'),
+    schema: {
+      tags: ['Orders'],
+      summary: 'Bulk soft delete orders (admin)',
+      description: 'Marks multiple orders deleted (deletedAt/deletedBy), returning per-order success/failure. Requires orders:delete.',
+      body: {
+        type: 'object',
+        required: ['ids'],
+        properties: {
+          ids: { type: 'array', items: { type: 'string' } },
+        },
+      },
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { ids } = z.object({
+      ids: z.array(z.string().uuid()).min(1).max(500),
+    }).parse((req as any).body);
+
+    const orgId = req.orgId!;
+    const actorId = req.user?.sub ?? null;
+
+    const owned = await prisma.order.findMany({
+      where: { id: { in: ids }, orgId, deletedAt: null },
+      select: { id: true },
+    });
+    const ownedIds = new Set(owned.map((o: { id: string }) => o.id));
+
+    const results: Array<{ id: string; success: boolean; error: string | null }> = [];
+    for (const id of ids) {
+      if (!ownedIds.has(id)) {
+        results.push({ id, success: false, error: 'Order not found' });
+        continue;
+      }
+      const result = await commandBus.dispatch({
+        type: SOFT_DELETE_ORDER,
+        orgId,
+        actorId,
+        payload: { id },
+        metadata: { correlationId: randomUUID(), source: 'api' },
+      });
+      results.push({ id, success: result.success, error: result.success ? null : (result.error ?? 'Unknown error') });
+    }
+
+    return { data: { results }, error: null };
   });
 
   // Validate and create location if needed

@@ -9,27 +9,6 @@ import { PrismaClient, AgentDecision, AgentDecisionReadModel } from '@prisma/cli
 
 // ── DTOs ──────────────────────────────────────────────────────────
 
-export interface CreateAgentDecisionDTO {
-  orgId: string;
-  agentType: string;
-  modelProvider?: string;
-  modelId?: string;
-  triggerType: string;
-  triggerEventType?: string;
-  triggerEventId?: string;
-  entityType?: string;
-  entityId?: string;
-  summary: string;
-  reasoning: string;
-  context: Record<string, unknown>;
-  conversationLog?: Array<{ role: string; content: string }>;
-  confidence?: number;
-  actionType: string;
-  actionPayload?: Record<string, unknown>;
-  actionEntityType?: string;
-  actionEntityId?: string;
-}
-
 export interface AgentDecisionFilters {
   orgId?: string;
   agentType?: string;

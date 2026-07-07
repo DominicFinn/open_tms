@@ -123,7 +123,7 @@ export default function VNextFinanceQuoteDetail() {
       const json = await res.json();
       if (json.error) throw new Error(json.error);
       if (action === 'accept' && json.data?.shipmentId) {
-        navigate(`/loadboard`);
+        navigate(`/shipments/${json.data.shipmentId}`);
         return;
       }
       if (action === 'accept' && json.data?.orderId) {

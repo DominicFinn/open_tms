@@ -139,6 +139,7 @@ describe('OrdersRepository orgId scoping', () => {
     await repo.all('org-1');
     expect(prisma.order.findMany.mock.calls[0][0].where).toEqual({
       archived: false,
+      deletedAt: null,
       orgId: 'org-1',
     });
   });
@@ -161,6 +162,7 @@ describe('OrdersRepository orgId scoping', () => {
     expect(prisma.order.findFirst.mock.calls[0][0].where).toEqual({
       id: 'o-1',
       archived: false,
+      deletedAt: null,
       orgId: 'org-1',
     });
   });
@@ -172,6 +174,7 @@ describe('OrdersRepository orgId scoping', () => {
     expect(prisma.order.findFirst.mock.calls[0][0].where).toEqual({
       orderNumber: 'PO-1234',
       archived: false,
+      deletedAt: null,
       orgId: 'org-1',
     });
   });

@@ -48,6 +48,10 @@ export class OrderProjection implements IEventHandler {
         return this.onExceptionResolved(event);
       case EVENT_TYPES.ORDER_ARCHIVED:
         return this.onOrderArchived(event);
+      case EVENT_TYPES.ORDER_DELETED:
+        return this.onOrderDeleted(event);
+      case EVENT_TYPES.ORDER_UNARCHIVED:
+        return this.onOrderCreated(event);
       case EVENT_TYPES.TRACKABLE_UNIT_CREATED:
       case EVENT_TYPES.TRACKABLE_UNIT_UPDATED:
       case EVENT_TYPES.TRACKABLE_UNIT_DELETED:
@@ -262,6 +266,16 @@ export class OrderProjection implements IEventHandler {
       where: { id: event.entityId },
     }).catch((err: Error) => {
       console.error(`[OrderProjection] Failed to delete archived order ${event.entityId}: ${err.message}`);
+    });
+  }
+
+  private async onOrderDeleted(event: DomainEvent): Promise<void> {
+    // Soft-deleted orders are hidden from every view, same read-model removal
+    // as archive.
+    await this.prisma.orderReadModel.delete({
+      where: { id: event.entityId },
+    }).catch((err: Error) => {
+      console.error(`[OrderProjection] Failed to delete order ${event.entityId}: ${err.message}`);
     });
   }
 

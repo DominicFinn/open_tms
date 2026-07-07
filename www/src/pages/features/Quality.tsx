@@ -19,7 +19,7 @@ const problems = [
   {
     problem: 'Cold chain compliance is a nightmare of spreadsheets and manual temperature logs',
     solution: 'Automated cold chain compliance',
-    description: 'CFR 21 Part 11 compliant temperature logging with SHA-256 integrity hashes. The system continuously monitors temperature, humidity, and other sensor data. When an excursion is detected, it automatically triggers quarantine workflows and creates investigation records. Compliance reports generate themselves.',
+    description: 'CFR 21 Part 11 compliant temperature logging with SHA-256 integrity hashes. The system continuously monitors temperature and other sensor data. When an excursion is detected, it automatically triggers quarantine workflows and creates investigation records. Compliance reports generate themselves.',
     color: '#8b5cf6',
   },
   {

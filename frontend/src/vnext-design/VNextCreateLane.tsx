@@ -33,7 +33,21 @@ interface Stop {
   id: number;
   location: string;
   order: number;
+  purpose: string;
 }
+
+// Informational only — doesn't affect routing/rating, just labels what a
+// hub-and-spoke stop is for.
+const STOP_PURPOSES = [
+  { key: 'pickup', label: 'Pickup' },
+  { key: 'dropoff', label: 'Dropoff' },
+  { key: 'cross_dock', label: 'Cross-dock' },
+  { key: 'fuel', label: 'Fuel' },
+  { key: 'rest', label: 'Rest' },
+  { key: 'hub', label: 'Hub' },
+  { key: 'customs', label: 'Customs' },
+  { key: 'other', label: 'Other' },
+];
 
 interface RouteData {
   encodedPolyline: string;
@@ -92,7 +106,7 @@ export default function VNextCreateLane() {
         if (l.stops && l.stops.length > 0) {
           setStops(l.stops.map((s: any, i: number) => {
             stopIdCounter += 1;
-            return { id: stopIdCounter, location: s.locationId || '', order: s.order || i + 1 };
+            return { id: stopIdCounter, location: s.locationId || '', order: s.order || i + 1, purpose: s.purpose || '' };
           }));
         }
         if (l.route) {
@@ -112,7 +126,7 @@ export default function VNextCreateLane() {
         originId: origin, destinationId: destination,
         distance: distance ? parseFloat(distance) : undefined,
         notes, serviceLevel,
-        stops: stops.filter(s => s.location).map(s => ({ locationId: s.location, order: s.order })),
+        stops: stops.filter(s => s.location).map(s => ({ locationId: s.location, order: s.order, purpose: s.purpose || undefined })),
       };
       const url = isEdit ? `${API_URL}/api/v1/lanes/${id}` : `${API_URL}/api/v1/lanes`;
       const res = await fetch(url, {
@@ -194,7 +208,7 @@ export default function VNextCreateLane() {
 
   const addStop = () => {
     stopIdCounter += 1;
-    setStops(prev => [...prev, { id: stopIdCounter, location: '', order: prev.length + 1 }]);
+    setStops(prev => [...prev, { id: stopIdCounter, location: '', order: prev.length + 1, purpose: '' }]);
   };
 
   const updateStop = (sid: number, field: keyof Stop, value: string | number) => {
@@ -270,11 +284,14 @@ export default function VNextCreateLane() {
               <div className="h-px flex-1 bg-border" />
               {stops.length > 0 && stops.map((stop, i) => {
                 const stopLabel = apiLocations.find(l => l.id === stop.location)?.name || `Stop ${i + 1}`;
+                const purposeLabel = STOP_PURPOSES.find(p => p.key === stop.purpose)?.label;
                 return (
                   <React.Fragment key={stop.id}>
                     <div className="flex items-center gap-2">
                       <span className="h-2.5 w-2.5 rounded-full bg-warning" />
-                      <span className="text-xs text-muted-foreground">{stopLabel}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {stopLabel}{purposeLabel ? ` (${purposeLabel})` : ''}
+                      </span>
                     </div>
                     <div className="h-px flex-1 bg-border" />
                   </React.Fragment>
@@ -458,6 +475,19 @@ export default function VNextCreateLane() {
                   value={stop.order}
                   onChange={e => updateStop(stop.id, 'order', parseInt(e.target.value) || 1)}
                 />
+              </div>
+              <div className="w-40 space-y-2">
+                <Label>Tag</Label>
+                <Select value={stop.purpose} onValueChange={v => updateStop(stop.id, 'purpose', v)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="No tag" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {STOP_PURPOSES.map(p => (
+                      <SelectItem key={p.key} value={p.key}>{p.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <Button
                 variant="outline"

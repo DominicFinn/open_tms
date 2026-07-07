@@ -1,8 +1,6 @@
 /**
- * Canonical shipment timeline event types. Used by the backend timeline
- * projection/backfill and the GET filter, and mirrored byte-for-byte at
- * frontend/src/shared/shipmentEventTypes.ts for the filter dropdown + labels.
- * If you change this file, update the mirror.
+ * Canonical shipment timeline event types, shared by the backend timeline
+ * projection/backfill/filter and the frontend filter dropdown + labels.
  *
  * Shipment events are platform-generated and read-only — there is no manual
  * event creation. Legacy device/EDI rows (e.g. "location", "status_change",

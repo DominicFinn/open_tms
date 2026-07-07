@@ -131,7 +131,6 @@ import { issueRoutes } from './routes/issues.js';
 import { commentRoutes } from './routes/comments.js';
 import { carrierTrackingRoutes } from './routes/carrierTracking.js';
 import { qualityCentreRoutes } from './routes/qualityCentre.js';
-import { loadboardRoutes } from './routes/loadboard.js';
 import { roleRoutes } from './routes/roles.js';
 import { brokerReportRoutes } from './routes/brokerReports.js';
 import { commissionRoutes } from './routes/commissions.js';
@@ -169,9 +168,22 @@ async function start() {
             in: 'header',
             name: 'x-api-key',
             description: 'Customer-scoped API key. Create one via POST /api/v1/api-keys with a customerId. Can also be passed as Authorization: Bearer <key>.'
+          },
+          BearerAuth: {
+            type: 'http',
+            scheme: 'bearer',
+            bearerFormat: 'JWT',
+            description: 'Internal user JWT from POST /api/v1/auth/login. Required for most admin/back-office endpoints.'
           }
         }
-      }
+      },
+      // Default security requirement for any operation that doesn't declare
+      // its own `security` array. Most routes sit behind the global
+      // authenticateJWT hook (see the authenticatedRoutes block below), so
+      // BearerAuth is the sane default; self-authenticating routes (login,
+      // customer/carrier portals, ApiKeyAuth-scoped endpoints, etc.) already
+      // override this with their own per-route `security`.
+      security: [{ BearerAuth: [] }]
     }
   });
   // Only expose Swagger UI in non-production environments
@@ -207,7 +219,6 @@ async function start() {
   await server.register(customerPortalRoutes);       // Own customer JWT auth internally
   await server.register(customerDeveloperRoutes);    // Own customer JWT auth internally (Developer Area)
   await server.register(customerApiRoutes);          // Own API key auth internally
-  await server.register(loadboardRoutes);            // Optional auth (public carrier-facing)
   await server.register(webhookRoutes);              // Own API key auth internally
   await server.register(warehouseRoutes);            // Own magic link auth internally
   await server.register(seedRoutes);                 // Dev/demo only (guarded by NODE_ENV)

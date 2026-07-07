@@ -18,11 +18,12 @@
 - **Shipment Archive & Soft Delete** - Users archive shipments (recoverable, `shipments:write`); an archived shipment still opens with an "archived" banner and admins can unarchive it (`shipments:delete`). Admins soft-delete (`shipments:delete`, hidden everywhere, deleted shipments show a styled not-found screen, retained for audit). All actions audit-logged. _Future: an archived-shipments screen to browse/restore archived records._
 - **Shipment Event Timeline** - Read-only, platform-generated timeline on the shipment detail page. A projection materializes domain events (created, updated, status changed, carrier assigned, exception, delivered, archived/unarchived/deleted, leaves origin, enters destination, entered/exited waypoint) into filterable timeline entries. Filter by event type and date range. No manual/custom events.
 - **IoT Device Association** - Admin per-org IoT vendor on/off toggle (System Loco is vendor #1) at /settings/iot-vendors; when enabled, the shipment create/edit form shows an IoT Devices section to attach one or many devices (name + external ID). Devices create Device + active DeviceAssignment records so System Loco webhooks resolve to the shipment by device id. Disabling a vendor skips its webhooks. Shipment-level tracking.
-- **System Loco Webhook Ingestion** - Hardened device webhook pipeline: verify -> enqueue (pg-boss) -> 202; HMAC X-LocoAware-Signature verification (secret on the IoT vendor config) with API-key fallback; idempotent on the event id (no duplicate readings on redelivery); resolved location updates the shipment's live map/list position; enriched telemetry (humidity, pressure, location type/accuracy) on SensorReading + Telemetry tab. Local replay harness + integration doc (docs/SYSTEM_LOCO_INTEGRATION.md).
+- **System Loco Webhook Ingestion** - Hardened device webhook pipeline: verify -> enqueue (pg-boss) -> 202; HMAC X-LocoAware-Signature verification (secret on the IoT vendor config) with API-key fallback; idempotent on the event id (no duplicate readings on redelivery); resolved location updates the shipment's live map/list position; enriched telemetry (pressure, location type/accuracy) on SensorReading + Telemetry tab. Local replay harness + integration doc (docs/SYSTEM_LOCO_INTEGRATION.md).
 - **Item/Line Items** - Model SKUs, quantities, weights, dimensions, CSV/Excel bulk import
 
 ### **Phase 2: Orders & Ingestion** DONE
 - **Order Management** - CSV import, manual creation, auto-assignment to lanes, pending lane requests, special requirements (FTL/LTL, temp control, hazmat)
+- **Order Archive, Soft Delete & Auto-Archive** - Customers and operational users (`orders:write`) archive an order (recoverable, removed from active lists, captures pre-archive status for restore); admins (`orders:delete`) soft-delete (hidden everywhere, retained for audit) and unarchive (restores prior status). Delivered/cancelled orders are auto-archived after a retention window (default 30 days) by a daily pg-boss cron.
 - **Customer API** - REST API for programmatic order creation, API key auth, rate limiting, Swagger docs
 - **Order Status Lifecycle** - Status flow (unassigned to delivered/exception), geofencing, IoT triggers, audit trail, timeline API/UI
 - **EDI Import (850)** - X12 850 parser, EDI partner config, file storage/dedup, preview, history, SFTP polling (edi-collector)
@@ -56,13 +57,12 @@
 - **Exceptions** - Exception status with type classification, resolution workflow, event-driven notifications, ETA-based auto-detection
 
 ### **Phase 6: Cold Chain** DONE (partial)
-- **Cold Chain Profiles** - CRUD (name, temp range, alert range, humidity), assign to shipments
-- **Excursion Management** - IoT sensor pipeline, disposition lifecycle (monitoring to released/quarantined), auto-triage
+- **Excursion Management** - IoT sensor pipeline, disposition lifecycle (monitoring to released/quarantined), auto-triage. Effective temperature/alert range derives from order temperatureControl defaults (no standalone profile entity)
 - **Regulatory Audit Trail** - Immutable temperature logging with SHA-256 integrity hashes (CFR 21 Part 11)
 - **Cold Chain Compliance Report** - Auto-generated PDF on shipment complete
 - **Device Calibration** - Certificate, expiry, accuracy tracking
 - **CAPA Reports** - Model and management UI
-- **Admin & Frontend** - VNext profiles page, CAPA reports page, auto-deliver shipment docs setting
+- **Admin & Frontend** - CAPA reports page, auto-deliver shipment docs setting
 
 ### **Phase 7: Financial & Commercial** DONE
 - **7A: Charges + Rating** - Charge model (revenue/cost), ShipmentFinancialSummary, CQRS commands, RatingService, ChargeService, financial tab on shipment detail
@@ -140,17 +140,12 @@ The system models the world as "shipper has carriers" but never accounts for the
   - Target margin per customer and per lane-carrier with variance tracking (actual vs target %)
 - **Broker Quoting Workflow** ✅
   - Quick quote endpoint: auto-populate from lane-carrier rates via RatingService + configurable markup percentage
-  - Quote-to-book conversion: "Accept & Book" creates shipment with pre-set sell rate, flows directly to load board
+  - Quote-to-book conversion: "Accept & Book" creates an unassigned shipment with pre-set sell rate
   - Rate confirmation PDF generation (carrier-facing, hides customer sell rate and broker margin)
   - Customer credit check service: validates outstanding balance against creditLimitCents before quoting
   - Customer rate request intake - moved to Track 3 (Customer Portal)
-- **Broker Load Board** ✅
-  - Internal load board: unmatched shipments needing carrier assignment
-  - Carrier capacity search: find carriers with lane rates and historical usage on matching lanes
-  - Quick carrier assignment with cost rate capture and real-time margin preview
-  - Integration with carrier tendering (existing broadcast/waterfall) for larger operations
-  - Tender acceptance rate stats per carrier
-  - Load matching suggestions - moved to Track 4 (Route Optimization)
+- **Broker Load Board** ❌ Removed
+  - The standalone Load Board page (list of unassigned shipments + quick carrier assignment) was removed in favor of assigning carriers directly from shipment creation/detail. Carrier tendering (broadcast/waterfall) remains available for larger operations.
 - **Broker-Specific Financials** ✅
   - Carrier quick pay / factoring: request accelerated payment with configurable discount % and payment days
   - Customer invoice with broker markup (not showing carrier cost) - already worked via existing Invoice system
@@ -547,7 +542,7 @@ Bolt-on WMS extending the TMS's TrackableUnit/CargoScan/Location models. Full sp
   - Transit-hours upgrade: refrigerated packages heading past 24h transit automatically get dry_ice added with a warning
   - `POST /api/v1/containers/recommend` endpoint returns full package plan with volume/weight utilization and total container cost
   - Carton catalogue admin UI extended with all the new fields: temperature zone selector, insulation hours, tamper-evident toggle, value class, material, hazmat classes list, plus per-row chips in the table
-  - 37 tests covering input validation, best-fit sizing, temperature grouping, hazmat segregation (compatible and incompatible class pairs), value-class routing, fragile + humidity ancillaries, multi-split combinations, reason strings, cost/weight totals
+  - 36 tests covering input validation, best-fit sizing, temperature grouping, hazmat segregation (compatible and incompatible class pairs), value-class routing, fragile ancillaries, multi-split combinations, reason strings, cost/weight totals
   - 🔲 Smart tote integration (IoT-paired totes assigned at pack time) - next iteration
   - 🔲 Order-line-item-driven auto-fill from SKU catalog temperature + hazmat attributes at pack time
 - **Unified WarehouseTask Supertype** 🔲
@@ -704,7 +699,7 @@ Items from the unified trading partner model that are not yet complete:
 
 ### **IoT Integration (System Loco)**
 - Device-shipment linking (associate IoT devices with shipments) ✅
-- Real-time data ingestion from System Loco IoT platform (temperature, humidity, pressure, shock, light, GPS) ✅ — hardened webhook pipeline (verify→enqueue→202, HMAC signature, idempotency), resolves to shipment, updates live position, enriched telemetry. See `docs/SYSTEM_LOCO_INTEGRATION.md`
+- Real-time data ingestion from System Loco IoT platform (temperature, pressure, shock, light, GPS) ✅ — hardened webhook pipeline (verify→enqueue→202, HMAC signature, idempotency), resolves to shipment, updates live position, enriched telemetry. See `docs/SYSTEM_LOCO_INTEGRATION.md`
 - Sensor stream visualization on shipment detail pages ✅ (Telemetry tab)
 - IoT-based alerts and automation (excursion alerts, geofence+sensor triggers) 🔲
 - _Future:_ **Device Reports V2 feed** — continuous full-sensor snapshots + `timeSeries` arrays (denser telemetry than Device Events) 🔲

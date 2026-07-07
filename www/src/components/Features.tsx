@@ -103,7 +103,7 @@ const features = [
   },
   {
     title: 'IoT & GPS Tracking',
-    description: 'Real-time telemetry from GPS, temperature, humidity, shock, and light sensors. Traffic-aware ETA monitoring with TomTom, HERE, or self-hosted Valhalla routing.',
+    description: 'Real-time telemetry from GPS, temperature, shock, and light sensors. Traffic-aware ETA monitoring with TomTom, HERE, or self-hosted Valhalla routing.',
     icon: (
       <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />

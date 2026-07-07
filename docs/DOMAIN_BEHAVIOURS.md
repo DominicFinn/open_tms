@@ -35,7 +35,11 @@ Every event is persisted to the immutable `DomainEventLog` before handler fan-ou
 |---------|---------|----------------|
 | `CreateOrderCommand` | `POST /api/v1/orders` | `order.created` |
 | `UpdateOrderCommand` | `PUT /api/v1/orders/:id` | `order.updated`, `order.status_changed` (if status changes) |
-| `ArchiveOrderCommand` | `DELETE /api/v1/orders/:id` | `order.archived` |
+| `ArchiveOrderCommand` | `DELETE /api/v1/orders/:id`, `POST /api/v1/orders/bulk-archive` (`orders:write`) | `order.archived` |
+| `SoftDeleteOrderCommand` | `POST /api/v1/orders/:id/soft-delete`, `POST /api/v1/orders/bulk-delete` (admin, `orders:delete`) | `order.deleted` |
+| `UnarchiveOrderCommand` | `POST /api/v1/orders/:id/unarchive` (admin, `orders:delete`) | `order.unarchived` |
+
+**Bulk archive/delete:** the orders list page's multi-select checkboxes drive `POST /api/v1/orders/bulk-archive` and `POST /api/v1/orders/bulk-delete`, which dispatch the same commands per-id (up to 500 ids) and return per-order `{ id, success, error }` results, mirroring the shipment list page's `bulk-archive`/`bulk-delete`/`bulk-transition` pattern.
 
 ### Sub-Entity Operations (CQRS, Phase 2 + Phase 4)
 
@@ -96,7 +100,9 @@ These call domain services with complex orchestration logic. They currently crea
 | `order.delivered` | OrderReadModel.deliveredAt set | In-app notification | — |
 | `order.exception` | OrderReadModel.exceptionType set | In-app + email | — |
 | `order.exception_resolved` | OrderReadModel.exceptionType cleared | — | — |
-| `order.archived` | — | — | Audit log |
+| `order.archived` | OrderReadModel deleted (removed from active lists; captures prior `status` in `statusBeforeArchive` for restore) | — | Audit log |
+| `order.deleted` (soft delete) | OrderReadModel deleted | — | Sets `deletedAt`/`deletedBy`; hidden from every view, not recoverable from the UI |
+| `order.unarchived` | OrderReadModel re-inserted (reuses the `order.created` projection path) | — | Restores `status` from `statusBeforeArchive` (falls back to `pending`) |
 
 ### Status Lifecycle
 
@@ -214,9 +220,9 @@ Shipments follow a canonical lifecycle: **`draft` → `ready` → `in_progress` 
 | `CreateShipmentCommand` | `POST /api/v1/shipments` | `shipment.created` (always `draft`) |
 | `UpdateShipmentCommand` | `PUT /api/v1/shipments/:id` | `shipment.updated`, `shipment.status_changed`, `shipment.carrier_assigned` |
 | `TransitionShipmentStatusCommand` | `POST /api/v1/shipments/:id/transition`, `POST /api/v1/shipments/bulk-transition` | `shipment.status_changed` (gated: adjacency + readiness) |
-| `ArchiveShipmentCommand` | `DELETE /api/v1/shipments/:id` (requires `shipments:write`) | `shipment.archived` |
+| `ArchiveShipmentCommand` | `DELETE /api/v1/shipments/:id`, `POST /api/v1/shipments/bulk-archive` (requires `shipments:write`) | `shipment.archived` |
 | `UnarchiveShipmentCommand` | `POST /api/v1/shipments/:id/unarchive` (requires `shipments:delete`) | `shipment.unarchived` |
-| `SoftDeleteShipmentCommand` | `POST /api/v1/shipments/:id/soft-delete` (requires `shipments:delete`) | `shipment.deleted` |
+| `SoftDeleteShipmentCommand` | `POST /api/v1/shipments/:id/soft-delete`, `POST /api/v1/shipments/bulk-delete` (requires `shipments:delete`) | `shipment.deleted` |
 | `ProcessInbound214Command` | `POST /api/v1/edi/214/inbound` | `edi_214.received`, `shipment.status_changed`, `shipment.stop_arrived`, `shipment.stop_completed`, `shipment.exception`, `shipment.delivered` |
 
 `GET /api/v1/shipments/:id/readiness` returns `{ status, missing, isValid, allowedTransitions }` for the detail-page control. Every `shipment.status_changed` is captured by the `AuditHandler` as an immutable `AuditLog` row recording the actor ("who did it") — this is the audit event for manual lifecycle moves.
@@ -240,6 +246,7 @@ Two independent removal states, both retaining the row for audit:
 
 - **Archive** (`archived`/`archivedAt`) — recoverable, available to any operational user (`shipments:write`). Removed from active lists, but the shipment **detail page still loads** and shows an "archived" banner. Admins (`shipments:delete`) can **unarchive** (`POST /:id/unarchive`) to restore it to active lists. Intended to also surface in a future "archived shipments" screen.
 - **Soft delete** (`deletedAt`/`deletedBy`) — admin-only (`shipments:delete`). Hidden from **every** view, including the future archived screen. The row is kept only for audit/compliance; idempotent (re-deleting is a no-op). Soft-deleted shipments are filtered out of all read/mutation routes via `deletedAt: null`, so the detail page 404s.
+- **Bulk archive/delete** — the shipment list page's multi-select checkboxes drive `POST /api/v1/shipments/bulk-archive` and `POST /api/v1/shipments/bulk-delete`, which dispatch the same commands per-id (up to 500 ids) and return per-shipment `{ id, success, error }` results, mirroring `bulk-transition`'s pattern.
 
 ### Side Effects
 
@@ -277,7 +284,7 @@ Two independent removal states, both retaining the row for audit:
 
 **Webhook resolution.** `SystemLocoAdapter.resolveAssignment` resolves a device to a shipment by: (1) active `DeviceAssignment` for the device id, then (2) device name → `Shipment.reference`, then (3) device name → `Order.orderNumber`. Creating devices on the shipment form populates path (1). Lookups use existing indexes: `Device.name`, `Device.externalId` (`@unique`), `DeviceAssignment[deviceId, active]`, `Shipment.reference`, `Order.orderNumber` (`@unique`).
 
-**Webhook ingestion (`POST /api/v1/webhook`).** Verify → enqueue (pg-boss `INBOUND_WEBHOOK`) → 202, real work in `inboundWebhookWorker`. Auth: `X-LocoAware-Signature` HMAC-SHA256 (timing-safe, raw body; secret on `IotVendor.webhookSecret`) when present, else API key. **Idempotent**: the worker skips events whose `id` already exists as `DeviceEvent.externalEventId` (logged `duplicate`); `SensorReading.sourceReportId` is a unique backstop. When a resolved event carries a location, the worker publishes `tracking.location_received` → `ShipmentProjection` updates `ShipmentReadModel.currentLat/lng/lastLocationAt` (map/list position). Sensor data is stored on `SensorReading` (hot columns incl. humidity, atmosphericPressure, locationType, locationAccuracy + full `rawPayload`) and surfaced on the Telemetry tab. Full details: `docs/SYSTEM_LOCO_INTEGRATION.md`.
+**Webhook ingestion (`POST /api/v1/webhook`).** Verify → enqueue (pg-boss `INBOUND_WEBHOOK`) → 202, real work in `inboundWebhookWorker`. Auth: `X-LocoAware-Signature` HMAC-SHA256 (timing-safe, raw body; secret on `IotVendor.webhookSecret`) when present, else API key. **Idempotent**: the worker skips events whose `id` already exists as `DeviceEvent.externalEventId` (logged `duplicate`); `SensorReading.sourceReportId` is a unique backstop. When a resolved event carries a location, the worker publishes `tracking.location_received` → `ShipmentProjection` updates `ShipmentReadModel.currentLat/lng/lastLocationAt` (map/list position). Sensor data is stored on `SensorReading` (hot columns incl. atmosphericPressure, locationType, locationAccuracy + full `rawPayload`) and surfaced on the Telemetry tab. Full details: `docs/SYSTEM_LOCO_INTEGRATION.md`.
 
 ---
 
@@ -392,6 +399,10 @@ Locations can be classified by type (`warehouse`, `distribution_centre`, `cross_
 | `lane.updated` | LaneReadModel fields updated |
 | `lane.archived` | LaneReadModel.status = 'archived' |
 
+### Lane Stops
+
+Each intermediate hub-and-spoke stop (`LaneStop`) has an optional `purpose` tag describing what the stop is for: `pickup`, `dropoff`, `cross_dock`, `fuel`, `rest`, `hub`, `customs`, or `other`. It's informational only and doesn't affect routing, rating, or the planned-route (`LaneRoute`) waypoints. Set on the create/edit lane form alongside the stop's location and order.
+
 ---
 
 ## Issues / Triage
@@ -475,6 +486,8 @@ When an issue is closed (`issue.closed` event), the `IssueClosureReportHandler` 
 ## Comments (Polymorphic)
 
 Comments are a generic, polymorphic entity that can be attached to issues, shipments, or orders. The `entityType` + `entityId` fields link a comment to its parent.
+
+**Tag:** Comments carry an optional free-form `tag` field for categorization (e.g. `"issue"`, `"requirement"`). It's purely a label — no other system reacts to it. The shipment create/edit form (`VNextCreateShipment.tsx`) uses this to let users add notes tagged as "Issue" or "Additional requirement" while building a shipment; notes are posted as comments (`entityType: "shipment"`) once the shipment is saved. Tagged comments render with a colored badge on the shipment detail Notes & Comments tab (`VNextShipmentDetail.tsx`).
 
 ### Commands
 
@@ -933,27 +946,6 @@ Scale handler throughput via environment variables:
 
 ---
 
-## Cold Chain Profile
-
-Cold chain profiles define allowable temperature and humidity bands for shipments carrying temperature-sensitive cargo.
-
-### Commands
-
-| Command | Trigger | Events Emitted |
-|---------|---------|----------------|
-| `cold_chain_profile.create` | `POST /api/v1/cold-chain-profiles` | `cold_chain_profile.created` |
-| `cold_chain_profile.update` | `PUT /api/v1/cold-chain-profiles/:id` | `cold_chain_profile.updated` |
-
-### Side Effects
-
-| Event | What Happens |
-|-------|-------------|
-| `cold_chain_profile.created` | — |
-| `cold_chain_profile.updated` | — |
-| `cold_chain_profile.deactivated` | — |
-
----
-
 ## Cold Chain Monitoring
 
 Monitors temperature telemetry on shipments, detects excursions, and manages the cold chain disposition lifecycle.
@@ -969,7 +961,7 @@ Monitors temperature telemetry on shipments, detects excursions, and manages the
 | Event | Trigger |
 |-------|---------|
 | `cold_chain.temperature_logged` | IoT sensor telemetry ingested |
-| `cold_chain.excursion_detected` | Temperature reading outside profile alert range |
+| `cold_chain.excursion_detected` | Temperature reading outside the shipment's effective alert range |
 | `cold_chain.excursion_acknowledged` | User acknowledges an active excursion |
 | `cold_chain.excursion_resolved` | Temperature returns to acceptable range or manual resolution |
 
@@ -992,7 +984,7 @@ monitoring → pending_review → released
 
 ## Device Calibration
 
-Tracks calibration records for IoT temperature/humidity devices used in cold chain monitoring.
+Tracks calibration records for IoT temperature devices used in cold chain monitoring.
 
 ### Commands
 
@@ -1547,7 +1539,6 @@ Status bridging rules:
 The `Organization` model has an `organizationType` field that determines the UI experience and available features. Valid values: `shipper` (default), `broker`, `carrier`, `3pl`.
 
 Broker and 3PL organizations get:
-- Load Board in sidebar navigation
 - Margin columns on shipment list (on by default)
 - Brokerage settings tab in admin (MC number, bond, operating authority, margin alerts)
 
@@ -1562,26 +1553,6 @@ Broker and 3PL organizations get:
 - Deduplicates: will not create a second alert if an open margin_alert issue already exists for the shipment
 
 **Configuration:** Set `marginAlertEnabled = true` and `minMarginPercent` on the Organization model via Settings > Brokerage.
-
-### Load Board
-
-**Endpoint:** `GET /api/v1/loadboard`
-
-Returns shipments where `carrierId IS NULL` and `status IN ('booked', 'confirmed', 'ready', 'pending')`, ordered by pickup date. Includes customer, origin/destination, lane, financial summary, and active tenders.
-
-**Endpoint:** `GET /api/v1/loadboard/:shipmentId/matching-carriers`
-
-Finds carriers with:
-1. Lane rates (LaneCarrier records) for the shipment's lane
-2. Historical usage (previously assigned to shipments on the same lane)
-3. Tender acceptance stats (total bids, accepted bids, acceptance rate %)
-
-**Endpoint:** `POST /api/v1/loadboard/:shipmentId/assign`
-
-Quick-assigns a carrier with a cost rate. In a single transaction:
-1. Sets `carrierId` on the shipment
-2. Creates an approved cost charge (linehaul) for the agreed rate
-3. Updates `ShipmentFinancialSummary` with the new cost
 
 ### ShipmentReadModel Financial Columns
 
@@ -1602,9 +1573,9 @@ When `createShipment` is true and the org type is broker or 3PL, the `AcceptQuot
 2. Links Order to Shipment via `OrderShipment`
 3. Creates a `ShipmentFinancialSummary` with expected revenue from the quote
 4. Copies revenue charges to the shipment
-5. Emits `SHIPMENT_CREATED` event (shipment appears on load board for carrier assignment)
+5. Emits `SHIPMENT_CREATED` event (shipment is created unassigned, ready for carrier assignment)
 
-The frontend "Accept & Book" button (visible for broker orgs) triggers this flow and navigates to the load board.
+The frontend "Accept & Book" button (visible for broker orgs) triggers this flow and navigates to the new shipment's detail page.
 
 ### Customer Credit Check
 
@@ -1647,13 +1618,13 @@ Generates a carrier-facing PDF showing the agreed carrier rate (cost charges onl
 |------|-------------|----------------|
 | `admin` | Full system access | `*` |
 | `broker_admin` | Brokerage administrator | All ops + settings + users |
-| `broker_agent` | Sales rep / agent | Loadboard, quotes, margins - no settings/users |
-| `dispatcher` | Operational user | Shipments, orders, tendering, loadboard |
+| `broker_agent` | Sales rep / agent | Quotes, margins - no settings/users |
+| `dispatcher` | Operational user | Shipments, orders, tendering |
 | `finance` | Financial operations | Quotes, invoices, charges, reports |
 | `warehouse` | Warehouse operator | Shipment read/write, devices |
 | `readonly` | Read-only access | All `:read` and `:view` permissions |
 
-**Broker-Specific Permissions:** `loadboard:read`, `loadboard:assign`, `margin:view`, `credit:check`, `rate_confirmation:generate`
+**Broker-Specific Permissions:** `margin:view`, `credit:check`, `rate_confirmation:generate`
 
 **Seeding:** `POST /api/v1/roles/seed` creates or updates system roles (idempotent). Custom roles can be created via the Roles CRUD API.
 
@@ -1701,7 +1672,6 @@ Requests accelerated payment on a carrier invoice with a discount. Sets `quickPa
 - `frontend/src/hooks/useCurrentUser.ts` - Frontend role/permission hook
 - `frontend/src/vnext-design/VNextRoles.tsx` - Roles management admin page
 - `backend/prisma/schema.prisma` - Organization brokerage fields, ShipmentReadModel financial columns
-- `backend/src/routes/loadboard.ts` - Load board API (list, matching carriers, quick assign)
 - `backend/src/routes/quotes.ts` - Quick quote + credit check endpoints
 - `backend/src/routes/organization.ts` - Organization settings (includes brokerage fields)
 - `backend/src/services/CreditCheckService.ts` - Customer credit validation
@@ -1711,7 +1681,6 @@ Requests accelerated payment on a carrier invoice with a discount. Sets `quickPa
 - `backend/src/events/handlers/MarginAlertHandler.ts` - Margin alert event handler
 - `backend/src/events/projections/ShipmentProjection.ts` - Financial column denormalization
 - `backend/src/events/eventTypes.ts` - margin.alert event type
-- `frontend/src/vnext-design/VNextLoadBoard.tsx` - Load board page
 - `frontend/src/vnext-design/VNextShipments.tsx` - Margin columns on shipment list
 - `frontend/src/vnext-design/VNextFinanceQuoteDetail.tsx` - Accept & Book button for brokers
 - `frontend/src/vnext-design/VNextShipmentDetail.tsx` - Rate Confirmation button
@@ -1896,7 +1865,6 @@ Incompatible UN classes cannot share a package even if both appear in the carton
 Automatically attached to the package suggestion based on cargo + carton:
 - `gel_pack` - refrigerated packages (always)
 - `dry_ice` - frozen or dry_ice packages; also added to refrigerated packages when `transitHours > 24`
-- `desiccant` - when any item is `humiditySensitive`
 - `fragile_padding` - when any item is `fragile`
 - `tamper_seal` - high-value group using a carton that isn't already tamper-evident
 
@@ -1919,7 +1887,7 @@ Each `PackageSuggestion` carries the selected `cartonId` + name, items, ancillar
 - `backend/src/services/containers/ContainerIntelligenceService.ts` - service + segregation matrix
 - `backend/src/routes/containerIntelligence.ts` - recommend endpoint
 - `frontend/src/vnext-design/VNextWmsCartonCatalogue.tsx` - extended admin form + chips in table
-- `backend/src/__tests__/services/ContainerIntelligenceService.test.ts` - 37 tests (input validation, best-fit, temperature splits, hazmat segregation including the real-world class 3 vs class 5.1 case, value/fragile/humidity ancillaries, multi-constraint splits, cost + weight totals)
+- `backend/src/__tests__/services/ContainerIntelligenceService.test.ts` - 36 tests (input validation, best-fit, temperature splits, hazmat segregation including the real-world class 3 vs class 5.1 case, value/fragile ancillaries, multi-constraint splits, cost + weight totals)
 
 ---
 

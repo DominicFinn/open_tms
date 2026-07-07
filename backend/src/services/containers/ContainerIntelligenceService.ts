@@ -23,8 +23,6 @@ export interface PackItem {
   hazmatClass?: string;
   valueClass?: ValueClass;
   fragile?: boolean;
-  /** Humidity-sensitive items get a desiccant ancillary. */
-  humiditySensitive?: boolean;
 }
 
 export interface RecommendOptions {
@@ -38,7 +36,7 @@ export interface PackageSuggestion {
   cartonId: string;
   cartonName: string;
   items: Array<{ sku: string; quantity: number }>;
-  ancillaries: string[];          // gel_pack | dry_ice | desiccant | fragile_padding | tamper_seal
+  ancillaries: string[];          // gel_pack | dry_ice | fragile_padding | tamper_seal
   temperatureZone: TemperatureZone | 'any';
   specialHandling: string[];      // hazmat | high_value | fragile
   hazmatClasses: string[];
@@ -241,7 +239,6 @@ export class ContainerIntelligenceService {
     if (group.temperatureZone === 'refrigerated' && carton.insulated) ancillaries.push('gel_pack');
     if (group.temperatureZone === 'frozen') ancillaries.push('dry_ice');
     if (group.temperatureZone === 'dry_ice') ancillaries.push('dry_ice');
-    if (group.items.some(i => i.humiditySensitive)) ancillaries.push('desiccant');
     if (group.items.some(i => i.fragile)) ancillaries.push('fragile_padding');
     if (group.valueClass === 'high_value' && !carton.tamperEvident) ancillaries.push('tamper_seal');
 

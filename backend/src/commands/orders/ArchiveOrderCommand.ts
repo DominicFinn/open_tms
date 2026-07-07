@@ -24,9 +24,16 @@ export class ArchiveOrderCommandHandler extends BaseCommandHandler<ArchiveOrderP
   ): Promise<{ id: string }> {
     const { id } = command.payload;
 
+    const existing = await tx.order.findFirstOrThrow({ where: { id } });
+
     const order = await tx.order.update({
       where: { id },
-      data: { archived: true, archivedAt: new Date(), status: 'archived' },
+      data: {
+        archived: true,
+        archivedAt: new Date(),
+        status: 'archived',
+        statusBeforeArchive: existing.status,
+      },
     });
 
     emit(this.createEvent(command, {

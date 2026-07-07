@@ -86,7 +86,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { DatePicker } from '@/components/ui/date-picker';
-import { SHIPMENT_EVENT_TYPES, shipmentEventLabel } from '../shared/shipmentEventTypes';
 import { cn } from '@/lib/utils';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { getDeviceImageUrl } from './deviceImages';
@@ -104,7 +103,17 @@ import {
   canTransition,
   validateShipmentReadiness,
   SHIPMENT_FIELD_LABELS,
-} from '../shared/shipmentTypeValidator';
+  SHIPMENT_EVENT_TYPES,
+  shipmentEventLabel,
+} from '@open-tms/shared';
+
+const EQUIPMENT_TYPE_LABELS: Record<string, string> = {
+  dryVan: 'Dry van',
+  reefer: 'Reefer',
+  flatbed: 'Flatbed',
+  tanker: 'Tanker',
+  intermodal: 'Intermodal',
+};
 
 // Maps a canonical lifecycle status to a Badge variant.
 function shipmentStatusVariant(status: string): 'muted' | 'warning' | 'info' | 'success' {
@@ -126,6 +135,7 @@ const COLOR_SUCCESS = '#22c55e';
 const COLOR_WARNING = '#eab308';
 const COLOR_DESTRUCTIVE = '#ef4444';
 const COLOR_MUTED = '#94a3b8';
+const COLOR_ROUTE = '#a855f7';
 
 // ─── Financials Tab ─────────────────────────────────────────────────────
 function FinancialsTab({ shipmentId }: { shipmentId: string }) {
@@ -232,7 +242,14 @@ function FinancialsTab({ shipmentId }: { shipmentId: string }) {
 }
 
 // ─── Telemetry Tab ──────────────────────────────────────────────────────
-function TelemetryTab({ shipmentId }: { shipmentId: string }) {
+const DEVICE_PURPOSE_LABELS: Record<string, string> = {
+  cargo_condition: 'Cargo condition',
+  security: 'Security & tamper',
+  location: 'Location tracking',
+  general: 'General',
+};
+
+function TelemetryTab({ shipmentId, deviceAssignments }: { shipmentId: string; deviceAssignments: any[] }) {
   const [telemetry, setTelemetry] = useState<any>(null);
   const [tLoading, setTLoading] = useState(true);
   const [tError, setTError] = useState('');
@@ -320,8 +337,12 @@ function TelemetryTab({ shipmentId }: { shipmentId: string }) {
   });
   const trackerDevices = Array.from(deviceMap.values());
 
+  const purposeByDeviceId = new Map<string, string>();
+  (deviceAssignments || []).forEach((a: any) => {
+    if (a.deviceId && a.purpose) purposeByDeviceId.set(a.deviceId, a.purpose);
+  });
+
   const tempSeries = readingsToSeries(readings, 'temperature');
-  const humiditySeries = readingsToSeries(readings, 'humidity');
   const pressureSeries = readingsToSeries(readings, 'atmosphericPressure');
   const batterySeries = readingsToSeries(readings, 'batteryLevel');
 
@@ -341,6 +362,7 @@ function TelemetryTab({ shipmentId }: { shipmentId: string }) {
             <div className="flex flex-wrap gap-3">
               {trackerDevices.map((dev: any) => {
                 const imgUrl = getDeviceImageUrl(dev.model);
+                const purpose = purposeByDeviceId.get(dev.id);
                 return (
                   <div
                     key={dev.id}
@@ -352,7 +374,10 @@ function TelemetryTab({ shipmentId }: { shipmentId: string }) {
                       <Package className="h-9 w-9 shrink-0 text-muted-foreground" />
                     )}
                     <div>
-                      <div className="text-sm font-semibold">{dev.name || dev.displayId || 'Device'}</div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold">{dev.name || dev.displayId || 'Device'}</span>
+                        {purpose && <Badge variant="muted">{DEVICE_PURPOSE_LABELS[purpose] || purpose}</Badge>}
+                      </div>
                       <div className="text-xs text-muted-foreground">
                         {dev.model || 'Unknown model'}{dev.displayId ? ` - ${dev.displayId}` : ''}
                       </div>
@@ -417,15 +442,6 @@ function TelemetryTab({ shipmentId }: { shipmentId: string }) {
           </CardContent>
         </Card>
 
-        {humiditySeries.length >= 2 && (
-          <Card>
-            <CardHeader><CardTitle className="text-base">Humidity over time</CardTitle></CardHeader>
-            <CardContent>
-              <TimeSeriesChart points={humiditySeries} unit="%" lineClassName="stroke-info" pointClassName="fill-info" />
-            </CardContent>
-          </Card>
-        )}
-
         {pressureSeries.length >= 2 && (
           <Card>
             <CardHeader><CardTitle className="text-base">Atmospheric pressure over time</CardTitle></CardHeader>
@@ -453,7 +469,6 @@ function TelemetryTab({ shipmentId }: { shipmentId: string }) {
               <TableRow>
                 <TableHead>Time</TableHead>
                 <TableHead>Temp</TableHead>
-                <TableHead>Humidity</TableHead>
                 <TableHead>Pressure</TableHead>
                 <TableHead>Battery</TableHead>
                 <TableHead>Location</TableHead>
@@ -465,7 +480,6 @@ function TelemetryTab({ shipmentId }: { shipmentId: string }) {
                 <TableRow key={r.id || i}>
                   <TableCell className="text-sm">{r.eventTime ? new Date(r.eventTime).toLocaleString() : '-'}</TableCell>
                   <TableCell>{r.temperature != null ? `${r.temperature}°` : '-'}</TableCell>
-                  <TableCell>{r.humidity != null ? `${r.humidity}%` : '-'}</TableCell>
                   <TableCell>{r.atmosphericPressure != null ? `${r.atmosphericPressure} hPa` : '-'}</TableCell>
                   <TableCell>{r.batteryLevel != null ? `${r.batteryLevel}%` : '-'}</TableCell>
                   <TableCell className="text-xs">
@@ -1182,7 +1196,11 @@ function ShipmentNotesTab({ shipmentId }: { shipmentId: string }) {
               </div>
               <div className="flex-1">
                 <div className="mb-1 flex items-center justify-between gap-2">
-                  <span className="text-sm font-semibold">{c.authorName || 'Unknown user'}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold">{c.authorName || 'Unknown user'}</span>
+                    {c.tag === 'issue' && <Badge variant="destructive">Issue</Badge>}
+                    {c.tag === 'requirement' && <Badge variant="info">Additional requirement</Badge>}
+                  </div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-muted-foreground">
                       {c.createdAt ? new Date(c.createdAt).toLocaleString() : ''}
@@ -1520,6 +1538,9 @@ export default function VNextShipmentDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const mapRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<L.Map | null>(null);
+  const laneLayersRef = useRef<L.Polyline[]>([]);
+  const routeLayerRef = useRef<L.Polyline | null>(null);
   const [activeTab, setActiveTab] = useState('events');
   const [shipment, setShipment] = useState<any>(null);
   const [shipmentType, setShipmentType] = useState<any>(null);
@@ -1538,6 +1559,9 @@ export default function VNextShipmentDetail() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [notFound, setNotFound] = useState(false);
   const [mapLoading, setMapLoading] = useState(true);
+  const [laneRoute, setLaneRoute] = useState<any>(undefined);
+  const [showLane, setShowLane] = useState(true);
+  const [showRoute, setShowRoute] = useState(true);
   const { hasPermission } = useCurrentUser();
 
   const loadShipment = useCallback((showSpinner = true) => {
@@ -1698,6 +1722,37 @@ export default function VNextShipmentDetail() {
       .catch(() => { });
   }, [shipment?.laneId, shipment?.status, shipment?.currentLat, shipment?.currentLng]);
 
+  // Fetch the lane's planned route (if any) so it can be overlaid on the map.
+  // laneRoute stays `undefined` while this is unresolved, then settles to
+  // either the route object or `null` (no lane / no saved route) — that
+  // three-way state lets the default-visibility effect below tell "still
+  // loading" apart from "confirmed no route".
+  useEffect(() => {
+    // Wait for the shipment itself to load first — otherwise `shipment` is
+    // still null on mount, `shipment?.laneId` reads as undefined, and this
+    // would prematurely resolve laneRoute to `null` ("no route") before the
+    // real laneId is even known, locking in the wrong default below.
+    if (!shipment) return;
+    if (!shipment.laneId) { setLaneRoute(null); return; }
+    fetch(`${API_URL}/api/v1/lanes/${shipment.laneId}/route`)
+      .then(r => r.json())
+      .then(json => setLaneRoute(json.error ? null : (json.data ?? null)))
+      .catch(() => setLaneRoute(null));
+  }, [shipment?.laneId, !!shipment]);
+
+  // Default the map to whichever layer is more useful: once we know whether
+  // a planned route exists, show the route (and hide the plain straight
+  // line) if one was found, otherwise fall back to the straight line. Only
+  // applied once so it doesn't fight with the user's own toggle clicks.
+  const routeDefaultsAppliedRef = useRef(false);
+  useEffect(() => {
+    if (routeDefaultsAppliedRef.current || laneRoute === undefined) return;
+    routeDefaultsAppliedRef.current = true;
+    const hasRoute = Array.isArray(laneRoute?.waypoints) && laneRoute.waypoints.length >= 2;
+    setShowRoute(hasRoute);
+    setShowLane(!hasRoute);
+  }, [laneRoute]);
+
   const handleGenerateDoc = async (type: 'bol' | 'customs' | 'rate_confirmation') => {
     if (!id) return;
     const names: Record<string, string> = { bol: 'Bill of Lading', customs: 'Customs Form', rate_confirmation: 'Rate Confirmation' };
@@ -1783,22 +1838,67 @@ export default function VNextShipmentDetail() {
       L.marker(coord, { icon: stopIcon }).addTo(map).bindPopup(`<strong>Stop</strong><br/>${s.city || ''}, ${s.state || ''}`);
     });
 
+    const fitCoords: [number, number][] = [...allCoords];
+
     if (allCoords.length >= 2) {
-      L.polyline(allCoords, { color: COLOR_MUTED, weight: 3, opacity: 0.7, dashArray: '8 4' }).addTo(map);
-      L.polyline(allCoords, { color: COLOR_INFO, weight: 4 }).addTo(map);
-      map.fitBounds(L.latLngBounds(allCoords).pad(0.1));
-    } else if (allCoords.length === 1) {
-      map.setView(allCoords[0], 12);
+      const laneBg = L.polyline(allCoords, { color: COLOR_MUTED, weight: 3, opacity: 0.7, dashArray: '8 4' });
+      const laneFg = L.polyline(allCoords, { color: COLOR_INFO, weight: 4 });
+      laneLayersRef.current = [laneBg, laneFg];
+      if (showLane) { laneBg.addTo(map); laneFg.addTo(map); }
+    } else {
+      laneLayersRef.current = [];
     }
 
+    const routeWaypoints = laneRoute?.waypoints;
+    if (Array.isArray(routeWaypoints) && routeWaypoints.length >= 2) {
+      const routeCoords: [number, number][] = routeWaypoints.map((w: any) => [w.lat, w.lng]);
+      const routeLine = L.polyline(routeCoords, { color: COLOR_ROUTE, weight: 4, opacity: 0.9 });
+      routeLayerRef.current = routeLine;
+      if (showRoute) { routeLine.addTo(map); fitCoords.push(...routeCoords); }
+    } else {
+      routeLayerRef.current = null;
+    }
+
+    if (fitCoords.length >= 2) {
+      map.fitBounds(L.latLngBounds(fitCoords).pad(0.1));
+    } else if (fitCoords.length === 1) {
+      map.setView(fitCoords[0], 12);
+    }
+
+    mapInstanceRef.current = map;
     const stopSizing = keepMapSized(map, mapRef.current);
 
     return () => {
       clearTimeout(loadFallback);
       stopSizing();
+      mapInstanceRef.current = null;
+      laneLayersRef.current = [];
+      routeLayerRef.current = null;
       map.remove();
     };
-  }, [shipment, hasAnyCoords, hasOriginCoords, hasDestCoords]);
+    // showLane/showRoute intentionally omitted: their toggling is handled by
+    // the lightweight effects below without rebuilding the whole map.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shipment, hasAnyCoords, hasOriginCoords, hasDestCoords, laneRoute]);
+
+  // Toggle layers on/off without tearing down the map (avoids re-fetching
+  // tiles and resetting the viewport on every checkbox click).
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+    laneLayersRef.current.forEach((layer) => {
+      if (showLane) { if (!map.hasLayer(layer)) layer.addTo(map); }
+      else if (map.hasLayer(layer)) map.removeLayer(layer);
+    });
+  }, [showLane]);
+
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    const layer = routeLayerRef.current;
+    if (!map || !layer) return;
+    if (showRoute) { if (!map.hasLayer(layer)) layer.addTo(map); }
+    else if (map.hasLayer(layer)) map.removeLayer(layer);
+  }, [showRoute]);
 
   if (loading) {
     return (
@@ -2051,13 +2151,44 @@ export default function VNextShipmentDetail() {
 
       {/* Map */}
       {hasAnyCoords ? (
-        <div className="relative overflow-hidden rounded-lg border border-border">
-          <div ref={mapRef} className="h-[480px] w-full" />
-          {mapLoading && (
-            <div className="pointer-events-none absolute inset-0 z-[500] flex items-center justify-center bg-muted/40">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          )}
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-4 text-sm">
+            <label className="flex cursor-pointer select-none items-center gap-1.5">
+              <input
+                type="checkbox"
+                checked={showLane}
+                onChange={(e) => setShowLane(e.target.checked)}
+                className="h-4 w-4 rounded border border-input bg-background accent-primary"
+              />
+              <span className="inline-block h-0.5 w-4 rounded-full" style={{ background: COLOR_INFO }} />
+              Lane
+            </label>
+            {laneRoute?.waypoints?.length > 0 && (
+              <label className="flex cursor-pointer select-none items-center gap-1.5">
+                <input
+                  type="checkbox"
+                  checked={showRoute}
+                  onChange={(e) => setShowRoute(e.target.checked)}
+                  className="h-4 w-4 rounded border border-input bg-background accent-primary"
+                />
+                <span className="inline-block h-0.5 w-4 rounded-full" style={{ background: COLOR_ROUTE }} />
+                Planned route
+              </label>
+            )}
+            {shipment.laneId && laneRoute === null && (
+              <Link to={`/lanes/${shipment.laneId}/edit`} className="ml-auto text-xs text-muted-foreground underline">
+                Plan a route for this lane
+              </Link>
+            )}
+          </div>
+          <div className="relative overflow-hidden rounded-lg border border-border">
+            <div ref={mapRef} className="h-[480px] w-full" />
+            {mapLoading && (
+              <div className="pointer-events-none absolute inset-0 z-[500] flex items-center justify-center bg-muted/40">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            )}
+          </div>
         </div>
       ) : (
         <div className="flex h-[480px] flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border bg-muted/30 px-6 text-center">
@@ -2257,7 +2388,7 @@ export default function VNextShipmentDetail() {
             </TabsContent>
 
             <TabsContent value="telemetry" className="mt-4">
-              <TelemetryTab shipmentId={id!} />
+              <TelemetryTab shipmentId={id!} deviceAssignments={shipment.deviceAssignments || []} />
             </TabsContent>
 
             <TabsContent value="sla" className="mt-4">
@@ -2278,6 +2409,7 @@ export default function VNextShipmentDetail() {
               <Detail label="Customer" value={shipment.customer?.name || '-'} />
               <Detail label="Carrier" value={shipment.carrier?.name || '-'} />
               <Detail label="PRO Number" value={shipment.proNumber || '-'} />
+              <Detail label="Mode" value={shipment.serviceLevel || '-'} />
               <Detail label="Status" value={shipment.status ? shipmentStatusLabel(shipment.status) : '-'} />
               <Detail label="Pickup Date" value={shipment.pickupDate ? new Date(shipment.pickupDate).toLocaleDateString() : '-'} />
               <Detail label="Delivery Date" value={shipment.deliveryDate ? new Date(shipment.deliveryDate).toLocaleDateString() : '-'} />
@@ -2306,6 +2438,43 @@ export default function VNextShipmentDetail() {
               )}
             </CardContent>
           </Card>
+
+          {(shipment.tempControlled || shipment.hazmat || shipment.humidityControlled || shipment.requiredEquipmentType) && (
+            <Card>
+              <CardHeader><CardTitle className="text-base">Restrictions</CardTitle></CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                {shipment.tempControlled && (
+                  <Detail
+                    label="Temperature"
+                    value={`${shipment.tempMinC ?? '?'}°C to ${shipment.tempMaxC ?? '?'}°C`}
+                  />
+                )}
+                {shipment.humidityControlled && (
+                  <Detail
+                    label="Humidity"
+                    value={`${shipment.humidityMinPct ?? '?'}% to ${shipment.humidityMaxPct ?? '?'}%`}
+                  />
+                )}
+                {shipment.hazmat && (
+                  <>
+                    <Detail label="Hazmat" value={<Badge variant="warning">Hazmat</Badge>} />
+                    {shipment.unNumber && <Detail label="UN Number" value={shipment.unNumber} />}
+                    {shipment.hazmatClass && <Detail label="Hazmat Class" value={shipment.hazmatClass} />}
+                    {shipment.packingGroup && <Detail label="Packing Group" value={shipment.packingGroup} />}
+                    {shipment.properShippingName && (
+                      <Detail label="Proper Shipping Name" value={shipment.properShippingName} />
+                    )}
+                  </>
+                )}
+                {shipment.requiredEquipmentType && (
+                  <Detail
+                    label="Equipment"
+                    value={EQUIPMENT_TYPE_LABELS[shipment.requiredEquipmentType] || shipment.requiredEquipmentType}
+                  />
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardContent className="p-5">

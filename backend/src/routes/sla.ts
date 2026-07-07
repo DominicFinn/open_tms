@@ -31,7 +31,7 @@ export const slaRoutes: FastifyPluginAsync = async (server) => {
         200: {
           type: 'object',
           properties: {
-            data: { type: 'array', items: { type: 'object' } },
+            data: { type: 'array', items: { type: 'object', additionalProperties: true } },
             error: { type: 'string', nullable: true },
           },
         },
@@ -61,7 +61,7 @@ export const slaRoutes: FastifyPluginAsync = async (server) => {
         200: {
           type: 'object',
           properties: {
-            data: { type: 'object', nullable: true },
+            data: { type: 'object', nullable: true, additionalProperties: true },
             error: { type: 'string', nullable: true },
           },
         },
@@ -121,7 +121,7 @@ export const slaRoutes: FastifyPluginAsync = async (server) => {
         200: {
           type: 'object',
           properties: {
-            data: { type: 'object' },
+            data: { type: 'object', additionalProperties: true },
             error: { type: 'string', nullable: true },
           },
         },
@@ -170,7 +170,7 @@ export const slaRoutes: FastifyPluginAsync = async (server) => {
         200: {
           type: 'object',
           properties: {
-            data: { type: 'object' },
+            data: { type: 'object', additionalProperties: true },
             error: { type: 'string', nullable: true },
           },
         },
@@ -210,7 +210,7 @@ export const slaRoutes: FastifyPluginAsync = async (server) => {
         200: {
           type: 'object',
           properties: {
-            data: { type: 'object' },
+            data: { type: 'object', additionalProperties: true },
             error: { type: 'string', nullable: true },
           },
         },
@@ -258,7 +258,7 @@ export const slaRoutes: FastifyPluginAsync = async (server) => {
         200: {
           type: 'object',
           properties: {
-            data: { type: 'object' },
+            data: { type: 'object', additionalProperties: true },
             error: { type: 'string', nullable: true },
           },
         },
@@ -351,7 +351,7 @@ export const slaRoutes: FastifyPluginAsync = async (server) => {
             data: {
               type: 'object',
               properties: {
-                items: { type: 'array', items: { type: 'object' } },
+                items: { type: 'array', items: { type: 'object', additionalProperties: true } },
                 total: { type: 'number' },
                 page: { type: 'number' },
                 limit: { type: 'number' },
@@ -434,7 +434,7 @@ export const slaRoutes: FastifyPluginAsync = async (server) => {
         200: {
           type: 'object',
           properties: {
-            data: { type: 'array', items: { type: 'object' } },
+            data: { type: 'array', items: { type: 'object', additionalProperties: true } },
             error: { type: 'string', nullable: true },
           },
         },
@@ -460,7 +460,7 @@ export const slaRoutes: FastifyPluginAsync = async (server) => {
         200: {
           type: 'object',
           properties: {
-            data: { type: 'array', items: { type: 'object' } },
+            data: { type: 'array', items: { type: 'object', additionalProperties: true } },
             error: { type: 'string', nullable: true },
           },
         },
@@ -481,7 +481,7 @@ export const slaRoutes: FastifyPluginAsync = async (server) => {
         200: {
           type: 'object',
           properties: {
-            data: { type: 'object' },
+            data: { type: 'object', additionalProperties: true },
             error: { type: 'string', nullable: true },
           },
         },

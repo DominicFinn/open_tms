@@ -158,6 +158,49 @@ describe('Comment command handlers', () => {
       );
     });
 
+    it('stores an optional tag when provided', async () => {
+      const { prisma, tx } = buildPrisma();
+      const { bus } = mockEventBus();
+      const handler = new CreateCommentCommandHandler(prisma, bus);
+
+      await handler.execute(
+        createTestCommand(CREATE_COMMENT, {
+          entityType: 'shipment',
+          entityId: 'ship-1',
+          body: 'Needs a liftgate at delivery',
+          authorId: 'user-1',
+          authorName: 'Jane Dispatcher',
+          authorType: 'user',
+          tag: 'requirement',
+        })
+      );
+
+      expect(tx.comment.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ tag: 'requirement' }) })
+      );
+    });
+
+    it('defaults tag to null when not provided', async () => {
+      const { prisma, tx } = buildPrisma();
+      const { bus } = mockEventBus();
+      const handler = new CreateCommentCommandHandler(prisma, bus);
+
+      await handler.execute(
+        createTestCommand(CREATE_COMMENT, {
+          entityType: 'issue',
+          entityId: 'issue-1',
+          body: 'Carrier confirmed PoD',
+          authorId: 'user-1',
+          authorName: 'Jane Dispatcher',
+          authorType: 'user',
+        })
+      );
+
+      expect(tx.comment.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ tag: null }) })
+      );
+    });
+
     it('carries orgId from the command envelope onto the row', async () => {
       const { prisma, tx } = buildPrisma();
       const { bus } = mockEventBus();

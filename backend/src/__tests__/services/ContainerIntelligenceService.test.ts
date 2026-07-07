@@ -261,7 +261,7 @@ describe('ContainerIntelligenceService - hazmat segregation', () => {
   });
 });
 
-describe('ContainerIntelligenceService - value + fragile + humidity handling', () => {
+describe('ContainerIntelligenceService - value + fragile handling', () => {
   const standardBox = mkCarton({ id: 'std' });
   const highValueBox = mkCarton({ id: 'hv', name: 'Tamper-evident HV Box', valueClass: 'high_value', tamperEvident: true, unitCostCents: 500 });
 
@@ -296,19 +296,14 @@ describe('ContainerIntelligenceService - value + fragile + humidity handling', (
     expect(r.packages[0].specialHandling).toContain('fragile');
   });
 
-  it('adds desiccant for humidity-sensitive items', () => {
-    const r = svc.recommend([mkItem({ humiditySensitive: true })], [standardBox]);
-    expect(r.packages[0].ancillaries).toContain('desiccant');
-  });
-
   it('combines multiple ancillaries for a complex package', () => {
     const hvFragileBox = mkCarton({ id: 'hvf', valueClass: 'high_value', tamperEvident: false });
     const r = svc.recommend(
-      [mkItem({ valueClass: 'high_value', fragile: true, humiditySensitive: true })],
+      [mkItem({ valueClass: 'high_value', fragile: true })],
       [hvFragileBox],
     );
     const anc = r.packages[0].ancillaries;
-    expect(anc).toEqual(expect.arrayContaining(['desiccant', 'fragile_padding', 'tamper_seal']));
+    expect(anc).toEqual(expect.arrayContaining(['fragile_padding', 'tamper_seal']));
   });
 });
 

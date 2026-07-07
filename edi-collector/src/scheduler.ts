@@ -104,6 +104,3 @@ export function stopAll() {
   log.info('All jobs stopped');
 }
 
-export function getActiveJobCount(): number {
-  return activeJobs.size;
-}

@@ -2,8 +2,6 @@
  * Cold Chain Command Handler & Service Tests
  */
 
-import { CreateColdChainProfileCommandHandler, CREATE_COLD_CHAIN_PROFILE } from '../commands/coldChain/CreateColdChainProfileCommand';
-import { UpdateColdChainProfileCommandHandler, UPDATE_COLD_CHAIN_PROFILE } from '../commands/coldChain/UpdateColdChainProfileCommand';
 import { AcknowledgeExcursionCommandHandler, ACKNOWLEDGE_EXCURSION } from '../commands/coldChain/AcknowledgeExcursionCommand';
 import { ResolveExcursionCommandHandler, RESOLVE_EXCURSION } from '../commands/coldChain/ResolveExcursionCommand';
 import { SetDispositionCommandHandler, SET_DISPOSITION } from '../commands/coldChain/SetDispositionCommand';
@@ -17,11 +15,6 @@ import { mockEventBus, createTestCommand } from './helpers/testUtils';
 // ── Mock Prisma ────────────────────────────────────────────────
 const mockPrisma: any = {
   $transaction: jest.fn(async (fn: any) => fn(mockPrisma)),
-  coldChainProfile: {
-    create: jest.fn(),
-    findUniqueOrThrow: jest.fn(),
-    update: jest.fn(),
-  },
   coldChainExcursion: {
     findUniqueOrThrow: jest.fn(),
     update: jest.fn(),
@@ -62,82 +55,6 @@ const mockPrisma: any = {
 };
 
 // ── Tests ──────────────────────────────────────────────────────
-
-describe('CreateColdChainProfileCommandHandler', () => {
-  let handler: CreateColdChainProfileCommandHandler;
-  let eventBus: ReturnType<typeof mockEventBus>;
-
-  beforeEach(() => {
-    jest.clearAllMocks();
-    eventBus = mockEventBus();
-    handler = new CreateColdChainProfileCommandHandler(mockPrisma as any, eventBus.bus);
-  });
-
-  it('creates a profile and emits COLD_CHAIN_PROFILE_CREATED', async () => {
-    const payload = {
-      name: 'Frozen Goods',
-      minTemperature: -25,
-      maxTemperature: -18,
-      alertMinTemperature: -23,
-      alertMaxTemperature: -20,
-    };
-    mockPrisma.coldChainProfile.create.mockResolvedValue({
-      id: 'profile-1', name: 'Frozen Goods',
-      minTemperature: -25, maxTemperature: -18,
-      alertMinTemperature: -23, alertMaxTemperature: -20,
-    });
-
-    const result = await handler.execute(createTestCommand(CREATE_COLD_CHAIN_PROFILE, payload));
-
-    expect(result.success).toBe(true);
-    expect(result.data).toEqual({ id: 'profile-1', name: 'Frozen Goods' });
-    expect(eventBus.persisted).toHaveLength(1);
-    expect(eventBus.persisted[0].type).toBe(EVENT_TYPES.COLD_CHAIN_PROFILE_CREATED);
-  });
-});
-
-describe('UpdateColdChainProfileCommandHandler', () => {
-  let handler: UpdateColdChainProfileCommandHandler;
-  let eventBus: ReturnType<typeof mockEventBus>;
-
-  beforeEach(() => {
-    jest.clearAllMocks();
-    eventBus = mockEventBus();
-    handler = new UpdateColdChainProfileCommandHandler(mockPrisma as any, eventBus.bus);
-  });
-
-  it('updates profile and emits COLD_CHAIN_PROFILE_UPDATED', async () => {
-    mockPrisma.coldChainProfile.findUniqueOrThrow.mockResolvedValue({
-      id: 'profile-1', name: 'Old Name', active: true,
-    });
-    mockPrisma.coldChainProfile.update.mockResolvedValue({
-      id: 'profile-1', name: 'New Name', active: true,
-    });
-
-    const result = await handler.execute(createTestCommand(UPDATE_COLD_CHAIN_PROFILE, {
-      id: 'profile-1', data: { name: 'New Name' },
-    }));
-
-    expect(result.success).toBe(true);
-    expect(eventBus.persisted[0].type).toBe(EVENT_TYPES.COLD_CHAIN_PROFILE_UPDATED);
-  });
-
-  it('emits DEACTIVATED when active changes to false', async () => {
-    mockPrisma.coldChainProfile.findUniqueOrThrow.mockResolvedValue({
-      id: 'profile-1', name: 'Test', active: true,
-    });
-    mockPrisma.coldChainProfile.update.mockResolvedValue({
-      id: 'profile-1', name: 'Test', active: false,
-    });
-
-    const result = await handler.execute(createTestCommand(UPDATE_COLD_CHAIN_PROFILE, {
-      id: 'profile-1', data: { active: false },
-    }));
-
-    expect(result.success).toBe(true);
-    expect(eventBus.persisted[0].type).toBe(EVENT_TYPES.COLD_CHAIN_PROFILE_DEACTIVATED);
-  });
-});
 
 describe('AcknowledgeExcursionCommandHandler', () => {
   let handler: AcknowledgeExcursionCommandHandler;
@@ -326,8 +243,8 @@ describe('ColdChainService', () => {
         deviceId: 'dev-1',
         temperature: 5.1234,
         recordedAt: new Date('2026-04-10T12:00:00Z'),
-        profileMinTemp: 2,
-        profileMaxTemp: 8,
+        effectiveMinTemp: 2,
+        effectiveMaxTemp: 8,
       };
 
       const hash1 = service.generateIntegrityHash(params);
@@ -343,8 +260,8 @@ describe('ColdChainService', () => {
         shipmentId: 'ship-1',
         deviceId: 'dev-1',
         recordedAt: new Date('2026-04-10T12:00:00Z'),
-        profileMinTemp: 2,
-        profileMaxTemp: 8,
+        effectiveMinTemp: 2,
+        effectiveMaxTemp: 8,
       };
 
       const hash1 = service.generateIntegrityHash({ ...base, temperature: 5.0 });

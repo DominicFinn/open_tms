@@ -35,6 +35,8 @@ export const EVENT_TYPES = {
   ORDER_EXCEPTION_RESOLVED: 'order.exception_resolved',
   ORDER_DELIVERED: 'order.delivered',
   ORDER_ARCHIVED: 'order.archived',
+  ORDER_UNARCHIVED: 'order.unarchived',
+  ORDER_DELETED: 'order.deleted',
 
   // Trackable Units (per-handling-unit ops, Phase 2)
   TRACKABLE_UNIT_CREATED: 'trackable_unit.created',
@@ -173,9 +175,6 @@ export const EVENT_TYPES = {
   CUSTOMER_WEBHOOK_SECRET_ROTATED: 'customer_webhook.secret_rotated',
 
   // Cold Chain
-  COLD_CHAIN_PROFILE_CREATED: 'cold_chain_profile.created',
-  COLD_CHAIN_PROFILE_UPDATED: 'cold_chain_profile.updated',
-  COLD_CHAIN_PROFILE_DEACTIVATED: 'cold_chain_profile.deactivated',
   COLD_CHAIN_EXCURSION_DETECTED: 'cold_chain.excursion_detected',
   COLD_CHAIN_EXCURSION_ACKNOWLEDGED: 'cold_chain.excursion_acknowledged',
   COLD_CHAIN_EXCURSION_RESOLVED: 'cold_chain.excursion_resolved',
@@ -348,12 +347,6 @@ export const EVENT_TYPES = {
   INVENTORY_BELOW_MINIMUM: 'inventory.below_minimum',
   REPLENISHMENT_TRIGGERED: 'replenishment.triggered',
 
-  // WMS: Manifest Ingestion
-  MANIFEST_UPLOADED: 'manifest.uploaded',
-  MANIFEST_MAPPED: 'manifest.mapped',
-  MANIFEST_PROCESSED: 'manifest.processed',
-  MANIFEST_FAILED: 'manifest.failed',
-
   // WMS: Load Planning
   LOAD_PLAN_CREATED: 'load_plan.created',
   LOAD_PLAN_COMPLETED: 'load_plan.completed',
@@ -409,6 +402,8 @@ export const EVENT_SCHEMA_VERSIONS: Record<string, number> = {
   [EVENT_TYPES.ORDER_EXCEPTION_RESOLVED]: 1,
   [EVENT_TYPES.ORDER_DELIVERED]: 1,
   [EVENT_TYPES.ORDER_ARCHIVED]: 1,
+  [EVENT_TYPES.ORDER_UNARCHIVED]: 1,
+  [EVENT_TYPES.ORDER_DELETED]: 1,
   [EVENT_TYPES.TRACKABLE_UNIT_CREATED]: 1,
   [EVENT_TYPES.TRACKABLE_UNIT_UPDATED]: 1,
   [EVENT_TYPES.TRACKABLE_UNIT_DELETED]: 1,
@@ -475,9 +470,6 @@ export const EVENT_SCHEMA_VERSIONS: Record<string, number> = {
   [EVENT_TYPES.COMMENT_ADDED]: 1,
   [EVENT_TYPES.COMMENT_UPDATED]: 1,
   [EVENT_TYPES.COMMENT_DELETED]: 1,
-  [EVENT_TYPES.COLD_CHAIN_PROFILE_CREATED]: 1,
-  [EVENT_TYPES.COLD_CHAIN_PROFILE_UPDATED]: 1,
-  [EVENT_TYPES.COLD_CHAIN_PROFILE_DEACTIVATED]: 1,
   [EVENT_TYPES.COLD_CHAIN_EXCURSION_DETECTED]: 1,
   [EVENT_TYPES.COLD_CHAIN_EXCURSION_ACKNOWLEDGED]: 1,
   [EVENT_TYPES.COLD_CHAIN_EXCURSION_RESOLVED]: 1,
@@ -602,10 +594,6 @@ export const EVENT_SCHEMA_VERSIONS: Record<string, number> = {
   [EVENT_TYPES.REPLENISHMENT_RULE_UPDATED]: 1,
   [EVENT_TYPES.INVENTORY_BELOW_MINIMUM]: 1,
   [EVENT_TYPES.REPLENISHMENT_TRIGGERED]: 1,
-  [EVENT_TYPES.MANIFEST_UPLOADED]: 1,
-  [EVENT_TYPES.MANIFEST_MAPPED]: 1,
-  [EVENT_TYPES.MANIFEST_PROCESSED]: 1,
-  [EVENT_TYPES.MANIFEST_FAILED]: 1,
   [EVENT_TYPES.LOAD_PLAN_CREATED]: 1,
   [EVENT_TYPES.LOAD_PLAN_COMPLETED]: 1,
   [EVENT_TYPES.LOAD_PLAN_BOL_GENERATED]: 1,
@@ -751,14 +739,6 @@ export interface EntityArchivedPayload {
 }
 
 // Cold Chain payloads
-export interface ColdChainProfileCreatedPayload {
-  name: string;
-  minTemperature: number;
-  maxTemperature: number;
-  alertMinTemperature: number;
-  alertMaxTemperature: number;
-}
-
 export interface ColdChainExcursionDetectedPayload {
   shipmentId: string;
   shipmentReference: string;

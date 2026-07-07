@@ -49,6 +49,8 @@ import { CommandBus } from '../commands/CommandBus.js';
 import { CreateOrderCommandHandler } from '../commands/orders/CreateOrderCommand.js';
 import { UpdateOrderCommandHandler } from '../commands/orders/UpdateOrderCommand.js';
 import { ArchiveOrderCommandHandler } from '../commands/orders/ArchiveOrderCommand.js';
+import { SoftDeleteOrderCommandHandler } from '../commands/orders/SoftDeleteOrderCommand.js';
+import { UnarchiveOrderCommandHandler } from '../commands/orders/UnarchiveOrderCommand.js';
 import {
   CreateTrackableUnitCommandHandler,
   UpdateTrackableUnitCommandHandler,
@@ -135,8 +137,6 @@ import { UpdateDeviceCommandHandler } from '../commands/devices/UpdateDeviceComm
 import { AssignDeviceCommandHandler } from '../commands/devices/AssignDeviceCommand.js';
 import { CreateCarrierUserCommandHandler } from '../commands/carrierUsers/CreateCarrierUserCommand.js';
 import { RecordCargoScanCommandHandler } from '../commands/cargoTracking/RecordCargoScanCommand.js';
-import { CreateColdChainProfileCommandHandler } from '../commands/coldChain/CreateColdChainProfileCommand.js';
-import { UpdateColdChainProfileCommandHandler } from '../commands/coldChain/UpdateColdChainProfileCommand.js';
 import { AcknowledgeExcursionCommandHandler } from '../commands/coldChain/AcknowledgeExcursionCommand.js';
 import { ResolveExcursionCommandHandler } from '../commands/coldChain/ResolveExcursionCommand.js';
 import { SetDispositionCommandHandler } from '../commands/coldChain/SetDispositionCommand.js';
@@ -809,6 +809,8 @@ export function registerDependencies(prisma: PrismaClient): void {
     bus.register(new CreateOrderCommandHandler(prisma, eventBus));
     bus.register(new UpdateOrderCommandHandler(prisma, eventBus));
     bus.register(new ArchiveOrderCommandHandler(prisma, eventBus));
+    bus.register(new SoftDeleteOrderCommandHandler(prisma, eventBus));
+    bus.register(new UnarchiveOrderCommandHandler(prisma, eventBus));
     bus.register(new CreateTrackableUnitCommandHandler(prisma, eventBus));
     bus.register(new UpdateTrackableUnitCommandHandler(prisma, eventBus));
     bus.register(new DeleteTrackableUnitCommandHandler(prisma, eventBus));
@@ -915,8 +917,6 @@ export function registerDependencies(prisma: PrismaClient): void {
     bus.register(new RecordCargoScanCommandHandler(prisma, eventBus));
 
     // Cold Chain commands
-    bus.register(new CreateColdChainProfileCommandHandler(prisma, eventBus));
-    bus.register(new UpdateColdChainProfileCommandHandler(prisma, eventBus));
     bus.register(new AcknowledgeExcursionCommandHandler(prisma, eventBus));
     bus.register(new ResolveExcursionCommandHandler(prisma, eventBus));
     bus.register(new SetDispositionCommandHandler(prisma, eventBus));

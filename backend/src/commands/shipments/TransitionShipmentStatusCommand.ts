@@ -8,7 +8,7 @@ import {
   validateShipmentReadiness,
   SHIPMENT_LIFECYCLE,
   SHIPMENT_FIELD_LABELS,
-} from '../../shared/shipmentTypeValidator.js';
+} from '@open-tms/shared';
 
 export interface TransitionShipmentStatusPayload {
   id: string;

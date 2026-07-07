@@ -75,6 +75,28 @@ describe('Lane Command Handlers', () => {
         ]),
       });
     });
+
+    it('passes stop purpose through when provided', async () => {
+      const { bus } = mockEventBus();
+      const handler = new CreateLaneCommandHandler(mockPrisma, bus);
+
+      await handler.execute(
+        createTestCommand(CREATE_LANE, {
+          name: 'Multi-stop',
+          originId: 'loc-1',
+          destinationId: 'loc-2',
+          stops: [
+            { locationId: 'loc-3', order: 1, purpose: 'cross_dock' },
+          ],
+        })
+      );
+
+      expect(mockTx.laneStop.createMany).toHaveBeenCalledWith({
+        data: expect.arrayContaining([
+          expect.objectContaining({ locationId: 'loc-3', order: 1, purpose: 'cross_dock' }),
+        ]),
+      });
+    });
   });
 
   describe('ArchiveLaneCommandHandler', () => {
