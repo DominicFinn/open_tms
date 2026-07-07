@@ -1612,6 +1612,26 @@ The frontend "Accept & Book" button (visible for broker orgs) triggers this flow
 
 `CreditCheckService` sums unpaid invoices (draft, approved, sent, overdue, partial) and compares against `Customer.creditLimitCents`. Returns pass/fail with outstanding balance and available credit. Null credit limit = unlimited.
 
+### Bill of Lading Generation & Readiness Gate
+
+**Endpoints:**
+- `POST /api/v1/documents/generate/bol` (sync) and `/bol/async` (queued) — generate the BOL PDF.
+- `GET /api/v1/documents/bol-readiness/:shipmentId` — readiness check driving the UI.
+
+A Bill of Lading is a legal shipping document that must name the shipper and consignee and describe the goods (description, piece count, weight) for every line. Open TMS treats all of that cargo detail as **optional** throughout the shipment/order lifecycle - a shipment can exist with no orders, and an order line can exist with no weight - so a shipment can easily lack enough information to produce a valid BOL.
+
+`evaluateBolReadiness` (`backend/src/services/bolReadiness.ts`) is the **single source of truth** for whether a shipment can produce a legally-sufficient BOL. A shipment is BOL-ready only when:
+- the shipment has an origin (shipper) and destination (consignee), and
+- at least one order is attached, and
+- the attached orders have at least one line item, and
+- **every** line item carries a goods description, a quantity > 0, and a weight > 0.
+
+When not ready, the check returns the list of missing requirements. This gates:
+- **Both** generate endpoints (sync and async) - they return 400 with the missing-requirements list rather than producing an incomplete document (the BOL metadata snapshot is captured immutably at generation time).
+- The **"Generate BOL" button** on the shipment Documents tab (`VNextShipmentDetail`), which greys out and shows the missing requirements inline until the data exists.
+
+The intended happy-path trigger remains `POST /load-plans/:id/complete`, which auto-generates the BOL after WMS picking and loading, by which point the cargo detail is populated.
+
 ### Rate Confirmation PDF
 
 **Endpoint:** `POST /api/v1/documents/rate-confirmation`

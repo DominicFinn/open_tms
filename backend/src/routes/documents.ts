@@ -10,6 +10,7 @@ import { IDocumentGenerationService } from '../services/DocumentGenerationServic
 import { IBinaryStorageProvider } from '../storage/IBinaryStorageProvider.js';
 import { IQueueAdapter } from '../queue/IQueueAdapter.js';
 import { QUEUES, type DocumentGenerationKind, type DocumentGenerationJob } from '../queue/events.js';
+import { evaluateBolReadiness } from '../services/bolReadiness.js';
 
 const createTemplateSchema = z.object({
   name: z.string().min(1),
@@ -303,49 +304,24 @@ export async function documentRoutes(server: FastifyInstance) {
       return { data: null, error: parsed.error.issues.map(i => i.message).join('. ') };
     }
 
-    // Guard: refuse to generate a BOL until the shipment has actually been
-    // built up (orders attached + units or line items present). The BOL
-    // metadata is captured immutably at generation time, so generating
-    // before the WMS load completes produces a permanently empty document.
-    // The intended trigger is `POST /load-plans/:id/complete`, which fires
-    // automatically after picking and loading.
-    const shipment = await prisma.shipment.findUnique({
-      where: { id: parsed.data.shipmentId },
-      select: {
-        id: true,
-        orderShipments: {
-          select: {
-            order: {
-              select: {
-                _count: { select: { trackableUnits: true, lineItems: true } },
-              },
-            },
-          },
-        },
-      },
-    });
-
-    if (!shipment) {
+    // Guard: refuse to generate a BOL until the shipment carries enough detail
+    // to produce a legally-sufficient document (shipper/consignee set, orders
+    // attached, and every line item describing the goods with a piece count and
+    // weight). The BOL metadata is captured immutably at generation time, so
+    // generating before this data exists produces a permanently incomplete
+    // document. The intended trigger is `POST /load-plans/:id/complete`, which
+    // fires automatically after picking and loading. `evaluateBolReadiness` is
+    // the single source of truth shared with the frontend button.
+    const readiness = await evaluateBolReadiness(prisma, parsed.data.shipmentId);
+    if (!readiness) {
       reply.code(404);
       return { data: null, error: 'Shipment not found' };
     }
-
-    if (shipment.orderShipments.length === 0) {
+    if (!readiness.ready) {
       reply.code(400);
       return {
         data: null,
-        error: 'Cannot generate BOL: no orders are attached to this shipment. Attach at least one order first.',
-      };
-    }
-
-    const hasItems = shipment.orderShipments.some(
-      os => os.order._count.trackableUnits > 0 || os.order._count.lineItems > 0,
-    );
-    if (!hasItems) {
-      reply.code(400);
-      return {
-        data: null,
-        error: 'Cannot generate BOL: the attached orders have no trackable units or line items. Complete picking and loading in the WMS first, then a BOL is generated automatically when the load plan is sealed.',
+        error: `Cannot generate BOL: ${readiness.missing.join('; ')}.`,
       };
     }
 
@@ -357,6 +333,47 @@ export async function documentRoutes(server: FastifyInstance) {
       reply.code(500);
       return { data: null, error: err.message };
     }
+  });
+
+  // Readiness check that drives the "Generate BOL" button's enabled/greyed
+  // state. Returns whether the shipment carries enough detail for a valid BOL
+  // and, if not, the list of missing requirements to show the user.
+  server.get('/api/v1/documents/bol-readiness/:shipmentId', {
+    schema: {
+      description: 'Whether a shipment carries enough detail (shipper/consignee, attached orders, and per-line goods description + quantity + weight) to generate a legally-sufficient Bill of Lading. Drives the greyed-out state of the Generate BOL button.',
+      tags: ['Document Generation'],
+      params: {
+        type: 'object',
+        required: ['shipmentId'],
+        properties: { shipmentId: { type: 'string', format: 'uuid' } },
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            data: {
+              type: 'object',
+              properties: {
+                ready: { type: 'boolean' },
+                missing: { type: 'array', items: { type: 'string' } },
+                orderCount: { type: 'integer' },
+                lineItemCount: { type: 'integer' },
+              },
+            },
+            error: { type: 'object', nullable: true },
+          },
+        },
+        404: errorResponse,
+      },
+    },
+  }, async (req, reply) => {
+    const { shipmentId } = req.params as { shipmentId: string };
+    const readiness = await evaluateBolReadiness(prisma, shipmentId);
+    if (!readiness) {
+      reply.code(404);
+      return { data: null, error: 'Shipment not found' };
+    }
+    return { data: readiness, error: null };
   });
 
   server.post('/api/v1/documents/generate/labels', {
@@ -500,6 +517,17 @@ export async function documentRoutes(server: FastifyInstance) {
     if (!parsed.success) {
       reply.code(400);
       return { data: null, error: parsed.error.issues.map(i => i.message).join('. ') };
+    }
+    // Same readiness gate as the sync route — never enqueue a BOL job for a
+    // shipment that lacks the legally-required cargo detail.
+    const readiness = await evaluateBolReadiness(prisma, parsed.data.shipmentId);
+    if (!readiness) {
+      reply.code(404);
+      return { data: null, error: 'Shipment not found' };
+    }
+    if (!readiness.ready) {
+      reply.code(400);
+      return { data: null, error: `Cannot generate BOL: ${readiness.missing.join('; ')}.` };
     }
     const { correlationId, jobId } = await enqueueGeneration('bol', parsed.data.shipmentId, parsed.data.templateId, req);
     reply.code(202);
