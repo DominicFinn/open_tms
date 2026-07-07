@@ -326,10 +326,12 @@ export default function VNextOrders() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button variant="gradient" onClick={() => navigate('/orders/create')}>
-            <Plus className="h-4 w-4" />
-            New order
-          </Button>
+          {hasPermission('orders:write') && (
+            <Button variant="gradient" onClick={() => navigate('/orders/create')}>
+              <Plus className="h-4 w-4" />
+              New order
+            </Button>
+          )}
         </div>
       </div>
 

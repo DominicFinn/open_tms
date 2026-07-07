@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
+  Archive,
+  ArchiveRestore,
   ArrowLeft,
   Building2,
   ChevronRight,
@@ -11,11 +13,13 @@ import {
   MapPin,
   Save,
   ShieldCheck,
+  Trash2,
   Truck,
   User,
 } from 'lucide-react';
 
 import { API_URL } from '../api';
+import { useCurrentUser } from '../hooks/useCurrentUser';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DatePicker } from '@/components/ui/date-picker';
@@ -66,18 +70,26 @@ export default function VNextCreateCarrier() {
   const [loading, setLoading] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [archived, setArchived] = useState(false);
+  const [notFound, setNotFound] = useState(false);
+  const [actionBusy, setActionBusy] = useState(false);
+  const { hasPermission } = useCurrentUser();
+  const canWrite = hasPermission('carriers:write');
+  const canDelete = hasPermission('carriers:delete');
 
   useEffect(() => {
     if (!id) return;
     setLoading(true);
     fetch(`${API_URL}/api/v1/carriers/${id}`)
       .then(r => {
+        if (r.status === 404) { setNotFound(true); return null; }
         if (!r.ok) throw new Error('Failed to load');
         return r.json();
       })
       .then(json => {
-        const c = json.data;
+        const c = json?.data;
         if (!c) return;
+        setArchived(!!c.archived);
         setName(c.name || '');
         setMcNumber(c.mcNumber || '');
         setDotNumber(c.dotNumber || '');
@@ -99,23 +111,33 @@ export default function VNextCreateCarrier() {
 
   const handleSubmit = async () => {
     setSubmitError('');
+    if (!name.trim()) {
+      setSubmitError('Carrier name is required.');
+      return;
+    }
     setSubmitting(true);
     try {
-      const body: any = {
-        name, mcNumber, dotNumber, contactName, contactEmail: email, contactPhone: phone,
+      // Only send fields that have a value — blank optional fields (e.g. no
+      // email) must be omitted, not sent as "" (which fails format validation).
+      const raw: Record<string, any> = {
+        mcNumber, dotNumber, contactName, contactEmail: email, contactPhone: phone,
         address1, address2, city, state, postalCode, country,
-        paymentTermsDays: parseInt(paymentTermsDays) || 30,
         currency: carrierCurrency,
       };
+      const body: any = { name: name.trim(), paymentTermsDays: parseInt(paymentTermsDays) || 30 };
+      for (const [k, v] of Object.entries(raw)) {
+        if (typeof v === 'string' ? v.trim() !== '' : v != null) body[k] = v;
+      }
       const url = isEdit ? `${API_URL}/api/v1/carriers/${id}` : `${API_URL}/api/v1/carriers`;
       const res = await fetch(url, {
         method: isEdit ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      if (!res.ok) throw new Error('Failed to save carrier');
-      const json = await res.json();
-      if (json.error) throw new Error(json.error);
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json.error) {
+        throw new Error(json.error || `Failed to save carrier (HTTP ${res.status})`);
+      }
       const newId = json.data?.id ?? id;
       const label = json.data?.name || name || newId?.slice(0, 8);
       if (isEdit) {
@@ -132,6 +154,56 @@ export default function VNextCreateCarrier() {
       setSubmitting(false);
     }
   };
+
+  // Lifecycle actions (archive / unarchive / delete). The POST endpoints need a
+  // JSON body, so send {} to satisfy the content-type parser.
+  const lifecycleAction = async (
+    verb: 'archive' | 'unarchive' | 'delete',
+    successMsg: string,
+  ) => {
+    setSubmitError('');
+    setActionBusy(true);
+    try {
+      const isDelete = verb === 'delete';
+      const res = await fetch(`${API_URL}/api/v1/carriers/${id}${isDelete ? '' : `/${verb}`}`, {
+        method: isDelete ? 'DELETE' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: isDelete ? undefined : '{}',
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json.error) {
+        throw new Error(json.error || `Action failed (HTTP ${res.status})`);
+      }
+      toast.success(successMsg);
+      if (verb === 'unarchive') {
+        setArchived(false);
+      } else {
+        navigate('/carriers');
+      }
+    } catch (err: any) {
+      setSubmitError(err.message);
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  const handleArchive = () => lifecycleAction('archive', 'Carrier archived');
+  const handleUnarchive = () => lifecycleAction('unarchive', 'Carrier restored');
+  const handleDelete = () => {
+    if (!window.confirm('Delete this carrier? This removes it from everywhere. Carriers assigned to lanes cannot be deleted (archive instead).')) return;
+    lifecycleAction('delete', 'Carrier deleted');
+  };
+
+  if (notFound) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-24 text-center text-muted-foreground">
+        <CircleAlert className="h-10 w-10 text-destructive" />
+        <h2 className="text-xl font-semibold text-foreground">Carrier not found</h2>
+        <p>This carrier may have been deleted.</p>
+        <Button variant="outline" asChild><Link to="/carriers">Back to carriers</Link></Button>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -153,7 +225,34 @@ export default function VNextCreateCarrier() {
         <span>{isEdit ? 'Edit carrier' : 'New carrier'}</span>
       </div>
 
-      <h1 className="text-3xl font-bold tracking-tight">{isEdit ? 'Edit carrier' : 'New carrier'}</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-3xl font-bold tracking-tight">{isEdit ? 'Edit carrier' : 'New carrier'}</h1>
+        {isEdit && (canWrite || canDelete) && (
+          <div className="flex items-center gap-2">
+            {canWrite && (archived ? (
+              <Button variant="outline" onClick={handleUnarchive} disabled={actionBusy}>
+                <ArchiveRestore className="h-4 w-4" /> Unarchive
+              </Button>
+            ) : (
+              <Button variant="outline" onClick={handleArchive} disabled={actionBusy}>
+                <Archive className="h-4 w-4" /> Archive
+              </Button>
+            ))}
+            {canDelete && (
+              <Button variant="outline" className="text-destructive hover:text-destructive" onClick={handleDelete} disabled={actionBusy}>
+                <Trash2 className="h-4 w-4" /> Delete
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {archived && (
+        <div className="flex items-center gap-2 rounded-md border border-warning/30 bg-warning/10 p-3 text-sm text-warning">
+          <Archive className="h-4 w-4" />
+          This carrier is archived. It can't be selected for new work or used by its portal users until restored.
+        </div>
+      )}
 
       <Card>
         <CardHeader>
@@ -164,8 +263,9 @@ export default function VNextCreateCarrier() {
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-3">
           <div className="space-y-2 md:col-span-3">
-            <Label>Name</Label>
-            <Input type="text" placeholder="Carrier name" value={name} onChange={e => setName(e.target.value)} />
+            <Label>Name <span className="text-destructive">*</span></Label>
+            <Input type="text" placeholder="Carrier name" value={name} onChange={e => setName(e.target.value)} required aria-required />
+            <p className="text-xs text-muted-foreground">Name is the only required field. Everything else is optional.</p>
           </div>
           <div className="space-y-2">
             <Label>MC number</Label>

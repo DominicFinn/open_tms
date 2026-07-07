@@ -101,6 +101,12 @@ export class CarrierAuthService implements ICarrierAuthService {
       throw new Error(`Account is temporarily locked. Try again in ${minutesLeft} minutes.`);
     }
 
+    // Archived or deleted carriers can no longer access the portal.
+    const carrierState = (user as any).carrier as { archived?: boolean; deletedAt?: Date | null } | undefined;
+    if (carrierState?.deletedAt || carrierState?.archived) {
+      throw new Error('This carrier account is no longer active. Please contact your Open TMS administrator.');
+    }
+
     if (!user.active) throw new Error('Account is deactivated');
 
     const valid = await this.verifyPassword(password, user.passwordHash);

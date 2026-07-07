@@ -1,3 +1,4 @@
+import { toast } from 'sonner';
 import { API_URL } from './api';
 
 /**
@@ -111,6 +112,17 @@ export function installAuthFetchInterceptor() {
       localStorage.removeItem(MAIN_TMS_TOKEN_KEY);
       localStorage.removeItem(MAIN_TMS_USER_KEY);
       redirectToLogin();
+    }
+
+    // On 403 from a mutating main TMS request, surface a permission error.
+    // (Reads are never permission-gated, so a 403 here is a blocked action.)
+    if (res.status === 403 && !isPortalRoute(url) && !isAuthPublicRoute(url)) {
+      const method = (
+        finalInit?.method ?? (input instanceof Request ? input.method : 'GET')
+      ).toUpperCase();
+      if (method !== 'GET' && method !== 'HEAD') {
+        toast.error("You don't have permission to perform that action.");
+      }
     }
 
     return res;

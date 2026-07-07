@@ -10,12 +10,16 @@ import { REVISE_QUOTE, ReviseQuotePayload } from '../commands/quotes/ReviseQuote
 import { ILtlRatingService } from '../services/LtlRatingService.js';
 import { IRatingService } from '../services/RatingService.js';
 import { CreditCheckService } from '../services/CreditCheckService.js';
+import { guardWrites } from '../auth/guardWrites.js';
 
 export async function quoteRoutes(server: FastifyInstance) {
   const quoteRepo = container.resolve<IQuoteRepository>(TOKENS.IQuoteRepository);
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
   const ltlRatingService = container.resolve<ILtlRatingService>(TOKENS.ILtlRatingService);
   const ratingService = container.resolve<IRatingService>(TOKENS.IRatingService);
+
+  // Rate calculations (/rates/*) are read-only previews.
+  server.addHook('preHandler', guardWrites('quotes', { readPaths: ['/rates/'] }));
 
   // List quotes
   server.get('/api/v1/quotes', {

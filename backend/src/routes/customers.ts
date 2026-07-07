@@ -8,6 +8,7 @@ import { CREATE_CUSTOMER } from '../commands/customers/CreateCustomerCommand.js'
 import { UPDATE_CUSTOMER } from '../commands/customers/UpdateCustomerCommand.js';
 import { ARCHIVE_CUSTOMER } from '../commands/customers/ArchiveCustomerCommand.js';
 import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
+import { guardWrites } from '../auth/guardWrites.js';
 
 export async function customerRoutes(server: FastifyInstance) {
   const customersRepo = container.resolve<ICustomersRepository>(TOKENS.ICustomersRepository);
@@ -16,6 +17,7 @@ export async function customerRoutes(server: FastifyInstance) {
   // Multi-tenancy: registers a preHandler that populates req.orgId on
   // every request before any handler in this plugin runs.
   await registerOrgScope(server);
+  server.addHook('preHandler', guardWrites('customers'));
 
   // Get all customers — scoped to the requesting JWT's org.
   server.get('/api/v1/customers', async (req: FastifyRequest, _reply: FastifyReply) => {

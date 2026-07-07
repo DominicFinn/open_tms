@@ -7,11 +7,13 @@ import { CREATE_LANE } from '../commands/lanes/CreateLaneCommand.js';
 import { UPDATE_LANE } from '../commands/lanes/UpdateLaneCommand.js';
 import { ARCHIVE_LANE } from '../commands/lanes/ArchiveLaneCommand.js';
 import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
+import { guardWrites } from '../auth/guardWrites.js';
 
 export async function laneRoutes(server: FastifyInstance) {
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
 
   await registerOrgScope(server);
+  server.addHook('preHandler', guardWrites('lanes'));
   // Get all lanes (uses denormalized read model for performance). Scoped
   // to the requesting tenant.
   server.get('/api/v1/lanes', async (req: FastifyRequest, _reply: FastifyReply) => {

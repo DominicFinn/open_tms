@@ -31,6 +31,10 @@ const mockTx = {
   shipment: {
     create: jest.fn().mockResolvedValue(mockShipment),
   },
+  shipmentStop: {
+    deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+    createMany: jest.fn().mockResolvedValue({ count: 0 }),
+  },
   domainEventLog: { create: jest.fn().mockResolvedValue({}) },
 } as any;
 

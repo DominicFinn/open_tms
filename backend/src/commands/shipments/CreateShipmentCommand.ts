@@ -14,6 +14,7 @@ import { QUEUES } from '../../queue/events.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { Command } from '../types.js';
 import { reconcileShipmentDevices } from './reconcileShipmentDevices.js';
+import { syncShipmentStops } from './syncShipmentStops.js';
 
 export interface CreateShipmentPayload {
   reference?: string;
@@ -63,6 +64,7 @@ export interface CreateShipmentPayload {
     volumeM3?: number;
   }>;
   devices?: Array<{ name: string; externalId: string }>;
+  waypoints?: string[];
 }
 
 export interface CreateShipmentResult {
@@ -283,6 +285,14 @@ export class CreateShipmentCommandHandler extends BaseCommandHandler<CreateShipm
         entityId: deviceId,
         payload: { assignmentId, shipmentId: shipment.id },
       })),
+    });
+
+    // Build the route's stop list (origin -> waypoints -> destination).
+    await syncShipmentStops(tx, {
+      shipmentId: shipment.id,
+      originId: finalOriginId,
+      waypoints: body.waypoints,
+      destinationId: finalDestinationId,
     });
 
     // Enqueue for outbound integrations (fire-and-forget, after tx commits)

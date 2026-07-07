@@ -15,8 +15,12 @@ import {
   PROMOTE_DECISION_TO_RULE,
 } from '../commands/automationRules/index.js';
 
+import { guardWrites } from '../auth/guardWrites.js';
+
 export const automationRuleRoutes: FastifyPluginAsync = async (server) => {
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
+  // /test is a dry-run evaluation (read-only).
+  server.addHook('preHandler', guardWrites('automation_rules', { readPaths: ['/test'] }));
 
   const resolveOrgId = async (req: any): Promise<string | null> => {
     if (req.user?.organizationId) return req.user.organizationId;

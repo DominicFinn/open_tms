@@ -65,8 +65,12 @@ const errorResponse = {
   },
 } as const;
 
+import { guardWrites } from '../auth/guardWrites.js';
+
 export async function customFieldRoutes(server: FastifyInstance) {
   const customFieldService = container.resolve<ICustomFieldService>(TOKENS.ICustomFieldService);
+  // /validate is a read-only check of a field definition.
+  server.addHook('preHandler', guardWrites('settings', { readPaths: ['/validate'] }));
 
   // GET /api/v1/custom-fields/:entityType — get active version with field definitions
   server.get('/api/v1/custom-fields/:entityType', {

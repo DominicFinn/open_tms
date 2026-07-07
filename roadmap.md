@@ -11,6 +11,7 @@
 ### **Phase 1: Core Setup (Foundation)** DONE
 - **Lane Management** - Create/manage lanes (point-to-point, multi-stop), associate with locations and carriers
 - **Carrier Management** - Add carriers, store negotiated rates, service levels, link to lanes
+- **Carrier Archive / Delete Lifecycle** - Archive (reversible, deactivates portal logins) and admin soft-delete (tombstone, 404s everywhere, blocked when assigned to lanes); archived banner + management list via `?includeArchived`; portal users notified on archive/delete (auditable event, email stubbed); portal-user PII anonymised 1 year later via daily cron
 - **Customer Management** - Manage customers with contact/billing info, customer-specific preferences
 - **Shipment Creation (Basic)** - Create shipments with references, customer, origin, destination, status, templates
 - **Shipment Lifecycle States** - Canonical draft → ready → in_progress → complete lifecycle with a readiness gate (customer, route/lane, carrier, dates, reference, shipment-type fields), forward/step-back-only manual transitions, audit logging of who/when, an orthogonal exception flag, and bulk status updates on the list page

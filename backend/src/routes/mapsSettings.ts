@@ -9,8 +9,11 @@
 
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { guardWrites } from '../auth/guardWrites.js';
 
 export async function mapsSettingsRoutes(server: FastifyInstance) {
+  // /test validates a key against Google (read-only check).
+  server.addHook('preHandler', guardWrites('settings', { readPaths: ['/test'] }));
   // Get maps settings (masked key)
   server.get('/api/v1/maps/settings', {
     schema: {

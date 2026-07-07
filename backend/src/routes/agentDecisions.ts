@@ -14,7 +14,10 @@ import { CREATE_AGENT_DECISION } from '../commands/agentDecisions/CreateAgentDec
 import { RECORD_DECISION_OUTCOME } from '../commands/agentDecisions/RecordDecisionOutcomeCommand.js';
 import { randomUUID } from 'crypto';
 
+import { guardWrites } from '../auth/guardWrites.js';
+
 export const agentDecisionRoutes: FastifyPluginAsync = async (server) => {
+  server.addHook('preHandler', guardWrites('agent_decisions'));
 
   // ── POST /api/v1/agent-decisions — Log a new agent decision ──
 

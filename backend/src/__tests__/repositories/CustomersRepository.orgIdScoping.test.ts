@@ -104,6 +104,7 @@ describe('CarriersRepository orgId scoping', () => {
     const repo = new CarriersRepository(prisma);
     await repo.all('org-1');
     expect(prisma.carrier.findMany.mock.calls[0][0].where).toEqual({
+      deletedAt: null,
       archived: false,
       orgId: 'org-1',
     });
@@ -115,7 +116,7 @@ describe('CarriersRepository orgId scoping', () => {
     await repo.findById('car-1', 'org-1');
     expect(prisma.carrier.findFirst.mock.calls[0][0].where).toEqual({
       id: 'car-1',
-      archived: false,
+      deletedAt: null,
       orgId: 'org-1',
     });
   });
@@ -126,7 +127,7 @@ describe('CarriersRepository orgId scoping', () => {
     await repo.findById('car-1');
     expect(prisma.carrier.findFirst.mock.calls[0][0].where).toEqual({
       id: 'car-1',
-      archived: false,
+      deletedAt: null,
     });
   });
 });

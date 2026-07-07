@@ -7,10 +7,13 @@ import { RECEIVE_CARRIER_INVOICE, ReceiveCarrierInvoicePayload } from '../comman
 import { APPROVE_CARRIER_INVOICE, ApproveCarrierInvoicePayload } from '../commands/carrierInvoices/ApproveCarrierInvoiceCommand.js';
 import { RECORD_CARRIER_PAYMENT, RecordCarrierPaymentPayload } from '../commands/carrierInvoices/RecordCarrierPaymentCommand.js';
 import { CarrierPaymentBatchService } from '../services/CarrierPaymentBatchService.js';
+import { guardWrites } from '../auth/guardWrites.js';
 
 export async function carrierInvoiceRoutes(server: FastifyInstance) {
   const carrierInvoiceRepo = container.resolve<ICarrierInvoiceRepository>(TOKENS.ICarrierInvoiceRepository);
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
+
+  server.addHook('preHandler', guardWrites('carrier_invoices'));
 
   // List carrier invoices
   server.get('/api/v1/carrier-invoices', {

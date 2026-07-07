@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 
 import { API_URL } from '../api';
+import { useCurrentUser } from '../hooks/useCurrentUser';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -58,19 +59,23 @@ function carrierStatus(c: Carrier): { label: string; variant: StatusVariant } {
 
 export default function VNextCarriers() {
   const navigate = useNavigate();
+  const { hasPermission } = useCurrentUser();
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState<'table' | 'cards'>('cards');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [carriers, setCarriers] = useState<Carrier[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [statFilter, setStatFilter] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         setLoading(true);
-        const res = await fetch(`${API_URL}/api/v1/carriers`);
+        // Include archived carriers so the management list + "Archived" stat
+        // filter can surface them (they show an "Inactive" badge).
+        const res = await fetch(`${API_URL}/api/v1/carriers?includeArchived=true`);
         if (!res.ok) throw new Error(`Failed to load carriers (${res.status})`);
         const json = await res.json();
         if (!cancelled) {
@@ -88,7 +93,17 @@ export default function VNextCarriers() {
     };
   }, []);
 
+  // Clickable stat boxes each carry a predicate; selecting one filters the list.
+  const statDefs = [
+    { key: 'active', label: 'Active carriers', icon: CheckCircle2, tone: 'bg-success/15 text-success', match: (c: Carrier) => !c.archived },
+    { key: 'registration', label: 'Registration verified', icon: Star, tone: 'bg-info/15 text-info', match: (c: Carrier) => !!c.registrationChecked },
+    { key: 'insurance', label: 'Insurance on file', icon: Truck, tone: 'bg-primary/10 text-primary', match: (c: Carrier) => !!c.insuranceDocReceived },
+    { key: 'archived', label: 'Archived', icon: Clock, tone: 'bg-warning/15 text-warning', match: (c: Carrier) => !!c.archived },
+  ];
+  const activeStat = statDefs.find(s => s.key === statFilter);
+
   const filtered = carriers.filter(c => {
+    if (activeStat && !activeStat.match(c)) return false;
     if (!search) return true;
     const q = search.toLowerCase();
     return c.name.toLowerCase().includes(q)
@@ -114,12 +129,7 @@ export default function VNextCarriers() {
     );
   }
 
-  const stats = [
-    { label: 'Active carriers', value: carriers.filter(c => !c.archived).length, icon: CheckCircle2, tone: 'bg-success/15 text-success' },
-    { label: 'Registration verified', value: carriers.filter(c => c.registrationChecked).length, icon: Star, tone: 'bg-info/15 text-info' },
-    { label: 'Insurance on file', value: carriers.filter(c => c.insuranceDocReceived).length, icon: Truck, tone: 'bg-primary/10 text-primary' },
-    { label: 'Archived', value: carriers.filter(c => c.archived).length, icon: Clock, tone: 'bg-warning/15 text-warning' },
-  ];
+  const stats = statDefs.map(s => ({ ...s, value: carriers.filter(s.match).length }));
 
   return (
     <div className="space-y-6">
@@ -150,18 +160,32 @@ export default function VNextCarriers() {
               <ListIcon className="h-4 w-4" />
             </Button>
           </div>
-          <Button variant="gradient" onClick={() => navigate('/carriers/create')}>
-            <Plus className="h-4 w-4" />
-            Add carrier
-          </Button>
+          {hasPermission('carriers:write') && (
+            <Button variant="gradient" onClick={() => navigate('/carriers/create')}>
+              <Plus className="h-4 w-4" />
+              Add carrier
+            </Button>
+          )}
         </div>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {stats.map(stat => {
           const Icon = stat.icon;
+          const isActive = statFilter === stat.key;
           return (
-            <Card key={stat.label}>
+            <Card
+              key={stat.key}
+              role="button"
+              tabIndex={0}
+              aria-pressed={isActive}
+              onClick={() => setStatFilter(isActive ? null : stat.key)}
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setStatFilter(isActive ? null : stat.key); } }}
+              className={cn(
+                'cursor-pointer transition-colors hover:border-primary/50',
+                isActive && 'border-primary ring-1 ring-primary'
+              )}
+            >
               <div className="p-5">
                 <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', stat.tone)}>
                   <Icon className="h-5 w-5" />
@@ -173,6 +197,13 @@ export default function VNextCarriers() {
           );
         })}
       </div>
+
+      {activeStat && (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <span>Filtered by <span className="font-medium text-foreground">{activeStat.label}</span> — showing {filtered.length} of {carriers.length}.</span>
+          <button className="text-primary hover:underline" onClick={() => setStatFilter(null)}>Clear</button>
+        </div>
+      )}
 
       <Card>
         <div className="p-4">

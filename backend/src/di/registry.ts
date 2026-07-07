@@ -75,6 +75,8 @@ import { UnarchiveShipmentCommandHandler } from '../commands/shipments/Unarchive
 import { CreateCarrierCommandHandler } from '../commands/carriers/CreateCarrierCommand.js';
 import { UpdateCarrierCommandHandler } from '../commands/carriers/UpdateCarrierCommand.js';
 import { ArchiveCarrierCommandHandler } from '../commands/carriers/ArchiveCarrierCommand.js';
+import { UnarchiveCarrierCommandHandler } from '../commands/carriers/UnarchiveCarrierCommand.js';
+import { SoftDeleteCarrierCommandHandler } from '../commands/carriers/SoftDeleteCarrierCommand.js';
 import { CreateCustomerCommandHandler } from '../commands/customers/CreateCustomerCommand.js';
 import { UpdateCustomerCommandHandler } from '../commands/customers/UpdateCustomerCommand.js';
 import { ArchiveCustomerCommandHandler } from '../commands/customers/ArchiveCustomerCommand.js';
@@ -833,6 +835,8 @@ export function registerDependencies(prisma: PrismaClient): void {
     bus.register(new CreateCarrierCommandHandler(prisma, eventBus));
     bus.register(new UpdateCarrierCommandHandler(prisma, eventBus));
     bus.register(new ArchiveCarrierCommandHandler(prisma, eventBus));
+    bus.register(new UnarchiveCarrierCommandHandler(prisma, eventBus));
+    bus.register(new SoftDeleteCarrierCommandHandler(prisma, eventBus));
 
     // Customer commands
     bus.register(new CreateCustomerCommandHandler(prisma, eventBus));

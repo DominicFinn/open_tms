@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 
 import { API_URL } from '../api';
+import { useCurrentUser } from '../hooks/useCurrentUser';
 import { LOCATION_TYPE_META } from './locationTypesMeta';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -119,6 +120,7 @@ const CRITERIA_ICONS: Record<string, React.ComponentType<{ className?: string }>
 
 export default function VNextLocations() {
   const navigate = useNavigate();
+  const { hasPermission } = useCurrentUser();
   const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -193,10 +195,12 @@ export default function VNextLocations() {
           <p className="mt-1 text-sm text-muted-foreground">{locations.length} locations managed</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="gradient" onClick={() => navigate('/locations/create')}>
-            <Plus className="h-4 w-4" />
-            New location
-          </Button>
+          {hasPermission('locations:write') && (
+            <Button variant="gradient" onClick={() => navigate('/locations/create')}>
+              <Plus className="h-4 w-4" />
+              New location
+            </Button>
+          )}
         </div>
       </div>
 

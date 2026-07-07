@@ -25,8 +25,11 @@ const updateSettingsSchema = z.object({
   marginAlertEnabled: z.boolean().optional(),
 });
 
+import { guardWrites } from '../auth/guardWrites.js';
+
 export async function organizationRoutes(server: FastifyInstance) {
   const orgRepo = container.resolve<IOrganizationRepository>(TOKENS.IOrganizationRepository);
+  server.addHook('preHandler', guardWrites('settings'));
 
   // Get organization settings
   server.get('/api/v1/organization/settings', async (_req: FastifyRequest, _reply: FastifyReply) => {

@@ -16,6 +16,7 @@ import { ESCALATE_ISSUE } from '../commands/issues/EscalateIssueCommand.js';
 import { ADD_ISSUE_LABEL } from '../commands/issues/AddIssueLabelCommand.js';
 import { REMOVE_ISSUE_LABEL } from '../commands/issues/RemoveIssueLabelCommand.js';
 import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
+import { guardWrites } from '../auth/guardWrites.js';
 import {
   CREATE_ISSUE_LABEL,
   UPDATE_ISSUE_LABEL,
@@ -24,6 +25,7 @@ import {
 
 export const issueRoutes: FastifyPluginAsync = async (server) => {
   await registerOrgScope(server);
+  server.addHook('preHandler', guardWrites('issues'));
 
   const issueRepo = container.resolve<IIssueRepository>(TOKENS.IIssueRepository);
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);

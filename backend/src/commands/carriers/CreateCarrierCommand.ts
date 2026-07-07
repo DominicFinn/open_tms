@@ -11,14 +11,27 @@ export interface CreateCarrierPayload {
   orgId?: string | null;
   mcNumber?: string;
   dotNumber?: string;
+  scacCode?: string;
   contactName?: string;
   contactEmail?: string;
   contactPhone?: string;
   address1?: string;
+  address2?: string;
   city?: string;
   state?: string;
   postalCode?: string;
   country?: string;
+  paymentTermsDays?: number;
+  currency?: string;
+  validationTier?: string;
+  registrationChecked?: boolean;
+  insuranceDocReceived?: boolean;
+  insuranceVerified?: boolean;
+  identityConfirmed?: boolean;
+  complianceChecked?: boolean;
+  validationNotes?: string;
+  validatedAt?: string;
+  validatedBy?: string;
 }
 
 export const CREATE_CARRIER = 'carrier.create';

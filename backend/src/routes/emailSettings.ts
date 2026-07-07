@@ -11,8 +11,11 @@ import { z } from 'zod';
 import { container } from '../di/container.js';
 import { TOKENS } from '../di/tokens.js';
 import { IEmailService } from '../services/IEmailService.js';
+import { guardWrites } from '../auth/guardWrites.js';
 
 export async function emailSettingsRoutes(server: FastifyInstance) {
+  // /test sends a test email (an admin action, but not a settings mutation).
+  server.addHook('preHandler', guardWrites('settings', { readPaths: ['/test'] }));
   // Get email settings
   server.get('/api/v1/email/settings', {
     schema: {

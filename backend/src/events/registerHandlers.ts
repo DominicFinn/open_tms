@@ -48,6 +48,7 @@ import { BillingTriggerHandler } from './handlers/BillingTriggerHandler.js';
 import { InvoiceProjection } from './projections/InvoiceProjection.js';
 import { FinancialImpactHandler } from './handlers/FinancialImpactHandler.js';
 import { CarrierTrackingHandler } from './handlers/CarrierTrackingHandler.js';
+import { CarrierArchivalNotificationHandler } from './handlers/CarrierArchivalNotificationHandler.js';
 import { MarginAlertHandler } from './handlers/MarginAlertHandler.js';
 import { AutoReplenishmentHandler } from './handlers/AutoReplenishmentHandler.js';
 
@@ -158,6 +159,9 @@ export async function registerEventHandlers(
 
   // Carrier tracking: handle delivered, exception, integration error, and status bridging
   handlers.push(new CarrierTrackingHandler(prisma, eventBus));
+
+  // Notify a carrier's portal users when it is archived/deleted (email stubbed).
+  handlers.push(new CarrierArchivalNotificationHandler(prisma, eventBus));
 
   // Brokerage: margin alert - creates issues when margin drops below threshold
   handlers.push(new MarginAlertHandler(prisma));

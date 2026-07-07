@@ -9,12 +9,16 @@ import { CREATE_CHARGE, CreateChargePayload } from '../commands/charges/CreateCh
 import { APPROVE_CHARGE, ApproveChargePayload } from '../commands/charges/ApproveChargeCommand.js';
 import { REWEIGH_ADJUSTMENT, ReweighAdjustmentPayload } from '../commands/charges/ReweighAdjustmentCommand.js';
 import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
+import { guardWrites } from '../auth/guardWrites.js';
 
 export async function chargeRoutes(server: FastifyInstance) {
   const chargeService = container.resolve<IChargeService>(TOKENS.IChargeService);
   const chargeRepo = container.resolve<IChargeRepository>(TOKENS.IChargeRepository);
   const ratingService = container.resolve<IRatingService>(TOKENS.IRatingService);
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
+
+  // Rate calculation (/rates/*) is a read-only preview.
+  server.addHook('preHandler', guardWrites('charges', { readPaths: ['/rates/'] }));
 
   await registerOrgScope(server);
 
