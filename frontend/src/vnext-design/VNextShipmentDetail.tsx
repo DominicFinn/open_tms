@@ -22,6 +22,7 @@ import {
   Globe,
   Handshake,
   Inbox,
+  Info,
   Loader2,
   MapPin,
   MessageSquare,
@@ -1547,6 +1548,9 @@ export default function VNextShipmentDetail() {
   const [error, setError] = useState('');
   const [documents, setDocuments] = useState<any[]>([]);
   const [generating, setGenerating] = useState<string | null>(null);
+  const [bolReadiness, setBolReadiness] = useState<
+    { ready: boolean; missing: string[]; orderCount: number; lineItemCount: number } | null
+  >(null);
   const [routeDeviation, setRouteDeviation] = useState<any>(null);
   const [transitioning, setTransitioning] = useState(false);
   const [archiving, setArchiving] = useState(false);
@@ -1679,6 +1683,20 @@ export default function VNextShipmentDetail() {
   }, [id]);
 
   useEffect(() => { loadDocuments(); }, [loadDocuments]);
+
+  // BOL readiness drives the greyed-out state of the Generate BOL button. A BOL
+  // is a legal document; if the shipment lacks the required cargo detail
+  // (attached orders + per-line goods description/quantity/weight) we disable
+  // the button rather than let the user generate an incomplete document.
+  const loadBolReadiness = useCallback(() => {
+    if (!id) return;
+    fetch(`${API_URL}/api/v1/documents/bol-readiness/${id}`)
+      .then(r => r.json())
+      .then(json => { if (!json.error) setBolReadiness(json.data); })
+      .catch(() => { });
+  }, [id]);
+
+  useEffect(() => { loadBolReadiness(); }, [loadBolReadiness]);
 
   // Check route deviation for in-transit shipments with a lane
   useEffect(() => {
@@ -2225,14 +2243,20 @@ export default function VNextShipmentDetail() {
 
             <TabsContent value="documents" className="mt-4">
               <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0">
+                <CardHeader className="flex flex-col gap-2 space-y-0">
+                  <div className="flex flex-row items-center justify-between">
                   <CardTitle className="text-base">Documents</CardTitle>
                   <div className="flex flex-wrap gap-2">
                     <Button
                       variant="default"
                       size="sm"
-                      disabled={generating !== null}
+                      disabled={generating !== null || (bolReadiness !== null && !bolReadiness.ready)}
                       onClick={() => handleGenerateDoc('bol')}
+                      title={
+                        bolReadiness && !bolReadiness.ready
+                          ? `Bill of Lading unavailable: ${bolReadiness.missing.join('; ')}.`
+                          : undefined
+                      }
                     >
                       <FileText className="h-4 w-4" />
                       {generating === 'bol' ? 'Generating...' : 'Generate BOL'}
@@ -2258,6 +2282,21 @@ export default function VNextShipmentDetail() {
                       </Button>
                     )}
                   </div>
+                  </div>
+                  {bolReadiness && !bolReadiness.ready && (
+                    <div className="flex items-start gap-2 rounded-md border border-warning/30 bg-warning/10 p-3 text-xs text-warning">
+                      <Info className="mt-0.5 h-4 w-4 shrink-0" />
+                      <div>
+                        <span className="font-medium">Bill of Lading not available yet.</span> A BOL is a
+                        legal document and needs the following before it can be generated:
+                        <ul className="mt-1 list-inside list-disc">
+                          {bolReadiness.missing.map((m, i) => (
+                            <li key={i}>{m}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  )}
                 </CardHeader>
                 <CardContent className="p-0">
                   {documents.length === 0 ? (
