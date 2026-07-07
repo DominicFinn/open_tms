@@ -14,7 +14,7 @@ export interface UpdateLanePayload {
     status?: string;
     name?: string;
   };
-  stops?: Array<{ locationId: string; order: number; notes?: string }>;
+  stops?: Array<{ locationId: string; order: number; notes?: string; purpose?: string }>;
 }
 
 export const UPDATE_LANE = 'lane.update';

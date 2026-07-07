@@ -113,6 +113,7 @@ export default async function deviceRoutes(server: FastifyInstance) {
       shipmentId: z.string().uuid().optional(),
       orderId: z.string().uuid().optional(),
       trackableUnitId: z.string().uuid().optional(),
+      purpose: z.enum(['cargo_condition', 'security', 'location', 'general']).optional(),
     }).parse(req.body);
 
     const orgId = req.orgId!;
@@ -131,6 +132,7 @@ export default async function deviceRoutes(server: FastifyInstance) {
         shipmentId: body.shipmentId || null,
         orderId: body.orderId || null,
         trackableUnitId: body.trackableUnitId || null,
+        purpose: body.purpose || null,
       },
     });
     return reply.status(201).send({ data: assignment });

@@ -4,8 +4,6 @@ describe('Permissions', () => {
   it('defines all expected permission constants', () => {
     expect(PERMISSIONS.ALL).toBe('*');
     expect(PERMISSIONS.SHIPMENTS_READ).toBe('shipments:read');
-    expect(PERMISSIONS.LOADBOARD_READ).toBe('loadboard:read');
-    expect(PERMISSIONS.LOADBOARD_ASSIGN).toBe('loadboard:assign');
     expect(PERMISSIONS.MARGIN_VIEW).toBe('margin:view');
     expect(PERMISSIONS.CREDIT_CHECK).toBe('credit:check');
     expect(PERMISSIONS.RATE_CONFIRMATION).toBe('rate_confirmation:generate');
@@ -40,7 +38,6 @@ describe('System Roles', () => {
   it('broker_admin has all broker-specific permissions', () => {
     const brokerAdmin = SYSTEM_ROLES.find(r => r.name === 'broker_admin');
     expect(brokerAdmin).toBeDefined();
-    expect(brokerAdmin!.permissions).toContain('loadboard:*');
     expect(brokerAdmin!.permissions).toContain('margin:view');
     expect(brokerAdmin!.permissions).toContain('credit:check');
     expect(brokerAdmin!.permissions).toContain('rate_confirmation:generate');
@@ -48,10 +45,9 @@ describe('System Roles', () => {
     expect(brokerAdmin!.permissions).toContain('charges:*');
   });
 
-  it('broker_agent has loadboard and quoting but not settings', () => {
+  it('broker_agent has quoting but not settings', () => {
     const agent = SYSTEM_ROLES.find(r => r.name === 'broker_agent');
     expect(agent).toBeDefined();
-    expect(agent!.permissions).toContain('loadboard:*');
     expect(agent!.permissions).toContain('quotes:*');
     expect(agent!.permissions).toContain('margin:view');
     expect(agent!.permissions).not.toContain('settings:*');

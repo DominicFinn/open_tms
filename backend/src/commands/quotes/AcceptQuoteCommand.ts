@@ -6,7 +6,7 @@ import { Command } from '../types.js';
 
 export interface AcceptQuotePayload {
   quoteId: string;
-  createShipment?: boolean; // For broker orgs: also create a shipment that flows to the load board
+  createShipment?: boolean; // For broker orgs: also create an unassigned shipment
 }
 
 export const ACCEPT_QUOTE = 'quote.accept';
@@ -75,7 +75,7 @@ export class AcceptQuoteCommandHandler extends BaseCommandHandler<AcceptQuotePay
       });
     }
 
-    // For broker orgs: also create a shipment so it flows to the load board
+    // For broker orgs: also create an unassigned shipment
     let shipmentId: string | null = null;
     let shipmentReference: string | null = null;
 

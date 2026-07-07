@@ -12,6 +12,7 @@ export interface CreateCommentPayload {
   authorName: string;
   authorType: string;
   visibleToCustomer?: boolean;
+  tag?: string | null;
 }
 
 export interface CreateCommentResult {
@@ -24,6 +25,7 @@ export interface CreateCommentResult {
   authorName: string;
   authorType: string;
   visibleToCustomer: boolean;
+  tag: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -59,6 +61,7 @@ export class CreateCommentCommandHandler extends BaseCommandHandler<CreateCommen
         authorType,
         body,
         visibleToCustomer,
+        tag: command.payload.tag ?? null,
       },
     });
 
@@ -73,6 +76,7 @@ export class CreateCommentCommandHandler extends BaseCommandHandler<CreateCommen
         authorName,
         authorType,
         visibleToCustomer,
+        tag: comment.tag,
       },
     }));
 
@@ -86,6 +90,7 @@ export class CreateCommentCommandHandler extends BaseCommandHandler<CreateCommen
       authorName: comment.authorName,
       authorType: comment.authorType,
       visibleToCustomer: comment.visibleToCustomer,
+      tag: comment.tag,
       createdAt: comment.createdAt,
       updatedAt: comment.updatedAt,
     };

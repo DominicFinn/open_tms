@@ -106,6 +106,14 @@ import {
   shipmentEventLabel,
 } from '@open-tms/shared';
 
+const EQUIPMENT_TYPE_LABELS: Record<string, string> = {
+  dryVan: 'Dry van',
+  reefer: 'Reefer',
+  flatbed: 'Flatbed',
+  tanker: 'Tanker',
+  intermodal: 'Intermodal',
+};
+
 // Maps a canonical lifecycle status to a Badge variant.
 function shipmentStatusVariant(status: string): 'muted' | 'warning' | 'info' | 'success' {
   switch (status) {
@@ -233,7 +241,14 @@ function FinancialsTab({ shipmentId }: { shipmentId: string }) {
 }
 
 // ─── Telemetry Tab ──────────────────────────────────────────────────────
-function TelemetryTab({ shipmentId }: { shipmentId: string }) {
+const DEVICE_PURPOSE_LABELS: Record<string, string> = {
+  cargo_condition: 'Cargo condition',
+  security: 'Security & tamper',
+  location: 'Location tracking',
+  general: 'General',
+};
+
+function TelemetryTab({ shipmentId, deviceAssignments }: { shipmentId: string; deviceAssignments: any[] }) {
   const [telemetry, setTelemetry] = useState<any>(null);
   const [tLoading, setTLoading] = useState(true);
   const [tError, setTError] = useState('');
@@ -321,6 +336,11 @@ function TelemetryTab({ shipmentId }: { shipmentId: string }) {
   });
   const trackerDevices = Array.from(deviceMap.values());
 
+  const purposeByDeviceId = new Map<string, string>();
+  (deviceAssignments || []).forEach((a: any) => {
+    if (a.deviceId && a.purpose) purposeByDeviceId.set(a.deviceId, a.purpose);
+  });
+
   const tempSeries = readingsToSeries(readings, 'temperature');
   const pressureSeries = readingsToSeries(readings, 'atmosphericPressure');
   const batterySeries = readingsToSeries(readings, 'batteryLevel');
@@ -341,6 +361,7 @@ function TelemetryTab({ shipmentId }: { shipmentId: string }) {
             <div className="flex flex-wrap gap-3">
               {trackerDevices.map((dev: any) => {
                 const imgUrl = getDeviceImageUrl(dev.model);
+                const purpose = purposeByDeviceId.get(dev.id);
                 return (
                   <div
                     key={dev.id}
@@ -352,7 +373,10 @@ function TelemetryTab({ shipmentId }: { shipmentId: string }) {
                       <Package className="h-9 w-9 shrink-0 text-muted-foreground" />
                     )}
                     <div>
-                      <div className="text-sm font-semibold">{dev.name || dev.displayId || 'Device'}</div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold">{dev.name || dev.displayId || 'Device'}</span>
+                        {purpose && <Badge variant="muted">{DEVICE_PURPOSE_LABELS[purpose] || purpose}</Badge>}
+                      </div>
                       <div className="text-xs text-muted-foreground">
                         {dev.model || 'Unknown model'}{dev.displayId ? ` - ${dev.displayId}` : ''}
                       </div>
@@ -1171,7 +1195,11 @@ function ShipmentNotesTab({ shipmentId }: { shipmentId: string }) {
               </div>
               <div className="flex-1">
                 <div className="mb-1 flex items-center justify-between gap-2">
-                  <span className="text-sm font-semibold">{c.authorName || 'Unknown user'}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold">{c.authorName || 'Unknown user'}</span>
+                    {c.tag === 'issue' && <Badge variant="destructive">Issue</Badge>}
+                    {c.tag === 'requirement' && <Badge variant="info">Additional requirement</Badge>}
+                  </div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-muted-foreground">
                       {c.createdAt ? new Date(c.createdAt).toLocaleString() : ''}
@@ -2321,7 +2349,7 @@ export default function VNextShipmentDetail() {
             </TabsContent>
 
             <TabsContent value="telemetry" className="mt-4">
-              <TelemetryTab shipmentId={id!} />
+              <TelemetryTab shipmentId={id!} deviceAssignments={shipment.deviceAssignments || []} />
             </TabsContent>
 
             <TabsContent value="sla" className="mt-4">
@@ -2342,6 +2370,7 @@ export default function VNextShipmentDetail() {
               <Detail label="Customer" value={shipment.customer?.name || '-'} />
               <Detail label="Carrier" value={shipment.carrier?.name || '-'} />
               <Detail label="PRO Number" value={shipment.proNumber || '-'} />
+              <Detail label="Mode" value={shipment.serviceLevel || '-'} />
               <Detail label="Status" value={shipment.status ? shipmentStatusLabel(shipment.status) : '-'} />
               <Detail label="Pickup Date" value={shipment.pickupDate ? new Date(shipment.pickupDate).toLocaleDateString() : '-'} />
               <Detail label="Delivery Date" value={shipment.deliveryDate ? new Date(shipment.deliveryDate).toLocaleDateString() : '-'} />
@@ -2370,6 +2399,43 @@ export default function VNextShipmentDetail() {
               )}
             </CardContent>
           </Card>
+
+          {(shipment.tempControlled || shipment.hazmat || shipment.humidityControlled || shipment.requiredEquipmentType) && (
+            <Card>
+              <CardHeader><CardTitle className="text-base">Restrictions</CardTitle></CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                {shipment.tempControlled && (
+                  <Detail
+                    label="Temperature"
+                    value={`${shipment.tempMinC ?? '?'}°C to ${shipment.tempMaxC ?? '?'}°C`}
+                  />
+                )}
+                {shipment.humidityControlled && (
+                  <Detail
+                    label="Humidity"
+                    value={`${shipment.humidityMinPct ?? '?'}% to ${shipment.humidityMaxPct ?? '?'}%`}
+                  />
+                )}
+                {shipment.hazmat && (
+                  <>
+                    <Detail label="Hazmat" value={<Badge variant="warning">Hazmat</Badge>} />
+                    {shipment.unNumber && <Detail label="UN Number" value={shipment.unNumber} />}
+                    {shipment.hazmatClass && <Detail label="Hazmat Class" value={shipment.hazmatClass} />}
+                    {shipment.packingGroup && <Detail label="Packing Group" value={shipment.packingGroup} />}
+                    {shipment.properShippingName && (
+                      <Detail label="Proper Shipping Name" value={shipment.properShippingName} />
+                    )}
+                  </>
+                )}
+                {shipment.requiredEquipmentType && (
+                  <Detail
+                    label="Equipment"
+                    value={EQUIPMENT_TYPE_LABELS[shipment.requiredEquipmentType] || shipment.requiredEquipmentType}
+                  />
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardContent className="p-5">

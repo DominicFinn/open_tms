@@ -13,7 +13,7 @@ export interface CreateLanePayload {
   distance?: number;
   notes?: string;
   serviceLevel?: string;
-  stops?: Array<{ locationId: string; order: number; notes?: string }>;
+  stops?: Array<{ locationId: string; order: number; notes?: string; purpose?: string }>;
 }
 
 export const CREATE_LANE = 'lane.create';

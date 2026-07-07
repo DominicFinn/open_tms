@@ -181,6 +181,10 @@ model Shipment {
   shipmentType        ShipmentType? @relation(fields: [shipmentTypeId], references: [id])
   shipmentTypeId      String?
   proNumber           String?
+  // Transport mode — "FTL" (Full Truck Load) or "LTL" (Less Than Truck Load).
+  // Distinct from shipmentType, which drives physical restrictions (temp,
+  // hazmat, humidity, equipment), not mode/service level.
+  serviceLevel        String?
   items               Json?
   archived            Boolean       @default(false)
   archivedAt          DateTime?
@@ -235,6 +239,21 @@ model Shipment {
   temperatureLogs       ImmutableTemperatureLog[]
   coldChainExcursions   ColdChainExcursion[]
   capaReports           CAPAReport[]
+
+  // Declared restrictions (set at shipment creation, distinct from the
+  // effective* fields above which are computed from linked orders)
+  tempControlled     Boolean @default(false)
+  tempMinC           Float?
+  tempMaxC           Float?
+  humidityControlled Boolean @default(false)
+  humidityMinPct     Float?
+  humidityMaxPct     Float?
+  hazmat             Boolean @default(false)
+  unNumber           String? // e.g. "UN1203"
+  hazmatClass        String? // e.g. "3" (flammable liquid)
+  packingGroup       String? // I | II | III
+  properShippingName String?
+  requiredEquipmentType String? // dryVan, reefer, flatbed, tanker, intermodal
 
   // Custom fields
   customFieldVersionId String?
@@ -642,6 +661,9 @@ model LaneStop {
   locationId String
   order      Int // Order of the stop in the lane (1, 2, 3, etc.)
   notes      String? // Optional notes for this specific stop
+  // What this stop is for — informational only, doesn't affect routing/rating.
+  // pickup | dropoff | cross_dock | fuel | rest | hub | customs | other
+  purpose    String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
@@ -2416,6 +2438,9 @@ model DeviceAssignment {
   active          Boolean   @default(true)
   assignedAt      DateTime  @default(now())
   unassignedAt    DateTime?
+  // Why this device is on the shipment/order — informational only, doesn't
+  // change alerting/compliance logic. cargo_condition | security | location | general
+  purpose         String?
 
   @@index([deviceId, active])
   @@index([shipmentId])
@@ -3693,6 +3718,7 @@ model Comment {
   authorName         String
   authorType         String    @default("user") // "user", "agent", "system", "customer"
   body               String // Markdown text
+  tag                String? // Optional free-form categorization, e.g. "issue", "requirement"
   // Visibility for the customer portal. Internal user/agent comments default to
   // false (internal-only) and must be opted into. Customer-authored comments
   // are always set to true so internal staff sees them.

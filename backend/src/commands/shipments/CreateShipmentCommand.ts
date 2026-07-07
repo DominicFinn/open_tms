@@ -55,6 +55,7 @@ export interface CreateShipmentPayload {
   deliveryWindowEnd?: string;
   shipmentTypeId?: string;
   proNumber?: string;
+  serviceLevel?: string;
   items?: Array<{
     sku: string;
     description?: string;
@@ -63,6 +64,18 @@ export interface CreateShipmentPayload {
     volumeM3?: number;
   }>;
   devices?: Array<{ name: string; externalId: string }>;
+  tempControlled?: boolean;
+  tempMinC?: number | null;
+  tempMaxC?: number | null;
+  humidityControlled?: boolean;
+  humidityMinPct?: number | null;
+  humidityMaxPct?: number | null;
+  hazmat?: boolean;
+  unNumber?: string | null;
+  hazmatClass?: string | null;
+  packingGroup?: string | null;
+  properShippingName?: string | null;
+  requiredEquipmentType?: string | null;
 }
 
 export interface CreateShipmentResult {
@@ -235,8 +248,21 @@ export class CreateShipmentCommandHandler extends BaseCommandHandler<CreateShipm
         deliveryWindowEnd: body.deliveryWindowEnd ? new Date(body.deliveryWindowEnd) : undefined,
         shipmentTypeId: body.shipmentTypeId,
         proNumber: body.proNumber,
+        serviceLevel: body.serviceLevel,
         items: body.items ?? [],
         status: 'draft',
+        tempControlled: body.tempControlled ?? false,
+        tempMinC: body.tempMinC,
+        tempMaxC: body.tempMaxC,
+        humidityControlled: body.humidityControlled ?? false,
+        humidityMinPct: body.humidityMinPct,
+        humidityMaxPct: body.humidityMaxPct,
+        hazmat: body.hazmat ?? false,
+        unNumber: body.unNumber,
+        hazmatClass: body.hazmatClass,
+        packingGroup: body.packingGroup,
+        properShippingName: body.properShippingName,
+        requiredEquipmentType: body.requiredEquipmentType,
       },
       include: {
         customer: { select: { id: true, name: true } },

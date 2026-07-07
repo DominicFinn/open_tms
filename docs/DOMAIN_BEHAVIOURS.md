@@ -370,6 +370,10 @@ Locations can be classified by type (`warehouse`, `distribution_centre`, `cross_
 | `lane.updated` | LaneReadModel fields updated |
 | `lane.archived` | LaneReadModel.status = 'archived' |
 
+### Lane Stops
+
+Each intermediate hub-and-spoke stop (`LaneStop`) has an optional `purpose` tag describing what the stop is for: `pickup`, `dropoff`, `cross_dock`, `fuel`, `rest`, `hub`, `customs`, or `other`. It's informational only and doesn't affect routing, rating, or the planned-route (`LaneRoute`) waypoints. Set on the create/edit lane form alongside the stop's location and order.
+
 ---
 
 ## Issues / Triage
@@ -453,6 +457,8 @@ When an issue is closed (`issue.closed` event), the `IssueClosureReportHandler` 
 ## Comments (Polymorphic)
 
 Comments are a generic, polymorphic entity that can be attached to issues, shipments, or orders. The `entityType` + `entityId` fields link a comment to its parent.
+
+**Tag:** Comments carry an optional free-form `tag` field for categorization (e.g. `"issue"`, `"requirement"`). It's purely a label — no other system reacts to it. The shipment create/edit form (`VNextCreateShipment.tsx`) uses this to let users add notes tagged as "Issue" or "Additional requirement" while building a shipment; notes are posted as comments (`entityType: "shipment"`) once the shipment is saved. Tagged comments render with a colored badge on the shipment detail Notes & Comments tab (`VNextShipmentDetail.tsx`).
 
 ### Commands
 
@@ -1504,7 +1510,6 @@ Status bridging rules:
 The `Organization` model has an `organizationType` field that determines the UI experience and available features. Valid values: `shipper` (default), `broker`, `carrier`, `3pl`.
 
 Broker and 3PL organizations get:
-- Load Board in sidebar navigation
 - Margin columns on shipment list (on by default)
 - Brokerage settings tab in admin (MC number, bond, operating authority, margin alerts)
 
@@ -1519,26 +1524,6 @@ Broker and 3PL organizations get:
 - Deduplicates: will not create a second alert if an open margin_alert issue already exists for the shipment
 
 **Configuration:** Set `marginAlertEnabled = true` and `minMarginPercent` on the Organization model via Settings > Brokerage.
-
-### Load Board
-
-**Endpoint:** `GET /api/v1/loadboard`
-
-Returns shipments where `carrierId IS NULL` and `status IN ('booked', 'confirmed', 'ready', 'pending')`, ordered by pickup date. Includes customer, origin/destination, lane, financial summary, and active tenders.
-
-**Endpoint:** `GET /api/v1/loadboard/:shipmentId/matching-carriers`
-
-Finds carriers with:
-1. Lane rates (LaneCarrier records) for the shipment's lane
-2. Historical usage (previously assigned to shipments on the same lane)
-3. Tender acceptance stats (total bids, accepted bids, acceptance rate %)
-
-**Endpoint:** `POST /api/v1/loadboard/:shipmentId/assign`
-
-Quick-assigns a carrier with a cost rate. In a single transaction:
-1. Sets `carrierId` on the shipment
-2. Creates an approved cost charge (linehaul) for the agreed rate
-3. Updates `ShipmentFinancialSummary` with the new cost
 
 ### ShipmentReadModel Financial Columns
 
@@ -1559,9 +1544,9 @@ When `createShipment` is true and the org type is broker or 3PL, the `AcceptQuot
 2. Links Order to Shipment via `OrderShipment`
 3. Creates a `ShipmentFinancialSummary` with expected revenue from the quote
 4. Copies revenue charges to the shipment
-5. Emits `SHIPMENT_CREATED` event (shipment appears on load board for carrier assignment)
+5. Emits `SHIPMENT_CREATED` event (shipment is created unassigned, ready for carrier assignment)
 
-The frontend "Accept & Book" button (visible for broker orgs) triggers this flow and navigates to the load board.
+The frontend "Accept & Book" button (visible for broker orgs) triggers this flow and navigates to the new shipment's detail page.
 
 ### Customer Credit Check
 
@@ -1584,13 +1569,13 @@ Generates a carrier-facing PDF showing the agreed carrier rate (cost charges onl
 |------|-------------|----------------|
 | `admin` | Full system access | `*` |
 | `broker_admin` | Brokerage administrator | All ops + settings + users |
-| `broker_agent` | Sales rep / agent | Loadboard, quotes, margins - no settings/users |
-| `dispatcher` | Operational user | Shipments, orders, tendering, loadboard |
+| `broker_agent` | Sales rep / agent | Quotes, margins - no settings/users |
+| `dispatcher` | Operational user | Shipments, orders, tendering |
 | `finance` | Financial operations | Quotes, invoices, charges, reports |
 | `warehouse` | Warehouse operator | Shipment read/write, devices |
 | `readonly` | Read-only access | All `:read` and `:view` permissions |
 
-**Broker-Specific Permissions:** `loadboard:read`, `loadboard:assign`, `margin:view`, `credit:check`, `rate_confirmation:generate`
+**Broker-Specific Permissions:** `margin:view`, `credit:check`, `rate_confirmation:generate`
 
 **Seeding:** `POST /api/v1/roles/seed` creates or updates system roles (idempotent). Custom roles can be created via the Roles CRUD API.
 
@@ -1638,7 +1623,6 @@ Requests accelerated payment on a carrier invoice with a discount. Sets `quickPa
 - `frontend/src/hooks/useCurrentUser.ts` - Frontend role/permission hook
 - `frontend/src/vnext-design/VNextRoles.tsx` - Roles management admin page
 - `backend/prisma/schema.prisma` - Organization brokerage fields, ShipmentReadModel financial columns
-- `backend/src/routes/loadboard.ts` - Load board API (list, matching carriers, quick assign)
 - `backend/src/routes/quotes.ts` - Quick quote + credit check endpoints
 - `backend/src/routes/organization.ts` - Organization settings (includes brokerage fields)
 - `backend/src/services/CreditCheckService.ts` - Customer credit validation
@@ -1648,7 +1632,6 @@ Requests accelerated payment on a carrier invoice with a discount. Sets `quickPa
 - `backend/src/events/handlers/MarginAlertHandler.ts` - Margin alert event handler
 - `backend/src/events/projections/ShipmentProjection.ts` - Financial column denormalization
 - `backend/src/events/eventTypes.ts` - margin.alert event type
-- `frontend/src/vnext-design/VNextLoadBoard.tsx` - Load board page
 - `frontend/src/vnext-design/VNextShipments.tsx` - Margin columns on shipment list
 - `frontend/src/vnext-design/VNextFinanceQuoteDetail.tsx` - Accept & Book button for brokers
 - `frontend/src/vnext-design/VNextShipmentDetail.tsx` - Rate Confirmation button

@@ -39,7 +39,8 @@ export async function laneRoutes(server: FastifyInstance) {
         stops: z.array(z.object({
           locationId: z.string().uuid(),
           order: z.number().int().positive(),
-          notes: z.string().optional()
+          notes: z.string().optional(),
+          purpose: z.enum(['pickup', 'dropoff', 'cross_dock', 'fuel', 'rest', 'hub', 'customs', 'other']).optional()
         })).optional().default([])
       })
       .parse((req as any).body);
@@ -168,7 +169,8 @@ export async function laneRoutes(server: FastifyInstance) {
       stops: z.array(z.object({
         locationId: z.string().uuid(),
         order: z.number().int().positive(),
-        notes: z.string().optional()
+        notes: z.string().optional(),
+        purpose: z.enum(['pickup', 'dropoff', 'cross_dock', 'fuel', 'rest', 'hub', 'customs', 'other']).optional()
       })).optional()
     }).parse((req as any).body);
 
@@ -290,7 +292,8 @@ export async function laneRoutes(server: FastifyInstance) {
               laneId: id,
               locationId: stop.locationId,
               order: stop.order,
-              notes: stop.notes
+              notes: stop.notes,
+              purpose: stop.purpose
             }))
           });
         }

@@ -78,7 +78,6 @@ import VNextAutomationRules from './vnext-design/VNextAutomationRules';
 import VNextAutomationRuleDetail from './vnext-design/VNextAutomationRuleDetail';
 import VNextSkillsConfig from './vnext-design/VNextSkillsConfig';
 import VNextSkillChains from './vnext-design/VNextSkillChains';
-import VNextLoadBoard from './vnext-design/VNextLoadBoard';
 import VNextRoles from './vnext-design/VNextRoles';
 import VNextUsers from './vnext-design/VNextUsers';
 import VNextPortalUsers from './vnext-design/VNextPortalUsers';
@@ -330,7 +329,6 @@ root.render(
           <Route path="issues" element={<VNextIssueKanban />} />
           <Route path="issues/:id" element={<VNextIssueDetail />} />
           <Route path="carrier-bidding" element={<VNextCarrierBidding />} />
-          <Route path="loadboard" element={<VNextLoadBoard />} />
 
           {/* Agent Decisions */}
           <Route path="agent-decisions" element={<VNextAgentDecisions />} />

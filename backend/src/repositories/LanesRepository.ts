@@ -41,6 +41,7 @@ export interface CreateLaneStopDTO {
   locationId: string;
   order: number;
   notes?: string;
+  purpose?: string;
 }
 
 export interface UpdateLaneDTO {

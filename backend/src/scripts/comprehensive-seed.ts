@@ -1451,7 +1451,6 @@ async function seedShipmentTypes() {
     { key: 'refrigerated', name: 'Refrigerated', icon: 'ac_unit', color: '#3b82f6', description: 'Cold chain 2-8°C.', defaults: { temperatureControlled: true, tempMode: 'refrigerated' } },
     { key: 'frozen', name: 'Frozen', icon: 'severe_cold', color: '#06b6d4', description: 'Cold chain frozen.', defaults: { temperatureControlled: true, tempMode: 'frozen' } },
     { key: 'hazmat', name: 'Hazmat', icon: 'warning', color: '#ef4444', description: 'Hazardous materials.', defaults: { hazmat: true } },
-    { key: 'ltl', name: 'LTL', icon: 'inventory_2', color: '#8b5cf6', description: 'Less-than-truckload.', defaults: { mode: 'LTL' } },
   ];
   const byKey: Record<string, any> = {};
   for (const d of defs) {
@@ -1545,11 +1544,11 @@ async function seedShipments(
       disposition = delivered ? 'released' : 'monitoring';
     }
 
-    // Shipment type variety from the order's characteristics.
+    // Shipment type variety from the order's characteristics. Mode (FTL/LTL)
+    // is tracked separately via serviceLevel below — it's not a restriction.
     const typeKey = order.requiresHazmat ? 'hazmat'
       : order.temperatureControl === 'frozen' ? 'frozen'
       : order.temperatureControl === 'refrigerated' ? 'refrigerated'
-      : order.serviceLevel === 'LTL' ? 'ltl'
       : 'standard';
     const shipmentTypeId = shipmentTypes[typeKey]?.id ?? null;
 
@@ -1560,6 +1559,7 @@ async function seedShipments(
         status,
         hasException,
         shipmentTypeId,
+        serviceLevel: order.serviceLevel === 'LTL' ? 'LTL' : 'FTL',
         pickupDate: order.requestedPickupDate,
         deliveryDate: order.requestedDeliveryDate,
         customerId: order.customerId,

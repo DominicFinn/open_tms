@@ -134,16 +134,18 @@ export const commentRoutes: FastifyPluginAsync = async (server) => {
           entityId: { type: 'string', description: 'Entity ID' },
           body: { type: 'string', description: 'Comment body (markdown)' },
           visibleToCustomer: { type: 'boolean', default: false, description: 'If true, the comment is exposed to the customer portal for the related entity owner.' },
+          tag: { type: 'string', description: 'Optional free-form tag for categorizing the note (e.g. "issue", "requirement")' },
         },
       },
       response: { 201: dataObject },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const { entityType, entityId, body, visibleToCustomer } = z.object({
+    const { entityType, entityId, body, visibleToCustomer, tag } = z.object({
       entityType: z.string().min(1),
       entityId: z.string().min(1),
       body: z.string().min(1),
       visibleToCustomer: z.boolean().optional(),
+      tag: z.string().min(1).optional(),
     }).parse(req.body);
 
     const { authorId, authorName, orgId } = await resolveAuthor(prisma, req);
@@ -160,6 +162,7 @@ export const commentRoutes: FastifyPluginAsync = async (server) => {
         authorName,
         authorType: 'user',
         visibleToCustomer,
+        tag,
       },
       metadata: { correlationId: crypto.randomUUID(), source: 'api' },
     });

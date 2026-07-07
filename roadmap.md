@@ -139,17 +139,12 @@ The system models the world as "shipper has carriers" but never accounts for the
   - Target margin per customer and per lane-carrier with variance tracking (actual vs target %)
 - **Broker Quoting Workflow** ✅
   - Quick quote endpoint: auto-populate from lane-carrier rates via RatingService + configurable markup percentage
-  - Quote-to-book conversion: "Accept & Book" creates shipment with pre-set sell rate, flows directly to load board
+  - Quote-to-book conversion: "Accept & Book" creates an unassigned shipment with pre-set sell rate
   - Rate confirmation PDF generation (carrier-facing, hides customer sell rate and broker margin)
   - Customer credit check service: validates outstanding balance against creditLimitCents before quoting
   - Customer rate request intake - moved to Track 3 (Customer Portal)
-- **Broker Load Board** ✅
-  - Internal load board: unmatched shipments needing carrier assignment
-  - Carrier capacity search: find carriers with lane rates and historical usage on matching lanes
-  - Quick carrier assignment with cost rate capture and real-time margin preview
-  - Integration with carrier tendering (existing broadcast/waterfall) for larger operations
-  - Tender acceptance rate stats per carrier
-  - Load matching suggestions - moved to Track 4 (Route Optimization)
+- **Broker Load Board** ❌ Removed
+  - The standalone Load Board page (list of unassigned shipments + quick carrier assignment) was removed in favor of assigning carriers directly from shipment creation/detail. Carrier tendering (broadcast/waterfall) remains available for larger operations.
 - **Broker-Specific Financials** ✅
   - Carrier quick pay / factoring: request accelerated payment with configurable discount % and payment days
   - Customer invoice with broker markup (not showing carrier cost) - already worked via existing Invoice system

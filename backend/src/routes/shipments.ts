@@ -182,6 +182,7 @@ export async function shipmentRoutes(server: FastifyInstance) {
       deliveryWindowEnd: flexibleDate.optional(),
       shipmentTypeId: z.string().uuid().optional(),
       proNumber: z.string().optional(),
+      serviceLevel: z.enum(['FTL', 'LTL']).optional(),
       items: z.array(z.object({
         sku: z.string(),
         description: z.string().optional(),
@@ -192,7 +193,19 @@ export async function shipmentRoutes(server: FastifyInstance) {
       devices: z.array(z.object({
         name: z.string().min(1),
         externalId: z.string().min(1),
-      })).optional()
+      })).optional(),
+      tempControlled: z.boolean().optional(),
+      tempMinC: z.number().nullable().optional(),
+      tempMaxC: z.number().nullable().optional(),
+      humidityControlled: z.boolean().optional(),
+      humidityMinPct: z.number().min(0).max(100).nullable().optional(),
+      humidityMaxPct: z.number().min(0).max(100).nullable().optional(),
+      hazmat: z.boolean().optional(),
+      unNumber: z.string().nullable().optional(),
+      hazmatClass: z.string().nullable().optional(),
+      packingGroup: z.string().nullable().optional(),
+      properShippingName: z.string().nullable().optional(),
+      requiredEquipmentType: z.string().nullable().optional(),
     });
     // No route requirement at create — a draft may be saved with a partial or
     // absent route (lane / origin / destination). Completeness is enforced when
@@ -366,6 +379,7 @@ export async function shipmentRoutes(server: FastifyInstance) {
       laneId: z.string().uuid().optional(),
       carrierId: z.string().uuid().nullable().optional(),
       proNumber: z.string().nullable().optional(),
+      serviceLevel: z.enum(['FTL', 'LTL']).nullable().optional(),
       originId: z.string().uuid().optional(),
       destinationId: z.string().uuid().optional(),
       items: z.array(z.object({
@@ -378,7 +392,19 @@ export async function shipmentRoutes(server: FastifyInstance) {
       devices: z.array(z.object({
         name: z.string().min(1),
         externalId: z.string().min(1),
-      })).optional()
+      })).optional(),
+      tempControlled: z.boolean().optional(),
+      tempMinC: z.number().nullable().optional(),
+      tempMaxC: z.number().nullable().optional(),
+      humidityControlled: z.boolean().optional(),
+      humidityMinPct: z.number().min(0).max(100).nullable().optional(),
+      humidityMaxPct: z.number().min(0).max(100).nullable().optional(),
+      hazmat: z.boolean().optional(),
+      unNumber: z.string().nullable().optional(),
+      hazmatClass: z.string().nullable().optional(),
+      packingGroup: z.string().nullable().optional(),
+      properShippingName: z.string().nullable().optional(),
+      requiredEquipmentType: z.string().nullable().optional(),
     }).parse((req as any).body);
     // No route requirement on edit — lane and origin/destination may coexist
     // (a lane resolves to origin/destination), and a draft may hold a partial
