@@ -87,6 +87,9 @@ function orderStatusVariant(status: string): StatusVariant {
   if (s === 'shipped' || s === 'intransit') return 'info';
   if (s === 'delivered') return 'success';
   if (s === 'cancelled' || s === 'canceled') return 'destructive';
+  // Orthogonal to the lifecycle above — set by archive/unarchive, same
+  // "Inactive" tone Carriers uses.
+  if (s === 'archived') return 'destructive';
   return 'muted';
 }
 
@@ -117,7 +120,10 @@ export default function VNextOrders() {
     (async () => {
       try {
         setLoading(true);
-        const res = await fetch(`${API_URL}/api/v1/orders`);
+        // Archived orders now stay in the read model as a filterable status
+        // rather than being removed — fetch them too so the "Archived" tab
+        // can select them, mirroring VNextCarriers.
+        const res = await fetch(`${API_URL}/api/v1/orders?includeArchived=true`);
         if (!res.ok) throw new Error(`Failed to load orders (${res.status})`);
         const json = await res.json();
         if (!cancelled) {
@@ -152,6 +158,7 @@ export default function VNextOrders() {
         draft: 'draft',
         delivered: 'delivered',
         cancelled: 'cancelled',
+        archived: 'archived',
       };
       if (sNorm !== map[statusFilter]) return false;
     }
@@ -283,6 +290,7 @@ export default function VNextOrders() {
     pending: orders.filter(o => o.status?.toLowerCase().replace(/[_ ]/g, '') === 'pendingapproval').length,
     shipped: orders.filter(o => o.status?.toLowerCase() === 'shipped').length,
     delivered: orders.filter(o => o.status?.toLowerCase() === 'delivered').length,
+    archived: orders.filter(o => o.status?.toLowerCase() === 'archived').length,
   };
 
   const stats = [
@@ -297,6 +305,7 @@ export default function VNextOrders() {
     { key: 'ready', label: 'Ready to ship', count: counts.ready },
     { key: 'pending', label: 'Pending', count: counts.pending },
     { key: 'shipped', label: 'Shipped', count: counts.shipped },
+    { key: 'archived', label: 'Archived', count: counts.archived },
   ];
 
   return (

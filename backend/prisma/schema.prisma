@@ -188,6 +188,9 @@ model Shipment {
   items               Json?
   archived            Boolean       @default(false)
   archivedAt          DateTime?
+  // Captured on archive (alongside status -> 'archived') so unarchive can
+  // restore the prior lifecycle status. Mirrors Order.statusBeforeArchive.
+  statusBeforeArchive String?
   // Soft delete (admin-only, distinct from archive): the row is retained for
   // audit but hidden from every view, including the future archived screen.
   deletedAt           DateTime?

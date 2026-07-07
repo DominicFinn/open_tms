@@ -551,37 +551,47 @@ The tendering system supports **broadcast** (all carriers simultaneously) and **
 - `frontend/src/pages/carrier-portal/` — All carrier portal pages
 - `frontend/src/carrier-portal-layout.tsx` — Carrier portal layout
 
-## Order Archival Policy
+## Archival Policy (Orders, Shipments, Carriers)
 
-Orders are archived (not deleted) when they reach end-of-life. Archiving sets `archived = true`, `status = 'archived'`, and emits `order.archived`. The `OrderProjection` removes archived orders from `OrderReadModel` so they disappear from list views in both the admin app and the customer portal. The underlying `Order` row is retained for audit/history.
+Orders, Shipments, and Carriers share one archiving pattern, modeled on how Carriers originally did it: archiving is recoverable and **never removes the row from its read model**. Archived items stay visible on their normal list page (Orders, Shipments, Carriers) with `'archived'` as just another filterable status value alongside the real lifecycle statuses (`pending/validated/converted/cancelled` for orders, `draft/ready/in_progress/complete` for shipments) — there's no more "archive = disappear from the list." The Archives admin page (`/settings/archives`, `VNextArchives.tsx`) is a separate admin-only surface with three tabs — Orders, Shipments, Carriers — for bulk oversight and restore.
 
-**Manual archive — customer portal:** Customers can archive any of their own orders from the order detail page (`DELETE /api/v1/customer-portal/orders/:id`). No status restriction — customers may have created an order by accident or no longer need it. Already-archived orders return 400.
+**Mechanics (Order and Shipment):** archiving sets `archived = true`, `archivedAt`, `status = 'archived'`, and captures the prior value in `statusBeforeArchive` (so unarchive restores it exactly instead of guessing a default). `OrderProjection.onOrderArchived` / `ShipmentProjection.onShipmentArchived` **update** the read model's `status` field in place — they no longer delete the row. Unarchiving restores `status` from `statusBeforeArchive` and clears it.
 
-**Manual archive — admin app:** Same behavior via `DELETE /api/v1/orders/:id`, gated on `orders:write` (any operational user). Archiving captures the order's pre-archive `status` in `statusBeforeArchive` (since archiving overwrites `status` to `'archived'`, unlike Shipment's boolean-only `archived` flag) so unarchive can restore it instead of guessing.
+**Mechanics (Carrier):** unchanged — archiving sets `archived = true`/`archivedAt`, `CarrierProjection` updates `CarrierReadModel.status` to `'active'`/`'archived'`, and portal users are deactivated/reactivated alongside it. This was the reference implementation the other two entities were brought in line with.
 
-**Manual delete + unarchive — admin app:** Mirrors the Shipment archive/delete/unarchive trio. `POST /api/v1/orders/:id/soft-delete` (admin-only, `orders:delete`) sets `deletedAt`/`deletedBy` and hides the order from every view (list, detail, customer portal) via `SoftDeleteOrderCommand` — distinct from archive, and not recoverable from the UI. `POST /api/v1/orders/:id/unarchive` (admin-only, `orders:delete`) clears `archived`/`archivedAt` via `UnarchiveOrderCommand`, restores `status` from `statusBeforeArchive` (falls back to `pending` if none was captured), and re-inserts the order into `OrderReadModel`. `GET /api/v1/orders/:id` uses `OrdersRepository.findByIdIncludingArchived` (not `findById`) so an archived order still loads on its detail page to show the archived banner + Unarchive action; soft-deleted orders still 404. The `VNextOrderDetail` page (Archive/Delete buttons, archived banner, delete confirmation dialog) mirrors `VNextShipmentDetail`.
+**List pages default to including archived rows:** `GET /api/v1/{orders,shipments,carriers}` all support `?includeArchived=true`. The VNext list pages (`VNextOrders.tsx`, `VNextShipments.tsx`, `VNextCarriers.tsx`) always pass it and do client-side stat-card/tab filtering — the same pattern Carriers used originally. Other callers (customer portal, fleet map) do **not** pass it, so their queries explicitly exclude `status: 'archived'` by default — see `backend/src/routes/customerPortal.ts` and `backend/src/routes/map.ts`. Any new consumer of `OrderReadModel`/`ShipmentReadModel` should make the same call: opt in to archived rows only if that surface is meant to show them.
 
-**Auto-archive:** Delivered or cancelled orders are auto-archived after a retention window (default 30 days). `OrderAutoArchiveService` is invoked by the `order-auto-archive` pg-boss cron worker daily at 02:00 UTC. Eligibility:
+**Manual archive — customer portal:** Customers can archive any of their own orders from the order detail page (`DELETE /api/v1/customer-portal/orders/:id`). No status restriction — customers may have created an order by accident or no longer need it. Already-archived orders return 400. The customer portal has no "Archived" view of its own, so its order/shipment list and dashboard activity feed explicitly filter out `status: 'archived'`.
+
+**Manual archive — admin app:** `DELETE /api/v1/orders/:id` / `DELETE /api/v1/shipments/:id`, gated on `{orders,shipments}:write`. `POST /api/v1/carriers/:id/archive` gated on `carriers:write`.
+
+**Manual delete + unarchive — admin app:** `POST /api/v1/{orders,shipments}/:id/soft-delete` (admin-only, `{orders,shipments}:delete`) sets `deletedAt`/`deletedBy` and hides the row from every view (list, detail, customer portal, Archives page) — distinct from archive, and not recoverable from the UI. `POST /api/v1/{orders,shipments,carriers}/:id/unarchive` restores it. `GET /api/v1/orders/:id` / `GET /api/v1/shipments/:id` load archived rows (not soft-deleted ones) so the detail page can show the archived banner + Unarchive action.
+
+**Dedicated `/archived` endpoints:** `GET /api/v1/{orders,shipments,carriers}/archived` (admin-only, `*:delete` or `carriers:write`) back the Archives page's three tabs. They read the live table directly (not the read model) so they can show `statusBeforeArchive` in a dedicated column for Orders/Shipments.
+
+**Auto-archive (Orders only):** Delivered or cancelled orders are auto-archived after a retention window (default 30 days). `OrderAutoArchiveService` is invoked by the `order-auto-archive` pg-boss cron worker daily at 02:00 UTC. Eligibility:
 - `deliveryStatus = 'delivered' AND deliveredAt < now - retentionDays`, OR
 - `status = 'cancelled' AND updatedAt < now - retentionDays`, OR
 - `deliveryStatus = 'cancelled' AND updatedAt < now - retentionDays`
 
 Configurable via `ORDER_AUTO_ARCHIVE_DAYS` (default 30) and `ORDER_AUTO_ARCHIVE_CRON` (default `0 2 * * *`).
 
-**Why a fixed 30-day window?** A delivered order is operationally closed; the read model keeps it visible long enough for the customer to download paperwork, raise an exception, or reconcile billing, then drops it from the active list. Archived orders are still accessible by ID and through reporting.
+**Why keep archived rows in the list instead of a fixed retention window everywhere?** Only Orders auto-archive on a timer; Shipments and Carriers are archived purely by manual action. Keeping the row visible (as a status, not a removal) means an operator browsing the Shipments or Orders list never loses track of something that got archived by mistake or automation — they can find it, see it's archived, and unarchive it right there, instead of having to know to check a separate admin page.
 
 ### Key Files
-- `backend/src/commands/orders/ArchiveOrderCommand.ts` — `ARCHIVE_ORDER` command handler
-- `backend/src/commands/orders/SoftDeleteOrderCommand.ts` — `SOFT_DELETE_ORDER` command handler (admin-only, idempotent)
-- `backend/src/commands/orders/UnarchiveOrderCommand.ts` — `UNARCHIVE_ORDER` command handler (admin-only, restores prior status, idempotent)
-- `backend/src/services/OrderAutoArchiveService.ts` — Finds eligible orders and dispatches archive commands
-- `backend/src/workers/orderAutoArchiveWorker.ts` — pg-boss cron registration
-- `backend/src/events/projections/OrderProjection.ts` — `onOrderArchived`/`onOrderDeleted` remove from read model; `order.unarchived` reuses `onOrderCreated` to re-insert
-- `backend/src/repositories/OrdersRepository.ts` — `findByIdIncludingArchived` (detail-page + unarchive/soft-delete existence checks bypass the `archived: false` filter that other mutation routes rely on)
-- `backend/src/routes/customerPortal.ts` — Customer-facing archive endpoint
-- `backend/src/routes/orders.ts` — Admin-facing archive/soft-delete/unarchive endpoints
+- `backend/src/commands/orders/ArchiveOrderCommand.ts` / `UnarchiveOrderCommand.ts` — `ARCHIVE_ORDER` / `UNARCHIVE_ORDER`, capture + restore `statusBeforeArchive`
+- `backend/src/commands/shipments/ArchiveShipmentCommand.ts` / `UnarchiveShipmentCommand.ts` — same pattern, mirrors Order
+- `backend/src/commands/carriers/ArchiveCarrierCommand.ts` / `UnarchiveCarrierCommand.ts` — also deactivates/reactivates `CarrierUser` portal users
+- `backend/src/commands/orders/SoftDeleteOrderCommand.ts` / `backend/src/commands/shipments/SoftDeleteShipmentCommand.ts` — admin-only, idempotent, distinct from archive
+- `backend/src/services/OrderAutoArchiveService.ts` — Finds eligible orders and dispatches archive commands (Orders only)
+- `backend/src/events/projections/OrderProjection.ts` / `ShipmentProjection.ts` — `onOrderArchived`/`onShipmentArchived` update `status` in the read model in place (no delete); `CarrierProjection.ts` is the original reference implementation of this pattern
+- `backend/src/repositories/OrdersRepository.ts` / `CarriersRepository.ts` — `all(orgId, { includeArchived })` and `findArchived(orgId)`; the Shipments list route queries `ShipmentReadModel` inline (see `routes/shipments.ts`) rather than through a repository, with the same `includeArchived` param
+- `backend/src/routes/customerPortal.ts` — customer-facing archive endpoints; explicitly excludes `status: 'archived'` from its own list/dashboard queries
+- `backend/src/routes/map.ts` — fleet map excludes `status: 'archived'` by default so an archived shipment's last known GPS position doesn't linger as a pin
+- `backend/src/routes/{orders,shipments,carriers}.ts` — admin-facing archive/soft-delete/unarchive + `/archived` endpoints
+- `frontend/src/vnext-design/VNextArchives.tsx` — Archives admin page, three tabs (Orders, Shipments, Carriers)
+- `frontend/src/vnext-design/VNextOrderDetail.tsx` / `VNextShipmentDetail.tsx` — Archive/Delete buttons, archived banner, Unarchive, delete confirmation dialog
 - `frontend/src/pages/customer-portal/CustomerOrderDetail.tsx` — Archive button
-- `frontend/src/vnext-design/VNextOrderDetail.tsx` — Archive/Delete buttons, archived banner, Unarchive, delete confirmation dialog
 
 ## Database
 

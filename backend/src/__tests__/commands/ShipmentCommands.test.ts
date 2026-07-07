@@ -195,8 +195,9 @@ describe('Shipment Command Handlers', () => {
   });
 
   describe('ArchiveShipmentCommandHandler', () => {
-    it('archives shipment and emits SHIPMENT_ARCHIVED', async () => {
-      mockTx.shipment.update.mockResolvedValueOnce({ ...mockShipment, archived: true });
+    it('archives shipment, captures the prior status, and emits SHIPMENT_ARCHIVED', async () => {
+      mockTx.shipment.findFirstOrThrow.mockResolvedValueOnce({ ...mockShipment, status: 'in_progress' });
+      mockTx.shipment.update.mockResolvedValueOnce({ ...mockShipment, archived: true, status: 'archived' });
       const { bus } = mockEventBus();
       const handler = new ArchiveShipmentCommandHandler(mockPrisma, bus);
 
@@ -205,6 +206,10 @@ describe('Shipment Command Handlers', () => {
       );
 
       expect(result.success).toBe(true);
+      expect(mockTx.shipment.update).toHaveBeenCalledWith(expect.objectContaining({
+        where: { id: 'ship-1' },
+        data: expect.objectContaining({ status: 'archived', statusBeforeArchive: 'in_progress' }),
+      }));
       expect(result.events).toHaveLength(1);
       expect(result.events[0].type).toBe(EVENT_TYPES.SHIPMENT_ARCHIVED);
     });

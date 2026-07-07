@@ -24,6 +24,7 @@ interface ArchivedOrder {
   orderNumber?: string;
   poNumber?: string;
   status: string;
+  statusBeforeArchive?: string;
   archivedAt?: string;
   customer?: { name: string };
   origin?: { city: string; state: string };
@@ -35,11 +36,21 @@ interface ArchivedShipment {
   reference?: string;
   proNumber?: string;
   status: string;
+  statusBeforeArchive?: string;
   archivedAt?: string;
   customer?: { name: string };
   origin?: { city: string; state: string };
   destination?: { city: string; state: string };
   carrier?: { name: string };
+}
+
+interface ArchivedCarrier {
+  id: string;
+  name: string;
+  mcNumber?: string;
+  dotNumber?: string;
+  contactEmail?: string;
+  archivedAt?: string;
 }
 
 function formatDateTime(d?: string): string {
@@ -51,13 +62,15 @@ export default function VNextArchives() {
   const navigate = useNavigate();
   const { hasPermission } = useCurrentUser();
 
-  const [tab, setTab] = useState<'orders' | 'shipments'>('orders');
+  const [tab, setTab] = useState<'orders' | 'shipments' | 'carriers'>('orders');
   const [search, setSearch] = useState('');
 
   const [orders, setOrders] = useState<ArchivedOrder[]>([]);
   const [ordersLoaded, setOrdersLoaded] = useState(false);
   const [shipments, setShipments] = useState<ArchivedShipment[]>([]);
   const [shipmentsLoaded, setShipmentsLoaded] = useState(false);
+  const [carriers, setCarriers] = useState<ArchivedCarrier[]>([]);
+  const [carriersLoaded, setCarriersLoaded] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -65,6 +78,7 @@ export default function VNextArchives() {
 
   const canUnarchiveOrders = hasPermission('orders:delete');
   const canUnarchiveShipments = hasPermission('shipments:delete');
+  const canUnarchiveCarriers = hasPermission('carriers:write');
 
   const loadOrders = useCallback(async () => {
     setLoading(true);
@@ -98,10 +112,27 @@ export default function VNextArchives() {
     }
   }, []);
 
+  const loadCarriers = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch(`${API_URL}/api/v1/carriers/archived`);
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json.error) throw new Error(json.error || `Failed to load archived carriers (${res.status})`);
+      setCarriers(json.data || []);
+      setCarriersLoaded(true);
+    } catch (err: any) {
+      setError(err.message || 'Failed to load archived carriers');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (tab === 'orders' && !ordersLoaded) loadOrders();
     if (tab === 'shipments' && !shipmentsLoaded) loadShipments();
-  }, [tab, ordersLoaded, shipmentsLoaded, loadOrders, loadShipments]);
+    if (tab === 'carriers' && !carriersLoaded) loadCarriers();
+  }, [tab, ordersLoaded, shipmentsLoaded, carriersLoaded, loadOrders, loadShipments, loadCarriers]);
 
   const handleUnarchiveOrder = useCallback(async (id: string) => {
     setRestoringId(id);
@@ -139,6 +170,24 @@ export default function VNextArchives() {
     }
   }, []);
 
+  const handleUnarchiveCarrier = useCallback(async (id: string) => {
+    setRestoringId(id);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/carriers/${id}/unarchive`, { method: 'POST' });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json.error) {
+        toast.error(json.error || 'Failed to unarchive carrier', { duration: 8000 });
+        return;
+      }
+      toast.success('Carrier restored');
+      setCarriers(prev => prev.filter(c => c.id !== id));
+    } catch {
+      toast.error('Failed to unarchive carrier');
+    } finally {
+      setRestoringId(null);
+    }
+  }, []);
+
   const filteredOrders = orders.filter(o => {
     if (!search) return true;
     const q = search.toLowerCase();
@@ -151,17 +200,24 @@ export default function VNextArchives() {
     return (s.reference || s.id).toLowerCase().includes(q) || (s.customer?.name || '').toLowerCase().includes(q);
   });
 
+  const filteredCarriers = carriers.filter(c => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return c.name.toLowerCase().includes(q) || (c.mcNumber || '').toLowerCase().includes(q);
+  });
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Archives</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Orders and shipments that have been archived</p>
+        <p className="mt-1 text-sm text-muted-foreground">Orders, shipments, and carriers that have been archived</p>
       </div>
 
-      <Tabs value={tab} onValueChange={v => setTab(v as 'orders' | 'shipments')}>
+      <Tabs value={tab} onValueChange={v => setTab(v as 'orders' | 'shipments' | 'carriers')}>
         <TabsList>
           <TabsTrigger value="orders">Orders {ordersLoaded && `(${orders.length})`}</TabsTrigger>
           <TabsTrigger value="shipments">Shipments {shipmentsLoaded && `(${shipments.length})`}</TabsTrigger>
+          <TabsTrigger value="carriers">Carriers {carriersLoaded && `(${carriers.length})`}</TabsTrigger>
         </TabsList>
 
         <Card className="mt-4">
@@ -169,7 +225,11 @@ export default function VNextArchives() {
             <div className="relative min-w-[280px] flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder={tab === 'orders' ? 'Search archived orders...' : 'Search archived shipments...'}
+                placeholder={
+                  tab === 'orders' ? 'Search archived orders...'
+                    : tab === 'shipments' ? 'Search archived shipments...'
+                    : 'Search archived carriers...'
+                }
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 className="pl-9"
@@ -223,7 +283,7 @@ export default function VNextArchives() {
                               to {o.destination ? `${o.destination.city}, ${o.destination.state}` : '-'}
                             </div>
                           </TableCell>
-                          <TableCell className="text-sm">{o.status || '-'}</TableCell>
+                          <TableCell className="text-sm">{o.statusBeforeArchive || '-'}</TableCell>
                           <TableCell className="whitespace-nowrap text-sm">{formatDateTime(o.archivedAt)}</TableCell>
                           <TableCell onClick={e => e.stopPropagation()}>
                             <div className="flex items-center justify-end gap-1">
@@ -268,6 +328,7 @@ export default function VNextArchives() {
                         <TableHead>Customer</TableHead>
                         <TableHead>Route</TableHead>
                         <TableHead>Carrier</TableHead>
+                        <TableHead>Status before archive</TableHead>
                         <TableHead>Archived on</TableHead>
                         <TableHead className="w-[140px]"></TableHead>
                       </TableRow>
@@ -287,6 +348,7 @@ export default function VNextArchives() {
                             </div>
                           </TableCell>
                           <TableCell className="text-sm">{s.carrier?.name || '-'}</TableCell>
+                          <TableCell className="text-sm">{s.statusBeforeArchive || '-'}</TableCell>
                           <TableCell className="whitespace-nowrap text-sm">{formatDateTime(s.archivedAt)}</TableCell>
                           <TableCell onClick={e => e.stopPropagation()}>
                             <div className="flex items-center justify-end gap-1">
@@ -301,6 +363,63 @@ export default function VNextArchives() {
                                   disabled={restoringId === s.id}
                                 >
                                   {restoringId === s.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <ArchiveRestore className="h-4 w-4" />
+                                  )}
+                                  Unarchive
+                                </Button>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </TabsContent>
+
+              <TabsContent value="carriers" className="m-0">
+                {filteredCarriers.length === 0 ? (
+                  <div className="flex flex-col items-center gap-2 py-16 text-muted-foreground">
+                    <Archive className="h-8 w-8" />
+                    <p className="text-sm">No archived carriers</p>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Carrier</TableHead>
+                        <TableHead>MC / DOT</TableHead>
+                        <TableHead>Contact email</TableHead>
+                        <TableHead>Archived on</TableHead>
+                        <TableHead className="w-[140px]"></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredCarriers.map(c => (
+                        <TableRow key={c.id} onClick={() => navigate(`/carriers/${c.id}/edit`)} className="cursor-pointer">
+                          <TableCell>
+                            <div className="text-sm font-semibold">{c.name}</div>
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {c.mcNumber || '-'}{c.dotNumber ? ` / ${c.dotNumber}` : ''}
+                          </TableCell>
+                          <TableCell className="text-sm">{c.contactEmail || '-'}</TableCell>
+                          <TableCell className="whitespace-nowrap text-sm">{formatDateTime(c.archivedAt)}</TableCell>
+                          <TableCell onClick={e => e.stopPropagation()}>
+                            <div className="flex items-center justify-end gap-1">
+                              <Button variant="ghost" size="icon" onClick={() => navigate(`/carriers/${c.id}/edit`)}>
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                              {canUnarchiveCarriers && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleUnarchiveCarrier(c.id)}
+                                  disabled={restoringId === c.id}
+                                >
+                                  {restoringId === c.id ? (
                                     <Loader2 className="h-4 w-4 animate-spin" />
                                   ) : (
                                     <ArchiveRestore className="h-4 w-4" />

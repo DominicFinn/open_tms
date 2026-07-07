@@ -51,6 +51,8 @@ export class OrderProjection implements IEventHandler {
       case EVENT_TYPES.ORDER_DELETED:
         return this.onOrderDeleted(event);
       case EVENT_TYPES.ORDER_UNARCHIVED:
+        // Restore re-projects the live order into the read model (same path
+        // as create), picking up the status restored by UnarchiveOrderCommand.
         return this.onOrderCreated(event);
       case EVENT_TYPES.TRACKABLE_UNIT_CREATED:
       case EVENT_TYPES.TRACKABLE_UNIT_UPDATED:
@@ -261,11 +263,14 @@ export class OrderProjection implements IEventHandler {
   }
 
   private async onOrderArchived(event: DomainEvent): Promise<void> {
-    // Remove archived orders from the read model so they don't appear in list views
-    await this.prisma.orderReadModel.delete({
+    // Archived orders stay in the read model with status flipped to
+    // 'archived' so they remain visible in list views as a filterable status,
+    // mirroring CarrierProjection.onCarrierArchived.
+    await this.prisma.orderReadModel.update({
       where: { id: event.entityId },
+      data: { status: 'archived', updatedAt: new Date() },
     }).catch((err: Error) => {
-      console.error(`[OrderProjection] Failed to delete archived order ${event.entityId}: ${err.message}`);
+      console.error(`[OrderProjection] Failed to archive read model for ${event.entityId}: ${err.message}`);
     });
   }
 

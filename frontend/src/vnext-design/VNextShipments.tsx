@@ -58,7 +58,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
-import { keepMapSized } from '../lib/leafletMap';
+import { keepMapSized, worldBoundsMapOptions, noWrapTileOptions, capWorldZoomOut } from '../lib/leafletMap';
 
 interface Shipment {
   id: string;
@@ -72,7 +72,7 @@ interface Shipment {
   customer?: { name: string };
   origin?: { name: string; city: string; state: string; lat?: number; lng?: number };
   destination?: { name: string; city: string; state: string };
-  lane?: { name: string };
+  lane?: { id?: string; name: string };
   carrier?: { name: string };
   createdAt?: string;
   updatedAt?: string;
@@ -91,11 +91,14 @@ type SortOrder = 'asc' | 'desc';
 type StatusVariant = 'success' | 'info' | 'warning' | 'destructive' | 'muted';
 
 // Canonical lifecycle: draft -> ready -> in_progress -> complete.
+// 'archived' is orthogonal to the lifecycle (set by archive/unarchive, not
+// TransitionShipmentStatusCommand) — same "Inactive" tone Carriers uses.
 function statusVariant(status: string): StatusVariant {
   switch (status) {
     case 'ready': return 'warning';
     case 'in_progress': return 'info';
     case 'complete': return 'success';
+    case 'archived': return 'destructive';
     default: return 'muted'; // draft + anything unknown
   }
 }
@@ -162,7 +165,10 @@ const STAT_TONES = {
   in_progress: 'bg-info/15 text-info',
   complete: 'bg-success/15 text-success',
   issue: 'bg-destructive/10 text-destructive',
+  archived: 'bg-warning/15 text-warning',
 } as const;
+
+const ACTIVE_STATUSES = new Set(['ready', 'in_progress']);
 
 const MARKER_COLORS: Record<StatusVariant, string> = {
   info: '#3b82f6',
@@ -172,12 +178,23 @@ const MARKER_COLORS: Record<StatusVariant, string> = {
   muted: '#94a3b8',
 };
 
+const COLOR_ROUTE = '#a855f7';
+
+interface LaneGeo {
+  origin: [number, number] | null;
+  destination: [number, number] | null;
+  stops: [number, number][];
+  route: [number, number][] | null;
+}
+
 export default function VNextShipments() {
   const navigate = useNavigate();
   const { hasPermission } = useCurrentUser();
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<L.Map | null>(null);
   const markersRef = useRef<L.LayerGroup | null>(null);
+  const laneLinesRef = useRef<L.LayerGroup | null>(null);
+  const laneFetchedIds = useRef<Set<string>>(new Set());
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
@@ -188,6 +205,11 @@ export default function VNextShipments() {
   const [sortBy, setSortBy] = useState<SortField>('createdAt');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [viewMode, setViewMode] = useState<'table' | 'map'>('table');
+  const [mapActiveOnly, setMapActiveOnly] = useState(false);
+  const [mapLaneFilter, setMapLaneFilter] = useState('all');
+  const [showLanes, setShowLanes] = useState(true);
+  const [showRoutes, setShowRoutes] = useState(true);
+  const [laneGeo, setLaneGeo] = useState<Record<string, LaneGeo>>({});
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [shipmentTypes, setShipmentTypes] = useState<Record<string, ShipmentTypeSummary>>({});
   const [loading, setLoading] = useState(true);
@@ -225,6 +247,10 @@ export default function VNextShipments() {
         if (updatedTo) params.set('updatedTo', `${updatedTo}T23:59:59Z`);
         params.set('sortBy', sortBy);
         params.set('sortOrder', sortOrder);
+        // Archived shipments now stay in the read model as a filterable
+        // status rather than being removed — fetch them too so the
+        // "Archived" stat card can select them, mirroring VNextCarriers.
+        params.set('includeArchived', 'true');
         const qs = params.toString();
         const res = await fetch(`${API_URL}/api/v1/shipments${qs ? `?${qs}` : ''}`);
         if (!res.ok) throw new Error(`Failed to load shipments (${res.status})`);
@@ -251,6 +277,7 @@ export default function VNextShipments() {
     in_progress: shipments.filter(s => s.status === 'in_progress').length,
     complete: shipments.filter(s => s.status === 'complete').length,
     issue: shipments.filter(s => !!s.hasException).length,
+    archived: shipments.filter(s => s.status === 'archived').length,
   }), [shipments]);
 
   // Callback ref (not a plain useRef + mount-effect): the map container is behind
@@ -263,10 +290,14 @@ export default function VNextShipments() {
   const setMapRef = useCallback((node: HTMLDivElement | null) => {
     if (node) {
       if (mapInstance.current) return;
-      const map = L.map(node, { zoomControl: true, attributionControl: false }).setView([39.5, -98.5], 4);
+      const map = L.map(node, { zoomControl: true, attributionControl: false, ...worldBoundsMapOptions }).setView([39.5, -98.5], 4);
       L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
         maxZoom: 19,
+        ...noWrapTileOptions,
       }).addTo(map);
+      capWorldZoomOut(map);
+      // Lane lines are added first so shipment markers paint on top of them.
+      laneLinesRef.current = L.layerGroup().addTo(map);
       markersRef.current = L.layerGroup().addTo(map);
       mapInstance.current = map;
       const stopSizing = keepMapSized(map, node);
@@ -275,33 +306,13 @@ export default function VNextShipments() {
         map.remove();
         mapInstance.current = null;
         markersRef.current = null;
+        laneLinesRef.current = null;
       };
     } else {
       mapCleanupRef.current?.();
       mapCleanupRef.current = null;
     }
   }, []);
-
-  useEffect(() => {
-    if (!markersRef.current) return;
-    markersRef.current.clearLayers();
-    shipments.forEach(s => {
-      const lat = s.origin?.lat;
-      const lng = s.origin?.lng;
-      if (lat == null || lng == null) return;
-      const color = MARKER_COLORS[statusVariant(s.status)];
-      const icon = L.divIcon({
-        className: '',
-        html: `<div style="width:14px;height:14px;border-radius:50%;background:${color};border:3px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.3);"></div>`,
-        iconSize: [14, 14],
-        iconAnchor: [7, 7],
-      });
-      const originLabel = s.origin ? `${s.origin.city}, ${s.origin.state}` : '';
-      const destLabel = s.destination ? `${s.destination.city}, ${s.destination.state}` : '';
-      L.marker([lat, lng], { icon }).addTo(markersRef.current!)
-        .bindPopup(`<strong>${s.reference || s.id}</strong><br/>${originLabel} -> ${destLabel}<br/><em>${s.status}</em>`);
-    });
-  }, [shipments]);
 
   useEffect(() => {
     if (viewMode === 'map' && mapInstance.current) {
@@ -335,6 +346,166 @@ export default function VNextShipments() {
     return true;
   });
 
+  const lanesInView = useMemo(() => {
+    const byId = new Map<string, string>();
+    shipments.forEach(s => {
+      if (s.lane?.id) byId.set(s.lane.id, s.lane.name);
+    });
+    return Array.from(byId, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+  }, [shipments]);
+
+  const mapShipments = useMemo(() => filtered.filter(s => {
+    if (mapActiveOnly && !ACTIVE_STATUSES.has(s.status)) return false;
+    if (mapLaneFilter !== 'all' && s.lane?.id !== mapLaneFilter) return false;
+    return true;
+  }), [filtered, mapActiveOnly, mapLaneFilter]);
+
+  useEffect(() => {
+    if (!markersRef.current) return;
+    markersRef.current.clearLayers();
+    mapShipments.forEach(s => {
+      const lat = s.origin?.lat;
+      const lng = s.origin?.lng;
+      if (lat == null || lng == null) return;
+      const color = MARKER_COLORS[statusVariant(s.status)];
+      const icon = L.divIcon({
+        className: '',
+        html: `<div style="width:14px;height:14px;border-radius:50%;background:${color};border:3px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.3);"></div>`,
+        iconSize: [14, 14],
+        iconAnchor: [7, 7],
+      });
+      const originLabel = s.origin ? `${s.origin.city}, ${s.origin.state}` : '';
+      const destLabel = s.destination ? `${s.destination.city}, ${s.destination.state}` : '';
+      L.marker([lat, lng], { icon }).addTo(markersRef.current!)
+        .bindPopup(`<strong>${s.reference || s.id}</strong><br/>${originLabel} -> ${destLabel}<br/><em>${s.status}</em>`);
+    });
+  }, [mapShipments]);
+
+  // Lanes with at least one currently-visible shipment - drives both which
+  // lane lines get drawn and which lanes' geometry we bother fetching.
+  const visibleLaneIds = useMemo(() => {
+    const ids = new Set<string>();
+    mapShipments.forEach(s => { if (s.lane?.id) ids.add(s.lane.id); });
+    return ids;
+  }, [mapShipments]);
+
+  // Fetch full lane geometry (origin/destination/stops coords + planned
+  // route waypoints) for lanes as they come into view. The list endpoint's
+  // read model doesn't carry coordinates, so each lane needs its own detail
+  // call - cached by id via laneFetchedIds so switching filters back and
+  // forth doesn't refetch.
+  useEffect(() => {
+    if (viewMode !== 'map') return;
+    const toFetch = Array.from(visibleLaneIds).filter(id => !laneFetchedIds.current.has(id));
+    if (toFetch.length === 0) return;
+    toFetch.forEach(id => laneFetchedIds.current.add(id));
+    let cancelled = false;
+    Promise.all(toFetch.map(async (id) => {
+      try {
+        const res = await fetch(`${API_URL}/api/v1/lanes/${id}`);
+        const json = await res.json();
+        const lane = json.data;
+        if (!lane) return null;
+        const geo: LaneGeo = {
+          origin: lane.origin?.lat != null && lane.origin?.lng != null ? [lane.origin.lat, lane.origin.lng] : null,
+          destination: lane.destination?.lat != null && lane.destination?.lng != null ? [lane.destination.lat, lane.destination.lng] : null,
+          stops: (lane.stops || [])
+            .map((st: any) => st.location)
+            .filter((loc: any) => loc?.lat != null && loc?.lng != null)
+            .map((loc: any): [number, number] => [loc.lat, loc.lng]),
+          route: Array.isArray(lane.route?.waypoints) && lane.route.waypoints.length >= 2
+            ? lane.route.waypoints.map((w: any): [number, number] => [w.lat, w.lng])
+            : null,
+        };
+        return { id, geo };
+      } catch {
+        return null;
+      }
+    })).then(results => {
+      if (cancelled) return;
+      setLaneGeo(prev => {
+        const next = { ...prev };
+        results.forEach(r => { if (r) next[r.id] = r.geo; });
+        return next;
+      });
+    });
+    return () => { cancelled = true; };
+  }, [viewMode, visibleLaneIds]);
+
+  // Draw lane straight-lines (dashed) and, where a route has been planned
+  // for the lane, a solid overlay of the actual planned path - same visual
+  // language as the per-shipment map on the shipment detail page.
+  useEffect(() => {
+    const layer = laneLinesRef.current;
+    if (!layer) return;
+    layer.clearLayers();
+    if (!showLanes) return;
+    visibleLaneIds.forEach(laneId => {
+      const geo = laneGeo[laneId];
+      if (!geo || !geo.origin || !geo.destination) return;
+      const laneName = lanesInView.find(l => l.id === laneId)?.name || 'Lane';
+      const straightCoords: [number, number][] = [geo.origin, ...geo.stops, geo.destination];
+
+      L.polyline(straightCoords, { color: MARKER_COLORS.muted, weight: 3, opacity: 0.6, dashArray: '8 4' }).addTo(layer);
+
+      const routeCoords = showRoutes ? geo.route : null;
+      if (routeCoords && routeCoords.length >= 2) {
+        L.polyline(routeCoords, { color: COLOR_ROUTE, weight: 4, opacity: 0.9 })
+          .addTo(layer)
+          .bindPopup(`<strong>${laneName}</strong><br/><em>Planned route</em>`);
+      } else {
+        L.polyline(straightCoords, { color: MARKER_COLORS.info, weight: 3 })
+          .addTo(layer)
+          .bindPopup(`<strong>${laneName}</strong>`);
+      }
+
+      const originIcon = L.divIcon({
+        className: '',
+        html: `<div style="width:12px;height:12px;border-radius:50%;background:${MARKER_COLORS.info};border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.3);"></div>`,
+        iconSize: [12, 12], iconAnchor: [6, 6],
+      });
+      L.marker(geo.origin, { icon: originIcon }).addTo(layer).bindPopup(`<strong>${laneName}</strong><br/>Origin`);
+
+      const destIcon = L.divIcon({
+        className: '',
+        html: `<div style="width:12px;height:12px;border-radius:50%;background:${MARKER_COLORS.success};border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.3);"></div>`,
+        iconSize: [12, 12], iconAnchor: [6, 6],
+      });
+      L.marker(geo.destination, { icon: destIcon }).addTo(layer).bindPopup(`<strong>${laneName}</strong><br/>Destination`);
+    });
+  }, [laneGeo, visibleLaneIds, showLanes, showRoutes, lanesInView]);
+
+  // Frame the map around whatever is actually plotted (shipment pins +
+  // lane geometry) so switching views doesn't leave you staring at an
+  // empty patch of ocean.
+  const allMapCoords = useMemo(() => {
+    const coords: [number, number][] = [];
+    mapShipments.forEach(s => {
+      if (s.origin?.lat != null && s.origin?.lng != null) coords.push([s.origin.lat, s.origin.lng]);
+    });
+    if (showLanes) {
+      visibleLaneIds.forEach(id => {
+        const geo = laneGeo[id];
+        if (!geo) return;
+        if (geo.origin) coords.push(geo.origin);
+        if (geo.destination) coords.push(geo.destination);
+        geo.stops.forEach(c => coords.push(c));
+        if (showRoutes && geo.route) geo.route.forEach(c => coords.push(c));
+      });
+    }
+    return coords;
+  }, [mapShipments, laneGeo, visibleLaneIds, showLanes, showRoutes]);
+
+  useEffect(() => {
+    const map = mapInstance.current;
+    if (!map || viewMode !== 'map' || allMapCoords.length === 0) return;
+    if (allMapCoords.length === 1) {
+      map.setView(allMapCoords[0], 10);
+    } else {
+      map.fitBounds(L.latLngBounds(allMapCoords).pad(0.15));
+    }
+  }, [allMapCoords, viewMode]);
+
   const hasDateFilters = !!(createdFrom || createdTo || updatedFrom || updatedTo);
   const clearDateFilters = () => {
     setCreatedFrom('');
@@ -349,6 +520,7 @@ export default function VNextShipments() {
     { key: 'in_progress', label: 'In progress', value: statusCounts.in_progress, icon: Truck },
     { key: 'complete', label: 'Complete', value: statusCounts.complete, icon: CheckCircle2 },
     { key: 'issue', label: 'Issues', value: statusCounts.issue, icon: AlertTriangle },
+    { key: 'archived', label: 'Archived', value: statusCounts.archived, icon: Archive },
   ] as const;
 
   const filteredIds = filtered.map(s => s.id);
@@ -544,11 +716,101 @@ export default function VNextShipments() {
         })}
       </div>
 
+      <Card className={cn(viewMode !== 'map' && 'w-fit')}>
+        <div className="flex flex-wrap items-center gap-3 p-4">
+          <div className="inline-flex rounded-md border border-input">
+            <Button
+              variant={viewMode === 'table' ? 'secondary' : 'ghost'}
+              size="sm"
+              className="rounded-r-none"
+              onClick={() => setViewMode('table')}
+            >
+              <ListIcon className="h-4 w-4" />
+              Table
+            </Button>
+            <Separator orientation="vertical" />
+            <Button
+              variant={viewMode === 'map' ? 'secondary' : 'ghost'}
+              size="sm"
+              className="rounded-l-none"
+              onClick={() => setViewMode('map')}
+            >
+              <MapIcon className="h-4 w-4" />
+              Map
+            </Button>
+          </div>
+
+          {viewMode === 'map' && (
+            <>
+              <Separator orientation="vertical" className="h-6" />
+
+              <div className="inline-flex rounded-md border border-input">
+                <Button
+                  variant={!mapActiveOnly ? 'secondary' : 'ghost'}
+                  size="sm"
+                  className="rounded-r-none"
+                  onClick={() => setMapActiveOnly(false)}
+                >
+                  All shipments
+                </Button>
+                <Separator orientation="vertical" />
+                <Button
+                  variant={mapActiveOnly ? 'secondary' : 'ghost'}
+                  size="sm"
+                  className="rounded-l-none"
+                  onClick={() => setMapActiveOnly(true)}
+                >
+                  Active only
+                </Button>
+              </div>
+
+              <Select value={mapLaneFilter} onValueChange={setMapLaneFilter}>
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue placeholder="All lanes" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All lanes</SelectItem>
+                  {lanesInView.map(l => (
+                    <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <label className="flex cursor-pointer select-none items-center gap-1.5 text-sm">
+                <input
+                  type="checkbox"
+                  checked={showLanes}
+                  onChange={e => setShowLanes(e.target.checked)}
+                  className="h-4 w-4 rounded border border-input bg-background accent-primary"
+                />
+                <span className="inline-block h-0.5 w-4 rounded-full" style={{ background: MARKER_COLORS.info }} />
+                Lanes
+              </label>
+              <label className={cn('flex select-none items-center gap-1.5 text-sm', showLanes ? 'cursor-pointer' : 'cursor-not-allowed opacity-50')}>
+                <input
+                  type="checkbox"
+                  checked={showRoutes}
+                  disabled={!showLanes}
+                  onChange={e => setShowRoutes(e.target.checked)}
+                  className="h-4 w-4 rounded border border-input bg-background accent-primary"
+                />
+                <span className="inline-block h-0.5 w-4 rounded-full" style={{ background: COLOR_ROUTE }} />
+                Planned routes
+              </label>
+
+              <span className="ml-auto text-sm text-muted-foreground">
+                {mapShipments.length} of {filtered.length} shown on map
+              </span>
+            </>
+          )}
+        </div>
+      </Card>
+
       <div className={cn('rounded-lg border border-border bg-card', viewMode !== 'map' && 'hidden')}>
         <div ref={setMapRef} className="h-[600px] w-full overflow-hidden rounded-lg" />
       </div>
 
-      <Card>
+      <Card className={cn(viewMode !== 'table' && 'hidden')}>
         <div className="flex flex-wrap items-center gap-3 p-4">
           <div className="relative min-w-[280px] max-w-sm flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -571,6 +833,7 @@ export default function VNextShipments() {
               <SelectItem value="in_progress">In progress ({statusCounts.in_progress})</SelectItem>
               <SelectItem value="complete">Complete ({statusCounts.complete})</SelectItem>
               <SelectItem value="issue">Issues ({statusCounts.issue})</SelectItem>
+              <SelectItem value="archived">Archived ({statusCounts.archived})</SelectItem>
             </SelectContent>
           </Select>
 
@@ -615,28 +878,6 @@ export default function VNextShipments() {
           >
             {sortOrder === 'asc' ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
           </Button>
-
-          <div className="ml-auto inline-flex rounded-md border border-input">
-            <Button
-              variant={viewMode === 'table' ? 'secondary' : 'ghost'}
-              size="sm"
-              className="rounded-r-none"
-              onClick={() => setViewMode('table')}
-            >
-              <ListIcon className="h-4 w-4" />
-              Table
-            </Button>
-            <Separator orientation="vertical" />
-            <Button
-              variant={viewMode === 'map' ? 'secondary' : 'ghost'}
-              size="sm"
-              className="rounded-l-none"
-              onClick={() => setViewMode('map')}
-            >
-              <MapIcon className="h-4 w-4" />
-              Map
-            </Button>
-          </div>
         </div>
 
         <Separator />

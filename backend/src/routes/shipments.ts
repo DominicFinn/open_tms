@@ -50,11 +50,21 @@ export async function shipmentRoutes(server: FastifyInstance) {
       updatedTo,
       sortBy,
       sortOrder,
+      includeArchived,
     } = (req.query as any) || {};
     // Multi-tenancy: every query is scoped to the requesting JWT's org.
     const orgId = req.orgId!;
     const where: any = { orgId };
-    if (status) where.status = status;
+    if (status) {
+      where.status = status;
+    } else if (includeArchived !== 'true') {
+      // Archived shipments stay in the read model (status: 'archived') rather
+      // than being deleted, so exclude them by default — same pattern as
+      // CarriersRepository.all's includeArchived flag. ?includeArchived=true
+      // (used by the Shipments list page) fetches both so the "Archived"
+      // stat-card filter can select just archived rows client-side.
+      where.status = { not: 'archived' };
+    }
     if (customerId) where.customerId = customerId;
     if (carrierId) where.carrierId = carrierId;
 
@@ -123,9 +133,9 @@ export async function shipmentRoutes(server: FastifyInstance) {
     return { data: enriched, error: null };
   });
 
-  // Archived shipments (admin-only). Backs the Archives page. Archiving a
-  // shipment deletes its ShipmentReadModel row (see ShipmentProjection), so
-  // this reads the live table directly rather than the read model.
+  // Archived shipments (admin-only). Backs the Archives page. Reads the live
+  // table directly (rather than the read model) so it can show
+  // `statusBeforeArchive`, which isn't denormalized onto ShipmentReadModel.
   server.get('/api/v1/shipments/archived', {
     preHandler: requirePermission('shipments:delete'),
     schema: {

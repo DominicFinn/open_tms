@@ -103,6 +103,9 @@ export const SHIPMENT_STATUS_LABELS: Record<string, string> = {
   ready: 'Ready',
   in_progress: 'In Progress',
   complete: 'Complete',
+  // Orthogonal to the lifecycle above — set by archive/unarchive, not by
+  // TransitionShipmentStatusCommand.
+  archived: 'Archived',
 };
 
 /**

@@ -166,9 +166,12 @@ export async function customerPortalRoutes(server: FastifyInstance) {
       }),
     ]);
 
-    // Recent shipments for activity feed
+    // Recent shipments for activity feed. Archived shipments stay in the read
+    // model (status: 'archived') rather than being deleted, so exclude them
+    // explicitly — an archive shouldn't surface a customer-facing shipment in
+    // their own activity feed.
     const recentShipments = await server.prisma.shipmentReadModel.findMany({
-      where: { customerId },
+      where: { customerId, status: { not: 'archived' } },
       orderBy: { updatedAt: 'desc' },
       take: 5,
       select: {
@@ -214,7 +217,11 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     const query = req.query as { search?: string; status?: string; limit?: number; offset?: number };
 
     const where: any = { customerId };
+    // Archived orders stay in OrderReadModel (status: 'archived') rather than
+    // being deleted, so exclude them by default here too — the customer
+    // portal has no "Archived" view of its own, unlike the admin app.
     if (query.status) where.status = query.status;
+    else where.status = { not: 'archived' };
     if (query.search) {
       where.OR = [
         { orderNumber: { contains: query.search, mode: 'insensitive' } },
@@ -966,6 +973,11 @@ export async function customerPortalRoutes(server: FastifyInstance) {
       where.status = { in: ['booked', 'in_transit', 'at_pickup', 'at_delivery'] };
     } else if (query.status) {
       where.status = query.status;
+    } else {
+      // Archived shipments stay in ShipmentReadModel (status: 'archived')
+      // rather than being deleted, so exclude them by default here too — the
+      // customer portal has no "Archived" view of its own.
+      where.status = { not: 'archived' };
     }
 
     const shipments = await server.prisma.shipmentReadModel.findMany({

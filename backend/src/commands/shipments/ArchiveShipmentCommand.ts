@@ -24,9 +24,16 @@ export class ArchiveShipmentCommandHandler extends BaseCommandHandler<ArchiveShi
   ): Promise<{ id: string }> {
     const { id } = command.payload;
 
+    const existing = await tx.shipment.findFirstOrThrow({ where: { id } });
+
     const shipment = await tx.shipment.update({
       where: { id },
-      data: { archived: true, archivedAt: new Date() },
+      data: {
+        archived: true,
+        archivedAt: new Date(),
+        status: 'archived',
+        statusBeforeArchive: existing.status,
+      },
     });
 
     emit(this.createEvent(command, {

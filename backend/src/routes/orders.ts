@@ -195,11 +195,12 @@ export async function orderRoutes(server: FastifyInstance) {
 
   // Get all orders (optionally filtered by customer) — scoped to JWT org.
   server.get('/api/v1/orders', async (req: FastifyRequest, _reply: FastifyReply) => {
-    const { customerId } = (req.query as { customerId?: string }) || {};
+    const { customerId, includeArchived } = (req.query as { customerId?: string; includeArchived?: string }) || {};
     const orgId = req.orgId!;
+    // ?includeArchived=true returns archived orders too (Orders list page).
     const orders = customerId
       ? await ordersRepo.findByCustomerId(customerId, { orgId })
-      : await ordersRepo.all(orgId);
+      : await ordersRepo.all(orgId, { includeArchived: includeArchived === 'true' });
     return { data: orders, error: null };
   });
 

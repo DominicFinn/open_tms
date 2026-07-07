@@ -53,6 +53,9 @@ export interface UpdateCarrierDTO {
 
 export interface ICarriersRepository {
   all(orgId?: string | null, opts?: { includeArchived?: boolean }): Promise<Carrier[]>;
+  // Mirrors OrdersRepository.findArchived / ShipmentsRepository — backs the
+  // Archives admin page's Carriers tab.
+  findArchived(orgId?: string | null): Promise<Carrier[]>;
   findById(id: string, orgId?: string | null): Promise<Carrier | null>;
   create(data: CreateCarrierDTO): Promise<Carrier>;
   update(id: string, data: UpdateCarrierDTO): Promise<Carrier>;
@@ -74,6 +77,15 @@ export class CarriersRepository implements ICarriersRepository {
     return this.prisma.carrier.findMany({
       where,
       orderBy: { name: 'asc' }
+    });
+  }
+
+  async findArchived(orgId?: string | null): Promise<Carrier[]> {
+    const where: any = { archived: true, deletedAt: null };
+    if (orgId) where.orgId = orgId;
+    return this.prisma.carrier.findMany({
+      where,
+      orderBy: { archivedAt: 'desc' },
     });
   }
 

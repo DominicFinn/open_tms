@@ -143,7 +143,7 @@ export interface OrderWithRelations extends Order {
 }
 
 export interface IOrdersRepository {
-  all(orgId?: string | null): Promise<OrderWithRelations[]>;
+  all(orgId?: string | null, opts?: { includeArchived?: boolean }): Promise<OrderWithRelations[]>;
   // Mirrors all() but returns only archived orders — backs the Archives admin page.
   findArchived(orgId?: string | null): Promise<OrderWithRelations[]>;
   findById(id: string, orgId?: string | null): Promise<OrderWithRelations | null>;
@@ -181,8 +181,13 @@ export interface IOrdersRepository {
 export class OrdersRepository implements IOrdersRepository {
   constructor(private prisma: PrismaClient) {}
 
-  async all(orgId?: string | null): Promise<OrderWithRelations[]> {
-    const where: any = { archived: false, deletedAt: null };
+  async all(orgId?: string | null, opts?: { includeArchived?: boolean }): Promise<OrderWithRelations[]> {
+    const where: any = { deletedAt: null };
+    // Archived orders are excluded by default (so selection flows don't offer
+    // them) but can be included for the Orders list page, where they show
+    // with an "Archived" status alongside pending/validated/converted —
+    // mirrors CarriersRepository.all's includeArchived flag.
+    if (!opts?.includeArchived) where.archived = false;
     // Scope to the requesting tenant when supplied. Legacy NULL-orgId
     // rows are excluded from scoped queries.
     if (orgId) where.orgId = orgId;

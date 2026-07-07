@@ -11,10 +11,14 @@ export interface UnarchiveShipmentPayload {
 export const UNARCHIVE_SHIPMENT = 'shipment.unarchive';
 
 /**
- * Restore an archived shipment. Clears archived/archivedAt and emits
- * SHIPMENT_UNARCHIVED, which re-inserts the shipment into the read model so it
- * reappears in active lists. Idempotent — unarchiving a non-archived shipment
- * is a no-op.
+ * Restore an archived shipment. Clears archived/archivedAt and restores
+ * `status` to whatever it was before archiving (captured in
+ * `statusBeforeArchive` by ArchiveShipmentCommand) rather than guessing a
+ * default, mirroring UnarchiveOrderCommand.
+ *
+ * Emits SHIPMENT_UNARCHIVED, which re-projects the shipment into the read
+ * model with its restored status. Idempotent — unarchiving a non-archived
+ * shipment is a no-op.
  */
 export class UnarchiveShipmentCommandHandler extends BaseCommandHandler<UnarchiveShipmentPayload, { id: string; notArchived?: boolean }> {
   readonly commandType = UNARCHIVE_SHIPMENT;
@@ -37,7 +41,12 @@ export class UnarchiveShipmentCommandHandler extends BaseCommandHandler<Unarchiv
 
     const shipment = await tx.shipment.update({
       where: { id },
-      data: { archived: false, archivedAt: null },
+      data: {
+        archived: false,
+        archivedAt: null,
+        status: existing.statusBeforeArchive ?? 'draft',
+        statusBeforeArchive: null,
+      },
     });
 
     emit(this.createEvent(command, {

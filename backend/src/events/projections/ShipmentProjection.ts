@@ -41,8 +41,9 @@ export class ShipmentProjection implements IEventHandler {
       case EVENT_TYPES.SHIPMENT_ARCHIVED:
         return this.onShipmentArchived(event);
       case EVENT_TYPES.SHIPMENT_UNARCHIVED:
-        // Restore re-projects the live shipment into the read model (same path
-        // as create — the archived guard in onShipmentCreated now passes).
+        // Restore re-projects the live shipment into the read model (same
+        // path as create), picking up the status restored by
+        // UnarchiveShipmentCommand.
         return this.onShipmentCreated(event);
       case EVENT_TYPES.SHIPMENT_DELETED:
         return this.onShipmentDeleted(event);
@@ -82,10 +83,13 @@ export class ShipmentProjection implements IEventHandler {
       return;
     }
 
-    // Guard against out-of-order delivery: if a terminal event (archive or
-    // soft-delete) was processed before this create event, don't resurrect the
-    // row into the read model.
-    if (shipment.archived || shipment.deletedAt) {
+    // Guard against out-of-order delivery: if a soft-delete was processed
+    // before this create event, don't resurrect the row into the read model.
+    // Archived shipments are NOT deleted here — `shipment.status` already
+    // reflects 'archived' (or the restored status on unarchive) from the live
+    // row, so the upsert below naturally keeps them visible as just another
+    // filterable status.
+    if (shipment.deletedAt) {
       await this.prisma.shipmentReadModel.delete({ where: { id: shipment.id } }).catch(() => {});
       return;
     }
@@ -216,11 +220,14 @@ export class ShipmentProjection implements IEventHandler {
   }
 
   private async onShipmentArchived(event: DomainEvent): Promise<void> {
-    // Remove archived shipments from the read model so they don't appear in list views
-    await this.prisma.shipmentReadModel.delete({
+    // Archived shipments stay in the read model with status flipped to
+    // 'archived' so they remain visible in list views as a filterable status,
+    // mirroring CarrierProjection.onCarrierArchived.
+    await this.prisma.shipmentReadModel.update({
       where: { id: event.entityId },
+      data: { status: 'archived', updatedAt: new Date() },
     }).catch((err: Error) => {
-      console.error(`[ShipmentProjection] Failed to delete archived shipment ${event.entityId}: ${err.message}`);
+      console.error(`[ShipmentProjection] Failed to archive read model for ${event.entityId}: ${err.message}`);
     });
   }
 

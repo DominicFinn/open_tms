@@ -165,6 +165,23 @@ describe('OrderProjection', () => {
     });
   });
 
+  describe('onOrderArchived', () => {
+    it('flips status to archived in place rather than deleting the read model row', async () => {
+      const event = createTestEvent(
+        EVENT_TYPES.ORDER_ARCHIVED, 'order', 'order-1', {}
+      );
+
+      await projection.handle(event);
+
+      expect(mockPrisma.orderReadModel.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'order-1' },
+          data: expect.objectContaining({ status: 'archived' }),
+        })
+      );
+    });
+  });
+
   describe('trackable_unit.* events (Phase 2)', () => {
     it('subscribes to trackable_unit.* in addition to order.*', () => {
       expect(projection.eventPatterns).toEqual(expect.arrayContaining(['order.*', 'trackable_unit.*']));

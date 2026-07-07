@@ -25,6 +25,29 @@ function buildPrisma() {
 }
 
 describe('OrdersRepository', () => {
+  describe('all', () => {
+    it('excludes archived orders by default', async () => {
+      const prisma = buildPrisma();
+      const repo = new OrdersRepository(prisma);
+
+      await repo.all('org-1');
+
+      const where = prisma.order.findMany.mock.calls[0][0].where;
+      expect(where).toEqual({ deletedAt: null, archived: false, orgId: 'org-1' });
+    });
+
+    it('includes archived orders when includeArchived is set, so the Orders list page can show them as a filterable status', async () => {
+      const prisma = buildPrisma();
+      const repo = new OrdersRepository(prisma);
+
+      await repo.all('org-1', { includeArchived: true });
+
+      const where = prisma.order.findMany.mock.calls[0][0].where;
+      expect(where.archived).toBeUndefined();
+      expect(where.deletedAt).toBeNull();
+    });
+  });
+
   describe('findByCustomerId', () => {
     it('always filters out archived orders', async () => {
       const prisma = buildPrisma();

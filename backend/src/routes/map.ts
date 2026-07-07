@@ -94,6 +94,11 @@ export const mapRoutes: FastifyPluginAsync = async (server) => {
 
     if (statusFilter?.length) {
       where.status = { in: statusFilter };
+    } else {
+      // Archived shipments stay in the read model (status: 'archived') rather
+      // than being deleted, so exclude them by default — a fleet map has no
+      // business surfacing a shipment's last known position after archive.
+      where.status = { not: 'archived' };
     }
 
     const [readModels, total] = await Promise.all([

@@ -6,7 +6,13 @@ import { EVENT_TYPES } from '../../events/eventTypes';
 import { createTestCommand, mockEventBus } from '../helpers/testUtils';
 
 function makePrisma(shipment: any) {
-  const update = jest.fn().mockResolvedValue({ ...shipment, archived: false, archivedAt: null });
+  const update = jest.fn().mockResolvedValue({
+    ...shipment,
+    archived: false,
+    archivedAt: null,
+    status: shipment.statusBeforeArchive ?? 'draft',
+    statusBeforeArchive: null,
+  });
   const mockTx = {
     shipment: {
       findFirstOrThrow: jest.fn().mockResolvedValue(shipment),
@@ -24,22 +30,56 @@ function makePrisma(shipment: any) {
 describe('UnarchiveShipmentCommandHandler', () => {
   beforeEach(() => jest.clearAllMocks());
 
-  it('clears archived/archivedAt and emits SHIPMENT_UNARCHIVED', async () => {
-    const { mockPrisma, update } = makePrisma({ id: 'ship-1', reference: 'REF-1', archived: true, deletedAt: null });
+  it('clears archived/archivedAt, restores the pre-archive status, and emits SHIPMENT_UNARCHIVED', async () => {
+    const { mockPrisma, update } = makePrisma({
+      id: 'ship-1',
+      reference: 'REF-1',
+      archived: true,
+      deletedAt: null,
+      statusBeforeArchive: 'in_progress',
+    });
     const { bus } = mockEventBus();
     const handler = new UnarchiveShipmentCommandHandler(mockPrisma, bus);
 
     const result = await handler.execute(createTestCommand(UNARCHIVE_SHIPMENT, { id: 'ship-1' }));
 
     expect(result.success).toBe(true);
-    expect(update).toHaveBeenCalledWith({ where: { id: 'ship-1' }, data: { archived: false, archivedAt: null } });
+    expect(update).toHaveBeenCalledWith({
+      where: { id: 'ship-1' },
+      data: { archived: false, archivedAt: null, status: 'in_progress', statusBeforeArchive: null },
+    });
     expect(result.events).toHaveLength(1);
     expect(result.events[0].type).toBe(EVENT_TYPES.SHIPMENT_UNARCHIVED);
     expect(result.events[0].payload).toEqual(expect.objectContaining({ shipmentReference: 'REF-1' }));
   });
 
+  it('falls back to draft status when no statusBeforeArchive was captured', async () => {
+    const { mockPrisma, update } = makePrisma({
+      id: 'ship-1',
+      reference: 'REF-1',
+      archived: true,
+      deletedAt: null,
+      statusBeforeArchive: null,
+    });
+    const { bus } = mockEventBus();
+    const handler = new UnarchiveShipmentCommandHandler(mockPrisma, bus);
+
+    await handler.execute(createTestCommand(UNARCHIVE_SHIPMENT, { id: 'ship-1' }));
+
+    expect(update).toHaveBeenCalledWith({
+      where: { id: 'ship-1' },
+      data: { archived: false, archivedAt: null, status: 'draft', statusBeforeArchive: null },
+    });
+  });
+
   it('is idempotent — unarchiving a non-archived shipment is a no-op', async () => {
-    const { mockPrisma, update } = makePrisma({ id: 'ship-1', reference: 'REF-1', archived: false, deletedAt: null });
+    const { mockPrisma, update } = makePrisma({
+      id: 'ship-1',
+      reference: 'REF-1',
+      archived: false,
+      deletedAt: null,
+      statusBeforeArchive: null,
+    });
     const { bus } = mockEventBus();
     const handler = new UnarchiveShipmentCommandHandler(mockPrisma, bus);
 

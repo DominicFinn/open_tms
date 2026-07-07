@@ -108,6 +108,24 @@ describe('ShipmentProjection', () => {
     });
   });
 
+  describe('onShipmentArchived', () => {
+    it('flips status to archived in place rather than deleting the read model row', async () => {
+      const event = createTestEvent(
+        EVENT_TYPES.SHIPMENT_ARCHIVED, 'shipment', 'ship-1',
+        { shipmentReference: 'SH-001' }
+      );
+
+      await projection.handle(event);
+
+      expect(mockPrisma.shipmentReadModel.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'ship-1' },
+          data: expect.objectContaining({ status: 'archived' }),
+        })
+      );
+    });
+  });
+
   describe('onShipmentDeleted', () => {
     it('removes the soft-deleted shipment from the read model', async () => {
       const deleteFn = jest.fn().mockResolvedValue({});
@@ -141,9 +159,34 @@ describe('ShipmentProjection', () => {
   });
 
   describe('onShipmentCreated guard', () => {
-    it('does not resurrect a shipment already archived/deleted (out-of-order events)', async () => {
+    it('upserts (not deletes) an already-archived shipment, keeping it visible with status archived', async () => {
       const findUnique = jest.fn().mockResolvedValue({
-        ...mockShipment, archived: true, customer: { id: 'cust-1', name: 'Acme' },
+        ...mockShipment, archived: true, status: 'archived', customer: { id: 'cust-1', name: 'Acme' },
+      });
+      const upsert = jest.fn().mockResolvedValue({});
+      const del = jest.fn();
+      const prisma = {
+        shipment: { findUnique },
+        shipmentReadModel: { upsert, delete: del },
+      } as any;
+      const proj = new ShipmentProjection(prisma);
+      const event = createTestEvent(EVENT_TYPES.SHIPMENT_CREATED, 'shipment', 'ship-1', {});
+
+      await proj.handle(event);
+
+      expect(del).not.toHaveBeenCalled();
+      expect(upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'ship-1' },
+          create: expect.objectContaining({ status: 'archived' }),
+          update: expect.objectContaining({ status: 'archived' }),
+        })
+      );
+    });
+
+    it('does not resurrect a soft-deleted shipment (out-of-order events)', async () => {
+      const findUnique = jest.fn().mockResolvedValue({
+        ...mockShipment, deletedAt: new Date(), customer: { id: 'cust-1', name: 'Acme' },
       });
       const upsert = jest.fn();
       const del = jest.fn().mockResolvedValue({});

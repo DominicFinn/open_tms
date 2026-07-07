@@ -11,6 +11,7 @@ import { UNARCHIVE_CARRIER } from '../commands/carriers/UnarchiveCarrierCommand.
 import { SOFT_DELETE_CARRIER } from '../commands/carriers/SoftDeleteCarrierCommand.js';
 import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 import { guardWrites } from '../auth/guardWrites.js';
+import { requirePermission } from '../middleware/jwtAuth.js';
 
 // Treat an empty string as "not provided" so a blank optional field (e.g. a
 // carrier with no email yet) doesn't fail format validation.
@@ -31,6 +32,21 @@ export async function carrierRoutes(server: FastifyInstance) {
     // ?includeArchived=true returns archived carriers too (management list).
     const includeArchived = (req.query as any)?.includeArchived === 'true';
     const carriers = await carriersRepo.all(orgId, { includeArchived });
+    return { data: carriers, error: null };
+  });
+
+  // Archived carriers (admin-only). Backs the Archives page's Carriers tab.
+  // Registered as a static path so it is matched ahead of the /:id route.
+  server.get('/api/v1/carriers/archived', {
+    preHandler: requirePermission('carriers:write'),
+    schema: {
+      tags: ['Carriers'],
+      summary: 'List archived carriers (admin)',
+      description: 'Returns all archived carriers for the current org. Requires carriers:write.',
+    },
+  }, async (req: FastifyRequest, _reply: FastifyReply) => {
+    const orgId = req.orgId!;
+    const carriers = await carriersRepo.findArchived(orgId);
     return { data: carriers, error: null };
   });
 
