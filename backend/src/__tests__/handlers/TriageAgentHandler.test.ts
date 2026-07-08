@@ -48,6 +48,7 @@ function createMockPrisma(overrides?: {
   recentDecision?: unknown;
   agentConfig?: unknown;
   engineIssue?: unknown;
+  enrichIssue?: unknown;
 }) {
   return {
     shipment: {
@@ -68,6 +69,9 @@ function createMockPrisma(overrides?: {
       findMany: jest.fn().mockResolvedValue(overrides?.openIssues ?? []),
       // Engine-issue guard: null = no deterministic engine issue open for the entity.
       findFirst: jest.fn().mockResolvedValue(overrides?.engineIssue ?? null),
+      // Enrichment path loads the issue being enriched.
+      findUnique: jest.fn().mockResolvedValue(overrides?.enrichIssue ?? null),
+      count: jest.fn().mockResolvedValue(1),
     },
     slaEvaluation: {
       findMany: jest.fn().mockResolvedValue(overrides?.slaEvaluations ?? []),
@@ -188,6 +192,51 @@ describe('TriageAgentHandler', () => {
 
     // No issue.create dispatched — the engine owns it. (Decision is still logged.)
     expect(dispatched.some(d => d.type === 'issue.create')).toBe(false);
+  });
+
+  it('enriches an engine-raised issue with a triage comment, escalation, and a logged decision', async () => {
+    const llmResponse = JSON.stringify({
+      assessment: 'Cutoff is genuinely at risk; picking is behind. Recommend expediting.',
+      recommendedPriority: 'high',
+      escalate: true,
+      confidence: 0.9,
+    });
+    const mockLlm = createMockLlm(llmResponse);
+    const { bus, dispatched } = createMockCommandBus();
+    const mockPrisma = createMockPrisma({
+      enrichIssue: {
+        id: 'issue-1', issueType: 'shipment_cutoff_risk', title: 'Cutoff at risk: SH-1',
+        description: 'x', priority: 'medium', category: 'delay',
+        sourceEntityType: 'shipment', sourceEntityId: 'ship-1',
+      },
+    });
+    const handler = new TriageAgentHandler(mockPrisma, mockLlm, bus as any);
+
+    await handler.handle(createTestEvent(EVENT_TYPES.ISSUE_CREATED, 'issue', 'issue-1', { issueType: 'shipment_cutoff_risk' }));
+
+    const types = dispatched.map(d => d.type);
+    expect(types).toContain('comment.create');
+    expect(types).toContain('issue.update'); // priority escalation medium -> high
+    expect(types).toContain('agent_decision.create');
+    const decision = dispatched.find(d => d.type === 'agent_decision.create')!.payload as any;
+    expect(decision.agentType).toBe('triage_enrich');
+    expect(decision.actionType).toBe('enrich_issue');
+    const update = dispatched.find(d => d.type === 'issue.update')!.payload as any;
+    expect(update.data.priority).toBe('high');
+    // Never creates an issue on the enrichment path.
+    expect(types).not.toContain('issue.create');
+  });
+
+  it('does not enrich a manually-created issue (no issueType)', async () => {
+    const mockLlm = createMockLlm('{}');
+    const { bus, dispatched } = createMockCommandBus();
+    const mockPrisma = createMockPrisma({ enrichIssue: { id: 'issue-2', issueType: null, priority: 'medium' } });
+    const handler = new TriageAgentHandler(mockPrisma, mockLlm, bus as any);
+
+    await handler.handle(createTestEvent(EVENT_TYPES.ISSUE_CREATED, 'issue', 'issue-2', {}));
+
+    expect(dispatched).toHaveLength(0);
+    expect(mockLlm.complete).not.toHaveBeenCalled();
   });
 
   it('logs no_action decision when LLM says no action needed', async () => {

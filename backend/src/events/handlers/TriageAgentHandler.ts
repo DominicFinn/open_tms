@@ -19,7 +19,10 @@ import { CREATE_AGENT_DECISION } from '../../commands/agentDecisions/CreateAgent
 import { CREATE_COMMENT } from '../../commands/comments/index.js';
 import { CREATE_ISSUE } from '../../commands/issues/CreateIssueCommand.js';
 import { ESCALATE_ISSUE } from '../../commands/issues/EscalateIssueCommand.js';
+import { UPDATE_ISSUE } from '../../commands/issues/UpdateIssueCommand.js';
 import { AutomationRuleHandler } from './AutomationRuleHandler.js';
+import { EVENT_TYPES } from '../eventTypes.js';
+import { priorityRank } from '../../services/issues/issueTypeRegistry.js';
 import { randomUUID } from 'crypto';
 
 /** Unified condition format shared between agent decisions and automation rules */
@@ -113,6 +116,7 @@ export class TriageAgentHandler implements IEventHandler {
     'sla.*',
     'cargo.*',
     'cold_chain.*',
+    'issue.*', // issue.created → enrichment of engine-raised issues
   ];
   readonly options = {
     concurrency: 2,
@@ -139,6 +143,17 @@ export class TriageAgentHandler implements IEventHandler {
 
     // Check if agent is enabled
     if (!config.enabled) return;
+
+    // Enrichment path: the deterministic Issue Engine raises issues; the agent's
+    // role on those is to ENRICH (assess, comment, escalate) — not create.
+    if (event.type === EVENT_TYPES.ISSUE_CREATED) {
+      try {
+        await this.enrichIssue(event, config);
+      } catch (err) {
+        console.error(`[TriageAgent] Enrichment failed for issue ${event.entityId}:`, err);
+      }
+      return;
+    }
 
     // Check if this event type is in the subscribed list
     const subscribedEvents = config.subscribedEvents || DEFAULT_TRIAGE_EVENTS;
@@ -201,6 +216,170 @@ export class TriageAgentHandler implements IEventHandler {
       console.error(`[TriageAgent] Error processing ${event.type} for ${event.entityId}:`, (err as Error).message);
       throw err;
     }
+  }
+
+  // ── Issue enrichment (agent-as-enricher) ───────────────────────
+  // For issues raised by the deterministic Issue Engine, the agent adds value
+  // rather than creating: it posts an AI triage assessment as a comment and, if
+  // warranted, escalates the priority. Every enrichment is logged as an
+  // AgentDecision for compliance/audit, same as a triage decision.
+
+  private async enrichIssue(event: DomainEvent, config: LoadedConfig): Promise<void> {
+    const issue = await this.prisma.issue.findUnique({ where: { id: event.entityId } });
+    // Only enrich engine-raised issues (deterministic). Manual issues (issueType
+    // null) and already-enriched ones are left alone.
+    if (!issue || !issue.issueType) return;
+
+    const already = await this.prisma.agentDecision.findFirst({
+      where: { agentType: 'triage_enrich', entityType: 'issue', entityId: issue.id },
+      select: { id: true },
+    });
+    if (already) return;
+
+    const correlationId = randomUUID();
+    const context = await this.gatherIssueContext(issue);
+    const messages = this.buildEnrichmentPrompt(issue, context);
+
+    const llmStart = Date.now();
+    const llmResponse = await this.llm.complete({
+      messages,
+      maxTokens: config.maxTokens,
+      temperature: config.temperature,
+    });
+    const durationMs = Date.now() - llmStart;
+
+    const enrichment = this.parseEnrichment(llmResponse.content);
+
+    // 1. Post the triage assessment as an agent comment.
+    await this.commandBus.dispatch({
+      type: CREATE_COMMENT,
+      orgId: event.orgId,
+      actorId: 'system:triage-agent',
+      payload: {
+        entityType: 'issue',
+        entityId: issue.id,
+        body: this.buildEnrichmentComment(enrichment),
+        authorId: null,
+        authorName: 'AI Triage Agent',
+        authorType: 'agent',
+      },
+      metadata: { correlationId, source: 'agent' },
+    });
+
+    // 2. Escalate priority if the assessment recommends higher (and we're confident).
+    const rec = enrichment.recommendedPriority;
+    const confident = enrichment.confidence >= (config.confidenceThreshold || 0);
+    if (rec && confident && priorityRank(rec) > priorityRank(issue.priority)) {
+      await this.commandBus.dispatch({
+        type: UPDATE_ISSUE,
+        orgId: event.orgId,
+        actorId: 'system:triage-agent',
+        payload: { id: issue.id, data: { priority: rec } },
+        metadata: { correlationId, source: 'system' },
+      });
+    }
+
+    // 3. Log the enrichment decision for audit/compliance.
+    await this.commandBus.dispatch({
+      type: CREATE_AGENT_DECISION,
+      orgId: event.orgId,
+      actorId: 'system:triage-agent',
+      payload: {
+        agentType: 'triage_enrich',
+        modelProvider: llmResponse.provider,
+        modelId: llmResponse.model,
+        triggerType: 'domain_event',
+        triggerEventType: event.type,
+        triggerEventId: event.id,
+        entityType: 'issue',
+        entityId: issue.id,
+        summary: enrichment.assessment.slice(0, 240),
+        reasoning: enrichment.assessment,
+        context,
+        conversationLog: messages.map(m => ({ role: m.role, content: m.content })),
+        confidence: enrichment.confidence,
+        actionType: 'enrich_issue',
+        actionEntityType: 'issue',
+        actionEntityId: issue.id,
+        inputTokens: llmResponse.usage?.inputTokens,
+        outputTokens: llmResponse.usage?.outputTokens,
+        durationMs,
+        agentConfigId: config.id || undefined,
+        promptVersionId: config.activeVersionId || undefined,
+      },
+      metadata: { correlationId, source: 'system' },
+    });
+
+    console.log(`[TriageAgent] Enriched issue ${issue.id} (${issue.issueType}) — recommended ${rec ?? 'no change'}`);
+  }
+
+  private async gatherIssueContext(issue: { sourceEntityType: string | null; sourceEntityId: string | null; issueType: string | null; priority: string }): Promise<Record<string, unknown>> {
+    const ctx: Record<string, unknown> = {
+      issueType: issue.issueType,
+      currentPriority: issue.priority,
+    };
+    if (issue.sourceEntityType === 'shipment' && issue.sourceEntityId) {
+      const shipment = await this.prisma.shipment.findUnique({
+        where: { id: issue.sourceEntityId },
+        select: { id: true, reference: true, status: true, customerId: true, hasException: true },
+      });
+      if (shipment) {
+        ctx.shipment = shipment;
+        ctx.openIssueCount = await this.prisma.issue.count({
+          where: { sourceEntityType: 'shipment', sourceEntityId: shipment.id, status: { in: ['open', 'in_progress'] } },
+        });
+      }
+    }
+    return ctx;
+  }
+
+  private buildEnrichmentPrompt(
+    issue: { title: string; description: string | null; issueType: string | null; priority: string; category: string },
+    context: Record<string, unknown>,
+  ): LlmMessage[] {
+    const system = `You are an operations triage assistant for a transport management system. The monitoring system has AUTOMATICALLY raised an issue. Your job is NOT to create issues — it already exists — but to ENRICH it: give the ops team a concise triage assessment, recommend a priority, and say whether it should be escalated.
+
+Respond with ONLY a JSON object:
+{
+  "assessment": "2-3 sentence triage note for the ops team",
+  "recommendedPriority": "low" | "medium" | "high" | "critical",
+  "escalate": true | false,
+  "confidence": 0.0-1.0
+}`;
+    const user = `Issue:
+${JSON.stringify({ title: issue.title, description: issue.description, issueType: issue.issueType, priority: issue.priority, category: issue.category }, null, 2)}
+
+Context:
+${JSON.stringify(context, null, 2)}`;
+    return [
+      { role: 'system', content: system },
+      { role: 'user', content: user },
+    ];
+  }
+
+  private parseEnrichment(content: string): { assessment: string; recommendedPriority: string | null; escalate: boolean; confidence: number } {
+    try {
+      const json = content.replace(/```json\n?/g, '').replace(/```/g, '').trim();
+      const parsed = JSON.parse(json);
+      const validPriorities = ['low', 'medium', 'high', 'critical'];
+      return {
+        assessment: typeof parsed.assessment === 'string' ? parsed.assessment : 'No assessment provided.',
+        recommendedPriority: validPriorities.includes(parsed.recommendedPriority) ? parsed.recommendedPriority : null,
+        escalate: parsed.escalate === true,
+        confidence: typeof parsed.confidence === 'number' ? parsed.confidence : 0.5,
+      };
+    } catch {
+      return { assessment: 'Automated assessment unavailable (could not parse model output).', recommendedPriority: null, escalate: false, confidence: 0 };
+    }
+  }
+
+  private buildEnrichmentComment(e: { assessment: string; recommendedPriority: string | null; escalate: boolean }): string {
+    const lines = [`**AI triage assessment**`, ``, e.assessment];
+    const meta: string[] = [];
+    if (e.recommendedPriority) meta.push(`recommended priority: ${e.recommendedPriority}`);
+    if (e.escalate) meta.push(`suggests escalation`);
+    if (meta.length) lines.push(``, `_${meta.join(' · ')}_`);
+    return lines.join('\n');
   }
 
   // ── Config loading (with cache) ────────────────────────────────
