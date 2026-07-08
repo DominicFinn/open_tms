@@ -185,6 +185,7 @@ export class IssueEngineHandler implements IEventHandler {
   }
 
   private signalPriority(event: DomainEvent, type: IssueTypeDef): IssuePriority {
+    if (type.ignoreSignalSeverity) return type.defaultPriority;
     const severity = (event.payload as { severity?: string })?.severity;
     return (severity && SEVERITY_TO_PRIORITY[severity]) || type.defaultPriority;
   }

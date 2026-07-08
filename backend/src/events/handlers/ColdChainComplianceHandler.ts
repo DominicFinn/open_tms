@@ -6,7 +6,9 @@
  * 1. Auto-generates the Cold Chain Compliance Report PDF
  * 2. Optionally auto-delivers shipment docs to the customer (org setting)
  *
- * Also listens for cold_chain.excursion_detected to create triage issues.
+ * Issue creation for temperature excursions is owned by the deterministic Issue
+ * Engine (issue type `shipment_temperature`), which consumes
+ * cold_chain.excursion_detected — this handler no longer creates issues.
  */
 
 import { PrismaClient } from '@prisma/client';
@@ -21,7 +23,6 @@ export class ColdChainComplianceHandler implements IEventHandler {
   readonly eventPatterns = [
     EVENT_TYPES.SHIPMENT_DELIVERED,
     EVENT_TYPES.SHIPMENT_STATUS_CHANGED,
-    EVENT_TYPES.COLD_CHAIN_EXCURSION_DETECTED,
   ];
   readonly options = { concurrency: 2 };
 
@@ -36,8 +37,6 @@ export class ColdChainComplianceHandler implements IEventHandler {
         await this.handleShipmentDelivered(event);
       } else if (event.type === EVENT_TYPES.SHIPMENT_STATUS_CHANGED) {
         await this.handleStatusChanged(event);
-      } else if (event.type === EVENT_TYPES.COLD_CHAIN_EXCURSION_DETECTED) {
-        await this.handleExcursionDetected(event);
       }
     } catch (err) {
       console.error(`[ColdChainComplianceHandler] Error processing ${event.type}:`, err);
@@ -111,47 +110,4 @@ export class ColdChainComplianceHandler implements IEventHandler {
     }
   }
 
-  private async handleExcursionDetected(event: DomainEvent): Promise<void> {
-    const payload = event.payload as {
-      shipmentId: string;
-      shipmentReference: string;
-      excursionType: string;
-      severity: string;
-      peakValue: number;
-      thresholdValue: number;
-    };
-
-    // Auto-create a triage issue for critical excursions
-    if (payload.severity === 'critical') {
-      // Check if an open issue already exists for this shipment + excursion
-      const existingIssue = await this.prisma.issue.findFirst({
-        where: {
-          sourceEntityType: 'shipment',
-          sourceEntityId: payload.shipmentId,
-          category: 'compliance',
-          status: { in: ['open', 'in_progress'] },
-        },
-      });
-
-      if (existingIssue) return; // Already tracked
-
-      await this.prisma.issue.create({
-        data: {
-          orgId: event.orgId,
-          title: `Temperature excursion on ${payload.shipmentReference}`,
-          description: `Critical ${payload.excursionType} excursion detected. ` +
-            `Peak temperature: ${payload.peakValue}°C (threshold: ${payload.thresholdValue}°C). ` +
-            `Immediate action required — review and determine disposition.`,
-          status: 'open',
-          priority: 'critical',
-          category: 'compliance',
-          sourceEntityType: 'shipment',
-          sourceEntityId: payload.shipmentId,
-          sourceEventId: event.id,
-        },
-      });
-
-      console.log(`[ColdChainComplianceHandler] Created triage issue for critical excursion on shipment ${payload.shipmentId}`);
-    }
-  }
 }

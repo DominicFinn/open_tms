@@ -132,6 +132,36 @@ describe('IssueEngineHandler', () => {
     expect(commandBus.dispatch).not.toHaveBeenCalled();
   });
 
+  it('raises a critical latched temperature issue, ignoring the signal severity band', async () => {
+    // A "warning" excursion must still produce a critical issue for the safety type.
+    await handler.handle(ev('cold_chain.excursion_detected', { shipmentId: 'ship-1', severity: 'warning' }));
+    expect(commandBus.dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: CREATE_ISSUE,
+        payload: expect.objectContaining({
+          issueType: 'shipment_temperature',
+          latched: true,
+          category: 'compliance',
+          priority: 'critical',
+        }),
+      }),
+    );
+  });
+
+  it('raises a critical latched tamper issue from a light-in-transit event', async () => {
+    await handler.handle(ev('shipment.tamper_light', { shipmentId: 'ship-1', severity: 'critical' }));
+    expect(commandBus.dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: CREATE_ISSUE,
+        payload: expect.objectContaining({
+          issueType: 'shipment_tamper_light',
+          latched: true,
+          priority: 'critical',
+        }),
+      }),
+    );
+  });
+
   it('raises a latched mis-ship issue from a cargo event', async () => {
     await handler.handle(ev('cargo.misdrop_detected', { shipmentId: 'ship-1', shipmentReference: 'SHP-1' }));
     expect(commandBus.dispatch).toHaveBeenCalledWith(

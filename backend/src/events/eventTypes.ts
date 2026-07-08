@@ -19,6 +19,9 @@ export const EVENT_TYPES = {
   SHIPMENT_EXCEPTION: 'shipment.exception',
   SHIPMENT_CUTOFF_AT_RISK: 'shipment.cutoff_at_risk',
   SHIPMENT_CUTOFF_CLEARED: 'shipment.cutoff_cleared',
+  // Light exposure detected by an onboard sensor before the shipment arrives
+  // (possible door-open / tamper). Consumed by the Issue Engine (shipment_tamper_light).
+  SHIPMENT_TAMPER_LIGHT: 'shipment.tamper_light',
   SHIPMENT_STOP_ARRIVED: 'shipment.stop_arrived',
   SHIPMENT_STOP_COMPLETED: 'shipment.stop_completed',
   SHIPMENT_ARCHIVED: 'shipment.archived',
@@ -385,6 +388,7 @@ export const EVENT_SCHEMA_VERSIONS: Record<string, number> = {
   [EVENT_TYPES.SHIPMENT_EXCEPTION]: 1,
   [EVENT_TYPES.SHIPMENT_CUTOFF_AT_RISK]: 1,
   [EVENT_TYPES.SHIPMENT_CUTOFF_CLEARED]: 1,
+  [EVENT_TYPES.SHIPMENT_TAMPER_LIGHT]: 1,
   [EVENT_TYPES.SHIPMENT_STOP_ARRIVED]: 1,
   [EVENT_TYPES.SHIPMENT_STOP_COMPLETED]: 1,
   [EVENT_TYPES.SHIPMENT_ARCHIVED]: 1,

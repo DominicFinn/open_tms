@@ -58,13 +58,15 @@ interface LoadedConfig {
 }
 
 /** Default events the triage agent subscribes to */
+// The deterministic Issue Engine now OWNS issue creation for the shipment
+// exception domain (cargo.*, cold_chain.excursion_detected, tracking.eta_updated,
+// shipment.cutoff_at_risk, shipment.tamper_light). The triage agent no longer
+// creates issues for those — it defaults to the exceptions the engine does not
+// yet cover. It also skips creation entirely when an engine issue is already open
+// for the entity (see the guard in executeAction).
 export const DEFAULT_TRIAGE_EVENTS = [
   'shipment.exception',
   'sla.breached',
-  'cargo.misdrop_detected',
-  'cargo.missing_at_stop',
-  'cargo.left_on_vehicle',
-  'cold_chain.excursion_detected',
 ];
 
 /** Default system prompt — used when no AgentConfig exists or as seed for version 1 */
@@ -503,6 +505,23 @@ Based on this event and context, what action should be taken?`;
     }
 
     if (decision.actionType === 'create_issue') {
+      // Guard: the deterministic Issue Engine owns issue creation. If it has
+      // already raised an issue for this entity, do not create a duplicate —
+      // the engine issue is the system of record (the agent enriches it instead).
+      const engineIssue = await this.prisma.issue.findFirst({
+        where: {
+          sourceEntityType: event.entityType,
+          sourceEntityId: event.entityId,
+          issueType: { not: null },
+          status: { in: ['open', 'in_progress'] },
+        },
+        select: { id: true },
+      });
+      if (engineIssue) {
+        console.log(`[TriageAgent] Skipping create_issue — engine issue ${engineIssue.id} already open for ${event.entityType}/${event.entityId}`);
+        return {};
+      }
+
       const result = await this.commandBus.dispatch({
         type: CREATE_ISSUE,
         orgId: event.orgId,

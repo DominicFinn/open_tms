@@ -1,5 +1,8 @@
 import { PrismaClient } from '@prisma/client';
 import { ColdChainService } from '../services/ColdChainService.js';
+import { IEventBus } from '../events/IEventBus.js';
+import { createEvent } from '../events/createEvent.js';
+import { EVENT_TYPES } from '../events/eventTypes.js';
 
 /**
  * System Loco IoT Data Feed Adapter
@@ -53,6 +56,7 @@ export interface ProcessingResult {
 
 export class SystemLocoAdapter {
   private coldChainService: ColdChainService | null = null;
+  private eventBus: IEventBus | null = null;
 
   constructor(private prisma: PrismaClient) {}
 
@@ -62,6 +66,45 @@ export class SystemLocoAdapter {
    */
   setColdChainService(service: ColdChainService): void {
     this.coldChainService = service;
+  }
+
+  /**
+   * Set the event bus so IoT alerts can raise domain events (e.g. a light-in-
+   * transit reading emits shipment.tamper_light for the Issue Engine).
+   */
+  setEventBus(bus: IEventBus): void {
+    this.eventBus = bus;
+  }
+
+  /**
+   * A light-in-transit reading before the shipment arrives is a possible
+   * door-open / tamper event. Emits shipment.tamper_light so the deterministic
+   * Issue Engine can raise the `shipment_tamper_light` issue (latched).
+   */
+  private async emitTamperLightIfBeforeArrival(shipmentId: string, sensorReadingId: string | null): Promise<void> {
+    if (!this.eventBus) return;
+    const shipment = await this.prisma.shipment.findUnique({
+      where: { id: shipmentId },
+      select: { id: true, orgId: true, reference: true, status: true },
+    });
+    if (!shipment) return;
+    // "Before arrival": not yet delivered/completed.
+    if (shipment.status === 'complete' || shipment.status === 'delivered') return;
+
+    await this.eventBus.publish(createEvent({
+      type: EVENT_TYPES.SHIPMENT_TAMPER_LIGHT,
+      entityType: 'shipment',
+      entityId: shipment.id,
+      orgId: shipment.orgId,
+      actorId: 'system',
+      source: 'system-loco',
+      payload: {
+        shipmentId: shipment.id,
+        shipmentReference: shipment.reference,
+        severity: 'critical',
+        sensorReadingId,
+      },
+    }));
   }
 
   /**
@@ -243,6 +286,11 @@ export class SystemLocoAdapter {
           },
         });
         deviceEventId = de.id;
+      }
+
+      // Light detected in transit → possible tamper/door-open before arrival.
+      if (eventType === 'lightInTransit' && shipmentId) {
+        await this.emitTamperLightIfBeforeArrival(shipmentId, sensorReadingId);
       }
     }
 

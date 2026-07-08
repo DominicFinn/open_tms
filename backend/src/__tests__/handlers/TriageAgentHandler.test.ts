@@ -47,6 +47,7 @@ function createMockPrisma(overrides?: {
   slaEvaluations?: unknown[];
   recentDecision?: unknown;
   agentConfig?: unknown;
+  engineIssue?: unknown;
 }) {
   return {
     shipment: {
@@ -65,6 +66,8 @@ function createMockPrisma(overrides?: {
     },
     issue: {
       findMany: jest.fn().mockResolvedValue(overrides?.openIssues ?? []),
+      // Engine-issue guard: null = no deterministic engine issue open for the entity.
+      findFirst: jest.fn().mockResolvedValue(overrides?.engineIssue ?? null),
     },
     slaEvaluation: {
       findMany: jest.fn().mockResolvedValue(overrides?.slaEvaluations ?? []),
@@ -156,6 +159,35 @@ describe('TriageAgentHandler', () => {
     expect(decisionPayload.triggerEventType).toBe(EVENT_TYPES.SHIPMENT_EXCEPTION);
     expect(decisionPayload.actionType).toBe('create_issue');
     expect(decisionPayload.confidence).toBe(0.95);
+  });
+
+  it('skips create_issue when a deterministic engine issue is already open for the entity', async () => {
+    const llmResponse = JSON.stringify({
+      summary: 'Create issue for delay',
+      reasoning: 'Shipment delayed.',
+      actionType: 'create_issue',
+      confidence: 0.95,
+      issuePriority: 'high',
+      issueCategory: 'delay',
+      issueTitle: 'Delay: SH-00001',
+    });
+    const mockLlm = createMockLlm(llmResponse);
+    const { bus, dispatched } = createMockCommandBus();
+    // The Issue Engine has already raised an issue for this shipment.
+    const mockPrisma = createMockPrisma({ engineIssue: { id: 'engine-issue-1' } });
+    const handler = new TriageAgentHandler(mockPrisma, mockLlm, bus as any);
+
+    const event = createTestEvent(
+      EVENT_TYPES.SHIPMENT_EXCEPTION,
+      'shipment',
+      'ship-1',
+      { shipmentReference: 'SH-00001', exceptionType: 'eta_critical_delay' },
+    );
+
+    await handler.handle(event);
+
+    // No issue.create dispatched — the engine owns it. (Decision is still logged.)
+    expect(dispatched.some(d => d.type === 'issue.create')).toBe(false);
   });
 
   it('logs no_action decision when LLM says no action needed', async () => {

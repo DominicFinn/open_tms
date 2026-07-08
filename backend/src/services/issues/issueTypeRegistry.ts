@@ -45,6 +45,12 @@ export interface IssueTypeDef {
   category: 'exception' | 'delay' | 'damage' | 'compliance' | 'other';
   defaultPriority: IssuePriority;
   latched: boolean;
+  /**
+   * When true, the signal's severity is ignored and the issue always takes
+   * `defaultPriority`. Used for inherently-critical safety/compliance types
+   * (temperature, tamper) so a "warning" signal can't downgrade them.
+   */
+  ignoreSignalSeverity?: boolean;
   raise: IssueTypeRaiseRule;
   triggerEvents: string[];
   recoveryEvents: string[];
@@ -104,6 +110,7 @@ export const ISSUE_TYPES: Record<IssueTypeKey, IssueTypeDef> = {
     category: 'compliance',
     defaultPriority: 'critical',
     latched: true, // excursion happened — must be investigated (CAPA)
+    ignoreSignalSeverity: true, // always critical, regardless of excursion severity band
     raise: { thresholdCount: 1, windowMinutes: 60 },
     triggerEvents: ['cold_chain.excursion_detected'],
     recoveryEvents: [],
@@ -114,6 +121,7 @@ export const ISSUE_TYPES: Record<IssueTypeKey, IssueTypeDef> = {
     category: 'compliance',
     defaultPriority: 'critical',
     latched: true, // possible tamper/theft — must be investigated
+    ignoreSignalSeverity: true, // always critical
     raise: { thresholdCount: 1, windowMinutes: 60 },
     triggerEvents: ['shipment.tamper_light'],
     recoveryEvents: [],

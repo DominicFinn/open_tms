@@ -25,6 +25,7 @@ export function createInboundWebhookWorker(
   // model's current position updates (drives the map/list dot).
   let eventBus: IEventBus | null = null;
   try { eventBus = container.resolve<IEventBus>(TOKENS.IEventBus); } catch { /* not available in some contexts */ }
+  if (eventBus) systemLoco.setEventBus(eventBus);
 
   return async (message: QueueMessage<WebhookEvent>) => {
     const { webhookLogId, rawPayload } = message.payload;
