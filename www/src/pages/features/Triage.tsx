@@ -19,7 +19,7 @@ const problems = [
   {
     problem: 'You find out about problems from your customers, not your systems',
     solution: 'Automatic exception detection',
-    description: 'The system monitors shipments in real time and creates triage items automatically when things go wrong. Temperature out of range? Card created. ETA delay crosses a threshold? Card created. Carrier misses a pickup window? Card created. Your team responds proactively instead of reactively.',
+    description: 'The system monitors shipments in real time and raises triage items automatically when things go wrong. Temperature out of range? Card created. ETA delay crosses a threshold? Card created. Carrier misses a pickup window? Card created. Detection is rule-based and predictable, not dependent on AI, so it always fires. Transient problems auto-resolve when the shipment recovers, while safety events like a temperature excursion or a tamper alert stay open until someone investigates. Your team responds proactively instead of reactively.',
     icon: (
       <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />

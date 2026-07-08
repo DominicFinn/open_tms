@@ -419,6 +419,33 @@ Each intermediate hub-and-spoke stop (`LaneStop`) has an optional `purpose` tag 
 
 Issues track operational problems — exceptions, delays, damage, compliance failures. They can be created manually or auto-created from domain events.
 
+### Deterministic Issue Engine
+
+Issue creation for the **shipment-exception domain** is deterministic and LLM-independent. The `IssueEngineHandler` (`backend/src/events/handlers/IssueEngineHandler.ts`) subscribes to every trigger + recovery event declared by the **Issue Type registry** (`backend/src/services/issues/issueTypeRegistry.ts`) and owns issue creation via the command bus — so issues are raised even when no AI is configured, and every issue gets the same downstream side effects (`issue.created` → notifications, projection, SLA evals).
+
+**Issue Type registry (v1, code-defined; admin-editable DB version is a roadmap item):**
+
+| Key | Trigger event(s) | Default priority | Latched | Recovery event (auto-resolve) |
+|-----|------------------|:----------------:|:-------:|-------------------------------|
+| `shipment_cutoff_risk` | `shipment.cutoff_at_risk` | high | no | `shipment.cutoff_cleared` |
+| `shipment_eta_delay` | `tracking.eta_updated` | by severity | no | `tracking.eta_recovered` |
+| `shipment_misship` | `cargo.misdrop_detected` / `cargo.missing_at_stop` / `cargo.left_on_vehicle` | high | **yes** | — (investigate) |
+| `shipment_temperature` | `cold_chain.excursion_detected` | critical | **yes** | — (investigate) |
+| `shipment_tamper_light` | `shipment.tamper_light` (light-in-transit before arrival) | critical | **yes** | — (investigate) |
+
+Each type carries: `defaultPriority`, `latched`, `ignoreSignalSeverity` (temperature/tamper stay critical), and a raise rule `{ thresholdCount, windowMinutes, priorityFloor }`.
+
+**Engine behaviour per event:**
+- **Trigger** — append a row to the `IssueSignal` ledger, then apply the raise rule: **N signals within the window OR a signal at/above the severity floor**. Dedup is a single rule — **one open issue per (issueType, source entity)**. A matching event on an already-open issue **escalates** it (bumps priority) and attaches the signal rather than duplicating.
+- **Recovery** — auto-resolve the open issue if the type is **unlatched**; **latched** issues are left open ("it happened", must be investigated).
+- Signal severity → priority via `{ minor/minor_delay: low, warning: medium, critical: high }`; `ignoreSignalSeverity` types always use their default.
+
+**IssueSignal ledger** (`IssueSignal` table) is append-only: it drives the raise accumulator **and** feeds the per-shipment "events / issues over time" graphs (`GET /api/v1/shipments/:id/issue-activity`, shown on the shipment detail **Activity** tab).
+
+**Recovery emitters** live in the monitors that own each condition: `ShipmentCutoffMonitorService` emits `shipment.cutoff_cleared` on the at-risk→clear edge; `ShipmentEtaMonitorService` tracks `Shipment.lastEtaDelaySeverity` and emits `tracking.eta_recovered` on the delay→on-time edge.
+
+This engine **replaced** the previous bespoke direct-writers (cold-chain compliance handler, cutoff monitor) and the LLM-as-primary-creator. Other domains (order, financial/margin, SLA, WMS variances, EDI) still use their own creators and will be migrated onto this framework incrementally.
+
 ### Commands
 
 | Command | Trigger | Events Emitted |
@@ -1402,9 +1429,13 @@ Agent Decisions provide the compliance and audit layer for AI agent actions. Eve
 
 ### Triage Agent
 
-The Triage Agent is an AI event handler (`TriageAgentHandler`) that subscribes to exception events and uses Claude to decide what action to take. It runs as a pg-boss worker job within the event handler infrastructure.
+The Triage Agent is an AI event handler (`TriageAgentHandler`) that runs as a pg-boss worker job. Since the deterministic Issue Engine now **owns** issue creation for the shipment-exception domain, the agent's role has shifted from **creator** to **enricher** for those issues; it still creates issues for exceptions the engine does not yet cover.
 
-**Subscribed events:** `shipment.exception`, `sla.breached`, `cargo.misdrop_detected`, `cargo.missing_at_stop`, `cargo.left_on_vehicle`, `cold_chain.excursion_detected`
+**Subscribed events:** `shipment.exception`, `sla.breached` (create/triage — events not owned by the Issue Engine), plus `issue.created` (enrich). The cargo/cold-chain events were removed from its defaults because the engine owns them.
+
+**Enrichment path (`issue.created`):** for issues raised by the engine (`issueType != null`), the agent gathers shipment context, asks Claude for a triage assessment, posts that as an **agent comment**, escalates the issue's priority if the model recommends higher (and is confident enough), and logs a `triage_enrich` AgentDecision. It never creates on this path, skips manual (non-engine) issues, and is idempotent (won't re-enrich).
+
+**Create/triage guard:** even on `shipment.exception`, the agent **skips `create_issue`** when a deterministic engine issue is already open for the entity — so a critical ETA delay (which emits both `tracking.eta_updated` and `shipment.exception`) produces exactly one issue.
 
 **Flow:**
 1. Event arrives via pg-boss queue
@@ -1986,7 +2017,7 @@ The queries are read-only and run concurrently through `Promise.all` - a single 
 
 ### Domain: Cutoff-at-Risk Monitoring
 
-Carriers publish daily handoff cutoff times (e.g. 16:30 for same-day FedEx Ground pickup). Missing one slips the shipment a day. The cutoff-at-risk monitor watches open shipments, projects how long the remaining warehouse work will take, and fires `shipment.cutoff_at_risk` (plus auto-raises an Issue) when the projected ready time will miss the cutoff.
+Carriers publish daily handoff cutoff times (e.g. 16:30 for same-day FedEx Ground pickup). Missing one slips the shipment a day. The cutoff-at-risk monitor watches open shipments, projects how long the remaining warehouse work will take, and fires `shipment.cutoff_at_risk` when the projected ready time will miss the cutoff (the Issue Engine raises the Issue from that event).
 
 ### CarrierCutoff schema
 Per-day-of-week rows per carrier: `dayOfWeek (0-6)`, `cutoffLocalTime (HH:mm)`, `timezone (IANA)`, optional `serviceLevel` and `locationId` override, `active` flag. Multiple rows per carrier are supported; the earliest matching row for today wins.
@@ -2000,21 +2031,23 @@ Simple additive model (v1, configurable per-instance):
 Work is resolved by walking `Shipment → OrderShipment[] → Order.id → PickTask/PackTask` (non-completed, non-cancelled rows) and `Shipment → LoadPlan`.
 
 ### Severity bands
+The monitor **fires events only** — issue creation/escalation/auto-resolve is owned by the deterministic Issue Engine (`shipment_cutoff_risk`), which consumes these events.
+
 | Buffer (cutoff - projectedReady) | Severity | Action |
 |--|--|--|
-| ≥ 30 min | `minor` | Dashboard only, no event, no issue |
-| 10 - 29 min | `warning` | Fires event, creates medium-priority issue |
-| < 10 min or past cutoff | `critical` | Fires event, creates high-priority issue |
+| ≥ 30 min | `minor` | Dashboard only, no event (recovery emitted if previously flagged) |
+| 10 - 29 min | `warning` | Fires `shipment.cutoff_at_risk` → engine raises a high-priority issue |
+| < 10 min or past cutoff | `critical` | Fires `shipment.cutoff_at_risk` → engine raises/escalates the issue |
 
 ### Dedup
-Re-evaluation runs every 5 min. To avoid spam:
+Re-evaluation runs every 5 min. To avoid event spam:
 - Same-severity alert won't refire within the dedup window (default 30 min)
 - Escalating severity (warning → critical) fires immediately regardless of window
-- Existing issue is reused across escalations via `Shipment.lastCutoffRiskIssueId`
+- Issue-level dedup (one open issue per shipment, escalation) is handled by the Issue Engine, not the monitor. The monitor only tracks `Shipment.lastCutoffRiskSeverity` for its own event dedup and to detect the recovery edge.
 
 ### Events
-- `shipment.cutoff_at_risk` - payload: `{ shipmentId, shipmentReference, carrierId, cutoffAt, projectedReadyAt, bufferMinutes, severity, blockingStage, pendingPickTasks, pendingPackTasks, pendingLoadPlan, issueId }`
-- `shipment.cutoff_cleared` - reserved for future use when a shipment that was previously at risk returns to a safe buffer
+- `shipment.cutoff_at_risk` - payload: `{ shipmentId, shipmentReference, carrierId, cutoffAt, projectedReadyAt, bufferMinutes, severity, blockingStage, pendingPickTasks, pendingPackTasks, pendingLoadPlan }`
+- `shipment.cutoff_cleared` - emitted when a previously-flagged shipment returns to a safe buffer (or completes). The Issue Engine auto-resolves the open cutoff issue.
 
 ### API
 - CRUD: `GET/POST /api/v1/carriers/:carrierId/cutoffs`, `PUT/DELETE /api/v1/carrier-cutoffs/:id`

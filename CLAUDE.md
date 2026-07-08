@@ -372,7 +372,17 @@ Extensible action framework. Skills are discrete, configurable action units with
 ## Issue / Triage Centre
 
 ### Architecture
-The Triage Centre provides a drag-and-drop kanban board for managing operational issues (exceptions, delays, damage, compliance failures). Issues can be created manually, auto-created from domain events, or created by the AI triage agent. The system supports a full issue lifecycle with collaborative comments, labels, snooze/wake, and automatic PDF closure reports.
+The Triage Centre provides a drag-and-drop kanban board for managing operational issues (exceptions, delays, damage, compliance failures). Issues can be created manually, deterministically by the **Issue Engine**, or (for uncovered exceptions) by the AI triage agent. The system supports a full issue lifecycle with collaborative comments, labels, snooze/wake, and automatic PDF closure reports.
+
+### Deterministic Issue Engine (shipment exceptions)
+Issue creation for the shipment-exception domain is **deterministic and LLM-independent** — `IssueEngineHandler` maps trigger/recovery events onto issues via a code-defined **Issue Type registry**. All issue writes go through the command bus (`CREATE_ISSUE`/`UPDATE_ISSUE`).
+- **Registry** (`backend/src/services/issues/issueTypeRegistry.ts`): built-in types `shipment_cutoff_risk`, `shipment_eta_delay`, `shipment_misship`, `shipment_temperature`, `shipment_tamper_light`. Each declares `defaultPriority`, `latched`, `ignoreSignalSeverity`, a raise rule `{ thresholdCount, windowMinutes, priorityFloor }`, and trigger/recovery events. **Adding a new shipment-exception type = add a registry entry** (admin-editable DB types are a roadmap item). `Issue.issueType` + `Issue.latched` are stamped on each issue for reporting.
+- **Raise rule**: N signals within the window OR a signal at/above the severity floor. Dedup = **one open issue per (issueType, source entity)**; a matching event escalates the open issue instead of duplicating.
+- **Latching**: unlatched types (cutoff, ETA) auto-resolve on their recovery event; latched safety types (temperature, tamper, mis-ship) never auto-resolve.
+- **IssueSignal ledger** (`IssueSignal` table): append-only, drives the accumulator AND the per-shipment events/issues-over-time graphs (`GET /api/v1/shipments/:id/issue-activity`, Activity tab).
+- **Recovery emitters** live in the owning monitors (`ShipmentCutoffMonitorService` → `shipment.cutoff_cleared`; `ShipmentEtaMonitorService` → `tracking.eta_recovered`, tracking `Shipment.lastEtaDelaySeverity`).
+- The **AI triage agent** is an *enricher* on engine issues (comments + priority escalation on `issue.created`), not a creator. Do NOT add bespoke `prisma.issue.create` writes for shipment exceptions — extend the registry instead.
+- Key files: `backend/src/events/handlers/IssueEngineHandler.ts`, `backend/src/services/issues/issueTypeRegistry.ts`, tests in `backend/src/__tests__/handlers/IssueEngineHandler.test.ts` + `__tests__/services/issueTypeRegistry.test.ts`.
 
 ### Key Models
 - **Issue** - Operational problem linked to a source entity (shipment, order, carrier). Fields include status, priority, category, assigneeId, escalatedTo, snoozedUntil, snoozedBy, snoozedReason, needsCapa, closedAt, closedBy, and label associations.
