@@ -211,8 +211,10 @@ export class ShipmentCutoffMonitorService {
                         : base.pendingLoadPlan ? 'load_planning'
                         : 'ready';
 
-    // If everything is already complete, no risk
+    // If everything is already complete, no risk. If it was previously flagged,
+    // announce recovery so the Issue Engine auto-resolves the open cutoff issue.
     if (extraMinutes === 0 && shipment.status === 'booked') {
+      await this.maybeEmitCutoffCleared(shipment, now, orgId);
       return base;
     }
 
@@ -221,8 +223,34 @@ export class ShipmentCutoffMonitorService {
     base.bufferMinutes = bufferMinutes;
     base.severity = computeSeverity(bufferMinutes, this.config);
 
-    base.notified = await this.notifyIfNeeded(shipment, base, now, orgId);
+    // A safe buffer (minor/no severity) after a prior at-risk state is a recovery.
+    if (!base.severity || base.severity === 'minor') {
+      await this.maybeEmitCutoffCleared(shipment, now, orgId);
+    } else {
+      base.notified = await this.notifyIfNeeded(shipment, base, now, orgId);
+    }
     return base;
+  }
+
+  /**
+   * If the shipment was previously flagged at risk, emit shipment.cutoff_cleared
+   * and clear the marker so the Issue Engine auto-resolves the open cutoff issue.
+   */
+  private async maybeEmitCutoffCleared(shipment: Shipment, now: Date, orgId: string): Promise<void> {
+    if (!shipment.lastCutoffRiskSeverity) return;
+    await this.prisma.shipment.update({
+      where: { id: shipment.id },
+      data: { lastCutoffRiskSeverity: null, lastCutoffRiskAt: now },
+    });
+    await this.eventBus.publish(createEvent({
+      type: EVENT_TYPES.SHIPMENT_CUTOFF_CLEARED,
+      entityType: 'shipment',
+      entityId: shipment.id,
+      orgId,
+      actorId: 'system',
+      source: 'cutoff-monitor',
+      payload: { shipmentId: shipment.id, shipmentReference: shipment.reference },
+    }));
   }
 
   /**

@@ -376,6 +376,29 @@ export class ShipmentEtaMonitorService implements IShipmentEtaMonitorService {
       });
     }
 
+    // Track the delay severity so we can detect the delay -> on-time edge and
+    // emit tracking.eta_recovered when a previously-delayed shipment recovers
+    // (drives auto-resolve of the unlatched shipment_eta_delay issue).
+    const isDelayed = severity !== 'on_time' && severity !== 'skipped';
+    if (isDelayed) {
+      if (shipment.lastEtaDelaySeverity !== severity) {
+        await this.prisma.shipment.update({
+          where: { id: shipment.id },
+          data: { lastEtaDelaySeverity: severity },
+        });
+      }
+    } else if (shipment.lastEtaDelaySeverity) {
+      await this.prisma.shipment.update({
+        where: { id: shipment.id },
+        data: { lastEtaDelaySeverity: null },
+      });
+      await this.publishEtaRecoveredEvent(shipment, {
+        newEta,
+        nextStopId: nextStop?.id,
+        nextStopName: nextStop?.location?.name || targetLocation?.name,
+      });
+    }
+
     // Route deviation check: if the shipment has a lane with a planned route, check deviation
     if (this.routeDeviationService && shipment.laneId) {
       await this.checkRouteDeviation(shipment);
@@ -428,6 +451,33 @@ export class ShipmentEtaMonitorService implements IShipmentEtaMonitorService {
         correlationId: randomUUID(),
         source: 'eta-monitor',
         schemaVersion: EVENT_SCHEMA_VERSIONS[EVENT_TYPES.TRACKING_ETA_UPDATED] || 1,
+      },
+    };
+
+    await this.eventBus.publish(event);
+  }
+
+  /** Publish tracking.eta_recovered when a previously-delayed shipment is back on time. */
+  private async publishEtaRecoveredEvent(shipment: any, detail: any): Promise<void> {
+    const event: DomainEvent = {
+      id: randomUUID(),
+      type: EVENT_TYPES.TRACKING_ETA_RECOVERED,
+      timestamp: new Date().toISOString(),
+      orgId: shipment.orgId,
+      actorId: null,
+      entityType: 'shipment',
+      entityId: shipment.id,
+      payload: {
+        shipmentId: shipment.id,
+        shipmentReference: shipment.reference,
+        newEta: detail.newEta,
+        nextStopId: detail.nextStopId,
+        nextStopName: detail.nextStopName,
+      },
+      metadata: {
+        correlationId: randomUUID(),
+        source: 'eta-monitor',
+        schemaVersion: EVENT_SCHEMA_VERSIONS[EVENT_TYPES.TRACKING_ETA_RECOVERED] || 1,
       },
     };
 

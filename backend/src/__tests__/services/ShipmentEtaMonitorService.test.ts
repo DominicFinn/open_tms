@@ -48,6 +48,7 @@ function createMockPrisma(shipments: any[] = [], readModels: any[] = []) {
         const found = shipments.find((s: any) => s.id === where.id);
         return Promise.resolve(found || null);
       }),
+      update: jest.fn().mockResolvedValue({}),
     },
     shipmentReadModel: {
       findMany: jest.fn().mockResolvedValue(readModels),
@@ -131,6 +132,35 @@ describe('ShipmentEtaMonitorService', () => {
       expect(result.status).toBe('on_time');
       expect(result.delayMinutes).toBe(0);
       expect(eventBus.publish).not.toHaveBeenCalled();
+    });
+
+    it('emits tracking.eta_recovered when a previously-delayed shipment is back on time', async () => {
+      const shipment = createTestShipment();
+      const scheduledArrival = new Date(Date.now() + 7200000);
+      shipment.stops[1].estimatedArrival = scheduledArrival.toISOString();
+      shipment.lastEtaDelaySeverity = 'warning'; // was delayed on the previous cycle
+
+      const routeResult: Partial<RouteResult> = {
+        estimatedArrival: new Date(scheduledArrival.getTime() - 300000).toISOString(), // 5 min early
+        durationSeconds: 6900,
+      };
+      const provider = createMockRoutingProvider(routeResult);
+      const eventBus = createMockEventBus();
+      const prisma = createMockPrisma([shipment], [
+        { id: 'ship-001', currentLat: 41.0, currentLng: -75.5, lastLocationAt: new Date() },
+      ]);
+
+      const service = new ShipmentEtaMonitorService(prisma, provider, eventBus, config);
+      const result = await service.checkSingleShipment('ship-001');
+
+      expect(result.status).toBe('on_time');
+      const recovered = (eventBus.publish as jest.Mock).mock.calls.find(
+        (c: any) => c[0].type === 'tracking.eta_recovered',
+      );
+      expect(recovered).toBeTruthy();
+      expect(prisma.shipment.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ lastEtaDelaySeverity: null }) }),
+      );
     });
 
     it('detects minor delay and publishes eta_updated event', async () => {

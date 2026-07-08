@@ -126,6 +126,17 @@ describe('IssueEngineHandler', () => {
     );
   });
 
+  it('auto-resolves the ETA-delay issue on tracking.eta_recovered', async () => {
+    (prisma.issue.findFirst as jest.Mock).mockResolvedValueOnce({ id: 'issue-eta', priority: 'medium' });
+    await handler.handle(ev('tracking.eta_recovered', { shipmentId: 'ship-1' }));
+    expect(commandBus.dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: UPDATE_ISSUE,
+        payload: expect.objectContaining({ id: 'issue-eta', data: expect.objectContaining({ status: 'resolved' }) }),
+      }),
+    );
+  });
+
   it('does nothing on a recovery event when no issue is open', async () => {
     (prisma.issue.findFirst as jest.Mock).mockResolvedValue(null);
     await handler.handle(ev('shipment.cutoff_cleared', { shipmentId: 'ship-1' }));

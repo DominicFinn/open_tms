@@ -211,6 +211,9 @@ model Shipment {
   lastCutoffRiskSeverity String?
   lastCutoffRiskAt       DateTime?
   lastCutoffRiskIssueId  String?
+  // ETA-delay monitoring: last delay severity seen, so the monitor can detect the
+  // delay -> on-time edge and emit tracking.eta_recovered (drives auto-resolve).
+  lastEtaDelaySeverity   String?
   lane                   Lane?              @relation(fields: [laneId], references: [id])
   laneId                 String?
   carrier                Carrier?           @relation(fields: [carrierId], references: [id])

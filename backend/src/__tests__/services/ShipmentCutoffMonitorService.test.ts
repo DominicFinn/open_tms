@@ -217,6 +217,31 @@ describe('ShipmentCutoffMonitorService.evaluateShipment', () => {
     expect(result.notified).toBe(false); // minor doesn't fire unless escalating
   });
 
+  it('emits cutoff_cleared and clears the marker when a previously at-risk shipment recovers', async () => {
+    const shipmentUpdate = jest.fn().mockResolvedValue({});
+    const prisma = makePrisma({ pickCount: 1, loadPlanCount: 1, shipmentUpdate });
+    const bus = { publish: jest.fn().mockResolvedValue(undefined) };
+    const svc = new ShipmentCutoffMonitorService(prisma, bus as any);
+
+    const result = await svc.evaluateShipment(makeShipment({ lastCutoffRiskSeverity: 'critical' }), now, 'org-1');
+    expect(result.severity).toBe('minor');
+    const cleared = (bus.publish as jest.Mock).mock.calls.find(c => c[0].type === EVENT_TYPES.SHIPMENT_CUTOFF_CLEARED);
+    expect(cleared).toBeTruthy();
+    expect(cleared[0].payload.shipmentId).toBe('ship-1');
+    expect(shipmentUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ lastCutoffRiskSeverity: null }) }),
+    );
+  });
+
+  it('does not emit cutoff_cleared when the shipment was not previously at risk', async () => {
+    const prisma = makePrisma({ pickCount: 1, loadPlanCount: 1 });
+    const bus = { publish: jest.fn().mockResolvedValue(undefined) };
+    const svc = new ShipmentCutoffMonitorService(prisma, bus as any);
+
+    await svc.evaluateShipment(makeShipment({ lastCutoffRiskSeverity: null }), now, 'org-1');
+    expect((bus.publish as jest.Mock).mock.calls.find(c => c[0].type === EVENT_TYPES.SHIPMENT_CUTOFF_CLEARED)).toBeFalsy();
+  });
+
   it('dedupes warning re-notifications within the window', async () => {
     const prisma = makePrisma({ pickCount: 3, loadPlanCount: 1 });
     const bus = { publish: jest.fn().mockResolvedValue(undefined) };

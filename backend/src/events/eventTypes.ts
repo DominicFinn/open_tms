@@ -118,6 +118,9 @@ export const EVENT_TYPES = {
   TRACKING_LOCATION_RECEIVED: 'tracking.location_received',
   TRACKING_GEOFENCE_ENTERED: 'tracking.geofence_entered',
   TRACKING_ETA_UPDATED: 'tracking.eta_updated',
+  // A previously-delayed shipment's ETA has returned within threshold. Consumed
+  // by the Issue Engine to auto-resolve the (unlatched) shipment_eta_delay issue.
+  TRACKING_ETA_RECOVERED: 'tracking.eta_recovered',
   TRACKING_ROUTE_DEVIATION: 'tracking.route_deviation',
 
   // Cargo tracking & misdrop detection
@@ -436,6 +439,7 @@ export const EVENT_SCHEMA_VERSIONS: Record<string, number> = {
   [EVENT_TYPES.TRACKING_LOCATION_RECEIVED]: 1,
   [EVENT_TYPES.TRACKING_GEOFENCE_ENTERED]: 1,
   [EVENT_TYPES.TRACKING_ETA_UPDATED]: 1,
+  [EVENT_TYPES.TRACKING_ETA_RECOVERED]: 1,
   [EVENT_TYPES.TRACKING_ROUTE_DEVIATION]: 1,
   [EVENT_TYPES.ISSUE_CREATED]: 1,
   [EVENT_TYPES.ISSUE_UPDATED]: 1,

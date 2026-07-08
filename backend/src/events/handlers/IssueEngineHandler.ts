@@ -39,6 +39,7 @@ import {
 /** Shared mapping from a signal's severity band onto an issue priority. */
 const SEVERITY_TO_PRIORITY: Record<string, IssuePriority> = {
   minor: 'low',
+  minor_delay: 'low',
   warning: 'medium',
   critical: 'high',
 };
