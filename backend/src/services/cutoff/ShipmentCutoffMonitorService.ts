@@ -248,29 +248,15 @@ export class ShipmentCutoffMonitorService {
 
     if (!escalated && !windowPassed) return false;
 
-    let issueId: string | null = shipment.lastCutoffRiskIssueId ?? null;
-    if (!issueId) {
-      const issue = await this.prisma.issue.create({
-        data: {
-          orgId,
-          title: `Carrier cutoff at risk: shipment ${shipment.reference}`,
-          description: this.buildIssueDescription(shipment, result),
-          priority: result.severity === 'critical' ? 'high' : 'medium',
-          category: 'logistics',
-          sourceEntityType: 'shipment',
-          sourceEntityId: shipment.id,
-          status: 'open',
-        },
-      });
-      issueId = issue.id;
-    }
-
+    // Issue creation/escalation is owned by the deterministic Issue Engine, which
+    // consumes the SHIPMENT_CUTOFF_AT_RISK event emitted below (issue type
+    // `shipment_cutoff_risk`). The monitor only records severity for its own
+    // event-level dedup so it doesn't re-emit the same severity repeatedly.
     await this.prisma.shipment.update({
       where: { id: shipment.id },
       data: {
         lastCutoffRiskSeverity: result.severity,
         lastCutoffRiskAt: now,
-        lastCutoffRiskIssueId: issueId,
       },
     });
 
@@ -294,21 +280,9 @@ export class ShipmentCutoffMonitorService {
         pendingPickTasks: result.pendingPickTasks,
         pendingPackTasks: result.pendingPackTasks,
         pendingLoadPlan: result.pendingLoadPlan,
-        issueId,
       },
     });
     await this.eventBus.publish(event);
     return true;
-  }
-
-  private buildIssueDescription(shipment: Shipment, r: EvaluationResult): string {
-    const pieces = [
-      `Shipment ${shipment.reference} is projected to miss the carrier cutoff.`,
-      `Cutoff: ${r.cutoffAt?.toISOString()}`,
-      `Projected ready: ${r.projectedReadyAt?.toISOString()} (${r.bufferMinutes} min buffer)`,
-      `Blocking stage: ${r.blockingStage}`,
-      `Pending work: ${r.pendingPickTasks} pick task(s), ${r.pendingPackTasks} pack task(s)${r.pendingLoadPlan ? ', no load plan yet' : ''}.`,
-    ];
-    return pieces.join('\n');
   }
 }

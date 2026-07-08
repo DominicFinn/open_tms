@@ -75,6 +75,8 @@ export class IssueProjection implements IEventHandler {
         status: issue.status,
         priority: issue.priority,
         category: issue.category,
+        issueType: issue.issueType ?? null,
+        latched: issue.latched ?? false,
         sourceEntityType: issue.sourceEntityType,
         sourceEntityId: issue.sourceEntityId,
         sourceEventId: issue.sourceEventId ?? null,

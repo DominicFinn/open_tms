@@ -19,6 +19,7 @@ import { CustomerProjection } from './projections/CustomerProjection.js';
 import { LaneProjection } from './projections/LaneProjection.js';
 import { IssueProjection } from './projections/IssueProjection.js';
 import { ColdChainComplianceHandler } from './handlers/ColdChainComplianceHandler.js';
+import { IssueEngineHandler } from './handlers/IssueEngineHandler.js';
 import { IssueClosureReportHandler } from './handlers/IssueClosureReportHandler.js';
 import { AutoTenderHandler } from './handlers/AutoTenderHandler.js';
 import { ShipmentCompletionHandler } from './handlers/ShipmentCompletionHandler.js';
@@ -169,6 +170,14 @@ export async function registerEventHandlers(
   // WMS: auto-replenishment - reacts to pick line completion / inventory adjustments and fires CHECK_REPLENISHMENT
   if (commandBus) {
     handlers.push(new AutoReplenishmentHandler(prisma, commandBus));
+  }
+
+  // Deterministic Issue Engine: maps shipment-exception trigger/recovery events
+  // onto issues via the Issue Type registry (create/escalate/auto-resolve). This
+  // is the command-bus, LLM-independent path that replaces bespoke direct writes.
+  if (commandBus) {
+    handlers.push(new IssueEngineHandler(prisma, commandBus));
+    console.log('[EventBus] Deterministic issue engine enabled');
   }
 
   // Build automation rule handler (used inline by triage agent, not as a separate queue)

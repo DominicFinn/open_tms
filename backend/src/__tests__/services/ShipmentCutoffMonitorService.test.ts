@@ -175,13 +175,9 @@ describe('ShipmentCutoffMonitorService.evaluateShipment', () => {
     expect(result.bufferMinutes).toBeLessThan(0);
     expect(result.blockingStage).toBe('picking');
     expect(result.notified).toBe(true);
-    expect(prisma.issue.create).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({
-        priority: 'high',
-        category: 'logistics',
-        sourceEntityType: 'shipment',
-      }),
-    }));
+    // Issue creation is owned by the Issue Engine (consumes the event below);
+    // the monitor no longer writes issues directly.
+    expect(prisma.issue.create).not.toHaveBeenCalled();
     expect(bus.publish).toHaveBeenCalled();
     const eventArg = (bus.publish as jest.Mock).mock.calls[0][0];
     expect(eventArg.type).toBe(EVENT_TYPES.SHIPMENT_CUTOFF_AT_RISK);
@@ -201,9 +197,12 @@ describe('ShipmentCutoffMonitorService.evaluateShipment', () => {
 
     const result = await svc.evaluateShipment(makeShipment(), now, 'org-1');
     expect(result.severity).toBe('warning');
-    expect(prisma.issue.create).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ priority: 'medium' }),
-    }));
+    // Monitor emits the event; the Issue Engine raises the issue, not the monitor.
+    expect(prisma.issue.create).not.toHaveBeenCalled();
+    expect(bus.publish).toHaveBeenCalled();
+    const eventArg = (bus.publish as jest.Mock).mock.calls[0][0];
+    expect(eventArg.type).toBe(EVENT_TYPES.SHIPMENT_CUTOFF_AT_RISK);
+    expect(eventArg.payload.severity).toBe('warning');
   });
 
   it('returns minor severity when there is plenty of buffer and does not create an issue', async () => {
