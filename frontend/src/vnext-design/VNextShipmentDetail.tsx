@@ -3,6 +3,7 @@ import { useNavigate, useParams, Link } from 'react-router-dom';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
+  Activity,
   AlertTriangle,
   Archive,
   ArchiveRestore,
@@ -97,6 +98,7 @@ import {
   computeTelemetryRange,
   TelemetryPeriodKey,
 } from './TelemetryChart';
+import ShipmentIssueActivity from './ShipmentIssueActivity';
 import {
   SHIPMENT_STATUS_LABELS,
   allowedTransitions,
@@ -1852,6 +1854,7 @@ export default function VNextShipmentDetail() {
   const tabs = [
     { value: 'details', label: 'Details', Icon: Info },
     { value: 'events', label: 'Events', Icon: Clock },
+    { value: 'activity', label: 'Activity', Icon: Activity },
     { value: 'orders', label: 'Orders', Icon: Box },
     { value: 'documents', label: 'Docs', Icon: FileText },
     { value: 'financials', label: 'Financials', Icon: CreditCard },
@@ -2318,6 +2321,10 @@ export default function VNextShipmentDetail() {
 
         <TabsContent value="events" className="mt-4">
               {id && <EventsTab shipmentId={id} />}
+            </TabsContent>
+
+            <TabsContent value="activity" className="mt-4">
+              {id && <ShipmentIssueActivity shipmentId={id} />}
             </TabsContent>
 
             <TabsContent value="orders" className="mt-4">

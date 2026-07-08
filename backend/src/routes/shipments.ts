@@ -479,6 +479,46 @@ export async function shipmentRoutes(server: FastifyInstance) {
     return { data: events, error: null };
   });
 
+  // Exception-signal + issue activity for the shipment — data behind the
+  // "events over time" and "issues over time" graphs. Signals come from the
+  // deterministic Issue Engine's ledger; issues are the ones it raised.
+  server.get('/api/v1/shipments/:id/issue-activity', {
+    schema: {
+      tags: ['Shipments'],
+      summary: 'Shipment exception-signal & issue activity',
+      description: 'Returns the exception signals recorded for a shipment (issue-engine ledger) and the issues raised from them, for plotting events/issues over time.',
+      params: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const orgId = req.orgId!;
+    const shipment = await server.prisma.shipment.findFirst({ where: { id, orgId, deletedAt: null }, select: { id: true } });
+    if (!shipment) {
+      reply.code(404);
+      return { data: null, error: 'Shipment not found' };
+    }
+
+    const [signals, issues] = await Promise.all([
+      server.prisma.issueSignal.findMany({
+        where: { sourceEntityType: 'shipment', sourceEntityId: id },
+        orderBy: { occurredAt: 'asc' },
+        select: { id: true, issueType: true, eventType: true, priority: true, issueId: true, occurredAt: true },
+        take: 1000,
+      }),
+      server.prisma.issue.findMany({
+        where: { sourceEntityType: 'shipment', sourceEntityId: id, issueType: { not: null } },
+        orderBy: { createdAt: 'asc' },
+        select: {
+          id: true, issueType: true, title: true, priority: true, status: true, latched: true,
+          createdAt: true, resolvedAt: true, closedAt: true,
+        },
+        take: 500,
+      }),
+    ]);
+
+    return { data: { signals, issues }, error: null };
+  });
+
   // Update shipment
   server.put('/api/v1/shipments/:id', { preHandler: requirePermission('shipments:write') }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
