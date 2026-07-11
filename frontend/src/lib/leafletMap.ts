@@ -1,4 +1,31 @@
-import type { Map as LeafletMap } from 'leaflet';
+import L, { type Map as LeafletMap, type MapOptions } from 'leaflet';
+
+/** Valid Web Mercator lat range, +/- the whole longitude span. */
+const WORLD_BOUNDS = L.latLngBounds([-85.05112878, -180], [85.05112878, 180]);
+
+/**
+ * Map constructor options that keep panning within the world instead of
+ * dragging into the empty gray space past the poles/antimeridian. Spread
+ * into the options passed to `L.map(...)`.
+ */
+export const worldBoundsMapOptions: Partial<MapOptions> = {
+  maxBounds: WORLD_BOUNDS.pad(0.15),
+  maxBoundsViscosity: 1.0,
+};
+
+/** Tile layer options that stop the world tiles repeating when zoomed out. */
+export const noWrapTileOptions = { noWrap: true } as const;
+
+/**
+ * Caps zoom-out at the point where the whole world just fits the container,
+ * so scrolling/clicking "-" can't go past the map's edge into empty gray
+ * space. Recomputed on resize since the right cap depends on container size.
+ */
+export function capWorldZoomOut(map: LeafletMap): void {
+  const capMinZoom = () => map.setMinZoom(map.getBoundsZoom(WORLD_BOUNDS, true));
+  map.whenReady(capMinZoom);
+  map.on('resize', capMinZoom);
+}
 
 /**
  * Robustly keep a Leaflet map sized to its container.

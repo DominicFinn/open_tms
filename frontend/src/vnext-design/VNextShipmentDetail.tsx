@@ -89,7 +89,7 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { cn } from '@/lib/utils';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { getDeviceImageUrl } from './deviceImages';
-import { keepMapSized } from '../lib/leafletMap';
+import { keepMapSized, worldBoundsMapOptions, noWrapTileOptions, capWorldZoomOut } from '../lib/leafletMap';
 import {
   TimeSeriesChart,
   TelemetryPeriodFilter,
@@ -1795,8 +1795,13 @@ export default function VNextShipmentDetail() {
     const destination = shipment.destination;
 
     setMapLoading(true);
-    const map = L.map(mapRef.current, { zoomControl: true, attributionControl: false });
-    const tiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 19 });
+    const map = L.map(mapRef.current, {
+      zoomControl: true,
+      attributionControl: false,
+      ...worldBoundsMapOptions,
+    });
+    const tiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 19, ...noWrapTileOptions });
+    capWorldZoomOut(map);
     // Hide the spinner once tiles have rendered (with a fallback in case the
     // load event doesn't fire, e.g. fully cached).
     tiles.on('load', () => setMapLoading(false));
