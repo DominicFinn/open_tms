@@ -171,7 +171,7 @@ export interface IOrdersRepository {
   generateBarcode(unitId: string): Promise<TrackableUnit>;
 
   // Order-to-Shipment conversion
-  convertToShipment(orderId: string): Promise<{ shipmentId: string }>;
+  convertToShipment(orderId: string, orgId: string): Promise<{ shipmentId: string }>;
 
   // Batch operations
   mergeUnits(sourceUnitId: string, targetUnitId: string): Promise<void>;
@@ -684,9 +684,9 @@ export class OrdersRepository implements IOrdersRepository {
     });
   }
 
-  async convertToShipment(orderId: string): Promise<{ shipmentId: string }> {
+  async convertToShipment(orderId: string, orgId: string): Promise<{ shipmentId: string }> {
     // Fetch the order with all relations
-    const order = await this.findById(orderId);
+    const order = await this.findById(orderId, orgId);
 
     if (!order) {
       throw new Error('Order not found');
@@ -761,6 +761,7 @@ export class OrdersRepository implements IOrdersRepository {
       // Create the shipment
       const shipment = await tx.shipment.create({
         data: {
+          orgId: order.orgId,
           reference: shipmentReference,
           customerId: order.customer.id,
           originId: order.originId!,
