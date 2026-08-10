@@ -4,6 +4,7 @@ import { Loader2, Plus, Search, Upload } from 'lucide-react';
 
 import { API_URL } from '../../api';
 import { customerFetch } from './CustomerDashboard';
+import { orderStatusLabel, deliveryStatusLabel } from './orderStatusLabels';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -147,10 +148,10 @@ export default function CustomerOrders() {
                   </TableCell>
                   <TableCell className="text-sm">{o.lineItemCount} items</TableCell>
                   <TableCell>
-                    <Badge variant={statusVariant(o.status)}>{o.status}</Badge>
+                    <Badge variant={statusVariant(o.status)}>{orderStatusLabel(o.status)}</Badge>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={statusVariant(o.deliveryStatus)}>{o.deliveryStatus}</Badge>
+                    <Badge variant={statusVariant(o.deliveryStatus)}>{deliveryStatusLabel(o.deliveryStatus)}</Badge>
                   </TableCell>
                 </TableRow>
               ))}
