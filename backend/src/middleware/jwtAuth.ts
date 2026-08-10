@@ -205,6 +205,69 @@ export async function authenticateCustomerJWT(req: FastifyRequest, reply: Fastif
 }
 
 /**
+ * Verify HS256 signature + expiry without asserting an issuer.
+ * Callers are responsible for checking `iss` themselves.
+ */
+function verifySignatureAndExpiry(token: string): Record<string, any> {
+  const parts = token.split('.');
+  if (parts.length !== 3) throw new Error('Invalid token format');
+
+  const [headerB64, payloadB64, signatureB64] = parts;
+  const expectedSig = createHmac('sha256', JWT_SECRET)
+    .update(`${headerB64}.${payloadB64}`)
+    .digest('base64url');
+
+  if (signatureB64 !== expectedSig) throw new Error('Invalid signature');
+
+  const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString());
+  if (payload.exp && payload.exp * 1000 < Date.now()) throw new Error('Token expired');
+
+  return payload;
+}
+
+/**
+ * Fastify preHandler hook for endpoints shared by the main TMS app and the
+ * customer portal — currently the pure-compute order line item helpers
+ * (mode rules, cartonization preview), which perform no writes and expose
+ * no tenant data, so serving both audiences is safe.
+ *
+ * Sets `req.user` for an internal token or `req.customerUser` for a
+ * customer-portal token. Sends 401 if the token is missing, malformed,
+ * expired, or carries any other issuer.
+ *
+ * Note: routes using this must NOT sit inside the global `authenticatedRoutes`
+ * block in index.ts — that block's onRequest hook rejects customer tokens
+ * before this ever runs.
+ */
+export async function authenticateMainOrCustomerJWT(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) {
+    reply.code(401).send({ data: null, error: 'Authorization header required' });
+    return;
+  }
+
+  try {
+    const payload = verifySignatureAndExpiry(authHeader.slice(7));
+
+    if (payload.iss === 'open-tms-customer') {
+      if (!payload.customerId) throw new Error('Invalid customer token');
+      req.customerUser = payload as CustomerJWTPayload;
+      return;
+    }
+
+    // Internal tokens carry 'open-tms-auth' or omit iss entirely (matches verifyJWT).
+    if (!payload.iss || payload.iss === 'open-tms-auth') {
+      req.user = payload as JWTPayload;
+      return;
+    }
+
+    throw new Error('Invalid issuer');
+  } catch {
+    reply.code(401).send({ data: null, error: 'Invalid or expired token' });
+  }
+}
+
+/**
  * Optional auth: sets req.user if a valid token is present, but doesn't reject unauthenticated requests.
  */
 export async function optionalAuth(req: FastifyRequest): Promise<void> {

@@ -13,6 +13,7 @@
 import { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { container, TOKENS } from '../di/index.js';
+import { authenticateMainOrCustomerJWT } from '../middleware/jwtAuth.js';
 import { IModeRulesService, Mode, LineField } from '../services/orderLineItem/ModeRulesService.js';
 import { IOrderCartonizationService } from '../services/orderLineItem/OrderCartonizationService.js';
 
@@ -72,6 +73,12 @@ const UnitsBody = z.object({
 export async function orderLineItemRulesRoutes(server: FastifyInstance) {
   const modeRules = container.resolve<IModeRulesService>(TOKENS.IModeRulesService);
   const cartonization = container.resolve<IOrderCartonizationService>(TOKENS.IOrderCartonizationService);
+
+  // Both the main TMS app and the customer portal drive their create/edit
+  // order forms from these endpoints, so they accept either token type.
+  // Safe because they are pure compute: no writes, no tenant data returned,
+  // and nothing here reads req.orgId.
+  server.addHook('onRequest', authenticateMainOrCustomerJWT);
 
   server.get('/api/v1/order-line-items/mode-rules', {
     schema: {

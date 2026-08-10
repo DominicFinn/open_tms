@@ -222,6 +222,7 @@ async function start() {
   await server.register(webhookRoutes);              // Own API key auth internally
   await server.register(warehouseRoutes);            // Own magic link auth internally
   await server.register(seedRoutes);                 // Dev/demo only (guarded by NODE_ENV)
+  await server.register(orderLineItemRulesRoutes);    // Dual auth (main TMS or customer JWT) internally
   // EDI inbound - currently rely on trading partner ID validation.
   // TODO: add proper API key / HMAC auth for EDI endpoints
   await server.register(ediInboundRoutes);
@@ -300,7 +301,6 @@ async function start() {
     await app.register(cutoffMonitorRoutes);
     await app.register(warehouseOperationsDashboardRoutes);
     await app.register(packagingTypesRoutes);
-    await app.register(orderLineItemRulesRoutes);
     await app.register(containerIntelligenceRoutes);
     await app.register(edi940Routes);
     await app.register(customerRmaApiRoutes);

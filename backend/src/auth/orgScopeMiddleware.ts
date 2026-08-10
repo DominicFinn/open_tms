@@ -110,6 +110,18 @@ export async function registerOrgScope(server: FastifyInstance): Promise<void> {
  *    row, or DB error, so `requireOrgScope` can block downstream
  *  - the customer-portal authentication preHandler MUST run first so
  *    `req.customerUser` is populated by the time this hook fires
+ *
+ * IMPORTANT — do NOT register this with `server.addHook('preHandler', ...)`.
+ * Fastify runs instance-level preHandler hooks BEFORE route-level ones, so
+ * it would fire while `req.customerUser` is still undefined, set `req.orgId`
+ * to null, and — being idempotent — never re-resolve it. Chain it after the
+ * authenticator in the route's own preHandler array instead:
+ *
+ *   const authedCustomer = [
+ *     authenticateCustomerJWT,
+ *     attachOrgScopeFromCustomerUserHook(server.prisma),
+ *   ];
+ *   server.get('/api/v1/customer-portal/…', { preHandler: authedCustomer }, …)
  */
 export function attachOrgScopeFromCustomerUserHook(prisma: PrismaClient): preHandlerHookHandler {
   return async (req: FastifyRequest, _reply: FastifyReply): Promise<void> => {
@@ -135,6 +147,10 @@ export function attachOrgScopeFromCustomerUserHook(prisma: PrismaClient): preHan
  * Carrier-portal variant. Auth in the carrier portal uses
  * `req.carrierUser`, which carries a `carrierId`. Resolves `req.orgId`
  * via `Carrier.orgId` — NOT NULL post phase 2.
+ *
+ * Same ordering constraint as the customer variant above: chain it after
+ * `authenticateCarrierJWT` in the route's preHandler array, never via
+ * `server.addHook('preHandler', ...)`.
  */
 export function attachOrgScopeFromCarrierUserHook(prisma: PrismaClient): preHandlerHookHandler {
   return async (req: FastifyRequest, _reply: FastifyReply): Promise<void> => {

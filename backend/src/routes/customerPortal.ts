@@ -43,10 +43,18 @@ export async function customerPortalRoutes(server: FastifyInstance) {
   const csvImportService = container.resolve<ICSVImportService>(TOKENS.ICSVImportService);
 
   // Multi-tenancy: every authed customer-portal route resolves req.orgId
-  // by walking customerUser.customerId → Customer.orgId. The hook runs
-  // after `authenticateCustomerJWT` (declared per-route in preHandler),
-  // so req.customerUser is populated by the time it fires.
-  server.addHook('preHandler', attachOrgScopeFromCustomerUserHook(server.prisma));
+  // by walking customerUser.customerId → Customer.orgId.
+  //
+  // The org-scope hook MUST run after `authenticateCustomerJWT`, because it
+  // reads req.customerUser. Chaining both here (rather than registering the
+  // scope hook instance-level via server.addHook) is what guarantees that:
+  // Fastify runs instance-level preHandler hooks BEFORE route-level ones, so
+  // an instance-level scope hook would fire while req.customerUser is still
+  // undefined and permanently pin req.orgId to null.
+  const authedCustomer = [
+    authenticateCustomerJWT,
+    attachOrgScopeFromCustomerUserHook(server.prisma),
+  ];
 
   // ── Public: Login ────────────────────────────────────────────────────
 
@@ -82,7 +90,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
 
   // Profile
   server.get('/api/v1/customer-portal/profile', {
-    preHandler: [authenticateCustomerJWT],
+    preHandler: authedCustomer,
     schema: { tags: ['Customer Portal'], summary: 'Get current customer user profile' },
   }, async (req: FastifyRequest) => {
     const user = req.customerUser!;
@@ -100,7 +108,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
 
   // Change password
   server.post('/api/v1/customer-portal/change-password', {
-    preHandler: [authenticateCustomerJWT],
+    preHandler: authedCustomer,
     schema: {
       tags: ['Customer Portal'],
       body: {
@@ -125,7 +133,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
 
   // Dashboard summary
   server.get('/api/v1/customer-portal/dashboard', {
-    preHandler: [authenticateCustomerJWT],
+    preHandler: authedCustomer,
     schema: { tags: ['Customer Portal'], summary: 'Customer dashboard summary stats' },
   }, async (req: FastifyRequest) => {
     const customerId = req.customerUser!.customerId;
@@ -199,7 +207,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
 
   // Orders
   server.get('/api/v1/customer-portal/orders', {
-    preHandler: [authenticateCustomerJWT],
+    preHandler: authedCustomer,
     schema: {
       tags: ['Customer Portal'],
       querystring: {
@@ -244,7 +252,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
 
   // Order detail
   server.get('/api/v1/customer-portal/orders/:id', {
-    preHandler: [authenticateCustomerJWT],
+    preHandler: authedCustomer,
     schema: { tags: ['Customer Portal'] },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
@@ -266,7 +274,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
 
   // Archive order (customer self-service)
   server.delete('/api/v1/customer-portal/orders/:id', {
-    preHandler: [authenticateCustomerJWT],
+    preHandler: authedCustomer,
     schema: {
       tags: ['Customer Portal'],
       summary: 'Archive a customer order',
@@ -321,7 +329,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
   }
 
   server.post('/api/v1/customer-portal/orders/:id/trackable-units', {
-    preHandler: [authenticateCustomerJWT],
+    preHandler: authedCustomer,
     schema: { tags: ['Customer Portal - Handling Units'], summary: 'Add a handling unit to an order' },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
@@ -358,7 +366,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
   });
 
   server.put('/api/v1/customer-portal/trackable-units/:unitId', {
-    preHandler: [authenticateCustomerJWT],
+    preHandler: authedCustomer,
     schema: { tags: ['Customer Portal - Handling Units'], summary: 'Update a handling unit (identifier, notes, packaging, dims, weight, stackable)' },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { unitId } = req.params as { unitId: string };
@@ -379,7 +387,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
   });
 
   server.delete('/api/v1/customer-portal/trackable-units/:unitId', {
-    preHandler: [authenticateCustomerJWT],
+    preHandler: authedCustomer,
     schema: { tags: ['Customer Portal - Handling Units'], summary: 'Delete a handling unit (cascade-deletes its line items)' },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { unitId } = req.params as { unitId: string };
@@ -398,7 +406,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
   });
 
   server.post('/api/v1/customer-portal/trackable-units/:unitId/line-items', {
-    preHandler: [authenticateCustomerJWT],
+    preHandler: authedCustomer,
     schema: { tags: ['Customer Portal - Handling Units'], summary: 'Add a new line item directly to a handling unit' },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { unitId } = req.params as { unitId: string };
@@ -419,7 +427,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
   });
 
   server.put('/api/v1/customer-portal/line-items/:itemId/move', {
-    preHandler: [authenticateCustomerJWT],
+    preHandler: authedCustomer,
     schema: { tags: ['Customer Portal - Handling Units'], summary: 'Move a line item to another handling unit (or detach with null)' },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { itemId } = req.params as { itemId: string };
@@ -459,7 +467,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
   });
 
   server.post('/api/v1/customer-portal/trackable-units/:unitId/generate-barcode', {
-    preHandler: [authenticateCustomerJWT],
+    preHandler: authedCustomer,
     schema: { tags: ['Customer Portal - Handling Units'], summary: 'Generate a barcode for a handling unit' },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { unitId } = req.params as { unitId: string };
@@ -487,7 +495,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
   }
 
   server.post('/api/v1/customer-portal/orders/:id/trackable-units/merge', {
-    preHandler: [authenticateCustomerJWT],
+    preHandler: authedCustomer,
     schema: { tags: ['Customer Portal - Handling Units'], summary: 'Merge two handling units (source -> target, source deleted)' },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
@@ -518,7 +526,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
   });
 
   server.post('/api/v1/customer-portal/trackable-units/:unitId/split', {
-    preHandler: [authenticateCustomerJWT],
+    preHandler: authedCustomer,
     schema: { tags: ['Customer Portal - Handling Units'], summary: 'Split a handling unit by moving specified line items to a new unit' },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { unitId } = req.params as { unitId: string };
@@ -563,7 +571,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
   }
 
   server.post('/api/v1/customer-portal/orders/:id/line-items', {
-    preHandler: [authenticateCustomerJWT],
+    preHandler: authedCustomer,
     schema: { tags: ['Customer Portal - Line Items'], summary: 'Add a flat line item to one of your orders' },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
@@ -588,7 +596,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
   });
 
   server.put('/api/v1/customer-portal/line-items/:itemId', {
-    preHandler: [authenticateCustomerJWT],
+    preHandler: authedCustomer,
     schema: { tags: ['Customer Portal - Line Items'], summary: 'Update fields on a line item (sparse patch)' },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { itemId } = req.params as { itemId: string };
@@ -608,7 +616,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
   });
 
   server.delete('/api/v1/customer-portal/line-items/:itemId', {
-    preHandler: [authenticateCustomerJWT],
+    preHandler: authedCustomer,
     schema: { tags: ['Customer Portal - Line Items'], summary: 'Delete a line item' },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { itemId } = req.params as { itemId: string };
@@ -633,7 +641,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
   // orders onto someone else's account.
 
   server.get('/api/v1/customer-portal/orders/import/csv/template', {
-    preHandler: [authenticateCustomerJWT],
+    preHandler: authedCustomer,
     schema: {
       tags: ['Customer Portal - Bulk Import'],
       summary: 'Download a blank CSV template for bulk order upload',
@@ -648,7 +656,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
   });
 
   server.post('/api/v1/customer-portal/orders/import/csv', {
-    preHandler: [authenticateCustomerJWT],
+    preHandler: authedCustomer,
     schema: {
       tags: ['Customer Portal - Bulk Import'],
       summary: 'Bulk-upload orders from a CSV',
@@ -688,7 +696,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
   // Used by the customer portal create-order form to drive the packaging
   // dropdown. Read-only — customers can't manage their org's catalogue.
   server.get('/api/v1/customer-portal/packaging-types', {
-    preHandler: [authenticateCustomerJWT],
+    preHandler: authedCustomer,
     schema: {
       tags: ['Customer Portal'],
       summary: 'List active packaging types in this customer org',
@@ -713,7 +721,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
 
   // Create order (customer self-service)
   server.post('/api/v1/customer-portal/orders', {
-    preHandler: [authenticateCustomerJWT],
+    preHandler: authedCustomer,
     schema: {
       tags: ['Customer Portal'],
       summary: 'Create an order (customer self-service)',
@@ -953,7 +961,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
 
   // Shipments
   server.get('/api/v1/customer-portal/shipments', {
-    preHandler: [authenticateCustomerJWT],
+    preHandler: authedCustomer,
     schema: {
       tags: ['Customer Portal'],
       querystring: {
@@ -991,7 +999,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
 
   // Shipment detail
   server.get('/api/v1/customer-portal/shipments/:id', {
-    preHandler: [authenticateCustomerJWT],
+    preHandler: authedCustomer,
     schema: { tags: ['Customer Portal'] },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
@@ -1014,7 +1022,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
 
   // Documents
   server.get('/api/v1/customer-portal/documents', {
-    preHandler: [authenticateCustomerJWT],
+    preHandler: authedCustomer,
     schema: { tags: ['Customer Portal'] },
   }, async (req: FastifyRequest) => {
     const customerId = req.customerUser!.customerId;
@@ -1035,7 +1043,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
 
   // Document download
   server.get('/api/v1/customer-portal/documents/:id/download', {
-    preHandler: [authenticateCustomerJWT],
+    preHandler: authedCustomer,
     schema: { tags: ['Customer Portal'] },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
@@ -1059,7 +1067,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
 
   // Invoices
   server.get('/api/v1/customer-portal/invoices', {
-    preHandler: [authenticateCustomerJWT],
+    preHandler: authedCustomer,
     schema: {
       tags: ['Customer Portal'],
       querystring: {
@@ -1091,7 +1099,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
 
   // Invoice detail
   server.get('/api/v1/customer-portal/invoices/:id', {
-    preHandler: [authenticateCustomerJWT],
+    preHandler: authedCustomer,
     schema: { tags: ['Customer Portal'] },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
@@ -1108,7 +1116,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
 
   // Dispute an invoice
   server.post('/api/v1/customer-portal/invoices/:id/dispute', {
-    preHandler: [authenticateCustomerJWT],
+    preHandler: authedCustomer,
     schema: {
       tags: ['Customer Portal'],
       body: {
@@ -1190,7 +1198,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
   }
 
   server.get('/api/v1/customer-portal/issues', {
-    preHandler: [authenticateCustomerJWT],
+    preHandler: authedCustomer,
     schema: {
       tags: ['Customer Portal'],
       querystring: {
@@ -1221,7 +1229,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
   });
 
   server.get('/api/v1/customer-portal/issues/:id', {
-    preHandler: [authenticateCustomerJWT],
+    preHandler: authedCustomer,
     schema: { tags: ['Customer Portal'] },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
@@ -1239,7 +1247,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
   });
 
   server.get('/api/v1/customer-portal/issues/:id/comments', {
-    preHandler: [authenticateCustomerJWT],
+    preHandler: authedCustomer,
     schema: { tags: ['Customer Portal'] },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
@@ -1269,7 +1277,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
   });
 
   server.post('/api/v1/customer-portal/issues/:id/comments', {
-    preHandler: [authenticateCustomerJWT],
+    preHandler: authedCustomer,
     schema: {
       tags: ['Customer Portal'],
       body: {
@@ -1325,7 +1333,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
 
   // List returns
   server.get('/api/v1/customer-portal/rmas', {
-    preHandler: [authenticateCustomerJWT],
+    preHandler: authedCustomer,
     schema: {
       tags: ['Customer Portal'],
       summary: 'List your return authorizations',
@@ -1359,7 +1367,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
 
   // Return detail
   server.get('/api/v1/customer-portal/rmas/:id', {
-    preHandler: [authenticateCustomerJWT],
+    preHandler: authedCustomer,
     schema: { tags: ['Customer Portal'], summary: 'Get your RMA detail' },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
@@ -1374,7 +1382,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
 
   // Create a return (self-service)
   server.post('/api/v1/customer-portal/rmas', {
-    preHandler: [authenticateCustomerJWT],
+    preHandler: authedCustomer,
     schema: {
       tags: ['Customer Portal'],
       summary: 'Request a return (self-service)',
@@ -1450,7 +1458,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
 
   // Download return label (if one has been generated)
   server.get('/api/v1/customer-portal/rmas/:id/return-label', {
-    preHandler: [authenticateCustomerJWT],
+    preHandler: authedCustomer,
     schema: { tags: ['Customer Portal'], summary: 'Download the return shipping label for your RMA' },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
@@ -1472,7 +1480,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
 
   // List returnable order line items for the customer (helper for the request form)
   server.get('/api/v1/customer-portal/rmas/eligible-orders', {
-    preHandler: [authenticateCustomerJWT],
+    preHandler: authedCustomer,
     schema: {
       tags: ['Customer Portal'],
       summary: 'List delivered orders eligible for return (with their line items)',

@@ -13,9 +13,18 @@ export async function carrierPortalRoutes(server: FastifyInstance) {
   const tenderRepo = container.resolve<ITenderRepository>(TOKENS.ITenderRepository);
 
   // Multi-tenancy: resolve req.orgId by walking carrierUser.carrierId →
-  // Carrier.orgId. Runs after authenticateCarrierJWT (declared per-route
-  // in preHandler), so req.carrierUser is populated when this fires.
-  server.addHook('preHandler', attachOrgScopeFromCarrierUserHook(server.prisma));
+  // Carrier.orgId.
+  //
+  // The org-scope hook MUST run after `authenticateCarrierJWT`, because it
+  // reads req.carrierUser. Chaining both here (rather than registering the
+  // scope hook instance-level via server.addHook) is what guarantees that:
+  // Fastify runs instance-level preHandler hooks BEFORE route-level ones, so
+  // an instance-level scope hook would fire while req.carrierUser is still
+  // undefined and permanently pin req.orgId to null.
+  const authedCarrier = [
+    authenticateCarrierJWT,
+    attachOrgScopeFromCarrierUserHook(server.prisma),
+  ];
 
   // ── Auth (no middleware needed) ──
 
@@ -52,7 +61,7 @@ export async function carrierPortalRoutes(server: FastifyInstance) {
   // Get profile
   server.get('/api/v1/carrier-portal/profile', {
     schema: { tags: ['Carrier Portal'], summary: 'Get carrier user profile' },
-    preHandler: [authenticateCarrierJWT],
+    preHandler: authedCarrier,
   }, async (req: FastifyRequest, _reply: FastifyReply) => {
     const carrier = (req as any).carrierUser;
     return {
@@ -81,7 +90,7 @@ export async function carrierPortalRoutes(server: FastifyInstance) {
         },
       },
     },
-    preHandler: [authenticateCarrierJWT],
+    preHandler: authedCarrier,
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const userId = (req as any).carrierUser.sub;
     const { currentPassword, newPassword } = z.object({
@@ -101,7 +110,7 @@ export async function carrierPortalRoutes(server: FastifyInstance) {
   // List active tenders for this carrier
   server.get('/api/v1/carrier-portal/tenders', {
     schema: { tags: ['Carrier Portal'], summary: 'List active tenders for this carrier' },
-    preHandler: [authenticateCarrierJWT],
+    preHandler: authedCarrier,
   }, async (req: FastifyRequest, _reply: FastifyReply) => {
     const carrierId = (req as any).carrierUser.carrierId;
     const offers = await tenderService.getActiveTendersForCarrier(carrierId);
@@ -111,7 +120,7 @@ export async function carrierPortalRoutes(server: FastifyInstance) {
   // View tender details (marks as viewed)
   server.get('/api/v1/carrier-portal/tenders/:id', {
     schema: { tags: ['Carrier Portal'], summary: 'View tender details' },
-    preHandler: [authenticateCarrierJWT],
+    preHandler: authedCarrier,
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
     const carrierId = (req as any).carrierUser.carrierId;
@@ -141,7 +150,7 @@ export async function carrierPortalRoutes(server: FastifyInstance) {
         },
       },
     },
-    preHandler: [authenticateCarrierJWT],
+    preHandler: authedCarrier,
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id: tenderId } = req.params as { id: string };
     const carrierUser = (req as any).carrierUser;
@@ -189,7 +198,7 @@ export async function carrierPortalRoutes(server: FastifyInstance) {
   // Decline a tender
   server.post('/api/v1/carrier-portal/tenders/:id/decline', {
     schema: { tags: ['Carrier Portal'], summary: 'Decline a tender offer' },
-    preHandler: [authenticateCarrierJWT],
+    preHandler: authedCarrier,
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id: tenderId } = req.params as { id: string };
     const carrierId = (req as any).carrierUser.carrierId;
@@ -217,7 +226,7 @@ export async function carrierPortalRoutes(server: FastifyInstance) {
   // View my bid history
   server.get('/api/v1/carrier-portal/bids', {
     schema: { tags: ['Carrier Portal'], summary: 'View my bid history' },
-    preHandler: [authenticateCarrierJWT],
+    preHandler: authedCarrier,
   }, async (req: FastifyRequest, _reply: FastifyReply) => {
     const carrierId = (req as any).carrierUser.carrierId;
     const bids = await tenderRepo.findBidsByCarrierId(carrierId);
@@ -227,7 +236,7 @@ export async function carrierPortalRoutes(server: FastifyInstance) {
   // View all tender offers (full history: won, lost, expired, declined, etc.)
   server.get('/api/v1/carrier-portal/history', {
     schema: { tags: ['Carrier Portal'], summary: 'View full tender history for this carrier' },
-    preHandler: [authenticateCarrierJWT],
+    preHandler: authedCarrier,
   }, async (req: FastifyRequest, _reply: FastifyReply) => {
     const carrierId = (req as any).carrierUser.carrierId;
     const offers = await tenderRepo.findAllOffersForCarrier(carrierId);
