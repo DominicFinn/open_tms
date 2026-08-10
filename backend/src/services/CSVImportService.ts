@@ -462,7 +462,7 @@ export class CSVImportService implements ICSVImportService {
           },
           // status is derived inside the command from origin/destination presence
           // for non-route imports; pass 'pending' so the command resolves it.
-          status: originId && destinationId ? 'validated' : 'pending',
+          status: originId && destinationId ? 'verified' : 'pending',
         },
         metadata: { correlationId: randomUUID(), source: options.source ?? 'csv-import' },
       });

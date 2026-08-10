@@ -1,4 +1,6 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
+
+type TransactionClient = Prisma.TransactionClient;
 
 export interface BatchConvertOptions {
   mode: 'combine' | 'individual';
@@ -46,6 +48,8 @@ export interface CompatibilityCheck {
 export interface IOrderConversionService {
   checkCompatibility(orderIds: string[]): Promise<CompatibilityCheck>;
   batchConvert(orderIds: string[], options: BatchConvertOptions, userId?: string): Promise<BatchConvertResult>;
+  /** Manually convert a single order into a brand-new shipment. */
+  convertOrder(orderId: string, userId?: string): Promise<{ shipmentId: string }>;
   splitOrder(orderId: string, groups: SplitGroup[], userId?: string): Promise<SplitOrderResult>;
   /**
    * Manually add order(s) to an existing shipment, rather than creating a
@@ -78,9 +82,9 @@ export class OrderConversionService implements IOrderConversionService {
       errors.push(`Orders not found: ${missing.join(', ')}`);
     }
 
-    // Check no orders are already converted/assigned
+    // Check no orders are already assigned to a shipment
     const alreadyConverted = orders.filter(
-      (o) => o.status === 'converted' || o.status === 'assigned'
+      (o) => o.status === 'assigned'
     );
     if (alreadyConverted.length > 0) {
       errors.push(
@@ -183,7 +187,7 @@ export class OrderConversionService implements IOrderConversionService {
 
     for (const orderId of orderIds) {
       try {
-        const result = await this.convertSingleOrder(orderId, userId);
+        const result = await this.convertOrder(orderId, userId);
         shipmentIds.push(result.shipmentId);
       } catch (err: any) {
         errors.push(`Order ${orderId}: ${err.message}`);
@@ -201,7 +205,8 @@ export class OrderConversionService implements IOrderConversionService {
     };
   }
 
-  private async convertSingleOrder(orderId: string, userId?: string): Promise<{ shipmentId: string }> {
+  /** Manually convert a single order into a brand-new shipment. */
+  async convertOrder(orderId: string, userId?: string): Promise<{ shipmentId: string }> {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
       include: {
@@ -212,7 +217,7 @@ export class OrderConversionService implements IOrderConversionService {
     });
 
     if (!order) throw new Error('Order not found');
-    if (order.status === 'converted' || order.status === 'assigned') {
+    if (order.status === 'assigned') {
       throw new Error(`Order already ${order.status}`);
     }
     if (!order.originId || !order.destinationId) {
@@ -220,10 +225,7 @@ export class OrderConversionService implements IOrderConversionService {
     }
 
     return this.prisma.$transaction(async (tx) => {
-      const timestamp = Date.now().toString(36).toUpperCase().slice(-6);
       const reference = `SH-${order.orderNumber}`;
-
-      const items = this.buildItemsPayload([order]);
 
       const shipment = await tx.shipment.create({
         data: {
@@ -236,48 +238,12 @@ export class OrderConversionService implements IOrderConversionService {
           destinationId: order.destinationId!,
           pickupDate: order.requestedPickupDate || undefined,
           deliveryDate: order.requestedDeliveryDate || undefined,
-          items,
+          items: [],
           status: 'draft',
         },
       });
 
-      await tx.orderShipment.create({
-        data: { orderId: order.id, shipmentId: shipment.id },
-      });
-
-      const deliveryStop = await tx.shipmentStop.create({
-        data: {
-          shipmentId: shipment.id,
-          locationId: order.destinationId!,
-          sequenceNumber: 1,
-          stopType: 'delivery',
-          status: 'pending',
-        },
-      });
-
-      await tx.order.update({
-        where: { id: orderId },
-        data: {
-          status: 'converted',
-          deliveryStatus: 'assigned',
-          deliveryStopId: deliveryStop.id,
-        },
-      });
-
-      await tx.auditLog.create({
-        data: {
-          entityType: 'order',
-          entityId: orderId,
-          orderId,
-          action: 'delivery_status_changed',
-          description: `Order converted to shipment ${reference}`,
-          changes: {
-            before: { deliveryStatus: order.deliveryStatus, status: order.status },
-            after: { deliveryStatus: 'assigned', status: 'converted' },
-          },
-          userId,
-        },
-      });
+      await this.linkOrdersToShipment(tx, shipment, [order], userId, () => `Order converted to shipment ${reference}`);
 
       return { shipmentId: shipment.id };
     });
@@ -315,17 +281,6 @@ export class OrderConversionService implements IOrderConversionService {
         const timestamp = Date.now().toString(36).toUpperCase().slice(-6);
         const reference = `SH-BATCH-${timestamp}`;
 
-        // Use first order's origin; strictest temp control
-        const tempPriority: Record<string, number> = { frozen: 3, refrigerated: 2, ambient: 1 };
-        const strictestTemp = orders.reduce((strictest, o) =>
-          (tempPriority[o.temperatureControl] || 0) > (tempPriority[strictest] || 0)
-            ? o.temperatureControl
-            : strictest,
-          'ambient'
-        );
-
-        const items = this.buildItemsPayload(orders);
-
         const shipment = await tx.shipment.create({
           data: {
             orgId: firstOrder.orgId,
@@ -333,69 +288,19 @@ export class OrderConversionService implements IOrderConversionService {
             customerId: firstOrder.customerId,
             originId: firstOrder.originId!,
             destinationId: firstOrder.destinationId!,
-            items,
+            items: [],
             status: 'draft',
           },
         });
 
-        // Create delivery stops for each unique destination
-        const destinationMap = new Map<string, string[]>();
-        for (const order of orders) {
-          if (!order.destinationId) continue;
-          const existing = destinationMap.get(order.destinationId) || [];
-          existing.push(order.id);
-          destinationMap.set(order.destinationId, existing);
-        }
-
-        let stopSeq = 1;
-        const stopMap = new Map<string, string>(); // destinationId -> stopId
-
-        for (const [destId] of destinationMap) {
-          const stop = await tx.shipmentStop.create({
-            data: {
-              shipmentId: shipment.id,
-              locationId: destId,
-              sequenceNumber: stopSeq++,
-              stopType: 'delivery',
-              status: 'pending',
-            },
-          });
-          stopMap.set(destId, stop.id);
-        }
-
-        // Link each order and update status
-        for (const order of orders) {
-          await tx.orderShipment.create({
-            data: { orderId: order.id, shipmentId: shipment.id },
-          });
-
-          const stopId = order.destinationId ? stopMap.get(order.destinationId) : undefined;
-
-          await tx.order.update({
-            where: { id: order.id },
-            data: {
-              status: 'converted',
-              deliveryStatus: 'assigned',
-              deliveryStopId: stopId || undefined,
-            },
-          });
-
-          await tx.auditLog.create({
-            data: {
-              entityType: 'order',
-              entityId: order.id,
-              orderId: order.id,
-              action: 'delivery_status_changed',
-              description: `Order combined into batch shipment ${reference} with ${orders.length} orders`,
-              changes: {
-                before: { deliveryStatus: order.deliveryStatus, status: order.status },
-                after: { deliveryStatus: 'assigned', status: 'converted' },
-                batchOrderIds: orderIds,
-              },
-              userId,
-            },
-          });
-        }
+        await this.linkOrdersToShipment(
+          tx,
+          shipment,
+          orders,
+          userId,
+          () => `Order combined into batch shipment ${reference} with ${orders.length} orders`,
+          { batchOrderIds: orderIds },
+        );
 
         return shipment.id;
       });
@@ -439,7 +344,7 @@ export class OrderConversionService implements IOrderConversionService {
       return { success: false, shipmentIds: [], errors: ['Order not found'], message: 'Order not found' };
     }
 
-    if (order.status === 'converted' || order.status === 'assigned') {
+    if (order.status === 'assigned') {
       return {
         success: false,
         shipmentIds: [],
@@ -595,8 +500,7 @@ export class OrderConversionService implements IOrderConversionService {
         await tx.order.update({
           where: { id: orderId },
           data: {
-            status: 'converted',
-            deliveryStatus: 'assigned',
+            status: 'assigned',
           },
         });
 
@@ -608,8 +512,8 @@ export class OrderConversionService implements IOrderConversionService {
             action: 'delivery_status_changed',
             description: `Order split into ${groups.length} shipments`,
             changes: {
-              before: { deliveryStatus: order.deliveryStatus, status: order.status },
-              after: { deliveryStatus: 'assigned', status: 'converted' },
+              before: { status: order.status },
+              after: { status: 'assigned' },
               splitShipmentIds: ids,
               splitGroups: groups.length,
             },
@@ -679,7 +583,7 @@ export class OrderConversionService implements IOrderConversionService {
     }
 
     const valid = orders.filter((o) => {
-      if (o.status === 'converted' || o.status === 'assigned') {
+      if (o.status === 'assigned') {
         errors.push(`${o.orderNumber} is already ${o.status}`);
         return false;
       }
@@ -709,63 +613,13 @@ export class OrderConversionService implements IOrderConversionService {
 
     try {
       await this.prisma.$transaction(async (tx) => {
-        const existingItems = Array.isArray(shipment.items) ? (shipment.items as any[]) : [];
-        const newItems = this.buildItemsPayload(valid);
-        await tx.shipment.update({
-          where: { id: shipmentId },
-          data: { items: [...existingItems, ...newItems] },
-        });
-
-        const maxSeq = await tx.shipmentStop.aggregate({
-          where: { shipmentId },
-          _max: { sequenceNumber: true },
-        });
-        let nextSeq = (maxSeq._max.sequenceNumber || 0) + 1;
-
-        for (const order of valid) {
-          let stop = await tx.shipmentStop.findFirst({
-            where: { shipmentId, locationId: order.destinationId! },
-          });
-          if (!stop) {
-            stop = await tx.shipmentStop.create({
-              data: {
-                shipmentId,
-                locationId: order.destinationId!,
-                sequenceNumber: nextSeq++,
-                stopType: 'delivery',
-                status: 'pending',
-              },
-            });
-          }
-
-          await tx.orderShipment.create({
-            data: { orderId: order.id, shipmentId },
-          });
-
-          await tx.order.update({
-            where: { id: order.id },
-            data: {
-              status: 'converted',
-              deliveryStatus: 'assigned',
-              deliveryStopId: stop.id,
-            },
-          });
-
-          await tx.auditLog.create({
-            data: {
-              entityType: 'order',
-              entityId: order.id,
-              orderId: order.id,
-              action: 'delivery_status_changed',
-              description: `Order manually added to shipment ${shipment.reference}`,
-              changes: {
-                before: { deliveryStatus: order.deliveryStatus, status: order.status },
-                after: { deliveryStatus: 'assigned', status: 'converted' },
-              },
-              userId,
-            },
-          });
-        }
+        await this.linkOrdersToShipment(
+          tx,
+          shipment,
+          valid,
+          userId,
+          (order) => `Order manually added to shipment ${shipment.reference}`,
+        );
       });
     } catch (err: any) {
       return { success: false, shipmentIds: [], errors: [err.message], message: 'Failed to add orders to shipment' };
@@ -780,6 +634,82 @@ export class OrderConversionService implements IOrderConversionService {
           ? `Added ${valid.length} order${valid.length === 1 ? '' : 's'} to shipment ${shipment.reference}`
           : `Added ${valid.length} order${valid.length === 1 ? '' : 's'}, ${errors.length} skipped`,
     };
+  }
+
+  /**
+   * Shared linking mechanics for attaching order(s) to a shipment — appends
+   * items, finds-or-creates a delivery stop per unique destination, links
+   * via OrderShipment, flips each order to 'assigned', and audit-logs it.
+   * Used by every order→shipment path (convert, combine, manually add to an
+   * existing shipment, and lane-based auto-assignment) so stop/status/audit
+   * mechanics live in exactly one place. Caller owns the transaction and any
+   * pre-validation (shipment status, origin/customer match, etc).
+   */
+  private async linkOrdersToShipment(
+    tx: TransactionClient,
+    shipment: { id: string; items: Prisma.JsonValue },
+    orders: any[],
+    userId: string | undefined,
+    describe: (order: any) => string,
+    extraChanges?: Record<string, unknown>,
+  ): Promise<void> {
+    const existingItems = Array.isArray(shipment.items) ? (shipment.items as any[]) : [];
+    const newItems = this.buildItemsPayload(orders);
+    await tx.shipment.update({
+      where: { id: shipment.id },
+      data: { items: [...existingItems, ...newItems] },
+    });
+
+    const maxSeq = await tx.shipmentStop.aggregate({
+      where: { shipmentId: shipment.id },
+      _max: { sequenceNumber: true },
+    });
+    let nextSeq = (maxSeq._max.sequenceNumber || 0) + 1;
+
+    for (const order of orders) {
+      let stop = await tx.shipmentStop.findFirst({
+        where: { shipmentId: shipment.id, locationId: order.destinationId! },
+      });
+      if (!stop) {
+        stop = await tx.shipmentStop.create({
+          data: {
+            shipmentId: shipment.id,
+            locationId: order.destinationId!,
+            sequenceNumber: nextSeq++,
+            stopType: 'delivery',
+            status: 'pending',
+          },
+        });
+      }
+
+      await tx.orderShipment.create({
+        data: { orderId: order.id, shipmentId: shipment.id },
+      });
+
+      await tx.order.update({
+        where: { id: order.id },
+        data: {
+          status: 'assigned',
+          deliveryStopId: stop.id,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          entityType: 'order',
+          entityId: order.id,
+          orderId: order.id,
+          action: 'delivery_status_changed',
+          description: describe(order),
+          changes: {
+            before: { status: order.status },
+            after: { status: 'assigned' },
+            ...extraChanges,
+          },
+          userId,
+        },
+      });
+    }
   }
 
   private buildItemsPayload(orders: any[]): any[] {

@@ -4,7 +4,7 @@ import { createTestEvent } from '../helpers/testUtils';
 
 const mockOrder = {
   id: 'order-1', orderNumber: 'ORD-001', poNumber: null, status: 'pending',
-  deliveryStatus: 'unassigned', customerId: 'cust-1', serviceLevel: 'LTL',
+  deliveryStatus: null, customerId: 'cust-1', serviceLevel: 'LTL',
   temperatureControl: 'ambient', requiresHazmat: false,
   requestedDeliveryDate: null, importSource: 'manual',
   createdAt: new Date(), updatedAt: new Date(),
@@ -94,7 +94,7 @@ describe('OrderProjection', () => {
     it('updates status in read model', async () => {
       const event = createTestEvent(
         EVENT_TYPES.ORDER_STATUS_CHANGED, 'order', 'order-1',
-        { orderReference: 'ORD-001', previousStatus: 'pending', newStatus: 'validated' }
+        { orderReference: 'ORD-001', previousStatus: 'pending', newStatus: 'verified' }
       );
 
       await projection.handle(event);
@@ -102,7 +102,7 @@ describe('OrderProjection', () => {
       expect(mockPrisma.orderReadModel.update).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: 'order-1' },
-          data: expect.objectContaining({ status: 'validated' }),
+          data: expect.objectContaining({ status: 'verified' }),
         })
       );
     });
@@ -112,21 +112,24 @@ describe('OrderProjection', () => {
     it('updates delivery status in read model', async () => {
       const event = createTestEvent(
         EVENT_TYPES.ORDER_DELIVERY_STATUS_CHANGED, 'order', 'order-1',
-        { orderReference: 'ORD-001', previousStatus: 'unassigned', newStatus: 'assigned' }
+        { orderReference: 'ORD-001', previousStatus: null, newStatus: 'in_transit' }
       );
 
       await projection.handle(event);
 
       expect(mockPrisma.orderReadModel.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ deliveryStatus: 'assigned' }),
+          data: expect.objectContaining({ deliveryStatus: 'in_transit' }),
         })
       );
     });
   });
 
   describe('onAssignedToShipment', () => {
-    it('sets shipment reference in read model', async () => {
+    it('sets shipment reference in read model without touching deliveryStatus', async () => {
+      // deliveryStatus is no longer a valid value here — order.status already
+      // says 'assigned'; deliveryStatus stays null until the order actually
+      // starts moving (in_transit/delivered/exception).
       const event = createTestEvent(
         EVENT_TYPES.ORDER_ASSIGNED_TO_SHIPMENT, 'order', 'order-1',
         { orderReference: 'ORD-001', shipmentId: 'ship-1', shipmentReference: 'SH-001' }
@@ -139,10 +142,11 @@ describe('OrderProjection', () => {
           data: expect.objectContaining({
             shipmentId: 'ship-1',
             shipmentReference: 'SH-001',
-            deliveryStatus: 'assigned',
           }),
         })
       );
+      const call = mockPrisma.orderReadModel.update.mock.calls[0][0];
+      expect(call.data).not.toHaveProperty('deliveryStatus');
     });
   });
 

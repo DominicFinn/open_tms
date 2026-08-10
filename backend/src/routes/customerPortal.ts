@@ -896,7 +896,7 @@ export async function customerPortalRoutes(server: FastifyInstance) {
     const originId = await resolveLocation('origin');
     const destinationId = await resolveLocation('destination');
 
-    const status = originId && destinationId ? 'validated' : 'pending';
+    const status = originId && destinationId ? 'verified' : 'pending';
 
     // Phase 1: server-side mode-rules re-validation. The portal form enforces
     // the same matrix client-side; we re-check here so a tampered request

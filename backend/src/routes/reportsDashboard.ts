@@ -152,7 +152,7 @@ export async function reportsDashboardRoutes(server: FastifyInstance) {
 
     const deliveryStatusMap: Record<string, number> = {};
     for (const row of ordersByDelivery) {
-      deliveryStatusMap[row.deliveryStatus] = row._count;
+      deliveryStatusMap[row.deliveryStatus || 'not_moving'] = row._count;
     }
 
     // ── Assemble financial stats ────────────────────────────────────────

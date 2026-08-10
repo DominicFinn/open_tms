@@ -29,7 +29,6 @@ export class OrderAutoArchiveService {
         OR: [
           { deliveryStatus: 'delivered', deliveredAt: { lt: cutoff } },
           { status: 'cancelled', updatedAt: { lt: cutoff } },
-          { deliveryStatus: 'cancelled', updatedAt: { lt: cutoff } },
         ],
       },
       select: { id: true, orgId: true },

@@ -115,7 +115,7 @@ export class OrderProjection implements IEventHandler {
         orderNumber: order.orderNumber,
         poNumber: order.poNumber,
         status: order.status,
-        deliveryStatus: order.deliveryStatus || 'unassigned',
+        deliveryStatus: order.deliveryStatus,
         customerName: order.customer.name,
         customerId: order.customerId,
         originName: order.origin?.name ?? null,
@@ -137,7 +137,7 @@ export class OrderProjection implements IEventHandler {
       },
       update: {
         status: order.status,
-        deliveryStatus: order.deliveryStatus || 'unassigned',
+        deliveryStatus: order.deliveryStatus,
         customerName: order.customer.name,
         updatedAt: order.updatedAt,
       },
@@ -213,7 +213,6 @@ export class OrderProjection implements IEventHandler {
       data: {
         shipmentId: payload.shipmentId,
         shipmentReference: payload.shipmentReference,
-        deliveryStatus: 'assigned',
         updatedAt: new Date(),
       },
     }).catch((err: Error) => {
@@ -354,7 +353,7 @@ export class OrderProjection implements IEventHandler {
         orderNumber: order.orderNumber,
         poNumber: order.poNumber,
         status: order.status,
-        deliveryStatus: order.deliveryStatus || 'unassigned',
+        deliveryStatus: order.deliveryStatus,
         customerName: order.customer.name,
         customerId: order.customerId,
         originName: order.origin?.name ?? null,

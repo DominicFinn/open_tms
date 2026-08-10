@@ -113,7 +113,7 @@ describe('Quote Command Handlers', () => {
         expect.objectContaining({
           data: expect.objectContaining({
             customerId: 'cust-1',
-            status: 'validated',
+            status: 'verified',
           }),
         })
       );

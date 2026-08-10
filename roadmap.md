@@ -25,7 +25,7 @@
 - **Order Management** - CSV import, manual creation, auto-assignment to lanes, pending lane requests, special requirements (FTL/LTL, temp control, hazmat)
 - **Order Archive, Soft Delete & Auto-Archive** - Customers and operational users (`orders:write`) archive an order (recoverable, removed from active lists, captures pre-archive status for restore); admins (`orders:delete`) soft-delete (hidden everywhere, retained for audit) and unarchive (restores prior status). Delivered/cancelled orders are auto-archived after a retention window (default 30 days) by a daily pg-boss cron.
 - **Customer API** - REST API for programmatic order creation, API key auth, rate limiting, Swagger docs
-- **Order Status Lifecycle** - Status flow (unassigned to delivered/exception), geofencing, IoT triggers, audit trail, timeline API/UI
+- **Order Status Lifecycle** - `pending → verified → assigned` (+ `issue`, `cancelled`, `archived`) on the order itself; a separate nullable `deliveryStatus` (`in_transit → delivered`, or `exception`) once assigned. Cancel is only valid pre-assignment; `issue` pairs with a real Triage issue row (verification failure or no matching lane). Geofencing, IoT triggers, audit trail, timeline API/UI.
 - **EDI Import (850)** - X12 850 parser, EDI partner config, file storage/dedup, preview, history, SFTP polling (edi-collector)
 - **Order to Shipment Workflow** - Pending queue, auto-match to lanes/carriers, combine/split orders
 - **Queue-Based Integration** - pg-boss queue engine, outbound carrier/tracking workers, inbound webhook worker, retry with backoff
@@ -161,7 +161,7 @@ The current reporting is financial-only (AR aging, carrier spend, margin analysi
   - Reports app with own app switcher entry and dashboard landing page
   - Single performant API call (`GET /api/v1/reports/dashboard`) - all queries hit read models only
   - Shipment stats: total, in transit, at locations (pickup + delivery), delivered, full status breakdown with bars
-  - Order stats: total with delivery status breakdown (unassigned/assigned/in transit/delivered/exception)
+  - Order stats: total with delivery status breakdown (not yet moving/in transit/delivered/exception)
   - Financial summary: revenue, cost spent, margin ($ and %), with period-over-period trend arrows
   - Invoice health: outstanding count/value, overdue count/value
   - Issue overview: active issues, critical issues

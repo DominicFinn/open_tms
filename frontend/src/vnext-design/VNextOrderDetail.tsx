@@ -12,6 +12,7 @@ import {
   Pencil,
   Trash2,
   User,
+  XCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -38,6 +39,7 @@ import {
 } from '@/components/ui/dialog';
 import HandlingUnitsEditor, { HUEditorEndpoints } from '../components/HandlingUnitsEditor';
 import { useCurrentUser } from '../hooks/useCurrentUser';
+import { cn } from '@/lib/utils';
 
 type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning' | 'info' | 'muted';
 
@@ -90,6 +92,14 @@ interface AuditLog {
   userName?: string;
 }
 
+interface IssueSummary {
+  id: string;
+  title: string;
+  status: string;
+  priority: string;
+  category?: string;
+}
+
 interface OrderData {
   id: string;
   orderNumber?: string;
@@ -118,23 +128,55 @@ interface OrderData {
   updatedAt?: string;
 }
 
+// Order.status enum: pending, verified, assigned, issue, cancelled, archived
 function statusVariant(status?: string): BadgeVariant {
   const s = status?.toLowerCase().replace(/[_ ]/g, '');
-  if (s === 'readytoship' || s === 'ready') return 'success';
-  if (s === 'pendingapproval' || s === 'pending') return 'warning';
-  if (s === 'shipped' || s === 'intransit') return 'info';
-  if (s === 'delivered') return 'success';
-  if (s === 'cancelled' || s === 'canceled') return 'destructive';
-  if (s === 'draft') return 'secondary';
+  if (s === 'verified') return 'success';
+  if (s === 'pending') return 'warning';
+  if (s === 'assigned') return 'info';
+  if (s === 'issue') return 'destructive';
+  if (s === 'cancelled') return 'destructive';
+  if (s === 'archived') return 'secondary';
   return 'secondary';
 }
 
+// Order.deliveryStatus: null (not moving yet), in_transit, delivered, exception
 function deliveryStatusVariant(status?: string): BadgeVariant {
   const s = status?.toLowerCase().replace(/[_ ]/g, '');
   if (s === 'delivered') return 'success';
   if (s === 'intransit') return 'info';
-  if (s === 'pending') return 'warning';
-  if (s === 'failed' || s === 'exception') return 'destructive';
+  if (s === 'exception') return 'destructive';
+  return 'secondary';
+}
+
+// 'verified' and 'assigned' read as "Available" / "In shipment" — see
+// VNextOrders.tsx for the same mapping and the rationale.
+const ORDER_STATUS_LABEL: Record<string, string> = {
+  pending: 'Pending approval',
+  verified: 'Available',
+  assigned: 'In shipment',
+  issue: 'Needs attention',
+  cancelled: 'Cancelled',
+  archived: 'Archived',
+};
+function orderStatusLabel(status?: string): string {
+  const s = status?.toLowerCase().replace(/[_ ]/g, '') || '';
+  return ORDER_STATUS_LABEL[s] || status || '';
+}
+
+const DELIVERY_STATUS_LABEL: Record<string, string> = {
+  in_transit: 'In transit',
+  delivered: 'Delivered',
+  exception: 'Exception',
+};
+function deliveryStatusLabel(status?: string): string {
+  if (!status) return 'Not moving yet';
+  return DELIVERY_STATUS_LABEL[status] || status;
+}
+
+function issuePriorityVariant(priority?: string): BadgeVariant {
+  if (priority === 'critical' || priority === 'high') return 'destructive';
+  if (priority === 'medium') return 'warning';
   return 'secondary';
 }
 
@@ -171,6 +213,9 @@ export default function VNextOrderDetail() {
   const [deleting, setDeleting] = useState(false);
   const [unarchiving, setUnarchiving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [confirmCancel, setConfirmCancel] = useState(false);
+  const [issues, setIssues] = useState<IssueSummary[]>([]);
 
   const loadOrder = useCallback(async () => {
     try {
@@ -195,6 +240,14 @@ export default function VNextOrderDetail() {
     return () => { cancelled = true; };
   }, [loadOrder]);
 
+  useEffect(() => {
+    if (!id) return;
+    fetch(`${API_URL}/api/v1/issues?sourceEntityType=order&sourceEntityId=${id}`)
+      .then(res => res.json())
+      .then(json => setIssues(json.data || []))
+      .catch(() => setIssues([]));
+  }, [id]);
+
   const handleArchive = useCallback(async () => {
     if (!id) return;
     setArchiving(true);
@@ -213,6 +266,26 @@ export default function VNextOrderDetail() {
       setArchiving(false);
     }
   }, [id, navigate]);
+
+  const handleCancel = useCallback(async () => {
+    if (!id) return;
+    setCancelling(true);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/orders/${id}/cancel`, { method: 'POST' });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json.error) {
+        toast.error(json.error || 'Failed to cancel order', { duration: 8000 });
+        return;
+      }
+      toast.success('Order cancelled');
+      loadOrder();
+    } catch {
+      toast.error('Failed to cancel order');
+    } finally {
+      setCancelling(false);
+      setConfirmCancel(false);
+    }
+  }, [id, loadOrder]);
 
   const handleUnarchive = useCallback(async () => {
     if (!id) return;
@@ -299,9 +372,9 @@ export default function VNextOrderDetail() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">{order.orderNumber || order.id}</h1>
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <Badge variant={statusVariant(order.status)}>{order.status}</Badge>
+            <Badge variant={statusVariant(order.status)}>{orderStatusLabel(order.status)}</Badge>
             {order.deliveryStatus && (
-              <Badge variant={deliveryStatusVariant(order.deliveryStatus)}>{order.deliveryStatus}</Badge>
+              <Badge variant={deliveryStatusVariant(order.deliveryStatus)}>{deliveryStatusLabel(order.deliveryStatus)}</Badge>
             )}
             {order.poNumber && (
               <span className="text-sm text-muted-foreground">PO# {order.poNumber}</span>
@@ -317,6 +390,18 @@ export default function VNextOrderDetail() {
             <FileText className="h-4 w-4" />
             Documents
           </Button>
+          {hasPermission('orders:write') && ['pending', 'verified', 'issue'].includes(order.status) && !order.deletedAt && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setConfirmCancel(true)}
+              disabled={cancelling}
+              className="text-destructive hover:text-destructive"
+            >
+              <XCircle className="h-4 w-4" />
+              Cancel order
+            </Button>
+          )}
           {hasPermission('orders:write') && !order.archived && !order.deletedAt && (
             <Button variant="outline" size="sm" onClick={handleArchive} disabled={archiving}>
               {archiving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Archive className="h-4 w-4" />}
@@ -350,6 +435,35 @@ export default function VNextOrderDetail() {
         </div>
       )}
 
+      {/* Open issues banner */}
+      {(() => {
+        const openIssues = issues.filter(i => i.status === 'open' || i.status === 'in_progress');
+        if (openIssues.length === 0) return null;
+        const hasCritical = openIssues.some(i => i.priority === 'critical');
+        return (
+          <div
+            className={cn(
+              'flex flex-wrap items-center gap-3 rounded-md border p-4 text-sm',
+              hasCritical ? 'border-destructive/30 bg-destructive/10' : 'border-warning/30 bg-warning/10',
+            )}
+          >
+            <CircleAlert className={cn('h-5 w-5', hasCritical ? 'text-destructive' : 'text-warning')} />
+            <div className="flex-1">
+              <span className={cn('font-medium', hasCritical ? 'text-destructive' : 'text-warning')}>
+                {openIssues.length} open issue{openIssues.length === 1 ? '' : 's'} on this order.
+              </span>
+              <span className="ml-1 text-muted-foreground">
+                {openIssues[0].title}
+                {openIssues.length > 1 ? ` and ${openIssues.length - 1} more` : ''}
+              </span>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => navigate(`/issues/${openIssues[0].id}`)}>
+              View
+            </Button>
+          </div>
+        );
+      })()}
+
       {/* Soft-delete confirmation (admin) */}
       <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <DialogContent>
@@ -365,6 +479,26 @@ export default function VNextOrderDetail() {
             <Button variant="destructive" onClick={handleSoftDelete} disabled={deleting}>
               {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
               Delete order
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cancel confirmation */}
+      <Dialog open={confirmCancel} onOpenChange={setConfirmCancel}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cancel this order?</DialogTitle>
+            <DialogDescription>
+              {order.orderNumber || order.id} will be marked cancelled. This can only be done before the order
+              is assigned to a shipment, and can't be undone from here.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmCancel(false)} disabled={cancelling}>Never mind</Button>
+            <Button variant="destructive" onClick={handleCancel} disabled={cancelling}>
+              {cancelling ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
+              Cancel order
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -694,15 +828,38 @@ export default function VNextOrderDetail() {
             </CardHeader>
             <CardContent className="space-y-4">
               <InfoItem label="Order status">
-                <Badge variant={statusVariant(order.status)}>{order.status}</Badge>
+                <Badge variant={statusVariant(order.status)}>{orderStatusLabel(order.status)}</Badge>
               </InfoItem>
               <InfoItem label="Delivery status">
                 {order.deliveryStatus ? (
-                  <Badge variant={deliveryStatusVariant(order.deliveryStatus)}>{order.deliveryStatus}</Badge>
+                  <Badge variant={deliveryStatusVariant(order.deliveryStatus)}>{deliveryStatusLabel(order.deliveryStatus)}</Badge>
                 ) : '-'}
               </InfoItem>
             </CardContent>
           </Card>
+
+          {issues.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Related issues</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {issues.map(issue => (
+                  <Link
+                    key={issue.id}
+                    to={`/issues/${issue.id}`}
+                    className="block rounded-md border border-border p-3 text-sm hover:bg-muted/40"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <Badge variant={issuePriorityVariant(issue.priority)} className="capitalize">{issue.priority}</Badge>
+                      <span className="text-xs capitalize text-muted-foreground">{issue.status.replace(/_/g, ' ')}</span>
+                    </div>
+                    <div className="mt-2 font-medium">{issue.title}</div>
+                  </Link>
+                ))}
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardHeader>

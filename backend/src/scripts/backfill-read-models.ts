@@ -54,7 +54,7 @@ async function backfillOrders(orgId: string): Promise<number> {
         orderNumber: order.orderNumber,
         poNumber: order.poNumber,
         status: order.status,
-        deliveryStatus: order.deliveryStatus || 'unassigned',
+        deliveryStatus: order.deliveryStatus,
         customerName: order.customer.name,
         customerId: order.customerId,
         originName: order.origin?.name ?? null,
@@ -80,7 +80,7 @@ async function backfillOrders(orgId: string): Promise<number> {
       },
       update: {
         status: order.status,
-        deliveryStatus: order.deliveryStatus || 'unassigned',
+        deliveryStatus: order.deliveryStatus,
         customerName: order.customer.name,
         shipmentId: shipment?.id ?? null,
         shipmentReference: shipment?.reference ?? null,

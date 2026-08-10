@@ -349,7 +349,7 @@ export async function shipmentRoutes(server: FastifyInstance) {
       where: {
         orgId,
         archived: false,
-        status: 'validated',
+        status: 'verified',
         originId: shipment.originId,
         customerId: shipment.customerId,
         orderShipments: { none: {} },

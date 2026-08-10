@@ -199,6 +199,42 @@ export class CreateOrderCommandHandler extends BaseCommandHandler<CreateOrderPay
     const tuCount = (order as any).trackableUnits?.length ?? 0;
     const liCount = (order as any).lineItems?.length ?? 0;
 
+    // status='issue' at creation time means location resolution failed
+    // (raw address data was supplied but couldn't be resolved to a Location).
+    // Pair it with a real Issue/Triage row rather than a bare status flag, so
+    // "why is this order stuck" always has one place to look.
+    if (status === 'issue') {
+      const missingOrigin = !!orderData.originData && !orderData.originId;
+      const missingDestination = !!orderData.destinationData && !orderData.destinationId;
+      const parts = [missingOrigin && 'origin', missingDestination && 'destination'].filter(Boolean);
+
+      const issue = await tx.issue.create({
+        data: {
+          orgId: orgIdToWrite,
+          title: `Address verification failed: ${order.orderNumber}`,
+          description: `Could not resolve the ${parts.join(' and ')} address for this order to a known location.`,
+          status: 'open',
+          priority: 'high',
+          category: 'compliance',
+          sourceEntityType: 'order',
+          sourceEntityId: order.id,
+        },
+      });
+
+      emit(this.createEvent(command, {
+        type: EVENT_TYPES.ISSUE_CREATED,
+        entityType: 'issue',
+        entityId: issue.id,
+        payload: {
+          title: issue.title,
+          priority: issue.priority,
+          category: issue.category,
+          sourceEntityType: issue.sourceEntityType,
+          sourceEntityId: issue.sourceEntityId,
+        },
+      }));
+    }
+
     // Emit domain event
     emit(
       this.createEvent(command, {

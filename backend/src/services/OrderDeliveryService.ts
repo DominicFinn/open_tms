@@ -3,7 +3,7 @@ import { ICargoReconciliationService } from './CargoReconciliationService.js';
 
 export interface DeliveryStatusUpdate {
   orderId: string;
-  deliveryStatus: 'unassigned' | 'assigned' | 'in_transit' | 'delivered' | 'exception' | 'cancelled';
+  deliveryStatus: 'in_transit' | 'delivered' | 'exception';
   deliveryMethod?: 'manual' | 'geofence' | 'geofence_iot' | 'auto' | 'driver_app';
   deliveryConfirmedBy?: string; // User ID or system identifier
   deliveryNotes?: string;
@@ -218,10 +218,16 @@ export class OrderDeliveryService implements IOrderDeliveryService {
       where: { id: shipmentStopId },
       include: {
         orders: {
+          // Prisma's notIn doesn't reliably include NULL rows (the common
+          // case now — deliveryStatus is null until an order actually
+          // starts moving), so enumerate the "still active" states
+          // explicitly rather than exclude 'delivered'.
           where: {
-            deliveryStatus: {
-              notIn: ['delivered', 'cancelled']
-            }
+            OR: [
+              { deliveryStatus: null },
+              { deliveryStatus: 'in_transit' },
+              { deliveryStatus: 'exception' },
+            ],
           }
         },
         location: true
@@ -251,9 +257,11 @@ export class OrderDeliveryService implements IOrderDeliveryService {
         const updateResult = await tx.order.updateMany({
           where: {
             deliveryStopId: shipmentStopId,
-            deliveryStatus: {
-              notIn: ['delivered', 'cancelled']
-            }
+            OR: [
+              { deliveryStatus: null },
+              { deliveryStatus: 'in_transit' },
+              { deliveryStatus: 'exception' },
+            ],
           },
           data: {
             deliveryStatus: 'delivered',
@@ -287,14 +295,12 @@ export class OrderDeliveryService implements IOrderDeliveryService {
       // If stop is in_progress or arrived, mark orders as in_transit
       if (status === 'arrived' || status === 'in_progress') {
         const affectedOrders = stop.orders.filter(
-          (o: any) => o.deliveryStatus === 'assigned' || o.deliveryStatus === 'unassigned'
+          (o: any) => o.deliveryStatus === null
         );
         const updateResult = await tx.order.updateMany({
           where: {
             deliveryStopId: shipmentStopId,
-            deliveryStatus: {
-              in: ['assigned', 'unassigned']
-            }
+            deliveryStatus: null,
           },
           data: {
             deliveryStatus: 'in_transit',
@@ -371,9 +377,11 @@ export class OrderDeliveryService implements IOrderDeliveryService {
         location: true,
         orders: {
           where: {
-            deliveryStatus: {
-              notIn: ['delivered', 'cancelled']
-            }
+            OR: [
+              { deliveryStatus: null },
+              { deliveryStatus: 'in_transit' },
+              { deliveryStatus: 'exception' },
+            ],
           }
         }
       },

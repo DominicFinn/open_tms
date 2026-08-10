@@ -1113,58 +1113,58 @@ async function seedOrders(
 
   const specs = [
     // Nordic Frost - frozen foods
-    { cust: 'Nordic Frost Foods', origin: 'Green Bay', dest: 'Denver', service: 'FTL', temp: 'frozen', status: 'converted', delivery: 'in_transit', items: [
+    { cust: 'Nordic Frost Foods', origin: 'Green Bay', dest: 'Denver', service: 'FTL', temp: 'frozen', status: 'assigned', delivery: 'in_transit', items: [
       { sku: 'NF-ICECREAM-001', desc: 'Vanilla Ice Cream 4L Tubs', qty: 480, weight: 2400, unitPrice: 850, fclass: '100' },
       { sku: 'NF-FROZENPEA-002', desc: 'Frozen Peas 2kg Bags', qty: 720, weight: 1440, unitPrice: 320, fclass: '125' },
     ], palletType: gmaPallet, unitCount: 20 },
-    { cust: 'Nordic Frost Foods', origin: 'Green Bay', dest: 'Phoenix', service: 'FTL', temp: 'frozen', status: 'converted', delivery: 'assigned', items: [
+    { cust: 'Nordic Frost Foods', origin: 'Green Bay', dest: 'Phoenix', service: 'FTL', temp: 'frozen', status: 'assigned', delivery: 'assigned', items: [
       { sku: 'NF-FISH-004', desc: 'Frozen Atlantic Salmon Fillets', qty: 1200, weight: 6000, unitPrice: 1250, fclass: '85' },
     ], palletType: gmaPallet, unitCount: 24 },
     // Axiom Pharma - refrigerated
-    { cust: 'Axiom Pharma', origin: 'Cambridge', dest: 'Rochester', service: 'FTL', temp: 'refrigerated', status: 'converted', delivery: 'delivered', items: [
+    { cust: 'Axiom Pharma', origin: 'Cambridge', dest: 'Rochester', service: 'FTL', temp: 'refrigerated', status: 'assigned', delivery: 'delivered', items: [
       { sku: 'AX-VAX-112', desc: 'Flu Vaccine Vials (Refrigerated 2-8°C)', qty: 18000, weight: 540, unitPrice: 4200, fclass: '60' },
       { sku: 'AX-INSULIN-204', desc: 'Insulin Pens (Refrigerated)', qty: 5000, weight: 125, unitPrice: 3500, fclass: '60' },
     ], palletType: plasticPallet, unitCount: 6 },
     // BluePeak Electronics
-    { cust: 'BluePeak Electronics', origin: 'San Jose', dest: 'Seattle', service: 'LTL', temp: 'ambient', status: 'validated', delivery: 'unassigned', items: [
+    { cust: 'BluePeak Electronics', origin: 'San Jose', dest: 'Seattle', service: 'LTL', temp: 'ambient', status: 'verified', delivery: 'unassigned', items: [
       { sku: 'BP-LAPTOP-X1', desc: 'BluePeak X1 Pro Laptop', qty: 240, weight: 480, unitPrice: 180000, fclass: '77.5' },
       { sku: 'BP-MON-27', desc: '27" 4K Monitor', qty: 120, weight: 960, unitPrice: 45000, fclass: '92.5' },
     ], palletType: eurPallet, unitCount: 8 },
-    { cust: 'BluePeak Electronics', origin: 'San Jose', dest: 'Chicago', service: 'FTL', temp: 'ambient', status: 'converted', delivery: 'in_transit', items: [
+    { cust: 'BluePeak Electronics', origin: 'San Jose', dest: 'Chicago', service: 'FTL', temp: 'ambient', status: 'assigned', delivery: 'in_transit', items: [
       { sku: 'BP-PHONE-14', desc: 'BluePeak Phone 14 Series', qty: 2400, weight: 480, unitPrice: 95000, fclass: '77.5' },
       { sku: 'BP-TABLET-A', desc: 'BluePeak Tab A10', qty: 800, weight: 320, unitPrice: 35000, fclass: '85' },
     ], palletType: eurPallet, unitCount: 12 },
     // Metro Grocer - refrigerated
-    { cust: 'Metro Grocer Co', origin: 'Ontario', dest: 'Denver', service: 'FTL', temp: 'refrigerated', status: 'converted', delivery: 'delivered', items: [
+    { cust: 'Metro Grocer Co', origin: 'Ontario', dest: 'Denver', service: 'FTL', temp: 'refrigerated', status: 'assigned', delivery: 'delivered', items: [
       { sku: 'MG-DAIRY-MILK', desc: 'Whole Milk 4L Jugs', qty: 960, weight: 3840, unitPrice: 420, fclass: '70' },
       { sku: 'MG-PRODUCE-LET', desc: 'Iceberg Lettuce Cases', qty: 480, weight: 2400, unitPrice: 680, fclass: '125' },
       { sku: 'MG-MEAT-CHK', desc: 'Fresh Whole Chickens', qty: 720, weight: 1440, unitPrice: 890, fclass: '85' },
     ], palletType: plasticPallet, unitCount: 26 },
-    { cust: 'Metro Grocer Co', origin: 'Ontario', dest: 'Phoenix', service: 'FTL', temp: 'refrigerated', status: 'converted', delivery: 'exception', items: [
+    { cust: 'Metro Grocer Co', origin: 'Ontario', dest: 'Phoenix', service: 'FTL', temp: 'refrigerated', status: 'assigned', delivery: 'exception', items: [
       { sku: 'MG-DAIRY-YOG', desc: 'Greek Yogurt 1kg Tubs', qty: 1200, weight: 1200, unitPrice: 520, fclass: '92.5' },
     ], palletType: plasticPallet, unitCount: 15, exceptionType: 'delay', exceptionNotes: 'Stuck at weigh station - DOT inspection in progress' },
     // Titan Auto Parts
-    { cust: 'Titan Auto Parts', origin: 'Dallas', dest: 'Columbus', service: 'FTL', temp: 'ambient', status: 'converted', delivery: 'in_transit', items: [
+    { cust: 'Titan Auto Parts', origin: 'Dallas', dest: 'Columbus', service: 'FTL', temp: 'ambient', status: 'assigned', delivery: 'in_transit', items: [
       { sku: 'TA-BRAKE-PAD-F150', desc: 'Brake Pad Set F-150', qty: 400, weight: 3200, unitPrice: 4500, fclass: '70' },
       { sku: 'TA-ALT-GEN2', desc: 'Alternator Assembly Gen2', qty: 150, weight: 1500, unitPrice: 18500, fclass: '85' },
     ], palletType: gmaPallet, unitCount: 18 },
     // GreenField Chemicals - hazmat
-    { cust: 'GreenField Chemicals', origin: 'Houston', dest: 'Chicago', service: 'FTL', temp: 'ambient', hazmat: true, status: 'converted', delivery: 'in_transit', items: [
+    { cust: 'GreenField Chemicals', origin: 'Houston', dest: 'Chicago', service: 'FTL', temp: 'ambient', hazmat: true, status: 'assigned', delivery: 'in_transit', items: [
       { sku: 'GF-SOLV-101', desc: 'Industrial Solvent UN1993 (Class 3)', qty: 40, weight: 8000, unitPrice: 12000, fclass: '55' },
     ], palletType: gmaPallet, unitCount: 10 },
     { cust: 'GreenField Chemicals', origin: 'Houston', dest: 'Atlanta', service: 'FTL', temp: 'ambient', hazmat: true, status: 'pending', delivery: 'unassigned', items: [
       { sku: 'GF-ACID-205', desc: 'Sulfuric Acid 98% UN1830 (Class 8)', qty: 20, weight: 9000, unitPrice: 8500, fclass: '60' },
     ], palletType: plasticPallet, unitCount: 10 },
     // Harbor Apparel
-    { cust: 'Harbor Apparel Group', origin: 'Long Beach', dest: 'Chicago', service: 'FTL', temp: 'ambient', status: 'converted', delivery: 'delivered', items: [
+    { cust: 'Harbor Apparel Group', origin: 'Long Beach', dest: 'Chicago', service: 'FTL', temp: 'ambient', status: 'assigned', delivery: 'delivered', items: [
       { sku: 'HA-TSHIRT-SS24', desc: 'Summer T-Shirt Collection SS24', qty: 4800, weight: 1920, unitPrice: 520, fclass: '100' },
       { sku: 'HA-DENIM-CLSC', desc: 'Classic Denim Jeans', qty: 2400, weight: 2400, unitPrice: 1850, fclass: '100' },
     ], palletType: eurPallet, unitCount: 16 },
-    { cust: 'Harbor Apparel Group', origin: 'Savannah', dest: 'Miami', service: 'LTL', temp: 'ambient', status: 'validated', delivery: 'unassigned', items: [
+    { cust: 'Harbor Apparel Group', origin: 'Savannah', dest: 'Miami', service: 'LTL', temp: 'ambient', status: 'verified', delivery: 'unassigned', items: [
       { sku: 'HA-DRESS-FALL', desc: 'Fall Dress Collection', qty: 600, weight: 360, unitPrice: 3200, fclass: '150' },
     ], palletType: eurPallet, unitCount: 4 },
     // StellarMed - ultra-cold pharma
-    { cust: 'StellarMed Laboratories', origin: 'Cambridge', dest: 'Rochester', service: 'FTL', temp: 'frozen', status: 'converted', delivery: 'in_transit', items: [
+    { cust: 'StellarMed Laboratories', origin: 'Cambridge', dest: 'Rochester', service: 'FTL', temp: 'frozen', status: 'assigned', delivery: 'in_transit', items: [
       { sku: 'SM-MRNA-BATCH22', desc: 'mRNA Therapeutic Batch-22 (-80°C)', qty: 1200, weight: 48, unitPrice: 28500, fclass: '60' },
       { sku: 'SM-BIOSAMP-X', desc: 'Biological Samples Type X', qty: 480, weight: 72, unitPrice: 9500, fclass: '60' },
     ], palletType: plasticPallet, unitCount: 3 },
@@ -1176,7 +1176,7 @@ async function seedOrders(
       { sku: 'BP-KBD-MX2', desc: 'Mechanical Keyboard MX2', qty: 200, weight: 200, unitPrice: 22000, fclass: '92.5' },
     ], palletType: eurPallet, unitCount: 3 },
     // Location error (pending lane request)
-    { cust: 'Titan Auto Parts', origin: 'Dallas', dest: 'Columbus', service: 'FTL', temp: 'ambient', status: 'location_error', delivery: 'unassigned', items: [
+    { cust: 'Titan Auto Parts', origin: 'Dallas', dest: 'Columbus', service: 'FTL', temp: 'ambient', status: 'issue', delivery: 'unassigned', items: [
       { sku: 'TA-SPARK-GEN3', desc: 'Spark Plug Set Gen3', qty: 300, weight: 180, unitPrice: 1250, fclass: '92.5' },
     ], palletType: gmaPallet, unitCount: 4 },
   ];
@@ -1208,7 +1208,7 @@ async function seedOrders(
         serviceLevel: s.service,
         temperatureControl: s.temp,
         requiresHazmat: s.hazmat || false,
-        deliveryStatus: s.delivery,
+        deliveryStatus: (s.delivery === 'unassigned' || s.delivery === 'assigned') ? null : s.delivery,
         deliveredAt: s.delivery === 'delivered' ? daysAgo(2) : null,
         exceptionType: (s as any).exceptionType || null,
         exceptionNotes: (s as any).exceptionNotes || null,
@@ -1262,8 +1262,8 @@ async function seedOrders(
       });
     }
 
-    // Pending lane request for location_error orders
-    if (s.status === 'location_error') {
+    // Pending lane request for orders blocked on a missing lane
+    if (s.status === 'issue') {
       await prisma.pendingLaneRequest.create({
         data: {
           orderId: order.id,
@@ -1385,8 +1385,8 @@ async function seedBulkOrders(
 
     const status =
       delivery === 'cancelled' ? 'cancelled'
-      : delivery === 'unassigned' ? 'validated'
-      : 'converted';
+      : delivery === 'unassigned' ? 'verified'
+      : 'assigned';
 
     const orderNumber = `ORD-${String(10000 + startIndex + i + 1).padStart(5, '0')}`;
     const order = await prisma.order.create({
@@ -1407,7 +1407,7 @@ async function seedBulkOrders(
         serviceLevel: r.service,
         temperatureControl: r.temp,
         requiresHazmat: r.hazmat || false,
-        deliveryStatus: delivery,
+        deliveryStatus: (delivery === 'unassigned' || delivery === 'assigned') ? null : delivery,
         deliveredAt,
         exceptionType: delivery === 'exception' ? pick(['delay', 'weather', 'address_issue', 'damage']) : null,
         exceptionNotes: delivery === 'exception' ? 'Auto-generated exception for demo data' : null,
@@ -1507,9 +1507,9 @@ async function seedShipments(
   orgId: string,
 ) {
   const created: any[] = [];
-  // Only convert non-pending / non-cancelled / non-location_error orders to shipments
+  // Only convert non-pending / non-cancelled / non-issue orders to shipments
   const shippableOrders = orders.filter((o) =>
-    ['converted', 'validated'].includes(o.status) && o.deliveryStatus !== 'cancelled'
+    ['assigned', 'verified'].includes(o.status)
   );
 
   let refCounter = 1;
@@ -1519,7 +1519,7 @@ async function seedShipments(
     // so the live-tracking/temperature demo (devices, ETA monitoring) has
     // real in-progress shipments to attach to — mirrors the pre-8379571 seed.
     const delivered = order.deliveryStatus === 'delivered';
-    const launched = delivered || ['in_transit', 'assigned', 'exception'].includes(order.deliveryStatus);
+    const launched = delivered || ['in_transit', 'exception'].includes(order.deliveryStatus);
     const hasException = order.deliveryStatus === 'exception';
     const status = delivered ? 'complete' : launched ? 'in_progress' : 'draft';
 
@@ -2619,7 +2619,7 @@ async function backfillReadModels(orgId: string) {
         orderNumber: o.orderNumber,
         poNumber: o.poNumber,
         status: o.status,
-        deliveryStatus: o.deliveryStatus || 'unassigned',
+        deliveryStatus: o.deliveryStatus,
         customerName: o.customer.name,
         customerId: o.customerId,
         originName: o.origin?.name ?? null,

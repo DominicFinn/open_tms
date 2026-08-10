@@ -687,7 +687,7 @@ model Order {
   orgId        String
   orderNumber  String  @unique // Customer's order number or our generated number
   poNumber     String? // Purchase order number
-  status       String  @default("pending") // pending, validated, location_error, converted, cancelled, archived
+  status       String  @default("pending") // pending, verified, assigned, issue, cancelled, archived
   importSource String  @default("manual") // manual, csv, edi
   ediData      Json? // Store original EDI data if imported via EDI
 
@@ -716,8 +716,10 @@ model Order {
   requiresHazmat      Boolean @default(false)
   specialRequirements Json? // Additional requirements as JSON array
 
-  // Delivery status tracking (separate from order lifecycle status)
-  deliveryStatus      String    @default("unassigned") // unassigned, assigned, in_transit, delivered, exception, cancelled
+  // Delivery status tracking (separate from order lifecycle status). Null
+  // until the order is actually moving — 'assigned' is redundant with
+  // status='assigned' and is no longer a valid value here.
+  deliveryStatus      String? // in_transit, delivered, exception (null = not moving yet)
   deliveredAt         DateTime? // When the order was delivered
   deliveryConfirmedBy String? // User ID or system identifier who confirmed delivery
   deliveryMethod      String? // manual, geofence, geofence_iot, auto, driver_app
@@ -1685,8 +1687,8 @@ model OrderReadModel {
   orgId                 String
   orderNumber           String       @unique
   poNumber              String?
-  status                String // pending, validated, converted, assigned, etc.
-  deliveryStatus        String // unassigned, assigned, in_transit, delivered, exception
+  status                String // pending, verified, assigned, issue, cancelled, archived
+  deliveryStatus        String? // in_transit, delivered, exception (null = not moving yet)
   customer              Customer     @relation(fields: [customerId], references: [id])
   customerId            String
   customerName          String

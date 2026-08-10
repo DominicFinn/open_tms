@@ -604,7 +604,7 @@ export async function seedRoutes(server: FastifyInstance) {
           serviceLevel: 'LTL',
           temperatureControl: 'ambient',
           requiresHazmat: false,
-          deliveryStatus: 'unassigned',
+          deliveryStatus: null,
           specialInstructions: 'Driver must check in at gate 3. Appointment required.',
           notes: 'Q3 replenishment order for Chicago stores.'
         },
@@ -613,7 +613,7 @@ export async function seedRoutes(server: FastifyInstance) {
           orgId: seedOrgId,
           orderNumber: 'ORD-2026-0002',
           poNumber: 'PO-KRO-44180',
-          status: 'validated',
+          status: 'verified',
           importSource: 'edi',
           customerId: cust('Kroger Company').id,
           originId: loc('Kroger DC - Cincinnati').id,
@@ -626,7 +626,7 @@ export async function seedRoutes(server: FastifyInstance) {
           serviceLevel: 'FTL',
           temperatureControl: 'refrigerated',
           requiresHazmat: false,
-          deliveryStatus: 'unassigned',
+          deliveryStatus: null,
           specialInstructions: 'Temperature-controlled trailer required. Max 4°C throughout.',
           notes: 'EDI 850 imported. Carrier assignment pending.'
         },
@@ -635,7 +635,7 @@ export async function seedRoutes(server: FastifyInstance) {
           orgId: seedOrgId,
           orderNumber: 'ORD-2026-0003',
           poNumber: 'PO-BBY-91002',
-          status: 'converted',
+          status: 'assigned',
           importSource: 'manual',
           customerId: cust('Best Buy Co. Inc.').id,
           originId: loc('West Coast Hub - Los Angeles').id,
@@ -657,7 +657,7 @@ export async function seedRoutes(server: FastifyInstance) {
           orgId: seedOrgId,
           orderNumber: 'ORD-2026-0004',
           poNumber: 'PO-AMZ-71100',
-          status: 'converted',
+          status: 'assigned',
           importSource: 'manual',
           customerId: cust('Amazon.com Inc.').id,
           originId: loc('Head Office - Dallas').id,
@@ -695,7 +695,7 @@ export async function seedRoutes(server: FastifyInstance) {
           serviceLevel: 'FTL',
           temperatureControl: 'ambient',
           requiresHazmat: false,
-          deliveryStatus: 'cancelled',
+          deliveryStatus: null,
           notes: 'Cancelled by customer - store inventory exceeded requirements.'
         },
         // 6. Pending order — hazmat, requires special handling
@@ -716,7 +716,7 @@ export async function seedRoutes(server: FastifyInstance) {
           serviceLevel: 'FTL',
           temperatureControl: 'ambient',
           requiresHazmat: true,
-          deliveryStatus: 'unassigned',
+          deliveryStatus: null,
           specialInstructions: 'Hazmat-certified driver required. UN1760 and UN1263 placards needed.',
           notes: 'Hazmat manifest attached. Awaiting compliance review.'
         },
@@ -725,7 +725,7 @@ export async function seedRoutes(server: FastifyInstance) {
           orgId: seedOrgId,
           orderNumber: 'ORD-2026-0007',
           poNumber: 'PO-WAG-20987',
-          status: 'converted',
+          status: 'assigned',
           importSource: 'edi',
           customerId: cust('Walgreens Boots Alliance').id,
           originId: loc('Walgreens DC - Chicago').id,
@@ -738,7 +738,7 @@ export async function seedRoutes(server: FastifyInstance) {
           serviceLevel: 'FTL',
           temperatureControl: 'refrigerated',
           requiresHazmat: false,
-          deliveryStatus: 'assigned',
+          deliveryStatus: null,
           specialInstructions: 'Pharma cold chain 2-8°C. Temperature logger must be included.',
           notes: 'GDP-compliant shipment. Pre-clearance with receiving pharmacy required.'
         },
@@ -760,7 +760,7 @@ export async function seedRoutes(server: FastifyInstance) {
           serviceLevel: 'LTL',
           temperatureControl: 'ambient',
           requiresHazmat: false,
-          deliveryStatus: 'unassigned',
+          deliveryStatus: null,
           notes: 'CSV import from WMS. 3 SKUs consolidated for LTL.'
         },
         // 9. Converted order with exception — linked to SH-2026-004
@@ -768,7 +768,7 @@ export async function seedRoutes(server: FastifyInstance) {
           orgId: seedOrgId,
           orderNumber: 'ORD-2026-0009',
           poNumber: 'PO-TGT-90110',
-          status: 'converted',
+          status: 'assigned',
           importSource: 'manual',
           customerId: cust('Target Corporation').id,
           originId: loc('Southeast Warehouse - Atlanta').id,
@@ -791,7 +791,7 @@ export async function seedRoutes(server: FastifyInstance) {
           orgId: seedOrgId,
           orderNumber: 'ORD-2026-0010',
           poNumber: 'PO-KRO-80055',
-          status: 'validated',
+          status: 'verified',
           importSource: 'edi',
           customerId: cust('Kroger Company').id,
           originId: loc('Midwest Logistics Center - Kansas City').id,
@@ -804,7 +804,7 @@ export async function seedRoutes(server: FastifyInstance) {
           serviceLevel: 'FTL',
           temperatureControl: 'frozen',
           requiresHazmat: false,
-          deliveryStatus: 'unassigned',
+          deliveryStatus: null,
           specialInstructions: 'Frozen at -18°C or below. Continuous monitoring required. Rejection if temp breach.',
           notes: 'Validated via EDI 850. Carrier tender to be issued.'
         },
@@ -813,7 +813,7 @@ export async function seedRoutes(server: FastifyInstance) {
           orgId: seedOrgId,
           orderNumber: 'ORD-2026-0011',
           poNumber: "PO-LOW-12400",
-          status: 'converted',
+          status: 'assigned',
           importSource: 'manual',
           customerId: cust("Lowe's Companies Inc.").id,
           originId: loc("Lowe's DC - Charlotte").id,
@@ -850,7 +850,7 @@ export async function seedRoutes(server: FastifyInstance) {
           serviceLevel: 'FTL',
           temperatureControl: 'ambient',
           requiresHazmat: false,
-          deliveryStatus: 'unassigned',
+          deliveryStatus: null,
           specialInstructions: 'Port drayage — container pickup at Pier 300. SCAC code required on BOL.',
           notes: 'Import container from Shanghai. Customs cleared.'
         },
@@ -859,7 +859,7 @@ export async function seedRoutes(server: FastifyInstance) {
           orgId: seedOrgId,
           orderNumber: 'ORD-2026-0013',
           poNumber: 'PO-CVS-77831',
-          status: 'validated',
+          status: 'verified',
           importSource: 'manual',
           customerId: cust('CVS Health Corporation').id,
           originId: loc('CVS DC - Rhode Island').id,
@@ -872,7 +872,7 @@ export async function seedRoutes(server: FastifyInstance) {
           serviceLevel: 'LTL',
           temperatureControl: 'ambient',
           requiresHazmat: false,
-          deliveryStatus: 'unassigned',
+          deliveryStatus: null,
           notes: 'Validated. Consolidating with ORD-2026-0006 on same lane if carrier confirms capacity.'
         },
         // 14. Converted order — in transit, bulk warehouse
@@ -880,7 +880,7 @@ export async function seedRoutes(server: FastifyInstance) {
           orgId: seedOrgId,
           orderNumber: 'ORD-2026-0014',
           poNumber: 'PO-CST-39900',
-          status: 'converted',
+          status: 'assigned',
           importSource: 'edi',
           customerId: cust('Costco Wholesale Corporation').id,
           originId: loc('Costco DC - Seattle').id,
@@ -914,7 +914,7 @@ export async function seedRoutes(server: FastifyInstance) {
           serviceLevel: 'LTL',
           temperatureControl: 'ambient',
           requiresHazmat: false,
-          deliveryStatus: 'cancelled',
+          deliveryStatus: null,
           notes: 'Cancelled 24h before pickup. Carrier notified. No charges applied.'
         },
         // 16. Converted order — exception, damaged in transit
@@ -922,7 +922,7 @@ export async function seedRoutes(server: FastifyInstance) {
           orgId: seedOrgId,
           orderNumber: 'ORD-2026-0016',
           poNumber: 'PO-CST-71200',
-          status: 'converted',
+          status: 'assigned',
           importSource: 'manual',
           customerId: cust('Costco Wholesale Corporation').id,
           originId: loc('Deep South Distribution - New Orleans').id,
@@ -958,7 +958,7 @@ export async function seedRoutes(server: FastifyInstance) {
           serviceLevel: 'FTL',
           temperatureControl: 'ambient',
           requiresHazmat: false,
-          deliveryStatus: 'unassigned',
+          deliveryStatus: null,
           notes: 'Summer garden season top-up. CSV upload from category manager.'
         },
         // 18. Validated order — beauty products
@@ -966,7 +966,7 @@ export async function seedRoutes(server: FastifyInstance) {
           orgId: seedOrgId,
           orderNumber: 'ORD-2026-0018',
           poNumber: 'PO-WAG-45002',
-          status: 'validated',
+          status: 'verified',
           importSource: 'manual',
           customerId: cust('Walgreens Boots Alliance').id,
           originId: loc('Desert Southwest Hub - Las Vegas').id,
@@ -979,7 +979,7 @@ export async function seedRoutes(server: FastifyInstance) {
           serviceLevel: 'FTL',
           temperatureControl: 'ambient',
           requiresHazmat: false,
-          deliveryStatus: 'unassigned',
+          deliveryStatus: null,
           notes: 'Validated. Linked to lane Las Vegas to LA. Carrier assignment in progress.'
         },
         // 19. Converted order — delivered, high-value electronics
@@ -987,7 +987,7 @@ export async function seedRoutes(server: FastifyInstance) {
           orgId: seedOrgId,
           orderNumber: 'ORD-2026-0019',
           poNumber: 'PO-AMZ-30812',
-          status: 'converted',
+          status: 'assigned',
           importSource: 'edi',
           customerId: cust('Amazon.com Inc.').id,
           originId: loc('West Coast Hub - Los Angeles').id,
@@ -1024,7 +1024,7 @@ export async function seedRoutes(server: FastifyInstance) {
           serviceLevel: 'LTL',
           temperatureControl: 'ambient',
           requiresHazmat: false,
-          deliveryStatus: 'unassigned',
+          deliveryStatus: null,
           specialInstructions: 'Liftgate required at destination. Heavy items on bottom pallets.',
           notes: 'Power tools and fasteners for Chicago stores. Pending carrier capacity.'
         }

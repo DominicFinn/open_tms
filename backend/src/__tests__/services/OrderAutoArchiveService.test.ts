@@ -50,7 +50,11 @@ describe('OrderAutoArchiveService', () => {
 
     const where = prisma.order.findMany.mock.calls[0][0].where;
     expect(where.archived).toBe(false);
-    expect(where.OR).toHaveLength(3);
+    // Two branches, not three — deliveryStatus='cancelled' was a dead
+    // duplicate of status='cancelled' (cancellation now lives only on
+    // Order.status; deliveryStatus can never be 'cancelled').
+    expect(where.OR).toHaveLength(2);
+    expect(where.OR[1]).toEqual({ status: 'cancelled', updatedAt: { lt: expect.any(Date) } });
 
     const cutoff: Date = where.OR[0].deliveredAt.lt;
     const elapsedMs = before - cutoff.getTime();

@@ -2187,7 +2187,7 @@ export default function VNextShipmentDetail() {
           <DialogHeader>
             <DialogTitle>Add order to {shipment.reference || 'this shipment'}</DialogTitle>
             <DialogDescription>
-              Only validated orders with the same origin and customer as this shipment are eligible.
+              Only verified orders with the same origin and customer as this shipment are eligible.
             </DialogDescription>
           </DialogHeader>
           <div className="max-h-[50vh] overflow-y-auto -mx-1 px-1">

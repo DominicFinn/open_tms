@@ -42,8 +42,7 @@ export class AcceptQuoteCommandHandler extends BaseCommandHandler<AcceptQuotePay
         orgId: quote.orgId,
         orderNumber,
         customerId: quote.customerId,
-        status: 'validated',
-        deliveryStatus: 'unassigned',
+        status: 'verified',
         serviceLevel: quote.serviceLevel,
         originId: quote.originId,
         originValidated: !!quote.originId,
@@ -193,7 +192,7 @@ export class AcceptQuoteCommandHandler extends BaseCommandHandler<AcceptQuotePay
       payload: {
         orderReference: orderNumber,
         customerId: quote.customerId,
-        status: 'validated',
+        status: 'verified',
         originId: null,
         destinationId: null,
         trackableUnitCount: 0,

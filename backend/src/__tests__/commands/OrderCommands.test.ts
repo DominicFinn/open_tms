@@ -34,6 +34,16 @@ const mockTx = {
   customer: {
     findFirst: jest.fn().mockResolvedValue({ id: 'cust-1' }),
   },
+  issue: {
+    create: jest.fn().mockResolvedValue({
+      id: 'issue-1',
+      title: 'Address verification failed: ORD-001',
+      priority: 'high',
+      category: 'compliance',
+      sourceEntityType: 'order',
+      sourceEntityId: 'order-1',
+    }),
+  },
   domainEventLog: {
     create: jest.fn().mockResolvedValue({}),
     findFirst: jest.fn().mockResolvedValue(null),
@@ -231,6 +241,61 @@ describe('Order Command Handlers', () => {
       expect(result.success).toBe(false);
       expect(result.error).toBe('DB connection failed');
       expect(result.events).toHaveLength(0);
+    });
+
+    it('creates a paired Issue row and emits ISSUE_CREATED when status is "issue" (verification failure)', async () => {
+      mockTx.issue.create.mockClear();
+      const { bus } = mockEventBus();
+      const handler = new CreateOrderCommandHandler(mockPrisma, bus);
+
+      const result = await handler.execute(
+        createTestCommand(CREATE_ORDER, {
+          orderData: {
+            orgId: 'test-org',
+            orderNumber: 'ORD-001',
+            customerId: 'cust-1',
+            originData: { name: 'Bad Origin', address1: '123 Nowhere', city: 'Nowhere', country: 'US' },
+            // originId intentionally omitted — resolution failed
+          },
+          status: 'issue',
+        })
+      );
+
+      expect(mockTx.issue.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            orgId: 'test-org',
+            title: expect.stringContaining('ORD-001'),
+            description: expect.stringContaining('origin'),
+            status: 'open',
+            priority: 'high',
+            category: 'compliance',
+            sourceEntityType: 'order',
+            sourceEntityId: 'order-1',
+          }),
+        })
+      );
+      expect(result.events).toHaveLength(2);
+      expect(result.events.map((e) => e.type)).toEqual(
+        expect.arrayContaining([EVENT_TYPES.ORDER_CREATED, EVENT_TYPES.ISSUE_CREATED])
+      );
+    });
+
+    it('does not create an Issue row for a normal pending/verified order', async () => {
+      mockTx.issue.create.mockClear();
+      const { bus } = mockEventBus();
+      const handler = new CreateOrderCommandHandler(mockPrisma, bus);
+
+      const result = await handler.execute(
+        createTestCommand(CREATE_ORDER, {
+          orderData: { orgId: 'test-org', orderNumber: 'ORD-001', customerId: 'cust-1' },
+          status: 'pending',
+        })
+      );
+
+      expect(mockTx.issue.create).not.toHaveBeenCalled();
+      expect(result.events).toHaveLength(1);
+      expect(result.events[0].type).toBe(EVENT_TYPES.ORDER_CREATED);
     });
   });
 

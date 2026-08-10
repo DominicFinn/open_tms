@@ -95,8 +95,8 @@ const orderStatusSchema = {
   properties: {
     orderId: { type: 'string', format: 'uuid' },
     orderNumber: { type: 'string' },
-    status: { type: 'string', enum: ['pending', 'validated', 'location_error', 'assigned', 'converted', 'pending_lane', 'cancelled', 'archived'] },
-    deliveryStatus: { type: 'string', enum: ['unassigned', 'assigned', 'in_transit', 'delivered', 'exception', 'cancelled'] },
+    status: { type: 'string', enum: ['pending', 'verified', 'assigned', 'issue', 'cancelled', 'archived'] },
+    deliveryStatus: { type: 'string', enum: ['in_transit', 'delivered', 'exception'], nullable: true },
     deliveredAt: { type: 'string', format: 'date-time', nullable: true },
     updatedAt: { type: 'string', format: 'date-time' }
   }
@@ -282,11 +282,11 @@ export async function customerApiRoutes(server: FastifyInstance) {
     // Determine order status based on location validation
     let status = 'pending';
     if (!orderFields.originId && orderFields.originData) {
-      status = 'location_error';
+      status = 'issue';
     } else if (!orderFields.destinationId && orderFields.destinationData) {
-      status = 'location_error';
+      status = 'issue';
     } else if (orderFields.originId && orderFields.destinationId) {
-      status = 'validated';
+      status = 'verified';
     }
     orderData.status = status;
 
@@ -303,7 +303,7 @@ export async function customerApiRoutes(server: FastifyInstance) {
 
     // Optionally auto-assign to shipment
     let assignmentResult = null;
-    if (autoAssign && status === 'validated') {
+    if (autoAssign && status === 'verified') {
       try {
         assignmentResult = await assignmentService.assignOrderToShipment(created.id);
       } catch (_err) {
@@ -335,7 +335,7 @@ export async function customerApiRoutes(server: FastifyInstance) {
       querystring: {
         type: 'object',
         properties: {
-          status: { type: 'string', description: 'Filter by order status', enum: ['pending', 'validated', 'location_error', 'assigned', 'converted', 'pending_lane', 'cancelled'] },
+          status: { type: 'string', description: 'Filter by order status', enum: ['pending', 'verified', 'assigned', 'issue', 'cancelled', 'archived'] },
           limit: { type: 'integer', default: 50, minimum: 1, maximum: 100, description: 'Max results to return (default 50, max 100)' },
           offset: { type: 'integer', default: 0, minimum: 0, description: 'Number of results to skip for pagination' }
         }

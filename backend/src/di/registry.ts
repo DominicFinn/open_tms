@@ -49,6 +49,7 @@ import { CommandBus } from '../commands/CommandBus.js';
 import { CreateOrderCommandHandler } from '../commands/orders/CreateOrderCommand.js';
 import { UpdateOrderCommandHandler } from '../commands/orders/UpdateOrderCommand.js';
 import { ArchiveOrderCommandHandler } from '../commands/orders/ArchiveOrderCommand.js';
+import { CancelOrderCommandHandler } from '../commands/orders/CancelOrderCommand.js';
 import { SoftDeleteOrderCommandHandler } from '../commands/orders/SoftDeleteOrderCommand.js';
 import { UnarchiveOrderCommandHandler } from '../commands/orders/UnarchiveOrderCommand.js';
 import {
@@ -352,7 +353,10 @@ export function registerDependencies(prisma: PrismaClient): void {
 
   // Register services as singletons
   container.singleton(TOKENS.IShipmentAssignmentService).toFactory(() => {
-    return new ShipmentAssignmentService(container.resolve(TOKENS.PrismaClient));
+    return new ShipmentAssignmentService(
+      container.resolve(TOKENS.PrismaClient),
+      container.resolve(TOKENS.IOrderConversionService),
+    );
   });
 
   container.singleton(TOKENS.ICSVImportService).toFactory(() => {
@@ -809,6 +813,7 @@ export function registerDependencies(prisma: PrismaClient): void {
     bus.register(new CreateOrderCommandHandler(prisma, eventBus));
     bus.register(new UpdateOrderCommandHandler(prisma, eventBus));
     bus.register(new ArchiveOrderCommandHandler(prisma, eventBus));
+    bus.register(new CancelOrderCommandHandler(prisma, eventBus));
     bus.register(new SoftDeleteOrderCommandHandler(prisma, eventBus));
     bus.register(new UnarchiveOrderCommandHandler(prisma, eventBus));
     bus.register(new CreateTrackableUnitCommandHandler(prisma, eventBus));

@@ -14,6 +14,7 @@ import { ICommandBus } from '../commands/CommandBus.js';
 import { CREATE_ORDER } from '../commands/orders/CreateOrderCommand.js';
 import { UPDATE_ORDER } from '../commands/orders/UpdateOrderCommand.js';
 import { ARCHIVE_ORDER } from '../commands/orders/ArchiveOrderCommand.js';
+import { CANCEL_ORDER } from '../commands/orders/CancelOrderCommand.js';
 import { SOFT_DELETE_ORDER } from '../commands/orders/SoftDeleteOrderCommand.js';
 import { UNARCHIVE_ORDER } from '../commands/orders/UnarchiveOrderCommand.js';
 import {
@@ -139,8 +140,8 @@ export const createOrderSchema = z.object({
   notes: z.string().optional()
 });
 
-const ORDER_STATUSES = ['pending', 'validated', 'location_error', 'converted', 'cancelled', 'archived'] as const;
-const DELIVERY_STATUSES = ['unassigned', 'assigned', 'in_transit', 'delivered', 'exception', 'cancelled'] as const;
+const ORDER_STATUSES = ['pending', 'verified', 'assigned', 'issue', 'cancelled', 'archived'] as const;
+const DELIVERY_STATUSES = ['in_transit', 'delivered', 'exception'] as const;
 const DELIVERY_METHODS = ['manual', 'geofence', 'geofence_iot', 'auto', 'driver_app'] as const;
 const EXCEPTION_TYPES = ['delay', 'damage', 'refused', 'address_issue', 'weather', 'other'] as const;
 
@@ -280,11 +281,11 @@ export async function orderRoutes(server: FastifyInstance) {
     // Determine order status based on location validation
     let status = 'pending';
     if (!orderData.originId && body.originData) {
-      status = 'location_error';
+      status = 'issue';
     } else if (!orderData.destinationId && body.destinationData) {
-      status = 'location_error';
+      status = 'issue';
     } else if (orderData.originId && orderData.destinationId) {
-      status = 'validated';
+      status = 'verified';
     }
 
     const orgId = req.orgId!;
@@ -390,6 +391,42 @@ export async function orderRoutes(server: FastifyInstance) {
     }
 
     return { data: { id, archived: true }, error: null };
+  });
+
+  // Cancel order. Only valid before the order is assigned to a shipment —
+  // once assigned, a problem is a delivery exception, not a cancellation.
+  server.post('/api/v1/orders/:id/cancel', {
+    preHandler: requirePermission('orders:write'),
+    schema: {
+      tags: ['Orders'],
+      summary: 'Cancel order',
+      description: 'Cancels an order. Only valid while status is pending/verified/issue — rejects once the order is assigned to a shipment.',
+      params: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+
+    const orgId = req.orgId!;
+    const existing = await ordersRepo.findById(id, orgId);
+    if (!existing) {
+      reply.code(404);
+      return { data: null, error: 'Order not found' };
+    }
+
+    const result = await commandBus.dispatch({
+      type: CANCEL_ORDER,
+      orgId,
+      actorId: req.user?.sub ?? null,
+      payload: { id },
+      metadata: { correlationId: randomUUID(), source: 'api' },
+    });
+
+    if (!result.success) {
+      reply.code(400);
+      return { data: null, error: result.error };
+    }
+
+    return { data: { id, status: 'cancelled' }, error: null };
   });
 
   // Soft delete (admin-only, orders:delete). Hidden from every view; the row
@@ -929,7 +966,7 @@ export async function orderRoutes(server: FastifyInstance) {
         return { data: null, error: 'Order not found' };
       }
 
-      const result = await ordersRepo.convertToShipment(id, orgId);
+      const result = await conversionService.convertOrder(id, req.user?.sub);
       return { data: result, error: null };
     } catch (err: any) {
       reply.code(400);

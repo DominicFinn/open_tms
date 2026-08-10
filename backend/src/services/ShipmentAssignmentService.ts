@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { IOrderConversionService } from './OrderConversionService.js';
 
 export interface AssignmentResult {
   success: boolean;
@@ -12,7 +13,10 @@ export interface IShipmentAssignmentService {
 }
 
 export class ShipmentAssignmentService implements IShipmentAssignmentService {
-  constructor(private prisma: PrismaClient) {}
+  constructor(
+    private prisma: PrismaClient,
+    private orderConversionService: IOrderConversionService,
+  ) {}
 
   /**
    * Attempt to assign an order to a shipment based on matching lanes.
@@ -47,8 +51,8 @@ export class ShipmentAssignmentService implements IShipmentAssignmentService {
       };
     }
 
-    // Check if order is already assigned or converted
-    if (order.status === 'converted' || order.status === 'assigned') {
+    // Check if order is already assigned
+    if (order.status === 'assigned') {
       return {
         success: false,
         message: `Order is already ${order.status}`
@@ -65,13 +69,27 @@ export class ShipmentAssignmentService implements IShipmentAssignmentService {
     );
 
     if (!matchingLane) {
-      // No matching lane - create pending lane request
+      // No matching lane — create a pending lane request for ops to review,
+      // and pair the blocked status with a real Issue/Triage row carrying
+      // the detail, same pattern as a verification failure at creation time.
       const pendingRequest = await this.createPendingLaneRequest(order);
 
-      // Update order status
       await this.prisma.order.update({
         where: { id: orderId },
-        data: { status: 'pending_lane' }
+        data: { status: 'issue' }
+      });
+
+      await this.prisma.issue.create({
+        data: {
+          orgId: order.orgId,
+          title: `No matching lane found: ${order.orderNumber}`,
+          description: `Auto-assignment could not find an active lane from this order's origin to its destination supporting ${order.serviceLevel}${order.requiresHazmat ? ', hazmat,' : ''}${order.temperatureControl !== 'ambient' ? ` ${order.temperatureControl} temperature control,` : ''} requirements.`,
+          status: 'open',
+          priority: 'high',
+          category: 'other',
+          sourceEntityType: 'order',
+          sourceEntityId: order.id,
+        }
       });
 
       return {
@@ -101,65 +119,24 @@ export class ShipmentAssignmentService implements IShipmentAssignmentService {
       order.serviceLevel
     );
 
-    // Convert order to shipment format and update shipment items
-    await this.addOrderToShipment(shipment.id, order);
+    // Link the order to the shipment (item append, stop find-or-create,
+    // order status update, audit log) through the shared, validated primitive
+    // rather than duplicating that mechanics here. This also means an order
+    // whose customer doesn't match a reused LTL shipment's customer now
+    // correctly fails instead of silently landing on the wrong customer's
+    // shipment — findOrCreateShipment's LTL-reuse path doesn't check that.
+    const linkResult = await this.orderConversionService.addOrdersToShipment(
+      order.orgId,
+      shipment.id,
+      [orderId],
+    );
 
-    // Create junction record
-    await this.prisma.orderShipment.create({
-      data: {
-        orderId: order.id,
-        shipmentId: shipment.id
-      }
-    });
-
-    // Create or find delivery stop for this order's destination
-    let deliveryStop = await this.prisma.shipmentStop.findFirst({
-      where: {
-        shipmentId: shipment.id,
-        locationId: order.destinationId!
-      }
-    });
-
-    if (!deliveryStop) {
-      const maxSeq = await this.prisma.shipmentStop.aggregate({
-        where: { shipmentId: shipment.id },
-        _max: { sequenceNumber: true }
-      });
-      deliveryStop = await this.prisma.shipmentStop.create({
-        data: {
-          shipmentId: shipment.id,
-          locationId: order.destinationId!,
-          sequenceNumber: (maxSeq._max.sequenceNumber || 0) + 1,
-          stopType: 'delivery',
-          status: 'pending'
-        }
-      });
+    if (!linkResult.success) {
+      return {
+        success: false,
+        message: linkResult.errors[0] || linkResult.message,
+      };
     }
-
-    // Update order status and delivery status
-    await this.prisma.order.update({
-      where: { id: orderId },
-      data: {
-        status: 'assigned',
-        deliveryStatus: 'assigned',
-        deliveryStopId: deliveryStop.id
-      }
-    });
-
-    // Audit log
-    await this.prisma.auditLog.create({
-      data: {
-        entityType: 'order',
-        entityId: orderId,
-        orderId,
-        action: 'delivery_status_changed',
-        description: `Order assigned to shipment ${shipment.reference}, delivery status set to assigned`,
-        changes: {
-          before: { deliveryStatus: order.deliveryStatus, status: order.status },
-          after: { deliveryStatus: 'assigned', status: 'assigned' }
-        },
-      }
-    });
 
     return {
       success: true,
@@ -297,55 +274,6 @@ export class ShipmentAssignmentService implements IShipmentAssignmentService {
         status: 'draft',
         items: [] // Will be populated as orders are added
       }
-    });
-  }
-
-  /**
-   * Add order data to shipment's items JSON
-   */
-  private async addOrderToShipment(shipmentId: string, order: any) {
-    const shipment = await this.prisma.shipment.findUnique({
-      where: { id: shipmentId }
-    });
-
-    if (!shipment) {
-      throw new Error('Shipment not found');
-    }
-
-    const existingItems = (shipment.items as any[]) || [];
-
-    // Build order item structure
-    const orderItems: any = {
-      orderId: order.id,
-      orderNumber: order.orderNumber,
-      trackableUnits: order.trackableUnits.map((unit: any) => ({
-        unitId: unit.id,
-        identifier: unit.identifier,
-        unitType: unit.unitType,
-        items: unit.lineItems.map((item: any) => ({
-          sku: item.sku,
-          description: item.description,
-          quantity: item.quantity,
-          weight: item.weight,
-          weightUnit: item.weightUnit
-        }))
-      })),
-      legacyItems: order.lineItems.filter((item: any) => !item.trackableUnitId).map((item: any) => ({
-        sku: item.sku,
-        description: item.description,
-        quantity: item.quantity,
-        weight: item.weight,
-        weightUnit: item.weightUnit
-      }))
-    };
-
-    // Append to items array
-    const updatedItems = [...existingItems, orderItems];
-
-    // Update shipment
-    await this.prisma.shipment.update({
-      where: { id: shipmentId },
-      data: { items: updatedItems }
     });
   }
 

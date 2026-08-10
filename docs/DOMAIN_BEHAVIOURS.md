@@ -107,16 +107,26 @@ These call domain services with complex orchestration logic. They currently crea
 ### Status Lifecycle
 
 ```
-pending → validated → converted/assigned → cancelled/archived
-                   ↘ location_error (raw location data, needs resolution)
+pending → verified → assigned → cancelled/archived
+                   ↘ issue (verification failed, or no matching lane on auto-assign —
+                            each pairs with a real Issue/Triage row carrying the detail)
 ```
+
+`cancelled` is only reachable from `pending`/`verified`/`issue` — once `assigned`, an order is
+physically committed to a shipment; a post-assignment problem is a delivery `exception`, not a
+cancellation. `assigned` unifies what used to be two separate outcomes (`converted` from manual
+conversion, `assigned` from auto lane-matching) — provenance lives in `AuditLog`, not a second
+status value.
 
 ### Delivery Status Lifecycle
 
 ```
-unassigned → assigned → in_transit → delivered
+null (not moving yet) → in_transit → delivered
                               ↘ exception → (resolved) → in_transit
 ```
+
+`deliveryStatus` is nullable and only ever gets a value once the order is `assigned` — there is
+no `unassigned`/`assigned`/`cancelled` delivery status; those were redundant with `Order.status`.
 
 ### Line Items & Cartonization (Phase 1)
 

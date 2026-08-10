@@ -553,7 +553,7 @@ The tendering system supports **broadcast** (all carriers simultaneously) and **
 
 ## Archival Policy (Orders, Shipments, Carriers)
 
-Orders, Shipments, and Carriers share one archiving pattern, modeled on how Carriers originally did it: archiving is recoverable and **never removes the row from its read model**. Archived items stay visible on their normal list page (Orders, Shipments, Carriers) with `'archived'` as just another filterable status value alongside the real lifecycle statuses (`pending/validated/converted/cancelled` for orders, `draft/ready/in_progress/complete` for shipments) — there's no more "archive = disappear from the list." The Archives admin page (`/settings/archives`, `VNextArchives.tsx`) is a separate admin-only surface with three tabs — Orders, Shipments, Carriers — for bulk oversight and restore.
+Orders, Shipments, and Carriers share one archiving pattern, modeled on how Carriers originally did it: archiving is recoverable and **never removes the row from its read model**. Archived items stay visible on their normal list page (Orders, Shipments, Carriers) with `'archived'` as just another filterable status value alongside the real lifecycle statuses (`pending/verified/assigned/issue/cancelled` for orders, `draft/ready/in_progress/complete` for shipments) — there's no more "archive = disappear from the list." The Archives admin page (`/settings/archives`, `VNextArchives.tsx`) is a separate admin-only surface with three tabs — Orders, Shipments, Carriers — for bulk oversight and restore.
 
 **Mechanics (Order and Shipment):** archiving sets `archived = true`, `archivedAt`, `status = 'archived'`, and captures the prior value in `statusBeforeArchive` (so unarchive restores it exactly instead of guessing a default). `OrderProjection.onOrderArchived` / `ShipmentProjection.onShipmentArchived` **update** the read model's `status` field in place — they no longer delete the row. Unarchiving restores `status` from `statusBeforeArchive` and clears it.
 
@@ -571,8 +571,9 @@ Orders, Shipments, and Carriers share one archiving pattern, modeled on how Carr
 
 **Auto-archive (Orders only):** Delivered or cancelled orders are auto-archived after a retention window (default 30 days). `OrderAutoArchiveService` is invoked by the `order-auto-archive` pg-boss cron worker daily at 02:00 UTC. Eligibility:
 - `deliveryStatus = 'delivered' AND deliveredAt < now - retentionDays`, OR
-- `status = 'cancelled' AND updatedAt < now - retentionDays`, OR
-- `deliveryStatus = 'cancelled' AND updatedAt < now - retentionDays`
+- `status = 'cancelled' AND updatedAt < now - retentionDays`
+
+(Cancellation lives only on `Order.status` — `deliveryStatus` can never be `'cancelled'`, so there's no second branch for it.)
 
 Configurable via `ORDER_AUTO_ARCHIVE_DAYS` (default 30) and `ORDER_AUTO_ARCHIVE_CRON` (default `0 2 * * *`).
 

@@ -38,7 +38,8 @@ export class DailyReportService implements IDailyReportService {
     const ordersByDeliveryStatus: Record<string, number> = {};
     let exceptionCount = 0;
     for (const o of orders) {
-      ordersByDeliveryStatus[o.deliveryStatus] = (ordersByDeliveryStatus[o.deliveryStatus] || 0) + 1;
+      const key = o.deliveryStatus || 'not_moving';
+      ordersByDeliveryStatus[key] = (ordersByDeliveryStatus[key] || 0) + 1;
       if (o.deliveryStatus === 'exception') exceptionCount++;
     }
 
@@ -85,7 +86,8 @@ export class DailyReportService implements IDailyReportService {
     }
     const ordersByStatus: Record<string, number> = {};
     for (const o of orders) {
-      ordersByStatus[o.deliveryStatus] = (ordersByStatus[o.deliveryStatus] || 0) + 1;
+      const key = o.deliveryStatus || 'not_moving';
+      ordersByStatus[key] = (ordersByStatus[key] || 0) + 1;
     }
 
     summarySheet.addRow({ metric: 'Report Date', value: date });

@@ -4,14 +4,14 @@ import {
   Archive,
   AlertTriangle,
   Check,
+  CheckCircle2,
   ChevronDown,
   CircleAlert,
+  Clock,
   Eye,
   FileText,
-  Hourglass,
   Loader2,
   MoreVertical,
-  Package,
   Pencil,
   Plus,
   Search,
@@ -80,17 +80,51 @@ interface Order {
 
 type StatusVariant = 'success' | 'info' | 'warning' | 'destructive' | 'muted';
 
-// Order.status enum: pending, validated, location_error, converted, cancelled, archived
+// Order.status enum: pending, verified, assigned, issue, cancelled, archived
 function orderStatusVariant(status: string): StatusVariant {
   const s = status?.toLowerCase().replace(/[_ ]/g, '');
-  if (s === 'validated') return 'success';
+  if (s === 'verified') return 'success';
   if (s === 'pending') return 'warning';
-  if (s === 'converted') return 'info';
-  if (s === 'locationerror') return 'destructive';
+  if (s === 'assigned') return 'info';
+  if (s === 'issue') return 'destructive';
   if (s === 'cancelled') return 'destructive';
   // Orthogonal to the lifecycle above — set by archive/unarchive, same
   // "Inactive" tone Carriers uses.
   if (s === 'archived') return 'destructive';
+  return 'muted';
+}
+
+// 'verified' and 'assigned' read as "Available" / "In shipment" rather than
+// the raw enum — "assigned" only means booked onto a shipment, not that it
+// has physically departed (that's deliveryStatus's job).
+const ORDER_STATUS_LABEL: Record<string, string> = {
+  pending: 'Pending approval',
+  verified: 'Available',
+  assigned: 'In shipment',
+  issue: 'Needs attention',
+  cancelled: 'Cancelled',
+  archived: 'Archived',
+};
+function orderStatusLabel(status: string): string {
+  const s = status?.toLowerCase().replace(/[_ ]/g, '');
+  return ORDER_STATUS_LABEL[s] || status;
+}
+
+// Order.deliveryStatus: null (not moving yet), in_transit, delivered, exception
+// — only ever set once status is 'assigned'.
+const DELIVERY_STATUS_LABEL: Record<string, string> = {
+  in_transit: 'In transit',
+  delivered: 'Delivered',
+  exception: 'Exception',
+};
+function deliveryStatusLabel(status?: string): string {
+  if (!status) return 'Not moving yet';
+  return DELIVERY_STATUS_LABEL[status] || status;
+}
+function deliveryStatusVariant(status?: string): StatusVariant {
+  if (status === 'delivered') return 'success';
+  if (status === 'in_transit') return 'info';
+  if (status === 'exception') return 'destructive';
   return 'muted';
 }
 
@@ -104,7 +138,7 @@ export default function VNextOrders() {
   const { hasPermission } = useCurrentUser();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [activeTab, setActiveTab] = useState('all');
+  const [deliveryFilter, setDeliveryFilter] = useState('all');
   const [orders, setOrders] = useState<Order[]>([]);
   const [customers, setCustomers] = useState<{ id: string; name: string }[]>([]);
   const [customerFilter, setCustomerFilter] = useState('all');
@@ -115,6 +149,7 @@ export default function VNextOrders() {
   const [bulkArchiving, setBulkArchiving] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
+  const [openIssueOrderIds, setOpenIssueOrderIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     let cancelled = false;
@@ -143,6 +178,18 @@ export default function VNextOrders() {
   }, [refreshKey]);
 
   useEffect(() => {
+    fetch(`${API_URL}/api/v1/issues?sourceEntityType=order&status=open,in_progress&limit=500`)
+      .then(r => r.json())
+      .then(json => {
+        const ids: string[] = (json.data || [])
+          .map((issue: any) => issue.sourceEntityId)
+          .filter(Boolean);
+        setOpenIssueOrderIds(new Set(ids));
+      })
+      .catch(() => {});
+  }, [refreshKey]);
+
+  useEffect(() => {
     fetch(`${API_URL}/api/v1/customers`)
       .then(r => r.json())
       .then(json => setCustomers((json.data || []).filter((c: any) => !c.archived)))
@@ -152,15 +199,11 @@ export default function VNextOrders() {
   const filtered = orders.filter(o => {
     if (statusFilter !== 'all') {
       const sNorm = o.status?.toLowerCase().replace(/[_ ]/g, '');
-      const map: Record<string, string> = {
-        ready: 'validated',
-        pending: 'pending',
-        shipped: 'converted',
-        needsAttention: 'locationerror',
-        cancelled: 'cancelled',
-        archived: 'archived',
-      };
-      if (sNorm !== map[statusFilter]) return false;
+      if (sNorm !== statusFilter) return false;
+    }
+    if (deliveryFilter !== 'all') {
+      const dNorm = o.deliveryStatus || 'none';
+      if (dNorm !== deliveryFilter) return false;
     }
     if (customerFilter !== 'all' && o.customerId !== customerFilter) return false;
     if (search) {
@@ -286,29 +329,40 @@ export default function VNextOrders() {
   }
 
   const counts = {
-    ready: orders.filter(o => o.status?.toLowerCase() === 'validated').length,
     pending: orders.filter(o => o.status?.toLowerCase() === 'pending').length,
-    shipped: orders.filter(o => o.status?.toLowerCase() === 'converted').length,
-    needsAttention: orders.filter(o => o.status?.toLowerCase().replace(/[_ ]/g, '') === 'locationerror').length,
+    available: orders.filter(o => o.status?.toLowerCase() === 'verified').length,
+    inShipment: orders.filter(o => o.status?.toLowerCase() === 'assigned').length,
+    needsAttention: orders.filter(o => o.status?.toLowerCase() === 'issue').length,
     cancelled: orders.filter(o => o.status?.toLowerCase() === 'cancelled').length,
     archived: orders.filter(o => o.status?.toLowerCase() === 'archived').length,
   };
 
-  const stats = [
-    { label: 'Ready to ship', value: counts.ready, icon: Package, tone: 'bg-success/15 text-success' },
-    { label: 'Pending approval', value: counts.pending, icon: Hourglass, tone: 'bg-warning/15 text-warning' },
-    { label: 'Shipped', value: counts.shipped, icon: Truck, tone: 'bg-info/15 text-info' },
-    { label: 'Needs attention', value: counts.needsAttention, icon: AlertTriangle, tone: 'bg-destructive/15 text-destructive' },
+  // Delivery status only ever exists once an order is in a shipment, so
+  // these four cards are scoped to (and sum to) counts.inShipment rather
+  // than the full order count.
+  const inShipmentOrders = orders.filter(o => o.status?.toLowerCase() === 'assigned');
+  const deliveryCounts = {
+    none: inShipmentOrders.filter(o => !o.deliveryStatus).length,
+    in_transit: inShipmentOrders.filter(o => o.deliveryStatus === 'in_transit').length,
+    delivered: inShipmentOrders.filter(o => o.deliveryStatus === 'delivered').length,
+    exception: inShipmentOrders.filter(o => o.deliveryStatus === 'exception').length,
+  };
+
+  const deliveryStats = [
+    { key: 'none', label: 'Not moving yet', value: deliveryCounts.none, icon: Clock, tone: 'bg-muted text-muted-foreground' },
+    { key: 'in_transit', label: 'In transit', value: deliveryCounts.in_transit, icon: Truck, tone: 'bg-info/15 text-info' },
+    { key: 'delivered', label: 'Delivered', value: deliveryCounts.delivered, icon: CheckCircle2, tone: 'bg-success/15 text-success' },
+    { key: 'exception', label: 'Exception', value: deliveryCounts.exception, icon: AlertTriangle, tone: 'bg-destructive/15 text-destructive' },
   ];
 
-  const tabs = [
-    { key: 'all', label: 'All orders', count: orders.length },
-    { key: 'ready', label: 'Ready to ship', count: counts.ready },
-    { key: 'pending', label: 'Pending', count: counts.pending },
-    { key: 'shipped', label: 'Shipped', count: counts.shipped },
-    { key: 'needsAttention', label: 'Needs attention', count: counts.needsAttention },
-    { key: 'cancelled', label: 'Cancelled', count: counts.cancelled },
-    { key: 'archived', label: 'Archived', count: counts.archived },
+  const statusOptions = [
+    { value: 'all', label: 'All statuses' },
+    { value: 'pending', label: `${ORDER_STATUS_LABEL.pending} (${counts.pending})` },
+    { value: 'verified', label: `${ORDER_STATUS_LABEL.verified} (${counts.available})` },
+    { value: 'assigned', label: `${ORDER_STATUS_LABEL.assigned} (${counts.inShipment})` },
+    { value: 'issue', label: `${ORDER_STATUS_LABEL.issue} (${counts.needsAttention})` },
+    { value: 'cancelled', label: `${ORDER_STATUS_LABEL.cancelled} (${counts.cancelled})` },
+    { value: 'archived', label: `${ORDER_STATUS_LABEL.archived} (${counts.archived})` },
   ];
 
   return (
@@ -348,10 +402,17 @@ export default function VNextOrders() {
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {stats.map(stat => {
+        {deliveryStats.map(stat => {
           const Icon = stat.icon;
+          const active = deliveryFilter === stat.key;
           return (
-            <Card key={stat.label}>
+            <Card
+              key={stat.key}
+              role="button"
+              tabIndex={0}
+              onClick={() => setDeliveryFilter(active ? 'all' : stat.key)}
+              className={cn('cursor-pointer transition-colors', active && 'ring-2 ring-primary')}
+            >
               <div className="p-5">
                 <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', stat.tone)}>
                   <Icon className="h-5 w-5" />
@@ -363,27 +424,9 @@ export default function VNextOrders() {
           );
         })}
       </div>
-
-      <div className="flex flex-wrap items-center gap-1 border-b border-border">
-        {tabs.map(tab => (
-          <button
-            key={tab.key}
-            type="button"
-            onClick={() => {
-              setActiveTab(tab.key);
-              setStatusFilter(tab.key === 'all' ? 'all' : tab.key);
-            }}
-            className={cn(
-              '-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors',
-              activeTab === tab.key
-                ? 'border-primary text-primary'
-                : 'border-transparent text-muted-foreground hover:text-foreground',
-            )}
-          >
-            {tab.label} ({tab.count})
-          </button>
-        ))}
-      </div>
+      <p className="text-xs text-muted-foreground">
+        Of {counts.inShipment} in-shipment orders — the other {orders.length - counts.inShipment} haven't shipped yet, so they carry no delivery status.
+      </p>
 
       <Card>
         <div className="flex flex-wrap items-center gap-3 p-4">
@@ -396,6 +439,16 @@ export default function VNextOrders() {
               className="pl-9"
             />
           </div>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-[190px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {statusOptions.map(opt => (
+                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Select defaultValue="all">
             <SelectTrigger className="w-[160px]">
               <SelectValue />
@@ -497,7 +550,17 @@ export default function VNextOrders() {
                     />
                   </TableCell>
                   <TableCell>
-                    <div className="font-mono text-sm font-semibold">{o.orderNumber || o.id}</div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-mono text-sm font-semibold">{o.orderNumber || o.id}</span>
+                      {openIssueOrderIds.has(o.id) && (
+                        <span title="Has an open issue">
+                          <AlertTriangle
+                            className="h-3.5 w-3.5 shrink-0 text-destructive"
+                            aria-label="Has open issue"
+                          />
+                        </span>
+                      )}
+                    </div>
                     {o.poNumber && <div className="text-xs text-muted-foreground">PO# {o.poNumber}</div>}
                   </TableCell>
                   <TableCell>{o.customer?.name || '-'}</TableCell>
@@ -517,13 +580,17 @@ export default function VNextOrders() {
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-sm">{formatDate(o.requestedPickupDate)}</TableCell>
                   <TableCell className="whitespace-nowrap text-sm">{formatDate(o.requestedDeliveryDate)}</TableCell>
-                  <TableCell className="text-sm">{o.deliveryStatus || '-'}</TableCell>
                   <TableCell>
-                    <Badge variant={orderStatusVariant(o.status)}>{o.status}</Badge>
+                    {sNorm === 'assigned' ? (
+                      <Badge variant={deliveryStatusVariant(o.deliveryStatus)}>{deliveryStatusLabel(o.deliveryStatus)}</Badge>
+                    ) : '-'}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={orderStatusVariant(o.status)}>{orderStatusLabel(o.status)}</Badge>
                   </TableCell>
                   <TableCell onClick={e => e.stopPropagation()}>
                     <div className="flex items-center justify-end gap-1">
-                      {sNorm === 'validated' && (
+                      {sNorm === 'verified' && (
                         <Button size="sm" onClick={() => navigate('/carrier-bidding')}>
                           <Truck className="h-4 w-4" />
                           Ship
