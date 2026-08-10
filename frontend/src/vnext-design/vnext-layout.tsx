@@ -34,6 +34,7 @@ import {
   LayoutDashboard,
   LayoutGrid,
   ListChecks,
+  Loader2,
   Locate,
   LogOut,
   Mail,
@@ -68,6 +69,7 @@ import {
   Waves,
   Webhook,
   Wrench,
+  X,
   Zap,
   type LucideIcon,
 } from 'lucide-react';
@@ -75,6 +77,7 @@ import {
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { logout } from '../authFetch';
+import { API_URL } from '../api';
 import { Logo } from '@/components/brand/Logo';
 import { Input } from '@/components/ui/input';
 import {
@@ -312,6 +315,207 @@ const APPS: AppDef[] = [
   },
 ];
 
+/* ── Global search ──────────────────────────────────── */
+interface SearchResults {
+  shipments: { id: string; reference: string; status: string; customerName: string }[];
+  orders: { id: string; orderNumber: string; poNumber: string | null; status: string; customerName: string }[];
+  carriers: { id: string; name: string; mcNumber: string | null; archived: boolean }[];
+  customers: { id: string; name: string; contactEmail: string | null; archived: boolean }[];
+}
+
+const EMPTY_RESULTS: SearchResults = { shipments: [], orders: [], carriers: [], customers: [] };
+
+function resultCount(r: SearchResults) {
+  return r.shipments.length + r.orders.length + r.carriers.length + r.customers.length;
+}
+
+function GlobalSearch() {
+  const navigate = useNavigate();
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<SearchResults>(EMPTY_RESULTS);
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    const term = query.trim();
+    if (term.length < 2) {
+      setResults(EMPTY_RESULTS);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/v1/search?q=${encodeURIComponent(term)}`);
+        const json = await res.json();
+        setResults(json?.data || EMPTY_RESULTS);
+      } catch {
+        setResults(EMPTY_RESULTS);
+      } finally {
+        setLoading(false);
+      }
+    }, 250);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [query]);
+
+  useEffect(() => {
+    function onDocClick(e: MouseEvent) {
+      if (!containerRef.current?.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, []);
+
+  const go = (path: string) => {
+    setOpen(false);
+    setQuery('');
+    navigate(path);
+  };
+
+  const showDropdown = open && query.trim().length >= 2;
+  const count = resultCount(results);
+
+  return (
+    <div ref={containerRef} className="relative max-w-md flex-1">
+      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+      <Input
+        type="search"
+        placeholder="Search shipments, orders, carriers..."
+        className="pl-9 pr-9"
+        value={query}
+        onChange={e => setQuery(e.target.value)}
+        onFocus={() => setOpen(true)}
+        onKeyDown={e => {
+          if (e.key === 'Escape') setOpen(false);
+        }}
+      />
+      {loading ? (
+        <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+      ) : query ? (
+        <button
+          type="button"
+          onClick={() => setQuery('')}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+          aria-label="Clear search"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      ) : null}
+
+      {showDropdown && (
+        <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-[70vh] overflow-y-auto rounded-md border border-border bg-popover shadow-md">
+          {!loading && count === 0 && (
+            <div className="px-4 py-6 text-center text-sm text-muted-foreground">
+              No results for "{query.trim()}"
+            </div>
+          )}
+
+          {results.shipments.length > 0 && (
+            <SearchGroup icon={Truck} label="Shipments">
+              {results.shipments.map(s => (
+                <SearchResultRow
+                  key={s.id}
+                  onClick={() => go(`/shipments/${s.id}`)}
+                  primary={s.reference}
+                  secondary={s.customerName}
+                  meta={s.status}
+                />
+              ))}
+            </SearchGroup>
+          )}
+
+          {results.orders.length > 0 && (
+            <SearchGroup icon={FileText} label="Orders">
+              {results.orders.map(o => (
+                <SearchResultRow
+                  key={o.id}
+                  onClick={() => go(`/orders/${o.id}`)}
+                  primary={o.orderNumber}
+                  secondary={o.customerName}
+                  meta={o.status}
+                />
+              ))}
+            </SearchGroup>
+          )}
+
+          {results.carriers.length > 0 && (
+            <SearchGroup icon={Handshake} label="Carriers">
+              {results.carriers.map(c => (
+                <SearchResultRow
+                  key={c.id}
+                  onClick={() => go(`/carriers/${c.id}/edit`)}
+                  primary={c.name}
+                  secondary={c.mcNumber ? `MC ${c.mcNumber}` : undefined}
+                  meta={c.archived ? 'archived' : undefined}
+                />
+              ))}
+            </SearchGroup>
+          )}
+
+          {results.customers.length > 0 && (
+            <SearchGroup icon={Users} label="Customers">
+              {results.customers.map(c => (
+                <SearchResultRow
+                  key={c.id}
+                  onClick={() => go(`/customers/${c.id}/edit`)}
+                  primary={c.name}
+                  secondary={c.contactEmail || undefined}
+                  meta={c.archived ? 'archived' : undefined}
+                />
+              ))}
+            </SearchGroup>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SearchGroup({ icon: Icon, label, children }: { icon: LucideIcon; label: string; children: React.ReactNode }) {
+  return (
+    <div className="border-b border-border py-1.5 last:border-b-0">
+      <div className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <Icon className="h-3 w-3" />
+        {label}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function SearchResultRow({
+  onClick,
+  primary,
+  secondary,
+  meta,
+}: {
+  onClick: () => void;
+  primary: string;
+  secondary?: string;
+  meta?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-muted/40"
+    >
+      <span className="min-w-0 flex-1 truncate">
+        <span className="font-medium">{primary}</span>
+        {secondary && <span className="ml-2 text-muted-foreground">{secondary}</span>}
+      </span>
+      {meta && (
+        <span className="shrink-0 text-xs capitalize text-muted-foreground">{meta}</span>
+      )}
+    </button>
+  );
+}
+
 function detectApp(pathname: string): string {
   if (pathname.startsWith('/wms')) return 'warehouse';
   if (pathname.startsWith('/quality')) return 'quality';
@@ -428,14 +632,7 @@ export default function VNextLayout() {
             <Menu className="h-5 w-5" />
           </button>
 
-          <div className="relative max-w-md flex-1">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              type="search"
-              placeholder="Search shipments, orders, carriers..."
-              className="pl-9"
-            />
-          </div>
+          <GlobalSearch />
 
           <div className="flex items-center gap-1">
             <button

@@ -41,6 +41,7 @@ import { customerRoutes } from './routes/customers.js';
 import { carrierRoutes } from './routes/carriers.js';
 import { locationRoutes } from './routes/locations.js';
 import { shipmentRoutes } from './routes/shipments.js';
+import { globalSearchRoutes } from './routes/globalSearch.js';
 import { laneRoutes } from './routes/lanes.js';
 import { laneRouteRoutes } from './routes/laneRoutes.js';
 import { orderRoutes } from './routes/orders.js';
@@ -247,6 +248,7 @@ async function start() {
     await app.register(carrierRoutes);
     await app.register(locationRoutes);
     await app.register(shipmentRoutes);
+    await app.register(globalSearchRoutes);
     await app.register(shipmentTypeRoutes);
     await app.register(laneRoutes);
     await app.register(laneRouteRoutes);

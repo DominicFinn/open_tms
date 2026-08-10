@@ -47,6 +47,12 @@ export interface IOrderConversionService {
   checkCompatibility(orderIds: string[]): Promise<CompatibilityCheck>;
   batchConvert(orderIds: string[], options: BatchConvertOptions, userId?: string): Promise<BatchConvertResult>;
   splitOrder(orderId: string, groups: SplitGroup[], userId?: string): Promise<SplitOrderResult>;
+  /**
+   * Manually add order(s) to an existing shipment, rather than creating a
+   * new one. Requires matching origin + customer with the target shipment,
+   * and the shipment must not have already left draft/ready.
+   */
+  addOrdersToShipment(orgId: string, shipmentId: string, orderIds: string[], userId?: string): Promise<BatchConvertResult>;
 }
 
 export class OrderConversionService implements IOrderConversionService {
@@ -628,6 +634,152 @@ export class OrderConversionService implements IOrderConversionService {
         message: 'Failed to split order',
       };
     }
+  }
+
+  async addOrdersToShipment(
+    orgId: string,
+    shipmentId: string,
+    orderIds: string[],
+    userId?: string
+  ): Promise<BatchConvertResult> {
+    if (orderIds.length === 0) {
+      return { success: false, shipmentIds: [], errors: ['No orders specified'], message: 'No orders specified' };
+    }
+
+    const shipment = await this.prisma.shipment.findFirst({
+      where: { id: shipmentId, orgId, deletedAt: null },
+    });
+    if (!shipment) {
+      return { success: false, shipmentIds: [], errors: ['Shipment not found'], message: 'Shipment not found' };
+    }
+    if (shipment.status === 'in_progress' || shipment.status === 'complete') {
+      return {
+        success: false,
+        shipmentIds: [],
+        errors: [`Shipment is already ${shipment.status} — orders can only be added while it's draft or ready`],
+        message: 'Shipment has already left draft/ready',
+      };
+    }
+    if (!shipment.originId) {
+      return { success: false, shipmentIds: [], errors: ['Shipment has no origin set'], message: 'Shipment has no origin set' };
+    }
+
+    const orders = await this.prisma.order.findMany({
+      where: { id: { in: orderIds }, orgId, archived: false },
+      include: {
+        trackableUnits: { include: { lineItems: true }, orderBy: { sequenceNumber: 'asc' } },
+        lineItems: { where: { trackableUnitId: null } },
+      },
+    });
+
+    const errors: string[] = [];
+    const found = new Set(orders.map((o) => o.id));
+    for (const id of orderIds) {
+      if (!found.has(id)) errors.push(`Order ${id} not found`);
+    }
+
+    const valid = orders.filter((o) => {
+      if (o.status === 'converted' || o.status === 'assigned') {
+        errors.push(`${o.orderNumber} is already ${o.status}`);
+        return false;
+      }
+      if (!o.originId || !o.destinationId) {
+        errors.push(`${o.orderNumber} is missing origin or destination`);
+        return false;
+      }
+      if (o.originId !== shipment.originId) {
+        errors.push(`${o.orderNumber} has a different origin than this shipment`);
+        return false;
+      }
+      if (o.customerId !== shipment.customerId) {
+        errors.push(`${o.orderNumber} belongs to a different customer than this shipment`);
+        return false;
+      }
+      return true;
+    });
+
+    if (valid.length === 0) {
+      return {
+        success: false,
+        shipmentIds: [],
+        errors: errors.length ? errors : ['No valid orders to add'],
+        message: 'No valid orders to add',
+      };
+    }
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        const existingItems = Array.isArray(shipment.items) ? (shipment.items as any[]) : [];
+        const newItems = this.buildItemsPayload(valid);
+        await tx.shipment.update({
+          where: { id: shipmentId },
+          data: { items: [...existingItems, ...newItems] },
+        });
+
+        const maxSeq = await tx.shipmentStop.aggregate({
+          where: { shipmentId },
+          _max: { sequenceNumber: true },
+        });
+        let nextSeq = (maxSeq._max.sequenceNumber || 0) + 1;
+
+        for (const order of valid) {
+          let stop = await tx.shipmentStop.findFirst({
+            where: { shipmentId, locationId: order.destinationId! },
+          });
+          if (!stop) {
+            stop = await tx.shipmentStop.create({
+              data: {
+                shipmentId,
+                locationId: order.destinationId!,
+                sequenceNumber: nextSeq++,
+                stopType: 'delivery',
+                status: 'pending',
+              },
+            });
+          }
+
+          await tx.orderShipment.create({
+            data: { orderId: order.id, shipmentId },
+          });
+
+          await tx.order.update({
+            where: { id: order.id },
+            data: {
+              status: 'converted',
+              deliveryStatus: 'assigned',
+              deliveryStopId: stop.id,
+            },
+          });
+
+          await tx.auditLog.create({
+            data: {
+              entityType: 'order',
+              entityId: order.id,
+              orderId: order.id,
+              action: 'delivery_status_changed',
+              description: `Order manually added to shipment ${shipment.reference}`,
+              changes: {
+                before: { deliveryStatus: order.deliveryStatus, status: order.status },
+                after: { deliveryStatus: 'assigned', status: 'converted' },
+              },
+              userId,
+            },
+          });
+        }
+      });
+    } catch (err: any) {
+      return { success: false, shipmentIds: [], errors: [err.message], message: 'Failed to add orders to shipment' };
+    }
+
+    return {
+      success: errors.length === 0,
+      shipmentIds: [shipmentId],
+      errors,
+      message:
+        errors.length === 0
+          ? `Added ${valid.length} order${valid.length === 1 ? '' : 's'} to shipment ${shipment.reference}`
+          : `Added ${valid.length} order${valid.length === 1 ? '' : 's'}, ${errors.length} skipped`,
+    };
   }
 
   private buildItemsPayload(orders: any[]): any[] {

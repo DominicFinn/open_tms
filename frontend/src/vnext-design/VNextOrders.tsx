@@ -2,13 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Archive,
+  AlertTriangle,
   Check,
   ChevronDown,
   CircleAlert,
   Eye,
   FileText,
   Hourglass,
-  Inbox,
   Loader2,
   MoreVertical,
   Package,
@@ -80,13 +80,14 @@ interface Order {
 
 type StatusVariant = 'success' | 'info' | 'warning' | 'destructive' | 'muted';
 
+// Order.status enum: pending, validated, location_error, converted, cancelled, archived
 function orderStatusVariant(status: string): StatusVariant {
   const s = status?.toLowerCase().replace(/[_ ]/g, '');
-  if (s === 'readytoship' || s === 'ready') return 'success';
-  if (s === 'pendingapproval' || s === 'pending') return 'warning';
-  if (s === 'shipped' || s === 'intransit') return 'info';
-  if (s === 'delivered') return 'success';
-  if (s === 'cancelled' || s === 'canceled') return 'destructive';
+  if (s === 'validated') return 'success';
+  if (s === 'pending') return 'warning';
+  if (s === 'converted') return 'info';
+  if (s === 'locationerror') return 'destructive';
+  if (s === 'cancelled') return 'destructive';
   // Orthogonal to the lifecycle above — set by archive/unarchive, same
   // "Inactive" tone Carriers uses.
   if (s === 'archived') return 'destructive';
@@ -152,11 +153,10 @@ export default function VNextOrders() {
     if (statusFilter !== 'all') {
       const sNorm = o.status?.toLowerCase().replace(/[_ ]/g, '');
       const map: Record<string, string> = {
-        ready: 'readytoship',
-        pending: 'pendingapproval',
-        shipped: 'shipped',
-        draft: 'draft',
-        delivered: 'delivered',
+        ready: 'validated',
+        pending: 'pending',
+        shipped: 'converted',
+        needsAttention: 'locationerror',
         cancelled: 'cancelled',
         archived: 'archived',
       };
@@ -286,10 +286,11 @@ export default function VNextOrders() {
   }
 
   const counts = {
-    ready: orders.filter(o => o.status?.toLowerCase().replace(/[_ ]/g, '') === 'readytoship').length,
-    pending: orders.filter(o => o.status?.toLowerCase().replace(/[_ ]/g, '') === 'pendingapproval').length,
-    shipped: orders.filter(o => o.status?.toLowerCase() === 'shipped').length,
-    delivered: orders.filter(o => o.status?.toLowerCase() === 'delivered').length,
+    ready: orders.filter(o => o.status?.toLowerCase() === 'validated').length,
+    pending: orders.filter(o => o.status?.toLowerCase() === 'pending').length,
+    shipped: orders.filter(o => o.status?.toLowerCase() === 'converted').length,
+    needsAttention: orders.filter(o => o.status?.toLowerCase().replace(/[_ ]/g, '') === 'locationerror').length,
+    cancelled: orders.filter(o => o.status?.toLowerCase() === 'cancelled').length,
     archived: orders.filter(o => o.status?.toLowerCase() === 'archived').length,
   };
 
@@ -297,7 +298,7 @@ export default function VNextOrders() {
     { label: 'Ready to ship', value: counts.ready, icon: Package, tone: 'bg-success/15 text-success' },
     { label: 'Pending approval', value: counts.pending, icon: Hourglass, tone: 'bg-warning/15 text-warning' },
     { label: 'Shipped', value: counts.shipped, icon: Truck, tone: 'bg-info/15 text-info' },
-    { label: 'Delivered', value: counts.delivered, icon: Inbox, tone: 'bg-primary/10 text-primary' },
+    { label: 'Needs attention', value: counts.needsAttention, icon: AlertTriangle, tone: 'bg-destructive/15 text-destructive' },
   ];
 
   const tabs = [
@@ -305,6 +306,8 @@ export default function VNextOrders() {
     { key: 'ready', label: 'Ready to ship', count: counts.ready },
     { key: 'pending', label: 'Pending', count: counts.pending },
     { key: 'shipped', label: 'Shipped', count: counts.shipped },
+    { key: 'needsAttention', label: 'Needs attention', count: counts.needsAttention },
+    { key: 'cancelled', label: 'Cancelled', count: counts.cancelled },
     { key: 'archived', label: 'Archived', count: counts.archived },
   ];
 
@@ -520,13 +523,13 @@ export default function VNextOrders() {
                   </TableCell>
                   <TableCell onClick={e => e.stopPropagation()}>
                     <div className="flex items-center justify-end gap-1">
-                      {sNorm === 'readytoship' && (
+                      {sNorm === 'validated' && (
                         <Button size="sm" onClick={() => navigate('/carrier-bidding')}>
                           <Truck className="h-4 w-4" />
                           Ship
                         </Button>
                       )}
-                      {sNorm === 'pendingapproval' && (
+                      {sNorm === 'pending' && (
                         <Button size="sm" variant="outline">
                           <Check className="h-4 w-4" />
                           Approve

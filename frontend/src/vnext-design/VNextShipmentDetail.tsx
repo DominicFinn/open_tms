@@ -1562,6 +1562,11 @@ export default function VNextShipmentDetail() {
   const [laneRoute, setLaneRoute] = useState<any>(undefined);
   const [showLane, setShowLane] = useState(true);
   const [showRoute, setShowRoute] = useState(true);
+  const [addOrderOpen, setAddOrderOpen] = useState(false);
+  const [eligibleOrders, setEligibleOrders] = useState<any[]>([]);
+  const [eligibleLoading, setEligibleLoading] = useState(false);
+  const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
+  const [addingOrders, setAddingOrders] = useState(false);
   const { hasPermission } = useCurrentUser();
 
   const loadShipment = useCallback((showSpinner = true) => {
@@ -1592,6 +1597,55 @@ export default function VNextShipmentDetail() {
   }, [id]);
 
   useEffect(() => { loadShipment(); }, [loadShipment]);
+
+  const openAddOrderModal = useCallback(() => {
+    if (!id) return;
+    setAddOrderOpen(true);
+    setSelectedOrderIds(new Set());
+    setEligibleLoading(true);
+    fetch(`${API_URL}/api/v1/shipments/${id}/eligible-orders`)
+      .then(res => res.json())
+      .then(json => setEligibleOrders(json.data || []))
+      .catch(() => setEligibleOrders([]))
+      .finally(() => setEligibleLoading(false));
+  }, [id]);
+
+  const toggleEligibleOrder = useCallback((orderId: string) => {
+    setSelectedOrderIds(prev => {
+      const next = new Set(prev);
+      if (next.has(orderId)) next.delete(orderId); else next.add(orderId);
+      return next;
+    });
+  }, []);
+
+  const handleAddOrders = useCallback(async () => {
+    if (!id || selectedOrderIds.size === 0) return;
+    setAddingOrders(true);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/shipments/${id}/add-orders`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderIds: Array.from(selectedOrderIds) }),
+      });
+      const json = await res.json();
+      if (!res.ok || json.error) {
+        toast.error(json.error || 'Failed to add orders', { duration: 8000 });
+        return;
+      }
+      const errors: string[] = json.data?.errors || [];
+      if (errors.length > 0) {
+        toast.warning(json.data.message, { duration: 9000 });
+      } else {
+        toast.success(json.data.message);
+      }
+      setAddOrderOpen(false);
+      loadShipment(false);
+    } catch {
+      toast.error('Failed to add orders');
+    } finally {
+      setAddingOrders(false);
+    }
+  }, [id, selectedOrderIds, loadShipment]);
 
   const handleTransition = useCallback(async (toStatus: string) => {
     if (!id) return;
@@ -2127,6 +2181,58 @@ export default function VNextShipmentDetail() {
         </DialogContent>
       </Dialog>
 
+      {/* Add order to shipment */}
+      <Dialog open={addOrderOpen} onOpenChange={setAddOrderOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Add order to {shipment.reference || 'this shipment'}</DialogTitle>
+            <DialogDescription>
+              Only validated orders with the same origin and customer as this shipment are eligible.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[50vh] overflow-y-auto -mx-1 px-1">
+            {eligibleLoading ? (
+              <div className="flex items-center justify-center py-10 text-muted-foreground">
+                <Loader2 className="h-5 w-5 animate-spin" />
+              </div>
+            ) : eligibleOrders.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">
+                No eligible orders. Orders must be validated, share this shipment's origin and customer, and not already be linked to a shipment.
+              </p>
+            ) : (
+              <div className="space-y-1">
+                {eligibleOrders.map(o => (
+                  <label
+                    key={o.id}
+                    className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 hover:bg-muted/40"
+                  >
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 cursor-pointer accent-primary"
+                      checked={selectedOrderIds.has(o.id)}
+                      onChange={() => toggleEligibleOrder(o.id)}
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-medium">{o.orderNumber}</span>
+                      <span className="block text-xs text-muted-foreground">
+                        {o.customer?.name} &middot; to {o.destination ? `${o.destination.city}, ${o.destination.state || ''}` : 'unknown destination'}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddOrderOpen(false)} disabled={addingOrders}>Cancel</Button>
+            <Button onClick={handleAddOrders} disabled={addingOrders || selectedOrderIds.size === 0}>
+              {addingOrders ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+              Add {selectedOrderIds.size > 0 ? selectedOrderIds.size : ''} order{selectedOrderIds.size === 1 ? '' : 's'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Route Deviation Alert */}
       {routeDeviation && (
         <div
@@ -2438,8 +2544,36 @@ export default function VNextShipmentDetail() {
                   }
                 />
               )}
-              {orders.length > 0 && (
-                <Detail label="Orders" value={orders.map((os: any) => os.order?.orderNumber).filter(Boolean).join(', ') || '-'} />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
+              <CardTitle className="text-base">Linked orders</CardTitle>
+              {(shipment.status === 'draft' || shipment.status === 'ready') && hasPermission('orders:write') && (
+                <Button variant="outline" size="sm" onClick={openAddOrderModal}>
+                  <Plus className="h-4 w-4" />
+                  Add order
+                </Button>
+              )}
+            </CardHeader>
+            <CardContent className="space-y-1 text-sm">
+              {orders.length === 0 ? (
+                <p className="text-muted-foreground">No orders linked to this shipment yet.</p>
+              ) : (
+                orders.map((os: any) => (
+                  <Link
+                    key={os.id}
+                    to={`/orders/${os.order?.id}`}
+                    className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 -mx-2 hover:bg-muted/40"
+                  >
+                    <span className="min-w-0 flex-1 truncate">
+                      <span className="font-medium">{os.order?.orderNumber}</span>
+                      <span className="ml-2 text-muted-foreground">{os.order?.customer?.name}</span>
+                    </span>
+                    <span className="shrink-0 text-xs capitalize text-muted-foreground">{os.order?.deliveryStatus}</span>
+                  </Link>
+                ))
               )}
             </CardContent>
           </Card>

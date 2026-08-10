@@ -140,7 +140,7 @@ export default function CustomerOrders() {
                   </TableCell>
                   <TableCell className="text-sm">{o.poNumber || '-'}</TableCell>
                   <TableCell className="text-sm">
-                    {o.originCity ? `${o.originCity}, ${o.originState}` : '-'} - {o.destinationCity ? `${o.destinationCity}, ${o.destinationState}` : '-'}
+                    {o.originCity ? [o.originCity, o.originState].filter(Boolean).join(', ') : '-'} - {o.destinationCity ? [o.destinationCity, o.destinationState].filter(Boolean).join(', ') : '-'}
                   </TableCell>
                   <TableCell>
                     <Badge variant="muted">{o.serviceLevel || '-'}</Badge>

@@ -17,6 +17,7 @@ import {
 } from '@open-tms/shared';
 import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 import { requirePermission } from '../middleware/jwtAuth.js';
+import { IOrderConversionService } from '../services/OrderConversionService.js';
 
 // Accepts YYYY-MM-DD (HTML date input), YYYY-MM-DDTHH:mm[:ss[.sss]][Z] (datetime-local), or full ISO.
 // Normalizes to a full ISO string.
@@ -32,6 +33,7 @@ const flexibleDate = z.string().trim().min(1).transform((v, ctx) => {
 
 export async function shipmentRoutes(server: FastifyInstance) {
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
+  const conversionService = container.resolve<IOrderConversionService>(TOKENS.IOrderConversionService);
 
   await registerOrgScope(server);
 
@@ -321,6 +323,76 @@ export async function shipmentRoutes(server: FastifyInstance) {
       return { data: null, error: 'Shipment not found' };
     }
     return { data: shipment, error: null };
+  });
+
+  // Orders eligible to be manually added to this shipment: validated, same
+  // origin + customer as the shipment, and not already linked to one.
+  server.get('/api/v1/shipments/:id/eligible-orders', {
+    schema: {
+      tags: ['Shipments'],
+      summary: 'List orders that can be manually added to this shipment',
+      params: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const orgId = req.orgId!;
+    const shipment = await server.prisma.shipment.findFirst({ where: { id, orgId, deletedAt: null } });
+    if (!shipment) {
+      reply.code(404);
+      return { data: null, error: 'Shipment not found' };
+    }
+    if (!shipment.originId) {
+      return { data: [], error: null };
+    }
+
+    const orders = await server.prisma.order.findMany({
+      where: {
+        orgId,
+        archived: false,
+        status: 'validated',
+        originId: shipment.originId,
+        customerId: shipment.customerId,
+        orderShipments: { none: {} },
+      },
+      include: {
+        customer: { select: { name: true } },
+        destination: { select: { city: true, state: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    return { data: orders, error: null };
+  });
+
+  // Manually add order(s) to this existing shipment (rather than creating a
+  // new one). Requires the orders to match this shipment's origin + customer.
+  server.post('/api/v1/shipments/:id/add-orders', {
+    schema: {
+      tags: ['Shipments'],
+      summary: 'Manually add order(s) to an existing shipment',
+      params: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+      body: {
+        type: 'object',
+        required: ['orderIds'],
+        properties: { orderIds: { type: 'array', items: { type: 'string' }, minItems: 1 } },
+      },
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const body = z.object({ orderIds: z.array(z.string().uuid()).min(1) }).parse((req as any).body);
+    const orgId = req.orgId!;
+
+    try {
+      const result = await conversionService.addOrdersToShipment(orgId, id, body.orderIds, req.user?.sub);
+      if (!result.success && result.shipmentIds.length === 0) {
+        reply.code(400);
+        return { data: result, error: result.message };
+      }
+      return { data: result, error: null };
+    } catch (err: any) {
+      reply.code(500);
+      return { data: null, error: err.message || 'Failed to add orders to shipment' };
+    }
   });
 
   // Get shipment events (read-only, platform-generated timeline).

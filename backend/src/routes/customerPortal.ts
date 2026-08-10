@@ -36,6 +36,26 @@ import { attachOrgScopeFromCustomerUserHook } from '../auth/orgScopeMiddleware.j
 const RETURN_REASONS = ['damaged', 'wrong_item', 'not_as_described', 'no_longer_needed', 'defective', 'ordered_extra', 'other'] as const;
 const DISPOSITIONS_SUGGEST = ['restock', 'refurb', 'scrap', 'recycle', 'donate', 'rtv', 'customer_keeps'] as const;
 
+// Common street-suffix abbreviations, expanded so "82 Kimberly Rd" and
+// "82 kimberly road" normalize to the same string for address matching.
+// Not exhaustive — this is a mechanical fix for the common cases, not a
+// substitute for real address verification.
+const STREET_SUFFIX_EXPANSIONS: Record<string, string> = {
+  rd: 'road', st: 'street', ave: 'avenue', blvd: 'boulevard', dr: 'drive',
+  ln: 'lane', ct: 'court', pl: 'place', ter: 'terrace', hwy: 'highway',
+  pkwy: 'parkway', sq: 'square', cir: 'circle', apt: 'apartment', ste: 'suite',
+};
+
+function normalizeAddressLine(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[.,]/g, '')
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(word => STREET_SUFFIX_EXPANSIONS[word] || word)
+    .join(' ');
+}
+
 export async function customerPortalRoutes(server: FastifyInstance) {
   const authService = container.resolve<ICustomerAuthService>(TOKENS.ICustomerAuthService);
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
@@ -840,15 +860,20 @@ export async function customerPortalRoutes(server: FastifyInstance) {
 
       // Multi-tenancy: scope location matching + creation to the customer
       // portal's resolved org so portal A can't reuse portal B's locations.
-      const existing = await server.prisma.location.findFirst({
+      // Narrow by org/city/state/postal in the query, then compare address1
+      // with abbreviation-aware normalization in JS — Prisma's `insensitive`
+      // mode only folds case, so "82 Kimberly Rd" vs "82 kimberly road"
+      // would otherwise create two Location rows for the same address.
+      const candidates = await server.prisma.location.findMany({
         where: {
           orgId,
-          address1: { equals: address1 || '', mode: 'insensitive' },
           city: { equals: city || '', mode: 'insensitive' },
           state: state ? { equals: state, mode: 'insensitive' } : undefined,
           postalCode: postalCode ? { equals: postalCode, mode: 'insensitive' } : undefined,
         },
       });
+      const normalizedInput = normalizeAddressLine(address1 || '');
+      const existing = candidates.find(loc => normalizeAddressLine(loc.address1) === normalizedInput);
       if (existing) return existing.id;
 
       const created = await server.prisma.location.create({
