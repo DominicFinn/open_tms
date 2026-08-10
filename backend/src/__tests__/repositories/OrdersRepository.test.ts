@@ -201,4 +201,58 @@ describe('OrdersRepository', () => {
       });
     });
   });
+
+  describe('convertToShipment', () => {
+    function buildOrder(overrides: any = {}) {
+      return {
+        id: 'o-1',
+        orgId: 'org-1',
+        orderNumber: 'ORD-1',
+        status: 'confirmed',
+        originId: 'loc-origin',
+        destinationId: 'loc-dest',
+        customer: { id: 'cust-1', name: 'Acme' },
+        trackableUnits: [],
+        lineItems: [],
+        ...overrides,
+      };
+    }
+
+    function buildTransactionalPrisma(order: any) {
+      const tx = {
+        shipment: { create: jest.fn().mockResolvedValue({ id: 'ship-1' }) },
+        orderShipment: { create: jest.fn().mockResolvedValue({}) },
+        shipmentStop: { create: jest.fn().mockResolvedValue({ id: 'stop-1' }) },
+        order: { update: jest.fn().mockResolvedValue({}) },
+        auditLog: { create: jest.fn().mockResolvedValue({}) },
+      };
+      const prisma = buildPrisma();
+      prisma.order.findFirst.mockResolvedValue(order);
+      prisma.$transaction = jest.fn((fn: Function) => fn(tx));
+      return { prisma, tx };
+    }
+
+    it('scopes the order lookup to the given org', async () => {
+      const order = buildOrder();
+      const { prisma } = buildTransactionalPrisma(order);
+      const repo = new OrdersRepository(prisma);
+
+      await repo.convertToShipment('o-1', 'org-1');
+
+      const where = prisma.order.findFirst.mock.calls[0][0].where;
+      expect(where.orgId).toBe('org-1');
+    });
+
+    it('creates the shipment with the order\'s orgId set', async () => {
+      const order = buildOrder();
+      const { prisma, tx } = buildTransactionalPrisma(order);
+      const repo = new OrdersRepository(prisma);
+
+      const result = await repo.convertToShipment('o-1', 'org-1');
+
+      const data = tx.shipment.create.mock.calls[0][0].data;
+      expect(data.orgId).toBe('org-1');
+      expect(result).toEqual({ shipmentId: 'ship-1' });
+    });
+  });
 });

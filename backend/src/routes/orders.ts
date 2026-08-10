@@ -929,7 +929,7 @@ export async function orderRoutes(server: FastifyInstance) {
         return { data: null, error: 'Order not found' };
       }
 
-      const result = await ordersRepo.convertToShipment(id);
+      const result = await ordersRepo.convertToShipment(id, orgId);
       return { data: result, error: null };
     } catch (err: any) {
       reply.code(400);
