@@ -41,7 +41,9 @@ packages/**/dist/
 
 
 claude.md
-.claude/
+# Ignore local Claude Code state, but keep the shared project rules in source control.
+.claude/*
+!.claude/rules/
 .tracking/
 # Java
 *.class
