@@ -11,6 +11,106 @@ export interface Article {
 
 export const articles: Article[] = [
   {
+    slug: 'open-tms-is-changing',
+    title: 'Open TMS is Changing',
+    excerpt: 'The project is splitting into two: FinnTMS and FinnWMS, with an IMS possibly following later. Here is why one repo stopped making sense, and what that means for anyone running this.',
+    date: '2026-08-12',
+    author: 'Dominic Finn',
+    category: 'announcements',
+    readTime: '7 min read',
+    content: `
+## The Decision
+
+I have been circling this for months. Two earlier articles on this blog talk about the name and about scope creep, and both of them end with some version of "not yet, but it is coming". It is here now.
+
+Open TMS is splitting into separate open source projects:
+
+- **FinnTMS** - transport management. Orders, shipments, carriers, tendering, EDI, tracking, financials.
+- **FinnWMS** - warehouse management. Receiving, put-away, picking, packing, inventory, the warehouse PWA.
+- **FinnIMS** - possibly, later. Inventory management, which is WMS with the rules taken out.
+
+The rename and the split are the same decision, taken together, because doing one without the other would just mean doing it all again in six months.
+
+## Why the Split
+
+### The WMS was never really at home
+
+The warehouse functionality in this codebase grew out of shipment preparation. It started as a launch app for the warehouse floor and drifted into being a WMS. That path shows. Parts of it are half-modelled, parts of it duplicate concepts the TMS already owns under different names, and parts of it are genuinely good work sitting next to parts that never got finished.
+
+That is not a WMS. That is warehouse features that happen to live in a TMS repo.
+
+### The models do not want to be together
+
+A shipment and a pick task are not the same kind of thing and they do not share a lifecycle. Wiring them into one schema means every warehouse change has to be reasoned about against transport concerns and the other way round. Two domains sharing a migration history is a tax you pay on every single change, forever, whether or not the change touches both.
+
+Untangling them is not free. But the cost is fixed and I pay it once, instead of paying a smaller cost on every commit from now until the project dies.
+
+### Cloning should not mean taking everything
+
+This is the one that actually decided it for me.
+
+Somebody who wants an open source TMS currently has to clone a repo carrying a full WMS, a warehouse PWA, inventory tables, pick and pack workflows, and all the migrations behind them. They have to run it, host it, migrate it, and understand enough of it to be confident it is not going to break their transport flows. All for functionality they will never open.
+
+The reverse is worse. Somebody who wants a warehouse system has to take an EDI suite, a carrier portal, tendering strategies, and a financial reporting layer to get it.
+
+Open source projects get adopted when the thing you download is the thing you asked for. Right now this project fails that test in both directions.
+
+## Why the Name Changes
+
+I wrote a whole article arguing for keeping "Open TMS" and it holds up right until the moment the project stops being one thing. Once there are two systems, "Open TMS" cannot be the name of both, and it definitely cannot be the name of the warehouse one.
+
+I also flirted with "Open Logistics" as the umbrella. I have gone off it. The Open Logistics Foundation exists, it is a real industry body, and picking a name that invites confusion with it is a problem I would rather not create. The other candidates all had a version of the same issue: generic enough to collide with something, specific enough to box the project in later.
+
+FinnTMS and FinnWMS are not clever. That is most of why I like them. They say who maintains the project and what it does, they are searchable, and nobody else is using them. Naming a project after yourself is a little vain, but at least it is honest about what this is: a project maintained by one person and whoever else turns up.
+
+To be clear about something that keeps coming up: this remains an independent open source project. The rename does not change the license, the governance, or who can use it. MIT, same as always.
+
+## What an IMS Would Be
+
+The third project is a maybe, not a plan.
+
+A WMS is a set of rules. Where stock is allowed to live, what order to pick it in, which locations replenish from which, how to slot, how to wave. That is the value and that is also the complexity, and plenty of businesses do not want it. They want to know what they have, where it roughly is, and what happened to it.
+
+That is an IMS. Inventory, locations, movements, counts, adjustments. No slotting logic, no wave planning, no replenishment rules.
+
+The reason to consider it as its own project is that an IMS built by stripping a WMS is worse than one built as its own thing. If it turns up, it turns up after the other two are stable and it shares the same core libraries.
+
+## The Hard Parts
+
+I want to be straight about the fact that this is a decision, not a finished plan. The awkward questions are all still open.
+
+**Authentication and identity.** There is already an auth service in the repo. If FinnTMS and FinnWMS both need users, roles and organisations, either they each carry their own, or there is a shared identity service both defer to. Each having its own means two user directories for anyone who runs both, which is exactly the kind of thing that makes people stop running one of them. A shared service means a dependency that has to be operable on its own, and it has to be optional enough that someone running just the WMS does not need to stand up an identity platform to log in.
+
+**Shared libraries.** The packages/shared directory exists and both projects would want a lot of it: the command bus, the event types, the multi-tenancy helpers, the money handling, the design system. Publishing shared packages means versioning them, which means the moment the two projects are on different versions you have a compatibility matrix. Duplicating them means the fixes drift apart. There is no clean answer here, only a choice about which mess is easier to live in.
+
+**Events across the boundary.** Today a warehouse event and a transport event go into the same bus. After the split they do not. Something has to carry "this order is picked and ready to ship" from one system to the other, and it has to survive one of them being down. That is a real integration surface with real failure modes, and it is the part I expect to get wrong first.
+
+**The existing repo and anyone running it.** The open_tms repo does not vanish. There will be a documented path from what people are running today to whichever project they actually want, and if the data migration is genuinely painful for a particular flow, I would rather say so plainly than pretend it is a script you run once.
+
+**The website and the docs.** All of this, including the pages you are reading, is written for one product with one name. That is a rewrite too.
+
+## What Happens Next
+
+Nothing dramatic and nothing fast. The order I expect to work in:
+
+1. Draw the boundary properly on paper first. Which models, which events, which routes belong on which side, and what crosses between them.
+2. Decide the auth and shared library question, because both splits depend on the answer.
+3. Split the TMS out first, since it is the more complete of the two and gets to keep most of the existing plumbing.
+4. Fix the WMS while it is being extracted, rather than moving the garbled parts across unchanged.
+5. Migration notes, then the docs and the site.
+
+The testing work I wrote about in the roadmap article does not stop for this. If anything it matters more, because the way you find out you cut a domain boundary in the wrong place is by watching an end-to-end flow break across it.
+
+## The Honest Summary
+
+This adds work. It delays features. It means a rename, two repos, a migration path, and a set of integration problems I do not currently have.
+
+It is still the right call. The single-repo version was already costing me on every change, and it was costing anyone evaluating this project far more than that: a clone full of things they did not ask for and could not easily remove. Two focused projects that each do one job well are worth more than one project that does two jobs and asks you to take both.
+
+If you are running Open TMS today, or thinking about it, open an issue on GitHub. Particularly if you run both halves - your migration is the one I most need to not get wrong.
+    `,
+  },
+  {
     slug: 'open-logistics-roadmap',
     title: 'The Open Logistics Roadmap',
     excerpt: 'More thoughts about the name, the scope, and what this thing is actually trying to be. Where the project is, where it is going, and why I am pumping the brakes on new functionality.',
