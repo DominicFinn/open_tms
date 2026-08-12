@@ -310,8 +310,11 @@ export async function shipmentRoutes(server: FastifyInstance) {
           include: {
             order: {
               select: {
-                id: true, orderNumber: true, status: true, deliveryStatus: true,
-                customer: { select: { name: true } }
+                id: true, orderNumber: true,
+                requestedPickupDate: true, requestedDeliveryDate: true,
+                customer: { select: { name: true } },
+                origin: { select: { city: true, state: true } },
+                destination: { select: { city: true, state: true } },
               }
             }
           }
@@ -399,6 +402,31 @@ export async function shipmentRoutes(server: FastifyInstance) {
       reply.code(500);
       return { data: null, error: err.message || 'Failed to add orders to shipment' };
     }
+  });
+
+  // Unlink a single order from this shipment (reverses add-orders). Order
+  // reverts to 'verified' so it's eligible to be added elsewhere again.
+  server.delete('/api/v1/shipments/:id/orders/:orderId', {
+    preHandler: requirePermission('shipments:write'),
+    schema: {
+      tags: ['Shipments'],
+      summary: 'Remove a linked order from a shipment',
+      params: {
+        type: 'object',
+        properties: { id: { type: 'string' }, orderId: { type: 'string' } },
+        required: ['id', 'orderId'],
+      },
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id, orderId } = req.params as { id: string; orderId: string };
+    const orgId = req.orgId!;
+
+    const result = await conversionService.removeOrderFromShipment(orgId, id, orderId, req.user?.sub);
+    if (!result.success) {
+      reply.code(400);
+      return { data: null, error: result.error || 'Failed to remove order from shipment' };
+    }
+    return { data: { removed: true }, error: null };
   });
 
   // Get shipment events (read-only, platform-generated timeline).

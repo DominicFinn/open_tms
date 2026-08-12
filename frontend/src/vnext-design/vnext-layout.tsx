@@ -621,7 +621,7 @@ export default function VNextLayout() {
       )}
 
       {/* Main column */}
-      <div className="flex min-h-screen flex-1 flex-col">
+      <div className="flex min-h-screen min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-border bg-background/80 px-4 backdrop-blur md:px-6 print:hidden">
           <button
             type="button"
@@ -699,7 +699,7 @@ export default function VNextLayout() {
           </div>
         </header>
 
-        <main className="flex-1 px-4 py-6 md:px-8 md:py-8 print:p-0">
+        <main className="min-w-0 flex-1 px-4 py-6 md:px-8 md:py-8 print:p-0">
           <div className="mx-auto max-w-[1440px] print:max-w-none">
             <ErrorBoundary>
               <Outlet />

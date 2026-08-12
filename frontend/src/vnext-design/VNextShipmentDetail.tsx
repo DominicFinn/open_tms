@@ -25,7 +25,7 @@ import {
   Info,
   Loader2,
   MapPin,
-  MessageSquare,
+  MoreVertical,
   Package,
   Pen,
   Pencil,
@@ -51,6 +51,7 @@ import { toast } from 'sonner';
 import { API_URL } from '../api';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
@@ -61,7 +62,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Separator } from '@/components/ui/separator';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -127,6 +127,17 @@ function shipmentStatusVariant(status: string): 'muted' | 'warning' | 'info' | '
 
 function shipmentStatusLabel(status: string): string {
   return SHIPMENT_STATUS_LABELS[status] ?? status;
+}
+
+// Percent of the pickup-to-delivery window elapsed, for the route progress bar.
+function routeProgressPct(pickupDate?: string | null, deliveryDate?: string | null, status?: string): number {
+  if (status === 'complete') return 100;
+  if (!pickupDate || !deliveryDate) return 0;
+  const start = new Date(pickupDate).getTime();
+  const end = new Date(deliveryDate).getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return 0;
+  const now = Date.now();
+  return Math.max(0, Math.min(100, ((now - start) / (end - start)) * 100));
 }
 
 // Hex colors used inside Leaflet HTML strings (cannot use Tailwind/var(--*))
@@ -1060,229 +1071,6 @@ function SlaTab({ shipmentId }: { shipmentId: string }) {
   );
 }
 
-// ─── Notes Tab ────────────────────────────────────────────────────────
-function ShipmentNotesTab({ shipmentId }: { shipmentId: string }) {
-  const { user, hasRole } = useCurrentUser();
-  const isAdmin = hasRole('admin');
-  const currentUserId = user?.id ?? null;
-
-  const [comments, setComments] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [newComment, setNewComment] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editingDraft, setEditingDraft] = useState('');
-  const [busyId, setBusyId] = useState<string | null>(null);
-
-  const loadComments = useCallback(() => {
-    fetch(`${API_URL}/api/v1/comments?entityType=shipment&entityId=${shipmentId}`)
-      .then(r => r.json())
-      .then(json => setComments(json.data?.items || json.data || []))
-      .catch(() => { })
-      .finally(() => setLoading(false));
-  }, [shipmentId]);
-
-  useEffect(() => { loadComments(); }, [loadComments]);
-
-  const handleSubmit = async () => {
-    if (!newComment.trim()) return;
-    setSubmitting(true);
-    try {
-      const res = await fetch(`${API_URL}/api/v1/comments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ entityType: 'shipment', entityId: shipmentId, body: newComment }),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok || json.error) {
-        toast.error(json.error || 'Failed to post comment');
-        return;
-      }
-      setNewComment('');
-      loadComments();
-    } catch {
-      toast.error('Failed to post comment');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const beginEdit = (c: any) => {
-    setEditingId(c.id);
-    setEditingDraft(c.body || '');
-  };
-
-  const cancelEdit = () => {
-    setEditingId(null);
-    setEditingDraft('');
-  };
-
-  const saveEdit = async (id: string) => {
-    if (!editingDraft.trim()) return;
-    setBusyId(id);
-    try {
-      const res = await fetch(`${API_URL}/api/v1/comments/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ body: editingDraft }),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok || json.error) {
-        toast.error(json.error || 'Failed to update comment');
-        return;
-      }
-      cancelEdit();
-      loadComments();
-    } catch {
-      toast.error('Failed to update comment');
-    } finally {
-      setBusyId(null);
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('Delete this comment? It will be hidden but kept for audit.')) return;
-    setBusyId(id);
-    try {
-      const res = await fetch(`${API_URL}/api/v1/comments/${id}`, { method: 'DELETE' });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok || json.error) {
-        toast.error(json.error || 'Failed to delete comment');
-        return;
-      }
-      loadComments();
-    } catch {
-      toast.error('Failed to delete comment');
-    } finally {
-      setBusyId(null);
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center gap-2 py-12 text-muted-foreground">
-        <Loader2 className="h-6 w-6 animate-spin" />
-      </div>
-    );
-  }
-
-  return (
-    <Card>
-      <CardHeader><CardTitle className="text-base">Notes &amp; Comments</CardTitle></CardHeader>
-      <CardContent>
-        {comments.length === 0 && (
-          <div className="flex flex-col items-center gap-2 py-6 text-muted-foreground">
-            <MessageSquare className="h-12 w-12 opacity-50" />
-            <p>No notes yet. Add the first comment below.</p>
-          </div>
-        )}
-        {comments.map((c: any) => {
-          const isAuthor = !!currentUserId && c.authorId === currentUserId;
-          const canEdit = isAuthor && c.authorType !== 'agent';
-          const canDelete = (isAuthor || isAdmin) && c.authorType !== 'agent';
-          const isEditing = editingId === c.id;
-          const busy = busyId === c.id;
-          return (
-            <div key={c.id} className="group flex gap-3 border-b border-border py-3 last:border-0">
-              <div
-                className={cn(
-                  'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white',
-                  c.authorType === 'agent' ? 'bg-info' : 'bg-primary',
-                )}
-              >
-                {c.authorType === 'agent'
-                  ? <Bot className="h-4 w-4" />
-                  : (c.authorName || '?').split(/\s+/).map((w: string) => w[0]).join('').toUpperCase().slice(0, 2)}
-              </div>
-              <div className="flex-1">
-                <div className="mb-1 flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold">{c.authorName || 'Unknown user'}</span>
-                    {c.tag === 'issue' && <Badge variant="destructive">Issue</Badge>}
-                    {c.tag === 'requirement' && <Badge variant="info">Additional requirement</Badge>}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground">
-                      {c.createdAt ? new Date(c.createdAt).toLocaleString() : ''}
-                      {c.updatedAt && c.createdAt && c.updatedAt !== c.createdAt && (
-                        <span className="ml-1 italic">(edited)</span>
-                      )}
-                    </span>
-                    {!isEditing && (canEdit || canDelete) && (
-                      <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
-                        {canEdit && (
-                          <button
-                            type="button"
-                            onClick={() => beginEdit(c)}
-                            disabled={busy}
-                            className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-muted/40 hover:text-foreground"
-                            title="Edit comment"
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </button>
-                        )}
-                        {canDelete && (
-                          <button
-                            type="button"
-                            onClick={() => handleDelete(c.id)}
-                            disabled={busy}
-                            className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                            title={isAuthor ? 'Delete comment' : 'Delete (admin)'}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-                {isEditing ? (
-                  <div className="flex gap-2">
-                    <textarea
-                      className="flex w-full flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                      value={editingDraft}
-                      onChange={e => setEditingDraft(e.target.value)}
-                      rows={2}
-                      autoFocus
-                    />
-                    <div className="flex flex-col gap-1 self-end">
-                      <Button
-                        size="sm"
-                        variant="gradient"
-                        onClick={() => saveEdit(c.id)}
-                        disabled={busy || !editingDraft.trim() || editingDraft === c.body}
-                      >
-                        {busy ? '...' : 'Save'}
-                      </Button>
-                      <Button size="sm" variant="ghost" onClick={cancelEdit} disabled={busy} title="Cancel">
-                        <X className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="whitespace-pre-wrap text-sm leading-relaxed">{c.body}</p>
-                )}
-              </div>
-            </div>
-          );
-        })}
-        <div className="mt-4 flex gap-2">
-          <textarea
-            className="flex w-full flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            placeholder="Add a comment..."
-            value={newComment}
-            onChange={e => setNewComment(e.target.value)}
-            rows={2}
-          />
-          <Button variant="gradient" onClick={handleSubmit} disabled={submitting || !newComment.trim()} className="self-end">
-            {submitting ? '...' : 'Post'}
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
 // ─── Carrier Tracking Tab ─────────────────────────────────────────────
 const TRACKING_STATUS_VARIANT: Record<string, 'success' | 'destructive' | 'info' | 'warning' | 'default' | 'muted'> = {
   delivered: 'success',
@@ -1537,11 +1325,13 @@ function EventsTab({ shipmentId }: { shipmentId: string }) {
 export default function VNextShipmentDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+
+  useEffect(() => { window.scrollTo(0, 0); }, [id]);
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const laneLayersRef = useRef<L.Polyline[]>([]);
   const routeLayerRef = useRef<L.Polyline | null>(null);
-  const [activeTab, setActiveTab] = useState('events');
+  const [activeTab, setActiveTab] = useState('details');
   const [shipment, setShipment] = useState<any>(null);
   const [shipmentType, setShipmentType] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -1565,6 +1355,7 @@ export default function VNextShipmentDetail() {
   const [addOrderOpen, setAddOrderOpen] = useState(false);
   const [eligibleOrders, setEligibleOrders] = useState<any[]>([]);
   const [eligibleLoading, setEligibleLoading] = useState(false);
+  const [eligibleSearch, setEligibleSearch] = useState('');
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
   const [addingOrders, setAddingOrders] = useState(false);
   const { hasPermission } = useCurrentUser();
@@ -1602,6 +1393,7 @@ export default function VNextShipmentDetail() {
     if (!id) return;
     setAddOrderOpen(true);
     setSelectedOrderIds(new Set());
+    setEligibleSearch('');
     setEligibleLoading(true);
     fetch(`${API_URL}/api/v1/shipments/${id}/eligible-orders`)
       .then(res => res.json())
@@ -1646,6 +1438,47 @@ export default function VNextShipmentDetail() {
       setAddingOrders(false);
     }
   }, [id, selectedOrderIds, loadShipment]);
+
+  const [orderActionBusyId, setOrderActionBusyId] = useState<string | null>(null);
+
+  const handleRemoveOrder = useCallback(async (orderId: string, orderNumber: string) => {
+    if (!id) return;
+    if (!window.confirm(`Remove ${orderNumber} from this shipment? It'll become available to add to another shipment.`)) return;
+    setOrderActionBusyId(orderId);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/shipments/${id}/orders/${orderId}`, { method: 'DELETE' });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json.error) {
+        toast.error(json.error || 'Failed to remove order', { duration: 8000 });
+        return;
+      }
+      toast.success(`${orderNumber} removed from shipment`);
+      loadShipment(false);
+    } catch {
+      toast.error('Failed to remove order');
+    } finally {
+      setOrderActionBusyId(null);
+    }
+  }, [id, loadShipment]);
+
+  const handleArchiveOrder = useCallback(async (orderId: string, orderNumber: string) => {
+    if (!window.confirm(`Archive order ${orderNumber}? You can restore it later from Settings > Archives.`)) return;
+    setOrderActionBusyId(orderId);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/orders/${orderId}`, { method: 'DELETE' });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json.error) {
+        toast.error(json.error || 'Failed to archive order', { duration: 8000 });
+        return;
+      }
+      toast.success(`${orderNumber} archived`);
+      loadShipment(false);
+    } catch {
+      toast.error('Failed to archive order');
+    } finally {
+      setOrderActionBusyId(null);
+    }
+  }, [loadShipment]);
 
   const handleTransition = useCallback(async (toStatus: string) => {
     if (!id) return;
@@ -2006,11 +1839,22 @@ export default function VNextShipmentDetail() {
   const destination = shipment.destination || {};
   const orders = shipment.orderShipments || [];
 
+  const filteredEligibleOrders = eligibleSearch.trim()
+    ? eligibleOrders.filter(o => {
+        const q = eligibleSearch.toLowerCase();
+        const orderNum = (o.orderNumber || '').toLowerCase();
+        const customerName = (o.customer?.name || '').toLowerCase();
+        const destLabel = o.destination ? `${o.destination.city}, ${o.destination.state || ''}`.toLowerCase() : '';
+        return orderNum.includes(q) || customerName.includes(q) || destLabel.includes(q);
+      })
+    : eligibleOrders;
+
   const tabs = [
+    { value: 'details', label: 'Details', Icon: Info },
     { value: 'events', label: 'Events', Icon: Clock },
+    { value: 'orders', label: 'Orders', Icon: Box },
     { value: 'documents', label: 'Docs', Icon: FileText },
     { value: 'financials', label: 'Financials', Icon: CreditCard },
-    { value: 'notes', label: 'Notes', Icon: MessageSquare },
     { value: 'cargo', label: 'Cargo', Icon: Package },
     { value: 'telemetry', label: 'Telemetry', Icon: Thermometer },
     { value: 'sla', label: 'SLA', Icon: Timer },
@@ -2102,10 +1946,6 @@ export default function VNextShipmentDetail() {
             <Edit className="h-4 w-4" />
             Edit
           </Button>
-          <Button variant="outline" size="sm" onClick={() => setActiveTab('documents')}>
-            <FileText className="h-4 w-4" />
-            Documents
-          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -2190,6 +2030,18 @@ export default function VNextShipmentDetail() {
               Only verified orders with the same origin and customer as this shipment are eligible.
             </DialogDescription>
           </DialogHeader>
+          {eligibleOrders.length > 0 && (
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search eligible orders..."
+                value={eligibleSearch}
+                onChange={e => setEligibleSearch(e.target.value)}
+                className="pl-9"
+                autoFocus
+              />
+            </div>
+          )}
           <div className="max-h-[50vh] overflow-y-auto -mx-1 px-1">
             {eligibleLoading ? (
               <div className="flex items-center justify-center py-10 text-muted-foreground">
@@ -2199,9 +2051,13 @@ export default function VNextShipmentDetail() {
               <p className="py-8 text-center text-sm text-muted-foreground">
                 No eligible orders. Orders must be validated, share this shipment's origin and customer, and not already be linked to a shipment.
               </p>
+            ) : filteredEligibleOrders.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">
+                No eligible orders match "{eligibleSearch}".
+              </p>
             ) : (
               <div className="space-y-1">
-                {eligibleOrders.map(o => (
+                {filteredEligibleOrders.map(o => (
                   <label
                     key={o.id}
                     className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 hover:bg-muted/40"
@@ -2260,96 +2116,293 @@ export default function VNextShipmentDetail() {
         </div>
       )}
 
-      {/* Map */}
-      {hasAnyCoords ? (
-        <div className="space-y-2">
-          <div className="flex flex-wrap items-center gap-4 text-sm">
-            <label className="flex cursor-pointer select-none items-center gap-1.5">
-              <input
-                type="checkbox"
-                checked={showLane}
-                onChange={(e) => setShowLane(e.target.checked)}
-                className="h-4 w-4 rounded border border-input bg-background accent-primary"
-              />
-              <span className="inline-block h-0.5 w-4 rounded-full" style={{ background: COLOR_INFO }} />
-              Lane
-            </label>
-            {laneRoute?.waypoints?.length > 0 && (
+      {/* Route summary + map */}
+      <Card className="overflow-hidden p-0">
+        <div className="flex flex-wrap items-center justify-between gap-3 p-4 pb-3">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <span className="inline-block h-2 w-2 rounded-full bg-info" />
+            {origin.city}, {origin.state}
+            <ArrowLeft className="h-3.5 w-3.5 rotate-180 text-muted-foreground" />
+            {destination.city}, {destination.state}
+            <span className="inline-block h-2 w-2 rounded-full bg-success" />
+          </div>
+          <span className="text-xs text-muted-foreground">
+            {shipment.pickupDate && `Picked up ${new Date(shipment.pickupDate).toLocaleDateString()}`}
+            {shipment.pickupDate && shipment.deliveryDate && ' · '}
+            {shipment.deliveryDate && `ETA ${new Date(shipment.deliveryDate).toLocaleDateString()}`}
+          </span>
+        </div>
+        <div className="h-1 bg-muted">
+          <div
+            className="h-full bg-success transition-[width]"
+            style={{ width: `${routeProgressPct(shipment.pickupDate, shipment.deliveryDate, shipment.status)}%` }}
+          />
+        </div>
+
+        {hasAnyCoords ? (
+          <div className="space-y-2 p-4 pt-3">
+            <div className="flex flex-wrap items-center gap-4 text-xs">
               <label className="flex cursor-pointer select-none items-center gap-1.5">
                 <input
                   type="checkbox"
-                  checked={showRoute}
-                  onChange={(e) => setShowRoute(e.target.checked)}
+                  checked={showLane}
+                  onChange={(e) => setShowLane(e.target.checked)}
                   className="h-4 w-4 rounded border border-input bg-background accent-primary"
                 />
-                <span className="inline-block h-0.5 w-4 rounded-full" style={{ background: COLOR_ROUTE }} />
-                Planned route
+                <span className="inline-block h-0.5 w-4 rounded-full" style={{ background: COLOR_INFO }} />
+                Lane
               </label>
-            )}
-            {shipment.laneId && laneRoute === null && (
-              <Link to={`/lanes/${shipment.laneId}/edit`} className="ml-auto text-xs text-muted-foreground underline">
-                Plan a route for this lane
-              </Link>
-            )}
-          </div>
-          <div className="relative overflow-hidden rounded-lg border border-border">
-            <div ref={mapRef} className="h-[480px] w-full" />
-            {mapLoading && (
-              <div className="pointer-events-none absolute inset-0 z-[500] flex items-center justify-center bg-muted/40">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              </div>
-            )}
-          </div>
-        </div>
-      ) : (
-        <div className="flex h-[480px] flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border bg-muted/30 px-6 text-center">
-          <div className="text-5xl" role="img" aria-label="Map">🗺️</div>
-          <div className="text-sm font-medium">No location data yet</div>
-          <div className="max-w-sm text-xs text-muted-foreground">
-            Does this shipment have a carrier link and/or an IoT device on it? Live position appears here once a
-            carrier-tracking integration or an assigned IoT device reports a location.
-          </div>
-        </div>
-      )}
-
-      {/* Route Progress */}
-      <Card>
-        <CardContent className="p-5">
-          <div className="mb-3 flex items-center justify-between">
-            <span className="text-sm font-medium">{origin.city}, {origin.state} -&gt; {destination.city}, {destination.state}</span>
-            <span className="text-sm text-muted-foreground">
-              {shipment.deliveryDate ? `ETA ${new Date(shipment.deliveryDate).toLocaleDateString()}` : ''}
-            </span>
-          </div>
-          <div className="h-2 overflow-hidden rounded-full bg-muted">
-            <div className="h-full rounded-full bg-success" style={{ width: '58%' }} />
-          </div>
-          <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
-            <div className="flex items-center gap-1.5">
-              <span className="inline-block h-2 w-2 rounded-full bg-info" />
-              {origin.city}, {origin.state}{shipment.pickupDate ? ` - ${new Date(shipment.pickupDate).toLocaleDateString()}` : ''}
+              {laneRoute?.waypoints?.length > 0 && (
+                <label className="flex cursor-pointer select-none items-center gap-1.5">
+                  <input
+                    type="checkbox"
+                    checked={showRoute}
+                    onChange={(e) => setShowRoute(e.target.checked)}
+                    className="h-4 w-4 rounded border border-input bg-background accent-primary"
+                  />
+                  <span className="inline-block h-0.5 w-4 rounded-full" style={{ background: COLOR_ROUTE }} />
+                  Planned route
+                </label>
+              )}
+              {shipment.laneId && laneRoute === null && (
+                <Link to={`/lanes/${shipment.laneId}/edit`} className="ml-auto text-muted-foreground underline">
+                  Plan a route for this lane
+                </Link>
+              )}
             </div>
-            <div className="flex items-center gap-1.5">
-              {destination.city}, {destination.state}{shipment.deliveryDate ? ` - ${new Date(shipment.deliveryDate).toLocaleDateString()}` : ''}
-              <span className="inline-block h-2 w-2 rounded-full bg-success" />
+            <div className="relative overflow-hidden rounded-lg border border-border">
+              <div ref={mapRef} className="h-[300px] w-full" />
+              {mapLoading && (
+                <div className="pointer-events-none absolute inset-0 z-[500] flex items-center justify-center bg-muted/40">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              )}
             </div>
           </div>
-        </CardContent>
+        ) : (
+          <div className="flex h-[220px] flex-col items-center justify-center gap-2 border-t border-dashed border-border bg-muted/30 px-6 text-center">
+            <div className="text-3xl" role="img" aria-label="Map">🗺️</div>
+            <div className="text-sm font-medium">No location data yet</div>
+            <div className="max-w-sm text-xs text-muted-foreground">
+              Live position appears here once a carrier-tracking integration or an assigned IoT device reports a location.
+            </div>
+          </div>
+        )}
       </Card>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
-        <div className="space-y-6">
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="flex w-full justify-start overflow-x-auto">
-              {tabs.map(t => (
-                <TabsTrigger key={t.value} value={t.value}>
-                  {t.label}
-                </TabsTrigger>
-              ))}
-            </TabsList>
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="flex w-full justify-start overflow-x-auto">
+          {tabs.map(t => (
+            <TabsTrigger key={t.value} value={t.value}>
+              {t.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
 
-            <TabsContent value="events" className="mt-4">
+        <TabsContent value="details" className="mt-4">
+          <Card>
+            <CardContent className="divide-y divide-border p-0">
+              <section className="space-y-2 p-4 text-sm">
+                <Detail label="Carrier" value={shipment.carrier?.name || '-'} />
+                <Detail label="PRO Number" value={shipment.proNumber || '-'} />
+                <Detail label="Mode" value={shipment.serviceLevel || '-'} />
+                <Detail
+                  label="Lane"
+                  value={
+                    shipment.laneId ? (
+                      <Link to={`/lanes/${shipment.laneId}`} className="text-primary hover:underline">
+                        {shipment.lane?.name || 'View Lane'}
+                      </Link>
+                    ) : '-'
+                  }
+                />
+                {routeDeviation && (
+                  <Detail
+                    label="Route Status"
+                    value={
+                      <Badge variant={routeDeviation.severity === 'critical' ? 'destructive' : 'warning'}>
+                        {(routeDeviation.deviationMeters / 1000).toFixed(1)} km off route
+                      </Badge>
+                    }
+                  />
+                )}
+              </section>
+
+              {(shipment.tempControlled || shipment.hazmat || shipment.humidityControlled || shipment.requiredEquipmentType) && (
+                <section className="space-y-2 p-4 text-sm">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Restrictions
+                  </span>
+                  {shipment.tempControlled && (
+                    <Detail
+                      label="Temperature"
+                      value={`${shipment.tempMinC ?? '?'}°C to ${shipment.tempMaxC ?? '?'}°C`}
+                    />
+                  )}
+                  {shipment.humidityControlled && (
+                    <Detail
+                      label="Humidity"
+                      value={`${shipment.humidityMinPct ?? '?'}% to ${shipment.humidityMaxPct ?? '?'}%`}
+                    />
+                  )}
+                  {shipment.hazmat && (
+                    <>
+                      <Detail label="Hazmat" value={<Badge variant="warning">Hazmat</Badge>} />
+                      {shipment.unNumber && <Detail label="UN Number" value={shipment.unNumber} />}
+                      {shipment.hazmatClass && <Detail label="Hazmat Class" value={shipment.hazmatClass} />}
+                      {shipment.packingGroup && <Detail label="Packing Group" value={shipment.packingGroup} />}
+                      {shipment.properShippingName && (
+                        <Detail label="Proper Shipping Name" value={shipment.properShippingName} />
+                      )}
+                    </>
+                  )}
+                  {shipment.requiredEquipmentType && (
+                    <Detail
+                      label="Equipment"
+                      value={EQUIPMENT_TYPE_LABELS[shipment.requiredEquipmentType] || shipment.requiredEquipmentType}
+                    />
+                  )}
+                </section>
+              )}
+
+              <section className="space-y-4 p-4 text-sm">
+                <div>
+                  <div className="mb-1.5 flex items-center gap-2">
+                    <span className="inline-block h-2 w-2 rounded-full bg-info" />
+                    <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Origin</span>
+                  </div>
+                  <div className="space-y-2 pl-4">
+                    <Detail label="Facility" value={origin.name || '-'} />
+                    <Detail label="Address" value={[origin.address1, origin.city, origin.state].filter(Boolean).join(', ') || '-'} />
+                    {(shipment.pickupWindowStart || shipment.pickupWindowEnd) && (
+                      <Detail
+                        label="Pickup Window"
+                        value={
+                          <>
+                            {shipment.pickupWindowStart ? new Date(shipment.pickupWindowStart).toLocaleString() : '-'}
+                            {' - '}
+                            {shipment.pickupWindowEnd ? new Date(shipment.pickupWindowEnd).toLocaleString() : '-'}
+                          </>
+                        }
+                      />
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="mb-1.5 flex items-center gap-2">
+                    <span className="inline-block h-2 w-2 rounded-full bg-success" />
+                    <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Destination</span>
+                  </div>
+                  <div className="space-y-2 pl-4">
+                    <Detail label="Facility" value={destination.name || '-'} />
+                    <Detail label="Address" value={[destination.address1, destination.city, destination.state].filter(Boolean).join(', ') || '-'} />
+                    {(shipment.deliveryWindowStart || shipment.deliveryWindowEnd) && (
+                      <Detail
+                        label="Delivery Window"
+                        value={
+                          <>
+                            {shipment.deliveryWindowStart ? new Date(shipment.deliveryWindowStart).toLocaleString() : '-'}
+                            {' - '}
+                            {shipment.deliveryWindowEnd ? new Date(shipment.deliveryWindowEnd).toLocaleString() : '-'}
+                          </>
+                        }
+                      />
+                    )}
+                  </div>
+                </div>
+              </section>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="events" className="mt-4">
               {id && <EventsTab shipmentId={id} />}
+            </TabsContent>
+
+            <TabsContent value="orders" className="mt-4">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0">
+                  <CardTitle className="text-base">Orders ({orders.length})</CardTitle>
+                  {(shipment.status === 'draft' || shipment.status === 'ready') && hasPermission('orders:write') && (
+                    <Button variant="outline" size="sm" onClick={openAddOrderModal}>
+                      <Plus className="h-4 w-4" />
+                      Add order
+                    </Button>
+                  )}
+                </CardHeader>
+                <CardContent className="space-y-1 text-sm">
+                  {orders.length === 0 ? (
+                    <p className="text-muted-foreground">No orders linked to this shipment yet.</p>
+                  ) : (
+                    orders.map((os: any) => {
+                      const order = os.order || {};
+                      const canModify = (shipment.status === 'draft' || shipment.status === 'ready') && hasPermission('orders:write');
+                      const busy = orderActionBusyId === order.id;
+                      return (
+                        <div
+                          key={os.id}
+                          className="flex items-center gap-2 rounded-md px-2 py-2 -mx-2 hover:bg-muted/40"
+                        >
+                          <Link to={`/orders/${order.id}`} className="min-w-0 flex-1">
+                            <div>
+                              <span className="font-medium">{order.orderNumber}</span>
+                              <span className="ml-2 text-muted-foreground">{order.customer?.name}</span>
+                            </div>
+                            <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+                              <span>
+                                {order.origin ? [order.origin.city, order.origin.state].filter(Boolean).join(', ') : '-'}
+                                {' → '}
+                                {order.destination ? [order.destination.city, order.destination.state].filter(Boolean).join(', ') : '-'}
+                              </span>
+                              {(order.requestedPickupDate || order.requestedDeliveryDate) && (
+                                <span>
+                                  {order.requestedPickupDate ? new Date(order.requestedPickupDate).toLocaleDateString() : '-'}
+                                  {' - '}
+                                  {order.requestedDeliveryDate ? new Date(order.requestedDeliveryDate).toLocaleDateString() : '-'}
+                                </span>
+                              )}
+                            </div>
+                          </Link>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button
+                                type="button"
+                                disabled={busy}
+                                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
+                                title="Order actions"
+                              >
+                                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreVertical className="h-4 w-4" />}
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onSelect={() => navigate(`/orders/${order.id}`)}>
+                                <Eye className="h-4 w-4" />
+                                View details
+                              </DropdownMenuItem>
+                              {canModify && (
+                                <DropdownMenuItem onSelect={() => handleRemoveOrder(order.id, order.orderNumber)}>
+                                  <X className="h-4 w-4" />
+                                  Remove from shipment
+                                </DropdownMenuItem>
+                              )}
+                              {hasPermission('orders:write') && (
+                                <DropdownMenuItem
+                                  onSelect={() => handleArchiveOrder(order.id, order.orderNumber)}
+                                  className="text-destructive focus:text-destructive"
+                                >
+                                  <Archive className="h-4 w-4" />
+                                  Archive order
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      );
+                    })
+                  )}
+                </CardContent>
+              </Card>
             </TabsContent>
 
             <TabsContent value="documents" className="mt-4">
@@ -2490,10 +2543,6 @@ export default function VNextShipmentDetail() {
               <FinancialsTab shipmentId={id!} />
             </TabsContent>
 
-            <TabsContent value="notes" className="mt-4">
-              <ShipmentNotesTab shipmentId={id!} />
-            </TabsContent>
-
             <TabsContent value="cargo" className="mt-4">
               <CargoTab shipmentId={id!} />
             </TabsContent>
@@ -2509,165 +2558,7 @@ export default function VNextShipmentDetail() {
             <TabsContent value="carrier-tracking" className="mt-4">
               <CarrierTrackingTab shipmentId={id!} />
             </TabsContent>
-          </Tabs>
-        </div>
-
-        {/* Sidebar */}
-        <aside className="space-y-6 lg:sticky lg:top-20 lg:self-start">
-          <Card>
-            <CardHeader><CardTitle className="text-base">Details</CardTitle></CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              <Detail label="Customer" value={shipment.customer?.name || '-'} />
-              <Detail label="Carrier" value={shipment.carrier?.name || '-'} />
-              <Detail label="PRO Number" value={shipment.proNumber || '-'} />
-              <Detail label="Mode" value={shipment.serviceLevel || '-'} />
-              <Detail label="Status" value={shipment.status ? shipmentStatusLabel(shipment.status) : '-'} />
-              <Detail label="Pickup Date" value={shipment.pickupDate ? new Date(shipment.pickupDate).toLocaleDateString() : '-'} />
-              <Detail label="Delivery Date" value={shipment.deliveryDate ? new Date(shipment.deliveryDate).toLocaleDateString() : '-'} />
-              <Detail
-                label="Lane"
-                value={
-                  shipment.laneId ? (
-                    <Link to={`/lanes/${shipment.laneId}`} className="text-primary hover:underline">
-                      {shipment.lane?.name || 'View Lane'}
-                    </Link>
-                  ) : '-'
-                }
-              />
-              {routeDeviation && (
-                <Detail
-                  label="Route Status"
-                  value={
-                    <Badge variant={routeDeviation.severity === 'critical' ? 'destructive' : 'warning'}>
-                      {(routeDeviation.deviationMeters / 1000).toFixed(1)} km off route
-                    </Badge>
-                  }
-                />
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0">
-              <CardTitle className="text-base">Linked orders</CardTitle>
-              {(shipment.status === 'draft' || shipment.status === 'ready') && hasPermission('orders:write') && (
-                <Button variant="outline" size="sm" onClick={openAddOrderModal}>
-                  <Plus className="h-4 w-4" />
-                  Add order
-                </Button>
-              )}
-            </CardHeader>
-            <CardContent className="space-y-1 text-sm">
-              {orders.length === 0 ? (
-                <p className="text-muted-foreground">No orders linked to this shipment yet.</p>
-              ) : (
-                orders.map((os: any) => (
-                  <Link
-                    key={os.id}
-                    to={`/orders/${os.order?.id}`}
-                    className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 -mx-2 hover:bg-muted/40"
-                  >
-                    <span className="min-w-0 flex-1 truncate">
-                      <span className="font-medium">{os.order?.orderNumber}</span>
-                      <span className="ml-2 text-muted-foreground">{os.order?.customer?.name}</span>
-                    </span>
-                    <span className="shrink-0 text-xs capitalize text-muted-foreground">{os.order?.deliveryStatus}</span>
-                  </Link>
-                ))
-              )}
-            </CardContent>
-          </Card>
-
-          {(shipment.tempControlled || shipment.hazmat || shipment.humidityControlled || shipment.requiredEquipmentType) && (
-            <Card>
-              <CardHeader><CardTitle className="text-base">Restrictions</CardTitle></CardHeader>
-              <CardContent className="space-y-3 text-sm">
-                {shipment.tempControlled && (
-                  <Detail
-                    label="Temperature"
-                    value={`${shipment.tempMinC ?? '?'}°C to ${shipment.tempMaxC ?? '?'}°C`}
-                  />
-                )}
-                {shipment.humidityControlled && (
-                  <Detail
-                    label="Humidity"
-                    value={`${shipment.humidityMinPct ?? '?'}% to ${shipment.humidityMaxPct ?? '?'}%`}
-                  />
-                )}
-                {shipment.hazmat && (
-                  <>
-                    <Detail label="Hazmat" value={<Badge variant="warning">Hazmat</Badge>} />
-                    {shipment.unNumber && <Detail label="UN Number" value={shipment.unNumber} />}
-                    {shipment.hazmatClass && <Detail label="Hazmat Class" value={shipment.hazmatClass} />}
-                    {shipment.packingGroup && <Detail label="Packing Group" value={shipment.packingGroup} />}
-                    {shipment.properShippingName && (
-                      <Detail label="Proper Shipping Name" value={shipment.properShippingName} />
-                    )}
-                  </>
-                )}
-                {shipment.requiredEquipmentType && (
-                  <Detail
-                    label="Equipment"
-                    value={EQUIPMENT_TYPE_LABELS[shipment.requiredEquipmentType] || shipment.requiredEquipmentType}
-                  />
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          <Card>
-            <CardContent className="p-5">
-              <div className="mb-3 flex items-center gap-2">
-                <span className="inline-block h-2 w-2 rounded-full bg-info" />
-                <span className="text-sm font-semibold">Origin</span>
-              </div>
-              <div className="space-y-2 text-sm">
-                <Detail label="Facility" value={origin.name || '-'} />
-                <Detail label="Address" value={[origin.address1, origin.city, origin.state].filter(Boolean).join(', ') || '-'} />
-                <Detail label="Pickup Date" value={shipment.pickupDate ? new Date(shipment.pickupDate).toLocaleDateString() : '-'} />
-                {(shipment.pickupWindowStart || shipment.pickupWindowEnd) && (
-                  <Detail
-                    label="Pickup Window"
-                    value={
-                      <>
-                        {shipment.pickupWindowStart ? new Date(shipment.pickupWindowStart).toLocaleString() : '-'}
-                        {' - '}
-                        {shipment.pickupWindowEnd ? new Date(shipment.pickupWindowEnd).toLocaleString() : '-'}
-                      </>
-                    }
-                  />
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-5">
-              <div className="mb-3 flex items-center gap-2">
-                <span className="inline-block h-2 w-2 rounded-full bg-success" />
-                <span className="text-sm font-semibold">Destination</span>
-              </div>
-              <div className="space-y-2 text-sm">
-                <Detail label="Facility" value={destination.name || '-'} />
-                <Detail label="Address" value={[destination.address1, destination.city, destination.state].filter(Boolean).join(', ') || '-'} />
-                <Detail label="Delivery Date" value={shipment.deliveryDate ? new Date(shipment.deliveryDate).toLocaleDateString() : '-'} />
-                {(shipment.deliveryWindowStart || shipment.deliveryWindowEnd) && (
-                  <Detail
-                    label="Delivery Window"
-                    value={
-                      <>
-                        {shipment.deliveryWindowStart ? new Date(shipment.deliveryWindowStart).toLocaleString() : '-'}
-                        {' - '}
-                        {shipment.deliveryWindowEnd ? new Date(shipment.deliveryWindowEnd).toLocaleString() : '-'}
-                      </>
-                    }
-                  />
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </aside>
-      </div>
+      </Tabs>
     </div>
   );
 }

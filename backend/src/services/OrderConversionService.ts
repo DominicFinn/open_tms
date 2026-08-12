@@ -57,6 +57,16 @@ export interface IOrderConversionService {
    * and the shipment must not have already left draft/ready.
    */
   addOrdersToShipment(orgId: string, shipmentId: string, orderIds: string[], userId?: string): Promise<BatchConvertResult>;
+  /**
+   * Unlink a single order from a shipment — reverses linkOrdersToShipment.
+   * Requires the shipment to still be draft/ready, mirroring addOrdersToShipment.
+   */
+  removeOrderFromShipment(
+    orgId: string,
+    shipmentId: string,
+    orderId: string,
+    userId?: string,
+  ): Promise<{ success: boolean; error?: string }>;
 }
 
 export class OrderConversionService implements IOrderConversionService {
@@ -646,6 +656,67 @@ export class OrderConversionService implements IOrderConversionService {
           ? `Added ${valid.length} order${valid.length === 1 ? '' : 's'} to shipment ${shipment.reference}`
           : `Added ${valid.length} order${valid.length === 1 ? '' : 's'}, ${errors.length} skipped`,
     };
+  }
+
+  async removeOrderFromShipment(
+    orgId: string,
+    shipmentId: string,
+    orderId: string,
+    userId?: string,
+  ): Promise<{ success: boolean; error?: string }> {
+    const shipment = await this.prisma.shipment.findFirst({ where: { id: shipmentId, orgId, deletedAt: null } });
+    if (!shipment) return { success: false, error: 'Shipment not found' };
+    if (shipment.status === 'in_progress' || shipment.status === 'complete') {
+      return {
+        success: false,
+        error: `Shipment is already ${shipment.status} — orders can only be removed while it's draft or ready`,
+      };
+    }
+
+    const link = await this.prisma.orderShipment.findFirst({ where: { shipmentId, orderId } });
+    if (!link) return { success: false, error: 'Order is not linked to this shipment' };
+
+    const order = await this.prisma.order.findFirst({ where: { id: orderId, orgId } });
+    if (!order) return { success: false, error: 'Order not found' };
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.orderShipment.delete({ where: { id: link.id } });
+
+      await tx.order.update({
+        where: { id: orderId },
+        data: { status: 'verified', deliveryStopId: null },
+      });
+
+      const items = Array.isArray(shipment.items) ? (shipment.items as any[]) : [];
+      await tx.shipment.update({
+        where: { id: shipmentId },
+        data: { items: items.filter((it: any) => it.orderId !== orderId) },
+      });
+
+      // Best-effort: drop the delivery stop if this was its only order.
+      if (order.deliveryStopId) {
+        const stillUsed = await tx.order.count({
+          where: { deliveryStopId: order.deliveryStopId, id: { not: orderId } },
+        });
+        if (stillUsed === 0) {
+          await tx.shipmentStop.delete({ where: { id: order.deliveryStopId } }).catch(() => {});
+        }
+      }
+
+      await tx.auditLog.create({
+        data: {
+          entityType: 'order',
+          entityId: orderId,
+          orderId,
+          action: 'delivery_status_changed',
+          description: `Order removed from shipment ${shipment.reference}`,
+          changes: { before: { status: order.status }, after: { status: 'verified' } },
+          userId,
+        },
+      });
+    });
+
+    return { success: true };
   }
 
   /**

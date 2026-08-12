@@ -176,6 +176,7 @@ export default function VNextOrders() {
   const [shipOrder, setShipOrder] = useState<Order | null>(null);
   const [eligibleShipments, setEligibleShipments] = useState<any[]>([]);
   const [eligibleShipmentsLoading, setEligibleShipmentsLoading] = useState(false);
+  const [eligibleShipmentSearch, setEligibleShipmentSearch] = useState('');
   const [selectedShipmentId, setSelectedShipmentId] = useState('');
   const [assigningToShipment, setAssigningToShipment] = useState(false);
   const [approvingId, setApprovingId] = useState<string | null>(null);
@@ -355,6 +356,7 @@ export default function VNextOrders() {
     // LTL: offer to consolidate onto an existing open shipment first.
     setShipOrder(o);
     setSelectedShipmentId('');
+    setEligibleShipmentSearch('');
     setEligibleShipmentsLoading(true);
     fetch(`${API_URL}/api/v1/orders/${o.id}/eligible-shipments`)
       .then(res => res.json())
@@ -391,6 +393,15 @@ export default function VNextOrders() {
       setAssigningToShipment(false);
     }
   };
+
+  const filteredEligibleShipments = eligibleShipmentSearch.trim()
+    ? eligibleShipments.filter((s: any) => {
+        const q = eligibleShipmentSearch.toLowerCase();
+        const reference = (s.reference || s.id || '').toLowerCase();
+        const destLabel = s.destination ? `${s.destination.city}, ${s.destination.state || ''}`.toLowerCase() : '';
+        return reference.includes(q) || destLabel.includes(q);
+      })
+    : eligibleShipments;
 
   const handleApprove = async (o: Order) => {
     setApprovingId(o.id);
@@ -760,6 +771,18 @@ export default function VNextOrders() {
               Only shipments still in draft or ready are eligible.
             </DialogDescription>
           </DialogHeader>
+          {eligibleShipments.length > 0 && (
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search eligible shipments..."
+                value={eligibleShipmentSearch}
+                onChange={e => setEligibleShipmentSearch(e.target.value)}
+                className="pl-9"
+                autoFocus
+              />
+            </div>
+          )}
           <div className="max-h-[50vh] overflow-y-auto -mx-1 px-1">
             {eligibleShipmentsLoading ? (
               <div className="flex items-center justify-center py-10 text-muted-foreground">
@@ -769,9 +792,13 @@ export default function VNextOrders() {
               <p className="py-8 text-center text-sm text-muted-foreground">
                 No eligible shipments yet for this origin and customer.
               </p>
+            ) : filteredEligibleShipments.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">
+                No eligible shipments match "{eligibleShipmentSearch}".
+              </p>
             ) : (
               <div className="space-y-1">
-                {eligibleShipments.map((s: any) => (
+                {filteredEligibleShipments.map((s: any) => (
                   <label
                     key={s.id}
                     className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 hover:bg-muted/40"
