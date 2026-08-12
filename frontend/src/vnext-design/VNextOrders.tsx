@@ -69,12 +69,15 @@ interface Order {
   deliveryStatus?: string;
   customerId?: string;
   customer?: { name: string };
+  originId?: string;
+  destinationId?: string;
   origin?: { name: string; city: string; state: string };
   destination?: { name: string; city: string; state: string };
   requestedPickupDate?: string;
   requestedDeliveryDate?: string;
   serviceLevel?: string;
-  temperatureControl?: boolean;
+  // "ambient" (default), "refrigerated", or "frozen" — not a boolean.
+  temperatureControl?: string;
   requiresHazmat?: boolean;
 }
 
@@ -94,13 +97,13 @@ function orderStatusVariant(status: string): StatusVariant {
   return 'muted';
 }
 
-// 'verified' and 'assigned' read as "Available" / "In shipment" rather than
+// 'verified' and 'assigned' read as "Available" / "Assigned" rather than
 // the raw enum — "assigned" only means booked onto a shipment, not that it
 // has physically departed (that's deliveryStatus's job).
 const ORDER_STATUS_LABEL: Record<string, string> = {
   pending: 'Pending approval',
   verified: 'Available',
-  assigned: 'In shipment',
+  assigned: 'Assigned',
   issue: 'Needs attention',
   cancelled: 'Cancelled',
   archived: 'Archived',
@@ -133,12 +136,28 @@ function formatDate(d?: string): string {
   return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
+// Query params consumed by VNextCreateShipment's fromOrderId prefill effect.
+function buildShipQueryString(o: Order): string {
+  const params = new URLSearchParams();
+  params.set('fromOrderId', o.id);
+  if (o.customerId) params.set('customerId', o.customerId);
+  if (o.originId) params.set('originId', o.originId);
+  if (o.destinationId) params.set('destinationId', o.destinationId);
+  if (o.serviceLevel) params.set('mode', o.serviceLevel);
+  if (o.requestedPickupDate) params.set('pickupDate', o.requestedPickupDate.slice(0, 10));
+  if (o.requestedDeliveryDate) params.set('deliveryDate', o.requestedDeliveryDate.slice(0, 10));
+  if (o.temperatureControl && o.temperatureControl !== 'ambient') params.set('tempControlled', '1');
+  if (o.requiresHazmat) params.set('hazmat', '1');
+  return params.toString();
+}
+
 export default function VNextOrders() {
   const navigate = useNavigate();
   const { hasPermission } = useCurrentUser();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [deliveryFilter, setDeliveryFilter] = useState('all');
+  const [modeFilter, setModeFilter] = useState('all');
   const [orders, setOrders] = useState<Order[]>([]);
   const [customers, setCustomers] = useState<{ id: string; name: string }[]>([]);
   const [customerFilter, setCustomerFilter] = useState('all');
@@ -150,15 +169,27 @@ export default function VNextOrders() {
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
   const [openIssueOrderIds, setOpenIssueOrderIds] = useState<Set<string>>(new Set());
+  // LTL "Ship" flow: pick an existing eligible shipment instead of always
+  // spinning up a new one, since LTL's whole economics depend on consolidating
+  // several orders into one trailer rather than one order per shipment (FTL's
+  // "Ship" instead goes straight to creating a new shipment, prefilled).
+  const [shipOrder, setShipOrder] = useState<Order | null>(null);
+  const [eligibleShipments, setEligibleShipments] = useState<any[]>([]);
+  const [eligibleShipmentsLoading, setEligibleShipmentsLoading] = useState(false);
+  const [selectedShipmentId, setSelectedShipmentId] = useState('');
+  const [assigningToShipment, setAssigningToShipment] = useState(false);
+  const [approvingId, setApprovingId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         setLoading(true);
-        // Archived orders now stay in the read model as a filterable status
-        // rather than being removed — fetch them too so the "Archived" tab
-        // can select them, mirroring VNextCarriers.
+        // Fetch archived orders too — excluded from the default "all
+        // statuses" view (see `filtered` below) but reachable via the
+        // Archived option so ops can look one up without an admin's
+        // orders:delete permission. Restoring it still requires that
+        // permission (gated in VNextOrderDetail's Unarchive button).
         const res = await fetch(`${API_URL}/api/v1/orders?includeArchived=true`);
         if (!res.ok) throw new Error(`Failed to load orders (${res.status})`);
         const json = await res.json();
@@ -197,14 +228,20 @@ export default function VNextOrders() {
   }, []);
 
   const filtered = orders.filter(o => {
-    if (statusFilter !== 'all') {
-      const sNorm = o.status?.toLowerCase().replace(/[_ ]/g, '');
-      if (sNorm !== statusFilter) return false;
+    const sNorm = o.status?.toLowerCase().replace(/[_ ]/g, '');
+    if (statusFilter === 'all') {
+      // "All statuses" means all active work, not literally everything —
+      // archived orders only show up once someone explicitly asks for them.
+      if (sNorm === 'archived') return false;
+    } else if (sNorm !== statusFilter) {
+      return false;
     }
     if (deliveryFilter !== 'all') {
+      if (o.status?.toLowerCase() !== 'assigned') return false;
       const dNorm = o.deliveryStatus || 'none';
       if (dNorm !== deliveryFilter) return false;
     }
+    if (modeFilter !== 'all' && o.serviceLevel?.toLowerCase() !== modeFilter) return false;
     if (customerFilter !== 'all' && o.customerId !== customerFilter) return false;
     if (search) {
       const q = search.toLowerCase();
@@ -310,6 +347,69 @@ export default function VNextOrders() {
     }
   };
 
+  const handleShipClick = (o: Order) => {
+    if (o.serviceLevel?.toUpperCase() === 'FTL') {
+      navigate(`/shipments/create?${buildShipQueryString(o)}`);
+      return;
+    }
+    // LTL: offer to consolidate onto an existing open shipment first.
+    setShipOrder(o);
+    setSelectedShipmentId('');
+    setEligibleShipmentsLoading(true);
+    fetch(`${API_URL}/api/v1/orders/${o.id}/eligible-shipments`)
+      .then(res => res.json())
+      .then(json => setEligibleShipments(json.data || []))
+      .catch(() => setEligibleShipments([]))
+      .finally(() => setEligibleShipmentsLoading(false));
+  };
+
+  const handleAssignToShipment = async () => {
+    if (!shipOrder || !selectedShipmentId) return;
+    setAssigningToShipment(true);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/shipments/${selectedShipmentId}/add-orders`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderIds: [shipOrder.id] }),
+      });
+      const json = await res.json();
+      if (!res.ok || json.error) {
+        toast.error(json.error || 'Failed to add order to shipment', { duration: 8000 });
+        return;
+      }
+      const errors: string[] = json.data?.errors || [];
+      if (errors.length > 0) {
+        toast.warning(json.data.message, { duration: 9000 });
+      } else {
+        toast.success(json.data.message || 'Order added to shipment');
+      }
+      setShipOrder(null);
+      setRefreshKey(k => k + 1);
+    } catch {
+      toast.error('Failed to add order to shipment');
+    } finally {
+      setAssigningToShipment(false);
+    }
+  };
+
+  const handleApprove = async (o: Order) => {
+    setApprovingId(o.id);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/orders/${o.id}/approve`, { method: 'POST' });
+      const json = await res.json();
+      if (!res.ok || json.error) {
+        toast.error(json.error || 'Failed to approve order', { duration: 8000 });
+        return;
+      }
+      toast.success(`${o.orderNumber || 'Order'} approved`);
+      setRefreshKey(k => k + 1);
+    } catch {
+      toast.error('Failed to approve order');
+    } finally {
+      setApprovingId(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex flex-col items-center gap-3 py-24 text-muted-foreground">
@@ -362,6 +462,9 @@ export default function VNextOrders() {
     { value: 'assigned', label: `${ORDER_STATUS_LABEL.assigned} (${counts.inShipment})` },
     { value: 'issue', label: `${ORDER_STATUS_LABEL.issue} (${counts.needsAttention})` },
     { value: 'cancelled', label: `${ORDER_STATUS_LABEL.cancelled} (${counts.cancelled})` },
+    // Lookup-only for anyone without orders:delete — the Unarchive action
+    // itself stays gated to admins on the order detail page, so selecting
+    // this just lets ops find an order to point an admin at.
     { value: 'archived', label: `${ORDER_STATUS_LABEL.archived} (${counts.archived})` },
   ];
 
@@ -370,7 +473,7 @@ export default function VNextOrders() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Orders</h1>
-          <p className="mt-1 text-sm text-muted-foreground">{orders.length} orders</p>
+          <p className="mt-1 text-sm text-muted-foreground">{orders.length - counts.archived} orders</p>
         </div>
         <div className="flex gap-2">
           <DropdownMenu>
@@ -424,9 +527,6 @@ export default function VNextOrders() {
           );
         })}
       </div>
-      <p className="text-xs text-muted-foreground">
-        Of {counts.inShipment} in-shipment orders — the other {orders.length - counts.inShipment} haven't shipped yet, so they carry no delivery status.
-      </p>
 
       <Card>
         <div className="flex flex-wrap items-center gap-3 p-4">
@@ -449,7 +549,7 @@ export default function VNextOrders() {
               ))}
             </SelectContent>
           </Select>
-          <Select defaultValue="all">
+          <Select value={modeFilter} onValueChange={setModeFilter}>
             <SelectTrigger className="w-[160px]">
               <SelectValue />
             </SelectTrigger>
@@ -457,8 +557,6 @@ export default function VNextOrders() {
               <SelectItem value="all">All modes</SelectItem>
               <SelectItem value="ftl">FTL</SelectItem>
               <SelectItem value="ltl">LTL</SelectItem>
-              <SelectItem value="reefer">Reefer</SelectItem>
-              <SelectItem value="flatbed">Flatbed</SelectItem>
             </SelectContent>
           </Select>
           <Select value={customerFilter} onValueChange={setCustomerFilter}>
@@ -573,9 +671,9 @@ export default function VNextOrders() {
                   <TableCell className="text-sm">{o.serviceLevel || '-'}</TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-1">
-                      {o.temperatureControl && <Badge variant="muted">Temp ctrl</Badge>}
+                      {o.temperatureControl && o.temperatureControl !== 'ambient' && <Badge variant="muted">Temp ctrl</Badge>}
                       {o.requiresHazmat && <Badge variant="warning">Hazmat</Badge>}
-                      {!o.temperatureControl && !o.requiresHazmat && '-'}
+                      {(!o.temperatureControl || o.temperatureControl === 'ambient') && !o.requiresHazmat && '-'}
                     </div>
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-sm">{formatDate(o.requestedPickupDate)}</TableCell>
@@ -591,14 +689,14 @@ export default function VNextOrders() {
                   <TableCell onClick={e => e.stopPropagation()}>
                     <div className="flex items-center justify-end gap-1">
                       {sNorm === 'verified' && (
-                        <Button size="sm" onClick={() => navigate('/carrier-bidding')}>
+                        <Button size="sm" onClick={() => handleShipClick(o)}>
                           <Truck className="h-4 w-4" />
                           Ship
                         </Button>
                       )}
-                      {sNorm === 'pending' && (
-                        <Button size="sm" variant="outline">
-                          <Check className="h-4 w-4" />
+                      {sNorm === 'pending' && hasPermission('*') && (
+                        <Button size="sm" variant="outline" disabled={approvingId === o.id} onClick={() => handleApprove(o)}>
+                          {approvingId === o.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                           Approve
                         </Button>
                       )}
@@ -647,6 +745,67 @@ export default function VNextOrders() {
             <Button variant="destructive" onClick={handleBulkDelete} disabled={bulkDeleting}>
               {bulkDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
               Delete {selected.size} order{selected.size === 1 ? '' : 's'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* LTL "Ship": assign to an existing shipment, or fall back to creating one */}
+      <Dialog open={!!shipOrder} onOpenChange={open => { if (!open) setShipOrder(null); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Ship {shipOrder?.orderNumber || 'this order'}</DialogTitle>
+            <DialogDescription>
+              LTL orders can consolidate onto an existing shipment for the same origin and customer.
+              Only shipments still in draft or ready are eligible.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[50vh] overflow-y-auto -mx-1 px-1">
+            {eligibleShipmentsLoading ? (
+              <div className="flex items-center justify-center py-10 text-muted-foreground">
+                <Loader2 className="h-5 w-5 animate-spin" />
+              </div>
+            ) : eligibleShipments.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">
+                No eligible shipments yet for this origin and customer.
+              </p>
+            ) : (
+              <div className="space-y-1">
+                {eligibleShipments.map((s: any) => (
+                  <label
+                    key={s.id}
+                    className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 hover:bg-muted/40"
+                  >
+                    <input
+                      type="radio"
+                      name="ship-target-shipment"
+                      className="h-4 w-4 cursor-pointer accent-primary"
+                      checked={selectedShipmentId === s.id}
+                      onChange={() => setSelectedShipmentId(s.id)}
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-medium">{s.reference || s.id.slice(0, 8)}</span>
+                      <span className="block text-xs text-muted-foreground">
+                        {s.orderShipments?.length || 0} order{(s.orderShipments?.length || 0) === 1 ? '' : 's'} &middot; to {s.destination ? `${s.destination.city}, ${s.destination.state || ''}` : 'unknown destination'}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+          <DialogFooter className="sm:justify-between">
+            <Button
+              variant="outline"
+              disabled={assigningToShipment}
+              onClick={() => shipOrder && navigate(`/shipments/create?${buildShipQueryString(shipOrder)}`)}
+            >
+              <Plus className="h-4 w-4" />
+              Create new shipment instead
+            </Button>
+            <Button onClick={handleAssignToShipment} disabled={assigningToShipment || !selectedShipmentId}>
+              {assigningToShipment ? <Loader2 className="h-4 w-4 animate-spin" /> : <Truck className="h-4 w-4" />}
+              Assign to shipment
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -326,7 +326,10 @@ export async function shipmentRoutes(server: FastifyInstance) {
   });
 
   // Orders eligible to be manually added to this shipment: validated, same
-  // origin + customer as the shipment, and not already linked to one.
+  // origin + customer as the shipment, not already linked to one, and
+  // compatible on mode/hazmat/temperature control — mirrors the hard-block
+  // checks in OrderConversionService.addOrdersToShipment so the picker never
+  // offers an order that add-orders would then reject.
   server.get('/api/v1/shipments/:id/eligible-orders', {
     schema: {
       tags: ['Shipments'],
@@ -353,6 +356,9 @@ export async function shipmentRoutes(server: FastifyInstance) {
         originId: shipment.originId,
         customerId: shipment.customerId,
         orderShipments: { none: {} },
+        ...(shipment.serviceLevel ? { serviceLevel: shipment.serviceLevel } : {}),
+        ...(shipment.hazmat ? {} : { requiresHazmat: false }),
+        ...(shipment.tempControlled ? {} : { temperatureControl: 'ambient' }),
       },
       include: {
         customer: { select: { name: true } },

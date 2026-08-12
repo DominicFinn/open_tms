@@ -247,10 +247,8 @@ export default function VNextShipments() {
         if (updatedTo) params.set('updatedTo', `${updatedTo}T23:59:59Z`);
         params.set('sortBy', sortBy);
         params.set('sortOrder', sortOrder);
-        // Archived shipments now stay in the read model as a filterable
-        // status rather than being removed — fetch them too so the
-        // "Archived" stat card can select them, mirroring VNextCarriers.
-        params.set('includeArchived', 'true');
+        // Archived shipments are excluded here by default — they're admin
+        // territory, surfaced on /settings/archives instead.
         const qs = params.toString();
         const res = await fetch(`${API_URL}/api/v1/shipments${qs ? `?${qs}` : ''}`);
         if (!res.ok) throw new Error(`Failed to load shipments (${res.status})`);
@@ -277,7 +275,6 @@ export default function VNextShipments() {
     in_progress: shipments.filter(s => s.status === 'in_progress').length,
     complete: shipments.filter(s => s.status === 'complete').length,
     issue: shipments.filter(s => !!s.hasException).length,
-    archived: shipments.filter(s => s.status === 'archived').length,
   }), [shipments]);
 
   // Callback ref (not a plain useRef + mount-effect): the map container is behind
@@ -520,7 +517,6 @@ export default function VNextShipments() {
     { key: 'in_progress', label: 'In progress', value: statusCounts.in_progress, icon: Truck },
     { key: 'complete', label: 'Complete', value: statusCounts.complete, icon: CheckCircle2 },
     { key: 'issue', label: 'Issues', value: statusCounts.issue, icon: AlertTriangle },
-    { key: 'archived', label: 'Archived', value: statusCounts.archived, icon: Archive },
   ] as const;
 
   const filteredIds = filtered.map(s => s.id);
@@ -833,7 +829,6 @@ export default function VNextShipments() {
               <SelectItem value="in_progress">In progress ({statusCounts.in_progress})</SelectItem>
               <SelectItem value="complete">Complete ({statusCounts.complete})</SelectItem>
               <SelectItem value="issue">Issues ({statusCounts.issue})</SelectItem>
-              <SelectItem value="archived">Archived ({statusCounts.archived})</SelectItem>
             </SelectContent>
           </Select>
 

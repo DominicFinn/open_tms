@@ -149,12 +149,12 @@ function deliveryStatusVariant(status?: string): BadgeVariant {
   return 'secondary';
 }
 
-// 'verified' and 'assigned' read as "Available" / "In shipment" — see
+// 'verified' and 'assigned' read as "Available" / "Assigned" — see
 // VNextOrders.tsx for the same mapping and the rationale.
 const ORDER_STATUS_LABEL: Record<string, string> = {
   pending: 'Pending approval',
   verified: 'Available',
-  assigned: 'In shipment',
+  assigned: 'Assigned',
   issue: 'Needs attention',
   cancelled: 'Cancelled',
   archived: 'Archived',

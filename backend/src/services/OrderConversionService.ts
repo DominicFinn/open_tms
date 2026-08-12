@@ -599,6 +599,18 @@ export class OrderConversionService implements IOrderConversionService {
         errors.push(`${o.orderNumber} belongs to a different customer than this shipment`);
         return false;
       }
+      if (shipment.serviceLevel && o.serviceLevel !== shipment.serviceLevel) {
+        errors.push(`${o.orderNumber} is ${o.serviceLevel} but this shipment is ${shipment.serviceLevel}`);
+        return false;
+      }
+      if (o.requiresHazmat && !shipment.hazmat) {
+        errors.push(`${o.orderNumber} requires hazmat handling, which this shipment isn't flagged for`);
+        return false;
+      }
+      if (o.temperatureControl !== 'ambient' && !shipment.tempControlled) {
+        errors.push(`${o.orderNumber} requires temperature control, which this shipment isn't flagged for`);
+        return false;
+      }
       return true;
     });
 

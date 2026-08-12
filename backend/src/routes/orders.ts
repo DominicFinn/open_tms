@@ -85,7 +85,9 @@ export const packingSummarySchema = z.object({
 });
 
 export const createOrderSchema = z.object({
-  orderNumber: z.string().min(1),
+  // Auto-generated below if omitted — manual UI creation has no order number
+  // to supply (unlike CSV/EDI imports, which always carry one from source).
+  orderNumber: z.string().min(1).optional(),
   poNumber: z.string().optional(),
   customerId: z.string().uuid(),
   importSource: z.string().default('manual'),
@@ -238,6 +240,10 @@ export async function orderRoutes(server: FastifyInstance) {
 
     // Convert date strings to Date objects
     const orderData: any = { ...body };
+    // Mirrors CreateShipmentCommand's DRAFT- fallback for an omitted reference.
+    if (!orderData.orderNumber || !orderData.orderNumber.trim()) {
+      orderData.orderNumber = `ORD-${Date.now().toString(36).toUpperCase()}`;
+    }
     if (body.orderDate) orderData.orderDate = new Date(body.orderDate);
     if (body.requestedPickupDate) orderData.requestedPickupDate = new Date(body.requestedPickupDate);
     if (body.requestedDeliveryDate) orderData.requestedDeliveryDate = new Date(body.requestedDeliveryDate);
@@ -427,6 +433,53 @@ export async function orderRoutes(server: FastifyInstance) {
     }
 
     return { data: { id, status: 'cancelled' }, error: null };
+  });
+
+  // Approve order: pending -> verified. Admin-only (permission '*') — unlike
+  // most order actions, this isn't gated by orders:write, because every
+  // operational role (dispatcher, broker_admin, etc.) already holds
+  // orders:*, and approval is meant to stay a deliberate admin step rather
+  // than something any operational user can do in passing.
+  server.post('/api/v1/orders/:id/approve', {
+    preHandler: requirePermission('*'),
+    schema: {
+      tags: ['Orders'],
+      summary: 'Approve order (admin-only)',
+      description: 'Transitions a pending order to verified. Requires both origin and destination to already be resolved to real locations. Admin-only.',
+      params: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+
+    const orgId = req.orgId!;
+    const existing = await ordersRepo.findById(id, orgId);
+    if (!existing) {
+      reply.code(404);
+      return { data: null, error: 'Order not found' };
+    }
+    if (existing.status !== 'pending') {
+      reply.code(400);
+      return { data: null, error: `Order is ${existing.status}, not pending — nothing to approve` };
+    }
+    if (!existing.originId || !existing.destinationId) {
+      reply.code(400);
+      return { data: null, error: 'Order is missing a resolved origin or destination — validate its location before approving' };
+    }
+
+    const result = await commandBus.dispatch({
+      type: UPDATE_ORDER,
+      orgId,
+      actorId: req.user?.sub ?? null,
+      payload: { id, data: { status: 'verified' } },
+      metadata: { correlationId: randomUUID(), source: 'api' },
+    });
+
+    if (!result.success) {
+      reply.code(400);
+      return { data: null, error: result.error };
+    }
+
+    return { data: { id, status: 'verified' }, error: null };
   });
 
   // Soft delete (admin-only, orders:delete). Hidden from every view; the row
@@ -972,6 +1025,50 @@ export async function orderRoutes(server: FastifyInstance) {
       reply.code(400);
       return { data: null, error: err.message || 'Failed to convert order to shipment' };
     }
+  });
+
+  // Shipments this order could be manually added to instead of creating a new
+  // one — mirror image of GET /shipments/:id/eligible-orders: same origin +
+  // customer, still draft/ready (open to additions).
+  server.get('/api/v1/orders/:id/eligible-shipments', {
+    schema: {
+      tags: ['Orders'],
+      summary: 'List shipments this order can be manually added to',
+      params: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const orgId = req.orgId!;
+    const order = await ordersRepo.findById(id, orgId);
+    if (!order) {
+      reply.code(404);
+      return { data: null, error: 'Order not found' };
+    }
+    if (!order.originId) {
+      return { data: [], error: null };
+    }
+
+    const shipments = await (ordersRepo as any).prisma.shipment.findMany({
+      where: {
+        orgId,
+        deletedAt: null,
+        status: { in: ['draft', 'ready'] },
+        originId: order.originId,
+        customerId: order.customerId,
+        // A shipment with no mode set yet is treated as unconstrained, same
+        // as the hard-block check in addOrdersToShipment.
+        OR: [{ serviceLevel: order.serviceLevel }, { serviceLevel: null }],
+        ...(order.requiresHazmat ? { hazmat: true } : {}),
+        ...(order.temperatureControl !== 'ambient' ? { tempControlled: true } : {}),
+      },
+      include: {
+        destination: { select: { city: true, state: true } },
+        orderShipments: { select: { id: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return { data: shipments, error: null };
   });
 
   // Get audit logs for order

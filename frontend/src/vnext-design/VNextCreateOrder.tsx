@@ -130,17 +130,16 @@ export default function VNextCreateOrder() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
         });
-        if (!res.ok) throw new Error('Failed to update order');
-        const json = await res.json();
-        if (json.error) throw new Error(json.error);
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok || json.error) throw new Error(json.error || 'Failed to update order');
         toast.success(`Order ${json.data?.orderNumber || id?.slice(0, 8)} updated`);
         navigate(`/orders/${id}`);
         return;
       }
       const body: any = {
         poNumber, customerId: customer, originId: originLocation, destinationId: destLocation,
-        requestedPickupDate: orderDate || undefined,
-        requestedDeliveryDate: requestedDelivery || undefined,
+        requestedPickupDate: toIsoDate(orderDate),
+        requestedDeliveryDate: toIsoDate(requestedDelivery),
         serviceLevel: serviceLevel || undefined,
         temperatureControl: tempControl, requiresHazmat: hazmat,
         lineItems: lineItems.filter(li => li.sku || li.description).map(li => ({
@@ -155,9 +154,8 @@ export default function VNextCreateOrder() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      if (!res.ok) throw new Error('Failed to create order');
-      const json = await res.json();
-      if (json.error) throw new Error(json.error);
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json.error) throw new Error(json.error || 'Failed to create order');
       const newId = json.data?.id;
       const ref = json.data?.orderNumber || newId?.slice(0, 8);
       toast.success(`Order ${ref} created`, {
@@ -249,8 +247,8 @@ export default function VNextCreateOrder() {
                 <SelectValue placeholder="Select service level..." />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="ftl">FTL</SelectItem>
-                <SelectItem value="ltl">LTL</SelectItem>
+                <SelectItem value="FTL">FTL</SelectItem>
+                <SelectItem value="LTL">LTL</SelectItem>
               </SelectContent>
             </Select>
           </div>

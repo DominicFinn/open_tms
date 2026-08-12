@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import {
   CheckCircle2,
   CircleAlert,
-  Clock,
   Grid3x3,
   List as ListIcon,
   Loader2,
@@ -73,9 +72,9 @@ export default function VNextCarriers() {
     (async () => {
       try {
         setLoading(true);
-        // Include archived carriers so the management list + "Archived" stat
-        // filter can surface them (they show an "Inactive" badge).
-        const res = await fetch(`${API_URL}/api/v1/carriers?includeArchived=true`);
+        // Archived carriers are excluded here by default — they're admin
+        // territory, surfaced on /settings/archives instead.
+        const res = await fetch(`${API_URL}/api/v1/carriers`);
         if (!res.ok) throw new Error(`Failed to load carriers (${res.status})`);
         const json = await res.json();
         if (!cancelled) {
@@ -98,7 +97,6 @@ export default function VNextCarriers() {
     { key: 'active', label: 'Active carriers', icon: CheckCircle2, tone: 'bg-success/15 text-success', match: (c: Carrier) => !c.archived },
     { key: 'registration', label: 'Registration verified', icon: Star, tone: 'bg-info/15 text-info', match: (c: Carrier) => !!c.registrationChecked },
     { key: 'insurance', label: 'Insurance on file', icon: Truck, tone: 'bg-primary/10 text-primary', match: (c: Carrier) => !!c.insuranceDocReceived },
-    { key: 'archived', label: 'Archived', icon: Clock, tone: 'bg-warning/15 text-warning', match: (c: Carrier) => !!c.archived },
   ];
   const activeStat = statDefs.find(s => s.key === statFilter);
 

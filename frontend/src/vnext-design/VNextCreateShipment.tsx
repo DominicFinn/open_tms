@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
   ArrowLeft,
@@ -99,6 +99,11 @@ export default function VNextCreateShipment() {
   const { id } = useParams();
   const navigate = useNavigate();
   const isEdit = Boolean(id);
+  const [searchParams] = useSearchParams();
+  // Present when arriving via an order's "Ship" action (FTL path) — prefills
+  // the form from that order and, on success, links the order to the new
+  // shipment instead of leaving it to the separate "Add Order" flow.
+  const fromOrderId = searchParams.get('fromOrderId');
 
   const [customer, setCustomer] = useState('');
   const [reference, setReference] = useState('');
@@ -398,6 +403,23 @@ export default function VNextCreateShipment() {
     }).catch(() => {});
   }, []);
 
+  // Prefill from the originating order (see fromOrderId above). Runs once on
+  // mount, alongside the fetch effect above rather than after it — these are
+  // plain query-param values, not dependent on customers/locations having
+  // loaded yet, since Select values just need a matching id once options arrive.
+  useEffect(() => {
+    if (isEdit || !fromOrderId) return;
+    setCustomer(searchParams.get('customerId') || '');
+    setMode(searchParams.get('mode') || '');
+    setUseCustomRoute(true);
+    setOriginLocation(searchParams.get('originId') || '');
+    setDestLocation(searchParams.get('destinationId') || '');
+    setPickupDate(searchParams.get('pickupDate') || '');
+    setDeliveryDate(searchParams.get('deliveryDate') || '');
+    if (searchParams.get('tempControlled') === '1') setTempControlled(true);
+    if (searchParams.get('hazmat') === '1') setHazmat(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const addWaypoint = () => setWaypoints(w => [...w, '']);
   const removeWaypoint = (idx: number) => setWaypoints(w => w.filter((_, i) => i !== idx));
@@ -607,6 +629,19 @@ export default function VNextCreateShipment() {
       if (isEdit) {
         toast.success(`Shipment ${ref} updated`);
         navigate(`/shipments/${id}`);
+      } else if (fromOrderId && newId) {
+        const addRes = await fetch(`${API_URL}/api/v1/shipments/${newId}/add-orders`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderIds: [fromOrderId] }),
+        });
+        const addJson = await addRes.json().catch(() => ({}));
+        if (!addRes.ok || addJson.error) {
+          toast.error(`Shipment ${ref} created, but the order couldn't be linked to it: ${addJson.error || 'unknown error'}. Use "Add Order" on the shipment instead.`);
+        } else {
+          toast.success(`Shipment ${ref} created and order linked`);
+        }
+        navigate(`/shipments/${newId}`);
       } else {
         toast.success(`Shipment ${ref} created`, {
           action: { label: 'View', onClick: () => navigate(`/shipments/${newId}`) },
@@ -654,7 +689,7 @@ export default function VNextCreateShipment() {
         <CardContent className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
             <Label>Customer</Label>
-            <Select value={customer} onValueChange={setCustomer}>
+            <Select value={customer} onValueChange={setCustomer} disabled={!!fromOrderId}>
               <SelectTrigger>
                 <SelectValue placeholder="Select customer..." />
               </SelectTrigger>
@@ -664,6 +699,11 @@ export default function VNextCreateShipment() {
                 ))}
               </SelectContent>
             </Select>
+            {fromOrderId && (
+              <p className="text-xs text-muted-foreground">
+                Locked — must match the order being shipped, or it won't link to this shipment.
+              </p>
+            )}
           </div>
           <div className="space-y-2">
             <Label>Reference</Label>
@@ -706,21 +746,27 @@ export default function VNextCreateShipment() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <label className="flex items-center gap-2 text-sm font-medium">
+          <label className={cn('flex items-center gap-2 text-sm font-medium', !!fromOrderId && 'cursor-not-allowed opacity-50')}>
             <input
               type="checkbox"
               checked={useCustomRoute}
               onChange={e => handleToggleCustomRoute(e.target.checked)}
+              disabled={!!fromOrderId}
               className="h-4 w-4 rounded border border-input bg-background accent-primary"
             />
             Use a custom route instead of a lane
           </label>
+          {fromOrderId && (
+            <p className="-mt-2 text-xs text-muted-foreground">
+              Locked to a custom route so the origin matches the order being shipped.
+            </p>
+          )}
 
           {useCustomRoute ? (
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label>Origin</Label>
-                <Select value={originLocation} onValueChange={setOriginLocation}>
+                <Select value={originLocation} onValueChange={setOriginLocation} disabled={!!fromOrderId}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select origin..." />
                   </SelectTrigger>
@@ -730,6 +776,11 @@ export default function VNextCreateShipment() {
                     ))}
                   </SelectContent>
                 </Select>
+                {fromOrderId && (
+                  <p className="text-xs text-muted-foreground">
+                    Locked — must match the order being shipped, or it won't link to this shipment.
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label>Destination</Label>
