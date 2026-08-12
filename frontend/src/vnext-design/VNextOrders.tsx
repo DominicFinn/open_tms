@@ -632,9 +632,7 @@ export default function VNextOrders() {
               <TableHead>Customer</TableHead>
               <TableHead>Route</TableHead>
               <TableHead>Service</TableHead>
-              <TableHead>Requirements</TableHead>
-              <TableHead>Req. pickup</TableHead>
-              <TableHead>Req. delivery</TableHead>
+              <TableHead>Dates</TableHead>
               <TableHead>Delivery status</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="w-[120px]"></TableHead>
@@ -679,16 +677,17 @@ export default function VNextOrders() {
                       to {o.destination ? `${o.destination.city}, ${o.destination.state}` : '-'}
                     </div>
                   </TableCell>
-                  <TableCell className="text-sm">{o.serviceLevel || '-'}</TableCell>
                   <TableCell>
-                    <div className="flex flex-wrap gap-1">
+                    <div className="flex flex-wrap items-center gap-1">
+                      <span className="text-sm">{o.serviceLevel || '-'}</span>
                       {o.temperatureControl && o.temperatureControl !== 'ambient' && <Badge variant="muted">Temp ctrl</Badge>}
                       {o.requiresHazmat && <Badge variant="warning">Hazmat</Badge>}
-                      {(!o.temperatureControl || o.temperatureControl === 'ambient') && !o.requiresHazmat && '-'}
                     </div>
                   </TableCell>
-                  <TableCell className="whitespace-nowrap text-sm">{formatDate(o.requestedPickupDate)}</TableCell>
-                  <TableCell className="whitespace-nowrap text-sm">{formatDate(o.requestedDeliveryDate)}</TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    <div className="text-sm">{formatDate(o.requestedPickupDate)}</div>
+                    <div className="text-xs text-muted-foreground">to {formatDate(o.requestedDeliveryDate)}</div>
+                  </TableCell>
                   <TableCell>
                     {sNorm === 'assigned' ? (
                       <Badge variant={deliveryStatusVariant(o.deliveryStatus)}>{deliveryStatusLabel(o.deliveryStatus)}</Badge>

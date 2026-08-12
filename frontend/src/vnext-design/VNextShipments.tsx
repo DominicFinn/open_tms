@@ -988,10 +988,7 @@ export default function VNextShipments() {
                 <TableHead>Route</TableHead>
                 <TableHead>Carrier</TableHead>
                 <TableHead>Lane</TableHead>
-                <TableHead>Pickup</TableHead>
-                <TableHead>Delivery</TableHead>
-                <TableHead>PRO #</TableHead>
-                <TableHead>Created</TableHead>
+                <TableHead>Dates</TableHead>
                 <TableHead>Updated</TableHead>
                 <TableHead>Status</TableHead>
               </TableRow>
@@ -1033,15 +1030,16 @@ export default function VNextShipments() {
                         to {s.destination ? `${s.destination.city}, ${s.destination.state}` : '-'}
                       </div>
                     </TableCell>
-                    <TableCell className="text-sm">{s.carrier?.name || '-'}</TableCell>
+                    <TableCell className="text-sm">
+                      <div>{s.carrier?.name || '-'}</div>
+                      {s.proNumber && <div className="text-xs text-muted-foreground">PRO# {s.proNumber}</div>}
+                    </TableCell>
                     <TableCell>
                       {s.lane ? <Badge variant="muted">{s.lane.name}</Badge> : '-'}
                     </TableCell>
-                    <TableCell className="whitespace-nowrap text-sm">{formatDate(s.pickupDate)}</TableCell>
-                    <TableCell className="whitespace-nowrap text-sm">{formatDate(s.deliveryDate)}</TableCell>
-                    <TableCell className="text-sm">{s.proNumber || '-'}</TableCell>
-                    <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
-                      {formatDateTime(s.createdAt)}
+                    <TableCell className="whitespace-nowrap">
+                      <div className="text-sm">{formatDate(s.pickupDate)}</div>
+                      <div className="text-xs text-muted-foreground">to {formatDate(s.deliveryDate)}</div>
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
                       {formatDateTime(s.updatedAt)}
