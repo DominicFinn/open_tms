@@ -51,10 +51,30 @@ export interface IssueTypeDef {
    * (temperature, tamper) so a "warning" signal can't downgrade them.
    */
   ignoreSignalSeverity?: boolean;
+  /**
+   * Triage confidence in a *single* signal of this type, 0-100. Detectors
+   * differ wildly in how often they cry wolf: a cargo mis-drop is almost never
+   * spurious, whereas one temperature reading can just be an open door. The
+   * score is boosted as corroborating signals arrive (see computeSignalScore),
+   * so a low base is "prove it", not "ignore it".
+   */
+  baseConfidence: number;
+  /**
+   * Target time to resolution, in minutes, used to stamp Issue.slaDeadline
+   * when the engine raises the issue. Omit for types with no SLA.
+   */
+  slaMinutes?: number;
   raise: IssueTypeRaiseRule;
   triggerEvents: string[];
   recoveryEvents: string[];
 }
+
+/** Score at or below which an issue is treated as noise. */
+export const NOISE_THRESHOLD = 40;
+/** Added to the score for each corroborating signal beyond the first. */
+export const CORROBORATION_BOOST = 15;
+/** Ceiling — corroboration can never make a signal a certainty. */
+export const MAX_SIGNAL_SCORE = 95;
 
 /** Ordinal ranking so priorities can be compared / escalated. */
 export const PRIORITY_RANK: Record<IssuePriority, number> = {
@@ -80,6 +100,8 @@ export const ISSUE_TYPES: Record<IssueTypeKey, IssueTypeDef> = {
     category: 'delay',
     defaultPriority: 'high',
     latched: false, // recovers when the shipment is no longer at risk / has departed
+    baseConfidence: 75, // derived from a booked cutoff time — rarely spurious
+    slaMinutes: 120,
     raise: { thresholdCount: 1, windowMinutes: 120 },
     triggerEvents: ['shipment.cutoff_at_risk'],
     recoveryEvents: ['shipment.cutoff_cleared'],
@@ -90,6 +112,8 @@ export const ISSUE_TYPES: Record<IssueTypeKey, IssueTypeDef> = {
     category: 'delay',
     defaultPriority: 'medium',
     latched: false, // recovers when the ETA returns within threshold
+    baseConfidence: 55, // traffic-derived ETAs fluctuate; one reading proves little
+    slaMinutes: 240,
     raise: { thresholdCount: 1, windowMinutes: 120 },
     triggerEvents: ['tracking.eta_updated'],
     recoveryEvents: ['tracking.eta_recovered'],
@@ -100,6 +124,8 @@ export const ISSUE_TYPES: Record<IssueTypeKey, IssueTypeDef> = {
     category: 'exception',
     defaultPriority: 'high',
     latched: true, // it happened — must be investigated
+    baseConfidence: 70, // scan-derived cargo discrepancies are seldom false
+    slaMinutes: 120,
     raise: { thresholdCount: 1, windowMinutes: 60 },
     triggerEvents: ['cargo.misdrop_detected', 'cargo.missing_at_stop', 'cargo.left_on_vehicle'],
     recoveryEvents: [],
@@ -111,6 +137,8 @@ export const ISSUE_TYPES: Record<IssueTypeKey, IssueTypeDef> = {
     defaultPriority: 'critical',
     latched: true, // excursion happened — must be investigated (CAPA)
     ignoreSignalSeverity: true, // always critical, regardless of excursion severity band
+    baseConfidence: 30, // a single reading may just be a door-open spike
+    slaMinutes: 60,
     raise: { thresholdCount: 1, windowMinutes: 60 },
     triggerEvents: ['cold_chain.excursion_detected'],
     recoveryEvents: [],
@@ -122,6 +150,8 @@ export const ISSUE_TYPES: Record<IssueTypeKey, IssueTypeDef> = {
     defaultPriority: 'critical',
     latched: true, // possible tamper/theft — must be investigated
     ignoreSignalSeverity: true, // always critical
+    baseConfidence: 40, // light sensors trip on legitimate door opens
+    slaMinutes: 60,
     raise: { thresholdCount: 1, windowMinutes: 60 },
     triggerEvents: ['shipment.tamper_light'],
     recoveryEvents: [],
@@ -154,4 +184,44 @@ export function allTriggerEvents(): string[] {
 /** All distinct recovery event types across the registry (for subscriptions). */
 export function allRecoveryEvents(): string[] {
   return [...new Set(allIssueTypes().flatMap(t => t.recoveryEvents))];
+}
+
+/* ── Triage: signal scoring ───────────────────────────────────────────── */
+
+/**
+ * Confidence that an issue is real, 0-100.
+ *
+ * Starts at the type's `baseConfidence` and adds `CORROBORATION_BOOST` for
+ * every signal beyond the first, capped at `MAX_SIGNAL_SCORE`. One temperature
+ * blip scores 30 (probably a door); four in an hour scores 75 (probably a
+ * failing reefer).
+ */
+export function computeSignalScore(type: IssueTypeDef, signalCount: number): number {
+  const corroborations = Math.max(0, signalCount - 1);
+  return Math.min(MAX_SIGNAL_SCORE, type.baseConfidence + corroborations * CORROBORATION_BOOST);
+}
+
+/**
+ * Whether an issue should be suppressed as noise.
+ *
+ * Latched types are NEVER noise. A temperature excursion or a possible tamper
+ * has a deliberately low base confidence so it can be corroborated, but it is a
+ * safety/compliance event that has already happened — hiding it from the
+ * working queue because one sensor reading looked marginal is exactly the
+ * failure mode this system exists to prevent.
+ */
+export function isNoise(type: IssueTypeDef, score: number): boolean {
+  if (type.latched) return false;
+  return score <= NOISE_THRESHOLD;
+}
+
+/** Human-readable reason stamped on Issue.noiseReason when suppressed. */
+export function noiseReasonFor(type: IssueTypeDef, score: number, signalCount: number): string {
+  return `Low confidence: ${type.name} scored ${score}/100 from ${signalCount} signal${signalCount === 1 ? '' : 's'} (threshold ${NOISE_THRESHOLD}).`;
+}
+
+/** SLA deadline for a newly-raised issue, or null when the type has no SLA. */
+export function slaDeadlineFor(type: IssueTypeDef, from: Date): Date | null {
+  if (!type.slaMinutes) return null;
+  return new Date(from.getTime() + type.slaMinutes * 60_000);
 }

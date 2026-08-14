@@ -104,11 +104,24 @@ describe('IssueEngineHandler', () => {
     );
   });
 
-  it('attaches the signal but does not escalate when the open issue is already as severe', async () => {
+  it('attaches the signal and refreshes the score without escalating priority when the open issue is already as severe', async () => {
     (prisma.issue.findFirst as jest.Mock).mockResolvedValueOnce({ id: 'issue-9', priority: 'high' });
     await handler.handle(ev('shipment.cutoff_at_risk', { shipmentId: 'ship-1', severity: 'warning' }));
 
-    expect(commandBus.dispatch).not.toHaveBeenCalled();
+    // The signal still corroborates the issue, so the score is refreshed...
+    expect(commandBus.dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: UPDATE_ISSUE,
+        payload: expect.objectContaining({
+          id: 'issue-9',
+          data: expect.objectContaining({ signalScore: expect.any(Number), signalCount: expect.any(Number) }),
+        }),
+      }),
+    );
+    // ...but priority is left alone, since the open issue is already as severe.
+    const dispatched = (commandBus.dispatch as jest.Mock).mock.calls[0][0];
+    expect(dispatched.payload.data).not.toHaveProperty('priority');
+
     expect(prisma.issueSignal.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: { issueId: 'issue-9' } }),
     );

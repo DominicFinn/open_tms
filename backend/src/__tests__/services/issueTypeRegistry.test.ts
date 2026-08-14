@@ -8,6 +8,13 @@ import {
   allRecoveryEvents,
   maxPriority,
   priorityRank,
+  computeSignalScore,
+  isNoise,
+  noiseReasonFor,
+  slaDeadlineFor,
+  NOISE_THRESHOLD,
+  CORROBORATION_BOOST,
+  MAX_SIGNAL_SCORE,
 } from '../../services/issues/issueTypeRegistry.js';
 
 describe('issueTypeRegistry', () => {
@@ -81,5 +88,75 @@ describe('issueTypeRegistry', () => {
     expect(priorityRank('unknown')).toBe(0);
     expect(maxPriority('low', 'high')).toBe('high');
     expect(maxPriority('critical', 'medium')).toBe('critical');
+  });
+});
+
+describe('issueTypeRegistry — triage signal scoring', () => {
+  it('gives every type a base confidence within 0-100', () => {
+    for (const t of allIssueTypes()) {
+      expect(t.baseConfidence).toBeGreaterThanOrEqual(0);
+      expect(t.baseConfidence).toBeLessThanOrEqual(100);
+    }
+  });
+
+  it('scores a single signal at the type base confidence', () => {
+    const t = getIssueType('shipment_cutoff_risk')!;
+    expect(computeSignalScore(t, 1)).toBe(t.baseConfidence);
+  });
+
+  it('boosts the score by CORROBORATION_BOOST for each extra signal', () => {
+    const t = getIssueType('shipment_temperature')!; // baseConfidence 30
+    expect(computeSignalScore(t, 1)).toBe(30);
+    expect(computeSignalScore(t, 2)).toBe(30 + CORROBORATION_BOOST);
+    expect(computeSignalScore(t, 4)).toBe(30 + 3 * CORROBORATION_BOOST);
+  });
+
+  it('caps the score at MAX_SIGNAL_SCORE no matter how many signals arrive', () => {
+    const t = getIssueType('shipment_cutoff_risk')!;
+    expect(computeSignalScore(t, 100)).toBe(MAX_SIGNAL_SCORE);
+  });
+
+  it('treats a zero or negative signal count as a single signal', () => {
+    const t = getIssueType('shipment_cutoff_risk')!;
+    expect(computeSignalScore(t, 0)).toBe(t.baseConfidence);
+    expect(computeSignalScore(t, -5)).toBe(t.baseConfidence);
+  });
+
+  it('flags a low-scoring unlatched issue as noise', () => {
+    const t = getIssueType('shipment_eta_delay')!; // unlatched
+    expect(isNoise(t, NOISE_THRESHOLD - 1)).toBe(true);
+    expect(isNoise(t, NOISE_THRESHOLD)).toBe(true);
+    expect(isNoise(t, NOISE_THRESHOLD + 1)).toBe(false);
+  });
+
+  it('NEVER marks a latched safety type as noise, however low the score', () => {
+    // This is the whole point of the latched flag: a temperature excursion or a
+    // possible tamper has already happened. Suppressing it because one sensor
+    // reading looked marginal is the exact failure this system prevents.
+    for (const key of ['shipment_temperature', 'shipment_tamper_light', 'shipment_misship'] as const) {
+      const t = getIssueType(key)!;
+      expect(t.latched).toBe(true);
+      expect(isNoise(t, 0)).toBe(false);
+      expect(isNoise(t, 1)).toBe(false);
+    }
+  });
+
+  it('derives an SLA deadline from the type slaMinutes', () => {
+    const t = getIssueType('shipment_temperature')!; // slaMinutes 60
+    const from = new Date('2026-08-14T10:00:00.000Z');
+    expect(slaDeadlineFor(t, from)!.toISOString()).toBe('2026-08-14T11:00:00.000Z');
+  });
+
+  it('returns no SLA deadline for a type without slaMinutes', () => {
+    const t = { ...getIssueType('shipment_eta_delay')!, slaMinutes: undefined };
+    expect(slaDeadlineFor(t, new Date())).toBeNull();
+  });
+
+  it('explains why an issue was suppressed', () => {
+    const t = getIssueType('shipment_eta_delay')!;
+    const reason = noiseReasonFor(t, 30, 1);
+    expect(reason).toContain(t.name);
+    expect(reason).toContain('30/100');
+    expect(reason).toContain('1 signal');
   });
 });

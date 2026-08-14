@@ -20,6 +20,13 @@ export interface UpdateIssuePayload {
     needsCapa?: boolean;
     closedAt?: string | null;
     closedBy?: string | null;
+    /* Triage scoring — maintained by the Issue Engine as signals corroborate. */
+    signalScore?: number;
+    signalCount?: number;
+    isNoise?: boolean;
+    noiseReason?: string | null;
+    slaDeadline?: Date | string | null;
+    lastActivityAt?: Date | string | null;
   };
 }
 
@@ -56,6 +63,46 @@ export class UpdateIssueCommandHandler extends BaseCommandHandler<UpdateIssuePay
     }
     if (data.closedAt) {
       updateData.closedAt = new Date(data.closedAt);
+    }
+    if (data.slaDeadline) {
+      updateData.slaDeadline = new Date(data.slaDeadline);
+    }
+    if (data.lastActivityAt) {
+      updateData.lastActivityAt = new Date(data.lastActivityAt);
+    }
+
+    // Triage response metrics.
+    //
+    // First response = the first time anyone moves the issue off `open` or
+    // picks it up. Recorded once; later transitions must not overwrite it.
+    const isFirstResponse =
+      !previous.firstResponseAt &&
+      ((data.status && data.status !== 'open' && data.status !== previous.status) ||
+        (data.assigneeId && data.assigneeId !== previous.assigneeId));
+    if (isFirstResponse) {
+      const now = new Date();
+      updateData.firstResponseAt = now;
+      updateData.timeToFirstResponseMins = Math.max(
+        0,
+        Math.round((now.getTime() - previous.createdAt.getTime()) / 60_000)
+      );
+    }
+
+    // Resolution time + SLA verdict, stamped when the issue reaches a terminal
+    // state. `slaBreach` is only ever set true — once breached, always breached.
+    if (data.status === 'resolved' || data.status === 'closed') {
+      const settledAt = new Date();
+      updateData.timeToResolutionMins = Math.max(
+        0,
+        Math.round((settledAt.getTime() - previous.createdAt.getTime()) / 60_000)
+      );
+      if (previous.slaDeadline && settledAt > previous.slaDeadline) {
+        updateData.slaBreach = true;
+      }
+    }
+
+    if (updateData.lastActivityAt === undefined) {
+      updateData.lastActivityAt = new Date();
     }
 
     const updated = await tx.issue.update({ where: { id }, data: updateData });
