@@ -158,6 +158,7 @@ const updateOrderSchema = z.object({
   serviceLevel: z.string().optional(),
   temperatureControl: z.string().optional(),
   requiresHazmat: z.boolean().optional(),
+  specialRequirements: z.array(z.string()).optional(),
   specialInstructions: z.string().optional(),
   notes: z.string().optional()
 });

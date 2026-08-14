@@ -17,6 +17,7 @@ export interface UpdateOrderPayload {
     serviceLevel?: string;
     temperatureControl?: string;
     requiresHazmat?: boolean;
+    specialRequirements?: string[];
     specialInstructions?: string;
     notes?: string;
   };
