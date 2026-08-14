@@ -79,6 +79,8 @@ export interface CreateOrderDTO {
   serviceLevel?: string;
   temperatureControl?: string;
   requiresHazmat?: boolean;
+  /** Free-form requirement tags. Persisted to the Order.specialRequirements Json column. */
+  specialRequirements?: string[];
 
   // Trackable units (new preferred way)
   trackableUnits?: CreateTrackableUnitDTO[];

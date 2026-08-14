@@ -179,6 +179,7 @@ export class CreateOrderCommandHandler extends BaseCommandHandler<CreateOrderPay
         serviceLevel: orderData.serviceLevel,
         temperatureControl: orderData.temperatureControl,
         requiresHazmat: orderData.requiresHazmat,
+        specialRequirements: orderData.specialRequirements,
         specialInstructions: orderData.specialInstructions,
         notes: orderData.notes,
         status,

@@ -161,6 +161,36 @@ describe('Order Command Handlers', () => {
       }));
     });
 
+    it('persists specialRequirements to the create call', async () => {
+      mockTx.order.create.mockClear();
+      const { bus } = mockEventBus();
+      const handler = new CreateOrderCommandHandler(mockPrisma, bus);
+
+      await handler.execute(
+        createTestCommand(CREATE_ORDER, {
+          orderData: {
+            orgId: 'test-org',
+            orderNumber: 'ORD-REQ-1',
+            customerId: 'cust-1',
+            serviceLevel: 'FTL',
+            temperatureControl: 'refrigerated',
+            requiresHazmat: false,
+            specialRequirements: ['liftgate', 'inside_delivery'],
+          },
+          status: 'pending',
+        })
+      );
+
+      expect(mockTx.order.create).toHaveBeenCalledTimes(1);
+      const dataArg = mockTx.order.create.mock.calls[0][0].data;
+      expect(dataArg).toEqual(expect.objectContaining({
+        serviceLevel: 'FTL',
+        temperatureControl: 'refrigerated',
+        requiresHazmat: false,
+        specialRequirements: ['liftgate', 'inside_delivery'],
+      }));
+    });
+
     it('auto-generates N TrackableUnits when packingSummary is supplied', async () => {
       mockTx.order.create.mockClear();
       mockTx.packagingType.findUnique.mockResolvedValueOnce({ kind: 'pallet' });
@@ -314,6 +344,27 @@ describe('Order Command Handlers', () => {
       expect(result.success).toBe(true);
       expect(result.events.length).toBeGreaterThanOrEqual(1);
       expect(result.events[0].type).toBe(EVENT_TYPES.ORDER_UPDATED);
+    });
+
+    it('forwards specialRequirements through to the update call', async () => {
+      mockTx.order.update.mockClear();
+      const { bus } = mockEventBus();
+      const handler = new UpdateOrderCommandHandler(mockPrisma, bus);
+
+      const result = await handler.execute(
+        createTestCommand(UPDATE_ORDER, {
+          id: 'order-1',
+          data: { specialRequirements: ['tail_lift', 'appointment_required'] },
+        })
+      );
+
+      expect(result.success).toBe(true);
+      expect(mockTx.order.update).toHaveBeenCalledTimes(1);
+      expect(mockTx.order.update.mock.calls[0][0].data).toEqual(
+        expect.objectContaining({
+          specialRequirements: ['tail_lift', 'appointment_required'],
+        })
+      );
     });
 
     it('emits ORDER_STATUS_CHANGED when status changes', async () => {
