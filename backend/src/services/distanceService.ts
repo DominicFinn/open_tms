@@ -152,6 +152,95 @@ export class DistanceService {
     };
   }
 
+  private static readonly GOOGLE_GEOCODING_API_URL = 'https://maps.googleapis.com/maps/api/geocode/json';
+  private static readonly NOMINATIM_API_URL = 'https://nominatim.openstreetmap.org/search';
+
+  /**
+   * Geocode an address to lat/lng coordinates.
+   *
+   * Provider priority:
+   *   1. Google Geocoding API — if GOOGLE_MAPS_API_KEY env var is set
+   *   2. OpenStreetMap Nominatim — free fallback, no API key required
+   *
+   * Set GOOGLE_MAPS_API_KEY to use Google. Otherwise Nominatim is used automatically.
+   */
+  private static async geocodeAddress(location: Location): Promise<{ lat: number; lng: number } | null> {
+    // Try Google Geocoding first if API key is available
+    const googleKey = process.env.GOOGLE_MAPS_API_KEY;
+    if (googleKey) {
+      const result = await this.geocodeWithGoogle(location, googleKey);
+      if (result) return result;
+    }
+
+    // Fallback to Nominatim (free, no key required)
+    return this.geocodeWithNominatim(location);
+  }
+
+  /**
+   * Google Geocoding API — requires GOOGLE_MAPS_API_KEY.
+   * https://developers.google.com/maps/documentation/geocoding
+   */
+  private static async geocodeWithGoogle(location: Location, apiKey: string): Promise<{ lat: number; lng: number } | null> {
+    const address = [location.address1, location.city, location.state, location.postalCode, location.country]
+      .filter(Boolean)
+      .join(', ');
+
+    if (!address.trim()) return null;
+
+    try {
+      const params = new URLSearchParams({ address, key: apiKey });
+      const response = await fetch(`${this.GOOGLE_GEOCODING_API_URL}?${params}`);
+      if (!response.ok) {
+        console.warn('Google Geocoding API request failed:', response.status);
+        return null;
+      }
+
+      const data = await response.json();
+      if (data.status === 'OK' && data.results?.length > 0) {
+        const { lat, lng } = data.results[0].geometry.location;
+        return { lat, lng };
+      }
+      if (data.status !== 'ZERO_RESULTS') {
+        console.warn('Google Geocoding API returned:', data.status, data.error_message);
+      }
+    } catch (error) {
+      console.warn('Google Geocoding error:', error);
+    }
+
+    return null;
+  }
+
+  /**
+   * OpenStreetMap Nominatim — free geocoding, no API key required.
+   * Rate limit: 1 request/second per Nominatim usage policy.
+   * https://nominatim.org/release-docs/develop/api/Search/
+   */
+  private static async geocodeWithNominatim(location: Location): Promise<{ lat: number; lng: number } | null> {
+    const parts = [location.address1, location.city, location.state, location.postalCode, location.country]
+      .filter(Boolean)
+      .join(', ');
+
+    if (!parts.trim()) return null;
+
+    try {
+      const params = new URLSearchParams({ q: parts, format: 'json', limit: '1' });
+      const response = await fetch(`${this.NOMINATIM_API_URL}?${params}`, {
+        headers: { 'User-Agent': 'OpenTMS/0.1.0' },
+      });
+
+      if (!response.ok) return null;
+
+      const data = await response.json();
+      if (data.length > 0) {
+        return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+      }
+    } catch (error) {
+      console.warn('Nominatim geocoding error:', error);
+    }
+
+    return null;
+  }
+
   // Get distance with address geocoding (if coordinates are missing)
   static async getDistanceWithGeocoding(origin: Location, destination: Location): Promise<DistanceResult> {
     // If we have coordinates, use them directly
@@ -159,11 +248,27 @@ export class DistanceService {
       return this.getDistance(origin, destination);
     }
 
-    // TODO: Implement geocoding service to get coordinates from addresses
-    // For now, return error if coordinates are missing
-    return {
-      distance: 0,
-      error: 'Coordinates required for distance calculation'
-    };
+    // Geocode whichever endpoint is missing coordinates
+    let originCoords = origin.lat && origin.lng ? { lat: origin.lat, lng: origin.lng } : null;
+    let destCoords = destination.lat && destination.lng ? { lat: destination.lat, lng: destination.lng } : null;
+
+    if (!originCoords) {
+      originCoords = await this.geocodeAddress(origin);
+    }
+    if (!destCoords) {
+      destCoords = await this.geocodeAddress(destination);
+    }
+
+    if (!originCoords || !destCoords) {
+      return {
+        distance: 0,
+        error: 'Could not geocode one or both addresses'
+      };
+    }
+
+    return this.getDistance(
+      { ...origin, lat: originCoords.lat, lng: originCoords.lng },
+      { ...destination, lat: destCoords.lat, lng: destCoords.lng }
+    );
   }
 }

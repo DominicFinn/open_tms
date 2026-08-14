@@ -106,3 +106,106 @@ describe('DistanceService - Simple Tests', () => {
     });
   });
 });
+
+describe('DistanceService - geocoding', () => {
+  const addrOnly = {
+    lat: null as number | null,
+    lng: null as number | null,
+    address1: '1234 Commerce Street',
+    address2: null,
+    city: 'Dallas',
+    state: 'Texas',
+    postalCode: '75201',
+    country: 'USA'
+  };
+  const withCoords = {
+    lat: 40.7128,
+    lng: -74.0060,
+    address1: '1000 6th Ave',
+    address2: null,
+    city: 'New York',
+    state: 'New York',
+    postalCode: '10018',
+    country: 'USA'
+  };
+
+  const originalKey = process.env.GOOGLE_MAPS_API_KEY;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    delete process.env.GOOGLE_MAPS_API_KEY;
+  });
+
+  afterAll(() => {
+    if (originalKey === undefined) delete process.env.GOOGLE_MAPS_API_KEY;
+    else process.env.GOOGLE_MAPS_API_KEY = originalKey;
+  });
+
+  it('skips geocoding entirely when both endpoints already have coordinates', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({ ok: false, status: 500 });
+
+    await DistanceService.getDistanceWithGeocoding(withCoords, withCoords);
+
+    // Only the distance lookup should fire, never a geocode call
+    const calledUrls = (global.fetch as jest.Mock).mock.calls.map((c) => String(c[0]));
+    expect(calledUrls.some((u) => u.includes('geocode') || u.includes('nominatim'))).toBe(false);
+  });
+
+  it('uses Google Geocoding when GOOGLE_MAPS_API_KEY is set', async () => {
+    process.env.GOOGLE_MAPS_API_KEY = 'test-key';
+    (global.fetch as jest.Mock).mockImplementation((url: string) => {
+      if (String(url).includes('maps/api/geocode')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            status: 'OK',
+            results: [{ geometry: { location: { lat: 32.7767, lng: -96.797 } } }]
+          })
+        });
+      }
+      return Promise.resolve({ ok: false, status: 500 });
+    });
+
+    const result = await DistanceService.getDistanceWithGeocoding(addrOnly, withCoords);
+
+    const calledUrls = (global.fetch as jest.Mock).mock.calls.map((c) => String(c[0]));
+    expect(calledUrls.some((u) => u.includes('maps/api/geocode'))).toBe(true);
+    expect(calledUrls.some((u) => u.includes('nominatim'))).toBe(false);
+    // Geocoding succeeded, so we get a real distance rather than the geocode failure
+    expect(result.error).not.toBe('Could not geocode one or both addresses');
+    expect(result.distance).toBeGreaterThan(0);
+  });
+
+  it('falls back to Nominatim when no API key is configured', async () => {
+    (global.fetch as jest.Mock).mockImplementation((url: string) => {
+      if (String(url).includes('nominatim')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve([{ lat: '32.7767', lon: '-96.797' }])
+        });
+      }
+      return Promise.resolve({ ok: false, status: 500 });
+    });
+
+    const result = await DistanceService.getDistanceWithGeocoding(addrOnly, withCoords);
+
+    const calledUrls = (global.fetch as jest.Mock).mock.calls.map((c) => String(c[0]));
+    expect(calledUrls.some((u) => u.includes('nominatim'))).toBe(true);
+    expect(calledUrls.some((u) => u.includes('maps/api/geocode'))).toBe(false);
+    expect(result.distance).toBeGreaterThan(0);
+  });
+
+  it('returns a clear error when an address cannot be geocoded', async () => {
+    (global.fetch as jest.Mock).mockImplementation((url: string) => {
+      if (String(url).includes('nominatim')) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve([]) });
+      }
+      return Promise.resolve({ ok: false, status: 500 });
+    });
+
+    const result = await DistanceService.getDistanceWithGeocoding(addrOnly, withCoords);
+
+    expect(result.distance).toBe(0);
+    expect(result.error).toBe('Could not geocode one or both addresses');
+  });
+});
