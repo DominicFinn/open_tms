@@ -205,6 +205,7 @@ import { UpdateSlaPolicyCommandHandler } from '../commands/sla/UpdateSlaPolicyCo
 import { DeactivateSlaPolicyCommandHandler } from '../commands/sla/DeactivateSlaPolicyCommand.js';
 import { AgentDecisionRepository } from '../repositories/AgentDecisionRepository.js';
 import { IssueRepository } from '../repositories/IssueRepository.js';
+import { TriageRepository } from '../repositories/TriageRepository.js';
 import { CreateAgentDecisionCommandHandler } from '../commands/agentDecisions/CreateAgentDecisionCommand.js';
 import { RecordDecisionOutcomeCommandHandler } from '../commands/agentDecisions/RecordDecisionOutcomeCommand.js';
 import { PromoteDecisionCommandHandler } from '../commands/agentDecisions/PromoteDecisionCommand.js';
@@ -520,6 +521,10 @@ export function registerDependencies(prisma: PrismaClient): void {
 
   container.singleton(TOKENS.IIssueRepository).toFactory(() => {
     return new IssueRepository(container.resolve(TOKENS.PrismaClient));
+  });
+
+  container.singleton(TOKENS.ITriageRepository).toFactory(() => {
+    return new TriageRepository(container.resolve(TOKENS.PrismaClient));
   });
 
   container.singleton(TOKENS.ISlaEvaluationService).toFactory(() => {
