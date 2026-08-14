@@ -95,9 +95,44 @@ These need a new provider interface (e.g. `ICarrierShippingProvider`) alongside 
 tracking one; the aggregators already expose all of it under the same account, so the same
 credentials/sandbox carry over.
 
+## Status bridging detail
+
+`CarrierTrackingHandler` maps normalised carrier statuses onto the shipment lifecycle
+(`draft → ready → in_progress → complete`). There is no `delivered` or `exception` shipment
+status — both are represented by events, not by a lifecycle value.
+
+| Carrier status | Effect |
+|---|---|
+| `delivered` | sets `status: 'complete'` and `deliveryDate`, **only if the shipment is currently `in_progress`**; emits `SHIPMENT_DELIVERED` and `SHIPMENT_STATUS_CHANGED` |
+| `in_transit` / `out_for_delivery` | advances `status` **forward only** along `['draft','ready','in_progress','complete']`; a target at or behind the current index is a no-op |
+| `exception` | emits `SHIPMENT_EXCEPTION` (`exceptionType: 'carrier_exception'`) and flags the shipment; skipped if the shipment is already `complete` |
+
+Exceptions are deliberately orthogonal to lifecycle status so a carrier hiccup doesn't clobber the
+shipment's `draft`/`ready`/`in_progress`/`complete` state. The `SHIPMENT_EXCEPTION` event is what
+drives triage, notifications, and the Issue Engine (see [`ISSUE_ENGINE.md`](./ISSUE_ENGINE.md)).
+
+## Rate limits and polling
+
+Per-provider defaults enforced by `carrierTrackingPollWorker` (cron, default every 5 min,
+`CARRIER_TRACKING_POLL_CRON`):
+
+| Provider | Auth | Poll style | Rate limit |
+|---|---|---|---|
+| FedEx | OAuth 2.0 | batch (up to 30) | 10K/day |
+| UPS | OAuth 2.0 | single | 5K/day |
+| DHL | API key | single | 250/day |
+
 ## Key files
 
 - `backend/src/services/carrierTracking/ICarrierTrackingProvider.ts` — provider interface
+- `backend/src/services/carrierTracking/ProviderRegistry.ts` — provider factory
+- `backend/src/repositories/CarrierTrackingIntegrationRepository.ts` — integration CRUD
+- `backend/src/commands/carrierTracking/` — command handlers
+- `backend/src/workers/carrierTrackingPollWorker.ts` — polling cron worker
+- `frontend/src/vnext-design/VNextCarrierTracking.tsx` — integration list page
+- `frontend/src/vnext-design/VNextCarrierTrackingDetail.tsx` — integration detail page
+- `backend/src/__tests__/handlers/CarrierTrackingHandler.test.ts` — 16 handler tests
+- `backend/src/__tests__/commands/CarrierTrackingCommands.test.ts` — 14 command tests
 - `backend/src/services/carrierTracking/providers/*` — FedEx, UPS, DHL, EasyPost, AfterShip
 - `backend/src/services/carrierTracking/CarrierTrackingService.ts` — orchestration/polling
 - `backend/src/events/handlers/CarrierTrackingHandler.ts` — event → shipment status bridge
