@@ -15,6 +15,9 @@ import {
   Bug,
   Calendar,
   ClipboardCheck,
+  Siren,
+  Radar,
+  FileSearch,
   ClipboardList,
   Clock,
   CreditCard,
@@ -152,7 +155,6 @@ const APPS: AppDef[] = [
         { to: '/sla', icon: Timer, label: 'SLA Dashboard' },
         { to: '/shipments', icon: Truck, label: 'Shipments' },
         { to: '/orders', icon: FileText, label: 'Orders' },
-        { to: '/issues', icon: Bug, label: 'Issues' },
         { to: '/cold-chain/capa', icon: AlertTriangle, label: 'CAPA Reports' },
         { to: '/agent-decisions', icon: Bot, label: 'Agent Decisions' },
         { to: '/automation-rules', icon: Zap, label: 'Automation Rules' },
@@ -164,6 +166,18 @@ const APPS: AppDef[] = [
         { to: '/customers', icon: Users, label: 'Customers' },
         { to: '/locations', icon: MapPin, label: 'Locations' },
         { to: '/lanes', icon: Route, label: 'Lanes' },
+      ]},
+    ],
+  },
+  {
+    key: 'triage', icon: Siren, label: 'Triage', basePath: '/triage',
+    sections: [
+      { title: 'Triage Centre', items: [
+        { to: '/triage', icon: Radar, label: 'Signal Dashboard', end: true },
+        { to: '/triage/board', icon: Bug, label: 'All Issues' },
+        { to: '/triage/search', icon: Search, label: 'Search' },
+        { to: '/triage/spot-check', icon: FileSearch, label: 'Spot Check' },
+        { to: '/triage/reports', icon: BarChart3, label: 'Reports' },
       ]},
     ],
   },
@@ -517,6 +531,7 @@ function SearchResultRow({
 }
 
 function detectApp(pathname: string): string {
+  if (pathname.startsWith('/triage') || pathname.startsWith('/issues')) return 'triage';
   if (pathname.startsWith('/wms')) return 'warehouse';
   if (pathname.startsWith('/quality')) return 'quality';
   if (pathname.startsWith('/finance')) return 'finance';

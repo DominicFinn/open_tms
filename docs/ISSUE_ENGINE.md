@@ -60,6 +60,73 @@ Recovery events are emitted by the owning monitors, not the engine:
 The triage agent is an *enricher* on engine issues (comments + priority escalation on
 `issue.created`), not a creator.
 
+## Triage Centre (dedicated app)
+
+The Triage Centre is its own app at `/triage`, alongside Operations, Finance, Quality and the rest.
+Issues no longer appear in the Operations sidebar: `/issues` redirects to `/triage/board`. The full
+issue detail page stays at `/issues/:id` and the triage detail view links out to it, so the
+lifecycle surfaces (comments, labels, snooze, CAPA, closure report) are not duplicated.
+
+| Page | Route | Purpose |
+|---|---|---|
+| Signal Dashboard | `/triage` | Volume, noise ratio, SLA health, recurring offenders, work-next queue |
+| All Issues | `/triage/board` | Kanban (drag-and-drop) + list view, multi-select batch actions, saved boards |
+| Issue context | `/triage/issues/:id` | Why this was raised: confidence, contributing signals, sibling issues |
+| Search | `/triage/search` | Faceted lookup across every issue, including settled and suppressed |
+| Spot Check | `/triage/spot-check` | QA sample of settled issues for reviewing triage quality |
+| Reports | `/triage/reports` | Volume trend, MTTR, first response, breach rate by type/assignee/priority |
+
+### Signal scoring
+
+Every issue carries a confidence score, 0-100, that answers "how sure are we this is real?".
+
+- Each Issue Type declares a `baseConfidence`: how much one signal of that type is worth. A cargo
+  mis-drop (70) or a cutoff breach (75) is seldom spurious; a single temperature reading is 30
+  because it may just be an open door.
+- Each corroborating signal in the `IssueSignal` ledger adds `CORROBORATION_BOOST` (15), capped at
+  `MAX_SIGNAL_SCORE` (95). One temperature blip scores 30; four in an hour scores 75.
+- The score is **recomputed from the ledger** on every signal, never incremented, so a replayed
+  event cannot inflate it.
+
+### Noise suppression
+
+An issue scoring at or below `NOISE_THRESHOLD` (40) is flagged `isNoise` with a `noiseReason`, and
+hidden from the board, the actionable queue and the dashboards unless "Show suppressed" is ticked.
+
+**Latched types are never suppressed.** A temperature excursion or possible tamper has a
+deliberately low base confidence so it can be corroborated, but it describes something that has
+already happened. Hiding it because one sensor reading looked marginal is the exact failure mode the
+system exists to prevent. The same rule is enforced on the write side: `POST
+/api/v1/triage/batch/dismiss-noise` returns **409** for latched issues — they must be resolved with
+a reason instead.
+
+### SLA and response metrics
+
+Each Issue Type may declare `slaMinutes`, which stamps `Issue.slaDeadline` when the engine raises
+the issue.
+
+| Field | Set when |
+|---|---|
+| `firstResponseAt` / `timeToFirstResponseMins` | First move off `open`, or first assignment. Recorded once, never overwritten |
+| `timeToResolutionMins` | On reaching `resolved` or `closed` |
+| `slaBreach` | On settling past the deadline. Only ever set true - once breached, always breached |
+
+`slaAtRisk` on the dashboard counts open issues already past their deadline but not yet settled,
+since the breach flag is only written when an issue settles.
+
+### Saved boards
+
+The Triage Centre uses the existing `KanbanView` model as its saved boards rather than introducing a
+second saved-view concept. `KanbanView.filters` is a Json blob holding the same filter shape the
+board, search page and API all share, plus `icon`, `isShared` and `viewMode` columns.
+
+### Batch actions
+
+`POST /api/v1/triage/batch/{transition,assign,dismiss-noise}` fan out through the command bus, one
+dispatch per issue, so each still emits its own domain events and updates the projection. Ids are
+scoped to the org first, and outcomes are reported per id — one bad id does not discard the rest of
+the batch.
+
 ## Key Models
 
 - **Issue** - Operational problem linked to a source entity (shipment, order, carrier). Fields

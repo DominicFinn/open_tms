@@ -510,6 +510,40 @@ open -> in_progress -> resolved -> closed
 Any status can be snoozed (snoozedUntil set). Auto-wakes when time expires.
 ```
 
+### Triage: signal scoring, noise and SLA
+
+**Signal confidence** (`signalScore`, 0-100) is maintained by `IssueEngineHandler` from the
+`IssueSignal` ledger:
+
+| Behaviour | Rule |
+|---|---|
+| Initial score | The Issue Type's `baseConfidence` (cutoff 75, mis-ship 70, ETA delay 55, tamper 40, temperature 30) |
+| Corroboration | `+15` per additional signal, capped at `95` |
+| Recalculation | Recomputed from the ledger on every signal, never incremented, so replayed events cannot inflate it |
+
+**Noise suppression** (`isNoise` + `noiseReason`): set when `signalScore <= 40`. Suppressed issues
+are excluded from the board, actionable queue and dashboards unless explicitly requested.
+
+> **Latched types are never suppressed.** `isNoise()` returns false for any latched type regardless
+> of score, and `POST /api/v1/triage/batch/dismiss-noise` returns **409** if any target is latched.
+> A temperature excursion or possible tamper has already happened; it must be resolved with a
+> reason, not hidden.
+
+**SLA and response metrics** are stamped by `UpdateIssueCommandHandler`:
+- `slaDeadline` — set at raise time from the Issue Type's `slaMinutes`
+- `firstResponseAt` / `timeToFirstResponseMins` — first move off `open` or first assignment,
+  recorded once and never overwritten
+- `timeToResolutionMins` — on reaching `resolved` or `closed`
+- `slaBreach` — set true when an issue settles past its deadline; only ever set true
+
+All of these are mirrored onto `IssueReadModel` by `IssueProjection` so the triage queues filter and
+sort without joining back to `Issue`. `onIssueResolved` / `onIssueClosed` re-read the issue so the
+resolution metrics reach the read model.
+
+**Batch actions** (`/api/v1/triage/batch/*`) fan out through the command bus, one `UPDATE_ISSUE`
+dispatch per issue, so each emits its own domain events. Ids are scoped to the org first; outcomes
+are reported per id rather than failing the whole batch.
+
 ### Issue Closure Report
 
 When an issue is closed (`issue.closed` event), the `IssueClosureReportHandler` automatically generates a PDF closure report:

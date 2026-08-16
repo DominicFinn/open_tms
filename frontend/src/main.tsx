@@ -19,6 +19,12 @@ import VNextShipmentDetail from './vnext-design/VNextShipmentDetail';
 import VNextOrders from './vnext-design/VNextOrders';
 import VNextIssueKanban from './vnext-design/VNextIssueKanban';
 import VNextIssueDetail from './vnext-design/VNextIssueDetail';
+import VNextTriageDashboard from './vnext-design/VNextTriageDashboard';
+import VNextTriageBoard from './vnext-design/VNextTriageBoard';
+import VNextTriageSearch from './vnext-design/VNextTriageSearch';
+import VNextTriageSpotCheck from './vnext-design/VNextTriageSpotCheck';
+import VNextTriageReports from './vnext-design/VNextTriageReports';
+import VNextTriageIssueDetail from './vnext-design/VNextTriageIssueDetail';
 import VNextCarriers from './vnext-design/VNextCarriers';
 import VNextCarrierBidding from './vnext-design/VNextCarrierBidding';
 import VNextCustomers from './vnext-design/VNextCustomers';
@@ -326,8 +332,21 @@ root.render(
           <Route path="tenders/:id" element={<TenderDetail />} />
 
           {/* Issues & Carrier Bidding */}
-          <Route path="issues" element={<VNextIssueKanban />} />
+          {/* Issues now live in the Triage app. The list redirects; the full
+              detail page stays put because the triage detail view links to it. */}
+          <Route path="issues" element={<Navigate to="/triage/board" replace />} />
           <Route path="issues/:id" element={<VNextIssueDetail />} />
+
+          {/* Triage Centre (dedicated app) */}
+          <Route path="triage">
+            <Route index element={<VNextTriageDashboard />} />
+            <Route path="board" element={<VNextTriageBoard />} />
+            <Route path="board/:boardId" element={<VNextTriageBoard />} />
+            <Route path="issues/:id" element={<VNextTriageIssueDetail />} />
+            <Route path="search" element={<VNextTriageSearch />} />
+            <Route path="spot-check" element={<VNextTriageSpotCheck />} />
+            <Route path="reports" element={<VNextTriageReports />} />
+          </Route>
           <Route path="carrier-bidding" element={<VNextCarrierBidding />} />
 
           {/* Agent Decisions */}
