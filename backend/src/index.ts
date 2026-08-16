@@ -129,6 +129,7 @@ import { ediInboundRoutes } from './routes/ediInbound.js';
 import { edi997Routes } from './routes/edi997.js';
 import { financialReportRoutes } from './routes/financialReports.js';
 import { issueRoutes } from './routes/issues.js';
+import { triageRoutes } from './routes/triage.js';
 import { commentRoutes } from './routes/comments.js';
 import { carrierTrackingRoutes } from './routes/carrierTracking.js';
 import { qualityCentreRoutes } from './routes/qualityCentre.js';
@@ -320,6 +321,7 @@ async function start() {
     await app.register(quoteRoutes);
     await app.register(financialReportRoutes);
     await app.register(issueRoutes);
+    await app.register(triageRoutes);
     await app.register(commentRoutes);
     await app.register(qualityCentreRoutes);
     await app.register(roleRoutes);

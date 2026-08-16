@@ -50,6 +50,7 @@
 - **Triage Centre / Issue Management** - Full issue lifecycle (open to closed), kanban board (drag-and-drop), comments system, issue labels, snooze/close/reopen, CAPA workflows, PDF closure reports, agent driver contact, in-app notifications, entity search
 - **SLA Tracking & Breach Alerts** - Two-tier SLA policies (org + customer), 7 rule types, hybrid event+cron breach detection, auto-create issues on breach, SLA policy config UI, shipment detail SLA tab, kanban SLA badges, dashboard SLA health widget
 - **AI Auto-Triage** - Claude-powered triage agent, exception events to auto-create/escalate issues
+- **Triage Centre (dedicated app)** - Standalone `/triage` app: signal dashboard (volume, noise ratio, SLA health, recurring offenders), board with kanban + list views and batch actions, faceted search, QA spot check, performance reports. Signal confidence scoring per Issue Type with corroboration boost, noise suppression (latched safety types never suppressed), SLA deadlines and first-response/resolution metrics. Saved boards reuse `KanbanView`.
 - **Live Tracking** - Inbound GPS webhook, ShipmentEvent tracking, geofencing with auto-delivery, ShipmentReadModel with lat/lng
 - **ETA Monitoring** - Provider-agnostic routing (TomTom/HERE/Valhalla), adaptive polling, three delay severity levels, traffic-aware ETAs, pg-boss cron, API endpoints
 - **Carrier Tracking API Integrations** - ICarrierTrackingProvider interface, FedEx/UPS/DHL implementations, polling worker, webhook receiver, admin setup wizard

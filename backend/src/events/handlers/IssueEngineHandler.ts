@@ -34,6 +34,10 @@ import {
   allRecoveryEvents,
   priorityRank,
   maxPriority,
+  computeSignalScore,
+  isNoise,
+  noiseReasonFor,
+  slaDeadlineFor,
 } from '../../services/issues/issueTypeRegistry.js';
 
 /** Shared mapping from a signal's severity band onto an issue priority. */
@@ -95,16 +99,39 @@ export class IssueEngineHandler implements IEventHandler {
     const open = await this.findOpenIssue(type.key, entityId);
     if (open) {
       await this.prisma.issueSignal.update({ where: { id: signal.id }, data: { issueId: open.id } });
+
+      // Corroboration: each additional signal raises confidence, which can lift
+      // an issue back out of noise. Recomputed from the ledger rather than
+      // incremented, so a replayed event can't inflate the score.
+      const signalCount = await this.prisma.issueSignal.count({ where: { issueId: open.id } });
+      const score = computeSignalScore(type, signalCount);
+      const update: Record<string, unknown> = {
+        signalCount,
+        signalScore: score,
+        isNoise: isNoise(type, score),
+        noiseReason: isNoise(type, score) ? noiseReasonFor(type, score, signalCount) : null,
+        lastActivityAt: new Date(),
+      };
       if (priorityRank(priority) > priorityRank(open.priority)) {
-        await this.dispatchUpdate(open.id, orgId, { priority: maxPriority(open.priority, priority) });
+        update.priority = maxPriority(open.priority, priority);
       }
+      await this.dispatchUpdate(open.id, orgId, update);
       return;
     }
 
     // 3. Raise rule: immediate on severity floor, else N signals within the window.
     if (!(await this.shouldRaise(type, entityId, priority))) return;
 
-    // 4. Create via the command bus, then attach the contributing signals.
+    // 4. Score the issue from the signals that justified raising it.
+    const since = new Date(Date.now() - type.raise.windowMinutes * 60_000);
+    const contributing = await this.prisma.issueSignal.count({
+      where: { issueType: type.key, sourceEntityId: entityId, occurredAt: { gte: since } },
+    });
+    const score = computeSignalScore(type, contributing);
+    const noise = isNoise(type, score);
+    const raisedAt = new Date();
+
+    // 5. Create via the command bus, then attach the contributing signals.
     const result = await this.commandBus.dispatch({
       type: CREATE_ISSUE,
       orgId,
@@ -119,6 +146,12 @@ export class IssueEngineHandler implements IEventHandler {
         sourceEntityType: 'shipment',
         sourceEntityId: entityId,
         sourceEventId: event.id,
+        signalScore: score,
+        signalCount: contributing,
+        isNoise: noise,
+        noiseReason: noise ? noiseReasonFor(type, score, contributing) : null,
+        slaDeadline: slaDeadlineFor(type, raisedAt),
+        lastActivityAt: raisedAt,
       },
       metadata: { correlationId: randomUUID(), source: 'system' },
     });
@@ -128,7 +161,6 @@ export class IssueEngineHandler implements IEventHandler {
       console.warn(`[IssueEngine] Failed to create ${type.key} issue: ${result.error}`);
       return;
     }
-    const since = new Date(Date.now() - type.raise.windowMinutes * 60_000);
     await this.prisma.issueSignal.updateMany({
       where: { issueType: type.key, sourceEntityId: entityId, issueId: null, occurredAt: { gte: since } },
       data: { issueId },

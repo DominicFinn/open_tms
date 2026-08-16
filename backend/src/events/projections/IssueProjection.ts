@@ -58,6 +58,31 @@ export class IssueProjection implements IEventHandler {
     }
   }
 
+  /**
+   * Triage columns mirrored onto the read model. The board, dashboard and
+   * report queues filter and sort on these, so they must live on the read
+   * model rather than being joined back to Issue per row.
+   */
+  private triageFields(issue: {
+    signalScore: number; signalCount: number; isNoise: boolean; noiseReason: string | null;
+    slaDeadline: Date | null; slaBreach: boolean; firstResponseAt: Date | null;
+    timeToFirstResponseMins: number | null; timeToResolutionMins: number | null;
+    lastActivityAt: Date | null;
+  }) {
+    return {
+      signalScore: issue.signalScore,
+      signalCount: issue.signalCount,
+      isNoise: issue.isNoise,
+      noiseReason: issue.noiseReason ?? null,
+      slaDeadline: issue.slaDeadline ?? null,
+      slaBreach: issue.slaBreach,
+      firstResponseAt: issue.firstResponseAt ?? null,
+      timeToFirstResponseMins: issue.timeToFirstResponseMins ?? null,
+      timeToResolutionMins: issue.timeToResolutionMins ?? null,
+      lastActivityAt: issue.lastActivityAt ?? null,
+    };
+  }
+
   private async onIssueCreated(event: DomainEvent): Promise<void> {
     const issue = await this.prisma.issue.findUnique({ where: { id: event.entityId } });
     if (!issue) {
@@ -85,6 +110,7 @@ export class IssueProjection implements IEventHandler {
         needsCapa: issue.needsCapa ?? false,
         snoozedUntil: issue.snoozedUntil ?? null,
         labels: [],
+        ...this.triageFields(issue),
         createdAt: issue.createdAt,
         updatedAt: issue.updatedAt,
       },
@@ -97,6 +123,7 @@ export class IssueProjection implements IEventHandler {
         needsCapa: issue.needsCapa ?? false,
         snoozedUntil: issue.snoozedUntil ?? null,
         labels: [],
+        ...this.triageFields(issue),
         updatedAt: issue.updatedAt,
       },
     });
@@ -120,6 +147,7 @@ export class IssueProjection implements IEventHandler {
         needsCapa: issue.needsCapa ?? false,
         snoozedUntil: issue.snoozedUntil ?? null,
         snoozedBy: issue.snoozedBy ?? null,
+        ...this.triageFields(issue),
         updatedAt: new Date(),
       },
     }).catch((err: Error) => {
@@ -155,11 +183,15 @@ export class IssueProjection implements IEventHandler {
   }
 
   private async onIssueResolved(event: DomainEvent): Promise<void> {
+    // Re-read: resolution stamps timeToResolutionMins and the SLA verdict onto
+    // Issue, and the reports queue reads both off the read model.
+    const issue = await this.prisma.issue.findUnique({ where: { id: event.entityId } });
     await this.prisma.issueReadModel.update({
       where: { id: event.entityId },
       data: {
         status: 'resolved',
-        resolvedAt: new Date(),
+        resolvedAt: issue?.resolvedAt ?? new Date(),
+        ...(issue ? this.triageFields(issue) : {}),
         updatedAt: new Date(),
       },
     }).catch((err: Error) => {
@@ -196,11 +228,13 @@ export class IssueProjection implements IEventHandler {
 
   private async onIssueClosed(event: DomainEvent): Promise<void> {
     const payload = event.payload as { closedAt: string };
+    const issue = await this.prisma.issue.findUnique({ where: { id: event.entityId } });
     await this.prisma.issueReadModel.update({
       where: { id: event.entityId },
       data: {
         status: 'closed',
         closedAt: new Date(payload.closedAt),
+        ...(issue ? this.triageFields(issue) : {}),
         updatedAt: new Date(),
       },
     }).catch((err: Error) => {

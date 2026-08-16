@@ -25,6 +25,13 @@ export interface CreateIssuePayload {
   sourceEventId?: string;
   assigneeId?: string;
   assigneeName?: string;
+  /* Triage scoring — stamped by the Issue Engine when it raises the issue. */
+  signalScore?: number;
+  signalCount?: number;
+  isNoise?: boolean;
+  noiseReason?: string | null;
+  slaDeadline?: Date | null;
+  lastActivityAt?: Date | null;
 }
 
 export const CREATE_ISSUE = 'issue.create';
@@ -60,6 +67,12 @@ export class CreateIssueCommandHandler extends BaseCommandHandler<CreateIssuePay
         latched: issue.latched,
         sourceEntityType: issue.sourceEntityType,
         sourceEntityId: issue.sourceEntityId,
+        signalScore: issue.signalScore,
+        signalCount: issue.signalCount,
+        isNoise: issue.isNoise,
+        noiseReason: issue.noiseReason,
+        slaDeadline: issue.slaDeadline,
+        lastActivityAt: issue.lastActivityAt,
       },
     }));
 
