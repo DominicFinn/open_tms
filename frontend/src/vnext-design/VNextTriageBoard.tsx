@@ -21,7 +21,7 @@ import {
   DragStartEvent,
   DragEndEvent,
 } from '@dnd-kit/core';
-import { Bug, LayoutList, Columns3, Save, Users, EyeOff, CheckCheck, X } from 'lucide-react';
+import { Bug, LayoutList, Columns3, Save, Users, EyeOff, CheckCheck, X, Plus } from 'lucide-react';
 
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -37,6 +37,7 @@ import {
 import {
   TriageLoading, TriageError, TriageEmpty, TriageFilterBar, IssueCard, ConfidenceMeter, SlaPill,
 } from './triage/components';
+import { CreateIssueDialog } from './triage/CreateIssueDialog';
 
 const PER_PAGE = 100;
 
@@ -60,6 +61,7 @@ export default function VNextTriageBoard() {
   const [error, setError] = useState<string | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
   const [savingBoard, setSavingBoard] = useState(false);
+  const [creating, setCreating] = useState(false);
   const [boardName, setBoardName] = useState('');
 
   const typeNames = useMemo(
@@ -223,6 +225,10 @@ export default function VNextTriageBoard() {
             <LayoutList className="h-3.5 w-3.5" aria-hidden="true" /> List
           </Button>
         </div>
+
+        <Button size="sm" onClick={() => setCreating(true)}>
+          <Plus className="h-3.5 w-3.5" aria-hidden="true" /> Report issue
+        </Button>
 
         <Button size="sm" variant="outline" onClick={() => setSavingBoard((v) => !v)}>
           <Save className="h-3.5 w-3.5" aria-hidden="true" /> Save as board
@@ -424,6 +430,12 @@ export default function VNextTriageBoard() {
           </Button>
         </div>
       )}
+
+      <CreateIssueDialog
+        open={creating}
+        onClose={() => setCreating(false)}
+        onCreated={() => { void load(); }}
+      />
     </div>
   );
 }

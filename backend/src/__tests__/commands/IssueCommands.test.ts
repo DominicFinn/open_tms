@@ -3,6 +3,7 @@ import { UpdateIssueCommandHandler, UPDATE_ISSUE } from '../../commands/issues/U
 import { EscalateIssueCommandHandler, ESCALATE_ISSUE } from '../../commands/issues/EscalateIssueCommand';
 import { EVENT_TYPES } from '../../events/eventTypes';
 import { createTestCommand, mockEventBus } from '../helpers/testUtils';
+import { MANUAL_SIGNAL_SCORE, NOISE_THRESHOLD } from '../../services/issues/issueTypeRegistry';
 
 const mockIssue = {
   id: 'issue-1', orgId: 'org-1', title: 'Shipment delayed',
@@ -55,6 +56,70 @@ describe('Issue Command Handlers', () => {
           sourceEntityType: 'shipment',
         })
       );
+    });
+
+    /*
+     * Manual issues have no Issue Type to inherit triage defaults from, so the
+     * handler stamps them. Without this a hand-raised issue has no SLA deadline
+     * and never appears in SLA health.
+     */
+    it('stamps manual triage defaults when there is no issueType', async () => {
+      const { bus } = mockEventBus();
+      const handler = new CreateIssueCommandHandler(mockPrisma, bus);
+
+      await handler.execute(
+        createTestCommand(CREATE_ISSUE, {
+          title: 'Driver phoned in a damaged pallet',
+          category: 'damage',
+          priority: 'high',
+        })
+      );
+
+      const data = mockTx.issue.create.mock.calls[0][0].data;
+      expect(data.signalScore).toBe(MANUAL_SIGNAL_SCORE);
+      expect(data.signalScore).toBeGreaterThan(NOISE_THRESHOLD);
+      expect(data.lastActivityAt).toBeInstanceOf(Date);
+      // 'high' maps to a 120-minute target.
+      const minutes = (data.slaDeadline.getTime() - data.lastActivityAt.getTime()) / 60_000;
+      expect(minutes).toBeCloseTo(120, 0);
+    });
+
+    it('derives the manual SLA deadline from priority', async () => {
+      const { bus } = mockEventBus();
+      const handler = new CreateIssueCommandHandler(mockPrisma, bus);
+
+      await handler.execute(
+        createTestCommand(CREATE_ISSUE, { title: 'Minor query', category: 'other', priority: 'low' })
+      );
+
+      const data = mockTx.issue.create.mock.calls[0][0].data;
+      const minutes = (data.slaDeadline.getTime() - data.lastActivityAt.getTime()) / 60_000;
+      expect(minutes).toBeCloseTo(480, 0);
+    });
+
+    /*
+     * The Issue Engine computes score and SLA from the registry and passes them
+     * explicitly. The manual defaults must never override those.
+     */
+    it('leaves engine-supplied triage values untouched', async () => {
+      const { bus } = mockEventBus();
+      const handler = new CreateIssueCommandHandler(mockPrisma, bus);
+      const engineDeadline = new Date('2026-01-01T12:00:00Z');
+
+      await handler.execute(
+        createTestCommand(CREATE_ISSUE, {
+          title: 'Temperature excursion',
+          category: 'compliance',
+          priority: 'critical',
+          issueType: 'shipment_temperature',
+          signalScore: 30,
+          slaDeadline: engineDeadline,
+        })
+      );
+
+      const data = mockTx.issue.create.mock.calls[0][0].data;
+      expect(data.signalScore).toBe(30);
+      expect(data.slaDeadline).toBe(engineDeadline);
     });
   });
 
@@ -243,6 +308,152 @@ describe('Issue Command Handlers', () => {
       expect(capaEvent!.payload).toEqual(
         expect.objectContaining({ needsCapa: true })
       );
+    });
+  });
+
+
+  /*
+   * Triage response metrics. These are stamped by the handler rather than sent
+   * by the caller, so they are only observable through the tx.issue.update call.
+   */
+  describe('UpdateIssueCommandHandler — triage metrics', () => {
+    const CREATED_AT = new Date('2026-01-01T10:00:00Z');
+
+    /** Build a `previous` issue for tx.issue.findUniqueOrThrow to return. */
+    const previous = (over: Record<string, unknown> = {}) => ({
+      ...mockIssue,
+      createdAt: CREATED_AT,
+      status: 'open',
+      assigneeId: null,
+      firstResponseAt: null,
+      slaDeadline: null,
+      slaBreach: false,
+      ...over,
+    });
+
+    const updateData = () => mockTx.issue.update.mock.calls[0][0].data;
+
+    it('records first response when the issue first moves off open', async () => {
+      const { bus } = mockEventBus();
+      mockTx.issue.findUniqueOrThrow.mockResolvedValueOnce(previous());
+      const handler = new UpdateIssueCommandHandler(mockPrisma, bus);
+
+      await handler.execute(
+        createTestCommand(UPDATE_ISSUE, { id: 'issue-1', data: { status: 'in_progress' } })
+      );
+
+      const d = updateData();
+      expect(d.firstResponseAt).toBeInstanceOf(Date);
+      expect(d.timeToFirstResponseMins).toBeGreaterThanOrEqual(0);
+    });
+
+    it('records first response on first assignment', async () => {
+      const { bus } = mockEventBus();
+      mockTx.issue.findUniqueOrThrow.mockResolvedValueOnce(previous());
+      const handler = new UpdateIssueCommandHandler(mockPrisma, bus);
+
+      await handler.execute(
+        createTestCommand(UPDATE_ISSUE, { id: 'issue-1', data: { assigneeId: 'user-2' } })
+      );
+
+      expect(updateData().firstResponseAt).toBeInstanceOf(Date);
+    });
+
+    /* Recorded once — a later transition must not restart the clock. */
+    it('does not overwrite an existing firstResponseAt', async () => {
+      const { bus } = mockEventBus();
+      const already = new Date('2026-01-01T10:05:00Z');
+      mockTx.issue.findUniqueOrThrow.mockResolvedValueOnce(
+        previous({ status: 'in_progress', firstResponseAt: already })
+      );
+      const handler = new UpdateIssueCommandHandler(mockPrisma, bus);
+
+      await handler.execute(
+        createTestCommand(UPDATE_ISSUE, { id: 'issue-1', data: { status: 'resolved' } })
+      );
+
+      expect(updateData().firstResponseAt).toBeUndefined();
+    });
+
+    it('does not count a no-op status write as a first response', async () => {
+      const { bus } = mockEventBus();
+      mockTx.issue.findUniqueOrThrow.mockResolvedValueOnce(previous({ status: 'open' }));
+      const handler = new UpdateIssueCommandHandler(mockPrisma, bus);
+
+      await handler.execute(
+        createTestCommand(UPDATE_ISSUE, { id: 'issue-1', data: { status: 'open' } })
+      );
+
+      expect(updateData().firstResponseAt).toBeUndefined();
+    });
+
+    it('stamps timeToResolutionMins when the issue settles', async () => {
+      const { bus } = mockEventBus();
+      mockTx.issue.findUniqueOrThrow.mockResolvedValueOnce(previous());
+      const handler = new UpdateIssueCommandHandler(mockPrisma, bus);
+
+      await handler.execute(
+        createTestCommand(UPDATE_ISSUE, { id: 'issue-1', data: { status: 'resolved' } })
+      );
+
+      expect(updateData().timeToResolutionMins).toBeGreaterThanOrEqual(0);
+    });
+
+    it('sets slaBreach when the issue settles past its deadline', async () => {
+      const { bus } = mockEventBus();
+      mockTx.issue.findUniqueOrThrow.mockResolvedValueOnce(
+        previous({ slaDeadline: new Date('2026-01-01T11:00:00Z') })
+      );
+      const handler = new UpdateIssueCommandHandler(mockPrisma, bus);
+
+      await handler.execute(
+        createTestCommand(UPDATE_ISSUE, { id: 'issue-1', data: { status: 'closed' } })
+      );
+
+      expect(updateData().slaBreach).toBe(true);
+    });
+
+    it('leaves slaBreach alone when the issue settles inside its deadline', async () => {
+      const { bus } = mockEventBus();
+      const future = new Date(Date.now() + 60 * 60_000);
+      mockTx.issue.findUniqueOrThrow.mockResolvedValueOnce(previous({ slaDeadline: future }));
+      const handler = new UpdateIssueCommandHandler(mockPrisma, bus);
+
+      await handler.execute(
+        createTestCommand(UPDATE_ISSUE, { id: 'issue-1', data: { status: 'resolved' } })
+      );
+
+      expect(updateData().slaBreach).toBeUndefined();
+    });
+
+    it('touches lastActivityAt on every update', async () => {
+      const { bus } = mockEventBus();
+      mockTx.issue.findUniqueOrThrow.mockResolvedValueOnce(previous());
+      const handler = new UpdateIssueCommandHandler(mockPrisma, bus);
+
+      await handler.execute(
+        createTestCommand(UPDATE_ISSUE, { id: 'issue-1', data: { priority: 'high' } })
+      );
+
+      expect(updateData().lastActivityAt).toBeInstanceOf(Date);
+    });
+
+    it('passes through engine-maintained signal scoring', async () => {
+      const { bus } = mockEventBus();
+      mockTx.issue.findUniqueOrThrow.mockResolvedValueOnce(previous());
+      const handler = new UpdateIssueCommandHandler(mockPrisma, bus);
+
+      await handler.execute(
+        createTestCommand(UPDATE_ISSUE, {
+          id: 'issue-1',
+          data: { signalScore: 75, signalCount: 3, isNoise: false, noiseReason: null },
+        })
+      );
+
+      const d = updateData();
+      expect(d.signalScore).toBe(75);
+      expect(d.signalCount).toBe(3);
+      expect(d.isNoise).toBe(false);
     });
   });
 

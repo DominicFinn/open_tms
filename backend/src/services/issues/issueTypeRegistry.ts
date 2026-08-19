@@ -225,3 +225,36 @@ export function slaDeadlineFor(type: IssueTypeDef, from: Date): Date | null {
   if (!type.slaMinutes) return null;
   return new Date(from.getTime() + type.slaMinutes * 60_000);
 }
+
+/* ── Manual issues ───────────────────────────────────────────────────── */
+
+/**
+ * Signal score stamped on a manually-raised issue.
+ *
+ * BUSINESS RULE: a person deliberately filed this, which is stronger evidence
+ * than any single detector reading — it sits above the highest base confidence
+ * in the registry (cutoff risk, 75) but below the corroboration ceiling, so a
+ * corroborated automatic issue can still outrank it. Comfortably above
+ * NOISE_THRESHOLD, so a human report is never auto-suppressed as noise.
+ */
+export const MANUAL_SIGNAL_SCORE = 80;
+
+/**
+ * Target time to resolution for a manual issue, by priority.
+ *
+ * BUSINESS RULE: manual issues have no Issue Type to inherit an SLA from, but
+ * excluding them from SLA tracking would let hand-raised work age invisibly.
+ * The bands mirror the registry's spread — 60 minutes for the safety-grade
+ * types up to 240 for ETA drift.
+ */
+const MANUAL_SLA_MINUTES: Record<IssuePriority, number> = {
+  critical: 60,
+  high: 120,
+  medium: 240,
+  low: 480,
+};
+
+export function manualSlaDeadline(priority: string, from: Date): Date {
+  const mins = MANUAL_SLA_MINUTES[(priority as IssuePriority)] ?? MANUAL_SLA_MINUTES.medium;
+  return new Date(from.getTime() + mins * 60_000);
+}

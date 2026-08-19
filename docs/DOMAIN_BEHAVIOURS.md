@@ -540,6 +540,28 @@ All of these are mirrored onto `IssueReadModel` by `IssueProjection` so the tria
 sort without joining back to `Issue`. `onIssueResolved` / `onIssueClosed` re-read the issue so the
 resolution metrics reach the read model.
 
+### Manually-raised issues
+
+Not every issue has a detector behind it. "Report issue" on the triage board
+(`frontend/src/vnext-design/triage/CreateIssueDialog.tsx`) posts to the shared
+`POST /api/v1/issues` endpoint, which dispatches the same `CREATE_ISSUE` command the engine uses. A
+manual issue is identified throughout triage by a **null `issueType`**.
+
+Because there is no Issue Type to inherit from, `CreateIssueCommandHandler` stamps the manual
+equivalents:
+
+| Field | Manual value | Why |
+|---|---|---|
+| `signalScore` | `MANUAL_SIGNAL_SCORE` (80) | A person filed it deliberately — stronger than any single detector reading, so it outranks every `baseConfidence` in the registry but stays under the corroboration ceiling of 95 |
+| `isNoise` | always false | 80 is well clear of the 40 noise threshold; a human report is never auto-suppressed |
+| `slaDeadline` | by priority — critical 60m, high 120m, medium 240m, low 480m | Otherwise hand-raised work ages invisibly, outside SLA health |
+| `latched` | false | Nothing to latch; it can be resolved and closed normally |
+| `lastActivityAt` | creation time | So it sorts sensibly in the working queue |
+
+The engine always passes `signalScore` and `slaDeadline` explicitly, so these defaults only ever
+apply to genuinely manual issues. The subject is optional and may be a **shipment, order or
+carrier** (`sourceEntityType` + `sourceEntityId`).
+
 **Batch actions** (`/api/v1/triage/batch/*`) fan out through the command bus, one `UPDATE_ISSUE`
 dispatch per issue, so each emits its own domain events. Ids are scoped to the org first; outcomes
 are reported per id rather than failing the whole batch.
