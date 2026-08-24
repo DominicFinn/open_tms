@@ -6,6 +6,7 @@
  */
 
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 import { randomUUID } from 'crypto';
 import { container, TOKENS } from '../di/index.js';
 import { ICommandBus } from '../commands/CommandBus.js';
@@ -20,10 +21,10 @@ import { COMPLETE_SOP_AUDIT } from '../commands/sopChecklists/CompleteSOPAuditCo
 export async function qualityCentreRoutes(server: FastifyInstance) {
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
 
-  const getOrgId = async () => {
-    const org = await server.prisma.organization.findFirst({ select: { id: true } });
-    return org?.id || 'default-org';
-  };
+  // Tenancy: org comes from the authenticated principal via the standard
+  // org-scope hook, never from organization.findFirst() (which silently
+  // picks the first org for every caller once a second org exists).
+  await registerOrgScope(server);
 
   // ─── Dashboard Stats ───────────────────────────────────────────────────────
 
@@ -42,8 +43,8 @@ export async function qualityCentreRoutes(server: FastifyInstance) {
         },
       },
     },
-  }, async (_req: FastifyRequest, _reply: FastifyReply) => {
-    const orgId = await getOrgId();
+  }, async (req: FastifyRequest, _reply: FastifyReply) => {
+    const orgId = req.orgId!;
     const now = new Date();
 
     // Issue stats
@@ -141,7 +142,7 @@ export async function qualityCentreRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, _reply: FastifyReply) => {
     const { period = '30d', category } = req.query as { period?: string; category?: string };
-    const orgId = await getOrgId();
+    const orgId = req.orgId!;
     const now = new Date();
 
     let startDate: Date;
@@ -210,7 +211,7 @@ export async function qualityCentreRoutes(server: FastifyInstance) {
       sortOrder = 'desc',
       limit = 50,
     } = req.query as { dimensionType?: string; sortBy?: string; sortOrder?: string; limit?: number };
-    const orgId = await getOrgId();
+    const orgId = req.orgId!;
 
     const where: any = { orgId };
     if (dimensionType) where.dimensionType = dimensionType;
@@ -232,8 +233,8 @@ export async function qualityCentreRoutes(server: FastifyInstance) {
       summary: 'Rebuild quality issue summaries',
       description: 'Rebuilds all QualityIssueSummary rows from scratch. Use after data migration or corrections.',
     },
-  }, async (_req: FastifyRequest, _reply: FastifyReply) => {
-    const orgId = await getOrgId();
+  }, async (req: FastifyRequest, _reply: FastifyReply) => {
+    const orgId = req.orgId!;
 
     // Import and invoke the projection rebuild
     const { QualityIssueSummaryProjection } = await import('../events/projections/QualityIssueSummaryProjection.js');
@@ -263,7 +264,7 @@ export async function qualityCentreRoutes(server: FastifyInstance) {
     const { capaReportId, status, followUpType } = req.query as {
       capaReportId?: string; status?: string; followUpType?: string;
     };
-    const orgId = await getOrgId();
+    const orgId = req.orgId!;
 
     const where: any = { orgId };
     if (capaReportId) where.capaReportId = capaReportId;
@@ -294,8 +295,8 @@ export async function qualityCentreRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const followUp = await server.prisma.cAPAFollowUp.findUnique({
-      where: { id },
+    const followUp = await server.prisma.cAPAFollowUp.findFirst({
+      where: { id, orgId: req.orgId! },
       include: {
         capaReport: { select: { reportNumber: true, title: true, status: true, issueId: true } },
       },
@@ -327,7 +328,7 @@ export async function qualityCentreRoutes(server: FastifyInstance) {
       },
     },
   }, async (req: FastifyRequest, _reply: FastifyReply) => {
-    const orgId = await getOrgId();
+    const orgId = req.orgId!;
     const body = req.body as any;
 
     const result = await commandBus.dispatch({
@@ -366,7 +367,7 @@ export async function qualityCentreRoutes(server: FastifyInstance) {
       },
     },
   }, async (req: FastifyRequest, _reply: FastifyReply) => {
-    const orgId = await getOrgId();
+    const orgId = req.orgId!;
     const { id } = req.params as { id: string };
     const body = req.body as any;
 
@@ -401,7 +402,7 @@ export async function qualityCentreRoutes(server: FastifyInstance) {
       },
     },
   }, async (req: FastifyRequest, _reply: FastifyReply) => {
-    const orgId = await getOrgId();
+    const orgId = req.orgId!;
     const { capaReportId, assigneeId, assigneeName } = req.body as any;
 
     const capa = await server.prisma.cAPAReport.findFirst({
@@ -456,7 +457,7 @@ export async function qualityCentreRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, _reply: FastifyReply) => {
     const { category, status } = req.query as { category?: string; status?: string };
-    const orgId = await getOrgId();
+    const orgId = req.orgId!;
 
     const where: any = { orgId };
     if (category) where.category = category;
@@ -487,8 +488,8 @@ export async function qualityCentreRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const checklist = await server.prisma.sOPChecklist.findUnique({
-      where: { id },
+    const checklist = await server.prisma.sOPChecklist.findFirst({
+      where: { id, orgId: req.orgId! },
       include: {
         items: { orderBy: { sortOrder: 'asc' } },
         audits: {
@@ -538,7 +539,7 @@ export async function qualityCentreRoutes(server: FastifyInstance) {
       },
     },
   }, async (req: FastifyRequest, _reply: FastifyReply) => {
-    const orgId = await getOrgId();
+    const orgId = req.orgId!;
     const body = req.body as any;
 
     const result = await commandBus.dispatch({
@@ -578,7 +579,7 @@ export async function qualityCentreRoutes(server: FastifyInstance) {
       },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const orgId = await getOrgId();
+    const orgId = req.orgId!;
     const { id } = req.params as { id: string };
     const body = req.body as any;
 
@@ -617,7 +618,7 @@ export async function qualityCentreRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, _reply: FastifyReply) => {
     const { checklistId, status } = req.query as { checklistId?: string; status?: string };
-    const orgId = await getOrgId();
+    const orgId = req.orgId!;
 
     const where: any = { orgId };
     if (checklistId) where.checklistId = checklistId;
@@ -647,8 +648,8 @@ export async function qualityCentreRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const audit = await server.prisma.sOPAudit.findUnique({
-      where: { id },
+    const audit = await server.prisma.sOPAudit.findFirst({
+      where: { id, orgId: req.orgId! },
       include: {
         checklist: { include: { items: { orderBy: { sortOrder: 'asc' } } } },
         responses: true,
@@ -676,7 +677,7 @@ export async function qualityCentreRoutes(server: FastifyInstance) {
       },
     },
   }, async (req: FastifyRequest, _reply: FastifyReply) => {
-    const orgId = await getOrgId();
+    const orgId = req.orgId!;
     const body = req.body as any;
 
     const result = await commandBus.dispatch({
@@ -726,7 +727,7 @@ export async function qualityCentreRoutes(server: FastifyInstance) {
       },
     },
   }, async (req: FastifyRequest, _reply: FastifyReply) => {
-    const orgId = await getOrgId();
+    const orgId = req.orgId!;
     const { id } = req.params as { id: string };
     const body = req.body as any;
 
@@ -752,8 +753,8 @@ export async function qualityCentreRoutes(server: FastifyInstance) {
       summary: 'Carrier quality scorecard',
       description: 'Returns quality metrics per carrier: issue counts, CAPA rates, resolution times.',
     },
-  }, async (_req: FastifyRequest, _reply: FastifyReply) => {
-    const orgId = await getOrgId();
+  }, async (req: FastifyRequest, _reply: FastifyReply) => {
+    const orgId = req.orgId!;
 
     const summaries = await server.prisma.qualityIssueSummary.findMany({
       where: { orgId, dimensionType: 'carrier' },
@@ -770,8 +771,8 @@ export async function qualityCentreRoutes(server: FastifyInstance) {
       summary: 'Lane quality analysis',
       description: 'Returns quality metrics per lane: issue frequency, common categories, problem severity.',
     },
-  }, async (_req: FastifyRequest, _reply: FastifyReply) => {
-    const orgId = await getOrgId();
+  }, async (req: FastifyRequest, _reply: FastifyReply) => {
+    const orgId = req.orgId!;
 
     const summaries = await server.prisma.qualityIssueSummary.findMany({
       where: { orgId, dimensionType: 'lane' },
@@ -788,8 +789,8 @@ export async function qualityCentreRoutes(server: FastifyInstance) {
       summary: 'CAPA effectiveness report',
       description: 'Returns CAPA reports with follow-up completion rates and effectiveness outcomes.',
     },
-  }, async (_req: FastifyRequest, _reply: FastifyReply) => {
-    const orgId = await getOrgId();
+  }, async (req: FastifyRequest, _reply: FastifyReply) => {
+    const orgId = req.orgId!;
 
     const capas = await server.prisma.cAPAReport.findMany({
       where: { orgId },
@@ -856,7 +857,7 @@ export async function qualityCentreRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { auditId } = req.params as { auditId: string };
-    const orgId = await getOrgId();
+    const orgId = req.orgId!;
 
     // Verify audit exists and belongs to org
     const audit = await server.prisma.sOPAudit.findFirst({
@@ -933,8 +934,16 @@ export async function qualityCentreRoutes(server: FastifyInstance) {
         properties: { auditId: { type: 'string' } },
       },
     },
-  }, async (req: FastifyRequest, _reply: FastifyReply) => {
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { auditId } = req.params as { auditId: string };
+    const audit = await server.prisma.sOPAudit.findFirst({
+      where: { id: auditId, orgId: req.orgId! },
+      select: { id: true },
+    });
+    if (!audit) {
+      reply.code(404);
+      return { data: null, error: 'Audit not found' };
+    }
     const attachments = await attachmentRepo.findByEntity('sop_audit', auditId);
     return { data: attachments, error: null };
   });
@@ -967,8 +976,8 @@ export async function qualityCentreRoutes(server: FastifyInstance) {
     const { responseId } = req.params as { auditId: string; responseId: string };
     const body = req.body as any;
 
-    const existing = await server.prisma.sOPAuditResponse.findUnique({
-      where: { id: responseId },
+    const existing = await server.prisma.sOPAuditResponse.findFirst({
+      where: { id: responseId, audit: { orgId: req.orgId! } },
     });
     if (!existing) {
       reply.code(404);
