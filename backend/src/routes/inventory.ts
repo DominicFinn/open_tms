@@ -6,10 +6,14 @@ import { ADJUST_INVENTORY } from '../commands/warehouse/AdjustInventoryCommand.j
 import { TRANSFER_INVENTORY } from '../commands/warehouse/TransferInventoryCommand.js';
 import { PrismaClient } from '@prisma/client';
 import crypto from 'crypto';
+import { registerWmsGuard } from '../auth/wmsGuard.js';
 
 const REASON_CODES = ['damage', 'expired', 'recount', 'scrap', 'found', 'return', 'other'] as const;
 
 export async function inventoryRoutes(server: FastifyInstance) {
+  // WMS permission guard (#134): wms:read for reads, wms:write for mutations
+  await registerWmsGuard(server);
+
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
   const prisma = container.resolve<PrismaClient>(TOKENS.PrismaClient);
 

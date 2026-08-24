@@ -4,8 +4,12 @@ import { PrismaClient } from '@prisma/client';
 import { container, TOKENS } from '../di/index.js';
 import { ShipmentCutoffMonitorService } from '../services/cutoff/ShipmentCutoffMonitorService.js';
 import type { PgBossEventBus } from '../events/PgBossEventBus.js';
+import { registerWmsGuard } from '../auth/wmsGuard.js';
 
 export async function cutoffMonitorRoutes(server: FastifyInstance) {
+  // WMS permission guard (#134): wms:read for reads, wms:write for mutations
+  await registerWmsGuard(server);
+
   const prisma = container.resolve<PrismaClient>(TOKENS.PrismaClient);
   const eventBus = container.resolve<PgBossEventBus>(TOKENS.IEventBus);
   const service = new ShipmentCutoffMonitorService(prisma, eventBus);

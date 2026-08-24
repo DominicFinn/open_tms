@@ -2,8 +2,12 @@ import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { container, TOKENS } from '../di/index.js';
 import { PrismaClient } from '@prisma/client';
+import { registerWmsGuard } from '../auth/wmsGuard.js';
 
 export async function cartonCatalogueRoutes(server: FastifyInstance) {
+  // WMS permission guard (#134): wms:read for reads, wms:write for mutations
+  await registerWmsGuard(server);
+
   const prisma = container.resolve<PrismaClient>(TOKENS.PrismaClient);
 
   // GET /api/v1/carton-catalogue?locationId=xxx&includeArchived=true

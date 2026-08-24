@@ -16,6 +16,7 @@ import { PrismaClient } from '@prisma/client';
 import crypto from 'crypto';
 import { resolveActorId as resolveActorIdShared } from '../auth/orgScope.js';
 import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
+import { registerWmsGuard } from '../auth/wmsGuard.js';
 
 const RETURN_REASONS = ['damaged', 'wrong_item', 'not_as_described', 'no_longer_needed', 'defective', 'ordered_extra', 'other'] as const;
 const DISPOSITIONS = ['restock', 'refurb', 'scrap', 'recycle', 'donate', 'rtv', 'customer_keeps'] as const;
@@ -52,6 +53,9 @@ const PARCEL_SCHEMA = {
 } as const;
 
 export async function rmaRoutes(server: FastifyInstance) {
+  // WMS permission guard (#134): wms:read for reads, wms:write for mutations
+  await registerWmsGuard(server);
+
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
   const prisma = container.resolve<PrismaClient>(TOKENS.PrismaClient);
   const binaryStorage = container.resolve<IBinaryStorageProvider>(TOKENS.IBinaryStorageProvider);

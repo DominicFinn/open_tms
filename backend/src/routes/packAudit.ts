@@ -4,8 +4,12 @@ import crypto from 'crypto';
 import { container, TOKENS } from '../di/index.js';
 import { ICommandBus } from '../commands/CommandBus.js';
 import { RECORD_PACK_AUDIT } from '../commands/packAudit/RecordPackAuditCommand.js';
+import { registerWmsGuard } from '../auth/wmsGuard.js';
 
 export async function packAuditRoutes(server: FastifyInstance) {
+  // WMS permission guard (#134): wms:read for reads, wms:write for mutations
+  await registerWmsGuard(server);
+
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
   const prisma = container.resolve<PrismaClient>(TOKENS.PrismaClient);
 

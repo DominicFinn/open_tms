@@ -2,8 +2,12 @@ import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { container, TOKENS } from '../di/index.js';
 import { ICartonizationService } from '../services/CartonizationService.js';
+import { registerWmsGuard } from '../auth/wmsGuard.js';
 
 export async function cartonizationRoutes(server: FastifyInstance) {
+  // WMS permission guard (#134): wms:read for reads, wms:write for mutations
+  await registerWmsGuard(server);
+
   const cartonService = container.resolve<ICartonizationService>(TOKENS.ICartonizationService);
 
   // POST /api/v1/cartonization/recommend

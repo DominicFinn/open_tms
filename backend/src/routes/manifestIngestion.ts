@@ -6,8 +6,12 @@ import { CREATE_RECEIVING_TASK } from '../commands/warehouse/CreateReceivingTask
 import { PrismaClient, Prisma } from '@prisma/client';
 import { parseCSV, computeHeaderChecksum, applyMapping, MANIFEST_FIELDS, ColumnMapping } from '../services/ManifestIngestionService.js';
 import crypto from 'crypto';
+import { registerWmsGuard } from '../auth/wmsGuard.js';
 
 export async function manifestIngestionRoutes(server: FastifyInstance) {
+  // WMS permission guard (#134): wms:read for reads, wms:write for mutations
+  await registerWmsGuard(server);
+
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
   const prisma = container.resolve<PrismaClient>(TOKENS.PrismaClient);
 

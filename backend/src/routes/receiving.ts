@@ -8,8 +8,12 @@ import { RECORD_RECEIVING_LINE } from '../commands/warehouse/RecordReceivingLine
 import { COMPLETE_RECEIVING } from '../commands/warehouse/CompleteReceivingCommand.js';
 import { PrismaClient } from '@prisma/client';
 import crypto from 'crypto';
+import { registerWmsGuard } from '../auth/wmsGuard.js';
 
 export async function receivingRoutes(server: FastifyInstance) {
+  // WMS permission guard (#134): wms:read for reads, wms:write for mutations
+  await registerWmsGuard(server);
+
   const repo = container.resolve<IReceivingRepository>(TOKENS.IReceivingRepository);
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
   const prisma = container.resolve<PrismaClient>(TOKENS.PrismaClient);

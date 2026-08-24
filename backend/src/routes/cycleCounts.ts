@@ -6,8 +6,12 @@ import { CREATE_CYCLE_COUNT } from '../commands/warehouse/CreateCycleCountComman
 import { RECORD_CYCLE_COUNT_LINE } from '../commands/warehouse/RecordCycleCountLineCommand.js';
 import { PrismaClient } from '@prisma/client';
 import crypto from 'crypto';
+import { registerWmsGuard } from '../auth/wmsGuard.js';
 
 export async function cycleCountRoutes(server: FastifyInstance) {
+  // WMS permission guard (#134): wms:read for reads, wms:write for mutations
+  await registerWmsGuard(server);
+
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
   const prisma = container.resolve<PrismaClient>(TOKENS.PrismaClient);
 

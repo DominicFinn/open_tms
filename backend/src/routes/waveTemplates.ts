@@ -6,8 +6,12 @@ import { CREATE_WAVE_TEMPLATE } from '../commands/warehouse/CreateWaveTemplateCo
 import { APPLY_WAVE_TEMPLATE } from '../commands/warehouse/ApplyWaveTemplateCommand.js';
 import { PrismaClient } from '@prisma/client';
 import crypto from 'crypto';
+import { registerWmsGuard } from '../auth/wmsGuard.js';
 
 export async function waveTemplateRoutes(server: FastifyInstance) {
+  // WMS permission guard (#134): wms:read for reads, wms:write for mutations
+  await registerWmsGuard(server);
+
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
   const prisma = container.resolve<PrismaClient>(TOKENS.PrismaClient);
 
