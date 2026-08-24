@@ -1,5 +1,12 @@
 # Open TMS Roadmap
 
+> **Reoriented August 2026: the FinnTMS / FinnWMS split.** Open TMS is becoming two products over
+> a shared core: **FinnTMS** (transport) and **FinnWMS** (warehouse), with a possible **FinnIMS**
+> (inventory) later. Architecture: modular monolith with build-time product composition, per
+> [ADR 0002](docs/adr/0002-modular-monolith-product-composition.md). The sequenced programme is
+> **Track 0** below, detailed in
+> [docs/roadmap/split-finntms-finnwms.md](docs/roadmap/split-finntms-finnwms.md).
+
 > **Reoriented April 2026.** Restructured around core TMS completeness - the features that make or break a credible demo. Brokerage elevated to first-class, reporting overhauled, customer portal prioritised. Speculative/advanced items (carrier risk/FMCSA, driver mobile app, digital BOL, sustainability/carbon, multi-modal ocean/air/rail, hub-and-spoke) removed or deferred to considerations.
 
 > **WMS added April 2026.** WMS now an active track (Track 7). v1 and v2 are on the roadmap following the gap-analysis review in `docs/gap-analysis/12-WMS-GAP-ANALYSIS.md`. v3+ (slotting, LMS, yard, WCS, etc.) remains in considerations.
@@ -8,118 +15,43 @@
 
 ## Completed Work
 
-### **Phase 1: Core Setup (Foundation)** DONE
-- **Lane Management** - Create/manage lanes (point-to-point, multi-stop), associate with locations and carriers
-- **Carrier Management** - Add carriers, store negotiated rates, service levels, link to lanes
-- **Carrier Archive / Delete Lifecycle** - Archive (reversible, deactivates portal logins) and admin soft-delete (tombstone, 404s everywhere, blocked when assigned to lanes); archived banner + management list via `?includeArchived`; portal users notified on archive/delete (auditable event, email stubbed); portal-user PII anonymised 1 year later via daily cron
-- **Customer Management** - Manage customers with contact/billing info, customer-specific preferences
-- **Shipment Creation (Basic)** - Create shipments with references, customer, origin, destination, status, templates
-- **Shipment Lifecycle States** - Canonical draft → ready → in_progress → complete lifecycle with a readiness gate (customer, route/lane, carrier, dates, reference, shipment-type fields), forward/step-back-only manual transitions, audit logging of who/when, an orthogonal exception flag, and bulk status updates on the list page
-- **Shipment Archive & Soft Delete** - Users archive shipments (recoverable, `shipments:write`); an archived shipment still opens with an "archived" banner and admins can unarchive it (`shipments:delete`). Admins soft-delete (`shipments:delete`, hidden everywhere, deleted shipments show a styled not-found screen, retained for audit). All actions audit-logged. _Future: an archived-shipments screen to browse/restore archived records._
-- **Shipment Event Timeline** - Read-only, platform-generated timeline on the shipment detail page. A projection materializes domain events (created, updated, status changed, carrier assigned, exception, delivered, archived/unarchived/deleted, leaves origin, enters destination, entered/exited waypoint) into filterable timeline entries. Filter by event type and date range. No manual/custom events.
-- **IoT Device Association** - Admin per-org IoT vendor on/off toggle (System Loco is vendor #1) at /settings/iot-vendors; when enabled, the shipment create/edit form shows an IoT Devices section to attach one or many devices (name + external ID). Devices create Device + active DeviceAssignment records so System Loco webhooks resolve to the shipment by device id. Disabling a vendor skips its webhooks. Shipment-level tracking.
-- **System Loco Webhook Ingestion** - Hardened device webhook pipeline: verify -> enqueue (pg-boss) -> 202; HMAC X-LocoAware-Signature verification (secret on the IoT vendor config) with API-key fallback; idempotent on the event id (no duplicate readings on redelivery); resolved location updates the shipment's live map/list position; enriched telemetry (pressure, location type/accuracy) on SensorReading + Telemetry tab. Local replay harness + integration doc (docs/SYSTEM_LOCO_INTEGRATION.md).
-- **Item/Line Items** - Model SKUs, quantities, weights, dimensions, CSV/Excel bulk import
-
-### **Phase 2: Orders & Ingestion** DONE
-- **Order Management** - CSV import, manual creation, auto-assignment to lanes, pending lane requests, special requirements (FTL/LTL, temp control, hazmat)
-- **Order Archive, Soft Delete & Auto-Archive** - Customers and operational users (`orders:write`) archive an order (recoverable, removed from active lists, captures pre-archive status for restore); admins (`orders:delete`) soft-delete (hidden everywhere, retained for audit) and unarchive (restores prior status). Delivered/cancelled orders are auto-archived after a retention window (default 30 days) by a daily pg-boss cron.
-- **Customer API** - REST API for programmatic order creation, API key auth, rate limiting, Swagger docs
-- **Order Status Lifecycle** - `pending → verified → assigned` (+ `issue`, `cancelled`, `archived`) on the order itself; a separate nullable `deliveryStatus` (`in_transit → delivered`, or `exception`) once assigned. Cancel is only valid pre-assignment; `issue` pairs with a real Triage issue row (verification failure or no matching lane). Geofencing, IoT triggers, audit trail, timeline API/UI.
-- **EDI Import (850)** - X12 850 parser, EDI partner config, file storage/dedup, preview, history, SFTP polling (edi-collector)
-- **Order to Shipment Workflow** - Pending queue, auto-match to lanes/carriers, combine/split orders
-- **Queue-Based Integration** - pg-boss queue engine, outbound carrier/tracking workers, inbound webhook worker, retry with backoff
-
-### **Phase 3: Platform Foundations** DONE
-- **User Management & Auth** - Accounts, SSO/OAuth (Google, Microsoft), roles & permissions, JWT sessions, user attribution
-- **Document Templates** - Auto-generate BOLs, shipping labels, customs forms (pdf-lib), Handlebars templates, daily ops report (Excel)
-- **Document Management** - S3-compatible storage (AWS S3, MinIO, Azure), IBinaryStorageProvider interface with DB fallback, file attachments on any entity, drag-and-drop upload, opaque UUID storage keys, 10-year retention
-- **Theming & White-labeling** - CSS custom properties, theme API, ThemeProvider context, logo upload, Admin app with AppSwitcher, email/document branding
-- **Custom Fields** - Configurable per-entity fields (7 types), versioned definitions, server-side validation, management UI
-- **Units of Measure** - System defaults + user overrides (temperature, distance, weight, dimensions), canonical metric storage with display conversion
-
-### **Phase 3b: Location & Auto-Tender** DONE
-- **Location Auto-Creation** - LocationResolutionService (name+city match or create), arrival criteria (geofence, WiFi, BLE), configurable default geofence radius
-- **Shipment Completion Criteria** - Auto-deliver on destination arrival, geofence-triggered
-- **Auto-Tender for Laneless Shipments** - Event-driven on shipment.created, broadcast tender to all active carriers
-- **Admin Settings** - Auto-tender toggle, default geofence radius
-
-### **Phase 4: Notifications, Tracking & Exceptions** DONE (partial)
-- **Emails & Notifications** - Pluggable email service (SMTP, SendGrid, SES), Handlebars templates, per-user/org preferences, event-triggered, pg-boss worker, in-app notification centre
-- **CQRS & Event-Driven Architecture** - 20+ command handlers, immutable DomainEventLog, pg-boss event bus with wildcards, read model projections (6 entities), event export API, /metrics endpoint, 59 tests, domain behaviours docs
-- **Triage Centre / Issue Management** - Full issue lifecycle (open to closed), kanban board (drag-and-drop), comments system, issue labels, snooze/close/reopen, CAPA workflows, PDF closure reports, agent driver contact, in-app notifications, entity search
-- **SLA Tracking & Breach Alerts** - Two-tier SLA policies (org + customer), 7 rule types, hybrid event+cron breach detection, auto-create issues on breach, SLA policy config UI, shipment detail SLA tab, kanban SLA badges, dashboard SLA health widget
-- **AI Auto-Triage** - Claude-powered triage agent, exception events to auto-create/escalate issues
-- **Triage Centre (dedicated app)** - Standalone `/triage` app: signal dashboard (volume, noise ratio, SLA health, recurring offenders), board with kanban + list views and batch actions, faceted search, QA spot check, performance reports. Signal confidence scoring per Issue Type with corroboration boost, noise suppression (latched safety types never suppressed), SLA deadlines and first-response/resolution metrics. Saved boards reuse `KanbanView`.
-- **Live Tracking** - Inbound GPS webhook, ShipmentEvent tracking, geofencing with auto-delivery, ShipmentReadModel with lat/lng
-- **ETA Monitoring** - Provider-agnostic routing (TomTom/HERE/Valhalla), adaptive polling, three delay severity levels, traffic-aware ETAs, pg-boss cron, API endpoints
-- **Carrier Tracking API Integrations** - ICarrierTrackingProvider interface, FedEx/UPS/DHL implementations, polling worker, webhook receiver, admin setup wizard
-- **Route Deviation Alerts** - Planned route per lane via Google Maps, corridor-based deviation detection, real-time alerts
-- **Exceptions** - Exception status with type classification, resolution workflow, event-driven notifications, ETA-based auto-detection
-
-### **Phase 6: Cold Chain** DONE (partial)
-- **Excursion Management** - IoT sensor pipeline, disposition lifecycle (monitoring to released/quarantined), auto-triage. Effective temperature/alert range derives from order temperatureControl defaults (no standalone profile entity)
-- **Regulatory Audit Trail** - Immutable temperature logging with SHA-256 integrity hashes (CFR 21 Part 11)
-- **Cold Chain Compliance Report** - Auto-generated PDF on shipment complete
-- **Device Calibration** - Certificate, expiry, accuracy tracking
-- **CAPA Reports** - Model and management UI
-- **Admin & Frontend** - CAPA reports page, auto-deliver shipment docs setting
-
-### **Phase 7: Financial & Commercial** DONE
-- **7A: Charges + Rating** - Charge model (revenue/cost), ShipmentFinancialSummary, CQRS commands, RatingService, ChargeService, financial tab on shipment detail
-- **7B: Quotes** - Quote model with revision tracking, create/accept/decline/revise commands, markup config, expiration cron, LTL rate endpoints
-- **7C: Customer Invoicing (AR)** - Invoice generation, approve/send/payment/void lifecycle, billing trigger on delivery, invoice projection, consolidation (per-shipment/weekly/monthly), overdue detection, VNext Finance app (15 pages)
-- **7D: Carrier Invoices (AP) + Freight Audit** - Three-way match (tender vs expected vs carrier invoice), auto-approve (2% tolerance), EDI 210 inbound, carrier payment batch scheduling
-- **7E: Queries, Disputes & Credit Notes** - Financial queries, auto-raise from cargo events, credit notes on resolution
-- **7F: LTL Enhancements + EDI 810** - Class-based LTL rating, weight breaks, deficit weight, FAK, density calc, re-weigh/re-class, consolidation billing, EDI 810 outbound
-- **Basic Reporting** - AR aging report (JSON + CSV), carrier spend summary, margin analysis by customer, CSV exports (invoice register, carrier invoice register, payment ledger, charge detail)
-
-### **Phase 8: Portals & Tendering** DONE (partial)
-- **Carrier Tendering** - Broadcast and waterfall strategies, TenderOffer/TenderBid models, configurable duration, full lifecycle (draft to confirmed), admin UI with bid comparison, 5-step creation wizard
-- **Carrier Portal** - CarrierUser auth (JWT), login, dashboard, tender view with bid form, bid/tender history with win rate, profile with password change
-- **Carrier User Management** - Admin UI for create/activate/deactivate/reset, password strength validation, account lockout
-- **Carrier Enhancements** - SCAC codes, contract rate fields on LaneCarrier
-- **EDI 204/990** - EDI 204 generation, EDI 990 parsing with auto bid creation
-
-### **Phase 8b: EDI Communication Hub** DONE (partial)
-- **EDI 214 (Shipment Status)** - Inbound parser (carrier status updates), outbound generator (customer status), status code mapping, auto-forward to customer trading partners, stop-level updates, 997 auto-generation, SFTP polling
-- **EDI 210 (Freight Invoice)** - Inbound parsing with auto three-way match
-- **EDI 810 (Invoice)** - Outbound customer invoice generation
-- **EDI 820 (Payment/Remittance)** - Inbound parser, auto-apply to invoices
-- **EDI 997 (Functional Acknowledgment)** - Auto-generation for inbound transactions
-- **Unified Trading Partner Model** - TradingPartner replacing separate EdiPartner/OutboundIntegration, TradingPartnerTransaction registry, EdiTransactionLog audit, SFTP+HTTP delivery engine, EdiRouterService, management UI
-
-### **Phase 9: Maps & Spatial** DONE (partial)
-- **Shipment Map View** - Full-page map at /map, OpenStreetMap/Google Maps, supercluster client-side clustering, entity type switching (shipments/orders/units), bbox-filtered GeoJSON API, status-coloured markers, location markers overlay, issue/SLA overlay, fullscreen mode, auto-refresh
-- **SLA Dashboard** - Control centre at /sla, compliance rate, at-risk/breach tables, auto-refresh, CSV export, SLA compliance reports
-- **Location Operations View** - Per-location dashboard (/locations/:id/ops), incoming/at-location/outgoing stats, dwell time, facility info, map integration, location-type SLA rules (dock_turnaround, sort_to_dispatch, facility_dwell)
-- **Map Provider** - OpenStreetMap default with Google Maps auto-fallback, admin settings for API key
-
-### **Phase 9b: Intelligence & AI** DONE
-- **Agent Decision Logging** - CQRS commands, domain events, AgentDecisionReadModel
-- **AI Triage Agent** - ILlmProvider interface, AnthropicLlmProvider, TriageAgentHandler (event-driven), context gathering, structured prompting, action execution, decision logging, deduplication
-- **Configurable Agent Prompts** - AgentConfig per-org, AgentConfigVersion (immutable prompt versioning), template variables, admin UI, auto-seed
-- **LLM Key Management** - Org-level config, masked key display, env var detection, token tracking, usage telemetry
-- **Automation Rule Engine** - ConditionEvaluator (10 operators), AutomationRuleHandler, unified condition format, promote from decisions, API with dry-run, frontend rule builder
-- **Skills System** - ISkill interface, SkillRegistry, 6 built-in skills (create_issue, escalate_issue, add_comment, contact_driver, send_email, call_webhook), TemplateResolver, SkillChainExecutor with branching, SkillConfig/SkillChain models, admin UI
-
-### **Phase 11: Warehouse Shipment App** DONE
-- **Warehouse Login & Auth** - Password + magic link/QR code login, audit log, account lockout
-- **Location Selection** - Location selector on first login, preferred location saved to profile
-- **Shipment List** - Today's work filtered by origin warehouse, filter chips, search, scan-to-filter, auto-refresh
-- **Shipment Detail** - Full details (route, customer, dates, carrier, driver, vehicle), orders/units, flag button with resolution workflow
-- **Launch Wizard** - 4-step flow: assign IoT trackers, add accessories, pair trackable units, review/launch
-- **IoT Device Integration** - Device lookup by barcode, assignment warnings, shipment/unit level assignment
-- **Archive** - Stale shipments (>2 days) on separate screen
-- **Barcode Scanning** - HID scanner support (Zebra/Honeywell), rapid keystroke detection, manual fallback, camera-based fallback (BarcodeDetector API)
-- **WiFi Monitoring** - Offline/online event logging, duration tracking
-- **Mobile-First Design** - Bottom nav, touch-optimized, keyboard-aware, CSS custom properties
+Shipped phases (1 through 11: core TMS, orders, platform, tracking, cold chain, financials,
+portals, EDI hub, maps, AI, warehouse app) have moved to the changelog at
+[docs/roadmap/completed.md](docs/roadmap/completed.md). New completions append there.
 
 ---
 
 ## Active Development - Core TMS Completeness
 
 The following tracks are ordered by impact on TMS credibility. Items within each track are sequenced by dependency.
+
+### **Track 0: FinnTMS / FinnWMS Split** (NEW - the split programme)
+
+Separating WMS from TMS into composable products over a shared core, per
+[ADR 0002](docs/adr/0002-modular-monolith-product-composition.md). Full sequenced detail with
+sizing in [docs/roadmap/split-finntms-finnwms.md](docs/roadmap/split-finntms-finnwms.md).
+Roughly 50-65 PR-sized chunks end to end; every PR leaves the product shippable.
+
+- **Phase 0: bug fixes worth doing regardless** 🔲 All live bugs today, split or no split:
+  warehouse-locations tenancy leak (missing `orgId` filter), pack-audit issues bypassing the issue
+  engine (never reach triage), WMS permission family (currently none exists), issue engine
+  hardcoded to `shipment` (blocks WMS issues reaching the Triage Centre), magic-link token
+  scoping, qualityCentre org-scope violation
+- **Phase 1: Draw the boundary in code** 🔲 Boundary lint + `module-boundaries` rule, Prisma
+  multi-file schema split, DI/route registration split, `WmsFulfilmentOrder` projection (first WMS
+  read model), load-plan port/event seam. Zero schema changes
+- **Phase 2: Data model untangling** 🔲 `Facility` (WMS off the conflated `Location`),
+  `HandlingUnit` (stock without a TMS order), polymorphic `Allocation` demand ref, carton cleanup,
+  `OrgWmsSettings` carve-out. All expand→contract
+- **Phase 3: App shell & entitlements** 🔲 `ENABLED_MODULES` composition, `OrgApp` entitlements
+  + `GET /api/v1/apps` (replaces the hardcoded frontend APPS array), `packages/contracts`,
+  warehouse PWA split, delete `auth-service/`, per-product frontend builds (`VITE_PRODUCT`)
+- **Phase 4: Standalone FinnWMS install** 🔲 WMS-only compose profile + seed + e2e smoke
+  (receive→putaway→pick→pack); Tier 1 = dormant TMS tables; Tier 2 schema profile only when a
+  customer demands it. Includes demand intake: 940/API/manifest must write WMS fulfilment orders
+  directly, since a WMS-only install has no TMS order pipeline
+- **Phase 5: Inventory separability (FinnIMS)** 🔲 Inventory as its own module, `Product` SKU
+  master; deliberately last
 
 ### **Track 1: Brokerage Operations** (NEW - Critical Gap)
 
@@ -171,7 +103,9 @@ The current reporting is financial-only (AR aging, carrier spend, margin analysi
   - Trend comparison vs prior period (% change with up/down arrows)
   - On-time delivery percentage (OTD%) 🔲
   - Cost per shipment / cost per unit / cost per mile trends 🔲
-- **Carrier Scorecards** 🔲
+- **Carrier Scorecards** 🔲 (single implementation: this item supersedes the Quality Centre
+  carrier scorecard page and the "carrier & lane performance scoring" entry under Intelligence &
+  AI; under the split this is tms-module work)
   - On-time pickup and delivery rates per carrier
   - Tender acceptance rate and response time
   - Damage/claim rate
@@ -232,10 +166,10 @@ Every TMS needs customer self-service. The carrier portal exists but there's not
   - Location auto-resolution from city/state
   - **Phase 1: Order Line Items & Cartonization** ✅ (Jun 2026)
     - Surfaced existing schema gaps: hazmat detail (UN/class/PG/PSN), unit of measure, customs (HS code, country of origin), temperature range (tempMinC/tempMaxC) added to OrderLineItem
-    - `ModeRulesService` drives required-ness from `(mode, flags)` — FTL/LTL/parcel × hazmat × international × temp-controlled. Same matrix evaluated client-side in the portal and re-validated server-side
-    - `OrderCartonizationService` derives density, suggested freight class (NMFC density table), rolled-up class, total weight, total cube, pallet positions, linear feet — read-only live preview at `POST /api/v1/order-line-items/cartonization/preview`
+    - `ModeRulesService` drives required-ness from `(mode, flags)`: FTL/LTL/parcel × hazmat × international × temp-controlled. Same matrix evaluated client-side in the portal and re-validated server-side
+    - `OrderCartonizationService` derives density, suggested freight class (NMFC density table), rolled-up class, total weight, total cube, pallet positions, linear feet, with a read-only live preview at `POST /api/v1/order-line-items/cartonization/preview`
     - `PalletType` generalised → `PackagingType` (org-scoped catalogue with `kind` discriminator: pallet | carton | crate | drum | roll | bag | tote | loose | custom). Admin CRUD at `/wms/packaging-types`
-    - Order-level packing summary auto-generates `TrackableUnit`s from `(packagingTypeId, unitCount, stackable)` — customers don't build pallets by hand
+    - Order-level packing summary auto-generates `TrackableUnit`s from `(packagingTypeId, unitCount, stackable)`, so customers don't build pallets by hand
   - **Phase 2: Manual handling-unit modelling** ✅ (Jun 2026)
     - `TrackableUnit` gains optional per-unit overrides: weight, L/W/H + units, stackable
     - 8 per-unit operations promoted from repository-direct to CQRS commands (`CreateTrackableUnit`, `UpdateTrackableUnit`, `DeleteTrackableUnit`, `GenerateBarcode`, `AddLineItemToUnit`, `MoveLineItemBetweenUnits`, `MergeUnits`, `SplitUnit`). Each emits a `trackable_unit.*` event
@@ -245,7 +179,7 @@ Every TMS needs customer self-service. The carrier portal exists but there's not
     - Customer portal mirrors the 8 admin endpoints under `/customer-portal/...` with customer-owns-order ownership checks
   - Order templates for recurring shipments 🔲
   - **Bulk order upload (CSV) through portal** ✅ (Jun 2026, Phase 3 of Order Line Items work)
-    - CSVImportService rewritten to dispatch `CREATE_ORDER` per order through the command bus (events fire, OrderProjection stays in sync — previously bypassed)
+    - CSVImportService rewritten to dispatch `CREATE_ORDER` per order through the command bus (events fire and OrderProjection stays in sync; previously this was bypassed)
     - Per-line `ModeRulesService` validation: each row checked against `(serviceLevel, hazmat, international, temp-controlled)`. International derived from origin/destination country mismatch
     - All-or-nothing per order: any failing line rejects that whole order with row-level errors carrying source CSV row numbers; sibling orders still go through
     - Customer-portal endpoint at `POST /api/v1/customer-portal/orders/import/csv` forces customerId to the authed customer (rejects CSVs that declare a different one)
@@ -254,7 +188,7 @@ Every TMS needs customer self-service. The carrier portal exists but there's not
     - Polished upload UI in both admin and portal: drag-drop, staged spinner (reading → validating → creating), per-row error display with order number tag, quick-links to created orders, template download
   - **Phase 4: Line item CQRS + weight consistency** ✅ (Jun 2026)
     - `CreateLineItemCommand` / `UpdateLineItemCommand` / `DeleteLineItemCommand` close the last CQRS gap in the order write surface. Each emits an `order_line_item.*` event consumed by `OrderProjection`
-    - New `PUT /api/v1/orders/:orderId/line-items/:itemId` lets operators (and customers, via portal mirror) edit any Phase 1 field on an existing line via sparse patch — no more delete-and-recreate
+    - New `PUT /api/v1/orders/:orderId/line-items/:itemId` lets operators (and customers, via portal mirror) edit any Phase 1 field on an existing line via sparse patch, replacing delete-and-recreate
     - The two legacy `/line-items` endpoints (POST add, DELETE remove) now dispatch commands instead of hitting the repo, so the read model and audit trail finally see them
     - Weight aggregation bug fix: `OrderReadModel.totalWeight` now correctly sums `weight × quantity` per line (line weights are per-piece, matching cartonization). Unit-weight overrides still take precedence. Regression test included
 - **Shareable Tracking Links** ✅
@@ -589,7 +523,11 @@ Bolt-on WMS extending the TMS's TrackableUnit/CargoScan/Location models. Full sp
   - Follow-up from WMS v1 navbar audit - LLM usage + agent prompt version history already live inline in `/settings/llm` and `/settings/agents` respectively (no gap)
   - Standalone apps (customer portal, carrier portal, warehouse mobile PWA) are intentionally outside the app switcher - not in scope for this item
 
-#### **v2 - Differentiation** (after v1 ships)
+#### **v2 - Differentiation** (gated on Track 0 Phase 2)
+
+WMS v1 has shipped. v2 waits for `Facility` and `HandlingUnit` to land (Track 0 Phase 2) so it
+isn't built on the conflated `Location`/`TrackableUnit` models and then re-pointed. Each item here
+becomes FinnWMS product work under the module boundary rules.
 
 - **3PL Billing Suite** 🔲
   - BillingContract per customer (storage/handling/VAS rate cards)
@@ -687,7 +625,7 @@ Items from the unified trading partner model that are not yet complete:
 ### **Intelligence & AI** (Continue)
 - Visual node builder for skill chains (drag-and-drop flowchart UI) 🔲
 - Self-improving prompts: track agent suggestions vs human overrides, auto-refine 🔲
-- Carrier & lane performance scoring (on-time %, damage %, excursion rate, route adherence) 🔲
+- Carrier & lane performance scoring: folded into Track 2 Carrier Scorecards (one implementation)
 - Advanced analytics: predictive dashboards, trend analysis, visual reports 🔲
 
 ### **Warehouse App** (Continue)
@@ -700,11 +638,11 @@ Items from the unified trading partner model that are not yet complete:
 
 ### **IoT Integration (System Loco)**
 - Device-shipment linking (associate IoT devices with shipments) ✅
-- Real-time data ingestion from System Loco IoT platform (temperature, pressure, shock, light, GPS) ✅ — hardened webhook pipeline (verify→enqueue→202, HMAC signature, idempotency), resolves to shipment, updates live position, enriched telemetry. See `docs/SYSTEM_LOCO_INTEGRATION.md`
+- Real-time data ingestion from System Loco IoT platform (temperature, pressure, shock, light, GPS) ✅ hardened webhook pipeline (verify→enqueue→202, HMAC signature, idempotency), resolves to shipment, updates live position, enriched telemetry. See `docs/SYSTEM_LOCO_INTEGRATION.md`
 - Sensor stream visualization on shipment detail pages ✅ (Telemetry tab)
 - IoT-based alerts and automation (excursion alerts, geofence+sensor triggers) 🔲
-- _Future:_ **Device Reports V2 feed** — continuous full-sensor snapshots + `timeSeries` arrays (denser telemetry than Device Events) 🔲
-- _Future:_ **System Loco Shipments feed** — consume their shipment lifecycle / `leavesOrigin` / `entersDestination` / `leavesRoute` events and map onto our lifecycle + timeline 🔲
+- _Future:_ **Device Reports V2 feed**: continuous full-sensor snapshots + `timeSeries` arrays (denser telemetry than Device Events) 🔲
+- _Future:_ **System Loco Shipments feed**: consume their shipment lifecycle / `leavesOrigin` / `entersDestination` / `leavesRoute` events and map onto our lifecycle + timeline 🔲
 
 ### **Miscellaneous**
 - Multi-language support (JSON language files, user-selectable, RTL support) 🔲
@@ -732,6 +670,11 @@ Base login (email + password, JWT, admin password reset, RequireAuth guard, glob
 
 ## Priorities
 
+0. **NOW:** **Track 0 Phase 0 (split pre-work)** - Bug fixes worth doing whether or not the split
+   proceeds: tenancy leak on warehouse locations, pack-audit issues never reaching triage, WMS
+   permissions, issue engine accepting WMS sources. Phases 1-2 (boundary + data untangling) follow
+   behind them, and the other tracks build on that work.
+   See [docs/roadmap/split-finntms-finnwms.md](docs/roadmap/split-finntms-finnwms.md).
 1. **NEXT (Immediate):** **Carrier API Integration** - Real-time shipment tracking through carrier APIs is table stakes. FedEx/UPS/DHL first-party tracking already exist (real, sandbox-ready). Expand with **multi-carrier aggregators** (EasyPost, AfterShip) so one integration pools dozens of carriers, then broaden. Poll + webhook, all sandbox/ngrok-testable. Landscape + selection in `docs/CARRIER_INTEGRATIONS.md`; testing in `docs/CARRIER_TESTING.md`.
 2. **Immediate:** **Track 1 (Brokerage)** - Broker entity model, margin tracking, quoting workflow. This unlocks the largest market segment currently unserved.
 3. **Immediate:** **Track 2 (Reporting)** - Executive dashboard, carrier scorecards, on-time %. The single biggest credibility gap in a demo.
@@ -739,9 +682,9 @@ Base login (email + password, JWT, admin password reset, RequireAuth guard, glob
 5. **Short term:** **Track 4 (Route Optimization)** - Multi-stop optimization, consolidation, mode selection. This is the ROI pitch.
 6. **Medium term:** **Track 5 (Cold Chain Completion)** - Regulatory audit trail UI, compliance reporting, cold chain dashboard. Finish what's started.
 7. **Medium term:** **Track 6 (Routes & Maps)** - Route lines on map, spatial indexing. Visual polish on existing infrastructure.
-8. **Medium-to-long term:** **Track 7 (WMS v1)** - Foundation WMS bolt-on. Unlocks true end-to-end coverage (order → warehouse → shipment → delivery) and is the single largest domain expansion on the roadmap. v1 sequence in `docs/WMS_SPECIFICATION.md`.
-9. **Long term:** **Track 7 (WMS v2)** - 3PL billing, VAS/kitting, parcel/rate-shop, serial tracking, appointment portal. Differentiation vs commercial tier-1.
-10. **Ongoing:** EDI hub completion, audit trail, SRE/observability, AI enhancements, warehouse app improvements.
+8. **Shipped:** **Track 7 (WMS v1)** is done (see the v1 gap close-out). End-to-end coverage of order → warehouse → shipment → delivery exists today.
+9. **After Track 0 Phase 2:** **Track 7 (WMS v2)** - 3PL billing, VAS/kitting, parcel/rate-shop, serial tracking, appointment portal. Becomes FinnWMS product work; gated so it builds on `Facility`/`HandlingUnit` rather than the conflated models.
+10. **Ongoing:** EDI hub completion, audit trail, SRE/observability, AI enhancements, warehouse app improvements. Internal auth improvements pair naturally with Track 0 Phase 0 (magic-link scoping) since both land in core.
 
 ---
 
