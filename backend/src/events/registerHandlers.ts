@@ -52,6 +52,7 @@ import { CarrierTrackingHandler } from './handlers/CarrierTrackingHandler.js';
 import { CarrierArchivalNotificationHandler } from './handlers/CarrierArchivalNotificationHandler.js';
 import { MarginAlertHandler } from './handlers/MarginAlertHandler.js';
 import { AutoReplenishmentHandler } from './handlers/AutoReplenishmentHandler.js';
+import { PackAuditIssueHandler } from './handlers/PackAuditIssueHandler.js';
 
 /** Read concurrency from env with a default */
 function envInt(key: string, fallback: number): number {
@@ -170,6 +171,12 @@ export async function registerEventHandlers(
   // WMS: auto-replenishment - reacts to pick line completion / inventory adjustments and fires CHECK_REPLENISHMENT
   if (commandBus) {
     handlers.push(new AutoReplenishmentHandler(prisma, commandBus));
+  }
+
+  // WMS: pack-audit variances raise triage issues through CREATE_ISSUE
+  // (after commit), then link the issue back onto PackAudit.issueId
+  if (commandBus) {
+    handlers.push(new PackAuditIssueHandler(prisma, commandBus));
   }
 
   // Deterministic Issue Engine: maps shipment-exception trigger/recovery events

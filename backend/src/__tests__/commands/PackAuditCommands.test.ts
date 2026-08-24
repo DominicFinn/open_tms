@@ -56,32 +56,36 @@ describe('RecordPackAuditCommand', () => {
     expect(result.events[0].type).toBe(EVENT_TYPES.PACK_AUDIT_RECORDED);
   });
 
-  it('returns verdict "warning" and creates an issue when variance exceeds tolerance but within 2x', async () => {
+  it('returns verdict "warning" and emits an enriched variance event, never a direct issue write', async () => {
     const tx = makeTx();
     const { bus } = mockEventBus();
     const handler = new RecordPackAuditCommandHandler(makePrisma(tx), bus);
 
     // Expected = 1200g, actual 1400g = +16.7% → 10 < 16.7 < 20 → warning
     const result = await handler.execute(
-      createTestCommand(RECORD_PACK_AUDIT, { packTaskId: 'pack-1', actualWeightGrams: 1400 }),
+      createTestCommand(RECORD_PACK_AUDIT, { packTaskId: 'pack-1', actualWeightGrams: 1400, notes: 'box felt heavy' }),
     );
 
     expect(result.success).toBe(true);
     expect(result.data?.verdict).toBe('warning');
-    expect(result.data?.issueId).toBe('issue-1');
-    expect(tx.issue.create).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({
-        priority: 'medium',
-        category: 'quality',
-        sourceEntityType: 'pack_task',
-        sourceEntityId: 'pack-1',
-      }),
-    }));
+    // Issue creation moved after commit (PackAuditIssueHandler via CREATE_ISSUE):
+    // a direct write here bypassed the issue pipeline, so pack-audit issues
+    // never reached IssueReadModel or the triage board.
+    expect(result.data?.issueId).toBeNull();
+    expect(tx.issue.create).not.toHaveBeenCalled();
     const varianceEvent = result.events.find(e => e.type === EVENT_TYPES.PACK_AUDIT_VARIANCE_DETECTED);
     expect(varianceEvent).toBeDefined();
+    expect(varianceEvent!.payload).toEqual(expect.objectContaining({
+      packTaskId: 'pack-1',
+      verdict: 'warning',
+      expectedWeightGrams: 1200,
+      actualWeightGrams: 1400,
+      tolerance: 10,
+      notes: 'box felt heavy',
+    }));
   });
 
-  it('returns verdict "fail" and creates a high-priority issue beyond 2x tolerance', async () => {
+  it('returns verdict "fail" and emits the variance event, without a direct issue write', async () => {
     const tx = makeTx();
     const { bus } = mockEventBus();
     const handler = new RecordPackAuditCommandHandler(makePrisma(tx), bus);
@@ -93,9 +97,9 @@ describe('RecordPackAuditCommand', () => {
 
     expect(result.success).toBe(true);
     expect(result.data?.verdict).toBe('fail');
-    expect(tx.issue.create).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ priority: 'high' }),
-    }));
+    expect(tx.issue.create).not.toHaveBeenCalled();
+    const varianceEvent = result.events.find(e => e.type === EVENT_TYPES.PACK_AUDIT_VARIANCE_DETECTED);
+    expect(varianceEvent!.payload).toEqual(expect.objectContaining({ verdict: 'fail' }));
   });
 
   it('handles negative variance (lighter than expected) symmetrically', async () => {
