@@ -2,8 +2,12 @@ import { FastifyInstance, FastifyRequest } from 'fastify';
 import { PrismaClient } from '@prisma/client';
 import { container, TOKENS } from '../di/index.js';
 import { WarehouseOperationsDashboardService } from '../services/warehouse/WarehouseOperationsDashboardService.js';
+import { registerWmsGuard } from '../auth/wmsGuard.js';
 
 export async function warehouseOperationsDashboardRoutes(server: FastifyInstance) {
+  // WMS permission guard (#134): wms:read for reads, wms:write for mutations
+  await registerWmsGuard(server);
+
   const prisma = container.resolve<PrismaClient>(TOKENS.PrismaClient);
   const service = new WarehouseOperationsDashboardService(prisma);
 

@@ -8,8 +8,12 @@ import { CREATE_STAGING_ASSIGNMENT } from '../commands/warehouse/CreateStagingAs
 import { COMPLETE_LOADING } from '../commands/warehouse/CompleteLoadingCommand.js';
 import { PrismaClient } from '@prisma/client';
 import crypto from 'crypto';
+import { registerWmsGuard } from '../auth/wmsGuard.js';
 
 export async function packingRoutes(server: FastifyInstance) {
+  // WMS permission guard (#134): wms:read for reads, wms:write for mutations
+  await registerWmsGuard(server);
+
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
   const prisma = container.resolve<PrismaClient>(TOKENS.PrismaClient);
 

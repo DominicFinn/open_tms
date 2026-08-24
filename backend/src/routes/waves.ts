@@ -7,8 +7,12 @@ import { RELEASE_WAVE } from '../commands/warehouse/ReleaseWaveCommand.js';
 import { COMPLETE_PICK_LINE } from '../commands/warehouse/CompletePickLineCommand.js';
 import { PrismaClient } from '@prisma/client';
 import crypto from 'crypto';
+import { registerWmsGuard } from '../auth/wmsGuard.js';
 
 export async function waveRoutes(server: FastifyInstance) {
+  // WMS permission guard (#134): wms:read for reads, wms:write for mutations
+  await registerWmsGuard(server);
+
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
   const prisma = container.resolve<PrismaClient>(TOKENS.PrismaClient);
 

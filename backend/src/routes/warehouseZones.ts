@@ -9,12 +9,16 @@ import { CREATE_WAREHOUSE_BIN } from '../commands/warehouse/CreateWarehouseBinCo
 import { UPDATE_WAREHOUSE_BIN } from '../commands/warehouse/UpdateWarehouseBinCommand.js';
 import { BULK_CREATE_BINS } from '../commands/warehouse/BulkCreateBinsCommand.js';
 import crypto from 'crypto';
+import { registerWmsGuard } from '../auth/wmsGuard.js';
 
 const ZONE_TYPES = ['receiving', 'bulk_storage', 'pick_face', 'staging', 'packing', 'shipping_dock', 'quarantine', 'returns', 'cross_dock'] as const;
 const BIN_TYPES = ['pallet', 'shelf', 'floor', 'dock_door', 'staging', 'pack_station'] as const;
 const TEMP_ZONES = ['ambient', 'refrigerated', 'frozen'] as const;
 
 export async function warehouseZoneRoutes(server: FastifyInstance) {
+  // WMS permission guard (#134): wms:read for reads, wms:write for mutations
+  await registerWmsGuard(server);
+
   const repo = container.resolve<IWarehouseZoneRepository>(TOKENS.IWarehouseZoneRepository);
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
 
