@@ -84,3 +84,7 @@ deploy-personal.sh
 
 resources/
 marketing/
+# Local build experiments
+frontend/dist-new/
+frontend/dist-old/
+fixvscode.sh

@@ -32,7 +32,7 @@ Separating WMS from TMS into composable products over a shared core, per
 sizing in [docs/roadmap/split-finntms-finnwms.md](docs/roadmap/split-finntms-finnwms.md).
 Roughly 50-65 PR-sized chunks end to end; every PR leaves the product shippable.
 
-- **Phase 0: bug fixes worth doing regardless** 🔲 All live bugs today, split or no split:
+- **Phase 0: bug fixes worth doing regardless** ✅ (#130-#135, #142; merged Aug 2026) All were live bugs:
   warehouse-locations tenancy leak (missing `orgId` filter), pack-audit issues bypassing the issue
   engine (never reach triage), WMS permission family (currently none exists), issue engine
   hardcoded to `shipment` (blocks WMS issues reaching the Triage Centre), magic-link token

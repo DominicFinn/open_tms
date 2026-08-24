@@ -16,9 +16,9 @@ expand then contract. Sizing: 1 chunk = one focused PR (one GitHub issue, one wo
 - Clean seams already exist: a contiguous WMS schema block, ~55 WMS event types with zero
   cross-domain subscribers, and soft string ids across most of the seam.
 
-## Phase 0: pay now regardless (~8-10 chunks)
+## Phase 0: pay now regardless ✅ (shipped Aug 2026: #130, #131, #132, #133, #134, #135, plus #142 roles UI found along the way; #137 PWA token bug filed as follow-up)
 
-These are live bugs. Do them even if the split were cancelled.
+These were live bugs. Done ahead of any split work.
 
 | Item | Detail | Size |
 |---|---|---|
