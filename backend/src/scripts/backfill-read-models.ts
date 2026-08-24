@@ -70,7 +70,7 @@ async function backfillOrders(orgId: string): Promise<number> {
         hazmat: order.requiresHazmat || false,
         trackableUnitCount: order.trackableUnits.length,
         lineItemCount: order.lineItems.length,
-        totalWeight: totalWeight > 0 ? totalWeight : null,
+        totalWeight,
         requestedDeliveryDate: order.requestedDeliveryDate,
         deliveredAt: order.deliveredAt,
         exceptionType: order.exceptionType,
@@ -283,36 +283,83 @@ async function backfillLanes(orgId: string): Promise<number> {
   return count;
 }
 
-async function backfillIssues(orgId: string): Promise<number> {
-  const issues = await prisma.issue.findMany();
+/**
+ * Rebuild IssueReadModel from Issue.
+ *
+ * Every column the read model carries must be written here, not just the ones
+ * the projection happens to touch on create — the triage board, dashboard and
+ * reports filter and sort on the read model alone, so a column the backfill
+ * skips is a column that silently reads as its schema default after a rebuild.
+ *
+ * Labels and commentCount are derived rather than copied: they live in
+ * IssueLabelAssignment and Comment, and the projection maintains them
+ * incrementally, so a rebuild has to recompute them from source.
+ */
+async function backfillIssues(): Promise<number> {
+  const issues = await prisma.issue.findMany({
+    include: { labelAssignments: { include: { label: true } } },
+  });
+
+  // One grouped count rather than a per-issue query.
+  const commentCounts = await prisma.comment.groupBy({
+    by: ['entityId'],
+    where: { entityType: 'issue', deletedAt: null },
+    _count: { _all: true },
+  });
+  const countByIssueId = new Map(commentCounts.map(c => [c.entityId, c._count._all]));
 
   let count = 0;
   for (const issue of issues) {
+    const labels = issue.labelAssignments.map(a => ({
+      id: a.label.id,
+      name: a.label.name,
+      color: a.label.color,
+    }));
+
+    const fields = {
+      // Tenancy comes from the row, not from a single resolved org — this
+      // script must stay correct once a second Organization exists.
+      orgId: issue.orgId,
+      title: issue.title,
+      description: issue.description,
+      status: issue.status,
+      priority: issue.priority,
+      category: issue.category,
+      issueType: issue.issueType,
+      latched: issue.latched,
+      sourceEntityType: issue.sourceEntityType,
+      sourceEntityId: issue.sourceEntityId,
+      sourceEventId: issue.sourceEventId,
+      assigneeId: issue.assigneeId,
+      assigneeName: issue.assigneeName,
+      escalatedTo: issue.escalatedTo,
+      escalatedAt: issue.escalatedAt,
+      resolvedAt: issue.resolvedAt,
+      resolution: issue.resolution,
+      snoozedUntil: issue.snoozedUntil,
+      snoozedBy: issue.snoozedBy,
+      needsCapa: issue.needsCapa,
+      closedAt: issue.closedAt,
+      labels,
+      commentCount: countByIssueId.get(issue.id) ?? 0,
+      // Triage: scoring, noise, SLA + response metrics.
+      signalScore: issue.signalScore,
+      signalCount: issue.signalCount,
+      isNoise: issue.isNoise,
+      noiseReason: issue.noiseReason,
+      slaDeadline: issue.slaDeadline,
+      slaBreach: issue.slaBreach,
+      firstResponseAt: issue.firstResponseAt,
+      timeToFirstResponseMins: issue.timeToFirstResponseMins,
+      timeToResolutionMins: issue.timeToResolutionMins,
+      lastActivityAt: issue.lastActivityAt,
+      updatedAt: issue.updatedAt,
+    };
+
     await prisma.issueReadModel.upsert({
       where: { id: issue.id },
-      create: {
-        id: issue.id,
-        orgId: issue.orgId,
-        title: issue.title,
-        status: issue.status,
-        priority: issue.priority,
-        category: issue.category,
-        sourceEntityType: issue.sourceEntityType,
-        sourceEntityId: issue.sourceEntityId,
-        assigneeName: issue.assigneeName,
-        escalatedTo: issue.escalatedTo,
-        resolvedAt: issue.resolvedAt,
-        createdAt: issue.createdAt,
-        updatedAt: issue.updatedAt,
-      },
-      update: {
-        status: issue.status,
-        priority: issue.priority,
-        assigneeName: issue.assigneeName,
-        escalatedTo: issue.escalatedTo,
-        resolvedAt: issue.resolvedAt,
-        updatedAt: issue.updatedAt,
-      },
+      create: { id: issue.id, ...fields, createdAt: issue.createdAt },
+      update: fields,
     });
     count++;
   }
@@ -382,7 +429,7 @@ async function main() {
   const laneCount = await backfillLanes(orgId);
   console.log(`[Backfill] ${laneCount} lanes`);
 
-  const issueCount = await backfillIssues(orgId);
+  const issueCount = await backfillIssues();
   console.log(`[Backfill] ${issueCount} issues`);
 
   const agentDecisionCount = await backfillAgentDecisions();

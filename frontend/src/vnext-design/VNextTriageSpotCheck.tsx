@@ -140,7 +140,7 @@ export default function VNextTriageSpotCheck() {
                       type="button"
                       aria-expanded={open}
                       onClick={() => setExpanded(open ? null : i.id)}
-                      className="flex w-full cursor-pointer items-center gap-2.5 border-none bg-transparent p-3 text-left text-foreground hover:bg-accent"
+                      className="flex w-full cursor-pointer items-center gap-2.5 border-none bg-transparent p-3 text-left text-foreground hover:bg-primary/10"
                     >
                       {open
                         ? <ChevronDown className="h-4 w-4" aria-hidden="true" />

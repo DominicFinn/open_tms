@@ -10,6 +10,7 @@ import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { Command } from '../types.js';
+import { MANUAL_SIGNAL_SCORE, manualSlaDeadline } from '../../services/issues/issueTypeRegistry.js';
 
 export interface CreateIssuePayload {
   title: string;
@@ -48,10 +49,25 @@ export class CreateIssueCommandHandler extends BaseCommandHandler<CreateIssuePay
     tx: TransactionClient,
     emit: EmitFn
   ): Promise<{ id: string; title: string }> {
+    const p = command.payload;
+
+    /*
+     * BUSINESS RULE: a manually-raised issue (no `issueType`) has no Issue Type
+     * to inherit triage defaults from, so it would otherwise land with the
+     * schema's neutral score and no SLA deadline — invisible to SLA health and
+     * mid-pack in signal ranking. Stamp the manual equivalents instead. The
+     * Issue Engine always passes these explicitly, so its values win.
+     */
+    const isManual = !p.issueType;
+    const now = new Date();
+
     const issue = await tx.issue.create({
       data: {
         orgId: command.orgId,
-        ...command.payload,
+        ...p,
+        signalScore: p.signalScore ?? (isManual ? MANUAL_SIGNAL_SCORE : undefined),
+        slaDeadline: p.slaDeadline ?? (isManual ? manualSlaDeadline(p.priority ?? 'medium', now) : undefined),
+        lastActivityAt: p.lastActivityAt ?? (isManual ? now : undefined),
       },
     });
 

@@ -301,3 +301,37 @@ export const STATUS_LABEL: Record<string, string> = {
 };
 
 export const BOARD_COLUMNS = ['open', 'in_progress', 'resolved', 'closed'] as const;
+
+/* ── Manual issue creation ───────────────────────────────────────────── */
+
+export interface CreateIssueInput {
+  title: string;
+  description?: string;
+  priority: string;
+  category: string;
+  sourceEntityType?: string;
+  sourceEntityId?: string;
+  assigneeId?: string;
+  assigneeName?: string;
+}
+
+/**
+ * Raise an issue by hand.
+ *
+ * Posts to the shared `/api/v1/issues` create endpoint rather than a triage
+ * one — the command is the same, and a manually-raised issue is just an issue
+ * with a null `issueType`. The triage-specific defaults (signal score, SLA)
+ * are stamped server-side by the command handler, not sent from here.
+ */
+export async function createIssue(input: CreateIssueInput): Promise<{ id: string; title: string }> {
+  const res = await fetch(`${API_URL}/api/v1/issues`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  const json = await res.json().catch(() => null);
+  if (!res.ok || json?.error) {
+    throw new TriageApiError(json?.error || `Request failed (${res.status})`);
+  }
+  return json.data as { id: string; title: string };
+}

@@ -17,7 +17,6 @@ import VNextDashboard from './vnext-design/VNextDashboard';
 import VNextShipments from './vnext-design/VNextShipments';
 import VNextShipmentDetail from './vnext-design/VNextShipmentDetail';
 import VNextOrders from './vnext-design/VNextOrders';
-import VNextIssueKanban from './vnext-design/VNextIssueKanban';
 import VNextIssueDetail from './vnext-design/VNextIssueDetail';
 import VNextTriageDashboard from './vnext-design/VNextTriageDashboard';
 import VNextTriageBoard from './vnext-design/VNextTriageBoard';

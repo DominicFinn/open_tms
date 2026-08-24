@@ -8,6 +8,11 @@ const mockIssue = {
   sourceEntityType: 'shipment', sourceEntityId: 'ship-1',
   assigneeName: null, escalatedTo: null, resolvedAt: null,
   createdAt: new Date(), updatedAt: new Date(),
+  // Triage columns mirrored onto the read model by triageFields().
+  signalScore: 70, signalCount: 2, isNoise: false, noiseReason: null,
+  slaDeadline: new Date('2026-01-01T12:00:00Z'), slaBreach: false,
+  firstResponseAt: null, timeToFirstResponseMins: null,
+  timeToResolutionMins: null, lastActivityAt: new Date('2026-01-01T10:30:00Z'),
 };
 
 const mockPrisma = {
@@ -256,5 +261,106 @@ describe('IssueProjection', () => {
     await projection.handle(event);
 
     expect(mockPrisma.issueReadModel.update).not.toHaveBeenCalled();
+  });
+
+  /*
+   * The triage board, dashboard and reports all filter and sort on these
+   * columns, so they must reach the read model rather than being joined back
+   * to Issue per row.
+   */
+  describe('triage field mirroring', () => {
+    it('mirrors triage fields onto the read model on ISSUE_CREATED', async () => {
+      const event = createTestEvent(
+        EVENT_TYPES.ISSUE_CREATED, 'issue', 'issue-1', { title: 'Shipment delayed' }
+      );
+
+      await projection.handle(event);
+
+      expect(mockPrisma.issueReadModel.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({
+            signalScore: 70,
+            signalCount: 2,
+            isNoise: false,
+            slaDeadline: mockIssue.slaDeadline,
+            slaBreach: false,
+          }),
+        })
+      );
+    });
+
+    it('mirrors triage fields on the upsert update branch too', async () => {
+      const event = createTestEvent(
+        EVENT_TYPES.ISSUE_CREATED, 'issue', 'issue-1', { title: 'Shipment delayed' }
+      );
+
+      await projection.handle(event);
+
+      expect(mockPrisma.issueReadModel.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          update: expect.objectContaining({ signalScore: 70, signalCount: 2 }),
+        })
+      );
+    });
+
+    /*
+     * Resolution stamps timeToResolutionMins and the SLA verdict onto Issue, so
+     * the projection re-reads rather than trusting the event payload.
+     */
+    it('re-reads the issue to carry resolution metrics on ISSUE_RESOLVED', async () => {
+      mockPrisma.issue.findUnique.mockResolvedValueOnce({
+        ...mockIssue,
+        status: 'resolved',
+        resolvedAt: new Date('2026-01-01T11:30:00Z'),
+        timeToResolutionMins: 90,
+        slaBreach: true,
+      });
+
+      await projection.handle(
+        createTestEvent(EVENT_TYPES.ISSUE_RESOLVED, 'issue', 'issue-1', {})
+      );
+
+      expect(mockPrisma.issueReadModel.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'issue-1' },
+          data: expect.objectContaining({
+            status: 'resolved',
+            timeToResolutionMins: 90,
+            slaBreach: true,
+          }),
+        })
+      );
+    });
+
+    it('carries resolution metrics on ISSUE_CLOSED', async () => {
+      mockPrisma.issue.findUnique.mockResolvedValueOnce({
+        ...mockIssue, timeToResolutionMins: 45, slaBreach: false,
+      });
+
+      await projection.handle(
+        createTestEvent(EVENT_TYPES.ISSUE_CLOSED, 'issue', 'issue-1', {
+          closedAt: '2026-01-01T11:00:00Z',
+        })
+      );
+
+      expect(mockPrisma.issueReadModel.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ status: 'closed', timeToResolutionMins: 45 }),
+        })
+      );
+    });
+
+    /* The read model update must still land even if the Issue row has gone. */
+    it('still updates status when the issue row is missing on resolve', async () => {
+      mockPrisma.issue.findUnique.mockResolvedValueOnce(null);
+
+      await projection.handle(
+        createTestEvent(EVENT_TYPES.ISSUE_RESOLVED, 'issue', 'issue-1', {})
+      );
+
+      expect(mockPrisma.issueReadModel.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ status: 'resolved' }) })
+      );
+    });
   });
 });
