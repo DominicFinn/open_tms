@@ -33,7 +33,7 @@ paths:
 | Admin app | `authenticateJWT` | `registerOrgScope(server)` |
 | Customer portal | `authenticateCustomerJWT` + `req.customerUser` | `attachOrgScopeFromCustomerUserHook(server.prisma)` — walks `customerUser.customerId → Customer.orgId` |
 | Carrier portal | `authenticateCarrierJWT` + `req.carrierUser` | `attachOrgScopeFromCarrierUserHook(server.prisma)` — walks `carrierUser.carrierId → Carrier.orgId` |
-| Warehouse PWA | `authenticateJWT` (same JWT shape as admin login) | `registerOrgScope(server)` |
+| Warehouse PWA | `authenticateJWT` (same JWT shape as admin login, plus `scope: 'warehouse'` which restricts the token to warehouse/WMS task routes) | `registerOrgScope(server)` |
 | EDI inbound | mixed authed admin + unauthed webhook | `await registerOrgScopeForEdi(server)` |
 
 **Warehouse PWA:** the magic-link validate and password login endpoints both return a session JWT

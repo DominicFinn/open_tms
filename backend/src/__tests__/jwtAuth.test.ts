@@ -10,10 +10,12 @@ function makeToken(payload: Record<string, any>, secret = JWT_SECRET): string {
   return `${header}.${body}.${signature}`;
 }
 
-function mockReq(authHeader?: string): any {
+function mockReq(authHeader?: string, method = 'GET', url = '/api/v1/shipments'): any {
   return {
     headers: authHeader ? { authorization: authHeader } : {},
     user: undefined,
+    method,
+    url,
   };
 }
 
@@ -91,6 +93,65 @@ describe('jwtAuth', () => {
       await authenticateJWT(req, reply);
 
       expect(reply.code).toHaveBeenCalledWith(401);
+    });
+  });
+
+  describe('authenticateJWT warehouse scope', () => {
+    const scopedPayload = {
+      sub: 'op-1',
+      email: 'op@example.com',
+      roles: ['warehouse'],
+      permissions: ['wms:*', 'shipments:read', 'shipments:write'],
+      scope: 'warehouse',
+      exp: Math.floor(Date.now() / 1000) + 3600,
+      iss: 'open-tms-auth',
+    };
+
+    it.each([
+      ['GET', '/api/v1/warehouse/shipments'],
+      ['POST', '/api/v1/warehouse/shipments/abc/launch'],
+      ['PUT', '/api/v1/pick-lines/pl-1/complete'],
+      ['POST', '/api/v1/pack-audits'],
+      ['GET', '/api/v1/receiving/tasks'],
+      ['GET', '/api/v1/rmas/rma-1'],
+      ['GET', '/api/v1/carriers'],
+      ['GET', '/api/v1/customers'],
+    ])('allows a scoped session on %s %s', async (method, url) => {
+      const req = mockReq(`Bearer ${makeToken(scopedPayload)}`, method, url);
+      const reply = mockReply();
+
+      await authenticateJWT(req, reply);
+
+      expect(req.user).toBeDefined();
+      expect(reply.code).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['GET', '/api/v1/shipments'],
+      ['GET', '/api/v1/invoices'],
+      ['POST', '/api/v1/carriers'],
+      ['POST', '/api/v1/customers'],
+      ['GET', '/api/v1/users'],
+      ['PUT', '/api/v1/settings/llm'],
+    ])('refuses a scoped session on %s %s with 403', async (method, url) => {
+      const req = mockReq(`Bearer ${makeToken(scopedPayload)}`, method, url);
+      const reply = mockReply();
+
+      await authenticateJWT(req, reply);
+
+      expect(req.user).toBeUndefined();
+      expect(reply.code).toHaveBeenCalledWith(403);
+    });
+
+    it('leaves unscoped tokens unrestricted (transition: pre-#135 sessions keep working)', async () => {
+      const { scope, ...unscoped } = scopedPayload;
+      const req = mockReq(`Bearer ${makeToken(unscoped)}`, 'GET', '/api/v1/shipments');
+      const reply = mockReply();
+
+      await authenticateJWT(req, reply);
+
+      expect(req.user).toBeDefined();
+      expect(reply.code).not.toHaveBeenCalled();
     });
   });
 

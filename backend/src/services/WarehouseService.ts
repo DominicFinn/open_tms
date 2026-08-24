@@ -226,6 +226,10 @@ export class WarehouseService {
    * subsequent warehouse request.
    */
   private signSessionToken(user: WarehouseUser): string {
+    // BUSINESS RULE: warehouse logins (magic link or password) mint a
+    // scoped session, not a general admin token. Magic links can hang on
+    // a printed QR code in a warehouse; if one leaks it must only open
+    // the warehouse/WMS task surface, never the whole admin API.
     return signInternalJWT({
       sub: user.id,
       email: user.email,
@@ -234,6 +238,7 @@ export class WarehouseService {
       roles: user.roles,
       permissions: user.permissions,
       organizationId: user.organizationId ?? undefined,
+      scope: 'warehouse',
     });
   }
 

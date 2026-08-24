@@ -26,6 +26,13 @@ export interface InternalJWTClaims {
   roles: string[];
   permissions: string[];
   organizationId?: string;
+  /**
+   * Surface restriction. 'warehouse' marks a session minted by the
+   * warehouse PWA login (magic link or password): authenticateJWT only
+   * accepts it on warehouse/WMS task routes, so a leaked operative token
+   * cannot reach the wider admin API. Absent = unrestricted admin session.
+   */
+  scope?: 'warehouse';
 }
 
 /**
