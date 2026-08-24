@@ -16,14 +16,18 @@ Architecture, models, lifecycle and file map: `docs/ISSUE_ENGINE.md`
 
 ## Issue creation is deterministic — extend the registry, never write issues directly
 
-Issue creation for the shipment-exception domain is **deterministic and LLM-independent**.
+Issue creation is **deterministic and LLM-independent**, and no longer shipment-only (#133).
 `IssueEngineHandler` maps trigger/recovery events onto issues via the code-defined Issue Type
-registry at `backend/src/services/issues/issueTypeRegistry.ts`.
+registry at `backend/src/services/issues/issueTypeRegistry.ts`. Each type declares its own
+`sourceEntityType` ('shipment', 'pack_task', ...) and `entityIdField` (the payload key holding the
+source entity id) — the engine assumes nothing about the domain.
 
-- **Adding a new shipment-exception issue type = add a registry entry.** Nothing else.
+- **Adding a new issue type (TMS or WMS) = add a registry entry.** Nothing else. The WMS
+  `pack_audit_variance` entry is the canonical non-shipment example.
 - All issue writes go through the command bus (`CREATE_ISSUE` / `UPDATE_ISSUE`).
-- **Do NOT add bespoke `prisma.issue.create` writes for shipment exceptions.** Extend the registry
-  instead.
+- **Do NOT add bespoke `prisma.issue.create` writes.** Extend the registry instead. (Known legacy
+  direct writers still to convert: `MarginAlertHandler`, `SlaEvaluationService`,
+  `ShipmentAssignmentService`.)
 - The **AI triage agent is an enricher** on engine issues (comments + priority escalation on
   `issue.created`), not a creator.
 - Recovery emitters live in the owning monitors, not in the engine (e.g.

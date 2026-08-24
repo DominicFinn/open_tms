@@ -52,7 +52,7 @@ import { CarrierTrackingHandler } from './handlers/CarrierTrackingHandler.js';
 import { CarrierArchivalNotificationHandler } from './handlers/CarrierArchivalNotificationHandler.js';
 import { MarginAlertHandler } from './handlers/MarginAlertHandler.js';
 import { AutoReplenishmentHandler } from './handlers/AutoReplenishmentHandler.js';
-import { PackAuditIssueHandler } from './handlers/PackAuditIssueHandler.js';
+import { PackAuditIssueLinkHandler } from './handlers/PackAuditIssueLinkHandler.js';
 
 /** Read concurrency from env with a default */
 function envInt(key: string, fallback: number): number {
@@ -173,11 +173,10 @@ export async function registerEventHandlers(
     handlers.push(new AutoReplenishmentHandler(prisma, commandBus));
   }
 
-  // WMS: pack-audit variances raise triage issues through CREATE_ISSUE
-  // (after commit), then link the issue back onto PackAudit.issueId
-  if (commandBus) {
-    handlers.push(new PackAuditIssueHandler(prisma, commandBus));
-  }
+  // WMS: the issue engine raises pack-audit issues from the registry entry
+  // (pack_audit_variance); this handler only maintains the PackAudit.issueId
+  // back-link the admin list uses for jump-to-issue
+  handlers.push(new PackAuditIssueLinkHandler(prisma));
 
   // Deterministic Issue Engine: maps shipment-exception trigger/recovery events
   // onto issues via the Issue Type registry (create/escalate/auto-resolve). This

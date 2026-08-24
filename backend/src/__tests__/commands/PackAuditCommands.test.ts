@@ -68,7 +68,7 @@ describe('RecordPackAuditCommand', () => {
 
     expect(result.success).toBe(true);
     expect(result.data?.verdict).toBe('warning');
-    // Issue creation moved after commit (PackAuditIssueHandler via CREATE_ISSUE):
+    // Issue creation moved after commit (issue engine, registry entry pack_audit_variance):
     // a direct write here bypassed the issue pipeline, so pack-audit issues
     // never reached IssueReadModel or the triage board.
     expect(result.data?.issueId).toBeNull();
