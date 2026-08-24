@@ -2142,14 +2142,14 @@ Default tolerance is 10%, overridable per-audit via `weightTolerancePercent` on 
 Dim-weight is calculated only when an audit links to a `CartonCatalogue` (expected dims) AND the caller supplies all three actual dims. Formula is the industry standard `(L × W × H cm) / 5000 = kg`. The result is stored as a separate `dimWeightVariancePercent` column; verdict today is driven only by the scale weight, but the dim-weight delta is surfaced in UI so ops can investigate.
 
 ### Issue auto-creation
-When verdict is `warning` or `fail`, an `Issue` is created inline within the same transaction (not via `CREATE_ISSUE` dispatch, to keep the audit + issue atomic). The issue uses `category: 'quality'`, `sourceEntityType: 'pack_task'`, `sourceEntityId: packTask.id` so the triage kanban and the pack task detail page both see it.
+When verdict is `warning` or `fail`, `PackAuditIssueHandler` (subscribed to `pack.audit_variance_detected`) dispatches `CREATE_ISSUE` after commit with `category: 'exception'`, `issueType: 'pack_audit_variance'`, `sourceEntityType: 'pack_task'`, then links the created issue back onto `PackAudit.issueId`. Dedup follows the engine rule: one open issue per (issueType, pack task); a repeat variance links to the existing open issue. The previous behaviour (inline `issue.create` in the command's transaction with the invalid `category: 'quality'`) bypassed the issue pipeline, so those issues never fired `issue.created` and never reached `IssueReadModel` or the triage board; `scripts/fix-pack-audit-issues.ts` repairs historical rows, followed by the read-model backfill.
 
 ### Events
-- `pack.audit_recorded` - every audit, payload includes verdict, variances, expected/actual weight, tolerance, issueId (nullable)
-- `pack.audit_variance_detected` - only warning/fail, payload includes verdict, weight variance, issueId
+- `pack.audit_recorded` - every audit, payload includes verdict, variances, expected/actual weight, tolerance, issueId (null at emit time; linked after commit)
+- `pack.audit_variance_detected` - only warning/fail, payload includes verdict, both variances, expected/actual weight, tolerance and auditor notes (what the issue handler needs to build the issue)
 
 ### Commands
-- `RECORD_PACK_AUDIT` - single atomic operation: compute expected (unless override supplied), compute variance, assign verdict, create issue if non-pass, persist audit row, emit events
+- `RECORD_PACK_AUDIT` - compute expected (unless override supplied), compute variance, assign verdict, persist audit row, emit events. Issue creation happens after commit via `PackAuditIssueHandler` → `CREATE_ISSUE`
 
 ### API
 | Method | Endpoint | Purpose |

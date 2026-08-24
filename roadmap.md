@@ -498,7 +498,7 @@ Bolt-on WMS extending the TMS's TrackableUnit/CargoScan/Location models. Full sp
 
 - **WMS v1 Gap Close-Out** ✅
   - Wave auto-release worker - `WaveAutoReleaseService` + pg-boss cron (`wave-auto-release`, default every 5 min). Templates with `autoRelease=true` and a `releaseSchedule` (HH:MM or simple cron) + `cutoffTime` fallback fire `APPLY_WAVE_TEMPLATE` when due. `lastAutoReleasedAt` dedup stamp prevents re-firing within a 12h window. Configurable via `WAVE_AUTO_RELEASE_CRON`
-  - Pack audit events (`pack.audit_recorded`, `pack.audit_variance_detected`) now subscribed by `CustomerWebhookHandler` via pack task → order → customer resolver so third-party integrations receive them as webhooks (inline issue creation in the command stays for atomicity)
+  - Pack audit events (`pack.audit_recorded`, `pack.audit_variance_detected`) now subscribed by `CustomerWebhookHandler` via pack task → order → customer resolver so third-party integrations receive them as webhooks (issue creation moved after commit via `PackAuditIssueHandler` → `CREATE_ISSUE` in #131, so the issues reach the read model and triage board)
   - Receiving Appointments admin UI at `/wms/receiving-appointments` - date-filterable list with one-click check-in and cancel; new appointment form with carrier, trailer, seal, ASN reference, dock bin picker. Exposes `/api/v1/receiving/appointments/:id/check-in` and `/cancel` endpoints
   - Receiving Appointments mobile flow at `/warehouse/appointments` - today's arrivals with status chips and single-tap check-in, accessible from the bottom nav
   - Fixes from audit gaps 1-3: WaveTemplate `zonePickMode` wired end-to-end, `/cycle-counts/:id` `params` schema added, `ManifestUpload.location` relation + FK migration

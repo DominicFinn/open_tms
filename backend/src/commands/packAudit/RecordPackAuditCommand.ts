@@ -127,27 +127,13 @@ export class RecordPackAuditCommandHandler extends BaseCommandHandler<
 
     const verdict = verdictFor(weightVariancePercent, tolerance);
 
-    let issueId: string | null = null;
-    if (verdict !== 'pass') {
-      const title = verdict === 'fail'
-        ? `Pack audit failure on PackTask ${packTask.id.slice(0, 8)}: ${weightVariancePercent.toFixed(1)}% weight variance`
-        : `Pack audit warning on PackTask ${packTask.id.slice(0, 8)}: ${weightVariancePercent.toFixed(1)}% weight variance`;
-      const issue = await tx.issue.create({
-        data: {
-          orgId: command.orgId,
-          title,
-          description: `Expected ${expectedWeightGrams}g, actual ${p.actualWeightGrams}g (tolerance ±${tolerance}%).` +
-            (dimWeightVariancePercent != null ? ` Dim weight variance ${dimWeightVariancePercent.toFixed(1)}%.` : '') +
-            (p.notes ? `\n\nAuditor notes: ${p.notes}` : ''),
-          priority: verdict === 'fail' ? 'high' : 'medium',
-          category: 'quality',
-          sourceEntityType: 'pack_task',
-          sourceEntityId: packTask.id,
-          status: 'open',
-        },
-      });
-      issueId = issue.id;
-    }
+    // BUSINESS RULE: variance issues are raised AFTER commit by
+    // PackAuditIssueHandler consuming pack.audit_variance_detected, via the
+    // CREATE_ISSUE command — never by a direct issue write here. A direct
+    // write bypasses the issue pipeline (no issue.created event), so the
+    // issue never reaches IssueReadModel or the triage board. The handler
+    // links the issue back onto PackAudit.issueId once created.
+    const issueId: string | null = null;
 
     const audit = await tx.packAudit.create({
       data: {
@@ -199,7 +185,11 @@ export class RecordPackAuditCommandHandler extends BaseCommandHandler<
           orderId: packTask.orderId,
           verdict,
           weightVariancePercent: Number(weightVariancePercent.toFixed(2)),
-          issueId,
+          dimWeightVariancePercent: dimWeightVariancePercent != null ? Number(dimWeightVariancePercent.toFixed(2)) : null,
+          expectedWeightGrams,
+          actualWeightGrams: p.actualWeightGrams,
+          tolerance,
+          notes: p.notes ?? null,
         },
       }));
     }
