@@ -53,17 +53,19 @@ export class WarehouseService {
 
   async generateMagicLink(
     userId: string,
+    orgId: string,
     expiresInDays?: number,
   ): Promise<{ success: true; data: MagicLinkResult } | { success: false; error: string }> {
-    // Check magic links are enabled
-    const org = await this.prisma.organization.findFirst();
+    // Check magic links are enabled for the caller's organization
+    const org = await this.prisma.organization.findUnique({ where: { id: orgId } });
     if (!org?.magicLinksEnabled) {
       return { success: false, error: 'Magic links are disabled for this organization' };
     }
 
-    // Verify user exists
+    // Verify user exists and belongs to the caller's organization.
+    // Cross-tenant target reads as "not found" so existence stays opaque.
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user || !user.active) {
+    if (!user || !user.active || user.organizationId !== orgId) {
       return { success: false, error: 'User not found or inactive' };
     }
 
@@ -239,12 +241,13 @@ export class WarehouseService {
 
   async flagShipment(
     shipmentId: string,
+    orgId: string,
     flaggedBy: string,
     flaggedByName: string,
     reason: string,
   ): Promise<{ success: true; data: any } | { success: false; error: string }> {
     const shipment = await this.prisma.shipment.findFirst({
-      where: { id: shipmentId, archived: false },
+      where: { id: shipmentId, orgId, archived: false },
     });
     if (!shipment) {
       return { success: false, error: 'Shipment not found' };
@@ -259,9 +262,12 @@ export class WarehouseService {
 
   async resolveFlag(
     flagId: string,
+    orgId: string,
     resolvedBy: string,
   ): Promise<{ success: true; data: any } | { success: false; error: string }> {
-    const flag = await this.prisma.shipmentFlag.findUnique({ where: { id: flagId } });
+    const flag = await this.prisma.shipmentFlag.findFirst({
+      where: { id: flagId, shipment: { orgId } },
+    });
     if (!flag) {
       return { success: false, error: 'Flag not found' };
     }
@@ -276,10 +282,11 @@ export class WarehouseService {
 
   async launchShipment(
     shipmentId: string,
+    orgId: string,
     launchedBy: string,
   ): Promise<{ success: true; data: any } | { success: false; error: string }> {
     const shipment = await this.prisma.shipment.findFirst({
-      where: { id: shipmentId, archived: false },
+      where: { id: shipmentId, orgId, archived: false },
     });
     if (!shipment) {
       return { success: false, error: 'Shipment not found' };
@@ -309,6 +316,7 @@ export class WarehouseService {
 
   async lookupDevice(
     barcode: string,
+    orgId: string,
   ): Promise<{ success: true; data: any } | { success: false; error: string }> {
     const device = await this.prisma.device.findFirst({
       where: {
@@ -318,6 +326,7 @@ export class WarehouseService {
           { name: barcode },
         ],
         status: 'active',
+        orgId,
       },
       include: {
         assignments: {
@@ -347,8 +356,26 @@ export class WarehouseService {
   async assignDeviceToShipment(
     shipmentId: string,
     deviceId: string,
+    orgId: string,
     trackableUnitId?: string,
   ): Promise<{ success: true; data: any } | { success: false; error: string }> {
+    // Both sides of the assignment must belong to the caller's org;
+    // cross-tenant ids read as "not found" so existence stays opaque.
+    const shipment = await this.prisma.shipment.findFirst({
+      where: { id: shipmentId, orgId, archived: false },
+      select: { id: true },
+    });
+    if (!shipment) {
+      return { success: false, error: 'Shipment not found' };
+    }
+    const device = await this.prisma.device.findFirst({
+      where: { id: deviceId, orgId },
+      select: { id: true },
+    });
+    if (!device) {
+      return { success: false, error: 'Device not found' };
+    }
+
     // Deactivate existing assignments
     await this.prisma.deviceAssignment.updateMany({
       where: { deviceId, active: true },
@@ -369,9 +396,10 @@ export class WarehouseService {
   async removeDeviceFromShipment(
     shipmentId: string,
     deviceId: string,
+    orgId: string,
   ): Promise<{ success: true } | { success: false; error: string }> {
     await this.prisma.deviceAssignment.updateMany({
-      where: { deviceId, shipmentId, active: true },
+      where: { deviceId, shipmentId, active: true, shipment: { orgId } },
       data: { active: false, unassignedAt: new Date() },
     });
     return { success: true };
@@ -381,6 +409,7 @@ export class WarehouseService {
 
   async addAccessory(
     shipmentId: string,
+    orgId: string,
     data: {
       accessoryType: string;
       alias?: string;
@@ -389,7 +418,14 @@ export class WarehouseService {
       deviceId?: string;
       notes?: string;
     },
-  ): Promise<{ success: true; data: any }> {
+  ): Promise<{ success: true; data: any } | { success: false; error: string }> {
+    const shipment = await this.prisma.shipment.findFirst({
+      where: { id: shipmentId, orgId, archived: false },
+      select: { id: true },
+    });
+    if (!shipment) {
+      return { success: false, error: 'Shipment not found' };
+    }
     const accessory = await this.prisma.shipmentAccessory.create({
       data: {
         shipmentId,
@@ -406,8 +442,11 @@ export class WarehouseService {
 
   async removeAccessory(
     accessoryId: string,
+    orgId: string,
   ): Promise<{ success: true }> {
-    await this.prisma.shipmentAccessory.delete({ where: { id: accessoryId } });
+    await this.prisma.shipmentAccessory.deleteMany({
+      where: { id: accessoryId, shipment: { orgId } },
+    });
     return { success: true };
   }
 

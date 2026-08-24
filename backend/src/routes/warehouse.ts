@@ -17,12 +17,11 @@ export async function warehouseRoutes(server: FastifyInstance) {
   const warehouseService = new WarehouseService(prisma);
 
   // Auth — every operational warehouse route requires a valid session JWT.
-  // The three login endpoints below are excluded (they're the way to GET
-  // the JWT in the first place), as is the admin magic-link generate
-  // endpoint (separate-concern admin action — TODO: wire it to a stricter
-  // admin role check instead of leaving it unauthed).
+  // Only the two login endpoints are excluded (they're the way to GET the
+  // JWT in the first place). Magic-link generate is an admin action and
+  // requires auth like everything else: an unauthenticated generate
+  // endpoint would let anyone mint a login link for any user.
   const unauthPaths = new Set<string>([
-    '/api/v1/warehouse/auth/magic-link/generate',
     '/api/v1/warehouse/auth/magic-link/validate',
     '/api/v1/warehouse/auth/login',
   ]);
@@ -66,7 +65,7 @@ export async function warehouseRoutes(server: FastifyInstance) {
       expiresInDays: z.number().positive().optional(),
     }).parse(req.body);
 
-    const result = await warehouseService.generateMagicLink(body.userId, body.expiresInDays);
+    const result = await warehouseService.generateMagicLink(body.userId, req.orgId!, body.expiresInDays);
     if (!result.success) {
       reply.code(result.error.includes('disabled') ? 403 : 404);
       return { data: null, error: result.error };
@@ -174,13 +173,16 @@ export async function warehouseRoutes(server: FastifyInstance) {
       preferredLocationId: z.string().uuid().nullable().optional(),
     }).parse(req.body);
 
-    const user = await prisma.user.update({
-      where: { id },
+    const updated = await prisma.user.updateMany({
+      where: { id, organizationId: req.orgId! },
       data: { preferredLocationId: body.preferredLocationId },
-      select: { id: true, preferredLocationId: true },
     });
+    if (updated.count === 0) {
+      reply.code(404);
+      return { data: null, error: 'User not found' };
+    }
 
-    return { data: user, error: null };
+    return { data: { id, preferredLocationId: body.preferredLocationId ?? null }, error: null };
   });
 
   // ─── Shipment List (Today's Work) ─────────────────────────────────────────
@@ -215,6 +217,7 @@ export async function warehouseRoutes(server: FastifyInstance) {
     const twoDaysAgo = new Date(Date.now() - 2 * 86400000);
 
     const where: any = {
+      orgId: req.orgId!,
       archived: false,
       // Only show draft/ready shipments (not in_transit/delivered)
       status: { in: ['draft', 'ready', 'picked'] },
@@ -328,7 +331,7 @@ export async function warehouseRoutes(server: FastifyInstance) {
     const { id } = req.params as { id: string };
 
     const shipment = await prisma.shipment.findFirst({
-      where: { id, archived: false },
+      where: { id, orgId: req.orgId!, archived: false },
       include: {
         customer: true,
         origin: true,
@@ -404,7 +407,7 @@ export async function warehouseRoutes(server: FastifyInstance) {
       flaggedByName: z.string(),
     }).parse(req.body);
 
-    const result = await warehouseService.flagShipment(id, body.flaggedBy, body.flaggedByName, body.reason);
+    const result = await warehouseService.flagShipment(id, req.orgId!, body.flaggedBy, body.flaggedByName, body.reason);
     if (!result.success) {
       reply.code(404);
       return { data: null, error: result.error };
@@ -425,7 +428,7 @@ export async function warehouseRoutes(server: FastifyInstance) {
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { flagId } = req.params as { shipmentId: string; flagId: string };
     const body = z.object({ resolvedBy: z.string() }).parse(req.body);
-    const result = await warehouseService.resolveFlag(flagId, body.resolvedBy);
+    const result = await warehouseService.resolveFlag(flagId, req.orgId!, body.resolvedBy);
     if (!result.success) {
       reply.code(404);
       return { data: null, error: result.error };
@@ -453,7 +456,7 @@ export async function warehouseRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { barcode } = req.query as { barcode: string };
-    const result = await warehouseService.lookupDevice(barcode);
+    const result = await warehouseService.lookupDevice(barcode, req.orgId!);
     if (!result.success) {
       reply.code(404);
       return { data: null, error: result.error };
@@ -485,9 +488,13 @@ export async function warehouseRoutes(server: FastifyInstance) {
       trackableUnitId: z.string().optional(),
     }).parse(req.body);
 
-    const result = await warehouseService.assignDeviceToShipment(id, body.deviceId, body.trackableUnitId);
+    const result = await warehouseService.assignDeviceToShipment(id, body.deviceId, req.orgId!, body.trackableUnitId);
+    if (!result.success) {
+      reply.code(404);
+      return { data: null, error: result.error };
+    }
     reply.code(201);
-    return { data: result.success ? result.data : null, error: null };
+    return { data: result.data, error: null };
   });
 
   /**
@@ -501,7 +508,7 @@ export async function warehouseRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id, deviceId } = req.params as { id: string; deviceId: string };
-    await warehouseService.removeDeviceFromShipment(id, deviceId);
+    await warehouseService.removeDeviceFromShipment(id, deviceId, req.orgId!);
     return { data: { removed: true }, error: null };
   });
 
@@ -539,7 +546,11 @@ export async function warehouseRoutes(server: FastifyInstance) {
       notes: z.string().optional(),
     }).parse(req.body);
 
-    const result = await warehouseService.addAccessory(id, body);
+    const result = await warehouseService.addAccessory(id, req.orgId!, body);
+    if (!result.success) {
+      reply.code(404);
+      return { data: null, error: result.error };
+    }
     reply.code(201);
     return { data: result.data, error: null };
   });
@@ -555,7 +566,7 @@ export async function warehouseRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { accessoryId } = req.params as { id: string; accessoryId: string };
-    await warehouseService.removeAccessory(accessoryId);
+    await warehouseService.removeAccessory(accessoryId, req.orgId!);
     return { data: { removed: true }, error: null };
   });
 
@@ -580,7 +591,7 @@ export async function warehouseRoutes(server: FastifyInstance) {
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
     const { launchedBy } = z.object({ launchedBy: z.string() }).parse(req.body);
-    const result = await warehouseService.launchShipment(id, launchedBy);
+    const result = await warehouseService.launchShipment(id, req.orgId!, launchedBy);
     if (!result.success) {
       reply.code(result.error.includes('not found') ? 404 : 400);
       return { data: null, error: result.error };
@@ -690,6 +701,8 @@ export async function warehouseRoutes(server: FastifyInstance) {
           { barcode },
           { identifier: barcode },
         ],
+        // TrackableUnit has no orgId of its own; tenancy flows through the order
+        order: { orgId: req.orgId! },
       },
       include: {
         order: { select: { id: true, orderNumber: true } },
@@ -716,9 +729,9 @@ export async function warehouseRoutes(server: FastifyInstance) {
       tags: ['Warehouse'],
       summary: 'List locations for warehouse selection',
     },
-  }, async (_req: FastifyRequest, _reply: FastifyReply) => {
+  }, async (req: FastifyRequest, _reply: FastifyReply) => {
     const locations = await prisma.location.findMany({
-      where: { archived: false },
+      where: { orgId: req.orgId!, archived: false },
       select: { id: true, name: true, city: true, state: true, country: true },
       orderBy: { name: 'asc' },
       take: 500,
@@ -830,7 +843,8 @@ export async function warehouseRoutes(server: FastifyInstance) {
     const query = req.query as { userId?: string; method?: string; limit?: string };
     const limit = Math.min(parseInt(query.limit || '100'), 500);
 
-    const where: any = {};
+    // LoginAuditLog has no orgId of its own; tenancy flows through the user
+    const where: any = { user: { organizationId: req.orgId! } };
     if (query.userId) where.userId = query.userId;
     if (query.method) where.method = query.method;
 
@@ -861,7 +875,7 @@ export async function warehouseRoutes(server: FastifyInstance) {
     const { userId } = req.params as { userId: string };
 
     await prisma.magicLink.updateMany({
-      where: { userId, active: true },
+      where: { userId, active: true, user: { organizationId: req.orgId! } },
       data: { active: false },
     });
 
@@ -884,6 +898,7 @@ export async function warehouseRoutes(server: FastifyInstance) {
     const twoDaysAgo = new Date(Date.now() - 2 * 86400000);
 
     const where: any = {
+      orgId: req.orgId!,
       archived: false,
       status: { in: ['draft', 'ready', 'picked'] },
       launchedAt: null,

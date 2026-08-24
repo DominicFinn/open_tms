@@ -51,7 +51,7 @@ const mockFlag = {
 function createMockPrisma(overrides: any = {}) {
   return {
     organization: {
-      findFirst: jest.fn().mockResolvedValue({ magicLinksEnabled: true }),
+      findUnique: jest.fn().mockResolvedValue({ id: 'org-1', magicLinksEnabled: true }),
     },
     user: {
       findUnique: jest.fn().mockResolvedValue(mockUser),
@@ -72,7 +72,7 @@ function createMockPrisma(overrides: any = {}) {
     },
     shipmentFlag: {
       create: jest.fn().mockResolvedValue(mockFlag),
-      findUnique: jest.fn().mockResolvedValue(mockFlag),
+      findFirst: jest.fn().mockResolvedValue(mockFlag),
       update: jest.fn().mockResolvedValue({ ...mockFlag, resolved: true }),
       count: jest.fn().mockResolvedValue(0),
     },
@@ -85,7 +85,7 @@ function createMockPrisma(overrides: any = {}) {
     },
     shipmentAccessory: {
       create: jest.fn().mockResolvedValue({ id: 'acc-1', accessoryType: 'door_seal' }),
-      delete: jest.fn().mockResolvedValue({}),
+      deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
     ...overrides,
   };
@@ -107,7 +107,7 @@ describe('WarehouseService', () => {
 
   describe('generateMagicLink', () => {
     it('generates a magic link token for a valid user', async () => {
-      const result = await service.generateMagicLink('user-1');
+      const result = await service.generateMagicLink('user-1', 'org-1');
 
       expect(result.success).toBe(true);
       if (result.success) {
@@ -120,7 +120,7 @@ describe('WarehouseService', () => {
     });
 
     it('deactivates existing magic links before creating a new one', async () => {
-      await service.generateMagicLink('user-1');
+      await service.generateMagicLink('user-1', 'org-1');
 
       expect(prisma.magicLink.updateMany).toHaveBeenCalledWith({
         where: { userId: 'user-1', active: true },
@@ -129,7 +129,7 @@ describe('WarehouseService', () => {
     });
 
     it('stores a SHA-256 hash of the token, not the token itself', async () => {
-      const result = await service.generateMagicLink('user-1');
+      const result = await service.generateMagicLink('user-1', 'org-1');
       expect(result.success).toBe(true);
 
       const createCall = prisma.magicLink.create.mock.calls[0][0];
@@ -140,7 +140,7 @@ describe('WarehouseService', () => {
     });
 
     it('sets expiry when expiresInDays is provided', async () => {
-      const result = await service.generateMagicLink('user-1', 30);
+      const result = await service.generateMagicLink('user-1', 'org-1', 30);
 
       expect(result.success).toBe(true);
       if (result.success) {
@@ -151,9 +151,9 @@ describe('WarehouseService', () => {
     });
 
     it('fails if magic links are disabled', async () => {
-      prisma.organization.findFirst.mockResolvedValue({ magicLinksEnabled: false });
+      prisma.organization.findUnique.mockResolvedValue({ id: 'org-1', magicLinksEnabled: false });
 
-      const result = await service.generateMagicLink('user-1');
+      const result = await service.generateMagicLink('user-1', 'org-1');
 
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -164,7 +164,7 @@ describe('WarehouseService', () => {
     it('fails if user not found', async () => {
       prisma.user.findUnique.mockResolvedValue(null);
 
-      const result = await service.generateMagicLink('user-999');
+      const result = await service.generateMagicLink('user-999', 'org-1');
 
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -175,7 +175,7 @@ describe('WarehouseService', () => {
     it('fails if user is inactive', async () => {
       prisma.user.findUnique.mockResolvedValue({ ...mockUser, active: false });
 
-      const result = await service.generateMagicLink('user-1');
+      const result = await service.generateMagicLink('user-1', 'org-1');
 
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -480,7 +480,7 @@ describe('WarehouseService', () => {
 
   describe('flagShipment', () => {
     it('creates a flag on an existing shipment', async () => {
-      const result = await service.flagShipment('ship-1', 'user-1', 'Jane Worker', 'Wrong pallet count');
+      const result = await service.flagShipment('ship-1', 'org-1', 'user-1', 'Jane Worker', 'Wrong pallet count');
 
       expect(result.success).toBe(true);
       expect(prisma.shipmentFlag.create).toHaveBeenCalledWith({
@@ -496,7 +496,7 @@ describe('WarehouseService', () => {
     it('fails if shipment not found', async () => {
       prisma.shipment.findFirst.mockResolvedValue(null);
 
-      const result = await service.flagShipment('ship-999', 'user-1', 'Jane', 'Issue');
+      const result = await service.flagShipment('ship-999', 'org-1', 'user-1', 'Jane', 'Issue');
 
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -507,14 +507,14 @@ describe('WarehouseService', () => {
     it('fails if shipment is archived', async () => {
       prisma.shipment.findFirst.mockResolvedValue(null); // archived filter excludes it
 
-      const result = await service.flagShipment('ship-1', 'user-1', 'Jane', 'Issue');
+      const result = await service.flagShipment('ship-1', 'org-1', 'user-1', 'Jane', 'Issue');
       expect(result.success).toBe(false);
     });
   });
 
   describe('resolveFlag', () => {
     it('resolves an existing flag', async () => {
-      const result = await service.resolveFlag('flag-1', 'admin-1');
+      const result = await service.resolveFlag('flag-1', 'org-1', 'admin-1');
 
       expect(result.success).toBe(true);
       expect(prisma.shipmentFlag.update).toHaveBeenCalledWith(
@@ -526,9 +526,9 @@ describe('WarehouseService', () => {
     });
 
     it('fails if flag not found', async () => {
-      prisma.shipmentFlag.findUnique.mockResolvedValue(null);
+      prisma.shipmentFlag.findFirst.mockResolvedValue(null);
 
-      const result = await service.resolveFlag('flag-999', 'admin-1');
+      const result = await service.resolveFlag('flag-999', 'org-1', 'admin-1');
       expect(result.success).toBe(false);
     });
   });
@@ -537,7 +537,7 @@ describe('WarehouseService', () => {
 
   describe('launchShipment', () => {
     it('launches a draft shipment and transitions to ready', async () => {
-      const result = await service.launchShipment('ship-1', 'user-1');
+      const result = await service.launchShipment('ship-1', 'org-1', 'user-1');
 
       expect(result.success).toBe(true);
       expect(prisma.shipment.update).toHaveBeenCalledWith(
@@ -555,7 +555,7 @@ describe('WarehouseService', () => {
     it('preserves non-draft status when launching', async () => {
       prisma.shipment.findFirst.mockResolvedValue({ ...mockShipment, status: 'picked' });
 
-      await service.launchShipment('ship-1', 'user-1');
+      await service.launchShipment('ship-1', 'org-1', 'user-1');
 
       expect(prisma.shipment.update).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -567,7 +567,7 @@ describe('WarehouseService', () => {
     it('fails if shipment not found', async () => {
       prisma.shipment.findFirst.mockResolvedValue(null);
 
-      const result = await service.launchShipment('ship-999', 'user-1');
+      const result = await service.launchShipment('ship-999', 'org-1', 'user-1');
       expect(result.success).toBe(false);
       if (!result.success) {
         expect(result.error).toContain('not found');
@@ -577,7 +577,7 @@ describe('WarehouseService', () => {
     it('blocks launch when unresolved flags exist', async () => {
       prisma.shipmentFlag.count.mockResolvedValue(2);
 
-      const result = await service.launchShipment('ship-1', 'user-1');
+      const result = await service.launchShipment('ship-1', 'org-1', 'user-1');
 
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -589,7 +589,7 @@ describe('WarehouseService', () => {
     it('allows launch when all flags are resolved', async () => {
       prisma.shipmentFlag.count.mockResolvedValue(0);
 
-      const result = await service.launchShipment('ship-1', 'user-1');
+      const result = await service.launchShipment('ship-1', 'org-1', 'user-1');
       expect(result.success).toBe(true);
     });
   });
@@ -598,7 +598,7 @@ describe('WarehouseService', () => {
 
   describe('lookupDevice', () => {
     it('finds device by externalId barcode', async () => {
-      const result = await service.lookupDevice('SL-TRACKER-001');
+      const result = await service.lookupDevice('SL-TRACKER-001', 'org-1');
 
       expect(result.success).toBe(true);
       if (result.success) {
@@ -624,7 +624,7 @@ describe('WarehouseService', () => {
         assignments: [{ shipment: { id: 'ship-2', reference: 'SH-002' } }],
       });
 
-      const result = await service.lookupDevice('SL-TRACKER-001');
+      const result = await service.lookupDevice('SL-TRACKER-001', 'org-1');
 
       expect(result.success).toBe(true);
       if (result.success) {
@@ -636,7 +636,7 @@ describe('WarehouseService', () => {
     it('fails if device not found', async () => {
       prisma.device.findFirst.mockResolvedValue(null);
 
-      const result = await service.lookupDevice('UNKNOWN-BARCODE');
+      const result = await service.lookupDevice('UNKNOWN-BARCODE', 'org-1');
 
       expect(result.success).toBe(false);
       if (!result.success) {
@@ -649,7 +649,7 @@ describe('WarehouseService', () => {
 
   describe('assignDeviceToShipment', () => {
     it('deactivates existing assignments and creates a new one', async () => {
-      const result = await service.assignDeviceToShipment('ship-1', 'dev-1');
+      const result = await service.assignDeviceToShipment('ship-1', 'dev-1', 'org-1');
 
       expect(result.success).toBe(true);
       expect(prisma.deviceAssignment.updateMany).toHaveBeenCalledWith({
@@ -666,7 +666,7 @@ describe('WarehouseService', () => {
     });
 
     it('assigns to a trackable unit when provided', async () => {
-      await service.assignDeviceToShipment('ship-1', 'dev-1', 'unit-42');
+      await service.assignDeviceToShipment('ship-1', 'dev-1', 'org-1', 'unit-42');
 
       expect(prisma.deviceAssignment.create).toHaveBeenCalledWith({
         data: expect.objectContaining({ trackableUnitId: 'unit-42' }),
@@ -676,11 +676,11 @@ describe('WarehouseService', () => {
 
   describe('removeDeviceFromShipment', () => {
     it('deactivates the assignment for the specific shipment', async () => {
-      const result = await service.removeDeviceFromShipment('ship-1', 'dev-1');
+      const result = await service.removeDeviceFromShipment('ship-1', 'dev-1', 'org-1');
 
       expect(result.success).toBe(true);
       expect(prisma.deviceAssignment.updateMany).toHaveBeenCalledWith({
-        where: { deviceId: 'dev-1', shipmentId: 'ship-1', active: true },
+        where: { deviceId: 'dev-1', shipmentId: 'ship-1', active: true, shipment: { orgId: 'org-1' } },
         data: expect.objectContaining({ active: false }),
       });
     });
@@ -690,7 +690,7 @@ describe('WarehouseService', () => {
 
   describe('addAccessory', () => {
     it('creates a non-IoT door seal', async () => {
-      const result = await service.addAccessory('ship-1', {
+      const result = await service.addAccessory('ship-1', 'org-1', {
         accessoryType: 'door_seal',
         identifier: 'SEAL-12345',
         isIoT: false,
@@ -709,7 +709,7 @@ describe('WarehouseService', () => {
     });
 
     it('creates an IoT temperature sensor with device reference', async () => {
-      const result = await service.addAccessory('ship-1', {
+      const result = await service.addAccessory('ship-1', 'org-1', {
         accessoryType: 'temp_sensor_front',
         alias: 'Front Temp',
         isIoT: true,
@@ -730,10 +730,12 @@ describe('WarehouseService', () => {
 
   describe('removeAccessory', () => {
     it('deletes the accessory record', async () => {
-      const result = await service.removeAccessory('acc-1');
+      const result = await service.removeAccessory('acc-1', 'org-1');
 
       expect(result.success).toBe(true);
-      expect(prisma.shipmentAccessory.delete).toHaveBeenCalledWith({ where: { id: 'acc-1' } });
+      expect(prisma.shipmentAccessory.deleteMany).toHaveBeenCalledWith({
+        where: { id: 'acc-1', shipment: { orgId: 'org-1' } },
+      });
     });
   });
 
@@ -770,6 +772,95 @@ describe('WarehouseService', () => {
           success: false, failReason: 'test',
         })
       ).resolves.toBeUndefined();
+    });
+  });
+
+  // ─── Org Scoping (Tenancy) ────────────────────────────────────────────
+  // Every method takes the caller's orgId and must scope reads and writes
+  // to it. Cross-tenant ids read as "not found" so existence stays opaque.
+
+  describe('org scoping', () => {
+    it('generateMagicLink resolves the caller org by id, never findFirst', async () => {
+      await service.generateMagicLink('user-1', 'org-1');
+      expect(prisma.organization.findUnique).toHaveBeenCalledWith({ where: { id: 'org-1' } });
+    });
+
+    it('generateMagicLink refuses a user belonging to another org', async () => {
+      prisma.user.findUnique.mockResolvedValue({ ...mockUser, organizationId: 'org-2' });
+
+      const result = await service.generateMagicLink('user-1', 'org-1');
+
+      expect(result.success).toBe(false);
+      if (!result.success) expect(result.error).toBe('User not found or inactive');
+      expect(prisma.magicLink.create).not.toHaveBeenCalled();
+    });
+
+    it('flagShipment scopes the shipment lookup to the org', async () => {
+      await service.flagShipment('ship-1', 'org-1', 'user-1', 'Jane', 'Issue');
+      expect(prisma.shipment.findFirst).toHaveBeenCalledWith({
+        where: { id: 'ship-1', orgId: 'org-1', archived: false },
+      });
+    });
+
+    it('resolveFlag scopes the flag lookup through the shipment org', async () => {
+      await service.resolveFlag('flag-1', 'org-1', 'admin-1');
+      expect(prisma.shipmentFlag.findFirst).toHaveBeenCalledWith({
+        where: { id: 'flag-1', shipment: { orgId: 'org-1' } },
+      });
+    });
+
+    it('launchShipment scopes the shipment lookup to the org', async () => {
+      await service.launchShipment('ship-1', 'org-1', 'user-1');
+      expect(prisma.shipment.findFirst).toHaveBeenCalledWith({
+        where: { id: 'ship-1', orgId: 'org-1', archived: false },
+      });
+    });
+
+    it('lookupDevice scopes the device lookup to the org', async () => {
+      await service.lookupDevice('SL-TRACKER-001', 'org-1');
+      expect(prisma.device.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ orgId: 'org-1' }),
+        }),
+      );
+    });
+
+    it('assignDeviceToShipment refuses a cross-org shipment and writes nothing', async () => {
+      prisma.shipment.findFirst.mockResolvedValue(null);
+
+      const result = await service.assignDeviceToShipment('ship-other-org', 'dev-1', 'org-1');
+
+      expect(result.success).toBe(false);
+      if (!result.success) expect(result.error).toBe('Shipment not found');
+      expect(prisma.deviceAssignment.updateMany).not.toHaveBeenCalled();
+      expect(prisma.deviceAssignment.create).not.toHaveBeenCalled();
+    });
+
+    it('assignDeviceToShipment refuses a cross-org device and writes nothing', async () => {
+      prisma.device.findFirst.mockResolvedValue(null);
+
+      const result = await service.assignDeviceToShipment('ship-1', 'dev-other-org', 'org-1');
+
+      expect(result.success).toBe(false);
+      if (!result.success) expect(result.error).toBe('Device not found');
+      expect(prisma.deviceAssignment.create).not.toHaveBeenCalled();
+    });
+
+    it('removeDeviceFromShipment scopes the deactivation through the shipment org', async () => {
+      await service.removeDeviceFromShipment('ship-1', 'dev-1', 'org-1');
+      expect(prisma.deviceAssignment.updateMany).toHaveBeenCalledWith({
+        where: { deviceId: 'dev-1', shipmentId: 'ship-1', active: true, shipment: { orgId: 'org-1' } },
+        data: expect.objectContaining({ active: false }),
+      });
+    });
+
+    it('addAccessory refuses a cross-org shipment', async () => {
+      prisma.shipment.findFirst.mockResolvedValue(null);
+
+      const result = await service.addAccessory('ship-other-org', 'org-1', { accessoryType: 'door_seal' });
+
+      expect(result.success).toBe(false);
+      expect(prisma.shipmentAccessory.create).not.toHaveBeenCalled();
     });
   });
 });
