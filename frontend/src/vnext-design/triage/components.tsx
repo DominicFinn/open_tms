@@ -8,7 +8,7 @@
  */
 
 import React from 'react';
-import { AlertTriangle, Loader2, Inbox, Lock, EyeOff, Clock } from 'lucide-react';
+import { AlertTriangle, Loader2, Inbox, Lock, EyeOff, Clock, GripVertical } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -139,24 +139,32 @@ export function SlaPill({
 /* ── Issue card ──────────────────────────────────────────────────────── */
 
 export function IssueCard({
-  issue, onOpen, selected, onToggleSelect, typeName,
+  issue, onOpen, selected, onToggleSelect, typeName, dragHandle,
 }: {
   issue: TriageIssue & { minutesToDeadline?: number | null };
   onOpen: (id: string) => void;
   selected?: boolean;
   onToggleSelect?: (id: string) => void;
   typeName?: string;
+  /** Show the grab affordance. Set on the board, where cards are draggable. */
+  dragHandle?: boolean;
 }) {
   return (
     <Card
       className={cn(
-        'cursor-pointer p-3',
+        'cursor-pointer p-3 transition-shadow hover:shadow-md',
         selected && 'border-primary',
         issue.isNoise && 'opacity-65',
       )}
       onClick={() => onOpen(issue.id)}
     >
       <div className="flex items-start gap-2">
+        {dragHandle && (
+          <GripVertical
+            className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/50"
+            aria-hidden="true"
+          />
+        )}
         {onToggleSelect && (
           <input
             type="checkbox"
@@ -193,7 +201,13 @@ export function IssueCard({
             />
           </div>
 
-          <div className="mb-1 break-words text-sm font-semibold">{issue.title}</div>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onOpen(issue.id); }}
+            className="mb-1 block break-words text-left text-sm font-semibold hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {issue.title}
+          </button>
 
           <div className="mb-2 text-xs text-muted-foreground">
             {typeName ?? issue.issueType ?? issue.category} · {timeAgo(issue.createdAt)}
@@ -239,7 +253,7 @@ function Chips({
               'cursor-pointer rounded-full border px-2.5 py-0.5 text-xs transition-colors',
               on
                 ? 'border-primary bg-primary text-primary-foreground'
-                : 'border-border bg-transparent text-muted-foreground hover:bg-accent',
+                : 'border-border bg-transparent text-muted-foreground hover:bg-primary/10',
             )}
           >
             {labels?.[o] ?? o}

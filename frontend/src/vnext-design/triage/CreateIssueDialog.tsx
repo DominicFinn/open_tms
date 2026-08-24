@@ -300,20 +300,6 @@ export function CreateIssueDialog({ open, onClose, onCreated }: {
           </div>
 
           <div className="space-y-2">
-            <Label>Category</Label>
-            <Select value={form.category} onValueChange={(v) => update('category', v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="exception">Exception</SelectItem>
-                <SelectItem value="delay">Delay</SelectItem>
-                <SelectItem value="damage">Damage</SelectItem>
-                <SelectItem value="compliance">Compliance</SelectItem>
-                <SelectItem value="other">Other</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
             <Label>Subject type</Label>
             <Select
               value={form.sourceEntityType || 'none'}
@@ -339,6 +325,20 @@ export function CreateIssueDialog({ open, onClose, onCreated }: {
               value={form.sourceEntityId}
               onSelect={(id) => update('sourceEntityId', id)}
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Category</Label>
+            <Select value={form.category} onValueChange={(v) => update('category', v)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="exception">Exception</SelectItem>
+                <SelectItem value="delay">Delay</SelectItem>
+                <SelectItem value="damage">Damage</SelectItem>
+                <SelectItem value="compliance">Compliance</SelectItem>
+                <SelectItem value="other">Other</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-2 md:col-span-2">

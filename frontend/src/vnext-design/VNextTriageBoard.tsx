@@ -155,7 +155,14 @@ export default function VNextTriageBoard() {
 
   /* ── Drag and drop ────────────────────────────────────────────────── */
 
-  const sensors = useSensors(useSensor(PointerSensor), useSensor(KeyboardSensor));
+  // A card is both draggable and clickable. Without a distance constraint
+  // dnd-kit claims every pointerdown as the start of a drag and the click to
+  // open the issue never fires — 8px is far enough to distinguish a click from
+  // a deliberate drag, close enough that dragging still feels immediate.
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor),
+  );
   const [dragging, setDragging] = useState<TriageIssue | null>(null);
 
   const handleDragStart = (e: DragStartEvent) => {
@@ -331,23 +338,31 @@ export default function VNextTriageBoard() {
                       onOpen={(id) => navigate(`/triage/issues/${id}`)}
                       selected={selected.has(i.id)}
                       onToggleSelect={toggle}
+                      dragHandle
                     />
                   </DraggableCard>
                 ))}
                 {(columns[col] ?? []).length === 0 && (
-                  <div className="p-2 text-xs text-muted-foreground">Nothing here</div>
+                  <div className="rounded-md border border-dashed border-border/60 p-3 text-center text-xs text-muted-foreground">
+                    Drop an issue here
+                  </div>
                 )}
               </DroppableColumn>
             ))}
           </div>
 
-          <DragOverlay>
+          {/* The lifted card: scaled and tilted slightly with a deep shadow, so it
+              reads as picked up off the board rather than outlined on it. */}
+          <DragOverlay dropAnimation={{ duration: 180, easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)' }}>
             {dragging && (
-              <IssueCard
-                issue={dragging}
-                typeName={dragging.issueType ? typeNames[dragging.issueType] : undefined}
-                onOpen={() => {}}
-              />
+              <div className="rotate-2 scale-[1.04] cursor-grabbing shadow-2xl drop-shadow-2xl">
+                <IssueCard
+                  issue={dragging}
+                  typeName={dragging.issueType ? typeNames[dragging.issueType] : undefined}
+                  onOpen={() => {}}
+                  dragHandle
+                />
+              </div>
             )}
           </DragOverlay>
         </DndContext>
@@ -447,36 +462,40 @@ function DroppableColumn({
 }: { status: string; count: number; children: React.ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
   return (
-    <div>
-      <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
+    // The lane carries its own surface and border so the board reads as four
+    // columns rather than a loose grid of cards.
+    <section
+      aria-label={`${STATUS_LABEL[status] ?? status} column`}
+      className={cn(
+        'flex flex-col rounded-lg border border-border bg-muted/20 transition-colors',
+        isOver && 'border-primary/40 bg-primary/5',
+      )}
+    >
+      <header className="flex items-center gap-2 border-b border-border px-3 py-2 text-sm font-semibold">
         {STATUS_LABEL[status] ?? status}
         <Badge variant="secondary">{count}</Badge>
-      </div>
-      <div
-        ref={setNodeRef}
-        className={cn(
-          'grid min-h-[80px] gap-2 rounded-lg p-1',
-          isOver && 'bg-accent outline-dashed outline-2 outline-primary',
-        )}
-      >
+      </header>
+      <div ref={setNodeRef} className="grid min-h-[96px] content-start gap-2 p-2">
         {children}
       </div>
-    </div>
+    </section>
   );
 }
 
 function DraggableCard({ id, children }: { id: string; children: React.ReactNode }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id });
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id });
   return (
     <div
       ref={setNodeRef}
       {...listeners}
       {...attributes}
-      className={cn(isDragging && 'opacity-40')}
-      style={{
-        // Computed drag offset — the one thing utilities cannot express.
-        transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
-      }}
+      // The card follows the cursor via DragOverlay, so the original stays put
+      // and only dims — moving it as well produces two cards in flight.
+      className={cn(
+        'cursor-grab rounded-lg outline-none active:cursor-grabbing',
+        'focus-visible:ring-2 focus-visible:ring-ring',
+        isDragging && 'opacity-30',
+      )}
     >
       {children}
     </div>
