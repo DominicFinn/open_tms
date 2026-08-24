@@ -216,6 +216,9 @@ describe('WarehouseService', () => {
         expect(payload.iss).toBe('open-tms-auth');
         expect(payload.sub).toBe('user-1');
         expect(payload.organizationId).toBe(mockUser.organizationId);
+        // Warehouse logins mint a scoped session: authenticateJWT only
+        // accepts it on warehouse/WMS task routes (#135)
+        expect(payload.scope).toBe('warehouse');
       }
     });
 
@@ -368,6 +371,9 @@ describe('WarehouseService', () => {
         expect(payload.iss).toBe('open-tms-auth');
         expect(payload.sub).toBe('user-1');
         expect(payload.organizationId).toBe(mockUser.organizationId);
+        // Warehouse logins mint a scoped session: authenticateJWT only
+        // accepts it on warehouse/WMS task routes (#135)
+        expect(payload.scope).toBe('warehouse');
         expect(payload.roles).toEqual(['warehouse']);
       }
     });
