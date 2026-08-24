@@ -1,13 +1,10 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { PERMISSIONS, SYSTEM_ROLES } from '../auth/permissions.js';
+import { requirePermission } from '../middleware/jwtAuth.js';
 import { seedSystemRoles } from '../auth/seedRoles.js';
 
 export async function roleRoutes(server: FastifyInstance) {
-  const getOrgId = async () => {
-    const org = await server.prisma.organization.findFirst({ select: { id: true } });
-    return org?.id || 'default';
-  };
 
   // List all roles
   server.get('/api/v1/roles', {
@@ -15,6 +12,7 @@ export async function roleRoutes(server: FastifyInstance) {
       tags: ['Roles & Permissions'],
       summary: 'List all roles with their permissions',
     },
+    preHandler: requirePermission('roles:read'),
   }, async () => {
     const roles = await server.prisma.role.findMany({
       include: {
@@ -31,6 +29,7 @@ export async function roleRoutes(server: FastifyInstance) {
       tags: ['Roles & Permissions'],
       summary: 'Get the full catalog of available permissions',
     },
+    preHandler: requirePermission('roles:read'),
   }, async () => {
     return { data: PERMISSIONS, error: null };
   });
@@ -41,6 +40,7 @@ export async function roleRoutes(server: FastifyInstance) {
       tags: ['Roles & Permissions'],
       params: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
     },
+    preHandler: requirePermission('roles:read'),
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
     const role = await server.prisma.role.findUnique({
@@ -70,6 +70,7 @@ export async function roleRoutes(server: FastifyInstance) {
         },
       },
     },
+    preHandler: requirePermission('roles:write'),
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const body = z.object({
       name: z.string().min(1).max(50),
@@ -108,6 +109,7 @@ export async function roleRoutes(server: FastifyInstance) {
         },
       },
     },
+    preHandler: requirePermission('roles:write'),
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
     const body = z.object({
@@ -117,6 +119,12 @@ export async function roleRoutes(server: FastifyInstance) {
 
     const role = await server.prisma.role.findUnique({ where: { id } });
     if (!role) { reply.code(404); return { data: null, error: 'Role not found' }; }
+    if (role.isSystem) {
+      // seedSystemRoles() re-syncs system roles from code on every boot,
+      // so an edit here would silently revert. Refuse loudly instead.
+      reply.code(400);
+      return { data: null, error: 'System roles are managed in code and cannot be edited. Create a custom role instead.' };
+    }
 
     const updated = await server.prisma.role.update({ where: { id }, data: body });
     return { data: updated, error: null };
@@ -125,6 +133,7 @@ export async function roleRoutes(server: FastifyInstance) {
   // Delete a custom role (system roles cannot be deleted)
   server.delete('/api/v1/roles/:id', {
     schema: { tags: ['Roles & Permissions'] },
+    preHandler: requirePermission('roles:write'),
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
     const role = await server.prisma.role.findUnique({ where: { id } });
@@ -141,6 +150,7 @@ export async function roleRoutes(server: FastifyInstance) {
       tags: ['Roles & Permissions'],
       summary: 'Assign a role to a user',
     },
+    preHandler: requirePermission('roles:write'),
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { roleId, userId } = req.params as { roleId: string; userId: string };
 
@@ -168,6 +178,7 @@ export async function roleRoutes(server: FastifyInstance) {
   // Remove a role from a user
   server.delete('/api/v1/roles/:roleId/users/:userId', {
     schema: { tags: ['Roles & Permissions'] },
+    preHandler: requirePermission('roles:write'),
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { roleId, userId } = req.params as { roleId: string; userId: string };
 
@@ -186,6 +197,7 @@ export async function roleRoutes(server: FastifyInstance) {
       tags: ['Roles & Permissions'],
       summary: 'Seed or update system roles (idempotent)',
     },
+    preHandler: requirePermission('roles:write'),
   }, async () => {
     const result = await seedSystemRoles(server.prisma);
     return { data: result, error: null };

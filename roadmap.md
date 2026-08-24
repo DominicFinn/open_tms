@@ -652,6 +652,8 @@ Items from the unified trading partner model that are not yet complete:
 - Pluggable map provider interface 🔲
 
 ### **Internal User Auth Improvements**
+
+- **Role & permission management UI** ✅ (#142) - create/edit/delete custom roles from /settings with a grouped permission picker (catalogue-driven, so new permission families appear automatically); system roles locked in the UI and on the API (seeder re-syncs them on boot); roles:read/roles:write guards added to all role routes, closing a privilege-escalation hole where any authenticated user could create and self-assign a '*' role
 Base login (email + password, JWT, admin password reset, RequireAuth guard, global 401 → /login interceptor) is shipped. Improvements to harden and productionise:
 
 - **Self-service password reset via email** 🔲 - `/api/v1/auth/forgot-password` is currently a stub that only logs. Implement: time-limited signed reset token, reset-password page (`/reset-password?token=...`), email delivery via the existing EmailService + EmailTemplate system, token invalidation on use, rate-limit per email.
