@@ -51,8 +51,79 @@ describe('IssueEngineHandler', () => {
         'tracking.eta_updated',
         'cargo.misdrop_detected',
         'cold_chain.excursion_detected',
+        'pack.audit_variance_detected',
       ]),
     );
+  });
+
+  it('raises a pack-audit issue against the pack task, not the audit that emitted the event', async () => {
+    await handler.handle({
+      ...ev('pack.audit_variance_detected', {
+        packTaskId: 'pack-1',
+        verdict: 'fail',
+        weightVariancePercent: 50,
+        expectedWeightGrams: 1200,
+        actualWeightGrams: 1800,
+        tolerance: 10,
+      }),
+      entityType: 'pack_audit',
+      entityId: 'audit-1',
+    } as DomainEvent);
+
+    // Signal is stamped with the WMS source, keyed to the pack task
+    expect((prisma as any).issueSignal.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          issueType: 'pack_audit_variance',
+          sourceEntityType: 'pack_task',
+          sourceEntityId: 'pack-1',
+          priority: 'high', // verdict fail maps to high
+        }),
+      }),
+    );
+    expect(commandBus.dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: CREATE_ISSUE,
+        payload: expect.objectContaining({
+          issueType: 'pack_audit_variance',
+          category: 'exception',
+          sourceEntityType: 'pack_task',
+          sourceEntityId: 'pack-1',
+          priority: 'high',
+        }),
+      }),
+    );
+    const payload = commandBus.dispatch.mock.calls[0][0].payload;
+    expect(payload.description).toContain('Expected 1200g, actual 1800g');
+  });
+
+  it('maps a warning verdict to medium priority', async () => {
+    await handler.handle({
+      ...ev('pack.audit_variance_detected', { packTaskId: 'pack-1', verdict: 'warning' }),
+      entityType: 'pack_audit',
+      entityId: 'audit-1',
+    } as DomainEvent);
+
+    expect(commandBus.dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({ priority: 'medium' }),
+      }),
+    );
+  });
+
+  it('escalates the open pack-audit issue on a repeat variance instead of duplicating', async () => {
+    (prisma as any).issue.findFirst.mockResolvedValue({ id: 'issue-open', priority: 'medium' });
+
+    await handler.handle({
+      ...ev('pack.audit_variance_detected', { packTaskId: 'pack-1', verdict: 'fail' }),
+      entityType: 'pack_audit',
+      entityId: 'audit-2',
+    } as DomainEvent);
+
+    const call = commandBus.dispatch.mock.calls[0][0];
+    expect(call.type).toBe(UPDATE_ISSUE);
+    expect(call.payload.id).toBe('issue-open');
+    expect(call.payload.data.priority).toBe('high');
   });
 
   it('records a signal and raises a cutoff issue on the command bus', async () => {

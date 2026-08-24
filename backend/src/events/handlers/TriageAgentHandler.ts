@@ -330,6 +330,29 @@ export class TriageAgentHandler implements IEventHandler {
         });
       }
     }
+    // WMS sources (#133): pack-audit issues attach to a pack task. Give the
+    // agent the task, its lines, and the recent audit history so it can judge
+    // one-off scale drift vs a repeating mis-pack.
+    if (issue.sourceEntityType === 'pack_task' && issue.sourceEntityId) {
+      const packTask = await this.prisma.packTask.findUnique({
+        where: { id: issue.sourceEntityId },
+        select: {
+          id: true,
+          orderId: true,
+          status: true,
+          packLines: { select: { sku: true, expectedQuantity: true, packedQuantity: true } },
+        },
+      });
+      if (packTask) {
+        ctx.packTask = packTask;
+        ctx.recentAudits = await this.prisma.packAudit.findMany({
+          where: { packTaskId: packTask.id },
+          select: { verdict: true, weightVariancePercent: true, createdAt: true },
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+        });
+      }
+    }
     return ctx;
   }
 

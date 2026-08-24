@@ -2,7 +2,8 @@
  * Issue Type registry — the deterministic catalogue of issue types the Issue
  * Engine knows how to raise, escalate, and resolve.
  *
- * v1 is code-defined and built-in (shipment exceptions only). A DB-backed,
+ * v1 is code-defined and built-in. Types span domains (shipment exceptions,
+ * WMS pack audits) — each declares its own sourceEntityType. A DB-backed,
  * admin-editable version is a roadmap item ("Admin-editable Issue Types
  * (DB-backed)") — when that lands, this registry becomes the seed/fallback.
  *
@@ -22,7 +23,8 @@ export type IssueTypeKey =
   | 'shipment_eta_delay'
   | 'shipment_misship'
   | 'shipment_temperature'
-  | 'shipment_tamper_light';
+  | 'shipment_tamper_light'
+  | 'pack_audit_variance';
 
 export interface IssueTypeRaiseRule {
   /** Number of signals within `windowMinutes` needed to raise the issue. */
@@ -41,6 +43,19 @@ export type IssuePriority = 'low' | 'medium' | 'high' | 'critical';
 export interface IssueTypeDef {
   key: IssueTypeKey;
   name: string;
+  /**
+   * What Issue.sourceEntityType the engine stamps on issues of this type
+   * ('shipment', 'pack_task', ...). The engine must never assume a domain:
+   * WMS types raise against warehouse entities (#133).
+   */
+  sourceEntityType: string;
+  /**
+   * Payload key holding the source entity id on trigger/recovery events.
+   * Falls back to event.entityId when the key is absent — note the entity
+   * that emitted the event is not always the source entity (a pack audit
+   * event's entityId is the audit, but issues attach to the pack task).
+   */
+  entityIdField: string;
   /** Coarse Issue.category bucket for the existing filters. */
   category: 'exception' | 'delay' | 'damage' | 'compliance' | 'other';
   defaultPriority: IssuePriority;
@@ -96,6 +111,8 @@ export function maxPriority(a: string, b: string): string {
 export const ISSUE_TYPES: Record<IssueTypeKey, IssueTypeDef> = {
   shipment_cutoff_risk: {
     key: 'shipment_cutoff_risk',
+    sourceEntityType: 'shipment',
+    entityIdField: 'shipmentId',
     name: 'Cutoff at risk',
     category: 'delay',
     defaultPriority: 'high',
@@ -108,6 +125,8 @@ export const ISSUE_TYPES: Record<IssueTypeKey, IssueTypeDef> = {
   },
   shipment_eta_delay: {
     key: 'shipment_eta_delay',
+    sourceEntityType: 'shipment',
+    entityIdField: 'shipmentId',
     name: 'ETA delay',
     category: 'delay',
     defaultPriority: 'medium',
@@ -120,6 +139,8 @@ export const ISSUE_TYPES: Record<IssueTypeKey, IssueTypeDef> = {
   },
   shipment_misship: {
     key: 'shipment_misship',
+    sourceEntityType: 'shipment',
+    entityIdField: 'shipmentId',
     name: 'Mis-ship / cargo discrepancy',
     category: 'exception',
     defaultPriority: 'high',
@@ -132,6 +153,8 @@ export const ISSUE_TYPES: Record<IssueTypeKey, IssueTypeDef> = {
   },
   shipment_temperature: {
     key: 'shipment_temperature',
+    sourceEntityType: 'shipment',
+    entityIdField: 'shipmentId',
     name: 'Temperature excursion',
     category: 'compliance',
     defaultPriority: 'critical',
@@ -143,8 +166,24 @@ export const ISSUE_TYPES: Record<IssueTypeKey, IssueTypeDef> = {
     triggerEvents: ['cold_chain.excursion_detected'],
     recoveryEvents: [],
   },
+  pack_audit_variance: {
+    key: 'pack_audit_variance',
+    name: 'Pack audit variance',
+    sourceEntityType: 'pack_task',
+    entityIdField: 'packTaskId',
+    category: 'exception',
+    defaultPriority: 'medium',
+    latched: true, // the variance happened — investigated and closed by a person, never auto-resolved
+    baseConfidence: 70, // scale-derived weight variance is seldom spurious
+    slaMinutes: 240,
+    raise: { thresholdCount: 1, windowMinutes: 60 },
+    triggerEvents: ['pack.audit_variance_detected'],
+    recoveryEvents: [],
+  },
   shipment_tamper_light: {
     key: 'shipment_tamper_light',
+    sourceEntityType: 'shipment',
+    entityIdField: 'shipmentId',
     name: 'Light exposure before arrival (tamper)',
     category: 'compliance',
     defaultPriority: 'critical',

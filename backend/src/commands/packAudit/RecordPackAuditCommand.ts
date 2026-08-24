@@ -127,12 +127,12 @@ export class RecordPackAuditCommandHandler extends BaseCommandHandler<
 
     const verdict = verdictFor(weightVariancePercent, tolerance);
 
-    // BUSINESS RULE: variance issues are raised AFTER commit by
-    // PackAuditIssueHandler consuming pack.audit_variance_detected, via the
-    // CREATE_ISSUE command — never by a direct issue write here. A direct
-    // write bypasses the issue pipeline (no issue.created event), so the
-    // issue never reaches IssueReadModel or the triage board. The handler
-    // links the issue back onto PackAudit.issueId once created.
+    // BUSINESS RULE: variance issues are raised AFTER commit by the issue
+    // engine (registry entry pack_audit_variance) consuming
+    // pack.audit_variance_detected — never by a direct issue write here. A
+    // direct write bypasses the issue pipeline (no issue.created event), so
+    // the issue never reaches IssueReadModel or the triage board.
+    // PackAuditIssueLinkHandler links the issue back onto PackAudit.issueId.
     const issueId: string | null = null;
 
     const audit = await tx.packAudit.create({

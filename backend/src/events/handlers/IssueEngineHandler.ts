@@ -40,12 +40,16 @@ import {
   slaDeadlineFor,
 } from '../../services/issues/issueTypeRegistry.js';
 
-/** Shared mapping from a signal's severity band onto an issue priority. */
+/**
+ * Shared mapping from a signal's severity band onto an issue priority.
+ * Pack audits report `verdict` rather than `severity`; both feed this map.
+ */
 const SEVERITY_TO_PRIORITY: Record<string, IssuePriority> = {
   minor: 'low',
   minor_delay: 'low',
   warning: 'medium',
   critical: 'high',
+  fail: 'high',
 };
 
 const OPEN_STATUSES = ['open', 'in_progress'];
@@ -78,7 +82,7 @@ export class IssueEngineHandler implements IEventHandler {
 
   private async handleTrigger(event: DomainEvent, type: IssueTypeDef): Promise<void> {
     const orgId = event.orgId;
-    const entityId = this.entityId(event);
+    const entityId = this.entityId(event, type);
     const priority = this.signalPriority(event, type);
 
     // 1. Append the signal to the ledger (feeds the accumulator + the graphs).
@@ -87,7 +91,7 @@ export class IssueEngineHandler implements IEventHandler {
         orgId,
         issueType: type.key,
         eventType: event.type,
-        sourceEntityType: 'shipment',
+        sourceEntityType: type.sourceEntityType,
         sourceEntityId: entityId,
         priority,
         sourceEventId: event.id,
@@ -96,7 +100,7 @@ export class IssueEngineHandler implements IEventHandler {
     });
 
     // 2. If an issue is already open for this (type, entity), attach + escalate.
-    const open = await this.findOpenIssue(type.key, entityId);
+    const open = await this.findOpenIssue(orgId, type.key, entityId);
     if (open) {
       await this.prisma.issueSignal.update({ where: { id: signal.id }, data: { issueId: open.id } });
 
@@ -143,7 +147,7 @@ export class IssueEngineHandler implements IEventHandler {
         category: type.category,
         issueType: type.key,
         latched: type.latched,
-        sourceEntityType: 'shipment',
+        sourceEntityType: type.sourceEntityType,
         sourceEntityId: entityId,
         sourceEventId: event.id,
         signalScore: score,
@@ -168,8 +172,8 @@ export class IssueEngineHandler implements IEventHandler {
   }
 
   private async handleRecovery(event: DomainEvent, type: IssueTypeDef): Promise<void> {
-    const entityId = this.entityId(event);
-    const open = await this.findOpenIssue(type.key, entityId);
+    const entityId = this.entityId(event, type);
+    const open = await this.findOpenIssue(event.orgId, type.key, entityId);
     if (!open) return;
 
     // Latched issues never auto-resolve — "it happened", must be investigated.
@@ -181,9 +185,9 @@ export class IssueEngineHandler implements IEventHandler {
     });
   }
 
-  private findOpenIssue(issueType: string, sourceEntityId: string) {
+  private findOpenIssue(orgId: string, issueType: string, sourceEntityId: string) {
     return this.prisma.issue.findFirst({
-      where: { issueType, sourceEntityId, status: { in: OPEN_STATUSES } },
+      where: { orgId, issueType, sourceEntityId, status: { in: OPEN_STATUSES } },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -212,32 +216,47 @@ export class IssueEngineHandler implements IEventHandler {
     });
   }
 
-  /** All current types are shipment-scoped; prefer payload.shipmentId, fall back to entityId. */
-  private entityId(event: DomainEvent): string {
-    return ((event.payload as { shipmentId?: string })?.shipmentId) ?? event.entityId;
+  /**
+   * Resolve the source entity the issue attaches to, via the type's declared
+   * payload key. Falls back to event.entityId, which is NOT always right (a
+   * pack audit event's entityId is the audit row) — types whose emitting
+   * entity differs from the source entity must declare entityIdField.
+   */
+  private entityId(event: DomainEvent, type: IssueTypeDef): string {
+    const payload = (event.payload ?? {}) as Record<string, unknown>;
+    return (payload[type.entityIdField] as string | undefined) ?? event.entityId;
   }
 
   private signalPriority(event: DomainEvent, type: IssueTypeDef): IssuePriority {
     if (type.ignoreSignalSeverity) return type.defaultPriority;
-    const severity = (event.payload as { severity?: string })?.severity;
-    return (severity && SEVERITY_TO_PRIORITY[severity]) || type.defaultPriority;
+    const p = (event.payload as { severity?: string; verdict?: string }) ?? {};
+    const band = p.severity ?? p.verdict;
+    return (band && SEVERITY_TO_PRIORITY[band]) || type.defaultPriority;
   }
 
   private buildTitle(event: DomainEvent, type: IssueTypeDef): string {
     const p = (event.payload as { shipmentReference?: string; reference?: string }) || {};
-    const ref = p.shipmentReference || p.reference || event.entityId;
-    return `${type.name}: shipment ${ref}`;
+    const entityId = this.entityId(event, type);
+    const ref = p.shipmentReference || p.reference || entityId.slice(0, 8);
+    return `${type.name}: ${type.sourceEntityType.replace(/_/g, ' ')} ${ref}`;
   }
 
   private buildDescription(event: DomainEvent, type: IssueTypeDef, priority: string): string {
     const p = (event.payload as Record<string, unknown>) || {};
-    const ref = (p.shipmentReference as string) || (p.reference as string) || event.entityId;
-    const bits = [`${type.name} detected for shipment ${ref}.`, `Priority: ${priority}.`];
+    const entityId = this.entityId(event, type);
+    const ref = (p.shipmentReference as string) || (p.reference as string) || entityId.slice(0, 8);
+    const label = type.sourceEntityType.replace(/_/g, ' ');
+    const bits = [`${type.name} detected for ${label} ${ref}.`, `Priority: ${priority}.`];
     if (p.severity) bits.push(`Severity: ${p.severity}.`);
+    if (p.verdict) bits.push(`Verdict: ${p.verdict}.`);
     if (p.bufferMinutes != null) bits.push(`Buffer: ${p.bufferMinutes} min.`);
     if (p.blockingStage) bits.push(`Blocking stage: ${p.blockingStage}.`);
     if (p.delayMinutes != null) bits.push(`Delay: ${p.delayMinutes} min.`);
     if (p.excursionType) bits.push(`Excursion: ${p.excursionType}.`);
+    if (p.expectedWeightGrams != null && p.actualWeightGrams != null) {
+      bits.push(`Expected ${p.expectedWeightGrams}g, actual ${p.actualWeightGrams}g (tolerance ±${p.tolerance}%).`);
+    }
+    if (p.notes) bits.push(`Auditor notes: ${p.notes}`);
     return bits.join(' ');
   }
 }

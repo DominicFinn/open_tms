@@ -8,7 +8,7 @@
  * or the triage board.
  *
  * This script repairs the rows in place: valid category, the issueType the
- * new PackAuditIssueHandler stamps, and a lastActivityAt so triage ranking
+ * issue engine's registry entry stamps, and a lastActivityAt so triage ranking
  * has something to sort on. Idempotent — the where clause matches nothing
  * on a second run.
  *
@@ -37,6 +37,7 @@ async function main() {
       data: {
         category: 'exception',
         issueType: 'pack_audit_variance',
+        latched: true,
         lastActivityAt: issue.createdAt,
       },
     });
