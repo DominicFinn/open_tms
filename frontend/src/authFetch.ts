@@ -34,7 +34,14 @@ function requestAlreadyHasAuth(init: RequestInit | undefined, input: RequestInfo
 function isPortalRoute(url: string): boolean {
   // WMS admin endpoints share the /api/v1/warehouse/ prefix with the PWA but
   // require the main TMS JWT. Keep them on the standard auth path.
-  if (url.includes('/api/v1/warehouse/zones') || url.includes('/api/v1/warehouse/bins')) {
+  // magic-link/generate and the login audit log are admin-app actions
+  // (VNextSettings), not PWA ones; generate requires auth as of #130.
+  if (
+    url.includes('/api/v1/warehouse/zones') ||
+    url.includes('/api/v1/warehouse/bins') ||
+    url.includes('/api/v1/warehouse/auth/magic-link/generate') ||
+    url.includes('/api/v1/warehouse/audit')
+  ) {
     return false;
   }
   // Portals manage their own tokens — don't inject the main TMS token into them.
