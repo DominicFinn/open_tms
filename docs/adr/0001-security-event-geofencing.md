@@ -158,5 +158,5 @@ This is configured by setting the `light_event` and `seal_event` SLA rules to be
 - `backend/src/services/SlaEvaluationService.ts` — core SLA evaluation logic
 - `backend/src/workers/slaMonitorWorker.ts` — cron-driven breach detection
 - `backend/src/services/ArrivalCriteriaEvaluationService.ts` — existing geofence matching (arrival detection)
-- `backend/prisma/schema.prisma` — SlaRule `ruleType: "light_event" | "seal_event"`
+- `backend/prisma/schema/tms.prisma` — SlaRule `ruleType: "light_event" | "seal_event"`
 - `docs/ETA_MONITORING_GUIDE.md` — related: ETA monitor also uses cron-based evaluation

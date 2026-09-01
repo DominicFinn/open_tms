@@ -404,7 +404,7 @@ The frontend shows the corridor on the lane detail page and create/edit page. Th
 
 | File | Purpose |
 |------|---------|
-| `backend/prisma/schema.prisma` (LaneRoute model) | Per-lane planned route storage |
+| `backend/prisma/schema/tms.prisma` (LaneRoute model) | Per-lane planned route storage |
 | `backend/src/services/routing/GoogleMapsDirectionsService.ts` | Google Maps API client + polyline encode/decode |
 | `backend/src/services/routing/RouteDeviationService.ts` | Point-to-polyline distance algorithm |
 | `backend/src/services/routing/ShipmentEtaMonitorService.ts` | Integrated deviation checking |

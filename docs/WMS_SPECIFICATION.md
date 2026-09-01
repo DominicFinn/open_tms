@@ -935,7 +935,7 @@ The items below are explicitly **out of v1 scope**. Each has an `IFoo` interface
 
 ## Key Files to Modify
 
-- `backend/prisma/schema.prisma` - all new models
+- `backend/prisma/schema/wms.prisma` - all new models
 - `backend/src/events/eventTypes.ts` - all new event types
 - `backend/src/di/tokens.ts` - new DI tokens
 - `backend/src/di/registry.ts` - register repos/services/commands

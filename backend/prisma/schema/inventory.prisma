@@ -1,0 +1,112 @@
+// Inventory: stock records, movements, and allocation.
+// Module: inventory. See .claude/rules/module-boundaries.md for what may depend on what.
+
+model ProductUom {
+  id               String  @id @default(uuid())
+  sku              String
+  uomCode          String // EA, INNER, CASE, PALLET, or custom
+  parentUomCode    String? // which UOM this rolls up into
+  conversionFactor Int     @default(1) // how many children fit in one of this
+  lengthMm         Int?
+  widthMm          Int?
+  heightMm         Int?
+  weightGrams      Int?
+  barcodeGtin      String? // GTIN/UPC/EAN for scanning at this UOM
+  isDefault        Boolean @default(false)
+
+  orgId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([orgId, sku, uomCode])
+  @@index([orgId])
+  @@index([sku])
+  @@index([barcodeGtin])
+}
+
+model InventoryRecord {
+  id                String       @id @default(uuid())
+  locationId        String
+  location          Location     @relation(fields: [locationId], references: [id])
+  binId             String
+  bin               WarehouseBin @relation(fields: [binId], references: [id])
+  sku               String
+  uomCode           String       @default("EA")
+  quantityOnHand    Int          @default(0)
+  quantityAllocated Int          @default(0)
+  quantityAvailable Int          @default(0) // onHand - allocated
+  quantityOnHold    Int          @default(0)
+  ownerCustomerId   String?
+  ownerCustomer     Customer?    @relation("InventoryOwner", fields: [ownerCustomerId], references: [id])
+  lotNumber         String?
+  expiryDate        DateTime?
+  lastCountedAt     DateTime?
+
+  orgId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  transactions InventoryTransaction[]
+  allocations  Allocation[]
+  pickLines    PickLine[]
+
+  @@unique([binId, sku, uomCode, lotNumber, ownerCustomerId])
+  @@index([locationId])
+  @@index([orgId])
+  @@index([sku])
+  @@index([ownerCustomerId])
+}
+
+model InventoryTransaction {
+  id                String          @id @default(uuid())
+  inventoryRecordId String
+  inventoryRecord   InventoryRecord @relation(fields: [inventoryRecordId], references: [id])
+  transactionType   String // receive, putaway, pick, adjust, transfer, cycle_count, replenish, uom_converted
+  quantityChange    Int // positive for in, negative for out
+  previousQuantity  Int
+  newQuantity       Int
+  referenceType     String? // receiving_task, pick_task, adjustment, cycle_count
+  referenceId       String?
+  reasonCode        String? // damage, expired, recount, return, scrap, found
+  performedBy       String?
+  trackableUnitId   String?
+  trackableUnit     TrackableUnit?  @relation(fields: [trackableUnitId], references: [id])
+
+  orgId String
+
+  createdAt DateTime @default(now())
+
+  @@index([inventoryRecordId])
+  @@index([orgId])
+  @@index([transactionType])
+  @@index([createdAt])
+}
+
+model Allocation {
+  id                String          @id @default(uuid())
+  orderLineItemId   String
+  orderLineItem     OrderLineItem   @relation(fields: [orderLineItemId], references: [id])
+  inventoryRecordId String
+  inventoryRecord   InventoryRecord @relation(fields: [inventoryRecordId], references: [id])
+  trackableUnitId   String?
+  trackableUnit     TrackableUnit?  @relation(fields: [trackableUnitId], references: [id])
+  quantity          Int
+  uomCode           String          @default("EA")
+  state             String          @default("soft") // soft, hard, picked, released
+  lotNumber         String?
+  allocatedAt       DateTime        @default(now())
+  expiresAt         DateTime? // soft allocations auto-expire
+
+  orgId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orderLineItemId])
+  @@index([inventoryRecordId])
+  @@index([orgId])
+  @@index([state])
+}

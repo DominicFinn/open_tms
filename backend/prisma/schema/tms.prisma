@@ -1,0 +1,2613 @@
+// FinnTMS: shipments, orders, carriers, lanes, tendering, EDI, tracking, cold chain.
+// Module: tms. See .claude/rules/module-boundaries.md for what may depend on what.
+
+model Shipment {
+  id                  String        @id @default(uuid())
+  // Multi-tenancy: every Shipment is scoped to a single Organization.
+  // Tightened to NOT NULL after Phase 2 backfill verification.
+  orgId               String
+  reference           String
+  // Canonical lifecycle: draft -> ready -> in_progress -> complete.
+  // Manual transitions are gated (see TransitionShipmentStatusCommand);
+  // automatic tracking handlers map carrier milestones onto these values.
+  status              String        @default("draft")
+  // Orthogonal exception flag — set when a carrier/tracking exception fires,
+  // so the lifecycle status is never clobbered by an operational problem.
+  hasException        Boolean       @default(false)
+  pickupDate          DateTime?
+  deliveryDate        DateTime?
+  pickupWindowStart   DateTime?
+  pickupWindowEnd     DateTime?
+  deliveryWindowStart DateTime?
+  deliveryWindowEnd   DateTime?
+  shipmentType        ShipmentType? @relation(fields: [shipmentTypeId], references: [id])
+  shipmentTypeId      String?
+  proNumber           String?
+  // Transport mode — "FTL" (Full Truck Load) or "LTL" (Less Than Truck Load).
+  // Distinct from shipmentType, which drives physical restrictions (temp,
+  // hazmat, humidity, equipment), not mode/service level.
+  serviceLevel        String?
+  items               Json?
+  archived            Boolean       @default(false)
+  archivedAt          DateTime?
+  // Captured on archive (alongside status -> 'archived') so unarchive can
+  // restore the prior lifecycle status. Mirrors Order.statusBeforeArchive.
+  statusBeforeArchive String?
+  // Soft delete (admin-only, distinct from archive): the row is retained for
+  // audit but hidden from every view, including the future archived screen.
+  deletedAt           DateTime?
+  deletedBy           String?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  customer            Customer      @relation(fields: [customerId], references: [id])
+  customerId          String
+  // Nullable so a draft can be saved with a partial/absent route. Route
+  // completeness (a lane OR origin+destination) is enforced only when the
+  // shipment leaves draft, via the readiness gate.
+  origin              Location?     @relation("Origin", fields: [originId], references: [id])
+  originId            String?
+  destination         Location?     @relation("Destination", fields: [destinationId], references: [id])
+  destinationId       String?
+
+  // Cutoff-at-risk monitoring: dedupes notifications, only re-fires on severity escalation
+  lastCutoffRiskSeverity String?
+  lastCutoffRiskAt       DateTime?
+  lastCutoffRiskIssueId  String?
+  // ETA-delay monitoring: last delay severity seen, so the monitor can detect the
+  // delay -> on-time edge and emit tracking.eta_recovered (drives auto-resolve).
+  lastEtaDelaySeverity   String?
+  lane                   Lane?              @relation(fields: [laneId], references: [id])
+  laneId                 String?
+  carrier                Carrier?           @relation(fields: [carrierId], references: [id])
+  carrierId              String? // Manual carrier assignment for non-lane shipments
+  loads                  Load[]
+  events                 ShipmentEvent[]
+  orderShipments         OrderShipment[]
+  stops                  ShipmentStop[] // Multi-stop route support
+  tenders                Tender[] // Carrier tenders for this shipment
+  deviceAssignments      DeviceAssignment[] // IoT device assignments
+  sensorReadings         SensorReading[] // Sensor telemetry data
+
+  // Cargo tracking
+  cargoScans         CargoScan[]
+  cargoDiscrepancies CargoDiscrepancy[]
+
+  // Read model relations
+  orderReadModels OrderReadModel[]
+
+  // Cold chain
+  effectiveMinTemp      Float? // Computed from orders (°C canonical)
+  effectiveMaxTemp      Float?
+  effectiveAlertMinTemp Float? // Warning thresholds (tighter than min/max)
+  effectiveAlertMaxTemp Float?
+  coldChainDisposition  String                    @default("not_applicable") // not_applicable, monitoring, pending_review, released, quarantined
+  dispositionSetBy      String?
+  dispositionSetAt      DateTime?
+  dispositionNotes      String?
+  temperatureLogs       ImmutableTemperatureLog[]
+  coldChainExcursions   ColdChainExcursion[]
+  capaReports           CAPAReport[]
+
+  // Declared restrictions (set at shipment creation, distinct from the
+  // effective* fields above which are computed from linked orders)
+  tempControlled        Boolean @default(false)
+  tempMinC              Float?
+  tempMaxC              Float?
+  humidityControlled    Boolean @default(false)
+  humidityMinPct        Float?
+  humidityMaxPct        Float?
+  hazmat                Boolean @default(false)
+  unNumber              String? // e.g. "UN1203"
+  hazmatClass           String? // e.g. "3" (flammable liquid)
+  packingGroup          String? // I | II | III
+  properShippingName    String?
+  requiredEquipmentType String? // dryVan, reefer, flatbed, tanker, intermodal
+
+  // Custom fields
+  customFieldVersionId String?
+  customFieldValues    Json?
+
+  // Financial
+  charges                  Charge[]
+  shipmentFinancialSummary ShipmentFinancialSummary?
+
+  // Warehouse app
+  accessories ShipmentAccessory[] // Door seals, BLE sensors, etc.
+  flags       ShipmentFlag[] // Warehouse user flagged issues
+  launchedAt  DateTime? // When warehouse user completed launch workflow
+  launchedBy  String? // User ID who launched
+
+  // Carrier tracking API
+  trackingNumber        String? // Carrier tracking number (PRO, AWB, etc.)
+  carrierTrackingEvents CarrierTrackingEvent[]
+
+  // Brokerage
+  commissions Commission[]
+
+  @@index([customerId])
+  @@index([status])
+  @@index([originId])
+  @@index([destinationId])
+  @@index([carrierId])
+  @@index([laneId])
+  @@index([archived])
+  @@index([deletedAt])
+  @@index([createdAt])
+  @@index([reference])
+  @@index([trackingNumber])
+  @@index([status, archived])
+  @@index([customerId, status])
+  @@index([originId, archived, status])
+  @@index([destinationId, archived, status])
+  @@index([orgId])
+  @@index([orgId, status])
+  @@index([orgId, archived, status])
+}
+
+model ShipmentStop {
+  id         String   @id @default(uuid())
+  shipment   Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  shipmentId String
+  location   Location @relation(fields: [locationId], references: [id])
+  locationId String
+
+  // Stop sequence in the route (1 = first stop, 2 = second, etc.)
+  sequenceNumber Int
+
+  // Type of stop
+  stopType String @default("delivery") // pickup, delivery, both
+
+  // Timing
+  estimatedArrival   DateTime?
+  actualArrival      DateTime?
+  estimatedDeparture DateTime?
+  actualDeparture    DateTime?
+
+  // Status
+  status String @default("pending") // pending, arrived, in_progress, completed, skipped
+
+  // Orders to be delivered at this stop
+  orders Order[]
+
+  // Geofencing (for automatic status updates)
+  geofenceRadius  Float? // Radius in meters for geofence trigger
+  geofenceEnabled Boolean @default(false)
+
+  // Notes and instructions
+  notes        String?
+  instructions String? // Specific delivery instructions for this stop
+
+  // Proof of delivery
+  signatureUrl    String? // URL to signature image
+  photoUrls       Json? // Array of photo URLs
+  proofOfDelivery Json? // Additional proof data
+
+  // Cargo tracking relations
+  cargoScans            CargoScan[]
+  discrepanciesExpected CargoDiscrepancy[] @relation("ExpectedStop")
+  discrepanciesActual   CargoDiscrepancy[] @relation("ActualStop")
+  trackableUnitsHere    TrackableUnit[]    @relation("UnitCurrentStop")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([shipmentId, sequenceNumber])
+  @@index([shipmentId])
+  @@index([locationId])
+  @@index([status])
+}
+
+// ─── Arrival Criteria ─────────────────────────────────────────────────────────
+// Every location should have at least one arrival criteria to determine
+// when a shipment has arrived. Types: geofence, wifi, ble (Bluetooth anchor).
+
+model ArrivalCriteria {
+  id         String   @id @default(uuid())
+  location   Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  locationId String
+
+  // Criteria type
+  criteriaType String // "geofence", "wifi", "ble"
+
+  // Geofence criteria
+  radiusMeters Float? // Radius in meters for geofence trigger
+  lat          Float? // Center latitude (defaults to location lat if null)
+  lng          Float? // Center longitude (defaults to location lng if null)
+
+  // WiFi criteria (IoT device detects a known WiFi network)
+  wifiSsid  String? // WiFi network name (SSID)
+  wifiBssid String? // WiFi access point MAC address (BSSID) for precise identification
+
+  // BLE criteria (Bluetooth Low Energy location anchor / reader)
+  bleUuid           String? // BLE beacon UUID
+  bleMajor          Int? // BLE beacon major value
+  bleMinor          Int? // BLE beacon minor value
+  bleRssiThreshold  Int? // RSSI threshold for proximity detection (e.g., -70 dBm)
+  bleAnchorId       String? // Fixed anchor/reader ID at this location (matches device reports)
+  bleReaderLocation String? // Where the reader is at this location (e.g., "Loading Dock B")
+
+  // Metadata
+  name     String? // Optional friendly name (e.g., "Loading Dock A WiFi")
+  active   Boolean @default(true)
+  priority Int     @default(0) // Higher priority criteria checked first
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([locationId])
+  @@index([criteriaType])
+  @@index([locationId, active])
+}
+
+model ShipmentEvent {
+  id              String   @id @default(uuid())
+  shipment        Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  shipmentId      String
+  eventType       String // Canonical timeline type (see shared/shipmentEventTypes.ts) or legacy device/edi type
+  description     String? // User-facing summary of what happened
+  source          String? // Provenance: system | device | edi
+  sourceEventId   String? // Originating DomainEventLog id — idempotency key for the timeline projection
+  deviceId        String? // External device ID (e.g., "72308628872889491")
+  deviceName      String? // Device display name (e.g., "SH-0001")
+  lat             Float? // Latitude from GPS
+  lng             Float? // Longitude from GPS
+  address         String? // Human-readable address
+  locationSummary String? // Full location summary from webhook
+  rawPayload      Json? // Store the entire webhook payload for debugging
+  eventTime       DateTime // When the event occurred (from webhook)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([shipmentId])
+  @@index([eventTime])
+  @@index([eventType])
+  @@index([sourceEventId])
+}
+
+// Carrier cutoff times: latest handoff time for same-day pickup or a service-level guarantee.
+// The monitor compares projected warehouse-ready-time against these rows to fire shipment.cutoff_at_risk.
+model CarrierCutoff {
+  id              String   @id @default(uuid())
+  carrierId       String
+  carrier         Carrier  @relation(fields: [carrierId], references: [id], onDelete: Cascade)
+  locationId      String? // optional per-location override
+  dayOfWeek       Int // 0 = Sunday, 6 = Saturday
+  cutoffLocalTime String // "HH:mm" 24-hour
+  timezone        String   @default("UTC") // IANA tz name, e.g. "America/New_York"
+  serviceLevel    String? // e.g. "ground", "2day", null = all services
+  notes           String?
+  active          Boolean  @default(true)
+  orgId           String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([carrierId, dayOfWeek])
+  @@index([orgId])
+  @@index([active])
+}
+
+model Carrier {
+  id           String          @id @default(uuid())
+  // Multi-tenancy: every Carrier is scoped to a single Organization.
+  // Tightened to NOT NULL in Phase 2 of the multi-tenancy plan.
+  orgId        String
+  name         String
+  mcNumber     String?
+  dotNumber    String?
+  contactName  String?
+  contactEmail String?
+  contactPhone String?
+  address1     String?
+  address2     String?
+  city         String?
+  state        String?
+  postalCode   String?
+  country      String?
+  archived     Boolean         @default(false)
+  archivedAt   DateTime?
+  // Soft delete (tombstone). Deleted carriers 404 everywhere but are retained
+  // for audit/finance history. Only allowed when not assigned to any lane.
+  deletedAt    DateTime?
+  deletedBy    String?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  vehicles     Vehicle[]
+  drivers      Driver[]
+  laneCarriers LaneCarrier[]
+  shipments    Shipment[]
+  cutoffs      CarrierCutoff[]
+
+  // Carrier Validation (SOP-CL-001)
+  validationTier       String? // "tier1" | "tier2" | "tier3" | null
+  registrationChecked  Boolean   @default(false)
+  insuranceDocReceived Boolean   @default(false)
+  insuranceVerified    Boolean   @default(false)
+  identityConfirmed    Boolean   @default(false)
+  complianceChecked    Boolean   @default(false)
+  validationNotes      String?
+  validatedAt          DateTime?
+  validatedBy          String?
+
+  // Standard Carrier Alpha Code (needed for EDI 204)
+  scacCode String?
+
+  // Return label generation (carrier API or manual)
+  returnLabelProvider       String? // null = not configured; manual | fedex | ups | dhl
+  returnLabelAccountNumber  String? // carrier-side account number for return labels
+  returnLabelDefaultService String? // default service level (ground, 2day, etc.)
+
+  // Payment & Remittance
+  paymentTermsDays  Int     @default(30)
+  remitToName       String?
+  remitToAddress1   String?
+  remitToCity       String?
+  remitToState      String?
+  remitToPostalCode String?
+  remitToCountry    String?
+  currency          String  @default("USD")
+
+  // Custom fields
+  customFieldVersionId String?
+  customFieldValues    Json?
+
+  // Tendering relations
+  carrierUsers    CarrierUser[]
+  tenderOffers    TenderOffer[]
+  tenderBids      TenderBid[]
+  tradingPartners TradingPartner[] @relation("CarrierTradingPartners")
+
+  // Financial relations
+  carrierInvoices CarrierInvoice[]
+  creditNotes     CreditNote[]     @relation("CarrierCreditNotes")
+
+  // Read model relations
+  shipmentReadModels ShipmentReadModel[]
+
+  // Carrier tracking API integration
+  trackingIntegration CarrierTrackingIntegration?
+  trackingEvents      CarrierTrackingEvent[]
+
+  @@index([orgId])
+}
+
+model Vehicle {
+  id         String   @id @default(uuid())
+  // Multi-tenancy: every Vehicle is scoped to a single Organization
+  // (always matches its Carrier's orgId).
+  orgId      String
+  carrier    Carrier  @relation(fields: [carrierId], references: [id])
+  carrierId  String
+  plate      String
+  type       String
+  capacityKg Int?
+  capacityM3 Int?
+  loads      Load[]
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([carrierId])
+  @@index([orgId])
+}
+
+model Driver {
+  id        String   @id @default(uuid())
+  // Multi-tenancy: every Driver is scoped to a single Organization
+  // (always matches their Carrier's orgId).
+  orgId     String
+  carrier   Carrier  @relation(fields: [carrierId], references: [id])
+  carrierId String
+  name      String
+  phone     String?
+  email     String?
+  loads     Load[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([carrierId])
+  @@index([orgId])
+}
+
+model Load {
+  id         String    @id @default(uuid())
+  shipment   Shipment  @relation(fields: [shipmentId], references: [id])
+  shipmentId String
+  vehicle    Vehicle?  @relation(fields: [vehicleId], references: [id])
+  vehicleId  String?
+  driver     Driver?   @relation(fields: [driverId], references: [id])
+  driverId   String?
+  assignedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([shipmentId])
+  @@index([vehicleId])
+  @@index([driverId])
+}
+
+model Lane {
+  id            String   @id @default(uuid())
+  // Multi-tenancy: every Lane is scoped to a single Organization.
+  orgId         String
+  name          String // Auto-generated: "Origin → Destination"
+  origin        Location @relation("LaneOrigin", fields: [originId], references: [id])
+  originId      String
+  destination   Location @relation("LaneDestination", fields: [destinationId], references: [id])
+  destinationId String
+  distance      Float? // Optional distance in km
+  notes         String?
+
+  // Lane capabilities for order matching
+  serviceLevel               String  @default("LTL") // "FTL", "LTL", or "Both"
+  supportsTemperatureControl Boolean @default(false) // Can handle refrigerated/frozen
+  supportsHazmat             Boolean @default(false) // Hazmat certified
+  maxWeight                  Float? // Maximum weight capacity in kg
+  maxVolume                  Float? // Maximum volume capacity in m³
+
+  status        String         @default("active") // active/archived
+  archived      Boolean        @default(false)
+  archivedAt    DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  shipments     Shipment[]
+  customerLanes CustomerLane[]
+  laneCarriers  LaneCarrier[]
+  stops         LaneStop[]
+  route         LaneRoute?
+
+  // Read model relations
+  shipmentReadModels ShipmentReadModel[]
+
+  @@index([orgId])
+}
+
+model CustomerLane {
+  id         String   @id @default(uuid())
+  customer   Customer @relation(fields: [customerId], references: [id])
+  customerId String
+  lane       Lane     @relation(fields: [laneId], references: [id])
+  laneId     String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([customerId, laneId])
+  @@index([customerId])
+  @@index([laneId])
+}
+
+model LaneCarrier {
+  id           String   @id @default(uuid())
+  lane         Lane     @relation(fields: [laneId], references: [id])
+  laneId       String
+  carrier      Carrier  @relation(fields: [carrierId], references: [id])
+  carrierId    String
+  price        Float? // Price per shipment or per km (deprecated — use priceCents)
+  priceCents   Int? // Price in cents — canonical field for financial calculations
+  currency     String   @default("USD")
+  serviceLevel String? // e.g., "Standard", "Express", "Economy"
+  notes        String?
+  assigned     Boolean  @default(false) // True if this carrier is assigned to the lane
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Contract rate fields
+  rateType             String? // "per_mile" | "flat" | "cwt"
+  contractStartDate    DateTime?
+  contractEndDate      DateTime?
+  fuelSurchargePercent Float?
+  accessorialRates     Json? // { "detention": 50, "lumper": 75, ... }
+  isContractRate       Boolean   @default(false)
+
+  // Broker: Target margin for this lane-carrier combo
+  targetMarginPercent Decimal? @db.Decimal(5, 2)
+
+  @@unique([laneId, carrierId])
+  @@index([laneId])
+  @@index([carrierId])
+}
+
+model LaneStop {
+  id         String   @id @default(uuid())
+  lane       Lane     @relation(fields: [laneId], references: [id], onDelete: Cascade)
+  laneId     String
+  location   Location @relation(fields: [locationId], references: [id])
+  locationId String
+  order      Int // Order of the stop in the lane (1, 2, 3, etc.)
+  notes      String? // Optional notes for this specific stop
+  // What this stop is for — informational only, doesn't affect routing/rating.
+  // pickup | dropoff | cross_dock | fuel | rest | hub | customs | other
+  purpose    String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([laneId, order])
+  @@unique([laneId, locationId])
+  @@index([laneId])
+  @@index([locationId])
+}
+
+model Order {
+  id           String  @id @default(uuid())
+  // Multi-tenancy: every Order is scoped to a single Organization.
+  // Tightened to NOT NULL in Phase 2 of the multi-tenancy plan.
+  orgId        String
+  orderNumber  String  @unique // Customer's order number or our generated number
+  poNumber     String? // Purchase order number
+  status       String  @default("pending") // pending, verified, assigned, issue, cancelled, archived
+  importSource String  @default("manual") // manual, csv, edi
+  ediData      Json? // Store original EDI data if imported via EDI
+
+  customer   Customer @relation(fields: [customerId], references: [id])
+  customerId String
+
+  // Origin and destination - nullable because location might not exist yet
+  origin          Location? @relation("OrderOrigin", fields: [originId], references: [id])
+  originId        String?
+  originData      Json? // Store raw location data if location doesn't exist
+  originValidated Boolean   @default(false)
+
+  destination          Location? @relation("OrderDestination", fields: [destinationId], references: [id])
+  destinationId        String?
+  destinationData      Json? // Store raw location data if location doesn't exist
+  destinationValidated Boolean   @default(false)
+
+  // Dates
+  orderDate             DateTime  @default(now())
+  requestedPickupDate   DateTime?
+  requestedDeliveryDate DateTime?
+
+  // Special requirements for shipment assignment
+  serviceLevel        String  @default("LTL") // "FTL" (Full Truck Load) or "LTL" (Less Than Truck Load)
+  temperatureControl  String  @default("ambient") // "ambient", "refrigerated", "frozen"
+  requiresHazmat      Boolean @default(false)
+  specialRequirements Json? // Additional requirements as JSON array
+
+  // Delivery status tracking (separate from order lifecycle status). Null
+  // until the order is actually moving — 'assigned' is redundant with
+  // status='assigned' and is no longer a valid value here.
+  deliveryStatus      String? // in_transit, delivered, exception (null = not moving yet)
+  deliveredAt         DateTime? // When the order was delivered
+  deliveryConfirmedBy String? // User ID or system identifier who confirmed delivery
+  deliveryMethod      String? // manual, geofence, geofence_iot, auto, driver_app
+  deliveryNotes       String? // Notes about the delivery
+  exceptionType       String? // If exception status: delay, damage, refused, address_issue, weather, other
+  exceptionNotes      String? // Details about the exception
+  exceptionResolvedAt DateTime? // When the exception was resolved
+
+  // Link to the specific stop where this order should be delivered (for multi-stop shipments)
+  deliveryStop   ShipmentStop? @relation(fields: [deliveryStopId], references: [id])
+  deliveryStopId String?
+
+  // Trackable units (pallets, totes, boxes, etc.)
+  trackableUnits TrackableUnit[]
+
+  // Line items (legacy - will be moved to trackable units)
+  lineItems OrderLineItem[]
+
+  // Additional info
+  specialInstructions String?
+  notes               String?
+
+  // Tracking
+  archived            Boolean   @default(false)
+  archivedAt          DateTime?
+  statusBeforeArchive String? // Captured on archive so unarchive can restore the prior lifecycle status
+  deletedAt           DateTime? // Soft delete - set when order is deleted
+  deletedBy           String? // User ID who deleted the order
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  // Relationship to shipments
+  orderShipments OrderShipment[]
+
+  // Audit trail
+  auditLogs AuditLog[]
+
+  // Pending lane requests
+  pendingLaneRequests PendingLaneRequest[]
+
+  // IoT device tracking
+  deviceAssignments DeviceAssignment[]
+  sensorReadings    SensorReading[]
+
+  // Financial
+  charges Charge[]
+
+  // Custom fields
+  customFieldVersionId String?
+  customFieldValues    Json?
+
+  @@index([customerId])
+  @@index([status])
+  @@index([archived])
+  @@index([deletedAt])
+  @@index([createdAt])
+  @@index([deliveryStatus])
+  @@index([originId])
+  @@index([destinationId])
+  @@index([status, archived])
+  @@index([customerId, archived])
+  @@index([orgId])
+  @@index([orgId, status])
+}
+
+model OrderLineItem {
+  id      String @id @default(uuid())
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId String
+
+  // Optional: which trackable unit does this item belong to?
+  trackableUnit   TrackableUnit? @relation(fields: [trackableUnitId], references: [id], onDelete: Cascade)
+  trackableUnitId String?
+
+  sku         String
+  description String?
+  quantity    Int
+  weight      Float? // in kg
+  weightUnit  String  @default("kg")
+  length      Float? // dimensions in cm
+  width       Float?
+  height      Float?
+  dimUnit     String  @default("cm")
+
+  // Additional fields
+  hazmat      Boolean @default(false)
+  temperature String? // e.g., "ambient", "refrigerated", "frozen"
+
+  // Pricing
+  unitPriceCents  Int? // Price per unit in cents
+  totalPriceCents Int? // quantity * unitPriceCents
+  priceCurrency   String @default("USD")
+
+  // LTL classification
+  freightClass String? // 50, 55, 60, 65, 70, 77.5, 85, 92.5, 100, 110, 125, 150, 175, 200, 250, 300, 400, 500
+  nmfcCode     String? // National Motor Freight Classification code
+
+  // Unit of measure for the line (each | pieces | cases | pallets | cartons | kg | lb)
+  unitOfMeasure String @default("each")
+
+  // Hazmat detail — required when hazmat = true
+  unNumber           String? // e.g. "UN1203"
+  hazmatClass        String? // e.g. "3" (flammable liquid)
+  packingGroup       String? // I | II | III
+  properShippingName String?
+
+  // Customs (international shipments)
+  hsCode          String? // Harmonized System code
+  countryOfOrigin String? // ISO 3166-1 alpha-2
+
+  // Temperature range (keep `temperature` label for display)
+  tempMinC Float?
+  tempMaxC Float?
+
+  // WMS relations
+  allocations Allocation[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([sku])
+}
+
+model OrderShipment {
+  id         String   @id @default(uuid())
+  order      Order    @relation(fields: [orderId], references: [id])
+  orderId    String
+  shipment   Shipment @relation(fields: [shipmentId], references: [id])
+  shipmentId String
+  createdAt  DateTime @default(now())
+
+  @@unique([orderId, shipmentId])
+  @@index([orderId])
+  @@index([shipmentId])
+}
+
+model TrackableUnit {
+  id      String @id @default(uuid())
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId String
+
+  // Unit identification
+  identifier     String // e.g., "PALLET-001", "BOX-123", user-defined identifier
+  unitType       String // Snapshot of the org setting at creation time (pallet, tote, box, stillage, custom)
+  customTypeName String? // If custom type was used
+
+  // Sequence number within the order
+  sequenceNumber Int // 1, 2, 3... for ordering within an order
+
+  // Line items contained in this unit
+  lineItems OrderLineItem[]
+
+  // Additional tracking
+  barcode String? // Optional barcode/QR code
+  notes   String?
+
+  // Phase 2: per-unit dim/weight overrides for sophisticated shippers (mixed-SKU
+  // pallets, custom-built handling units). When null, cartonization falls back
+  // to summing the contained line items.
+  weight     Float? // total weight of this unit (cargo + tare)
+  weightUnit String  @default("kg")
+  length     Float? // external footprint of this unit
+  width      Float?
+  height     Float?
+  dimUnit    String  @default("cm")
+  stackable  Boolean @default(true)
+
+  // IoT device tracking at unit level
+  sensorReadings SensorReading[]
+  deviceEvents   DeviceEvent[]
+
+  // Cargo tracking — where this unit physically is right now
+  currentStopId String? // Which stop this unit is currently at (null = in transit / on vehicle)
+  currentStop   ShipmentStop? @relation("UnitCurrentStop", fields: [currentStopId], references: [id])
+  condition     String        @default("good") // good, damaged, lost, unknown
+  lastScannedAt DateTime?
+
+  // Cargo scan & discrepancy relations
+  cargoScans    CargoScan[]
+  discrepancies CargoDiscrepancy[]
+
+  // Packaging specification (any kind from the PackagingType catalogue); null = ad-hoc / unspecified
+  packagingTypeId String?
+  packagingType   PackagingType? @relation(fields: [packagingTypeId], references: [id])
+
+  // WMS fields
+  currentBinId    String?
+  currentBin      WarehouseBin?   @relation("UnitCurrentBin", fields: [currentBinId], references: [id])
+  parentUnitId    String?
+  parentUnit      TrackableUnit?  @relation("UnitNesting", fields: [parentUnitId], references: [id])
+  childUnits      TrackableUnit[] @relation("UnitNesting")
+  currentZoneId   String?
+  currentZone     WarehouseZone?  @relation("UnitCurrentZone", fields: [currentZoneId], references: [id])
+  lotNumber       String?
+  expiryDate      DateTime?
+  receivedAt      DateTime?
+  ownerCustomerId String?
+  ownerCustomer   Customer?       @relation("OwnedUnits", fields: [ownerCustomerId], references: [id])
+  qualityStatus   String          @default("available") // available, hold, quarantine, damaged
+
+  // WMS task relations
+  putawayTasks          PutawayTask[]
+  receivingLines        ReceivingLine[]
+  pickLines             PickLine[]
+  packLines             PackLine[]
+  allocations           Allocation[]
+  inventoryTransactions InventoryTransaction[]
+  stagingAssignments    StagingAssignment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([orderId, sequenceNumber])
+  @@index([orderId])
+  @@index([currentStopId])
+  @@index([currentBinId])
+  @@index([currentZoneId])
+  @@index([parentUnitId])
+  @@index([ownerCustomerId])
+  @@index([lotNumber])
+}
+
+model PendingLaneRequest {
+  id String @id @default(uuid())
+
+  // Order that triggered this request
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId String
+
+  // Lane details needed
+  originId      String
+  origin        Location @relation("PendingLaneOrigin", fields: [originId], references: [id])
+  destinationId String
+  destination   Location @relation("PendingLaneDestination", fields: [destinationId], references: [id])
+
+  // Required capabilities
+  serviceLevel               String // "FTL" or "LTL"
+  requiresTemperatureControl Boolean @default(false)
+  requiresHazmat             Boolean @default(false)
+
+  // Status tracking
+  status        String    @default("pending") // "pending", "approved", "rejected", "lane_created"
+  resolvedAt    DateTime?
+  resolvedById  String? // User who resolved this request
+  createdLaneId String? // If approved and lane was created
+
+  // Notes
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([status])
+  @@index([originId, destinationId])
+}
+
+// ─── Document Models ────────────────────────────────────────────────────────
+
+model DocumentTemplate {
+  id           String  @id @default(uuid())
+  name         String // "Standard BOL", "International Customs"
+  documentType String // "bol", "label", "customs", "daily_report"
+  description  String?
+
+  // Template content — HTML with Handlebars placeholders
+  htmlTemplate String
+
+  // Configuration — JSON blob for type-specific settings
+  config Json? // e.g. { "pageSize": "letter", "orientation": "portrait" }
+
+  // Metadata
+  isDefault Boolean @default(false) // One default per documentType
+  active    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  documents GeneratedDocument[]
+
+  @@index([documentType])
+  @@index([active])
+}
+
+model GeneratedDocument {
+  id String @id @default(uuid())
+
+  // What kind of document
+  documentType   String // "bol", "label", "customs", "daily_report", "attachment"
+  documentNumber String? // Auto-generated BOL number, etc.
+  fileName       String // "BOL-20260329-0001.pdf"
+  mimeType       String  @default("application/pdf")
+  fileSize       Int? // bytes
+
+  // Storage — binary content (optional: new docs use external storage via storageKey)
+  fileContent    Bytes?
+  storageKey     String? // Opaque UUID-based key — no entity info or filenames
+  storageBackend String  @default("database") // "s3" or "database"
+
+  // Template used (null for attachments/uploads)
+  template   DocumentTemplate? @relation(fields: [templateId], references: [id])
+  templateId String?
+
+  // Entity associations (polymorphic — at least one should be set)
+  shipmentId String?
+  orderId    String?
+  carrierId  String?
+  customerId String?
+
+  // Who generated/uploaded it
+  generatedBy String? // userId
+
+  // Metadata
+  metadata Json? // Snapshot of data used to generate
+  notes    String?
+
+  // Retention
+  retentionExpiresAt DateTime? // Default: 10 years from creation. Null = indefinite.
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([shipmentId])
+  @@index([orderId])
+  @@index([carrierId])
+  @@index([customerId])
+  @@index([documentType])
+  @@index([createdAt])
+  @@index([retentionExpiresAt])
+}
+
+// ─── CQRS Read Models ───────────────────────────────────────────
+// Denormalized projections built from domain events.
+// These tables are populated by projection handlers (OrderProjection, ShipmentProjection)
+// and serve GET/list endpoints without joins.
+
+model OrderReadModel {
+  id                    String       @id // Same as Order.id
+  organization          Organization @relation(fields: [orgId], references: [id])
+  orgId                 String
+  orderNumber           String       @unique
+  poNumber              String?
+  status                String // pending, verified, assigned, issue, cancelled, archived
+  deliveryStatus        String? // in_transit, delivered, exception (null = not moving yet)
+  customer              Customer     @relation(fields: [customerId], references: [id])
+  customerId            String
+  customerName          String
+  originName            String?
+  originCity            String?
+  originState           String?
+  destinationName       String?
+  destinationCity       String?
+  destinationState      String?
+  shipment              Shipment?    @relation(fields: [shipmentId], references: [id])
+  shipmentId            String?
+  shipmentReference     String?
+  carrierName           String?
+  serviceLevel          String?
+  temperatureRequired   Boolean      @default(false)
+  hazmat                Boolean      @default(false)
+  trackableUnitCount    Int          @default(0)
+  lineItemCount         Int          @default(0)
+  totalWeight           Float?
+  requestedDeliveryDate DateTime?
+  deliveredAt           DateTime?
+  exceptionType         String?
+  importSource          String?
+  createdAt             DateTime
+  updatedAt             DateTime
+
+  @@index([orgId])
+  @@index([status])
+  @@index([deliveryStatus])
+  @@index([customerId])
+  @@index([createdAt])
+  @@index([shipmentId])
+}
+
+model ShipmentReadModel {
+  id               String       @id // Same as Shipment.id
+  organization     Organization @relation(fields: [orgId], references: [id])
+  orgId            String
+  reference        String       @unique
+  status           String // Canonical lifecycle: draft, ready, in_progress, complete
+  hasException     Boolean      @default(false) // Orthogonal exception flag (drives Issues filter)
+  customer         Customer     @relation(fields: [customerId], references: [id])
+  customerId       String
+  customerName     String
+  originName       String?
+  originCity       String?
+  originState      String?
+  destinationName  String?
+  destinationCity  String?
+  destinationState String?
+  carrier          Carrier?     @relation(fields: [carrierId], references: [id])
+  carrierId        String?
+  carrierName      String?
+  lane             Lane?        @relation(fields: [laneId], references: [id])
+  laneId           String?
+  laneName         String?
+  proNumber        String?
+  pickupDate       DateTime?
+  deliveryDate     DateTime?
+  orderCount       Int          @default(0)
+  stopCount        Int          @default(0)
+  currentLat       Float?
+  currentLng       Float?
+  lastLocationAt   DateTime?
+
+  // Financial summary (denormalized from ShipmentFinancialSummary)
+  expectedRevenueCents Int?
+  expectedCostCents    Int?
+  expectedMarginCents  Int?
+  actualRevenueCents   Int?
+  actualCostCents      Int?
+  actualMarginCents    Int?
+
+  createdAt DateTime
+  updatedAt DateTime
+
+  @@index([orgId])
+  @@index([status])
+  @@index([customerId])
+  @@index([carrierId])
+  @@index([createdAt])
+  @@index([currentLat, currentLng]) // Composite index for map bbox queries
+  @@index([orgId, status, createdAt])
+  @@index([orgId, customerId, status])
+}
+
+model CarrierReadModel {
+  id              String       @id
+  organization    Organization @relation(fields: [orgId], references: [id])
+  orgId           String
+  name            String
+  mcNumber        String?
+  dotNumber       String?
+  contactEmail    String?
+  status          String // active, archived
+  validationTier  String?
+  vehicleCount    Int          @default(0)
+  driverCount     Int          @default(0)
+  activeLaneCount Int          @default(0)
+  createdAt       DateTime
+  updatedAt       DateTime
+
+  @@index([orgId])
+  @@index([status])
+  @@index([name])
+}
+
+model LaneReadModel {
+  id                  String       @id
+  organization        Organization @relation(fields: [orgId], references: [id])
+  orgId               String
+  name                String
+  originName          String?
+  originCity          String?
+  destinationName     String?
+  destinationCity     String?
+  serviceLevel        String
+  distance            Float?
+  carrierCount        Int          @default(0)
+  activeShipmentCount Int          @default(0)
+  status              String       @default("active")
+  createdAt           DateTime
+  updatedAt           DateTime
+
+  @@index([orgId])
+  @@index([status])
+}
+
+// ─── SLA (Service Level Agreements) ────────────────────────────
+// Two-tier policy hierarchy: org-level defaults + customer-level overrides.
+// Each policy contains typed rules covering ETA, issue response/resolution,
+// dwell time, security events (light/seal), and temperature excursions.
+
+model SlaPolicy {
+  id          String  @id @default(uuid())
+  orgId       String
+  name        String // "Standard SLA", "Premium Customer SLA"
+  description String?
+
+  // Scope: null customerId = org-wide default, non-null = customer override
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  active Boolean @default(true)
+
+  rules SlaRule[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([orgId, customerId]) // One active policy per org or per customer
+  @@index([orgId])
+  @@index([customerId])
+}
+
+model SlaRule {
+  id       String    @id @default(uuid())
+  policy   SlaPolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  policyId String
+
+  // Rule type discriminator
+  ruleType String // "eta_delivery", "issue_response", "issue_resolution",
+  // "dwell_time", "light_event", "seal_event",
+  // "temperature_excursion", "temperature_out_of_range"
+
+  name        String // "Critical Issue Response Time"
+  description String?
+  active      Boolean @default(true)
+
+  // Threshold values (interpreted based on ruleType)
+  warningThresholdMinutes  Int? // Minutes before warning-level alert
+  breachThresholdMinutes   Int? // Minutes before hard breach
+  criticalThresholdMinutes Int? // Minutes before critical escalation
+
+  // Issue SLA filters: which priority/category does this rule apply to?
+  issuePriority String? // "low", "medium", "high", "critical" (null = all)
+  issueCategory String? // "exception", "delay", "damage", "compliance" (null = all)
+
+  // ETA SLA: maximum allowed delivery time from pickup (minutes)
+  maxDeliveryMinutes Int?
+
+  // Dwell time SLA
+  maxDwellMinutes   Int? // Max minutes at a single location before alert
+  dwellLocationType String? // "any", "origin", "intermediate", "destination"
+
+  // Location-type filter: restrict this rule to stops at specific facility types
+  // e.g., "distribution_centre", "cross_dock", "warehouse", "terminal", "port"
+  // null = applies to all location types
+  locationType String?
+
+  // Security event SLA: allowed occurrences before breach
+  maxOccurrences Int? // e.g., 0 = any occurrence is a breach
+
+  // Temperature SLA
+  maxExcursionMinutes Int? // Max cumulative minutes out of range before breach
+
+  // Breach action config
+  autoCreateIssue       Boolean @default(true) // Auto-create triage issue on breach
+  issuePriorityOnBreach String  @default("high") // Priority of auto-created issue
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([policyId])
+  @@index([ruleType])
+}
+
+// Tracks individual SLA evaluations against shipments or issues.
+// One record per (SLA rule + entity) combination.
+//
+// Design decision: SlaEvaluation is its own table rather than a CQRS projection
+// because it is written by BOTH event handlers (instant evaluation on state changes)
+// and the cron worker (periodic breach sweep). A projection is a pure read model
+// derived from a single event stream — SlaEvaluation is a stateful tracking record
+// with concurrent writers, so it doesn't fit that pattern.
+//
+// Denormalized fields (ruleName, entityReference, customerId) avoid joins on
+// dashboard queries. The @@unique constraint on (ruleId, entityType, entityId)
+// prevents duplicate evaluations and acts as a natural concurrency guard — if the
+// cron worker and an event handler race to create the same evaluation, one will
+// get a unique constraint violation and gracefully skip.
+
+model SlaEvaluation {
+  id    String @id @default(uuid())
+  orgId String
+
+  // Which SLA rule is being evaluated
+  ruleId   String
+  ruleType String // Denormalized for querying
+  ruleName String // Denormalized snapshot
+
+  // Subject of evaluation
+  entityType      String // "shipment" or "issue"
+  entityId        String
+  entityReference String? // Shipment reference or issue title
+
+  // Policy context
+  policyId   String
+  customerId String? // Denormalized for dashboard filtering
+
+  // Timing
+  slaStartedAt DateTime // When the SLA clock started
+  slaDueAt     DateTime? // When the SLA will breach
+  warningAt    DateTime? // When warning threshold fires
+
+  // Current state
+  // Design decision: status transitions use optimistic locking via Prisma's
+  // `where` clause (e.g., update where status = 'active'). This prevents race
+  // conditions between the cron worker and event handlers — if both try to
+  // breach the same evaluation simultaneously, only one succeeds and the other
+  // gets zero affected rows, which we treat as a safe no-op.
+  status           String @default("active") // active, warning, breached, met, cancelled
+  remainingMinutes Int?
+
+  // Breach details
+  breachedAt            DateTime?
+  breachDurationMinutes Int?
+
+  // Met details
+  metAt DateTime?
+
+  // Auto-created issue on breach
+  issueId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([ruleId, entityType, entityId]) // One evaluation per rule + entity
+  @@index([orgId])
+  @@index([entityType, entityId])
+  @@index([status])
+  @@index([slaDueAt])
+  @@index([customerId])
+  @@index([ruleType])
+}
+
+// ============================================================
+// EDI Communication Hub — Unified Trading Partner model
+// ============================================================
+
+model TradingPartner {
+  id     String  @id @default(uuid())
+  // Multi-tenancy: every TradingPartner is scoped to a single Organization.
+  // Tightened to NOT NULL in Phase 2 of the multi-tenancy plan.
+  orgId  String
+  name   String
+  active Boolean @default(true)
+
+  // What kind of entity is this partner?
+  entityType String // "customer" | "carrier" | "3pl" | "warehouse" | "erp" | "other"
+  customerId String? // Optional link to Customer
+  customer   Customer? @relation("CustomerTradingPartners", fields: [customerId], references: [id])
+  carrierId  String? // Optional link to Carrier
+  carrier    Carrier?  @relation("CarrierTradingPartners", fields: [carrierId], references: [id])
+
+  // ── SFTP Connection ──
+  sftpHost       String?
+  sftpPort       Int     @default(22)
+  sftpUsername   String?
+  sftpPassword   String?
+  sftpPrivateKey String?
+
+  // ── HTTP/API Connection ──
+  httpUrl        String?
+  httpAuthType   String? // "none" | "basic" | "bearer" | "api_key"
+  httpAuthHeader String? // Header name (e.g., "X-API-Key")
+  httpAuthValue  String? // Auth credential value
+
+  // ── EDI Envelope Config ──
+  senderId   String? // ISA06 — our sender ID for this partner
+  receiverId String? // ISA08 — partner's receiver ID
+  ediVersion String  @default("005010")
+
+  // ── Inbound Config ──
+  inboundEnabled     Boolean   @default(false)
+  inboundDir         String    @default("/") // SFTP directory to poll for inbound files
+  inboundFilePattern String    @default("*.edi,*.x12")
+  pollingInterval    Int       @default(900) // seconds (15 min default)
+  pollingCron        String? // Optional cron expression override
+  lastPolledAt       DateTime?
+
+  // ── Outbound Config ──
+  outboundEnabled    Boolean @default(false)
+  outboundDir        String? // SFTP directory for outbound files (null = use HTTP)
+  outboundTransport  String  @default("sftp") // "sftp" | "http"
+  outboundFileNaming String  @default("reference") // "date" | "sequence" | "reference"
+
+  // ── Legacy migration tracking ──
+  migratedFromEdiPartnerId          String? // ID of old EdiPartner if migrated
+  migratedFromOutboundIntegrationId String? // ID of old OutboundIntegration if migrated
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime? // Soft delete - set when partner is deleted
+  deletedBy String? // User ID who deleted the partner
+
+  transactions TradingPartnerTransaction[]
+  ediLogs      EdiTransactionLog[]
+
+  @@index([entityType])
+  @@index([customerId])
+  @@index([carrierId])
+  @@index([active])
+  @@index([inboundEnabled])
+  @@index([outboundEnabled])
+  @@index([deletedAt])
+  @@index([orgId])
+}
+
+model TradingPartnerTransaction {
+  id        String         @id @default(uuid())
+  partner   TradingPartner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  partnerId String
+
+  transactionType String // "850" | "855" | "856" | "204" | "990" | "214" | "210" | "997" | "810"
+  direction       String // "inbound" | "outbound"
+  enabled         Boolean @default(true)
+
+  // Per-type config
+  fieldMapping   Json? // Custom field mappings for this transaction type
+  autoProcess    Boolean @default(true) // Auto-create orders (850), auto-update shipments (214), etc.
+  ack997Required Boolean @default(true) // Send/require 997 functional acknowledgment
+
+  // Inbound file pattern override (if different from partner default)
+  filePattern String? // e.g., "*.990" to override partner's default "*.edi"
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([partnerId, transactionType, direction])
+  @@index([partnerId])
+  @@index([transactionType])
+  @@index([direction])
+}
+
+model EdiTransactionLog {
+  id        String          @id @default(uuid())
+  partner   TradingPartner? @relation(fields: [partnerId], references: [id])
+  partnerId String?
+  orgId     String? // Multi-tenancy scope. Nullable so older rows that pre-date this column can be backfilled lazily; new writes should always set it.
+
+  // What was exchanged
+  transactionType String // "850", "856", "204", "990", "997", "214", "210", "810", "820"
+  direction       String // "inbound" | "outbound"
+
+  // File details
+  fileName    String?
+  fileSize    Int?
+  fileContent String? // Raw EDI content (for audit)
+  fileHash    String? // SHA-256 for dedup
+
+  // Transport details
+  transport    String  @default("api") // "sftp" | "http" | "api" | "manual"
+  url          String? // HTTP URL or SFTP path
+  responseCode Int? // HTTP response code
+  responseBody String?
+
+  // Processing
+  status       String    @default("pending") // "pending" | "processing" | "success" | "error" | "duplicate"
+  processedAt  DateTime?
+  errorMessage String?
+
+  // Parse result (for inbound) — replaces EdiFile.parsedData
+  parsedData       Json?
+  transactionCount Int   @default(0) // Number of transactions in file
+
+  // Created entities tracking — replaces EdiFile.ordersCreated/orderIds
+  entitiesCreated Int    @default(0) // Orders, invoices, payments created
+  entityIds       Json? // Array of created entity IDs
+  source          String @default("api") // "manual" | "sftp" | "api"
+
+  // Linked entities
+  shipmentId        String?
+  shipmentReference String?
+  orderId           String?
+  tenderId          String?
+  invoiceId         String?
+  invoiceNumber     String?
+
+  // 997 acknowledgment tracking
+  ack997Sent     Boolean @default(false)
+  ack997Received Boolean @default(false)
+  ack997LogId    String? // Reference to the 997 log entry
+
+  // Retry
+  retryCount  Int       @default(0)
+  lastRetryAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([partnerId])
+  @@index([transactionType])
+  @@index([direction])
+  @@index([status])
+  @@index([shipmentId])
+  @@index([fileHash])
+  @@index([createdAt])
+  @@index([source])
+  @@index([partnerId, status])
+  @@index([direction, status, createdAt])
+  @@index([orgId])
+  @@index([orgId, createdAt])
+  @@index([orgId, status])
+  @@index([orgId, direction, status])
+}
+
+// ============================================================
+// Carrier Tendering — CarrierUser, Tender, TenderOffer, TenderBid
+// ============================================================
+
+model CarrierUser {
+  id                  String    @id @default(uuid())
+  carrier             Carrier   @relation(fields: [carrierId], references: [id])
+  carrierId           String
+  email               String    @unique
+  passwordHash        String
+  name                String
+  role                String    @default("dispatcher") // "dispatcher" | "admin"
+  active              Boolean   @default(true)
+  lastLoginAt         DateTime?
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime?
+  // PII scrub tombstone — set when the user is anonymised (1 year after the
+  // carrier is archived/deleted). email/name/phone are replaced with placeholders.
+  anonymizedAt        DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  tenderBids TenderBid[]
+
+  @@index([carrierId])
+  @@index([email])
+}
+
+model Tender {
+  id         String   @id @default(uuid())
+  shipment   Shipment @relation(fields: [shipmentId], references: [id])
+  shipmentId String
+  reference  String   @unique // Auto-generated: "TND-001"
+
+  // Strategy & configuration
+  strategy              String @default("broadcast") // "broadcast" | "waterfall"
+  status                String @default("draft") // "draft" | "open" | "evaluating" | "awarded" | "cancelled" | "expired"
+  tenderDurationMinutes Int    @default(120) // How long carriers have to respond
+
+  // Rate information
+  targetRate Float? // Target rate (what shipper hopes to pay)
+  currency   String @default("USD")
+
+  // Shipment details for tender
+  equipmentType       String? // "53' Dry Van", "53' Reefer", etc.
+  notes               String?
+  specialInstructions String?
+
+  // Lifecycle timestamps
+  openedAt  DateTime?
+  closedAt  DateTime?
+  awardedAt DateTime?
+
+  // Who created this tender
+  createdBy String? // User ID
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  offers TenderOffer[]
+  bids   TenderBid[]
+
+  @@index([shipmentId])
+  @@index([status])
+  @@index([reference])
+  @@index([createdAt])
+}
+
+model TenderOffer {
+  id        String  @id @default(uuid())
+  tender    Tender  @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+  tenderId  String
+  carrier   Carrier @relation(fields: [carrierId], references: [id])
+  carrierId String
+
+  // Waterfall sequencing (1 = first choice, 2 = second, etc.)
+  sequence Int @default(1)
+
+  // Status tracking
+  status    String    @default("pending") // "pending" | "sent" | "viewed" | "expired" | "cancelled"
+  sentAt    DateTime?
+  expiresAt DateTime?
+  viewedAt  DateTime?
+
+  // EDI 204 tracking
+  ediSent       Boolean @default(false)
+  edi204Content String? // Stored EDI 204 document for audit trail
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  bids TenderBid[]
+
+  @@unique([tenderId, carrierId])
+  @@index([tenderId])
+  @@index([carrierId])
+  @@index([status])
+  @@index([expiresAt])
+}
+
+model TenderBid {
+  id            String      @id @default(uuid())
+  tender        Tender      @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+  tenderId      String
+  tenderOffer   TenderOffer @relation(fields: [tenderOfferId], references: [id], onDelete: Cascade)
+  tenderOfferId String
+  carrier       Carrier     @relation(fields: [carrierId], references: [id])
+  carrierId     String
+
+  // Bid details
+  rate          Float // Carrier's bid rate
+  currency      String  @default("USD")
+  transitDays   Int? // Estimated transit time in days
+  equipmentType String? // Equipment offered
+  notes         String? // Carrier comments
+
+  // Status
+  status      String    @default("submitted") // "submitted" | "accepted" | "rejected" | "withdrawn" | "expired"
+  submittedAt DateTime  @default(now())
+  respondedAt DateTime? // When the bid was accepted/rejected
+
+  // Who submitted this bid
+  submittedBy   CarrierUser? @relation(fields: [submittedById], references: [id])
+  submittedById String? // Null if submitted via EDI
+
+  // Source tracking
+  sourceType    String  @default("portal") // "portal" | "edi_990" | "manual"
+  edi990Content String? // Raw EDI 990 content if submitted via EDI
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenderOfferId, carrierId])
+  @@index([tenderId])
+  @@index([carrierId])
+  @@index([status])
+  @@index([submittedAt])
+}
+
+// ============================================================
+// IoT Device Tracking
+// ============================================================
+
+model Device {
+  id           String    @id @default(uuid())
+  // Multi-tenancy: every Device is scoped to a single Organization
+  // (per-tenant fleet/IoT management).
+  orgId        String
+  externalId   String    @unique // Provider device ID (e.g., System Loco ObjectId)
+  displayId    String? // User-friendly ID (e.g., "HG-00012345")
+  name         String // Device name — used for shipment/order matching
+  provider     String    @default("system_loco")
+  model        String? // Device model (e.g., "HGx")
+  manufacturer String? // Device manufacturer (e.g., "System Loco")
+  firmware     String?
+  labels       Json? // string[] of device tags/labels
+  status       String    @default("active") // active, inactive, retired
+  batteryLevel Int?
+  lastSeenAt   DateTime?
+  lastLat      Float?
+  lastLng      Float?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  assignments         DeviceAssignment[]
+  sensorReadings      SensorReading[]
+  deviceEvents        DeviceEvent[]
+  calibrations        DeviceCalibration[]
+  temperatureLogs     ImmutableTemperatureLog[]
+  coldChainExcursions ColdChainExcursion[]
+
+  @@index([name])
+  @@index([provider])
+  @@index([status])
+  @@index([orgId])
+}
+
+model DeviceAssignment {
+  id              String    @id @default(uuid())
+  device          Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  deviceId        String
+  shipment        Shipment? @relation(fields: [shipmentId], references: [id], onDelete: SetNull)
+  shipmentId      String?
+  order           Order?    @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  orderId         String?
+  trackableUnitId String?
+  active          Boolean   @default(true)
+  assignedAt      DateTime  @default(now())
+  unassignedAt    DateTime?
+  // Why this device is on the shipment/order — informational only, doesn't
+  // change alerting/compliance logic. cargo_condition | security | location | general
+  purpose         String?
+
+  @@index([deviceId, active])
+  @@index([shipmentId])
+  @@index([orderId])
+}
+
+// Per-org registry of IoT tracking vendors that can be switched on/off in admin
+// settings. When a vendor is disabled, its inbound webhooks are skipped and the
+// shipment form hides the IoT devices section. System Loco is vendor #1.
+model IotVendor {
+  id            String   @id @default(uuid())
+  orgId         String
+  vendorKey     String // 'system_loco'
+  name          String // 'System Loco'
+  enabled       Boolean  @default(true)
+  // Shared secret for verifying inbound webhook signatures (HMAC-SHA256).
+  // When set, the webhook endpoint verifies X-LocoAware-Signature against it.
+  webhookSecret String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([orgId, vendorKey])
+  @@index([orgId])
+}
+
+model SensorReading {
+  id              String         @id @default(uuid())
+  device          Device         @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  deviceId        String
+  shipment        Shipment?      @relation(fields: [shipmentId], references: [id], onDelete: SetNull)
+  shipmentId      String?
+  order           Order?         @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  orderId         String?
+  trackableUnit   TrackableUnit? @relation(fields: [trackableUnitId], references: [id], onDelete: SetNull)
+  trackableUnitId String?
+  eventTime       DateTime // When the reading occurred
+
+  // Sensor values (nullable — only populated when present)
+  temperature         Float?
+  atmosphericPressure Float? // hPa
+  lightLevel          Int?
+  batteryLevel        Int?
+  batteryVoltage      Float?
+  impactG             Float?
+  tiltAngle           Float?
+  movement            String? // "stationary" | "moving"
+
+  // Location at time of reading
+  lat              Float?
+  lng              Float?
+  address          String?
+  locationType     String? // gps | cell | wifi | indoor | uwb | fixed | app
+  locationAccuracy Float? // accuracy radius in metres (System Loco "cep")
+
+  // Thresholds (from device config, for context)
+  tempMin  Float?
+  tempMax  Float?
+  lightMin Int?
+  lightMax Int?
+
+  // Alert
+  isAlert   Boolean @default(false)
+  alertType String? // "temperature" | "impact" | "light" | "tip" | "battery"
+
+  // Idempotency: the originating System Loco report/event id, so a redelivered
+  // webhook cannot create a duplicate reading.
+  sourceReportId String? @unique
+
+  rawPayload Json?
+  createdAt  DateTime @default(now())
+
+  @@index([deviceId, eventTime])
+  @@index([shipmentId, eventTime])
+  @@index([orderId, eventTime])
+  @@index([trackableUnitId, eventTime])
+  @@index([isAlert])
+}
+
+model DeviceEvent {
+  id              String         @id @default(uuid())
+  device          Device         @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  deviceId        String
+  shipmentId      String?
+  orderId         String?
+  trackableUnit   TrackableUnit? @relation(fields: [trackableUnitId], references: [id], onDelete: SetNull)
+  trackableUnitId String?
+
+  externalEventId String? @unique // System Loco event ID (for dedup)
+  eventType       String // temperature, impact, drop, tip, zoneChange, firmware, charging, etc.
+  category        String // "event" | "warning" | "info"
+
+  startTime DateTime
+  endTime   DateTime?
+
+  lat      Float?
+  lng      Float?
+  address  String?
+  zoneName String?
+
+  message String?
+  payload Json? // Full type-specific payload
+
+  createdAt DateTime @default(now())
+
+  @@index([deviceId, startTime])
+  @@index([shipmentId])
+  @@index([eventType])
+}
+
+// ============================================================
+// Cargo Tracking & Misdrop Detection
+// ============================================================
+
+// Records physical confirmation of a trackable unit at a specific stop
+model CargoScan {
+  id              String        @id @default(uuid())
+  trackableUnit   TrackableUnit @relation(fields: [trackableUnitId], references: [id], onDelete: Cascade)
+  trackableUnitId String
+  shipmentStop    ShipmentStop  @relation(fields: [shipmentStopId], references: [id], onDelete: Cascade)
+  shipmentStopId  String
+  shipment        Shipment      @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  shipmentId      String
+
+  // Scan details
+  scanType   String // load, unload, checkpoint
+  scanMethod String // barcode, rfid, manual, geofence, iot
+  scannedAt  DateTime @default(now())
+  scannedBy  String? // User ID or device ID
+
+  // Location at scan time
+  lat Float?
+  lng Float?
+
+  // Result of scan evaluation
+  expected Boolean @default(true) // Was this unit expected at this stop?
+  notes    String?
+
+  createdAt DateTime @default(now())
+
+  @@index([trackableUnitId])
+  @@index([shipmentStopId])
+  @@index([shipmentId])
+  @@index([scannedAt])
+}
+
+// Tracks cargo discrepancies — misdrops, missing cargo, unexpected deliveries
+model CargoDiscrepancy {
+  id              String        @id @default(uuid())
+  shipment        Shipment      @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  shipmentId      String
+  trackableUnit   TrackableUnit @relation(fields: [trackableUnitId], references: [id], onDelete: Cascade)
+  trackableUnitId String
+
+  // Discrepancy classification
+  discrepancyType String // misdrop_early, misdrop_late, missing_at_stop, unexpected_at_stop, left_on_vehicle, damaged, wrong_destination
+  severity        String @default("high") // critical, high, medium, low
+
+  // Where was it supposed to go vs where it actually went
+  expectedStop   ShipmentStop? @relation("ExpectedStop", fields: [expectedStopId], references: [id])
+  expectedStopId String?
+  actualStop     ShipmentStop? @relation("ActualStop", fields: [actualStopId], references: [id])
+  actualStopId   String?
+
+  // Lifecycle
+  status     String    @default("open") // open, investigating, resolved, dismissed
+  detectedAt DateTime  @default(now())
+  detectedBy String    @default("system") // system, manual, driver, iot
+  resolvedAt DateTime?
+  resolvedBy String?
+  resolution String? // Description of how it was resolved
+
+  // Context
+  description String // Human-readable description of the issue
+  notes       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([shipmentId])
+  @@index([trackableUnitId])
+  @@index([status])
+  @@index([discrepancyType])
+  @@index([detectedAt])
+}
+
+// ============================================================
+// Cold Chain & Compliance
+// ============================================================
+
+// Device calibration records — tracks whether temperature sensors are signed off
+model DeviceCalibration {
+  id       String @id @default(uuid())
+  orgId    String
+  device   Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  deviceId String
+
+  calibratedAt      DateTime // When calibration was performed
+  calibratedBy      String // Person or lab that performed calibration
+  certificateNumber String? // Calibration certificate reference
+  expiresAt         DateTime // When calibration expires
+  calibrationMethod String? // Method used (e.g., "NIST traceable", "2-point")
+  accuracy          Float? // Accuracy in °C (e.g., 0.5 means ±0.5°C)
+  status            String   @default("valid") // valid, expired, pending
+  notes             String?
+
+  // Optional link to calibration certificate document
+  documentStorageKey String? // Storage key for certificate PDF
+
+  createdAt DateTime @default(now())
+  createdBy String? // User ID who recorded this
+
+  @@index([deviceId])
+  @@index([orgId])
+  @@index([status])
+  @@index([expiresAt])
+}
+
+// Immutable temperature log — WRITE-ONLY. No updates or deletes. CFR 21 Part 11 compliant.
+// Each row is a tamper-evident record of a temperature reading with a snapshot of the shipment's effective thresholds.
+model ImmutableTemperatureLog {
+  id    String @id @default(uuid())
+  orgId String
+
+  // Links to entities
+  shipment        Shipment? @relation(fields: [shipmentId], references: [id], onDelete: SetNull)
+  shipmentId      String?
+  device          Device?   @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+  deviceId        String?
+  orderId         String?
+  trackableUnitId String?
+
+  // Sensor values
+  temperature Float // °C — canonical metric
+
+  // Location at time of reading
+  lat Float?
+  lng Float?
+
+  // Timestamps
+  recordedAt DateTime // When the device captured the reading
+  capturedAt DateTime @default(now()) // When the system received it
+
+  // Effective thresholds at time of capture — snapshot for audit trail
+  effectiveMinTemp      Float?
+  effectiveMaxTemp      Float?
+  effectiveAlertMinTemp Float?
+  effectiveAlertMaxTemp Float?
+
+  // Compliance flags
+  isWithinRange      Boolean // temperature within [effectiveMinTemp, effectiveMaxTemp]
+  isWithinAlertRange Boolean // temperature within [effectiveAlertMinTemp, effectiveAlertMaxTemp]
+  isExcursion        Boolean @default(false) // Outside acceptable range
+  isAlert            Boolean @default(false) // Outside alert range but within acceptable
+
+  // Tamper evidence — SHA-256 hash of (shipmentId + deviceId + temperature + recordedAt + effectiveMinTemp + effectiveMaxTemp)
+  integrityHash String
+
+  // Original raw payload for forensic analysis
+  rawPayload Json?
+
+  // Immutable: createdAt only, no updatedAt
+  createdAt DateTime @default(now())
+
+  @@index([shipmentId, recordedAt])
+  @@index([deviceId, recordedAt])
+  @@index([orgId, capturedAt])
+  @@index([isExcursion])
+  @@index([isAlert])
+}
+
+// Temperature excursion — a period where readings breached profile thresholds
+model ColdChainExcursion {
+  id    String @id @default(uuid())
+  orgId String
+
+  shipment   Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  shipmentId String
+  device     Device?  @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+  deviceId   String?
+
+  // Excursion classification
+  excursionType String // high_temp, low_temp
+  severity      String // warning (alert range), critical (acceptable range breach)
+
+  // Duration
+  startedAt       DateTime // First reading outside threshold
+  endedAt         DateTime? // Last reading outside threshold (null if ongoing)
+  durationMinutes Int? // Computed duration
+
+  // Worst-case values
+  peakValue      Float // Worst reading during excursion
+  thresholdValue Float // What was the limit that was breached
+
+  readingCount Int @default(1) // How many readings fell within this excursion
+
+  // Lifecycle
+  status         String    @default("active") // active, acknowledged, resolved
+  acknowledgedBy String?
+  acknowledgedAt DateTime?
+  resolvedBy     String?
+  resolvedAt     DateTime?
+
+  // Disposition decision
+  dispositionDecision String? // released, quarantined
+  notes               String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([shipmentId])
+  @@index([orgId])
+  @@index([status])
+  @@index([severity])
+  @@index([startedAt])
+}
+
+// ─── Warehouse App: Shipment Accessories ────────────────────────────────────
+
+model ShipmentAccessory {
+  id            String   @id @default(uuid())
+  shipment      Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  shipmentId    String
+  accessoryType String // "door_seal", "temp_sensor_front", "temp_sensor_middle", "temp_sensor_back", "door_sensor", "ble_tracker"
+  alias         String? // User-friendly label
+  identifier    String? // Physical ID (barcode, serial number)
+  isIoT         Boolean  @default(false) // true = BLE/cellular device, false = physical seal
+  deviceId      String? // If IoT, link to Device
+  notes         String?
+  createdAt     DateTime @default(now())
+
+  @@index([shipmentId])
+  @@index([deviceId])
+}
+
+// ─── Warehouse App: Shipment Flags ──────────────────────────────────────────
+
+model ShipmentFlag {
+  id            String    @id @default(uuid())
+  shipment      Shipment  @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  shipmentId    String
+  flaggedBy     String // User ID
+  flaggedByName String // User display name for quick lookup
+  reason        String // Free-text description of the issue
+  resolved      Boolean   @default(false)
+  resolvedBy    String?
+  resolvedAt    DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@index([shipmentId])
+  @@index([resolved])
+}
+
+// ─── Warehouse App: WiFi Connectivity Log ───────────────────────────────────
+
+model ConnectivityLog {
+  id         String   @id @default(uuid())
+  userId     String?
+  deviceInfo String? // User agent / device model
+  eventType  String // "wifi_lost", "wifi_restored", "slow_connection"
+  locationId String? // Which warehouse
+  duration   Int? // Seconds offline (for restored events)
+  metadata   Json? // Signal strength, SSID, etc.
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([locationId])
+}
+
+// ─── Agent Decision Logging (AI Compliance & Audit) ───────────────────────────
+// Every AI agent decision is logged for compliance, auditability, and
+// automation discovery. Captures what was decided, why, what context was
+// available, what action was taken, and the outcome.
+
+model AgentDecision {
+  id           String       @id @default(uuid())
+  organization Organization @relation(fields: [orgId], references: [id])
+  orgId        String
+
+  // What agent made this decision
+  agentType String // triage, quality_analysis, route_optimization, carrier_selection
+
+  // Which LLM produced this decision (for compliance - whose key, which model)
+  modelProvider String? // "anthropic", "openai", etc. - nullable for non-AI automations
+  modelId       String? // "claude-sonnet-4-20250514", "gpt-4o", etc.
+
+  // What triggered the agent
+  triggerType      String // domain_event, schedule, manual, api
+  triggerEventType String? // e.g. "shipment.exception" - the domain event type that triggered this
+  triggerEventId   String? // DomainEventLog.id of the triggering event
+
+  // What entity this decision is about
+  entityType String? // "shipment", "order", "issue", etc.
+  entityId   String?
+
+  // The decision itself
+  summary         String // Short human-readable summary: "Escalated issue to critical priority"
+  reasoning       String // Full reasoning chain from the agent
+  context         Json // Snapshot of data the agent had when deciding
+  conversationLog Json? // Raw LLM message exchange [{role, content}...] for audit/debugging
+  confidence      Float? // 0.0 - 1.0, how confident the agent was
+
+  // What action was taken
+  actionType       String // create_issue, escalate_issue, change_priority, notify, no_action, etc.
+  actionPayload    Json? // Details of the action taken (e.g. { issueId, newPriority })
+  actionEntityType String? // Entity created/modified by the action
+  actionEntityId   String? // ID of entity created/modified
+
+  // Outcome tracking (filled in later by human review or automated feedback)
+  outcomeStatus     String    @default("pending") // pending, correct, incorrect, partially_correct
+  outcomeNotes      String? // Human reviewer's notes
+  outcomeRecordedAt DateTime?
+  outcomeRecordedBy String? // User who reviewed
+
+  // Token usage tracking (for cost monitoring)
+  inputTokens  Int? // Tokens sent to the LLM
+  outputTokens Int? // Tokens received from the LLM
+  durationMs   Int? // Wall-clock time for the LLM call in milliseconds
+
+  // Config traceability (which prompt produced this decision)
+  agentConfigId     String? // AgentConfig.id
+  promptVersionId   String? // AgentConfigVersion.id
+  matchedConditions Json? // Conditions in unified format [{field,operator,value}...]
+
+  // Automation promotion
+  promotedToAutomation Boolean   @default(false)
+  promotedAt           DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orgId])
+  @@index([agentType])
+  @@index([entityType, entityId])
+  @@index([actionType])
+  @@index([outcomeStatus])
+  @@index([triggerEventType])
+  @@index([createdAt])
+  @@index([promotedToAutomation])
+  @@index([orgId, createdAt])
+  @@index([orgId, outcomeStatus])
+}
+
+model AgentDecisionReadModel {
+  id           String       @id
+  organization Organization @relation(fields: [orgId], references: [id])
+  orgId        String
+
+  agentType            String
+  modelProvider        String?
+  modelId              String?
+  triggerType          String
+  triggerEventType     String?
+  entityType           String?
+  entityId             String?
+  summary              String
+  confidence           Float?
+  actionType           String
+  actionEntityType     String?
+  actionEntityId       String?
+  outcomeStatus        String  @default("pending")
+  promotedToAutomation Boolean @default(false)
+  inputTokens          Int?
+  outputTokens         Int?
+  durationMs           Int?
+
+  createdAt DateTime
+  updatedAt DateTime
+
+  @@index([orgId])
+  @@index([agentType])
+  @@index([actionType])
+  @@index([outcomeStatus])
+  @@index([createdAt])
+}
+
+// ─── Agent Configuration (configurable prompts & behaviour) ──────────────────
+
+model AgentConfig {
+  id           String       @id @default(uuid())
+  organization Organization @relation(fields: [orgId], references: [id])
+  orgId        String
+
+  agentType   String // "triage" (extensible for future agents)
+  name        String // "Shipment Triage Agent"
+  description String?
+
+  enabled Boolean @default(true)
+
+  // Which events trigger this agent (null = use code defaults)
+  subscribedEvents Json? // ["shipment.exception", "sla.breached", ...]
+
+  // Active prompt version
+  activeVersionId String?
+
+  // LLM tuning (null = use code defaults: temp 0.2, tokens 512)
+  temperature Float?
+  maxTokens   Int?
+
+  // Behaviour tuning
+  confidenceThreshold        Float? // 0-1, below this = override to no_action
+  deduplicationWindowMinutes Int? // null = code default (30)
+
+  versions AgentConfigVersion[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([orgId, agentType])
+  @@index([orgId])
+  @@index([agentType])
+}
+
+model AgentConfigVersion {
+  id       String      @id @default(uuid())
+  config   AgentConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+  configId String
+
+  versionNumber Int
+  systemPrompt  String  @db.Text
+  changeNote    String?
+
+  createdAt DateTime @default(now())
+  createdBy String?
+
+  @@unique([configId, versionNumber])
+  @@index([configId])
+}
+
+// ─── Automation Rules (deterministic rules promoted from agent decisions) ─────
+
+model AutomationRule {
+  id           String       @id @default(uuid())
+  organization Organization @relation(fields: [orgId], references: [id])
+  orgId        String
+
+  name        String // "Critical delay auto-escalation"
+  description String?
+
+  enabled  Boolean @default(true)
+  priority Int     @default(50) // 1-100, lower = evaluated first
+
+  // Trigger: which events this rule listens to
+  eventPattern String // "shipment.exception", "sla.breached", "shipment.*"
+
+  // Conditions: JSON array of {field, operator, value}
+  conditions Json // [{ field, operator, value }, ...]
+
+  // Action
+  actionType   String // "create_issue", "escalate_issue"
+  actionConfig Json // { issuePriority, issueCategory, issueTitle, ... }
+
+  // Provenance: which agent decision was this promoted from?
+  sourceDecisionId String? // AgentDecision.id (null if manually created)
+
+  // Skill chain support (for complex multi-step actions)
+  skillChainId String? // SkillChain.id (when actionType = "skill_chain")
+  inlineSteps  Json? // Inline SkillChainStep[] for one-off chains
+
+  // Stats
+  executionCount Int       @default(0)
+  lastExecutedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  executions AutomationExecutionLog[]
+
+  @@index([orgId, enabled])
+  @@index([eventPattern])
+  @@index([priority])
+}
+
+model AutomationExecutionLog {
+  id    String @id @default(uuid())
+  orgId String
+
+  rule     AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  ruleId   String
+  ruleName String // Denormalized for audit
+
+  // What triggered it
+  eventType  String
+  eventId    String // DomainEventLog.id
+  entityType String
+  entityId   String
+
+  // What it did
+  actionType   String
+  actionResult Json? // { issueId, success, error }
+
+  // Evaluation trace
+  conditionsMatched Boolean
+  evaluationMs      Int?
+
+  createdAt DateTime @default(now())
+
+  @@index([orgId])
+  @@index([ruleId])
+  @@index([createdAt])
+}
+
+// ─── Skills (extensible action system) ───────────────────────────────────────
+
+model SkillConfig {
+  id           String       @id @default(uuid())
+  organization Organization @relation(fields: [orgId], references: [id])
+  orgId        String
+
+  skillType String // "send_email", "call_webhook", etc.
+  name      String // "Ops Webhook" or "Company SMTP"
+  config    Json // Skill-specific config (API keys, URLs, etc.)
+  enabled   Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([orgId, skillType, name])
+  @@index([orgId])
+  @@index([skillType])
+}
+
+model SkillChain {
+  id           String       @id @default(uuid())
+  organization Organization @relation(fields: [orgId], references: [id])
+  orgId        String
+
+  name        String // "Critical Delay Response"
+  description String?
+
+  // Ordered array of SkillChainStep[] (skill nodes + question nodes)
+  steps Json // SkillChainStep[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orgId])
+}
+
+// ─── Financial: Quotes ──────────────────────────────────────────────────────
+
+model Quote {
+  id            String  @id @default(uuid())
+  orgId         String
+  quoteNumber   String  @unique // QTE-0001
+  version       Int     @default(1) // For revisions
+  parentQuoteId String? // Links revisions
+  parentQuote   Quote?  @relation("QuoteRevisions", fields: [parentQuoteId], references: [id])
+  revisions     Quote[] @relation("QuoteRevisions")
+  status        String  @default("draft") // draft, sent, accepted, declined, expired, superseded
+
+  customer   Customer @relation(fields: [customerId], references: [id])
+  customerId String
+
+  // Route details (snapshot at time of quote)
+  originId      String?
+  destinationId String?
+  serviceLevel  String  @default("FTL") // FTL, LTL
+  equipmentType String?
+
+  // Financial
+  totalRevenueCents Int // What we charge customer
+  totalCostCents    Int // Expected carrier cost
+  marginCents       Int // revenue - cost
+  marginPercent     Decimal @db.Decimal(5, 2)
+  currency          String  @default("USD")
+
+  // Validity
+  validFrom  DateTime @default(now())
+  validUntil DateTime // Expiration
+
+  // Conversion
+  orderId String? // Set when quote is accepted and converted
+
+  notes     String?
+  createdBy String?
+
+  lineItems QuoteLineItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orgId])
+  @@index([customerId])
+  @@index([status])
+}
+
+model QuoteLineItem {
+  id      String @id @default(uuid())
+  quote   Quote  @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  quoteId String
+
+  chargeType  String // linehaul, fuel_surcharge, accessorial, discount
+  description String
+  amountCents Int // Positive = charge, negative = discount
+  currency    String @default("USD")
+
+  // For accessorials
+  accessorialCode String?
+
+  // For LTL
+  freightClass String?
+  weight       Decimal? @db.Decimal(10, 2)
+  ratePerCwt   Int? // Rate per hundredweight in cents
+
+  quantity Int @default(1)
+
+  createdAt DateTime @default(now())
+
+  @@index([quoteId])
+}
+
+// ===========================================
+// Carrier Tracking API Integrations
+// ===========================================
+
+model CarrierTrackingIntegration {
+  id        String  @id @default(uuid())
+  carrier   Carrier @relation(fields: [carrierId], references: [id])
+  carrierId String  @unique
+
+  // Provider config
+  providerType String // fedex, ups, dhl, usps, easypost, aftership, edi_214, manual
+  status       String @default("pending_setup") // pending_setup, active, error, disabled
+  credentials  Json? // Encrypted: OAuth client ID/secret, API keys, account numbers
+
+  // Webhook config (push from carrier)
+  webhookEnabled    Boolean @default(false)
+  webhookSecret     String? // Shared secret for signature verification
+  webhookEndpointId String? // ID of registered webhook at carrier API
+
+  // Polling config (pull from carrier)
+  pollingEnabled         Boolean   @default(false)
+  pollingIntervalSeconds Int       @default(900) // 15 min default
+  lastPolledAt           DateTime?
+
+  // Rate limiting
+  rateLimitDailyMax   Int? // Provider-specific daily limit
+  rateLimitCallsToday Int       @default(0)
+  rateLimitResetAt    DateTime?
+
+  // Error tracking
+  lastErrorMessage String?
+  lastErrorAt      DateTime?
+
+  // Metadata
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  trackingEvents CarrierTrackingEvent[]
+
+  @@index([providerType])
+  @@index([status])
+}
+
+model CarrierTrackingEvent {
+  id String @id @default(uuid())
+
+  // Relations
+  shipment      Shipment                   @relation(fields: [shipmentId], references: [id])
+  shipmentId    String
+  carrier       Carrier                    @relation(fields: [carrierId], references: [id])
+  carrierId     String
+  integration   CarrierTrackingIntegration @relation(fields: [integrationId], references: [id])
+  integrationId String
+
+  // Tracking data
+  providerType   String // Denormalized for fast queries
+  trackingNumber String
+  status         String // Normalized: info_received, in_transit, out_for_delivery, delivered, exception, return_to_sender, unknown
+  statusDetail   String? // Provider's original status text
+  statusCode     String? // Provider's raw status code
+
+  // Location
+  city       String?
+  state      String?
+  country    String?
+  postalCode String?
+  lat        Float?
+  lng        Float?
+
+  // Timing
+  occurredAt        DateTime // When the event actually happened at the carrier
+  estimatedDelivery DateTime? // Carrier's predicted delivery
+
+  // Delivery
+  signedBy String? // Delivery signature name
+
+  // Audit
+  rawPayload Json? // Full provider response for debugging
+  source     String // webhook, poll, manual
+
+  createdAt DateTime @default(now())
+
+  @@index([shipmentId])
+  @@index([carrierId])
+  @@index([integrationId])
+  @@index([trackingNumber])
+  @@index([occurredAt])
+  @@index([status])
+}
+
+// ─── Lane Route (Planned Route Polyline) ──────────────────────────────────────
+
+model LaneRoute {
+  id     String @id @default(uuid())
+  lane   Lane   @relation(fields: [laneId], references: [id], onDelete: Cascade)
+  laneId String @unique // One route per lane
+  orgId  String
+
+  // The planned route geometry - Google-encoded polyline string
+  encodedPolyline String @db.Text
+
+  // Decoded waypoints snapshot (JSON array of {lat, lng}) for quick access
+  waypoints Json // [{lat: number, lng: number}, ...]
+
+  // Route metadata from Google Maps Directions API
+  distanceMeters  Int
+  durationSeconds Int
+  summary         String? // Google's route summary (e.g., "via I-95 N")
+
+  // Corridor config for deviation detection
+  corridorMeters Int @default(5000) // How far off-route before alerting
+
+  // Source tracking
+  provider  String   @default("google") // "google" | "manual"
+  createdBy String?
+  updatedBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orgId])
+}
+
+// ── Manifest Ingestion ───────────────────────────────────────
+
+model ManifestTemplate {
+  id             String  @id @default(uuid())
+  name           String // e.g. "Supplier X format", "FedEx ASN"
+  headerChecksum String // SHA-256 of sorted column headers for auto-detection
+  columnMapping  Json // { sku: "Product Code", quantity: "Qty", ... }
+  fileType       String  @default("csv") // csv, xlsx
+  delimiter      String? // for CSV: comma, tab, pipe
+  hasHeaderRow   Boolean @default(true)
+  usageCount     Int     @default(0) // how many times this template has been used
+
+  orgId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  uploads ManifestUpload[]
+
+  @@unique([orgId, headerChecksum])
+  @@index([orgId])
+}
+
+model ManifestUpload {
+  id              String            @id @default(uuid())
+  locationId      String // destination warehouse
+  location        Location          @relation(fields: [locationId], references: [id])
+  fileName        String
+  fileStorageKey  String? // S3/DB storage key for the raw file
+  status          String            @default("uploaded") // uploaded, mapped, processing, completed, failed
+  templateId      String?
+  template        ManifestTemplate? @relation(fields: [templateId], references: [id])
+  receivingTaskId String? // created on processing
+  totalRows       Int               @default(0)
+  processedRows   Int               @default(0)
+  errorRows       Int               @default(0)
+  errors          Json? // [{ row: 5, field: "sku", message: "..." }]
+  detectedHeaders Json? // column headers found in the file
+  supplierName    String?
+  reference       String? // BOL, PO number, etc.
+
+  orgId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orgId])
+  @@index([locationId])
+  @@index([status])
+}
+
+// ── Returns / RMA ────────────────────────────────────────────
+
+model Rma {
+  id             String  @id @default(uuid())
+  rmaNumber      String // auto-generated: RMA-2026-04-19-001
+  customerId     String
+  orderId        String
+  status         String  @default("requested") // requested, authorized, in_transit, received, inspecting, dispositioning, completed, rejected
+  returnReason   String // damaged, wrong_item, not_as_described, no_longer_needed, defective, ordered_extra, other
+  customerNotes  String?
+  rejectionNotes String? // if CSR rejects the request
+
+  // Lifecycle timestamps
+  requestedAt  DateTime  @default(now())
+  authorizedAt DateTime?
+  receivedAt   DateTime?
+  completedAt  DateTime?
+
+  // Financial
+  suggestedRefundCents  Int     @default(0) // auto-calculated from line prices
+  actualRefundCents     Int? // Finance override if different
+  refundAdjustmentNotes String?
+  creditNoteId          String? // link to issued credit note
+
+  // Return shipment / carrier collection
+  returnCarrierId                String? // FK to Carrier handling the return
+  returnServiceLevel             String? // e.g. ground, 2day, express_saver
+  returnTrackingNumber           String? // carrier tracking for return leg
+  returnLabelStorageKey          String? // binary storage key for label file
+  returnLabelFormat              String? // pdf, zpl, png
+  returnLabelGeneratedAt         DateTime?
+  returnLabelProvider            String? // manual, fedex, ups, dhl
+  returnPickupScheduledAt        DateTime? // when the pickup is booked for
+  returnPickupWindow             String? // "09:00-12:00" freeform window
+  returnPickupConfirmationNumber String? // carrier-issued confirmation
+  returnPickupAddressId          String? // optional override pickup location
+  returnPickupCancelledAt        DateTime?
+
+  // Initiator
+  createdByUserId String?
+  initiatedVia    String  @default("admin") // admin, customer_portal, marketplace_webhook
+
+  orgId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lines RmaLine[]
+
+  @@unique([orgId, rmaNumber])
+  @@index([orgId])
+  @@index([customerId])
+  @@index([orderId])
+  @@index([status])
+}
+
+model RmaLine {
+  id              String @id @default(uuid())
+  rmaId           String
+  rma             Rma    @relation(fields: [rmaId], references: [id], onDelete: Cascade)
+  orderLineItemId String
+  sku             String // denormalized for reporting
+
+  // Quantities
+  requestedQuantity Int // customer requested to return
+  receivedQuantity  Int @default(0) // actually arrived at dock
+
+  // Disposition
+  requestedDisposition String? // what customer/CSR initially chose
+  disposition          String  @default("pending") // pending, restock, refurb, scrap, recycle, donate, rtv, customer_keeps
+
+  // Inspection
+  inspectionStatus  String    @default("pending") // pending, pass, fail, partial_damage
+  inspectionNotes   String?
+  conditionPhotos   Json? // array of storage keys
+  inspectedByUserId String?
+  inspectedAt       DateTime?
+
+  // Financial
+  refundAmountCents Int @default(0)
+
+  // Physical tracking
+  trackableUnitId String? // if physically tracked
+  currentBinId    String? // where item is right now (quarantine, refurb zone, etc.)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([rmaId])
+  @@index([orderLineItemId])
+  @@index([disposition])
+  @@index([inspectionStatus])
+}
+
+// Shipment templates - pre-decide required fields, default values, and icon
+// so users can spin up repeatable shipment patterns (Cold Chain, Hazmat, etc.)
+model ShipmentType {
+  id          String  @id @default(uuid())
+  name        String // "Cold Chain", "Hazmat", "Standard Parcel"
+  icon        String  @default("local_shipping") // Material Icons name
+  color       String  @default("#6366F1") // Accent color for chip/badge
+  description String?
+
+  // Defaults applied when a shipment is created with this type.
+  // Flat key/value; client merges into form state. Example:
+  // { "customerId": "...", "originId": "...", "destinationId": "...",
+  //   "temperatureControlled": true, "tempMode": "refrigerated" }
+  defaults Json @default("{}")
+
+  // Array of field names that must be filled before transitioning out of draft.
+  // Example: ["customerId", "originId", "destinationId", "pickupDate", "pickupWindowStart"]
+  requiredFields String[] @default([])
+
+  // If true, this is a system-seeded built-in type and cannot be deleted
+  isBuiltIn Boolean @default(false)
+
+  archived   Boolean   @default(false)
+  archivedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  shipments Shipment[]
+
+  @@unique([name])
+  @@index([archived])
+}
+
+// Org-scoped packaging type catalogue. Covers pallets, cartons, crates, drums,
+// rolls, bags, totes, loose, and custom. Each tenant curates their own list with
+// real specs used for cartonization (cube/density/class), palletization planning,
+// load-plan calculations, and BOL weight totals. Generalised from the original
+// PalletType in 2026-06.
+model PackagingType {
+  id          String  @id @default(uuid())
+  code        String // e.g. "EUR1", "US_GMA_48x40", "CHEP_1210", "CARTON_M", "DRUM_55GAL"
+  name        String // e.g. "Euro Pallet (EUR 1)", "Medium Carton", "55 gal Drum"
+  description String?
+
+  // Discriminator: what kind of packaging this is.
+  // pallet | carton | crate | drum | roll | bag | tote | loose | custom
+  kind String @default("pallet")
+
+  // External dimensions in mm (always meaningful)
+  lengthMm Int
+  widthMm  Int
+  heightMm Int // For pallets this is deck height; for cartons/crates the external height.
+
+  // Weights in grams — nullable for kinds where tare/SWL is not meaningful
+  tareWeightGrams Int? // Empty packaging weight
+  maxLoadGrams    Int? // Safe Working Load (SWL)
+
+  // Max total stacked height (pallet + cargo) in mm. null = no limit.
+  maxStackHeightMm Int?
+
+  // Pallet-leaning attributes — nullable for non-pallet kinds
+  material     String? // wood | plastic | metal | cardboard | composite | fiber | textile
+  reusable     Boolean @default(true)
+  isoCertified Boolean @default(false) // ISPM-15 (heat-treated wood, for international shipping)
+
+  // Operational flags
+  stackable Boolean @default(true) // Can another unit be stacked on top when loaded
+  active    Boolean @default(true)
+
+  // Optional image / reference
+  imageUrl String?
+
+  orgId     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  trackableUnits TrackableUnit[]
+
+  @@unique([orgId, code])
+  @@index([orgId])
+  @@index([active])
+  @@index([kind])
+}

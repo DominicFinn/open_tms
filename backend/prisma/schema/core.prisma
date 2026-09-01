@@ -1,0 +1,1055 @@
+// Core: tenancy, identity, documents, events, and the issue engine.
+// Every product ships these.
+// Module: core. See .claude/rules/module-boundaries.md for what may depend on what.
+
+model Customer {
+  id               String            @id @default(uuid())
+  // Multi-tenancy: every Customer is scoped to a single Organization.
+  // Phase 2 of the multi-tenancy remediation plan tightened this from
+  // nullable to NOT NULL after backfill verification.
+  orgId            String
+  name             String
+  contactEmail     String?
+  archived         Boolean           @default(false)
+  archivedAt       DateTime?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  shipments        Shipment[]
+  customerLanes    CustomerLane[]
+  orders           Order[]
+  apiKeys          ApiKey[]
+  tradingPartners  TradingPartner[]  @relation("CustomerTradingPartners")
+  slaPolicies      SlaPolicy[]
+  users            User[]
+  customerWebhooks CustomerWebhook[] @relation("CustomerWebhooks")
+
+  // Billing & Financial
+  billingEmail         String?
+  billingAddress1      String?
+  billingAddress2      String?
+  billingCity          String?
+  billingState         String?
+  billingPostalCode    String?
+  billingCountry       String?
+  paymentTermsDays     Int     @default(30) // Net 30, Net 45, etc.
+  creditLimitCents     Int? // null = no limit
+  currency             String  @default("USD")
+  invoiceConsolidation String  @default("per_shipment") // per_shipment | weekly | monthly
+  autoInvoice          Boolean @default(false) // auto-generate draft invoice on delivery
+  taxId                String? // VAT / EIN
+
+  // Broker: Target Margin
+  targetMarginPercent Decimal? @db.Decimal(5, 2) // Target margin % for this customer (e.g., 15.00)
+
+  // Read model relations
+  orderReadModels    OrderReadModel[]
+  shipmentReadModels ShipmentReadModel[]
+
+  // Financial relations
+  quotes      Quote[]
+  invoices    Invoice[]
+  creditNotes CreditNote[] @relation("CustomerCreditNotes")
+
+  // Custom fields
+  customFieldVersionId String? // Version of custom field definitions used
+  customFieldValues    Json? // { "fieldKey": value, ... }
+
+  // WMS relations
+  ownedTrackableUnits TrackableUnit[]   @relation("OwnedUnits")
+  ownedInventory      InventoryRecord[] @relation("InventoryOwner")
+
+  // Customer Portal
+  customerUsers CustomerUser[]
+
+  @@index([orgId])
+}
+
+model CustomerUser {
+  id                  String    @id @default(uuid())
+  customer            Customer  @relation(fields: [customerId], references: [id])
+  customerId          String
+  email               String    @unique
+  passwordHash        String
+  name                String
+  role                String    @default("viewer") // "viewer" | "admin"
+  active              Boolean   @default(true)
+  lastLoginAt         DateTime?
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([customerId])
+  @@index([email])
+}
+
+model Location {
+  id         String    @id @default(uuid())
+  // Multi-tenancy: every Location is scoped to a single Organization.
+  // Tightened to NOT NULL in the phase-3 follow-up migration.
+  orgId      String
+  name       String
+  address1   String
+  address2   String?
+  city       String
+  state      String?
+  postalCode String?
+  country    String
+  lat        Float?
+  lng        Float?
+  archived   Boolean   @default(false)
+  archivedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  // Location classification & metadata
+  locationType         String? // warehouse, distribution_centre, cross_dock, terminal, port, rail_yard, customer, store, manufacturing
+  facilityCapabilities Json? // { crossDockCapable, hasColdStorage, hasHazmatCert, hasBondedStorage }
+  operatingHours       Json? // Per-day schedule: { mon: { open: "08:00", close: "17:00" }, ... }
+  appointmentRequired  Boolean @default(false)
+  dockCount            Int?
+  maxTrailerLengthFt   Int?
+
+  // Contact
+  contactName  String?
+  contactPhone String?
+  contactEmail String?
+
+  // Relations
+  originFor                        Shipment[]           @relation("Origin")
+  destFor                          Shipment[]           @relation("Destination")
+  lanesAsOrigin                    Lane[]               @relation("LaneOrigin")
+  lanesAsDestination               Lane[]               @relation("LaneDestination")
+  laneStops                        LaneStop[]
+  orderOriginFor                   Order[]              @relation("OrderOrigin")
+  orderDestFor                     Order[]              @relation("OrderDestination")
+  pendingLaneRequestsAsOrigin      PendingLaneRequest[] @relation("PendingLaneOrigin")
+  pendingLaneRequestsAsDestination PendingLaneRequest[] @relation("PendingLaneDestination")
+  shipmentStops                    ShipmentStop[] // Multi-stop shipment support
+  arrivalCriteria                  ArrivalCriteria[] // Arrival criteria for this location
+
+  // Custom fields
+  customFieldVersionId String?
+  customFieldValues    Json?
+
+  // Warehouse app preferences
+  preferredLocationId String? // Favourite origin location for warehouse app
+
+  // WMS relations
+  warehouseZones        WarehouseZone[]
+  warehouseAisles       WarehouseAisle[]
+  warehouseBins         WarehouseBin[]
+  inventoryRecords      InventoryRecord[]
+  receivingAppointments ReceivingAppointment[]
+  receivingTasks        ReceivingTask[]
+  putawayRules          PutawayRule[]
+  putawayTasks          PutawayTask[]
+  manifestUploads       ManifestUpload[]
+  waveTemplates         WaveTemplate[]
+  waves                 Wave[]
+  pickTasks             PickTask[]
+  packTasks             PackTask[]
+  stagingAssignments    StagingAssignment[]
+
+  @@index([orgId])
+}
+
+model Organization {
+  id   String @id @default(uuid())
+  name String @default("Default Organization")
+
+  // Organization Type
+  organizationType String @default("shipper") // "shipper" | "broker" | "carrier" | "3pl"
+
+  // Broker-Specific Fields
+  mcNumber                 String? // Motor Carrier number
+  bondAmountCents          Int? // Bond amount in cents
+  bondExpirationDate       DateTime? // Bond expiration date
+  operatingAuthorityStatus String?   @default("active") // "active" | "pending" | "revoked"
+
+  // Broker Margin Configuration
+  minMarginPercent   Decimal? @db.Decimal(5, 2) // Minimum acceptable margin % (e.g., 10.00)
+  marginAlertEnabled Boolean  @default(false) // Enable margin alert issues
+
+  // Lowest Trackable Unit Configuration
+  trackingMode      String  @default("item") // "group" or "item"
+  trackableUnitType String  @default("box") // "pallet", "tote", "box", "stillage", "custom"
+  customUnitName    String? // Used when trackableUnitType is "custom"
+
+  // Unit of Measure Configuration (system-level defaults)
+  weightUnit      String @default("kg") // "kg" or "lb"
+  dimUnit         String @default("cm") // "cm" or "in"
+  temperatureUnit String @default("C") // "C" or "F"
+  distanceUnit    String @default("km") // "km" or "mi"
+
+  // BOL sequence counter for auto-numbering
+  bolSequenceNumber Int @default(0)
+
+  // Theme & Branding
+  logoStorageKey String? // Opaque key for logo in IBinaryStorageProvider
+  logoMimeType   String? // "image/png", "image/svg+xml", etc.
+  themeConfig    Json? // Full CSS custom property overrides (see ThemeConfig)
+  themeUpdatedAt DateTime? // Used for cache invalidation
+
+  // Carrier Tendering
+  autoTenderEnabled           Boolean @default(false) // Auto-publish tenders for laneless shipments
+  defaultGeofenceRadiusMeters Float   @default(200) // Default geofence radius for new locations
+
+  // Cold Chain & Compliance
+  autoDeliverShipmentDocs Boolean @default(false) // Auto-deliver compliance docs to customers on shipment complete
+
+  // Warehouse App
+  magicLinksEnabled Boolean @default(true) // Allow QR code / magic link login
+  warehouseScanMode String  @default("hid") // "hid" (built-in scanner) or "camera"
+
+  // Maps & Geocoding
+  googleMapsApiKey String? // Google Maps API key for Places + Geocoding
+
+  // Email Branding
+  emailHeaderHtml String? // Custom HTML for email header (replaces default logo/name header)
+  emailFooterHtml String? // Custom HTML for email footer (replaces default "Sent by..." footer)
+
+  // Email Configuration
+  emailProvider    String  @default("console") // "smtp" | "sendgrid" | "ses" | "console"
+  smtpHost         String?
+  smtpPort         Int?
+  smtpSecure       Boolean @default(false)
+  smtpUser         String?
+  smtpPassword     String? // Encrypted at rest in production
+  emailFromAddress String? // Default "from" address
+  emailFromName    String? // Default "from" display name
+  emailEnabled     Boolean @default(false) // Global kill switch
+
+  // AI / LLM Configuration (for agent features)
+  llmProvider String? // "anthropic" (more providers in future)
+  llmApiKey   String? // API key — masked in API responses, encrypted at rest in production
+  llmModel    String? // Model override, e.g. "claude-sonnet-4-20250514"
+  llmEnabled  Boolean @default(false) // Global kill switch for AI agents
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users          User[]
+  emailTemplates EmailTemplate[]
+
+  // Issue & Read model relations
+  issues             Issue[]
+  issueSignals       IssueSignal[]
+  carrierReadModels  CarrierReadModel[]
+  customerReadModels CustomerReadModel[]
+  issueReadModels    IssueReadModel[]
+  laneReadModels     LaneReadModel[]
+  orderReadModels    OrderReadModel[]
+  shipmentReadModels ShipmentReadModel[]
+
+  // Agent Decision relations
+  agentDecisions          AgentDecision[]
+  agentDecisionReadModels AgentDecisionReadModel[]
+  agentConfigs            AgentConfig[]
+  automationRules         AutomationRule[]
+  skillConfigs            SkillConfig[]
+  skillChains             SkillChain[]
+}
+
+model AuditLog {
+  id String @id @default(uuid())
+
+  // Entity tracking
+  entityType String // "order", "trackable_unit", "line_item"
+  entityId   String // ID of the affected entity
+  orderId    String? // Reference to order for easy filtering
+  order      Order?  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  // Action details
+  action      String // "created", "updated", "deleted", "converted", "moved", etc.
+  description String // Human-readable description
+  changes     Json? // JSON object with before/after values
+
+  // User tracking
+  user     User?   @relation("AuditUser", fields: [userId], references: [id])
+  userId   String? // User who performed the action
+  userName String? // Name of the user (denormalized for display)
+
+  // Metadata
+  ipAddress String?
+  userAgent String?
+
+  createdAt DateTime @default(now())
+
+  @@index([orderId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+model ApiKey {
+  id          String       @id @default(uuid())
+  // Multi-tenancy: every API key is scoped to a single Organization.
+  // Tightened to NOT NULL in Phase 2 of the multi-tenancy plan.
+  orgId       String
+  name        String // User-friendly name for the API key
+  keyHash     String       @unique // Hashed version of the API key
+  keyPrefix   String // First 8 characters for display (e.g., "sk_live_...")
+  active      Boolean      @default(true)
+  customer    Customer?    @relation(fields: [customerId], references: [id])
+  customerId  String? // Links API key to a specific customer for scoped access
+  lastUsedAt  DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  webhookLogs WebhookLog[]
+
+  @@index([active])
+  @@index([createdAt])
+  @@index([customerId])
+  @@index([orgId])
+}
+
+// Customer-owned outbound webhooks subscribed from the Developer Area
+model CustomerWebhook {
+  id             String                    @id @default(uuid())
+  customerId     String
+  customer       Customer                  @relation("CustomerWebhooks", fields: [customerId], references: [id], onDelete: Cascade)
+  orgId          String
+  name           String
+  url            String
+  secret         String // HMAC-SHA256 signing secret (stored plaintext for the customer to reveal/rotate)
+  enabled        Boolean                   @default(true)
+  events         String[] // Event patterns: ["rma.*", "shipment.delivered", "order.created"]
+  description    String?
+  lastDeliveryAt DateTime?
+  lastStatusCode Int?
+  deliveryCount  Int                       @default(0)
+  failureCount   Int                       @default(0)
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+  deliveries     CustomerWebhookDelivery[]
+
+  @@index([customerId])
+  @@index([enabled])
+}
+
+model CustomerWebhookDelivery {
+  id           String          @id @default(uuid())
+  webhookId    String
+  webhook      CustomerWebhook @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+  eventType    String // e.g. rma.authorized
+  eventId      String? // DomainEventLog id if applicable
+  payload      Json
+  status       String // pending, delivered, failed
+  statusCode   Int?
+  responseBody String?
+  errorMessage String?
+  attemptCount Int             @default(0)
+  deliveredAt  DateTime?
+  createdAt    DateTime        @default(now())
+
+  @@index([webhookId, createdAt])
+  @@index([status])
+  @@index([eventType])
+}
+
+model WebhookLog {
+  id       String  @id @default(uuid())
+  apiKey   ApiKey? @relation(fields: [apiKeyId], references: [id], onDelete: SetNull)
+  apiKeyId String?
+
+  // Request details
+  method    String // HTTP method (POST, etc.)
+  path      String?
+  ipAddress String?
+  userAgent String?
+  headers   Json? // Request headers (redacted API key)
+
+  // Payload details
+  deviceName  String? // Extracted device name from payload
+  deviceId    String? // Device ID from payload
+  eventType   String? // Event type (location, etc.)
+  hasLocation Boolean @default(false) // Whether lat/lng were provided
+  lat         Float?
+  lng         Float?
+  rawPayload  Json? // Full request body
+
+  // Processing results
+  status            String // "success", "error", "skipped", "not_found"
+  shipmentFound     Boolean @default(false)
+  shipmentUpdated   Boolean @default(false)
+  shipmentId        String? // ID of shipment if found
+  shipmentReference String? // Reference of shipment if found
+  shipmentEventId   String? // ID of created ShipmentEvent if any
+  errorMessage      String? // Error message if status is "error"
+
+  // Response
+  responseCode Int? // HTTP response code
+  responseBody Json? // Response body sent back
+
+  // Timestamps
+  receivedAt  DateTime  @default(now())
+  processedAt DateTime?
+
+  @@index([apiKeyId])
+  @@index([status])
+  @@index([shipmentId])
+  @@index([receivedAt])
+  @@index([deviceName])
+}
+
+// ─── Auth Models ─────────────────────────────────────────────────────────────
+
+model User {
+  id           String  @id @default(uuid())
+  email        String  @unique
+  passwordHash String? // Null for OAuth-only users
+  firstName    String
+  lastName     String
+  active       Boolean @default(true)
+
+  // OAuth provider (null = local password auth)
+  authProvider   String? // "google", "microsoft", or null for local
+  authProviderId String? // External user ID from the OAuth provider
+
+  // Organization
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  organizationId String?
+
+  // Optional link to customer (for customer-portal users)
+  customer   Customer? @relation(fields: [customerId], references: [id])
+  customerId String?
+
+  // Profile
+  avatarUrl String?
+  phone     String?
+  timezone  String  @default("UTC")
+
+  // Unit of measure preferences (null = use organization default)
+  weightUnit      String? // "kg" or "lb"
+  dimUnit         String? // "cm" or "in"
+  temperatureUnit String? // "C" or "F"
+  distanceUnit    String? // "km" or "mi"
+
+  // Auth metadata
+  lastLoginAt         DateTime?
+  passwordChangedAt   DateTime?
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime?
+
+  // Warehouse app preferences
+  preferredLocationId String? // Favourite origin location for warehouse app
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relationships
+  roles          UserRole[]
+  sessions       Session[]
+  auditLogs      AuditLog[]      @relation("AuditUser")
+  magicLinks     MagicLink[]
+  loginAuditLogs LoginAuditLog[]
+  commissions    Commission[]
+
+  @@unique([authProvider, authProviderId])
+  @@index([email])
+  @@index([organizationId])
+  @@index([customerId])
+  @@index([active])
+}
+
+model AuthProvider {
+  id          String  @id @default(uuid())
+  provider    String  @unique // "google", "microsoft"
+  displayName String // "Google", "Microsoft"
+  enabled     Boolean @default(false)
+
+  // OAuth credentials (set by admin)
+  clientId     String?
+  clientSecret String?
+
+  // Provider-specific config
+  tenantId       String? // Microsoft: Azure AD tenant ID (blank = common)
+  allowedDomains Json? // Optional: restrict to specific email domains e.g. ["company.com"]
+
+  // Auto-provisioning
+  autoCreateUsers Boolean @default(true) // Create user on first OAuth login
+  defaultRoleId   String? // Role to assign to auto-created users
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Role {
+  id          String   @id @default(uuid())
+  name        String   @unique // admin, dispatcher, warehouse, readonly, customer
+  description String?
+  permissions Json // Array of permission strings e.g. ["shipments:read", "shipments:write", "orders:*"]
+  isSystem    Boolean  @default(false) // System roles can't be deleted
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users UserRole[]
+}
+
+model UserRole {
+  id        String   @id @default(uuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  roleId    String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, roleId])
+  @@index([userId])
+  @@index([roleId])
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  tokenHash String   @unique // SHA-256 hash of the refresh token
+  userAgent String?
+  ipAddress String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// ─── EDI Models ──────────────────────────────────────────────────────────────
+
+// ─── Binary Storage (fallback when S3 not configured) ───────────────────────
+
+model BinaryStore {
+  key       String   @id // S3-style key path e.g. "attachments/shipment/abc/file.pdf"
+  content   Bytes
+  size      Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ─── Attachment Models ──────────────────────────────────────────────────────
+
+model Attachment {
+  id                 String    @id @default(uuid())
+  entityType         String // "shipment", "order", "carrier", "customer", "location"
+  entityId           String
+  fileName           String // Original filename (for Content-Disposition only)
+  mimeType           String
+  fileSize           Int
+  storageKey         String // Opaque UUID-based key — no entity info or filenames
+  storageBackend     String    @default("s3") // "s3" or "database"
+  uploadedBy         String? // userId
+  description        String?
+  retentionExpiresAt DateTime? // Default: 10 years from creation. Null = indefinite.
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@index([retentionExpiresAt])
+}
+
+// ─── Custom Fields (Versioned) ──────────────────────────────────────────────
+
+model CustomFieldVersion {
+  id          String  @id @default(uuid())
+  entityType  String // "shipment", "order", "carrier", "customer", "location"
+  version     Int // Auto-incremented per entityType
+  description String? // E.g., "Added invoice number field"
+  createdBy   String? // userId who created this version
+  active      Boolean @default(true) // Only one active version per entityType
+
+  createdAt DateTime @default(now())
+
+  fields CustomFieldDefinition[]
+
+  @@unique([entityType, version])
+  @@index([entityType, active])
+}
+
+model CustomFieldDefinition {
+  id        String             @id @default(uuid())
+  version   CustomFieldVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  versionId String
+
+  // Field identity
+  fieldKey    String // Machine-readable key, e.g. "invoice_number" (stable across versions)
+  label       String // Display label, e.g. "Invoice Number"
+  description String? // Help text shown to users
+
+  // Field type and configuration
+  fieldType    String // "text", "decimal", "integer", "date", "boolean", "list", "multi_list"
+  required     Boolean @default(false)
+  defaultValue String? // Stored as string, parsed by type
+
+  // Type-specific configuration (JSON)
+  config Json? // {
+  //   text: { minLength, maxLength, formatMask, pattern }
+  //   decimal: { minValue, maxValue, decimalPlaces }
+  //   integer: { minValue, maxValue }
+  //   list/multi_list: { options: ["opt1","opt2",...] }
+  //   date: { minDate, maxDate }
+  // }
+
+  // Display
+  displayOrder Int @default(0) // Sort order in forms/views
+
+  createdAt DateTime @default(now())
+
+  @@unique([versionId, fieldKey])
+  @@index([versionId])
+}
+
+model CustomFieldAudit {
+  id                String   @id @default(uuid())
+  entityType        String
+  action            String // "version_created", "field_added", "field_modified", "field_removed"
+  versionId         String? // New version ID
+  previousVersionId String? // Previous version ID
+  changes           Json? // Details of what changed
+  performedBy       String? // userId
+  createdAt         DateTime @default(now())
+
+  @@index([entityType])
+  @@index([createdAt])
+}
+
+// ============================================================
+// Domain Events — immutable event store
+// ============================================================
+
+model DomainEventLog {
+  id         String   @id
+  type       String // "shipment.status_changed", "order.created", etc.
+  timestamp  String // ISO-8601 when the event occurred
+  orgId      String // Organization scope
+  actorId    String? // User or system that caused the event
+  entityType String // "shipment", "order", "carrier", etc.
+  entityId   String // PK of the changed entity
+  payload    Json // Event-specific data
+  metadata   Json // correlationId, causationId, source, schemaVersion
+  createdAt  DateTime @default(now())
+
+  @@index([type])
+  @@index([entityType, entityId])
+  @@index([orgId])
+  @@index([timestamp])
+  @@index([createdAt])
+}
+
+// ============================================================
+// Notifications — in-app notification inbox
+// ============================================================
+
+model Notification {
+  id         String    @id @default(uuid())
+  userId     String
+  orgId      String
+  title      String // "Shipment SH-0042 Exception"
+  body       String // Descriptive message
+  category   String // "shipment_update", "order_update", "exception", "triage", "system"
+  severity   String    @default("info") // "info", "warning", "error", "success"
+  entityType String? // Link to source entity
+  entityId   String?
+  actionUrl  String? // Deep link: "/shipments/abc-123"
+  eventId    String? // Reference to DomainEventLog.id
+  eventType  String? // "shipment.exception"
+  read       Boolean   @default(false)
+  readAt     DateTime?
+  dismissed  Boolean   @default(false)
+  createdAt  DateTime  @default(now())
+
+  @@index([userId, read])
+  @@index([userId, createdAt])
+  @@index([orgId])
+}
+
+// ============================================================
+// Event Subscriptions — org-level rules for event routing
+// ============================================================
+
+model EventSubscription {
+  id           String   @id @default(uuid())
+  orgId        String
+  name         String // "Email on shipment exceptions"
+  active       Boolean  @default(true)
+  eventPattern String // "shipment.exception", "order.*", "*"
+  handlerType  String // "email", "inapp", "webhook"
+  config       Json // Handler-specific: template, recipients, URL, etc.
+  entityFilter Json? // Optional: filter by entity properties
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([orgId, active])
+  @@index([eventPattern])
+}
+
+// ============================================================
+// User Notification Preferences — per-user channel settings
+// ============================================================
+
+model UserNotificationPreference {
+  id            String   @id @default(uuid())
+  userId        String
+  eventCategory String // "shipment_updates", "exceptions", "triage", "system"
+  emailEnabled  Boolean  @default(true)
+  inAppEnabled  Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([userId, eventCategory])
+}
+
+// ─── Email Templates ─────────────────────────────────────────────
+
+model EmailTemplate {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  // Template identification
+  name        String // "Shipment Status Update", "Delivery Confirmation"
+  eventType   String // Event type this template handles: "shipment.status_changed", "shipment.delivered", etc.
+  description String?
+
+  // Content (Handlebars)
+  subject  String // Subject line template: "Shipment {{shipmentReference}} — {{newStatus}}"
+  htmlBody String // HTML body with Handlebars placeholders
+  textBody String? // Plain-text fallback (auto-generated from HTML if null)
+
+  // State
+  active    Boolean @default(true)
+  isDefault Boolean @default(false) // System-provided default template
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, eventType]) // One template per event type per org
+  @@index([eventType])
+}
+
+model CustomerReadModel {
+  id               String       @id
+  organization     Organization @relation(fields: [orgId], references: [id])
+  orgId            String
+  name             String
+  contactEmail     String?
+  activeOrderCount Int          @default(0)
+  totalOrderCount  Int          @default(0)
+  createdAt        DateTime
+  updatedAt        DateTime
+
+  @@index([orgId])
+  @@index([name])
+}
+
+// ─── Issue / Triage ─────────────────────────────────────────────
+// Tracks exceptions, delays, and operational issues across the system.
+// Issues can be auto-created from domain events (e.g., shipment.exception)
+// or manually by dispatchers.
+
+model Issue {
+  id           String       @id @default(uuid())
+  organization Organization @relation(fields: [orgId], references: [id])
+  orgId        String
+  title        String
+  description  String?
+  status       String       @default("open") // open, in_progress, resolved, closed
+  priority     String       @default("medium") // low, medium, high, critical
+  category     String // exception, delay, damage, compliance, other
+
+  // Deterministic issue engine: stable Issue Type registry key (e.g.
+  // "shipment_cutoff_risk"). Null for manually/legacy-created issues. Used for
+  // reporting and to look up the type's behaviour (latching, thresholds).
+  issueType String?
+  // Latched issues cannot be auto-resolved when the underlying condition clears
+  // ("it happened" — must be investigated). Snapshot of the type's `latched`.
+  latched   Boolean @default(false)
+
+  // Source entity that triggered the issue
+  sourceEntityType String? // "shipment", "order", "carrier"
+  sourceEntityId   String?
+  sourceEventId    String? // DomainEventLog.id that triggered this
+
+  // Assignment
+  assigneeId   String?
+  assigneeName String?
+  escalatedTo  String?
+  escalatedAt  DateTime?
+
+  // Resolution
+  resolvedAt DateTime?
+  resolvedBy String?
+  resolution String? // Free-text resolution notes
+
+  // Snooze
+  snoozedUntil  DateTime? // null = not snoozed; set to wake time
+  snoozedBy     String?
+  snoozedReason String?
+
+  // Triage: signal scoring + noise suppression.
+  // signalScore starts at the issue type's base confidence and is boosted by
+  // each corroborating signal in the IssueSignal ledger, capped at 95.
+  signalScore Int     @default(50)
+  signalCount Int     @default(1) // corroborating signals attached so far
+  isNoise     Boolean @default(false) // low-confidence; hidden from working queues
+  noiseReason String?
+
+  // Triage: SLA + response metrics
+  slaDeadline             DateTime?
+  slaBreach               Boolean   @default(false)
+  firstResponseAt         DateTime?
+  timeToFirstResponseMins Int?
+  timeToResolutionMins    Int?
+  lastActivityAt          DateTime?
+
+  // CAPA tracking
+  needsCapa Boolean @default(false) // Quality team flag
+
+  // Closure
+  closedAt DateTime?
+  closedBy String?
+
+  // CAPA reports linked to this issue
+  capaReports CAPAReport[]
+
+  // Labels
+  labelAssignments IssueLabelAssignment[]
+
+  // Exception signals that contributed to / are attached to this issue
+  signals IssueSignal[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orgId])
+  @@index([status])
+  @@index([priority])
+  @@index([signalScore])
+  @@index([isNoise])
+  @@index([slaBreach])
+  @@index([orgId, isNoise, status])
+  @@index([orgId, slaDeadline])
+  @@index([sourceEntityType, sourceEntityId])
+  @@index([assigneeId])
+  @@index([createdAt])
+  @@index([needsCapa])
+  @@index([snoozedUntil])
+  @@index([orgId, status, priority])
+  @@index([orgId, assigneeId, status])
+  @@index([orgId, snoozedUntil])
+  @@index([issueType])
+  @@index([orgId, issueType, status])
+  @@index([sourceEntityType, sourceEntityId, status])
+}
+
+// ─── Issue Signal ledger ─────────────────────────────────────────────
+// Append-only record of every exception signal the deterministic Issue Engine
+// sees. Drives two things: (1) the raise accumulator ("N signals in a window OR
+// severity >= floor" per Issue Type), and (2) the per-shipment "events / issues
+// over time" graphs. A signal is linked to the Issue it contributed to once one
+// is open for its (issueType, source entity).
+model IssueSignal {
+  id           String       @id @default(uuid())
+  organization Organization @relation(fields: [orgId], references: [id])
+  orgId        String
+
+  issueType        String // registry key, e.g. "shipment_cutoff_risk"
+  eventType        String // triggering domain event, e.g. "shipment.cutoff_at_risk"
+  sourceEntityType String // "shipment"
+  sourceEntityId   String
+  priority         String // signal severity mapped onto the priority band at emit time
+  sourceEventId    String? // DomainEventLog.id that produced this signal
+
+  // Set once this signal contributes to (or lands on) an open issue.
+  issue   Issue?  @relation(fields: [issueId], references: [id])
+  issueId String?
+
+  occurredAt DateTime // when the underlying condition occurred (event time)
+  createdAt  DateTime @default(now())
+
+  @@index([orgId])
+  @@index([issueType, sourceEntityId, occurredAt])
+  @@index([sourceEntityType, sourceEntityId, occurredAt])
+  @@index([issueId])
+  @@index([orgId, occurredAt])
+}
+
+model ProjectionCheckpoint {
+  projectionName String   @id
+  lastEventId    String
+  lastEventTime  DateTime
+  processedCount Int      @default(0)
+  updatedAt      DateTime @updatedAt
+}
+
+model IssueReadModel {
+  id               String       @id
+  organization     Organization @relation(fields: [orgId], references: [id])
+  orgId            String
+  title            String
+  description      String?
+  status           String
+  priority         String
+  category         String
+  issueType        String?
+  latched          Boolean      @default(false)
+  sourceEntityType String?
+  sourceEntityId   String?
+  sourceEventId    String?
+  assigneeId       String?
+  assigneeName     String?
+  escalatedTo      String?
+  escalatedAt      DateTime?
+  resolvedAt       DateTime?
+  resolution       String?
+  snoozedUntil     DateTime?
+  snoozedBy        String?
+  needsCapa        Boolean      @default(false)
+  labels           Json? // Cached label names: ["cold-chain", "hazmat"]
+  closedAt         DateTime?
+  commentCount     Int          @default(0)
+
+  // Triage: scoring, noise, SLA + response metrics (mirrors Issue)
+  signalScore             Int       @default(50)
+  signalCount             Int       @default(1)
+  isNoise                 Boolean   @default(false)
+  noiseReason             String?
+  slaDeadline             DateTime?
+  slaBreach               Boolean   @default(false)
+  firstResponseAt         DateTime?
+  timeToFirstResponseMins Int?
+  timeToResolutionMins    Int?
+  lastActivityAt          DateTime?
+
+  createdAt DateTime
+  updatedAt DateTime
+
+  @@index([orgId])
+  @@index([status])
+  @@index([priority])
+  @@index([assigneeName])
+  @@index([createdAt])
+  @@index([needsCapa])
+  @@index([snoozedUntil])
+  @@index([orgId, status, priority])
+  @@index([orgId, snoozedUntil])
+  @@index([orgId, issueType, status])
+  @@index([signalScore])
+  @@index([isNoise])
+  @@index([orgId, isNoise, status])
+  @@index([orgId, slaBreach])
+  @@index([orgId, slaDeadline])
+}
+
+// ─── Warehouse App: Magic Links ─────────────────────────────────────────────
+
+model MagicLink {
+  id        String    @id @default(uuid())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  tokenHash String    @unique // SHA-256 hash of the magic link token
+  expiresAt DateTime? // Null = never expires (persistent QR code)
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@index([tokenHash])
+}
+
+// ─── Warehouse App: Login Audit Log ─────────────────────────────────────────
+
+model LoginAuditLog {
+  id         String   @id @default(uuid())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     String
+  method     String // "password", "magic_link", "oauth_google", "oauth_microsoft"
+  ipAddress  String?
+  userAgent  String?
+  success    Boolean  @default(true)
+  failReason String? // "invalid_password", "locked", "expired_link", etc.
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([method])
+}
+
+// ─── Comments (polymorphic, any entity) ─────────────────────────────────────
+
+model Comment {
+  id                String    @id @default(uuid())
+  orgId             String
+  entityType        String // "issue", "shipment", "order", "trackable_unit"
+  entityId          String
+  authorId          String? // User.id or CustomerUser.id, or null for system/agent
+  authorName        String
+  authorType        String    @default("user") // "user", "agent", "system", "customer"
+  body              String // Markdown text
+  tag               String? // Optional free-form categorization, e.g. "issue", "requirement"
+  // Visibility for the customer portal. Internal user/agent comments default to
+  // false (internal-only) and must be opted into. Customer-authored comments
+  // are always set to true so internal staff sees them.
+  visibleToCustomer Boolean   @default(false)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  deletedAt         DateTime? // Soft delete - set when comment is deleted
+  deletedBy         String? // User ID who deleted the comment
+
+  @@index([orgId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@index([deletedAt])
+  @@index([entityType, entityId, visibleToCustomer])
+}
+
+// ─── Issue Labels ───────────────────────────────────────────────────────────
+
+model IssueLabel {
+  id          String                 @id @default(uuid())
+  orgId       String
+  name        String // e.g. "cold-chain", "hazmat", "vip-customer"
+  color       String                 @default("#6B7280") // Hex color for chip display
+  assignments IssueLabelAssignment[]
+  createdAt   DateTime               @default(now())
+
+  @@unique([orgId, name])
+  @@index([orgId])
+}
+
+model IssueLabelAssignment {
+  id      String     @id @default(uuid())
+  issueId String
+  labelId String
+  issue   Issue      @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  label   IssueLabel @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@unique([issueId, labelId])
+  @@index([issueId])
+  @@index([labelId])
+}
+
+// ─── Kanban Views (shared org-wide) ─────────────────────────────────────────
+
+model KanbanView {
+  id          String   @id @default(uuid())
+  orgId       String
+  name        String // "Cold Chain Issues", "Customer X Board"
+  description String?
+  // Widened for the Triage Centre, which uses KanbanView as its saved boards:
+  // { status?, priority?, category?, issueType?, sourceEntityType?, customerId?,
+  //   carrierId?, laneId?, region?, labels?, slaStatus?, assigneeId?, source?,
+  //   dateRange?, query?, signalScoreMin?, showNoise? }
+  filters     Json
+  groupBy     String   @default("status") // "status", "priority", "category", "assignee"
+  sortBy      String   @default("createdAt") // "createdAt", "priority", "slaStatus", "signalScore"
+  isDefault   Boolean  @default(false)
+  icon        String? // lucide icon name shown in the board picker
+  isShared    Boolean  @default(true) // false = private to createdBy
+  viewMode    String   @default("kanban") // "kanban" | "list"
+  createdBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([orgId])
+}

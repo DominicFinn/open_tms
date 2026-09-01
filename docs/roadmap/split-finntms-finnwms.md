@@ -39,8 +39,11 @@ Order: lint, then schema file split, then DI/routes split, then projection, then
    cold chain to CAPA, load plans to document generation, two on the Location conflation, and
    manifest ingest to receiving. Import-graph only for now; Prisma model ownership comes with the
    schema file split below. (S)
-2. **Prisma multi-file schema split** into `schema/{core,tms,wms}.prisma`. The WMS block is
-   contiguous; verify `prisma migrate diff` is empty. (S-M)
+2. **Prisma multi-file schema split** ✅ (#161) `prisma/schema/` under the `prismaSchemaFolder`
+   preview feature, one file per module rather than the three originally planned, so the schema
+   matches the map the boundary lint enforces in code: core 35 models, tms 66, wms 24, finance 11,
+   quality 7, inventory 4. `prisma migrate diff` empty in both directions, 56 migrations still
+   resolve. Also produced the cross-boundary FK list below. (S-M)
 3. **Split DI registration**: `di/registry.ts` into `di/{core,tms,wms}.ts`. (M)
 4. **Split route registration**: `index.ts` into `register{Core,Tms,Wms}.ts`. (S)
 5. **`WmsFulfilmentOrder` projection** (first WMS read model) fed by TMS order events, with a
@@ -53,6 +56,22 @@ Order: lint, then schema file split, then DI/routes split, then projection, then
 ## Phase 2: data model untangling (~18-26 chunks)
 
 This is the phase that makes standalone WMS possible.
+
+### The foreign keys that have to go
+
+Taken from the schema folder on 2026-09-01, after the split in #161. Every FK crossing the tms/wms
+boundary runs through `TrackableUnit`, which is exactly the model 2b splits:
+
+| Edge | Count | Where they are |
+|---|---|---|
+| wms to tms | 5 | `PackLine`, `PickLine`, `PutawayTask`, `ReceivingLine`, `StagingAssignment`, all to `TrackableUnit` |
+| tms to wms | 2 | `TrackableUnit.currentBin`, `TrackableUnit.currentZone` |
+| wms to core | 12 | every warehouse root pointing at `Location`, which 2a re-points at `Facility` |
+| inventory to tms | 3 | `Allocation.orderLineItem` (2c), plus two `TrackableUnit` refs |
+| finance to tms | 6 | charges, commissions and carrier invoices reaching shipments, orders and carriers |
+| core to tms | 1 | `AuditLog.order`, which is a stray and should be a soft id |
+
+Seven FKs and one model stand between the two products.
 
 - **2a. Location to Facility (XL, 6-9):** add `Facility`, backfill one per WMS-referenced
   Location, add nullable `facilityId` to the 17 WMS models (batched by subdomain), dual-write,
