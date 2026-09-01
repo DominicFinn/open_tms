@@ -65,11 +65,22 @@ check and was somehow missed.
 When you fix a leak, delete its exception in the same PR. The check tells you which ones have gone
 stale.
 
+## Registering a module
+
+Each module registers its own repositories, services and command handlers in
+`backend/src/di/modules/<module>.ts`, exporting `register<Module>Dependencies(prisma)` and
+`register<Module>CommandHandlers(bus, deps)`. `di/registry.ts` is the composition root: it calls
+them and does nothing else.
+
+Put a new binding in its module's file. A binding that ends up in the composition root is a sign
+the design has a cross-module dependency that wants an event or a port instead.
+
 ## Composition roots and exemptions
 
 `index.ts`, `worker.ts`, `di/registry.ts`, `commands/index.ts` and `events/registerHandlers.ts`
-wire every module together, which is their job, so the check skips them. Phase 1 splits them into
-per-module registration files and the exemptions come off. Tests and `scripts/` are exempt too.
+wire every module together, which is their job, so the check skips them. The per-module DI files
+are not exempt: each is checked against its own module's dependencies. Tests and `scripts/` are
+exempt too.
 
 ## What the check does not catch yet
 

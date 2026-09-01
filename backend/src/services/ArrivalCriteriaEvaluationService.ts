@@ -211,8 +211,9 @@ export class ArrivalCriteriaEvaluationService implements IArrivalCriteriaEvaluat
     }
 
     // Add destination criteria if no stop exists for it
-    if (shipment?.destination?.arrivalCriteria?.length && !locationCriteriaMap.has(shipment.destinationId)) {
-      locationCriteriaMap.set(shipment.destinationId, {
+    const destinationId = shipment?.destinationId ?? null;
+    if (destinationId && shipment?.destination?.arrivalCriteria?.length && !locationCriteriaMap.has(destinationId)) {
+      locationCriteriaMap.set(destinationId, {
         criteria: shipment.destination.arrivalCriteria,
         locationLat: shipment.destination.lat ?? undefined,
         locationLng: shipment.destination.lng ?? undefined,
