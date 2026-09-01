@@ -33,9 +33,12 @@ These were live bugs. Done ahead of any split work.
 
 Order: lint, then schema file split, then DI/routes split, then projection, then load-plan seam.
 
-1. **Boundary lint** (restricted imports / dependency-cruiser) plus a new
-   `.claude/rules/module-boundaries.md`. Seed the exception list with the known leaks; that list
-   becomes the burn-down. (S)
+1. **Boundary lint** ✅ (#159) `npm run lint:boundaries` walks backend imports against the ADR 0002
+   DAG, plus `.claude/rules/module-boundaries.md`. Seven known leaks seeded into
+   `backend/src/tooling/moduleBoundaries/exceptions.json` as the burn-down: charges to rating,
+   cold chain to CAPA, load plans to document generation, two on the Location conflation, and
+   manifest ingest to receiving. Import-graph only for now; Prisma model ownership comes with the
+   schema file split below. (S)
 2. **Prisma multi-file schema split** into `schema/{core,tms,wms}.prisma`. The WMS block is
    contiguous; verify `prisma migrate diff` is empty. (S-M)
 3. **Split DI registration**: `di/registry.ts` into `di/{core,tms,wms}.ts`. (M)
