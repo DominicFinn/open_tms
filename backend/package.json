@@ -8,6 +8,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "test": "jest --config jest.config.cjs",
+    "lint:boundaries": "tsx src/tooling/moduleBoundaries/cli.ts",
     "test:watch": "jest --config jest.config.cjs --watch",
     "test:coverage": "jest --config jest.config.cjs --coverage",
     "prisma:generate": "prisma generate",

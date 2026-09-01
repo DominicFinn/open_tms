@@ -30,6 +30,7 @@ Loaded when you touch matching files:
 
 | Rule | Scope |
 |---|---|
+| `.claude/rules/module-boundaries.md` | `backend/src/**` — **the tms/wms dependency DAG**, crossing a boundary by event or port, the exception burn-down |
 | `.claude/rules/backend.md` | `backend/src/**` — API envelope, DI, repositories, read models, file storage |
 | `.claude/rules/multi-tenancy.md` | `backend/src/**` — `orgId`, `req.orgId`, per-surface scope helpers |
 | `.claude/rules/api-design.md` | `backend/src/routes/**` — REST, envelope, pagination, **HTTP status codes**, schema validation |

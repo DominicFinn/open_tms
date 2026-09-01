@@ -4,6 +4,7 @@ Walk this before opening a PR. Not a formality — most of these have bitten us.
 
 ## Layering
 
+- [ ] `npm run lint:boundaries` passes, with no new entry in `exceptions.json`
 - [ ] No business logic in route handlers — routes are HTTP in/out only
 - [ ] All writes dispatched through the command bus
 - [ ] All query building inside repositories; no `prisma.<model>` calls in routes

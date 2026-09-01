@@ -1,0 +1,37 @@
+[
+  {
+    "from": "routes/charges.ts",
+    "to": "services/RatingService.ts",
+    "reason": "Charge creation re-rates through the TMS rating engine. Finance sits in core's tier so a standalone FinnWMS can bill, which means rating has to arrive as a DI port. Burn down with a RatingPort."
+  },
+  {
+    "from": "routes/coldChain.ts",
+    "to": "commands/capa/CreateCAPACommand.ts",
+    "reason": "A temperature excursion raises a CAPA by dispatching the quality command directly. Should be a quality subscriber on coldchain.excursion.recorded."
+  },
+  {
+    "from": "routes/coldChain.ts",
+    "to": "commands/capa/UpdateCAPACommand.ts",
+    "reason": "Same excursion-to-CAPA path as above."
+  },
+  {
+    "from": "routes/loadPlans.ts",
+    "to": "services/DocumentGenerationService.ts",
+    "reason": "Load plans generate the BOL inline. This is the Phase 1 load-plan seam: CompleteLoadPlanCommand emits wms.load_plan.completed and a TMS subscriber creates the BOL."
+  },
+  {
+    "from": "routes/locations.ts",
+    "to": "repositories/ArrivalCriteriaRepository.ts",
+    "reason": "Location is the conflated TMS node / WMS facility root. Resolves in Phase 2 when Facility lands and the geographic half stays in tms."
+  },
+  {
+    "from": "services/LocationResolutionService.ts",
+    "to": "repositories/ArrivalCriteriaRepository.ts",
+    "reason": "Same Location conflation as above."
+  },
+  {
+    "from": "routes/manifestIngestion.ts",
+    "to": "commands/warehouse/CreateReceivingTaskCommand.ts",
+    "reason": "Manifest ingest creates a warehouse receiving task directly. Phase 4 demand intake makes this an event a WMS-only install can also serve."
+  }
+]
