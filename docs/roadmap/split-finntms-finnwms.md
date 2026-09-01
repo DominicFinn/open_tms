@@ -44,7 +44,11 @@ Order: lint, then schema file split, then DI/routes split, then projection, then
    matches the map the boundary lint enforces in code: core 35 models, tms 66, wms 24, finance 11,
    quality 7, inventory 4. `prisma migrate diff` empty in both directions, 56 migrations still
    resolve. Also produced the cross-boundary FK list below. (S-M)
-3. **Split DI registration**: `di/registry.ts` into `di/{core,tms,wms}.ts`. (M)
+3. **Split DI registration** ✅ (#164) `di/registry.ts` into `di/modules/<module>.ts`, one per
+   module, each registering its own bindings and command handlers. The registry is now a 55-line
+   composition root. The per-module files are checked by the boundary lint rather than exempt.
+   Verified by diffing the 87 container bindings and 152 registered command types before and
+   after. (M)
 4. **Split route registration**: `index.ts` into `register{Core,Tms,Wms}.ts`. (S)
 5. **`WmsFulfilmentOrder` projection** (first WMS read model) fed by TMS order events, with a
    backfill; switch the wave commands off direct `tx.order` reads. Establishes the decoupling

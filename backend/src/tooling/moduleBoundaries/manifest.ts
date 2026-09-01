@@ -60,6 +60,14 @@ export const PATH_RULES: readonly PathRule[] = [
   // --- infrastructure and composition root ---
   { pattern: /^index(-demo)?\.ts$/, module: 'core' },
   { pattern: /^worker\.ts$/, module: 'core' },
+  // Per-module DI registration. These are checked, not exempt: each one may only see its own
+  // module. Only di/registry.ts, the composition root, sees them all.
+  { pattern: /^di\/modules\/core\.ts$/, module: 'core' },
+  { pattern: /^di\/modules\/finance\.ts$/, module: 'finance' },
+  { pattern: /^di\/modules\/inventory\.ts$/, module: 'inventory' },
+  { pattern: /^di\/modules\/quality\.ts$/, module: 'quality' },
+  { pattern: /^di\/modules\/tms\.ts$/, module: 'tms' },
+  { pattern: /^di\/modules\/wms\.ts$/, module: 'wms' },
   { pattern: /^(bootstrap|di|plugins|middleware|auth|security|queue|storage|tooling)\//, module: 'core' },
 
   // --- event and command infrastructure (the buses, not the handlers) ---
