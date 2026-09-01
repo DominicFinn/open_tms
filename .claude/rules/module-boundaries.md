@@ -28,6 +28,9 @@ through the same charge and invoice pipeline.
 Nothing has physically moved into `modules/` yet, so a file's module comes from its path. The map
 lives in `backend/src/tooling/moduleBoundaries/manifest.ts`.
 
+The schema follows the same map: `backend/prisma/schema/<module>.prisma`. The file a model sits in
+is the record of which module owns it.
+
 ## Crossing a boundary
 
 Two sanctioned ways, in order of preference:
@@ -71,8 +74,8 @@ per-module registration files and the exemptions come off. Tests and `scripts/` 
 ## What the check does not catch yet
 
 It reads import statements only. A wms file reading `tx.order` through the shared Prisma client is
-just as much a leak and goes undetected. Model ownership arrives with the Phase 1 schema file split
-(`schema/{core,tms,wms}.prisma`), which gives the ownership map for free.
+just as much a leak and goes undetected. The schema folder now records who owns each model, so
+teaching the check to read Prisma model access is the next chunk.
 
 Until then, that one is on you: if you are writing warehouse code and you find yourself touching a
 TMS model, stop and read from a WMS read model instead.

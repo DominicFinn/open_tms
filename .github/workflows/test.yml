@@ -22,7 +22,7 @@ jobs:
         run: npm ci
 
       - name: Generate Prisma client
-        run: npx prisma generate --schema=backend/prisma/schema.prisma
+        run: npx prisma generate --schema=backend/prisma/schema
 
       - name: Build shared package
         run: npm -w packages/shared run build

@@ -10,6 +10,17 @@ paths:
 PostgreSQL via Prisma. Migrations in `backend/prisma/migrations/`. After schema changes: write the
 migration SQL, then run `npx prisma generate`.
 
+## Where a model lives
+
+The schema is one file per module in `backend/prisma/schema/`: `core`, `finance`, `inventory`,
+`quality`, `tms`, `wms`, plus `config.prisma` for the generator and datasource. Prisma reads the
+folder as a single schema, so a relation may point at a model in another file, but **the file a
+model sits in is the record of which module owns it**.
+
+Put a new model in the module that owns the behaviour, and keep it there. No FK may cross the
+tms/wms boundary. References there are soft string ids. See
+[module-boundaries](module-boundaries.md).
+
 ## Naming
 
 Prisma conventions, not SQL conventions:

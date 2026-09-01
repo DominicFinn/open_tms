@@ -1,5 +1,5 @@
 // Customer-facing copy for Order.status / Order.deliveryStatus.
-// Internal enum values (backend/prisma/schema.prisma `Order.status` / `Order.deliveryStatus`)
+// Internal enum values (backend/prisma/schema/tms.prisma `Order.status` / `Order.deliveryStatus`)
 // are ops jargon and shouldn't be shown to customers verbatim.
 
 const ORDER_STATUS_LABELS: Record<string, string> = {

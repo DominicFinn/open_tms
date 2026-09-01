@@ -250,7 +250,7 @@ IMultimodalTrackingProvider (extends/mirrors ICarrierTrackingProvider)
 
 ## Files to Modify (When Implementation Begins)
 
-- `backend/prisma/schema.prisma` - Add ShipmentLeg model, transportMode enum
+- `backend/prisma/schema/tms.prisma` - Add ShipmentLeg model, transportMode enum
 - `backend/src/services/carrierTracking/ICarrierTrackingProvider.ts` - Extend or create parallel interface for multimodal
 - `backend/src/services/carrierTracking/ProviderRegistry.ts` - Register new providers
 - `backend/src/di/registry.ts` - DI registration for new providers

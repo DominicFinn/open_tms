@@ -1278,7 +1278,7 @@ During each ETA monitor cycle, for shipments with a `laneId` that has a `LaneRou
 
 ### Key Files
 
-- `backend/prisma/schema.prisma` - LaneRoute model
+- `backend/prisma/schema/tms.prisma` - LaneRoute model
 - `backend/src/services/routing/GoogleMapsDirectionsService.ts` - Google Maps Directions API + polyline encode/decode
 - `backend/src/services/routing/RouteDeviationService.ts` - Point-to-polyline deviation detection
 - `backend/src/services/routing/ShipmentEtaMonitorService.ts` - Integrated deviation checking during ETA monitor runs
@@ -1768,7 +1768,7 @@ Requests accelerated payment on a carrier invoice with a discount. Sets `quickPa
 - `backend/src/middleware/jwtAuth.ts` - JWT auth + requirePermission middleware
 - `frontend/src/hooks/useCurrentUser.ts` - Frontend role/permission hook
 - `frontend/src/vnext-design/VNextRoles.tsx` - Roles management admin page
-- `backend/prisma/schema.prisma` - Organization brokerage fields, ShipmentReadModel financial columns
+- `backend/prisma/schema/core.prisma` - Organization brokerage fields; `schema/tms.prisma` - ShipmentReadModel financial columns
 - `backend/src/routes/quotes.ts` - Quick quote + credit check endpoints
 - `backend/src/routes/organization.ts` - Organization settings (includes brokerage fields)
 - `backend/src/services/CreditCheckService.ts` - Customer credit validation

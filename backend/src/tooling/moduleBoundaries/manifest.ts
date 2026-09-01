@@ -72,6 +72,8 @@ export const PATH_RULES: readonly PathRule[] = [
   // --- overrides that would otherwise fall into a core sweep below ---
   { pattern: /^routes\/customer(Portal|Api|Developer|RmaApi)/, module: 'tms', note: 'the portal serves orders and shipments; the Customer entity itself is core' },
   { pattern: /^services\/(templates|skills|orderLineItem|llm)\//, module: 'tms' },
+  { pattern: /^(routes|commands|services|repositories)\/.*packagingType/i, module: 'tms', note: 'the packaging catalogue feeds rating and palletisation; CartonCatalogue is the wms box master' },
+  { pattern: /^services\/palletization\//, module: 'tms', note: 'palletising an order for shipping, not warehouse put-to-pallet' },
   { pattern: /^(routes|commands|services|events\/handlers)\/.*agent/i, module: 'tms', note: 'the triage agent is TMS AI work; the triage centre it writes into is core' },
   { pattern: /^(routes|services|repositories|workers)\/.*document/i, module: 'tms', note: 'document generation exists to produce BOLs, labels and customs paperwork; generic attachments stay core' },
   { pattern: /^commands\/queries\//, module: 'finance', note: 'billing queries raised against an invoice' },
@@ -96,7 +98,7 @@ export const PATH_RULES: readonly PathRule[] = [
   { pattern: /^(routes|commands|services|repositories|events\/(projections|handlers))\/.*(capa|sopChecklist|quality)/i, module: 'quality' },
 
   // --- wms ---
-  { pattern: /^(routes|commands|services|repositories|workers|events\/(projections|handlers))\/.*(warehouse|wave|pick|pack|putaway|receiving|cycleCount|replenishment|wms|loadPlan|palletization|carton|staging)/i, module: 'wms' },
+  { pattern: /^(routes|commands|services|repositories|workers|events\/(projections|handlers))\/.*(warehouse|wave|pick|pack|putaway|receiving|cycleCount|replenishment|wms|loadPlan|carton|staging)/i, module: 'wms' },
 
   // --- tms: everything else in the domain directories ---
   { pattern: /^(routes|commands|services|repositories|workers|integrations|events\/(projections|handlers))\//, module: 'tms' },

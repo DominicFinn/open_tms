@@ -1,0 +1,11 @@
+generator client {
+  provider        = "prisma-client-js"
+  // Lets the schema live as one file per module in this folder. The file a model
+  // sits in is the record of which module owns it. See .claude/rules/module-boundaries.md.
+  previewFeatures = ["prismaSchemaFolder"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
