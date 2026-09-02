@@ -2049,13 +2049,13 @@ export default function VNextShipmentDetail() {
         popupHtml: `<strong>Destination</strong><br/>${shipment.destination.city || ''}, ${shipment.destination.state || ''}`,
       });
     }
-    (shipment.stops || []).filter((st: any) => st.lat && st.lng).forEach((st: any, i: number) => {
+    (shipment.stops || []).filter((st: any) => st.location?.lat && st.location?.lng).forEach((st: any, i: number) => {
       out.push({
         id: `stop-${st.id ?? i}`,
-        position: { lat: st.lat, lng: st.lng },
+        position: { lat: st.location.lat, lng: st.location.lng },
         html: pin(COLOR_WARNING, 16, false),
         size: { width: 16, height: 16 },
-        popupHtml: `<strong>Stop</strong><br/>${st.city || ''}, ${st.state || ''}`,
+        popupHtml: `<strong>Stop</strong><br/>${st.location.city || ''}, ${st.location.state || ''}`,
       });
     });
 
