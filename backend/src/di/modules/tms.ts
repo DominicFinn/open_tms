@@ -10,6 +10,7 @@ import { container } from '../container.js';
 import { TOKENS } from '../tokens.js';
 import { CommandBus } from '../../commands/CommandBus.js';
 import type { CommandHandlerDeps } from '../moduleRegistration.js';
+import { OrderFulfilmentDemandSource } from '../../services/fulfilment/OrderFulfilmentDemandSource.js';
 import { ShipmentTypesRepository } from '../../repositories/ShipmentTypesRepository.js';
 import { CarriersRepository } from '../../repositories/CarriersRepository.js';
 import { ShipmentsRepository } from '../../repositories/ShipmentsRepository.js';
@@ -176,6 +177,11 @@ import { IReturnLabelProviderRegistry } from '../../services/returnLabel/IReturn
 import { IBinaryStorageProvider } from '../../storage/IBinaryStorageProvider.js';
 
 export function registerTmsDependencies(prisma: PrismaClient): void {
+  // The TMS side of the fulfilment demand port. WMS resolves this token and never sees Order.
+  container.singleton(TOKENS.IFulfilmentDemandSource).toFactory(() => {
+    return new OrderFulfilmentDemandSource(container.resolve(TOKENS.PrismaClient));
+  });
+
   container.singleton(TOKENS.ICarriersRepository).toFactory(() => {
     return new CarriersRepository(container.resolve(TOKENS.PrismaClient));
   });

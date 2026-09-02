@@ -53,9 +53,11 @@ Order: lint, then schema file split, then DI/routes split, then projection, then
    exporting its public and its JWT-scoped registrations. index.ts drops from 570 to 375 lines and
    keeps only the server lifecycle. Verified by booting the server and diffing the full route
    table: 717 routes, identical. (S)
-5. **`WmsFulfilmentOrder` projection** (first WMS read model) fed by TMS order events, with a
-   backfill; switch the wave commands off direct `tx.order` reads. Establishes the decoupling
-   pattern. (L)
+5. **`WmsFulfilmentOrder` projection** ✅ (#168) First WMS read model, fed by `order.*` and
+   `order_line_item.*` through `IFulfilmentDemandSource`, a core port TMS implements, so the
+   projection never touches a TMS model. `CreateWave`, `ApplyWaveTemplate` and `ReleaseWave` now
+   read it. The backfill runs the projection itself. Also closed a live cross-tenant bug: wave
+   template eligibility ran with no `orgId` filter on either half of the query. (L)
 6. **Load-plan seam**: `ShipmentStopPort` for `CreateLoadPlanCommand`; `CompleteLoadPlanCommand`
    emits `wms.load_plan.completed` and a TMS subscriber creates the BOL (first deliberate
    cross-domain event subscriber, idempotent). (M)

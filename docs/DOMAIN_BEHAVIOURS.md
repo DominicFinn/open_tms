@@ -2339,9 +2339,45 @@ Tracks stock levels across warehouse bins with an immutable transaction ledger.
 
 ---
 
+### Domain: Fulfilment Demand (WmsFulfilmentOrder)
+
+The warehouse's own record of what it has been asked to ship. Wave planning, eligibility and
+allocation all read this, never the TMS `Order` tables, because a standalone FinnWMS has no TMS
+order pipeline to read.
+
+**Models:** `WmsFulfilmentOrder`, `WmsFulfilmentOrderLine` (table role: read model).
+
+The link back to whatever created the demand is a soft `(sourceType, sourceId)` pair, never a
+foreign key. `sourceType` is `tms_order` today; a WMS-only install writes `edi_940`, `api` or
+`manifest` rows into the same table and nothing downstream changes.
+
+**Built by:** `WmsFulfilmentOrderProjection`, subscribing to `order.*` and `order_line_item.*`.
+It reads the source through `IFulfilmentDemandSource` (a core port implemented by TMS's
+`OrderFulfilmentDemandSource`), so the projection itself never touches a TMS model.
+
+**Projection behaviour:**
+- Every relevant event re-projects the whole order and replaces its lines. Order and line events
+  arrive independently and can interleave, and a wave built from a half-applied order picks the
+  wrong stock. Re-projection is idempotent and costs one query.
+- `order.status_changed` carries the status through verbatim, which is what drops a cancelled or
+  archived order out of wave eligibility. WMS treats the value as opaque apart from that and the
+  template rules.
+- `order.deleted`, and any event whose source no longer resolves, removes the row.
+- Delivery, exception and shipment-assignment events are ignored: they don't change what the
+  warehouse has to pick.
+
+**Backfill:** `npx tsx backend/src/scripts/backfill-read-models.ts` runs the projection itself
+rather than a second copy of the mapping, so the backfill cannot drift from the live path. It
+covers every organisation.
+
+---
+
 ### Domain: Waves & Picking
 
-Groups orders into pick waves and generates walk-sequence-optimized pick tasks.
+Groups orders into pick waves and generates walk-sequence-optimized pick tasks. All three wave
+commands read `WmsFulfilmentOrder` rather than `Order` or `OrderLineItem`. `Allocation` and
+`PickLine` still key off the TMS line id, carried through as `sourceLineId`, until Phase 2c makes
+the demand reference polymorphic.
 
 ### Commands
 - `wave.create` - Create a wave from selected order IDs. Auto-generates wave number (W-YYYY-MM-DD-NNN). Counts total line items across orders.
@@ -2444,6 +2480,8 @@ Automates wave creation from reusable template definitions with grouping rules, 
 ### Side Effects
 - ApplyWaveTemplate creates Wave + WaveOrder records
 - Eligible orders are those not currently in any active (non-completed, non-cancelled) wave
+- Eligibility reads `WmsFulfilmentOrder`, and both halves of the query are org-scoped. They were
+  not before, so a template could pull another organisation's orders into a wave
 - Cutoff time resolved from template HH:MM to today's datetime
 
 ---

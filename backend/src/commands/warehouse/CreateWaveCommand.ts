@@ -40,9 +40,13 @@ export class CreateWaveCommandHandler extends BaseCommandHandler<
     });
     const waveNumber = `W-${today}-${String(existing + 1).padStart(3, '0')}`;
 
-    // Count total line items across orders
-    const lineCount = await tx.orderLineItem.count({
-      where: { order: { id: { in: p.orderIds } } },
+    // Count total line items across orders, from the warehouse's own view of the demand.
+    // WmsFulfilmentOrder.sourceId is the order id; a WMS-only install populates it from a 940.
+    const lineCount = await tx.wmsFulfilmentOrderLine.count({
+      where: {
+        orgId: command.orgId,
+        fulfilmentOrder: { orgId: command.orgId, sourceId: { in: p.orderIds } },
+      },
     });
 
     const wave = await tx.wave.create({

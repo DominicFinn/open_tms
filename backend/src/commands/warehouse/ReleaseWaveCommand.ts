@@ -41,11 +41,28 @@ export class ReleaseWaveCommandHandler extends BaseCommandHandler<
 
     const orderIds = wave.waveOrders.map(wo => wo.orderId);
 
-    // Load all order line items for the wave's orders
-    const orderLines = await tx.orderLineItem.findMany({
-      where: { order: { id: { in: orderIds } } },
-      include: { order: { select: { id: true } } },
+    // Load the demand for the wave's orders from the warehouse's own read model rather than
+    // the TMS order tables. sourceLineId is still the id Allocation and PickLine key off,
+    // until Phase 2c makes the demand reference polymorphic.
+    const demandLines = await tx.wmsFulfilmentOrderLine.findMany({
+      where: {
+        orgId: command.orgId,
+        fulfilmentOrder: { orgId: command.orgId, sourceId: { in: orderIds } },
+      },
+      select: {
+        sourceLineId: true,
+        sku: true,
+        quantity: true,
+        fulfilmentOrder: { select: { sourceId: true } },
+      },
     });
+
+    const orderLines = demandLines.map((line) => ({
+      id: line.sourceLineId,
+      sku: line.sku,
+      quantity: line.quantity,
+      order: { id: line.fulfilmentOrder.sourceId },
+    }));
 
     // Allocate inventory for each line item
     const allocationFailures: string[] = [];

@@ -110,8 +110,13 @@ describe('ApplyWaveTemplateCommandHandler', () => {
         findMany: jest.fn().mockResolvedValue([]), // no existing wave orders
         createMany: jest.fn().mockResolvedValue({ count: 3 }),
       },
-      order: { findMany: jest.fn().mockResolvedValue([{ id: 'o1' }, { id: 'o2' }, { id: 'o3' }]) },
-      orderLineItem: { count: jest.fn().mockResolvedValue(8) },
+      wmsFulfilmentOrder: {
+        findMany: jest.fn().mockResolvedValue([
+          { sourceId: 'o1', lineCount: 3 },
+          { sourceId: 'o2', lineCount: 3 },
+          { sourceId: 'o3', lineCount: 2 },
+        ]),
+      },
       wave: {
         count: jest.fn().mockResolvedValue(0),
         create: jest.fn().mockResolvedValue(mockWave),
@@ -143,7 +148,7 @@ describe('ApplyWaveTemplateCommandHandler', () => {
     const tx = {
       waveTemplate: { findUnique: jest.fn().mockResolvedValue(mockTemplate) },
       waveOrder: { findMany: jest.fn().mockResolvedValue([]) },
-      order: { findMany: jest.fn().mockResolvedValue([{ id: 'o1' }]) }, // only 1, min is 2
+      wmsFulfilmentOrder: { findMany: jest.fn().mockResolvedValue([{ sourceId: 'o1', lineCount: 2 }]) }, // only 1, min is 2
       domainEventLog: { create: jest.fn().mockResolvedValue({}) },
     } as any;
     const prisma = {
@@ -166,7 +171,7 @@ describe('ApplyWaveTemplateCommandHandler', () => {
     const tx = {
       waveTemplate: { findUnique: jest.fn().mockResolvedValue({ ...mockTemplate, minOrders: null }) },
       waveOrder: { findMany: jest.fn().mockResolvedValue([]) },
-      order: { findMany: jest.fn().mockResolvedValue([]) },
+      wmsFulfilmentOrder: { findMany: jest.fn().mockResolvedValue([]) },
       domainEventLog: { create: jest.fn().mockResolvedValue({}) },
     } as any;
     const prisma = {
@@ -183,6 +188,32 @@ describe('ApplyWaveTemplateCommandHandler', () => {
     expect(result.success).toBe(true);
     expect(result.data?.skipped).toBe(true);
     expect(result.data?.skipReason).toContain('No eligible');
+  });
+
+  it('scopes both eligibility queries to the org', async () => {
+    const tx = {
+      waveTemplate: { findUnique: jest.fn().mockResolvedValue({ ...mockTemplate, minOrders: null }) },
+      waveOrder: { findMany: jest.fn().mockResolvedValue([]) },
+      wmsFulfilmentOrder: { findMany: jest.fn().mockResolvedValue([]) },
+      domainEventLog: { create: jest.fn().mockResolvedValue({}) },
+    } as any;
+    const prisma = {
+      $transaction: jest.fn((fn: Function) => fn(tx)),
+      domainEventLog: { findFirst: jest.fn().mockResolvedValue(null) },
+    } as any;
+    const handler = new ApplyWaveTemplateCommandHandler(prisma, mockEventBus().bus);
+
+    await handler.execute(createTestCommand(APPLY_WAVE_TEMPLATE, { templateId: 'tpl-1' }));
+
+    // Both halves used to run unscoped, so a template could wave another tenant's orders.
+    expect(tx.wmsFulfilmentOrder.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ orgId: 'test-org' }) })
+    );
+    expect(tx.waveOrder.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ wave: expect.objectContaining({ orgId: 'test-org' }) }),
+      })
+    );
   });
 
   it('fails if template inactive', async () => {
@@ -214,8 +245,14 @@ describe('ApplyWaveTemplateCommandHandler', () => {
         findMany: jest.fn().mockResolvedValue([]),
         createMany: jest.fn().mockResolvedValue({ count: 2 }),
       },
-      order: { findMany: jest.fn().mockResolvedValue([{ id: 'o1' }, { id: 'o2' }, { id: 'o3' }, { id: 'o4' }]) },
-      orderLineItem: { count: jest.fn().mockResolvedValue(4) },
+      wmsFulfilmentOrder: {
+        findMany: jest.fn().mockResolvedValue([
+          { sourceId: 'o1', lineCount: 1 },
+          { sourceId: 'o2', lineCount: 1 },
+          { sourceId: 'o3', lineCount: 1 },
+          { sourceId: 'o4', lineCount: 1 },
+        ]),
+      },
       wave: {
         count: jest.fn().mockResolvedValue(0),
         create: jest.fn().mockResolvedValue(mockWave),

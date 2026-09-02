@@ -35,32 +35,36 @@ export class ApplyWaveTemplateCommandHandler extends BaseCommandHandler<
     if (!template) throw new Error(`Wave template ${command.payload.templateId} not found`);
     if (!template.active) throw new Error('Template is inactive');
 
-    // Build order query from grouping rules
-    const orderWhere: any = {
-      // Orders that haven't been waved yet (not in any active wave)
-      id: {
-        notIn: (await tx.waveOrder.findMany({
-          where: { wave: { status: { notIn: ['completed', 'cancelled'] } } },
-          select: { orderId: true },
-        })).map(wo => wo.orderId),
+    // Eligibility runs against the warehouse's own view of demand, not the TMS order tables.
+    // Both halves are org-scoped: an unscoped query here pulled another tenant's orders into
+    // a wave.
+    const alreadyWaved = await tx.waveOrder.findMany({
+      where: {
+        wave: { orgId: command.orgId, status: { notIn: ['completed', 'cancelled'] } },
       },
+      select: { orderId: true },
+    });
+
+    const demandWhere: Prisma.WmsFulfilmentOrderWhereInput = {
+      orgId: command.orgId,
+      sourceId: { notIn: alreadyWaved.map((wo) => wo.orderId) },
     };
 
     // Apply grouping rules if present
     const rules = template.groupingRules as Record<string, unknown> | null;
     if (rules) {
-      if (rules.customer) orderWhere.customerId = rules.customer;
-      if (rules.status) orderWhere.status = rules.status;
+      if (rules.customer) demandWhere.customerId = rules.customer as string;
+      if (rules.status) demandWhere.status = rules.status as string;
       // shipFrom maps to origin location
-      if (rules.shipFrom) orderWhere.originId = rules.shipFrom;
+      if (rules.shipFrom) demandWhere.originLocationId = rules.shipFrom as string;
     }
 
     // Find eligible orders
-    let orders = await tx.order.findMany({
-      where: orderWhere,
-      select: { id: true },
-      orderBy: { createdAt: 'asc' },
-    });
+    let orders = (await tx.wmsFulfilmentOrder.findMany({
+      where: demandWhere,
+      select: { sourceId: true, lineCount: true },
+      orderBy: { sourceCreatedAt: 'asc' },
+    })).map((demand) => ({ id: demand.sourceId, lineCount: demand.lineCount }));
 
     // Apply min/max constraints
     if (template.minOrders && orders.length < template.minOrders) {
@@ -89,9 +93,7 @@ export class ApplyWaveTemplateCommandHandler extends BaseCommandHandler<
     const waveNumber = `W-${today}-${String(existing + 1).padStart(3, '0')}`;
 
     // Count total line items
-    const lineCount = await tx.orderLineItem.count({
-      where: { order: { id: { in: orders.map(o => o.id) } } },
-    });
+    const lineCount = orders.reduce((sum, order) => sum + order.lineCount, 0);
 
     // Resolve cutoff time to a datetime
     let cutoffAt: Date | null = null;

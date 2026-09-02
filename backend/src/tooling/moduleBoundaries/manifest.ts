@@ -69,6 +69,9 @@ export const PATH_RULES: readonly PathRule[] = [
   { pattern: /^(di|routes)\/modules\/tms\.ts$/, module: 'tms' },
   { pattern: /^(di|routes)\/modules\/wms\.ts$/, module: 'wms' },
   { pattern: /^(bootstrap|di|plugins|middleware|auth|security|queue|storage|tooling)\//, module: 'core' },
+  // Ports: interfaces one module calls and another implements. They live in core because the
+  // implementing side often may not import the calling side. See module-boundaries.md.
+  { pattern: /^ports\//, module: 'core' },
 
   // --- event and command infrastructure (the buses, not the handlers) ---
   { pattern: /^events\/(DomainEvent|IEventBus|IEventHandler|PgBossEventBus|createEvent|eventTypes|registerHandlers|index)\.ts$/, module: 'core' },

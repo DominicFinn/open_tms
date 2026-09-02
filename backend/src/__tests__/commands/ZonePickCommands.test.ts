@@ -9,9 +9,9 @@ describe('ReleaseWaveCommand - Zone Strategy', () => {
       pickStrategy: 'zone', zonePickMode: 'parallel', orgId: 'test-org',
       waveOrders: [{ orderId: 'order-1', priority: 0 }],
     };
-    const mockOrderLines = [
-      { id: 'line-1', orderId: 'order-1', sku: 'SKU-A', quantity: 5, order: { id: 'order-1' } },
-      { id: 'line-2', orderId: 'order-1', sku: 'SKU-B', quantity: 3, order: { id: 'order-1' } },
+    const mockDemandLines = [
+      { sourceLineId: 'line-1', sku: 'SKU-A', quantity: 5, fulfilmentOrder: { sourceId: 'order-1' } },
+      { sourceLineId: 'line-2', sku: 'SKU-B', quantity: 3, fulfilmentOrder: { sourceId: 'order-1' } },
     ];
     // SKU-A in zone-1 (bin-1), SKU-B in zone-2 (bin-2)
     const mockInvA = { id: 'inv-1', sku: 'SKU-A', quantityAvailable: 10, uomCode: 'EA', lotNumber: null, bin: { id: 'bin-1', walkSequence: 1 } };
@@ -20,7 +20,7 @@ describe('ReleaseWaveCommand - Zone Strategy', () => {
     const createdTasks: any[] = [];
     const tx = {
       wave: { findUnique: jest.fn().mockResolvedValue(mockWave), update: jest.fn() },
-      orderLineItem: { findMany: jest.fn().mockResolvedValue(mockOrderLines) },
+      wmsFulfilmentOrderLine: { findMany: jest.fn().mockResolvedValue(mockDemandLines) },
       inventoryRecord: {
         findMany: jest.fn()
           .mockResolvedValueOnce([mockInvA])  // SKU-A inventory
@@ -83,10 +83,10 @@ describe('ReleaseWaveCommand - Zone Strategy', () => {
       waveOrders: [{ orderId: 'order-1', priority: 0 }],
     };
     // 3 lines, 2 in zone-1, 1 in zone-2
-    const mockOrderLines = [
-      { id: 'line-1', orderId: 'order-1', sku: 'SKU-A', quantity: 5, order: { id: 'order-1' } },
-      { id: 'line-2', orderId: 'order-1', sku: 'SKU-B', quantity: 3, order: { id: 'order-1' } },
-      { id: 'line-3', orderId: 'order-1', sku: 'SKU-C', quantity: 2, order: { id: 'order-1' } },
+    const mockDemandLines = [
+      { sourceLineId: 'line-1', sku: 'SKU-A', quantity: 5, fulfilmentOrder: { sourceId: 'order-1' } },
+      { sourceLineId: 'line-2', sku: 'SKU-B', quantity: 3, fulfilmentOrder: { sourceId: 'order-1' } },
+      { sourceLineId: 'line-3', sku: 'SKU-C', quantity: 2, fulfilmentOrder: { sourceId: 'order-1' } },
     ];
     const invA = { id: 'inv-1', sku: 'SKU-A', quantityAvailable: 10, uomCode: 'EA', lotNumber: null, bin: { id: 'bin-1', walkSequence: 1 } };
     const invB = { id: 'inv-2', sku: 'SKU-B', quantityAvailable: 10, uomCode: 'EA', lotNumber: null, bin: { id: 'bin-2', walkSequence: 3 } };
@@ -95,7 +95,7 @@ describe('ReleaseWaveCommand - Zone Strategy', () => {
     const pickLineData: any[] = [];
     const tx = {
       wave: { findUnique: jest.fn().mockResolvedValue(mockWave), update: jest.fn() },
-      orderLineItem: { findMany: jest.fn().mockResolvedValue(mockOrderLines) },
+      wmsFulfilmentOrderLine: { findMany: jest.fn().mockResolvedValue(mockDemandLines) },
       inventoryRecord: {
         findMany: jest.fn()
           .mockResolvedValueOnce([invA])
