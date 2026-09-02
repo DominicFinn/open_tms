@@ -1,5 +1,6 @@
 import { toast } from 'sonner';
 import { API_URL } from './api';
+import { clearWarehouseSession, getWarehouseToken } from './warehouse/warehouse-session';
 
 /**
  * Global fetch interceptor for the main TMS app.
@@ -10,9 +11,17 @@ import { API_URL } from './api';
  * - On a 401 from API_URL, clears the main TMS session and redirects to /login
  *   with the current URL preserved as ?returnTo=...
  *
- * Portal fetches (carrier_token / customer_token / warehouse_token) bring their
- * own Authorization header, so we never override them. Non-API requests pass
- * through untouched.
+ * Carrier/customer portal fetches (carrier_token / customer_token) bring their
+ * own Authorization header via per-page wrappers, so we never override them.
+ *
+ * Warehouse PWA fetches are the one portal surface this interceptor also
+ * carries: it attaches `warehouse_token` on every `/api/v1/warehouse/*` PWA
+ * request and, on a 401, clears the warehouse session and bounces to
+ * /warehouse/login (see #137 — the PWA has ~15 pages making plain `fetch()`
+ * calls with no per-call wrapper, so a single request-scoped fix here is
+ * far cheaper than threading a wrapper through every page).
+ *
+ * Non-API requests pass through untouched.
  */
 
 const MAIN_TMS_TOKEN_KEY = 'auth_token';
@@ -31,7 +40,7 @@ function requestAlreadyHasAuth(init: RequestInit | undefined, input: RequestInfo
   return false;
 }
 
-function isPortalRoute(url: string): boolean {
+function isWarehousePwaRoute(url: string): boolean {
   // WMS admin endpoints share the /api/v1/warehouse/ prefix with the PWA but
   // require the main TMS JWT. Keep them on the standard auth path.
   // magic-link/generate and the login audit log are admin-app actions
@@ -44,12 +53,26 @@ function isPortalRoute(url: string): boolean {
   ) {
     return false;
   }
+  return url.includes('/api/v1/warehouse');
+}
+
+function isWarehouseAuthPublicRoute(url: string): boolean {
+  // These two endpoints authenticate the request themselves and return 401
+  // for plain bad credentials — the generic warehouse 401 handler (session
+  // expired -> clear + bounce to login) must not fire on a failed login.
+  return (
+    url.includes('/api/v1/warehouse/auth/login') ||
+    url.includes('/api/v1/warehouse/auth/magic-link/validate')
+  );
+}
+
+function isPortalRoute(url: string): boolean {
   // Portals manage their own tokens — don't inject the main TMS token into them.
   return (
+    isWarehousePwaRoute(url) ||
     url.includes('/api/v1/carrier-portal') ||
     url.includes('/api/v1/customer-portal') ||
-    url.includes('/api/v1/customer-api') ||
-    url.includes('/api/v1/warehouse')
+    url.includes('/api/v1/customer-api')
   );
 }
 
@@ -79,6 +102,13 @@ function redirectToLogin() {
   // Avoid ping-pong if we're already on the login page.
   if (window.location.pathname !== '/login') {
     window.location.assign(loginUrl);
+  }
+}
+
+function redirectToWarehouseLogin() {
+  // Avoid ping-pong if we're already on the warehouse login page.
+  if (window.location.pathname !== '/warehouse/login') {
+    window.location.assign('/warehouse/login');
   }
 }
 
@@ -114,6 +144,17 @@ export function installAuthFetchInterceptor() {
       finalInit = { ...init, headers };
     }
 
+    // Attach Authorization for warehouse PWA routes (see #137).
+    const isWarehouseRequest = isWarehousePwaRoute(url) && !isWarehouseAuthPublicRoute(url);
+    if (isWarehouseRequest && !requestAlreadyHasAuth(init, input)) {
+      const warehouseToken = getWarehouseToken();
+      if (warehouseToken) {
+        const headers = new Headers(init?.headers as HeadersInit | undefined);
+        headers.set('Authorization', `Bearer ${warehouseToken}`);
+        finalInit = { ...init, headers };
+      }
+    }
+
     const res = await originalFetch(input, finalInit);
 
     // On 401 from main TMS routes, bounce to /login.
@@ -121,6 +162,13 @@ export function installAuthFetchInterceptor() {
       localStorage.removeItem(MAIN_TMS_TOKEN_KEY);
       localStorage.removeItem(MAIN_TMS_USER_KEY);
       redirectToLogin();
+    }
+
+    // On 401 from a warehouse PWA route, the session token is missing/expired
+    // — clear it and bounce back to the warehouse login screen.
+    if (res.status === 401 && isWarehouseRequest) {
+      clearWarehouseSession();
+      redirectToWarehouseLogin();
     }
 
     // On 403 from a mutating main TMS request, surface a permission error.

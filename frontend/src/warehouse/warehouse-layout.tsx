@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
+import { clearWarehouseSession, getWarehouseToken, getWarehouseUser } from './warehouse-session';
 
 interface WarehouseUser {
   email?: string;
@@ -42,20 +43,16 @@ export function WarehouseLayout() {
   const [user, setUser] = useState<WarehouseUser | null>(null);
 
   useEffect(() => {
-    const stored = localStorage.getItem('warehouse_user');
-    if (!stored) {
+    const stored = getWarehouseUser();
+    if (!stored || !getWarehouseToken()) {
       navigate('/warehouse/login');
       return;
     }
-    try {
-      setUser(JSON.parse(stored));
-    } catch {
-      navigate('/warehouse/login');
-    }
+    setUser(stored);
   }, [navigate]);
 
   function handleLogout() {
-    localStorage.removeItem('warehouse_user');
+    clearWarehouseSession();
     localStorage.removeItem('warehouse_location');
     navigate('/warehouse/login');
   }
