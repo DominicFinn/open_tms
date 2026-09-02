@@ -24,6 +24,7 @@ import {
   Inbox,
   Info,
   Loader2,
+  Lock,
   MapPin,
   MoreVertical,
   Package,
@@ -153,7 +154,7 @@ const COLOR_MUTED = '#94a3b8';
 const COLOR_ROUTE = '#a855f7';
 
 // ─── Financials Tab ─────────────────────────────────────────────────────
-function FinancialsTab({ shipmentId }: { shipmentId: string }) {
+function FinancialsTab({ shipmentId, hasBol }: { shipmentId: string; hasBol: boolean }) {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
@@ -172,6 +173,24 @@ function FinancialsTab({ shipmentId }: { shipmentId: string }) {
       </CardContent>
     </Card>
   );
+
+  // BUSINESS RULE: rate/margin data stays hidden until the load is sealed
+  // (a BOL has been generated) so it isn't visible mid-negotiation or before
+  // the shipment's contents/charges are finalized.
+  if (!hasBol) {
+    return (
+      <Card>
+        <CardHeader><CardTitle>Financials</CardTitle></CardHeader>
+        <CardContent>
+          <div className="flex flex-col items-center gap-2 py-8 text-muted-foreground">
+            <Lock className="h-12 w-12 opacity-50" />
+            <p>Financial data becomes available once the load is sealed.</p>
+            <p className="text-sm">Generate a Bill of Lading from the Docs tab to unlock revenue, cost, and margin.</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (!data || (data.charges && data.charges.length === 0)) {
     return (
@@ -2499,7 +2518,7 @@ export default function VNextShipmentDetail() {
             </TabsContent>
 
             <TabsContent value="financials" className="mt-4">
-              <FinancialsTab shipmentId={id!} />
+              <FinancialsTab shipmentId={id!} hasBol={documents.some((d: any) => d.documentType === 'bol')} />
             </TabsContent>
 
             <TabsContent value="cargo" className="mt-4">
