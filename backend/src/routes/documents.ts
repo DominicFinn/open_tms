@@ -11,6 +11,7 @@ import { IBinaryStorageProvider } from '../storage/IBinaryStorageProvider.js';
 import { IQueueAdapter } from '../queue/IQueueAdapter.js';
 import { QUEUES, type DocumentGenerationKind, type DocumentGenerationJob } from '../queue/events.js';
 import { evaluateBolReadiness } from '../services/bolReadiness.js';
+import { requirePermission } from '../middleware/jwtAuth.js';
 
 const createTemplateSchema = z.object({
   name: z.string().min(1),
@@ -448,6 +449,7 @@ export async function documentRoutes(server: FastifyInstance) {
 
   // Generate rate confirmation (broker: carrier-facing document showing agreed cost rate)
   server.post('/api/v1/documents/rate-confirmation', {
+    preHandler: requirePermission('rate_confirmation:generate'),
     schema: {
       description: 'Generate a rate confirmation PDF for a shipment (carrier-facing, hides customer sell rate)',
       tags: ['Documents'],
@@ -593,6 +595,7 @@ export async function documentRoutes(server: FastifyInstance) {
   });
 
   server.post('/api/v1/documents/rate-confirmation/async', {
+    preHandler: requirePermission('rate_confirmation:generate'),
     schema: {
       description: 'Enqueue an async rate-confirmation generation. See /bol/async for the polling pattern.',
       tags: ['Documents'],
