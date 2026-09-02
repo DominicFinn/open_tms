@@ -31,7 +31,7 @@ import { cn } from '@/lib/utils';
 
 import { API_URL } from '../api';
 import {
-  triageApi, boardsApi, TriageIssue, IssueTypeDef, TriageFilterState, SavedBoard,
+  triageApi, boardsApi, TriageIssue, IssueTypeDef, TriageFilterState, SavedBoard, BatchResult,
   BOARD_COLUMNS, STATUS_LABEL, timeAgo,
 } from './triage/api';
 import {
@@ -117,18 +117,47 @@ export default function VNextTriageBoard() {
     });
   };
 
-  const runBatch = async (fn: () => Promise<{ updated: number; failed: unknown[] }>, verb: string) => {
+  // The list reads an async read-model projection that can lag a write by a beat, so an
+  // immediate refetch after a batch action can still show the pre-change status. Patch the
+  // affected issues locally from the batch result (which id's actually succeeded) instead of
+  // waiting on `load()` alone — `load()` still runs after, as a background reconciliation.
+  const applyLocalStatusChange = (
+    successIds: string[],
+    changes: Partial<TriageIssue> & { status: string },
+  ) => {
+    if (successIds.length === 0) return;
+    const activeStatuses = filters.status;
+    const stillVisible = !activeStatuses || activeStatuses.includes(changes.status);
+    setIssues((prev) => (
+      stillVisible
+        ? prev.map((i) => (successIds.includes(i.id) ? { ...i, ...changes } : i))
+        : prev.filter((i) => !successIds.includes(i.id))
+    ));
+    if (!stillVisible) setTotal((t) => Math.max(0, t - successIds.length));
+  };
+
+  const runBatch = async (
+    ids: string[],
+    fn: () => Promise<BatchResult>,
+    verb: string,
+    changes: Partial<TriageIssue> & { status: string },
+  ) => {
     setBanner(null);
     try {
       const res = await fn();
+      const failedIds = new Set(res.failed.map((f) => f.id));
+      const successIds = ids.filter((id) => !failedIds.has(id));
       const failedCount = res.failed.length;
       setBanner(
         failedCount
           ? `${verb} ${res.updated} issue${res.updated === 1 ? '' : 's'}; ${failedCount} failed.`
           : `${verb} ${res.updated} issue${res.updated === 1 ? '' : 's'}.`,
       );
+      // Patch locally from the batch result rather than refetching: `load()` reads the same
+      // async read-model projection the batch write feeds, and an immediate refetch would race
+      // it and overwrite this patch with the pre-batch status.
+      applyLocalStatusChange(successIds, changes);
       setSelected(new Set());
-      await load();
     } catch (e) {
       setBanner(e instanceof Error ? e.message : 'Batch action failed');
     }
@@ -292,15 +321,15 @@ export default function VNextTriageBoard() {
         <Card className="flex flex-wrap items-center gap-2 p-3">
           <strong className="text-sm">{selected.size} selected</strong>
           <Button size="sm" variant="outline"
-            onClick={() => runBatch(() => triageApi.batchTransition(ids, 'in_progress'), 'Started')}>
+            onClick={() => runBatch(ids, () => triageApi.batchTransition(ids, 'in_progress'), 'Started', { status: 'in_progress' })}>
             <Users className="h-3.5 w-3.5" aria-hidden="true" /> Start
           </Button>
           <Button size="sm" variant="outline"
-            onClick={() => runBatch(() => triageApi.batchTransition(ids, 'resolved', 'Bulk resolved from the triage board'), 'Resolved')}>
+            onClick={() => runBatch(ids, () => triageApi.batchTransition(ids, 'resolved', 'Bulk resolved from the triage board'), 'Resolved', { status: 'resolved' })}>
             <CheckCheck className="h-3.5 w-3.5" aria-hidden="true" /> Resolve
           </Button>
           <Button size="sm" variant="outline"
-            onClick={() => runBatch(() => triageApi.batchDismissNoise(ids), 'Dismissed')}>
+            onClick={() => runBatch(ids, () => triageApi.batchDismissNoise(ids), 'Dismissed', { status: 'closed', isNoise: true })}>
             <EyeOff className="h-3.5 w-3.5" aria-hidden="true" /> Dismiss as noise
           </Button>
           <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>Clear</Button>
@@ -429,7 +458,12 @@ export default function VNextTriageBoard() {
 
       {total > PER_PAGE && (
         <div className="flex items-center justify-center gap-2">
-          <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={page <= 1}
+            onClick={() => { setPage((p) => p - 1); setSelected(new Set()); }}
+          >
             Previous
           </Button>
           <span className="text-sm text-muted-foreground">
@@ -439,7 +473,7 @@ export default function VNextTriageBoard() {
             size="sm"
             variant="outline"
             disabled={page >= Math.ceil(total / PER_PAGE)}
-            onClick={() => setPage((p) => p + 1)}
+            onClick={() => { setPage((p) => p + 1); setSelected(new Set()); }}
           >
             Next
           </Button>
