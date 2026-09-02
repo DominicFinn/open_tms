@@ -191,6 +191,18 @@ export default function VNextCreateShipment() {
 
   const selectedLane = useMemo(() => lanes.find((l: any) => l.id === laneId) || null, [lanes, laneId]);
 
+  const selectedCarrier = useMemo(() => carriers.find((c: any) => c.id === carrierId) || null, [carriers, carrierId]);
+
+  // Pre-fill the PRO number with the newly-selected carrier's known prefix,
+  // but only while the field is still empty — never overwrite a value the
+  // user typed or a loaded shipment already had.
+  useEffect(() => {
+    if (selectedCarrier?.proNumberPrefix && proNumber.trim() === '') {
+      setProNumber(selectedCarrier.proNumberPrefix);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCarrier]);
+
   const loadLaneDetail = async (targetLaneId: string): Promise<any | null> => {
     if (!targetLaneId) {
       setLaneDetail(null);
@@ -734,6 +746,19 @@ export default function VNextCreateShipment() {
               value={proNumber}
               onChange={e => setProNumber(e.target.value)}
             />
+            {selectedCarrier && (selectedCarrier.proNumberPrefix || selectedCarrier.proNumberMaxLength) && (
+              <p className="text-xs text-muted-foreground">
+                {selectedCarrier.name} PRO numbers
+                {selectedCarrier.proNumberPrefix ? ` start with "${selectedCarrier.proNumberPrefix}"` : ''}
+                {selectedCarrier.proNumberPrefix && selectedCarrier.proNumberMaxLength ? ' and' : ''}
+                {selectedCarrier.proNumberMaxLength ? ` run up to ${selectedCarrier.proNumberMaxLength} characters` : ''}.
+              </p>
+            )}
+            {selectedCarrier?.proNumberMaxLength && proNumber.length > selectedCarrier.proNumberMaxLength && (
+              <p className="text-xs text-warning">
+                Longer than {selectedCarrier.name}'s usual {selectedCarrier.proNumberMaxLength} characters — double-check it.
+              </p>
+            )}
           </div>
         </CardContent>
       </Card>
