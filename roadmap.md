@@ -38,7 +38,7 @@ Roughly 50-65 PR-sized chunks end to end; every PR leaves the product shippable.
   hardcoded to `shipment` (blocks WMS issues reaching the Triage Centre), magic-link token
   scoping, qualityCentre org-scope violation
 - **Phase 1: Draw the boundary in code** 🔨 Boundary lint ✅ (#159), Prisma multi-file schema
-  split ✅ (#161), DI registration split ✅ (#164), route registration split,
+  split ✅ (#161), DI registration split ✅ (#164), route registration split ✅ (#166),
   `WmsFulfilmentOrder` projection (first WMS read model), load-plan port/event seam.
   Zero schema changes
 - **Phase 2: Data model untangling** 🔲 `Facility` (WMS off the conflated `Location`),

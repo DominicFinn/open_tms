@@ -49,7 +49,10 @@ Order: lint, then schema file split, then DI/routes split, then projection, then
    composition root. The per-module files are checked by the boundary lint rather than exempt.
    Verified by diffing the 87 container bindings and 152 registered command types before and
    after. (M)
-4. **Split route registration**: `index.ts` into `register{Core,Tms,Wms}.ts`. (S)
+4. **Split route registration** ✅ (#166) `index.ts` into `routes/modules/<module>.ts`, each
+   exporting its public and its JWT-scoped registrations. index.ts drops from 570 to 375 lines and
+   keeps only the server lifecycle. Verified by booting the server and diffing the full route
+   table: 717 routes, identical. (S)
 5. **`WmsFulfilmentOrder` projection** (first WMS read model) fed by TMS order events, with a
    backfill; switch the wave commands off direct `tx.order` reads. Establishes the decoupling
    pattern. (L)
