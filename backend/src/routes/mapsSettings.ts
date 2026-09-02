@@ -23,7 +23,17 @@ export async function mapsSettingsRoutes(server: FastifyInstance) {
         200: {
           type: 'object',
           properties: {
-            data: { type: 'object' },
+            // These properties must be declared. Fastify serialises the response against this
+            // schema and drops anything not listed, so a bare `{ type: 'object' }` returned an
+            // empty object no matter what the handler produced — which is exactly what this
+            // endpoint and /api-key were doing, leaving the app permanently in OSM mode.
+            data: {
+              type: 'object',
+              properties: {
+                hasKey: { type: 'boolean' },
+                maskedKey: { type: 'string', nullable: true },
+              },
+            },
             error: { type: 'string', nullable: true },
           },
         },
@@ -135,7 +145,12 @@ export async function mapsSettingsRoutes(server: FastifyInstance) {
         200: {
           type: 'object',
           properties: {
-            data: { type: 'object' },
+            data: {
+              type: 'object',
+              properties: {
+                apiKey: { type: 'string', nullable: true },
+              },
+            },
             error: { type: 'string', nullable: true },
           },
         },

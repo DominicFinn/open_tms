@@ -60,3 +60,34 @@ export function keepMapSized(map: LeafletMap, container: HTMLElement): () => voi
     ro?.disconnect();
   };
 }
+
+/**
+ * The basemap every Leaflet surface draws.
+ *
+ * One place decides the tile source, so a change lands everywhere at once. That is the lesson
+ * from #158: four surfaces each hardcoded a CartoDB URL, the migration that deleted the old
+ * pages took the OpenStreetMap URLs with them, and Carto later started demanding an account.
+ * Nobody chose Carto; it won by elimination, on four separate lines.
+ *
+ * OpenStreetMap's standard tiles need no key and no account, which is what makes them the right
+ * default. They are light-only, so map panels read light even in dark theme. That is accepted:
+ * there is no free, keyless, dark raster basemap whose terms are worth depending on, and a
+ * washed-out CSS filter looks worse than an honest light map.
+ *
+ * Attribution is required by the OSM licence. Do not remove it.
+ */
+const OSM_TILE_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+const OSM_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+
+export function createBaseTileLayer(): L.TileLayer {
+  return L.tileLayer(OSM_TILE_URL, {
+    attribution: OSM_ATTRIBUTION,
+    maxZoom: 19,
+    ...noWrapTileOptions,
+  });
+}
+
+/** Convenience for the common case where the layer is added immediately and never toggled. */
+export function addBaseTileLayer(map: LeafletMap): L.TileLayer {
+  return createBaseTileLayer().addTo(map);
+}

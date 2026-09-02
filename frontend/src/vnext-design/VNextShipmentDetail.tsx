@@ -92,7 +92,7 @@ import { ShareShipmentDialog } from '../components/ShareShipmentDialog';
 import { ShipmentShareLinksTab } from '../components/ShipmentShareLinksTab';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { getDeviceImageUrl } from './deviceImages';
-import { keepMapSized, worldBoundsMapOptions, noWrapTileOptions, capWorldZoomOut } from '../lib/leafletMap';
+import { keepMapSized, worldBoundsMapOptions, capWorldZoomOut, createBaseTileLayer } from '../lib/leafletMap';
 import {
   TimeSeriesChart,
   TelemetryPeriodFilter,
@@ -1694,7 +1694,7 @@ export default function VNextShipmentDetail() {
       attributionControl: false,
       ...worldBoundsMapOptions,
     });
-    const tiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 19, ...noWrapTileOptions });
+    const tiles = createBaseTileLayer();
     capWorldZoomOut(map);
     // Hide the spinner once tiles have rendered (with a fallback in case the
     // load event doesn't fire, e.g. fully cached).

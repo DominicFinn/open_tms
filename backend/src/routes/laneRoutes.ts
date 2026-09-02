@@ -198,10 +198,15 @@ export async function laneRouteRoutes(server: FastifyInstance) {
       summary?: string;
       corridorMeters?: number;
       waypoints?: Array<{ lat: number; lng: number }>;
+      provider?: 'google' | 'manual';
     };
   }>, reply: FastifyReply) => {
     const { laneId } = req.params;
     const { encodedPolyline, distanceMeters, durationSeconds, summary, corridorMeters, waypoints } = req.body;
+    // A route drawn without a Google key follows the points the planner placed, not the road
+    // network, so its distance is a straight-line sum and it carries no travel time. Recording
+    // which produced it stops the two being compared as though they measured the same thing.
+    const provider = req.body.provider === 'manual' ? 'manual' : 'google';
 
     const lane = await prisma.lane.findUnique({ where: { id: laneId } });
     if (!lane) {
@@ -227,7 +232,7 @@ export async function laneRouteRoutes(server: FastifyInstance) {
         durationSeconds,
         summary: summary || null,
         corridorMeters: corridorMeters || 5000,
-        provider: 'google',
+        provider,
       },
       update: {
         encodedPolyline,
@@ -236,6 +241,7 @@ export async function laneRouteRoutes(server: FastifyInstance) {
         durationSeconds,
         summary: summary || null,
         corridorMeters: corridorMeters ?? undefined,
+        provider,
       },
     });
 
