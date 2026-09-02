@@ -26,6 +26,7 @@ import {
   Loader2,
   Lock,
   MapPin,
+  MessageSquare,
   MoreVertical,
   Package,
   Pen,
@@ -102,6 +103,8 @@ import {
   TelemetryPeriodKey,
 } from './TelemetryChart';
 import ShipmentIssueActivity from './ShipmentIssueActivity';
+import { NOTE_TAGS } from './VNextCreateShipment';
+import { Label } from '@/components/ui/label';
 import {
   SHIPMENT_STATUS_LABELS,
   allowedTransitions,
@@ -1094,6 +1097,300 @@ function SlaTab({ shipmentId }: { shipmentId: string }) {
   );
 }
 
+// ─── Notes Tab ────────────────────────────────────────────────────────
+// Notes are grouped by the same tag taxonomy used when composing them at
+// shipment creation (see NOTE_TAGS in VNextCreateShipment.tsx) — a plain note,
+// an "issue" note, or an "additional requirement" note. This is distinct from
+// the platform-generated Issue Engine exceptions shown on the Activity tab.
+const NOTE_GROUPS: {
+  key: string;
+  label: string;
+  Icon: typeof MessageSquare;
+  empty: string;
+  border: string;
+  iconBg: string;
+  iconText: string;
+}[] = [
+  {
+    key: 'issue', label: 'Issues', Icon: AlertTriangle, empty: 'No issues noted for this shipment.',
+    border: 'border-l-4 border-l-destructive', iconBg: 'bg-destructive/10', iconText: 'text-destructive',
+  },
+  {
+    key: 'requirement', label: 'Additional requirements', Icon: Info, empty: 'No additional requirements noted.',
+    border: 'border-l-4 border-l-info', iconBg: 'bg-info/10', iconText: 'text-info',
+  },
+  {
+    key: '', label: 'Standard notes', Icon: MessageSquare, empty: 'No standard notes yet.',
+    border: 'border-l-4 border-l-primary', iconBg: 'bg-primary/10', iconText: 'text-primary',
+  },
+];
+
+function NotesTab({ shipmentId }: { shipmentId: string }) {
+  const { user, hasRole } = useCurrentUser();
+  const isAdmin = hasRole('admin');
+  const currentUserId = user?.id ?? null;
+
+  const [comments, setComments] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [newComment, setNewComment] = useState('');
+  const [noteTag, setNoteTag] = useState(NOTE_TAGS[0].key);
+  const [submitting, setSubmitting] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingDraft, setEditingDraft] = useState('');
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const loadComments = useCallback(() => {
+    fetch(`${API_URL}/api/v1/comments?entityType=shipment&entityId=${shipmentId}`)
+      .then(r => r.json())
+      .then(json => setComments(json.data?.items || json.data || []))
+      .catch(() => { })
+      .finally(() => setLoading(false));
+  }, [shipmentId]);
+
+  useEffect(() => { loadComments(); }, [loadComments]);
+
+  const handleSubmit = async () => {
+    if (!newComment.trim()) return;
+    setSubmitting(true);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/comments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entityType: 'shipment', entityId: shipmentId, body: newComment, tag: noteTag || undefined }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json.error) {
+        toast.error(json.error || 'Failed to post comment');
+        return;
+      }
+      setNewComment('');
+      setNoteTag(NOTE_TAGS[0].key);
+      loadComments();
+    } catch {
+      toast.error('Failed to post comment');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const beginEdit = (c: any) => {
+    setEditingId(c.id);
+    setEditingDraft(c.body || '');
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditingDraft('');
+  };
+
+  const saveEdit = async (id: string) => {
+    if (!editingDraft.trim()) return;
+    setBusyId(id);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/comments/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body: editingDraft }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json.error) {
+        toast.error(json.error || 'Failed to update comment');
+        return;
+      }
+      cancelEdit();
+      loadComments();
+    } catch {
+      toast.error('Failed to update comment');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('Delete this comment? It will be hidden but kept for audit.')) return;
+    setBusyId(id);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/comments/${id}`, { method: 'DELETE' });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json.error) {
+        toast.error(json.error || 'Failed to delete comment');
+        return;
+      }
+      loadComments();
+    } catch {
+      toast.error('Failed to delete comment');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center gap-2 py-12 text-muted-foreground">
+        <Loader2 className="h-6 w-6 animate-spin" />
+      </div>
+    );
+  }
+
+  const renderNote = (c: any) => {
+    const isAuthor = !!currentUserId && c.authorId === currentUserId;
+    const canEdit = isAuthor && c.authorType !== 'agent';
+    const canDelete = (isAuthor || isAdmin) && c.authorType !== 'agent';
+    const isEditing = editingId === c.id;
+    const busy = busyId === c.id;
+    return (
+      <div key={c.id} className="group flex gap-3 border-b border-border py-3 last:border-0">
+        <div
+          className={cn(
+            'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white',
+            c.authorType === 'agent' ? 'bg-info' : 'bg-primary',
+          )}
+        >
+          {c.authorType === 'agent'
+            ? <Bot className="h-4 w-4" />
+            : (c.authorName || '?').split(/\s+/).map((w: string) => w[0]).join('').toUpperCase().slice(0, 2)}
+        </div>
+        <div className="flex-1">
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <span className="text-sm font-semibold">{c.authorName || 'Unknown user'}</span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">
+                {c.createdAt ? new Date(c.createdAt).toLocaleString() : ''}
+                {c.updatedAt && c.createdAt && c.updatedAt !== c.createdAt && (
+                  <span className="ml-1 italic">(edited)</span>
+                )}
+              </span>
+              {!isEditing && (canEdit || canDelete) && (
+                <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+                  {canEdit && (
+                    <button
+                      type="button"
+                      onClick={() => beginEdit(c)}
+                      disabled={busy}
+                      className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+                      title="Edit comment"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  {canDelete && (
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(c.id)}
+                      disabled={busy}
+                      className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                      title={isAuthor ? 'Delete comment' : 'Delete (admin)'}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+          {isEditing ? (
+            <div className="flex gap-2">
+              <textarea
+                className="flex w-full flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                value={editingDraft}
+                onChange={e => setEditingDraft(e.target.value)}
+                rows={2}
+                autoFocus
+              />
+              <div className="flex flex-col gap-1 self-end">
+                <Button
+                  size="sm"
+                  variant="gradient"
+                  onClick={() => saveEdit(c.id)}
+                  disabled={busy || !editingDraft.trim() || editingDraft === c.body}
+                >
+                  {busy ? '...' : 'Save'}
+                </Button>
+                <Button size="sm" variant="ghost" onClick={cancelEdit} disabled={busy} title="Cancel">
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <p className="whitespace-pre-wrap text-sm leading-relaxed">{c.body}</p>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-6">
+      {NOTE_GROUPS.map(group => {
+        const items = comments.filter((c: any) => (group.key ? c.tag === group.key : c.tag !== 'issue' && c.tag !== 'requirement'));
+        return (
+          <div key={group.key || 'standard'}>
+            <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold">
+              <span className={cn('flex h-6 w-6 items-center justify-center rounded-md', group.iconBg, group.iconText)}>
+                <group.Icon className="h-3.5 w-3.5" />
+              </span>
+              <span className="uppercase tracking-wide text-muted-foreground">
+                {group.label} ({items.length})
+              </span>
+            </h3>
+            <Card className={group.border}>
+              <CardContent className="pt-6">
+                {items.length === 0 ? (
+                  <div className="flex flex-col items-center gap-2 py-6 text-muted-foreground">
+                    <group.Icon className={cn('h-10 w-10 opacity-40', group.iconText)} />
+                    <p className="text-sm">{group.empty}</p>
+                  </div>
+                ) : (
+                  items.map(renderNote)
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        );
+      })}
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Add a note</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="space-y-2">
+            <Label>Tag</Label>
+            <div className="flex flex-wrap gap-2">
+              {NOTE_TAGS.map(t => (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => setNoteTag(t.key)}
+                  className={cn(
+                    'inline-flex items-center gap-2 rounded-lg border-2 px-3 py-2 text-sm transition-colors',
+                    noteTag === t.key ? t.activeClass : 'border-border hover:border-primary/40 bg-transparent',
+                  )}
+                >
+                  <span className={cn('h-2 w-2 rounded-full', t.dotClass)} />
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <textarea
+              className="flex w-full flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              placeholder="Add a note..."
+              value={newComment}
+              onChange={e => setNewComment(e.target.value)}
+              rows={2}
+            />
+            <Button variant="gradient" onClick={handleSubmit} disabled={submitting || !newComment.trim()} className="self-end">
+              {submitting ? '...' : 'Post'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 // ─── Carrier Tracking Tab ─────────────────────────────────────────────
 const TRACKING_STATUS_VARIANT: Record<string, 'success' | 'destructive' | 'info' | 'warning' | 'default' | 'muted'> = {
   delivered: 'success',
@@ -1831,6 +2128,7 @@ export default function VNextShipmentDetail() {
   const tabs = [
     { value: 'details', label: 'Details', Icon: Info },
     { value: 'events', label: 'Events', Icon: Clock },
+    { value: 'notes', label: 'Notes', Icon: MessageSquare },
     { value: 'activity', label: 'Activity', Icon: Activity },
     { value: 'orders', label: 'Orders', Icon: Box },
     { value: 'documents', label: 'Docs', Icon: FileText },
@@ -2292,6 +2590,10 @@ export default function VNextShipmentDetail() {
 
         <TabsContent value="events" className="mt-4">
               {id && <EventsTab shipmentId={id} />}
+            </TabsContent>
+
+            <TabsContent value="notes" className="mt-4">
+              {id && <NotesTab shipmentId={id} />}
             </TabsContent>
 
             <TabsContent value="activity" className="mt-4">
