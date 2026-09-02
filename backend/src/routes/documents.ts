@@ -11,6 +11,7 @@ import { IBinaryStorageProvider } from '../storage/IBinaryStorageProvider.js';
 import { IQueueAdapter } from '../queue/IQueueAdapter.js';
 import { QUEUES, type DocumentGenerationKind, type DocumentGenerationJob } from '../queue/events.js';
 import { evaluateBolReadiness } from '../services/bolReadiness.js';
+import { requirePermission } from '../middleware/jwtAuth.js';
 
 const createTemplateSchema = z.object({
   name: z.string().min(1),
@@ -280,6 +281,7 @@ export async function documentRoutes(server: FastifyInstance) {
   // ── Document Generation ───────────────────────────────────────────────
 
   server.post('/api/v1/documents/generate/bol', {
+    preHandler: requirePermission('documents:generate'),
     schema: {
       description: 'Generate a Bill of Lading PDF for a shipment. The BOL number is auto-incremented per organization. The generated document is stored via the configured storage provider (S3 or database).',
       tags: ['Document Generation'],
@@ -377,6 +379,7 @@ export async function documentRoutes(server: FastifyInstance) {
   });
 
   server.post('/api/v1/documents/generate/labels', {
+    preHandler: requirePermission('documents:generate'),
     schema: {
       description: 'Generate shipping labels PDF for an order. Creates one label per trackable unit.',
       tags: ['Document Generation'],
@@ -412,6 +415,7 @@ export async function documentRoutes(server: FastifyInstance) {
   });
 
   server.post('/api/v1/documents/generate/customs', {
+    preHandler: requirePermission('documents:generate'),
     schema: {
       description: 'Generate a customs/commercial invoice PDF for a shipment. HS code, country of origin, and declared value are populated from order line items where set, with a blank fill-in line otherwise.',
       tags: ['Document Generation'],
@@ -448,6 +452,7 @@ export async function documentRoutes(server: FastifyInstance) {
 
   // Generate rate confirmation (broker: carrier-facing document showing agreed cost rate)
   server.post('/api/v1/documents/rate-confirmation', {
+    preHandler: requirePermission('rate_confirmation:generate'),
     schema: {
       description: 'Generate a rate confirmation PDF for a shipment (carrier-facing, hides customer sell rate)',
       tags: ['Documents'],
@@ -495,6 +500,7 @@ export async function documentRoutes(server: FastifyInstance) {
   } as const;
 
   server.post('/api/v1/documents/generate/bol/async', {
+    preHandler: requirePermission('documents:generate'),
     schema: {
       description: 'Enqueue an async BOL generation. Returns immediately with a correlationId; poll /api/v1/documents/jobs/:correlationId.',
       tags: ['Document Generation'],
@@ -535,6 +541,7 @@ export async function documentRoutes(server: FastifyInstance) {
   });
 
   server.post('/api/v1/documents/generate/labels/async', {
+    preHandler: requirePermission('documents:generate'),
     schema: {
       description: 'Enqueue an async label sheet generation. See /bol/async for the polling pattern.',
       tags: ['Document Generation'],
@@ -564,6 +571,7 @@ export async function documentRoutes(server: FastifyInstance) {
   });
 
   server.post('/api/v1/documents/generate/customs/async', {
+    preHandler: requirePermission('documents:generate'),
     schema: {
       description: 'Enqueue an async customs form generation. See /bol/async for the polling pattern.',
       tags: ['Document Generation'],
@@ -593,6 +601,7 @@ export async function documentRoutes(server: FastifyInstance) {
   });
 
   server.post('/api/v1/documents/rate-confirmation/async', {
+    preHandler: requirePermission('rate_confirmation:generate'),
     schema: {
       description: 'Enqueue an async rate-confirmation generation. See /bol/async for the polling pattern.',
       tags: ['Documents'],
