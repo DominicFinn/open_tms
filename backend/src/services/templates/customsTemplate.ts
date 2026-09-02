@@ -1,6 +1,7 @@
 /**
  * Default Customs / Commercial Invoice Template
- * Includes blank fill-in fields for data not yet in the schema (HS codes, declared values, etc.)
+ * HS code, country of origin, and declared value are pulled from OrderLineItem where
+ * present; falls back to a blank fill-in line when a line item doesn't have that field set.
  */
 export const defaultCustomsTemplate = `
 {{#if branding.orgName}}
@@ -73,9 +74,9 @@ export const defaultCustomsTemplate = `
     <td>{{this.quantity}}</td>
     <td>{{this.weight}} {{this.weightUnit}}</td>
     <td>{{this.length}}x{{this.width}}x{{this.height}} {{this.dimUnit}}</td>
-    <td>________________</td>
-    <td>________________</td>
-    <td>________________</td>
+    <td>{{#if this.countryOfOrigin}}{{this.countryOfOrigin}}{{else}}________________{{/if}}</td>
+    <td>{{#if this.hsCode}}{{this.hsCode}}{{else}}________________{{/if}}</td>
+    <td>{{#if this.declaredValue}}{{this.declaredValue}}{{else}}________________{{/if}}</td>
   </tr>
   {{/each}}
 </table>
@@ -85,7 +86,7 @@ export const defaultCustomsTemplate = `
   <tr>
     <td><strong>Total Pieces:</strong> {{totals.itemCount}}</td>
     <td><strong>Total Weight:</strong> {{totals.totalWeight}} kg</td>
-    <td><strong>Total Declared Value:</strong> ________________</td>
+    <td><strong>Total Declared Value:</strong> {{#if totals.totalDeclaredValue}}{{totals.totalDeclaredValue}}{{else}}________________{{/if}}</td>
   </tr>
 </table>
 

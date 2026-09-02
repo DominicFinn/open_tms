@@ -9,6 +9,7 @@ import { defaultBolTemplate } from './templates/bolTemplate.js';
 import { defaultLabelTemplate } from './templates/labelTemplate.js';
 import { defaultCustomsTemplate } from './templates/customsTemplate.js';
 import { defaultRateConfirmationTemplate } from './templates/rateConfirmationTemplate.js';
+import { mapCustomsLineItem, totalDeclaredValueFor } from './customs/customsLineItemMapping.js';
 
 export interface IDocumentGenerationService {
   generateBOL(shipmentId: string, templateId?: string, userId?: string): Promise<{ id: string; fileName: string }>;
@@ -263,10 +264,11 @@ export class DocumentGenerationService implements IDocumentGenerationService {
       },
       customer: shipment.customer,
       carrier: shipment.carrier || {},
-      lineItems: allLineItems,
+      lineItems: allLineItems.map(li => mapCustomsLineItem(li)),
       totals: {
         itemCount: allLineItems.reduce((sum, li) => sum + li.quantity, 0),
         totalWeight: Math.round(totalWeight * 100) / 100,
+        totalDeclaredValue: totalDeclaredValueFor(allLineItems),
       },
     };
 

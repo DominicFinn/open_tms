@@ -413,7 +413,7 @@ export async function documentRoutes(server: FastifyInstance) {
 
   server.post('/api/v1/documents/generate/customs', {
     schema: {
-      description: 'Generate a customs/commercial invoice PDF for a shipment. Includes blank fields for HS codes, declared values, and other customs data not yet in the schema.',
+      description: 'Generate a customs/commercial invoice PDF for a shipment. HS code, country of origin, and declared value are populated from order line items where set, with a blank fill-in line otherwise.',
       tags: ['Document Generation'],
       body: {
         type: 'object',
