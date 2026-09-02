@@ -305,14 +305,20 @@ export class DocumentGenerationService implements IDocumentGenerationService {
         destination: true,
         customer: true,
         carrier: true,
+        // A rate confirmation states an agreed rate, so it only pulls approved
+        // (or already-invoiced) cost charges — a 'pending' charge hasn't been
+        // confirmed yet and can still change before it's approved.
         charges: {
-          where: { chargeCategory: 'cost', status: { not: 'written_off' } },
+          where: { chargeCategory: 'cost', status: { in: ['approved', 'invoiced'] } },
         },
         shipmentFinancialSummary: true,
       },
     });
 
     if (!shipment.carrier) throw new Error('Shipment has no carrier assigned');
+    if (shipment.charges.length === 0) {
+      throw new Error('Shipment has no approved cost charge — award a tender or approve a cost charge before generating a rate confirmation');
+    }
 
     const branding = await this.loadBranding();
     const org = await this.prisma.organization.findFirst({
