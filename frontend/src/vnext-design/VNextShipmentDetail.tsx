@@ -2586,6 +2586,39 @@ export default function VNextShipmentDetail() {
                   </div>
                 </div>
 
+                {(() => {
+                  const sortedStops = [...(shipment.stops || [])].sort(
+                    (a: any, b: any) => a.sequenceNumber - b.sequenceNumber,
+                  );
+                  // Origin and destination are themselves included as the first and last
+                  // stop in the route, so only the ones between them are true waypoints.
+                  const waypoints = sortedStops.length > 2 ? sortedStops.slice(1, -1) : [];
+                  if (waypoints.length === 0) return null;
+                  return (
+                    <div>
+                      <div className="mb-1.5 flex items-center gap-2">
+                        <span className="inline-block h-2 w-2 rounded-full bg-warning" />
+                        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          Waypoints ({waypoints.length})
+                        </span>
+                      </div>
+                      <div className="space-y-3 pl-4">
+                        {waypoints.map((stop: any, i: number) => (
+                          <Detail
+                            key={stop.id}
+                            label={`Stop ${i + 1}`}
+                            value={
+                              stop.location
+                                ? [stop.location.name, stop.location.city, stop.location.state].filter(Boolean).join(', ')
+                                : '-'
+                            }
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 <div>
                   <div className="mb-1.5 flex items-center gap-2">
                     <span className="inline-block h-2 w-2 rounded-full bg-success" />
