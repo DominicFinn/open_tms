@@ -440,6 +440,21 @@ export async function documentRoutes(server: FastifyInstance) {
       return { data: null, error: parsed.error.issues.map(i => i.message).join('. ') };
     }
 
+    // Same readiness gate as the BOL route (#150): a customs declaration
+    // needs the shipper/consignee and a complete goods description just as
+    // much as a BOL does, so it shares evaluateBolReadiness rather than
+    // duplicating the check. Without this, a shipment with no cargo detail
+    // silently produced a customs form that was all blank fill-in lines.
+    const readiness = await evaluateBolReadiness(prisma, parsed.data.shipmentId);
+    if (!readiness) {
+      reply.code(404);
+      return { data: null, error: 'Shipment not found' };
+    }
+    if (!readiness.ready) {
+      reply.code(400);
+      return { data: null, error: `Cannot generate customs form: ${readiness.missing.join('; ')}.` };
+    }
+
     try {
       const result = await docService.generateCustomsForm(parsed.data.shipmentId, parsed.data.templateId);
       reply.code(201);
@@ -594,6 +609,17 @@ export async function documentRoutes(server: FastifyInstance) {
     if (!parsed.success) {
       reply.code(400);
       return { data: null, error: parsed.error.issues.map(i => i.message).join('. ') };
+    }
+    // Same readiness gate as the sync route — never enqueue a customs form
+    // job for a shipment that lacks the goods detail needed to declare it.
+    const readiness = await evaluateBolReadiness(prisma, parsed.data.shipmentId);
+    if (!readiness) {
+      reply.code(404);
+      return { data: null, error: 'Shipment not found' };
+    }
+    if (!readiness.ready) {
+      reply.code(400);
+      return { data: null, error: `Cannot generate customs form: ${readiness.missing.join('; ')}.` };
     }
     const { correlationId, jobId } = await enqueueGeneration('customs', parsed.data.shipmentId, parsed.data.templateId, req);
     reply.code(202);

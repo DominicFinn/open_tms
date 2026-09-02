@@ -2807,8 +2807,13 @@ export default function VNextShipmentDetail() {
                     <Button
                       variant="outline"
                       size="sm"
-                      disabled={generating !== null}
+                      disabled={generating !== null || (bolReadiness !== null && !bolReadiness.ready)}
                       onClick={() => handleGenerateDoc('customs')}
+                      title={
+                        bolReadiness && !bolReadiness.ready
+                          ? `Customs form unavailable: ${bolReadiness.missing.join('; ')}.`
+                          : undefined
+                      }
                     >
                       <Globe className="h-4 w-4" />
                       {generating === 'customs' ? 'Generating...' : 'Customs Form'}
@@ -2830,8 +2835,9 @@ export default function VNextShipmentDetail() {
                     <div className="flex items-start gap-2 rounded-md border border-warning/30 bg-warning/10 p-3 text-xs text-warning">
                       <Info className="mt-0.5 h-4 w-4 shrink-0" />
                       <div>
-                        <span className="font-medium">Bill of Lading not available yet.</span> A BOL is a
-                        legal document and needs the following before it can be generated:
+                        <span className="font-medium">Bill of Lading and Customs Form not available yet.</span> Both
+                        need the shipper, consignee, and a complete description of the goods before they can be
+                        generated:
                         <ul className="mt-1 list-inside list-disc">
                           {bolReadiness.missing.map((m, i) => (
                             <li key={i}>{m}</li>
