@@ -1679,6 +1679,7 @@ export default function VNextShipmentDetail() {
   const [error, setError] = useState('');
   const [documents, setDocuments] = useState<any[]>([]);
   const [generating, setGenerating] = useState<string | null>(null);
+  const [downloadingDocId, setDownloadingDocId] = useState<string | null>(null);
   const [bolReadiness, setBolReadiness] = useState<
     { ready: boolean; missing: string[]; orderCount: number; lineItemCount: number } | null
   >(null);
@@ -2012,6 +2013,46 @@ export default function VNextShipmentDetail() {
       toast.error(`Failed to generate ${names[type] || type}`);
     } finally {
       setGenerating(null);
+    }
+  };
+
+  // A plain `<a href>` triggers a browser navigation, which bypasses the
+  // `window.fetch` interceptor in `authFetch.ts` — no Bearer token is sent
+  // and the backend rejects with 401 (see VNextBolView's handleDownload,
+  // which hit and fixed the same issue). Going through `fetch` lets the
+  // interceptor attach the Authorization header; we read the response as a
+  // blob and synthesise a click on a hidden anchor to actually save the file.
+  const handleDownloadDoc = async (docId: string, fallbackFileName: string) => {
+    setDownloadingDocId(docId);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/documents/${docId}/download`);
+      if (!res.ok) {
+        let message = `Download failed (${res.status})`;
+        try {
+          const json = await res.json();
+          if (json?.error) message = json.error;
+        } catch {
+          // Body wasn't JSON — keep the status-based message.
+        }
+        toast.error(message);
+        return;
+      }
+      const blob = await res.blob();
+      const cd = res.headers.get('Content-Disposition') || '';
+      const match = cd.match(/filename="?([^";]+)"?/i);
+      const fileName = match?.[1] || fallbackFileName;
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch (err) {
+      toast.error((err as Error).message || 'Download failed');
+    } finally {
+      setDownloadingDocId(null);
     }
   };
 
@@ -2856,14 +2897,19 @@ export default function VNextShipmentDetail() {
                                       </Link>
                                     </Button>
                                   )}
-                                  <Button asChild variant="ghost" size="icon" className="h-8 w-8" title="Download PDF">
-                                    <a
-                                      href={`${API_URL}/api/v1/documents/${doc.id}/download`}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                    >
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    title="Download PDF"
+                                    disabled={downloadingDocId === doc.id}
+                                    onClick={() => handleDownloadDoc(doc.id, doc.fileName)}
+                                  >
+                                    {downloadingDocId === doc.id ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
                                       <Download className="h-4 w-4" />
-                                    </a>
+                                    )}
                                   </Button>
                                 </div>
                               </TableCell>
