@@ -58,7 +58,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
-import { keepMapSized, worldBoundsMapOptions, noWrapTileOptions, capWorldZoomOut } from '../lib/leafletMap';
+import { keepMapSized, worldBoundsMapOptions, capWorldZoomOut, addBaseTileLayer } from '../lib/leafletMap';
 
 interface Shipment {
   id: string;
@@ -287,11 +287,10 @@ export default function VNextShipments() {
   const setMapRef = useCallback((node: HTMLDivElement | null) => {
     if (node) {
       if (mapInstance.current) return;
-      const map = L.map(node, { zoomControl: true, attributionControl: false, ...worldBoundsMapOptions }).setView([39.5, -98.5], 4);
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        maxZoom: 19,
-        ...noWrapTileOptions,
-      }).addTo(map);
+      // Attribution stays on: the OpenStreetMap licence requires it, and this map previously
+      // suppressed it while drawing third-party tiles.
+      const map = L.map(node, { zoomControl: true, ...worldBoundsMapOptions }).setView([39.5, -98.5], 4);
+      addBaseTileLayer(map);
       capWorldZoomOut(map);
       // Lane lines are added first so shipment markers paint on top of them.
       laneLinesRef.current = L.layerGroup().addTo(map);

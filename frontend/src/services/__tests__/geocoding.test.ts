@@ -11,6 +11,7 @@ describe('geocoding - Nominatim', () => {
   describe('nominatimSearch', () => {
     it('returns search results from Nominatim', async () => {
       (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
         json: () =>
           Promise.resolve([
             {
@@ -25,17 +26,22 @@ describe('geocoding - Nominatim', () => {
       const results = await nominatimSearch('Dallas TX');
 
       expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('nominatim.openstreetmap.org/search'),
-        expect.objectContaining({ headers: { 'User-Agent': 'OpenTMS/1.0' } })
+        expect.stringContaining('nominatim.openstreetmap.org/search')
       );
       expect(results).toHaveLength(1);
-      expect(results[0].description).toBe('Dallas, Texas, United States');
+      expect(results[0].formattedAddress).toBe('Dallas, Texas, United States');
+      // The address breakdown is now kept rather than discarded, so a picked suggestion can
+      // fill the form without a second lookup.
+      expect(results[0].city).toBe('Dallas');
+      expect(results[0].state).toBe('Texas');
+      expect(results[0].country).toBe('United States');
       expect(results[0].lat).toBeCloseTo(32.7767, 3);
       expect(results[0].lng).toBeCloseTo(-96.797, 3);
     });
 
     it('returns empty array on empty response', async () => {
       (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
         json: () => Promise.resolve([]),
       });
 

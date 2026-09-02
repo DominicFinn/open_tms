@@ -103,17 +103,14 @@ interface NominatimResult {
   };
 }
 
-export async function nominatimSearch(query: string): Promise<{ description: string; lat: number; lng: number }[]> {
+export async function nominatimSearch(query: string): Promise<GeocodingResult[]> {
   const url = `${NOMINATIM_BASE}/search?format=json&q=${encodeURIComponent(query)}&limit=5&addressdetails=1`;
-  const res = await fetch(url, {
-    headers: { 'User-Agent': 'OpenTMS/1.0' },
-  });
+  // Note: the browser refuses to let us set User-Agent, so Nominatim identifies us by Referer.
+  // Their usage policy caps us at one request a second, which the caller's debounce respects.
+  const res = await fetch(url);
+  if (!res.ok) return [];
   const data: NominatimResult[] = await res.json();
-  return data.map((r) => ({
-    description: r.display_name,
-    lat: parseFloat(r.lat),
-    lng: parseFloat(r.lon),
-  }));
+  return data.map(parseNominatimResult);
 }
 
 export async function nominatimReverse(lat: number, lng: number): Promise<GeocodingResult | null> {
@@ -125,15 +122,67 @@ export async function nominatimReverse(lat: number, lng: number): Promise<Geocod
   if (!data.lat) {
     return { lat, lng, formattedAddress: `${lat.toFixed(6)}, ${lng.toFixed(6)}` };
   }
-  const addr = data.address || {};
+  return parseNominatimResult(data);
+}
+
+function parseNominatimResult(result: NominatimResult): GeocodingResult {
+  const addr = result.address || {};
   return {
-    lat: parseFloat(data.lat),
-    lng: parseFloat(data.lon),
-    formattedAddress: data.display_name,
+    lat: parseFloat(result.lat),
+    lng: parseFloat(result.lon),
+    formattedAddress: result.display_name,
     address1: [addr.house_number, addr.road].filter(Boolean).join(' ') || undefined,
     city: addr.city || addr.town || addr.village || undefined,
     state: addr.state || undefined,
     postalCode: addr.postcode || undefined,
     country: addr.country || undefined,
   };
+}
+
+// --- Mode-agnostic surface ---------------------------------------------------
+//
+// Screens ask for an address search without caring who answers. Google returns a place id that
+// has to be exchanged for details in a second call; Nominatim hands back the full address up
+// front. That difference is hidden here: a suggestion always carries an opaque id, and
+// `resolveSuggestion` knows how to turn it back into an address for whichever mode produced it.
+
+import type { MapMode } from '../maps/capabilities';
+
+export interface AddressSuggestion {
+  id: string;
+  description: string;
+}
+
+/** Nominatim gives us the whole answer with the suggestion, so resolving it costs no request. */
+const nominatimResults = new Map<string, GeocodingResult>();
+
+/**
+ * Nominatim's usage policy allows roughly one request a second. Google Places has no such limit
+ * and feels sluggish if we wait that long, so the debounce differs by mode.
+ */
+export function searchDebounceMs(mode: MapMode): number {
+  return mode === 'google' ? 250 : 800;
+}
+
+export async function searchAddresses(mode: MapMode, query: string): Promise<AddressSuggestion[]> {
+  if (mode === 'google') {
+    const predictions = await googleAutocomplete(query);
+    return predictions.map((p) => ({ id: p.placeId, description: p.description }));
+  }
+
+  const results = await nominatimSearch(query);
+  nominatimResults.clear();
+  return results.map((result, index) => {
+    const id = `nominatim:${index}:${result.lat},${result.lng}`;
+    nominatimResults.set(id, result);
+    return { id, description: result.formattedAddress };
+  });
+}
+
+export async function resolveSuggestion(
+  mode: MapMode,
+  suggestion: AddressSuggestion
+): Promise<GeocodingResult | null> {
+  if (mode === 'google') return googleGetPlaceDetails(suggestion.id);
+  return nominatimResults.get(suggestion.id) ?? null;
 }

@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 
 import { API_URL } from '../api';
-import GoogleMapsRouteEditor from '../components/GoogleMapsRouteEditor';
+import RouteEditor from '../components/RouteEditor';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -156,7 +156,7 @@ export default function VNextLaneDetail() {
             <CardContent>
               {route ? (
                 <>
-                  <GoogleMapsRouteEditor
+                  <RouteEditor
                     origin={originLatLng}
                     destination={destLatLng}
                     stops={stopLatLngs}

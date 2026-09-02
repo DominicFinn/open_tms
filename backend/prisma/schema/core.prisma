@@ -202,8 +202,15 @@ model Organization {
   magicLinksEnabled Boolean @default(true) // Allow QR code / magic link login
   warehouseScanMode String  @default("hid") // "hid" (built-in scanner) or "camera"
 
-  // Maps & Geocoding
-  googleMapsApiKey String? // Google Maps API key for Places + Geocoding
+  // Maps & Geocoding.
+  // Two keys, because one cannot do both jobs. The browser key is served to the client for the
+  // Maps JS API and must carry HTTP referrer restrictions, since it is public the moment a map
+  // loads. Google rejects referrer-restricted keys on the server-side web service APIs
+  // ("API keys with referer restrictions cannot be used with this API"), so server-to-server
+  // Directions, Distance Matrix and Geocoding calls need a separate key that is never sent to
+  // the browser and is restricted by IP or by API instead.
+  googleMapsBrowserKey String?
+  googleMapsServerKey  String?
 
   // Email Branding
   emailHeaderHtml String? // Custom HTML for email header (replaces default logo/name header)

@@ -26,9 +26,11 @@ export async function laneRouteRoutes(server: FastifyInstance) {
    */
   async function getGoogleMapsApiKey(): Promise<string | null> {
     const org = await prisma.organization.findFirst({
-      select: { googleMapsApiKey: true },
+      select: { googleMapsServerKey: true },
     });
-    return org?.googleMapsApiKey || null;
+    // Server-side Directions needs the server key. The browser key carries referrer
+    // restrictions, and Google refuses those on web service endpoints.
+    return org?.googleMapsServerKey || null;
   }
 
   // ─── GET /api/v1/lanes/:laneId/route ──────────────────────────────────────
@@ -95,7 +97,7 @@ export async function laneRouteRoutes(server: FastifyInstance) {
     if (!apiKey) {
       return reply.status(400).send({
         data: null,
-        error: 'Google Maps API key is not configured. Go to Admin > Map Settings to add your API key. Route planning requires Google Maps.',
+        error: 'No Google Maps server key is configured. Add one under Settings, Map settings. It must not be restricted by HTTP referrer.',
       });
     }
 
@@ -198,10 +200,15 @@ export async function laneRouteRoutes(server: FastifyInstance) {
       summary?: string;
       corridorMeters?: number;
       waypoints?: Array<{ lat: number; lng: number }>;
+      provider?: 'google' | 'manual';
     };
   }>, reply: FastifyReply) => {
     const { laneId } = req.params;
     const { encodedPolyline, distanceMeters, durationSeconds, summary, corridorMeters, waypoints } = req.body;
+    // A route drawn without a Google key follows the points the planner placed, not the road
+    // network, so its distance is a straight-line sum and it carries no travel time. Recording
+    // which produced it stops the two being compared as though they measured the same thing.
+    const provider = req.body.provider === 'manual' ? 'manual' : 'google';
 
     const lane = await prisma.lane.findUnique({ where: { id: laneId } });
     if (!lane) {
@@ -227,7 +234,7 @@ export async function laneRouteRoutes(server: FastifyInstance) {
         durationSeconds,
         summary: summary || null,
         corridorMeters: corridorMeters || 5000,
-        provider: 'google',
+        provider,
       },
       update: {
         encodedPolyline,
@@ -236,6 +243,7 @@ export async function laneRouteRoutes(server: FastifyInstance) {
         durationSeconds,
         summary: summary || null,
         corridorMeters: corridorMeters ?? undefined,
+        provider,
       },
     });
 
@@ -325,7 +333,7 @@ export async function laneRouteRoutes(server: FastifyInstance) {
         configured: Boolean(apiKey),
         message: apiKey
           ? 'Google Maps API key is configured. Route planning is available.'
-          : 'Google Maps API key is not configured. Go to Admin > Map Settings to add your API key.',
+          : 'No Google Maps server key is configured. Add one under Settings, Map settings.',
       },
       error: null,
     };

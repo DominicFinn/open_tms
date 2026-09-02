@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 
 import { API_URL } from '../api';
-import GoogleMapsRouteEditor from '../components/GoogleMapsRouteEditor';
+import RouteEditor from '../components/RouteEditor';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -55,6 +55,8 @@ interface RouteData {
   durationSeconds: number;
   summary: string;
   waypoints: Array<{ lat: number; lng: number }>;
+  /** 'google' follows the road network; 'manual' follows the line the planner drew. */
+  provider: 'google' | 'manual';
 }
 
 let stopIdCounter = 0;
@@ -152,6 +154,7 @@ export default function VNextCreateLane() {
               summary: routeData.summary,
               corridorMeters,
               waypoints: routeData.waypoints,
+              provider: routeData.provider,
             }),
           });
         } catch {
@@ -319,7 +322,7 @@ export default function VNextCreateLane() {
             {originLatLng && destLatLng && ' Drag the blue route line on the map to adjust the planned path.'}
           </p>
 
-          <GoogleMapsRouteEditor
+          <RouteEditor
             origin={originLatLng}
             destination={destLatLng}
             stops={stopLatLngs}

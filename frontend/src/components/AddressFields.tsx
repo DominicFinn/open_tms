@@ -2,7 +2,7 @@ import React, { useEffect, useId, useRef, useState } from 'react';
 import { Loader2, MapPin, Search } from 'lucide-react';
 
 import { useMapProvider } from '../MapProvider';
-import { googleAutocomplete, googleGetPlaceDetails } from '../services/geocoding';
+import { searchAddresses, resolveSuggestion, searchDebounceMs, type AddressSuggestion } from '../services/geocoding';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
@@ -35,11 +35,14 @@ interface Props {
 }
 
 export function AddressFields({ idPrefix, value, onChange }: Props) {
-  const { provider, isLoaded } = useMapProvider();
-  const googleAvailable = isLoaded && provider === 'google';
+  const { capabilities, isLoaded } = useMapProvider();
+  // Address search works in both modes now: Google Places when a key is configured, Nominatim
+  // otherwise. Previously the whole search block was hidden without a key, even though the
+  // Nominatim implementation already existed and simply wasn't wired up.
+  const searchAvailable = isLoaded && capabilities.addressAutocomplete;
 
   const [search, setSearch] = useState('');
-  const [predictions, setPredictions] = useState<{ placeId: string; description: string }[]>([]);
+  const [predictions, setPredictions] = useState<AddressSuggestion[]>([]);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searching, setSearching] = useState(false);
   const [resolving, setResolving] = useState(false);
@@ -49,7 +52,7 @@ export function AddressFields({ idPrefix, value, onChange }: Props) {
   const hintId = useId();
 
   useEffect(() => {
-    if (!googleAvailable) {
+    if (!searchAvailable) {
       setPredictions([]);
       return;
     }
@@ -61,16 +64,18 @@ export function AddressFields({ idPrefix, value, onChange }: Props) {
     setSearching(true);
     debounceRef.current = setTimeout(async () => {
       try {
-        const results = await googleAutocomplete(search.trim());
-        setPredictions(results);
+        setPredictions(await searchAddresses(capabilities.mode, search.trim()));
+      } catch {
+        // A failed lookup leaves the manual fields usable, which is the point of the fallback.
+        setPredictions([]);
       } finally {
         setSearching(false);
       }
-    }, 250);
+    }, searchDebounceMs(capabilities.mode));
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [search, googleAvailable]);
+  }, [search, searchAvailable, capabilities.mode]);
 
   useEffect(() => {
     function onDocClick(e: MouseEvent) {
@@ -82,12 +87,12 @@ export function AddressFields({ idPrefix, value, onChange }: Props) {
 
   const update = (patch: Partial<AddressValue>) => onChange({ ...value, ...patch });
 
-  const pickPrediction = async (placeId: string, description: string) => {
+  const pickPrediction = async (suggestion: AddressSuggestion) => {
     setSearchOpen(false);
-    setSearch(description);
+    setSearch(suggestion.description);
     setResolving(true);
     try {
-      const result = await googleGetPlaceDetails(placeId);
+      const result = await resolveSuggestion(capabilities.mode, suggestion);
       if (!result) return;
       onChange({
         address1: result.address1 || '',
@@ -106,7 +111,7 @@ export function AddressFields({ idPrefix, value, onChange }: Props) {
 
   return (
     <div className="space-y-3">
-      {googleAvailable && (
+      {searchAvailable && (
         <div ref={containerRef} className="relative space-y-2">
           <Label htmlFor={`${idPrefix}-search`} className="flex items-center gap-1 text-xs text-muted-foreground">
             <Search className="h-3 w-3" />
@@ -132,10 +137,10 @@ export function AddressFields({ idPrefix, value, onChange }: Props) {
           {searchOpen && predictions.length > 0 && (
             <ul className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-md border border-border bg-popover py-1 text-sm shadow-md">
               {predictions.map(p => (
-                <li key={p.placeId}>
+                <li key={p.id}>
                   <button
                     type="button"
-                    onClick={() => pickPrediction(p.placeId, p.description)}
+                    onClick={() => pickPrediction(p)}
                     className="flex w-full items-start gap-2 px-3 py-2 text-left hover:bg-muted/60"
                   >
                     <MapPin className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />

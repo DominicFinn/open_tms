@@ -1,16 +1,19 @@
-import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { API_URL } from './api';
-
-type MapProviderType = 'google' | 'osm';
+import { capabilitiesFor, type MapCapabilities, type MapMode } from './maps/capabilities';
 
 interface MapProviderContextValue {
-  provider: MapProviderType;
+  /** Which mode the app is in. Prefer gating on `capabilities`, not on this. */
+  provider: MapMode;
+  /** What this mode can actually do. Gate features on these, never on the mode name. */
+  capabilities: MapCapabilities;
   isLoaded: boolean;
   apiKey: string | null;
 }
 
 const MapProviderContext = createContext<MapProviderContextValue>({
   provider: 'osm',
+  capabilities: capabilitiesFor('osm'),
   isLoaded: false,
   apiKey: null,
 });
@@ -44,7 +47,7 @@ function loadGoogleMapsScript(apiKey: string): Promise<void> {
 }
 
 export function MapProvider({ children }: { children: ReactNode }) {
-  const [provider, setProvider] = useState<MapProviderType>('osm');
+  const [provider, setProvider] = useState<MapMode>('osm');
   const [isLoaded, setIsLoaded] = useState(false);
   const [apiKey, setApiKey] = useState<string | null>(null);
 
@@ -93,7 +96,9 @@ export function MapProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <MapProviderContext.Provider value={{ provider, isLoaded, apiKey }}>
+    <MapProviderContext.Provider
+      value={{ provider, capabilities: capabilitiesFor(provider), isLoaded, apiKey }}
+    >
       {children}
     </MapProviderContext.Provider>
   );

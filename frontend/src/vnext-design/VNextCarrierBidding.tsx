@@ -18,7 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
-import { keepMapSized, worldBoundsMapOptions, noWrapTileOptions, capWorldZoomOut } from '../lib/leafletMap';
+import { keepMapSized, worldBoundsMapOptions, capWorldZoomOut, addBaseTileLayer } from '../lib/leafletMap';
 
 type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning' | 'info' | 'muted';
 
@@ -142,8 +142,9 @@ export default function VNextCarrierBidding() {
       mapInstance.current = null;
     }
 
-    const map = L.map(mapRef.current, { zoomControl: true, attributionControl: false, ...worldBoundsMapOptions }).setView([39.5, -98.5], 4);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { maxZoom: 19, ...noWrapTileOptions }).addTo(map);
+    // Attribution stays on: the OpenStreetMap licence requires it.
+    const map = L.map(mapRef.current, { zoomControl: true, ...worldBoundsMapOptions }).setView([39.5, -98.5], 4);
+    addBaseTileLayer(map);
     capWorldZoomOut(map);
 
     const cs = getComputedStyle(document.documentElement);

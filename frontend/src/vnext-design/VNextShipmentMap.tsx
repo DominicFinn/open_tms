@@ -35,7 +35,7 @@ import {
 import { API_URL } from '../api';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { keepMapSized, worldBoundsMapOptions, noWrapTileOptions, capWorldZoomOut } from '../lib/leafletMap';
+import { keepMapSized, worldBoundsMapOptions, capWorldZoomOut, addBaseTileLayer } from '../lib/leafletMap';
 import { getLocationTypeMeta } from './locationTypesMeta';
 
 // Fix for default markers in Leaflet with Vite
@@ -312,11 +312,7 @@ export default function VNextShipmentMap() {
       ...worldBoundsMapOptions,
     });
 
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; OpenStreetMap contributors',
-      maxZoom: 19,
-      ...noWrapTileOptions,
-    }).addTo(map);
+    addBaseTileLayer(map);
     capWorldZoomOut(map);
 
     markersLayer.current = L.layerGroup().addTo(map);
