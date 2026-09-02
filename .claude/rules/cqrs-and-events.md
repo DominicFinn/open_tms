@@ -17,7 +17,10 @@ The write path for this codebase. Applies to every entity and feature.
 - Projections (read model builders) live in `backend/src/events/projections/`
 - Register new projections in `backend/src/events/registerHandlers.ts`
 - Read models are flat Prisma tables — no joins needed for list queries
-- Backfill script: `npx tsx backend/src/scripts/backfill-read-models.ts`
+- Backfill script: `npx tsx backend/src/scripts/backfill-read-models.ts`, or
+  `--only=<name>` to rebuild one read model. Add your step to `STEPS` in that file
+- **A backfill takes each row's `orgId` from its own source record.** Never resolve one org for the
+  whole run: the queries are org-wide, so a single id would write one tenant's rows under another's
 
 ## When Adding a New Entity or Feature
 

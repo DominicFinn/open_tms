@@ -235,11 +235,24 @@ git pull
 npm ci
 npm -w backend run prisma:generate && npm -w packages/shared run build && npm -w backend run build
 DATABASE_URL=... npx --prefix backend prisma migrate deploy
+DATABASE_URL=... npx --prefix backend tsx src/scripts/backfill-read-models.ts
 VITE_API_URL=https://tms.example.com npm -w frontend run build
 sudo systemctl restart opentms-api
 ```
 
 Migrations run forward only. Take a database dump before upgrading.
+
+The backfill line matters when a release adds a read model. A projection only fills a read model
+from events that happen after it deploys, so a new one arrives empty and the features that read it
+fail silently rather than erroring. The script is upsert-based and safe to run on every upgrade.
+
+To rebuild one read model rather than all of them, name it:
+
+```bash
+DATABASE_URL=... npx --prefix backend tsx src/scripts/backfill-read-models.ts --only=wmsFulfilmentOrders
+```
+
+An unknown name is refused with the list of valid ones.
 
 ## Backups
 

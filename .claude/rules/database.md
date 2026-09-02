@@ -166,7 +166,10 @@ Examples: `ShipmentReadModel`, `IssueReadModel`, `InvoiceReadModel`.
 - Written **only** by projections, from events. A route handler never writes a read model directly.
 - **Must be rebuildable from source.** `backend/src/scripts/backfill-read-models.ts` is part of the
   deliverable for a new read model, not a nice-to-have. If it can't be rebuilt, it isn't a
-  projection — it's unbacked state.
+  projection — it's unbacked state. Register the step in `STEPS` so it can be run on its own with
+  `--only=<name>`, and take each row's `orgId` from its own source record.
+- **A new read model is empty on the day it deploys**, and the features reading it fail silently
+  rather than erroring. Running the backfill is part of shipping it, not a follow-up.
 - Read paths never lock it and never join more than one level off it.
 - Freshness contract is documented. Ours is roughly half a second (pg-boss polls at 0.5s) — stale by
   seconds is fine; stale by minutes is a bug.

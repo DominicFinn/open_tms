@@ -77,3 +77,28 @@ describe('backfill-read-models: IssueReadModel coverage', () => {
     expect(backfillIssuesSource()).toContain('orgId: issue.orgId');
   });
 });
+
+/*
+ * The same tenancy point as above, for the rest of the script. It used to resolve one org with
+ * organization.findFirst() and stamp that id onto every row it wrote, while the queries fetched
+ * records across all organisations. On a multi-org install that hands one tenant another
+ * tenant's orders, shipments, carriers, customers and lanes through the read model, which is
+ * what the list endpoints serve from.
+ */
+describe('backfill-read-models: tenancy', () => {
+  const source = () => readFileSync(SCRIPT, 'utf8');
+
+  it.each([
+    ['backfillOrders', 'orgId: order.orgId'],
+    ['backfillShipments', 'orgId: shipment.orgId'],
+    ['backfillCarriers', 'orgId: carrier.orgId'],
+    ['backfillCustomers', 'orgId: customer.orgId'],
+    ['backfillLanes', 'orgId: lane.orgId'],
+  ])('%s takes orgId from its own source row', (_fn, expected) => {
+    expect(source()).toContain(expected);
+  });
+
+  it('never resolves a single organization for the whole run', () => {
+    expect(source()).not.toMatch(/organization\.findFirst/);
+  });
+});
