@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Archive,
@@ -228,7 +228,7 @@ export default function VNextOrders() {
       .catch(() => {});
   }, []);
 
-  const filtered = orders.filter(o => {
+  const filtered = useMemo(() => orders.filter(o => {
     const sNorm = o.status?.toLowerCase().replace(/[_ ]/g, '');
     if (statusFilter === 'all') {
       // "All statuses" means all active work, not literally everything —
@@ -253,11 +253,28 @@ export default function VNextOrders() {
       return orderNum.includes(q) || customerName.includes(q) || originLabel.includes(q) || destLabel.includes(q);
     }
     return true;
-  });
+  }), [orders, statusFilter, deliveryFilter, modeFilter, customerFilter, search]);
 
-  const filteredIds = filtered.map(o => o.id);
+  const filteredIds = useMemo(() => filtered.map(o => o.id), [filtered]);
   const selectedInView = filteredIds.filter(idv => selected.has(idv));
   const allSelected = filtered.length > 0 && selectedInView.length === filtered.length;
+
+  // Selection is keyed by id and otherwise persists across filter changes, which lets a stale
+  // selection made under one filter silently apply under another. Prune it back to whatever's
+  // still visible whenever the filtered set changes, so the displayed count and any bulk action
+  // always match what's on screen.
+  useEffect(() => {
+    setSelected(prev => {
+      const visible = new Set(filteredIds);
+      const next = new Set<string>();
+      let changed = false;
+      prev.forEach(id => {
+        if (visible.has(id)) next.add(id);
+        else changed = true;
+      });
+      return changed ? next : prev;
+    });
+  }, [filteredIds]);
 
   const toggleOne = (orderId: string) => {
     setSelected(prev => {
@@ -282,10 +299,10 @@ export default function VNextOrders() {
   const clearSelection = () => setSelected(new Set());
 
   const handleBulkArchive = async () => {
-    if (selected.size === 0) return;
+    if (selectedInView.length === 0) return;
     setBulkArchiving(true);
     try {
-      const ids = Array.from(selected);
+      const ids = selectedInView;
       const res = await fetch(`${API_URL}/api/v1/orders/bulk-archive`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -315,10 +332,10 @@ export default function VNextOrders() {
   };
 
   const handleBulkDelete = async () => {
-    if (selected.size === 0) return;
+    if (selectedInView.length === 0) return;
     setBulkDeleting(true);
     try {
-      const ids = Array.from(selected);
+      const ids = selectedInView;
       const res = await fetch(`${API_URL}/api/v1/orders/bulk-delete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -585,9 +602,9 @@ export default function VNextOrders() {
 
         <Separator />
 
-        {selected.size > 0 && (
+        {selectedInView.length > 0 && (
           <div className="flex flex-wrap items-center gap-3 border-b border-border bg-muted/40 px-4 py-3 md:px-6">
-            <span className="text-sm font-medium">{selected.size} selected</span>
+            <span className="text-sm font-medium">{selectedInView.length} selected</span>
             <Button variant="ghost" size="sm" onClick={clearSelection}>
               <X className="h-4 w-4" />
               Clear
@@ -744,7 +761,7 @@ export default function VNextOrders() {
       <Dialog open={confirmBulkDelete} onOpenChange={setConfirmBulkDelete}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete {selected.size} order{selected.size === 1 ? '' : 's'}?</DialogTitle>
+            <DialogTitle>Delete {selectedInView.length} order{selectedInView.length === 1 ? '' : 's'}?</DialogTitle>
             <DialogDescription>
               Selected orders will be removed from all views. Records are retained for audit
               but cannot be restored from the UI. This is different from archiving.
@@ -754,7 +771,7 @@ export default function VNextOrders() {
             <Button variant="outline" onClick={() => setConfirmBulkDelete(false)} disabled={bulkDeleting}>Cancel</Button>
             <Button variant="destructive" onClick={handleBulkDelete} disabled={bulkDeleting}>
               {bulkDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-              Delete {selected.size} order{selected.size === 1 ? '' : 's'}
+              Delete {selectedInView.length} order{selectedInView.length === 1 ? '' : 's'}
             </Button>
           </DialogFooter>
         </DialogContent>

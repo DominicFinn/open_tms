@@ -321,7 +321,7 @@ export default function VNextShipments() {
     [shipmentTypes],
   );
 
-  const filtered = shipments.filter(s => {
+  const filtered = useMemo(() => shipments.filter(s => {
     if (statusFilter === 'issue') {
       if (!s.hasException) return false;
     } else if (statusFilter !== 'all' && s.status !== statusFilter) {
@@ -340,7 +340,7 @@ export default function VNextShipments() {
       return ref.includes(q) || customerName.includes(q) || originLabel.includes(q) || destLabel.includes(q) || carrierName.includes(q);
     }
     return true;
-  });
+  }), [shipments, statusFilter, typeFilter, search]);
 
   const lanesInView = useMemo(() => {
     const byId = new Map<string, string>();
@@ -518,9 +518,26 @@ export default function VNextShipments() {
     { key: 'issue', label: 'Issues', value: statusCounts.issue, icon: AlertTriangle },
   ] as const;
 
-  const filteredIds = filtered.map(s => s.id);
+  const filteredIds = useMemo(() => filtered.map(s => s.id), [filtered]);
   const selectedInView = filteredIds.filter(idv => selected.has(idv));
   const allSelected = filtered.length > 0 && selectedInView.length === filtered.length;
+
+  // Selection is keyed by id and otherwise persists across filter changes, which lets a stale
+  // selection made under one filter silently apply under another. Prune it back to whatever's
+  // still visible whenever the filtered set changes, so the displayed count and any bulk action
+  // always match what's on screen.
+  useEffect(() => {
+    setSelected(prev => {
+      const visible = new Set(filteredIds);
+      const next = new Set<string>();
+      let changed = false;
+      prev.forEach(id => {
+        if (visible.has(id)) next.add(id);
+        else changed = true;
+      });
+      return changed ? next : prev;
+    });
+  }, [filteredIds]);
 
   const toggleOne = (shipmentId: string) => {
     setSelected(prev => {
@@ -545,10 +562,10 @@ export default function VNextShipments() {
   const clearSelection = () => setSelected(new Set());
 
   const handleBulkApply = async () => {
-    if (!bulkStatus || selected.size === 0) return;
+    if (!bulkStatus || selectedInView.length === 0) return;
     setBulkBusy(true);
     try {
-      const ids = Array.from(selected);
+      const ids = selectedInView;
       const res = await fetch(`${API_URL}/api/v1/shipments/bulk-transition`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -572,9 +589,13 @@ export default function VNextShipments() {
           { duration: 9000 },
         );
       }
+      // Patch the transitioned rows locally instead of triggering a refetch: the list reads
+      // an async read-model projection that can lag the write by up to ~0.5s, so an immediate
+      // refetch would just race it and overwrite this patch with the pre-transition status.
+      const okIds = new Set(ok.map(r => r.id));
+      setShipments(prev => prev.map(s => (okIds.has(s.id) ? { ...s, status: bulkStatus } : s)));
       clearSelection();
       setBulkStatus('');
-      setRefreshKey(k => k + 1);
     } catch {
       toast.error('Bulk update failed');
     } finally {
@@ -583,10 +604,10 @@ export default function VNextShipments() {
   };
 
   const handleBulkArchive = async () => {
-    if (selected.size === 0) return;
+    if (selectedInView.length === 0) return;
     setBulkArchiving(true);
     try {
-      const ids = Array.from(selected);
+      const ids = selectedInView;
       const res = await fetch(`${API_URL}/api/v1/shipments/bulk-archive`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -606,8 +627,12 @@ export default function VNextShipments() {
         const reason = failed[0]?.error ?? 'blocked';
         toast.warning(`${ok.length} archived, ${failed.length} skipped. e.g. ${reason}`, { duration: 9000 });
       }
+      // Archived shipments are excluded from this list by default, so drop them locally
+      // instead of triggering a refetch — an immediate refetch would race the async
+      // read-model projection and could bring the just-archived rows right back.
+      const okIds = new Set(ok.map(r => r.id));
+      setShipments(prev => prev.filter(s => !okIds.has(s.id)));
       clearSelection();
-      setRefreshKey(k => k + 1);
     } catch {
       toast.error('Bulk archive failed');
     } finally {
@@ -616,10 +641,10 @@ export default function VNextShipments() {
   };
 
   const handleBulkDelete = async () => {
-    if (selected.size === 0) return;
+    if (selectedInView.length === 0) return;
     setBulkDeleting(true);
     try {
-      const ids = Array.from(selected);
+      const ids = selectedInView;
       const res = await fetch(`${API_URL}/api/v1/shipments/bulk-delete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -639,8 +664,12 @@ export default function VNextShipments() {
         const reason = failed[0]?.error ?? 'blocked';
         toast.warning(`${ok.length} deleted, ${failed.length} skipped. e.g. ${reason}`, { duration: 9000 });
       }
+      // Deleted shipments disappear from every view, so drop them locally instead of
+      // triggering a refetch — an immediate refetch would race the async read-model
+      // projection and could bring the just-deleted rows right back.
+      const okIds = new Set(ok.map(r => r.id));
+      setShipments(prev => prev.filter(s => !okIds.has(s.id)));
       clearSelection();
-      setRefreshKey(k => k + 1);
     } catch {
       toast.error('Bulk delete failed');
     } finally {
@@ -919,9 +948,9 @@ export default function VNextShipments() {
 
         <Separator />
 
-        {selected.size > 0 && (
+        {selectedInView.length > 0 && (
           <div className="flex flex-wrap items-center gap-3 border-b border-border bg-muted/40 px-4 py-3 md:px-6">
-            <span className="text-sm font-medium">{selected.size} selected</span>
+            <span className="text-sm font-medium">{selectedInView.length} selected</span>
             <Button variant="ghost" size="sm" onClick={clearSelection}>
               <X className="h-4 w-4" />
               Clear
@@ -1073,7 +1102,7 @@ export default function VNextShipments() {
       <Dialog open={confirmBulkDelete} onOpenChange={setConfirmBulkDelete}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete {selected.size} shipment{selected.size === 1 ? '' : 's'}?</DialogTitle>
+            <DialogTitle>Delete {selectedInView.length} shipment{selectedInView.length === 1 ? '' : 's'}?</DialogTitle>
             <DialogDescription>
               Selected shipments will be removed from all views. Records are retained for audit
               but cannot be restored from the UI. This is different from archiving.
@@ -1083,7 +1112,7 @@ export default function VNextShipments() {
             <Button variant="outline" onClick={() => setConfirmBulkDelete(false)} disabled={bulkDeleting}>Cancel</Button>
             <Button variant="destructive" onClick={handleBulkDelete} disabled={bulkDeleting}>
               {bulkDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-              Delete {selected.size} shipment{selected.size === 1 ? '' : 's'}
+              Delete {selectedInView.length} shipment{selectedInView.length === 1 ? '' : 's'}
             </Button>
           </DialogFooter>
         </DialogContent>
