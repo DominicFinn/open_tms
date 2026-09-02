@@ -1,8 +1,8 @@
-import type { IReturnLabelProvider, IReturnLabelProviderRegistry } from './IReturnLabelProvider';
-import { ManualReturnLabelProvider } from './providers/ManualReturnLabelProvider';
-import { FedExReturnLabelProvider } from './providers/FedExReturnLabelProvider';
-import { UPSReturnLabelProvider } from './providers/UPSReturnLabelProvider';
-import { DHLReturnLabelProvider } from './providers/DHLReturnLabelProvider';
+import type { IReturnLabelProvider, IReturnLabelProviderRegistry } from './IReturnLabelProvider.js';
+import { ManualReturnLabelProvider } from './providers/ManualReturnLabelProvider.js';
+import { FedExReturnLabelProvider } from './providers/FedExReturnLabelProvider.js';
+import { UPSReturnLabelProvider } from './providers/UPSReturnLabelProvider.js';
+import { DHLReturnLabelProvider } from './providers/DHLReturnLabelProvider.js';
 
 export class ReturnLabelProviderRegistry implements IReturnLabelProviderRegistry {
   private readonly providers: Map<string, IReturnLabelProvider>;
