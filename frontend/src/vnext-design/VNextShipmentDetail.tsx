@@ -25,7 +25,9 @@ import {
   Inbox,
   Info,
   Loader2,
+  Lock,
   MapPin,
+  MessageSquare,
   MoreVertical,
   Package,
   Pen,
@@ -1075,6 +1077,311 @@ function SlaTab({ shipmentId }: { shipmentId: string }) {
   );
 }
 
+// ─── Notes Tab ────────────────────────────────────────────────────────
+function ShipmentNotesSection({ shipmentId }: { shipmentId: string }) {
+  const { user, hasRole } = useCurrentUser();
+  const isAdmin = hasRole('admin');
+  const currentUserId = user?.id ?? null;
+
+  const [comments, setComments] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [newComment, setNewComment] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingDraft, setEditingDraft] = useState('');
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const loadComments = useCallback(() => {
+    fetch(`${API_URL}/api/v1/comments?entityType=shipment&entityId=${shipmentId}`)
+      .then(r => r.json())
+      .then(json => setComments(json.data?.items || json.data || []))
+      .catch(() => { })
+      .finally(() => setLoading(false));
+  }, [shipmentId]);
+
+  useEffect(() => { loadComments(); }, [loadComments]);
+
+  const handleSubmit = async () => {
+    if (!newComment.trim()) return;
+    setSubmitting(true);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/comments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entityType: 'shipment', entityId: shipmentId, body: newComment }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json.error) {
+        toast.error(json.error || 'Failed to post comment');
+        return;
+      }
+      setNewComment('');
+      loadComments();
+    } catch {
+      toast.error('Failed to post comment');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const beginEdit = (c: any) => {
+    setEditingId(c.id);
+    setEditingDraft(c.body || '');
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditingDraft('');
+  };
+
+  const saveEdit = async (id: string) => {
+    if (!editingDraft.trim()) return;
+    setBusyId(id);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/comments/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body: editingDraft }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json.error) {
+        toast.error(json.error || 'Failed to update comment');
+        return;
+      }
+      cancelEdit();
+      loadComments();
+    } catch {
+      toast.error('Failed to update comment');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('Delete this comment? It will be hidden but kept for audit.')) return;
+    setBusyId(id);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/comments/${id}`, { method: 'DELETE' });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json.error) {
+        toast.error(json.error || 'Failed to delete comment');
+        return;
+      }
+      loadComments();
+    } catch {
+      toast.error('Failed to delete comment');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center gap-2 py-12 text-muted-foreground">
+        <Loader2 className="h-6 w-6 animate-spin" />
+      </div>
+    );
+  }
+
+  return (
+    <Card>
+      <CardContent className="pt-6">
+        {comments.length === 0 && (
+          <div className="flex flex-col items-center gap-2 py-6 text-muted-foreground">
+            <MessageSquare className="h-12 w-12 opacity-50" />
+            <p>No notes yet. Add the first comment below.</p>
+          </div>
+        )}
+        {comments.map((c: any) => {
+          const isAuthor = !!currentUserId && c.authorId === currentUserId;
+          const canEdit = isAuthor && c.authorType !== 'agent';
+          const canDelete = (isAuthor || isAdmin) && c.authorType !== 'agent';
+          const isEditing = editingId === c.id;
+          const busy = busyId === c.id;
+          return (
+            <div key={c.id} className="group flex gap-3 border-b border-border py-3 last:border-0">
+              <div
+                className={cn(
+                  'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white',
+                  c.authorType === 'agent' ? 'bg-info' : 'bg-primary',
+                )}
+              >
+                {c.authorType === 'agent'
+                  ? <Bot className="h-4 w-4" />
+                  : (c.authorName || '?').split(/\s+/).map((w: string) => w[0]).join('').toUpperCase().slice(0, 2)}
+              </div>
+              <div className="flex-1">
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold">{c.authorName || 'Unknown user'}</span>
+                    {c.tag === 'issue' && <Badge variant="destructive">Issue</Badge>}
+                    {c.tag === 'requirement' && <Badge variant="info">Additional requirement</Badge>}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">
+                      {c.createdAt ? new Date(c.createdAt).toLocaleString() : ''}
+                      {c.updatedAt && c.createdAt && c.updatedAt !== c.createdAt && (
+                        <span className="ml-1 italic">(edited)</span>
+                      )}
+                    </span>
+                    {!isEditing && (canEdit || canDelete) && (
+                      <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+                        {canEdit && (
+                          <button
+                            type="button"
+                            onClick={() => beginEdit(c)}
+                            disabled={busy}
+                            className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+                            title="Edit comment"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                        {canDelete && (
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(c.id)}
+                            disabled={busy}
+                            className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                            title={isAuthor ? 'Delete comment' : 'Delete (admin)'}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                {isEditing ? (
+                  <div className="flex gap-2">
+                    <textarea
+                      className="flex w-full flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      value={editingDraft}
+                      onChange={e => setEditingDraft(e.target.value)}
+                      rows={2}
+                      autoFocus
+                    />
+                    <div className="flex flex-col gap-1 self-end">
+                      <Button
+                        size="sm"
+                        variant="gradient"
+                        onClick={() => saveEdit(c.id)}
+                        disabled={busy || !editingDraft.trim() || editingDraft === c.body}
+                      >
+                        {busy ? '...' : 'Save'}
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={cancelEdit} disabled={busy} title="Cancel">
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="whitespace-pre-wrap text-sm leading-relaxed">{c.body}</p>
+                )}
+              </div>
+            </div>
+          );
+        })}
+        <div className="mt-4 flex gap-2">
+          <textarea
+            className="flex w-full flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            placeholder="Add a comment..."
+            value={newComment}
+            onChange={e => setNewComment(e.target.value)}
+            rows={2}
+          />
+          <Button variant="gradient" onClick={handleSubmit} disabled={submitting || !newComment.trim()} className="self-end">
+            {submitting ? '...' : 'Post'}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// Compact, note-style list of this shipment's issues — links out to the full
+// signals/timeline view on the Activity tab rather than re-rendering it here.
+function ShipmentIssuesSummary({ shipmentId }: { shipmentId: string }) {
+  const [issues, setIssues] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    fetch(`${API_URL}/api/v1/shipments/${shipmentId}/issue-activity`)
+      .then(r => r.json())
+      .then(json => { if (alive) setIssues(json.data?.issues || []); })
+      .catch(() => { })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [shipmentId]);
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center gap-2 py-8 text-muted-foreground">
+        <Loader2 className="h-6 w-6 animate-spin" />
+      </div>
+    );
+  }
+
+  return (
+    <Card>
+      <CardContent className="pt-6">
+        {issues.length === 0 ? (
+          <div className="flex flex-col items-center gap-2 py-6 text-muted-foreground">
+            <AlertTriangle className="h-10 w-10 opacity-40" />
+            <p className="text-sm">No issues raised for this shipment.</p>
+          </div>
+        ) : (
+          <ul className="divide-y divide-border">
+            {issues.map((issue: any) => (
+              <li key={issue.id} className="flex items-center justify-between gap-3 py-2.5">
+                <div className="min-w-0">
+                  <Link to={`/issues/${issue.id}`} className="text-sm font-medium hover:underline">
+                    {issue.title}
+                  </Link>
+                  <div className="text-xs text-muted-foreground">
+                    {issue.createdAt ? new Date(issue.createdAt).toLocaleDateString() : ''}
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <Badge variant={issue.priority === 'critical' ? 'destructive' : issue.priority === 'high' ? 'warning' : 'muted'}>
+                    {issue.priority}
+                  </Badge>
+                  <Badge variant={issue.status === 'resolved' || issue.status === 'closed' ? 'success' : 'info'}>
+                    {issue.status}
+                  </Badge>
+                  {issue.latched && <Lock className="h-3.5 w-3.5 text-muted-foreground" aria-label="Latched" />}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function NotesTab({ shipmentId }: { shipmentId: string }) {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          <MessageSquare className="h-4 w-4" />
+          Notes &amp; comments
+        </h3>
+        <ShipmentNotesSection shipmentId={shipmentId} />
+      </div>
+      <div>
+        <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+          <AlertTriangle className="h-4 w-4" />
+          Issues
+        </h3>
+        <ShipmentIssuesSummary shipmentId={shipmentId} />
+      </div>
+    </div>
+  );
+}
+
 // ─── Carrier Tracking Tab ─────────────────────────────────────────────
 const TRACKING_STATUS_VARIANT: Record<string, 'success' | 'destructive' | 'info' | 'warning' | 'default' | 'muted'> = {
   delivered: 'success',
@@ -1859,6 +2166,7 @@ export default function VNextShipmentDetail() {
   const tabs = [
     { value: 'details', label: 'Details', Icon: Info },
     { value: 'events', label: 'Events', Icon: Clock },
+    { value: 'notes', label: 'Notes', Icon: MessageSquare },
     { value: 'activity', label: 'Activity', Icon: Activity },
     { value: 'orders', label: 'Orders', Icon: Box },
     { value: 'documents', label: 'Docs', Icon: FileText },
@@ -2319,6 +2627,10 @@ export default function VNextShipmentDetail() {
 
         <TabsContent value="events" className="mt-4">
               {id && <EventsTab shipmentId={id} />}
+            </TabsContent>
+
+            <TabsContent value="notes" className="mt-4">
+              {id && <NotesTab shipmentId={id} />}
             </TabsContent>
 
             <TabsContent value="activity" className="mt-4">
