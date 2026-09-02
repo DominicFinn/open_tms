@@ -1,6 +1,5 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
-import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
   Activity,
@@ -88,11 +87,12 @@ import {
 } from '@/components/ui/select';
 import { DatePicker } from '@/components/ui/date-picker';
 import { cn } from '@/lib/utils';
+import MapView from '../maps/Map';
+import type { MapMarker, MapPolyline } from '../maps/types';
 import { ShareShipmentDialog } from '../components/ShareShipmentDialog';
 import { ShipmentShareLinksTab } from '../components/ShipmentShareLinksTab';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { getDeviceImageUrl } from './deviceImages';
-import { keepMapSized, worldBoundsMapOptions, capWorldZoomOut, createBaseTileLayer } from '../lib/leafletMap';
 import {
   TimeSeriesChart,
   TelemetryPeriodFilter,
@@ -1331,10 +1331,6 @@ export default function VNextShipmentDetail() {
   const navigate = useNavigate();
 
   useEffect(() => { window.scrollTo(0, 0); }, [id]);
-  const mapRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<L.Map | null>(null);
-  const laneLayersRef = useRef<L.Polyline[]>([]);
-  const routeLayerRef = useRef<L.Polyline | null>(null);
   const [activeTab, setActiveTab] = useState('details');
   const [shipment, setShipment] = useState<any>(null);
   const [shipmentType, setShipmentType] = useState<any>(null);
@@ -1352,7 +1348,6 @@ export default function VNextShipmentDetail() {
   const [unarchiving, setUnarchiving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [notFound, setNotFound] = useState(false);
-  const [mapLoading, setMapLoading] = useState(true);
   const [laneRoute, setLaneRoute] = useState<any>(undefined);
   const [showLane, setShowLane] = useState(true);
   const [showRoute, setShowRoute] = useState(true);
@@ -1683,120 +1678,79 @@ export default function VNextShipmentDetail() {
   const hasDestCoords = !!(shipment?.destination?.lat && shipment?.destination?.lng);
   const hasAnyCoords = hasOriginCoords || hasDestCoords;
 
-  useEffect(() => {
-    if (!mapRef.current || !shipment || !hasAnyCoords) return;
-    const origin = shipment.origin;
-    const destination = shipment.destination;
+  // The map is declared, not driven. Markers and lines are derived from the shipment, and the
+  // layer toggles simply leave a line out of the array rather than adding and removing it from a
+  // live map. The adapter decides whether that is drawn by Leaflet or by Google.
+  const pin = (colour: string, size: number, inner: boolean) =>
+    `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${colour};border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;">`
+    + (inner ? '<div style="width:6px;height:6px;border-radius:50%;background:white;"></div>' : '')
+    + '</div>';
 
-    setMapLoading(true);
-    const map = L.map(mapRef.current, {
-      zoomControl: true,
-      ...worldBoundsMapOptions,
-    });
-    const tiles = createBaseTileLayer();
-    capWorldZoomOut(map);
-    // Hide the spinner once tiles have rendered (with a fallback in case the
-    // load event doesn't fire, e.g. fully cached).
-    tiles.on('load', () => setMapLoading(false));
-    const loadFallback = setTimeout(() => setMapLoading(false), 2500);
-    tiles.addTo(map);
-
-    const allCoords: [number, number][] = [];
+  const mapMarkers = useMemo<MapMarker[]>(() => {
+    if (!shipment) return [];
+    const out: MapMarker[] = [];
 
     if (hasOriginCoords) {
-      const coord: [number, number] = [origin.lat, origin.lng];
-      allCoords.push(coord);
-      const originIcon = L.divIcon({
-        className: '',
-        html: `<div style="width:20px;height:20px;border-radius:50%;background:${COLOR_INFO};border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;"><div style="width:6px;height:6px;border-radius:50%;background:white;"></div></div>`,
-        iconSize: [20, 20], iconAnchor: [10, 10],
+      out.push({
+        id: 'origin',
+        position: { lat: shipment.origin.lat, lng: shipment.origin.lng },
+        html: pin(COLOR_INFO, 20, true),
+        size: { width: 20, height: 20 },
+        popupHtml: `<strong>Origin</strong><br/>${shipment.origin.city || ''}, ${shipment.origin.state || ''}`,
       });
-      L.marker(coord, { icon: originIcon }).addTo(map).bindPopup(`<strong>Origin</strong><br/>${origin.city || ''}, ${origin.state || ''}`);
     }
-
     if (hasDestCoords) {
-      const coord: [number, number] = [destination.lat, destination.lng];
-      allCoords.push(coord);
-      const destIcon = L.divIcon({
-        className: '',
-        html: `<div style="width:20px;height:20px;border-radius:50%;background:${COLOR_SUCCESS};border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;"><div style="width:6px;height:6px;border-radius:50%;background:white;"></div></div>`,
-        iconSize: [20, 20], iconAnchor: [10, 10],
+      out.push({
+        id: 'destination',
+        position: { lat: shipment.destination.lat, lng: shipment.destination.lng },
+        html: pin(COLOR_SUCCESS, 20, true),
+        size: { width: 20, height: 20 },
+        popupHtml: `<strong>Destination</strong><br/>${shipment.destination.city || ''}, ${shipment.destination.state || ''}`,
       });
-      L.marker(coord, { icon: destIcon }).addTo(map).bindPopup(`<strong>Destination</strong><br/>${destination.city || ''}, ${destination.state || ''}`);
     }
-
-    const stopIcon = L.divIcon({
-      className: '',
-      html: `<div style="width:16px;height:16px;border-radius:50%;background:${COLOR_WARNING};border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3);"></div>`,
-      iconSize: [16, 16], iconAnchor: [8, 8],
-    });
-    (shipment.stops || []).filter((s: any) => s.lat && s.lng).forEach((s: any) => {
-      const coord: [number, number] = [s.lat, s.lng];
-      allCoords.push(coord);
-      L.marker(coord, { icon: stopIcon }).addTo(map).bindPopup(`<strong>Stop</strong><br/>${s.city || ''}, ${s.state || ''}`);
+    (shipment.stops || []).filter((st: any) => st.lat && st.lng).forEach((st: any, i: number) => {
+      out.push({
+        id: `stop-${st.id ?? i}`,
+        position: { lat: st.lat, lng: st.lng },
+        html: pin(COLOR_WARNING, 16, false),
+        size: { width: 16, height: 16 },
+        popupHtml: `<strong>Stop</strong><br/>${st.city || ''}, ${st.state || ''}`,
+      });
     });
 
-    const fitCoords: [number, number][] = [...allCoords];
+    return out;
+  }, [shipment, hasOriginCoords, hasDestCoords]);
 
-    if (allCoords.length >= 2) {
-      const laneBg = L.polyline(allCoords, { color: COLOR_MUTED, weight: 3, opacity: 0.7, dashArray: '8 4' });
-      const laneFg = L.polyline(allCoords, { color: COLOR_INFO, weight: 4 });
-      laneLayersRef.current = [laneBg, laneFg];
-      if (showLane) { laneBg.addTo(map); laneFg.addTo(map); }
-    } else {
-      laneLayersRef.current = [];
+  const mapPolylines = useMemo<MapPolyline[]>(() => {
+    const lines: MapPolyline[] = [];
+    const lanePoints = mapMarkers.map((m) => m.position);
+
+    if (showLane && lanePoints.length >= 2) {
+      lines.push({ id: 'lane-shadow', points: lanePoints, color: COLOR_MUTED, weight: 3, opacity: 0.7, dashed: true });
+      lines.push({ id: 'lane', points: lanePoints, color: COLOR_INFO, weight: 4 });
     }
 
-    const routeWaypoints = laneRoute?.waypoints;
-    if (Array.isArray(routeWaypoints) && routeWaypoints.length >= 2) {
-      const routeCoords: [number, number][] = routeWaypoints.map((w: any) => [w.lat, w.lng]);
-      const routeLine = L.polyline(routeCoords, { color: COLOR_ROUTE, weight: 4, opacity: 0.9 });
-      routeLayerRef.current = routeLine;
-      if (showRoute) { routeLine.addTo(map); fitCoords.push(...routeCoords); }
-    } else {
-      routeLayerRef.current = null;
+    const waypoints = laneRoute?.waypoints;
+    if (showRoute && Array.isArray(waypoints) && waypoints.length >= 2) {
+      lines.push({
+        id: 'planned-route',
+        points: waypoints.map((w: any) => ({ lat: w.lat, lng: w.lng })),
+        color: COLOR_ROUTE,
+        weight: 4,
+        opacity: 0.9,
+      });
     }
 
-    if (fitCoords.length >= 2) {
-      map.fitBounds(L.latLngBounds(fitCoords).pad(0.1));
-    } else if (fitCoords.length === 1) {
-      map.setView(fitCoords[0], 12);
-    }
+    return lines;
+  }, [mapMarkers, showLane, showRoute, laneRoute]);
 
-    mapInstanceRef.current = map;
-    const stopSizing = keepMapSized(map, mapRef.current);
+  // Framing follows whatever is actually drawn, so toggling the planned route on re-frames to
+  // include it rather than leaving half the line off screen.
+  const mapFitTo = useMemo(
+    () => [...mapMarkers.map((m) => m.position), ...mapPolylines.flatMap((l) => l.points)],
+    [mapMarkers, mapPolylines]
+  );
 
-    return () => {
-      clearTimeout(loadFallback);
-      stopSizing();
-      mapInstanceRef.current = null;
-      laneLayersRef.current = [];
-      routeLayerRef.current = null;
-      map.remove();
-    };
-    // showLane/showRoute intentionally omitted: their toggling is handled by
-    // the lightweight effects below without rebuilding the whole map.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shipment, hasAnyCoords, hasOriginCoords, hasDestCoords, laneRoute]);
-
-  // Toggle layers on/off without tearing down the map (avoids re-fetching
-  // tiles and resetting the viewport on every checkbox click).
-  useEffect(() => {
-    const map = mapInstanceRef.current;
-    if (!map) return;
-    laneLayersRef.current.forEach((layer) => {
-      if (showLane) { if (!map.hasLayer(layer)) layer.addTo(map); }
-      else if (map.hasLayer(layer)) map.removeLayer(layer);
-    });
-  }, [showLane]);
-
-  useEffect(() => {
-    const map = mapInstanceRef.current;
-    const layer = routeLayerRef.current;
-    if (!map || !layer) return;
-    if (showRoute) { if (!map.hasLayer(layer)) layer.addTo(map); }
-    else if (map.hasLayer(layer)) map.removeLayer(layer);
-  }, [showRoute]);
 
   if (loading) {
     return (
@@ -2170,13 +2124,14 @@ export default function VNextShipmentDetail() {
                 </Link>
               )}
             </div>
-            <div className="relative overflow-hidden rounded-lg border border-border">
-              <div ref={mapRef} className="h-[300px] w-full" />
-              {mapLoading && (
-                <div className="pointer-events-none absolute inset-0 z-[500] flex items-center justify-center bg-muted/40">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                </div>
-              )}
+            <div className="overflow-hidden rounded-lg border border-border">
+              <MapView
+                markers={mapMarkers}
+                polylines={mapPolylines}
+                fitTo={mapFitTo}
+                height={300}
+                ariaLabel={`Route map for shipment ${shipment.reference || ''}`}
+              />
             </div>
           </div>
         ) : (

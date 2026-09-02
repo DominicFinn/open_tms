@@ -11,9 +11,9 @@
  *
  * A note on basemaps, because it surprises people: Google's terms require their tiles be
  * rendered through the Google Maps JS API, so they cannot be used as a Leaflet tile layer.
- * Our Leaflet surfaces therefore draw OSM tiles in both modes, and `googleCanvas` stays false
- * until a real google.maps.Map adapter exists. Google mode changes what the map can do, not
- * what it looks like.
+ * That is why `googleCanvas` selects a different renderer rather than swapping a tile URL: in
+ * Google mode a map is a google.maps.Map with Google's own basemap and controls, and in OSM mode
+ * it is Leaflet drawing OpenStreetMap tiles.
  */
 
 export type MapMode = 'google' | 'osm';
@@ -32,7 +32,7 @@ export interface MapCapabilities {
   trafficLayer: boolean;
   /** Street-level imagery. */
   streetView: boolean;
-  /** Whether map surfaces render through google.maps.Map rather than Leaflet. */
+  /** Whether map surfaces render through google.maps.Map rather than Leaflet drawing OSM tiles. */
   googleCanvas: boolean;
 }
 
@@ -60,8 +60,9 @@ const GOOGLE_CAPABILITIES: MapCapabilities = {
   draggableRoute: true,
   trafficLayer: true,
   streetView: true,
-  // Deferred, not impossible. See the note at the top of this file.
-  googleCanvas: false,
+  // The Google adapter renders through google.maps.Map, which is the only way their basemap and
+  // controls may legitimately be shown. Leaflet cannot be given their tiles.
+  googleCanvas: true,
 };
 
 export function capabilitiesFor(mode: MapMode): MapCapabilities {
