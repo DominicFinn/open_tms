@@ -29,7 +29,7 @@ These were live bugs. Done ahead of any split work.
 | WMS permissions | None exist: `/api/v1/wms*` is open to any authenticated user. Add a `wms.*` permission family; grant permissively to existing roles, tighten later | M |
 | Magic-link scoping | Warehouse PWA magic links mint full internal JWTs. Mint warehouse-scoped tokens; accept both during transition | M |
 
-## Phase 1: draw the boundary in code (~10-13 chunks, zero schema changes)
+## Phase 1: draw the boundary in code ✅ (shipped Sep 2026: #159, #161, #164, #166, #168, #173)
 
 Order: lint, then schema file split, then DI/routes split, then projection, then load-plan seam.
 
@@ -58,9 +58,12 @@ Order: lint, then schema file split, then DI/routes split, then projection, then
    projection never touches a TMS model. `CreateWave`, `ApplyWaveTemplate` and `ReleaseWave` now
    read it. The backfill runs the projection itself. Also closed a live cross-tenant bug: wave
    template eligibility ran with no `orgId` filter on either half of the query. (L)
-6. **Load-plan seam**: `ShipmentStopPort` for `CreateLoadPlanCommand`; `CompleteLoadPlanCommand`
-   emits `wms.load_plan.completed` and a TMS subscriber creates the BOL (first deliberate
-   cross-domain event subscriber, idempotent). (M)
+6. **Load-plan seam** ✅ (#173) `CompleteLoadPlanCommand` emits `load_plan.completed` carrying
+   `bolRequested`, and `BolGenerationHandler` on the TMS side generates the BOL, links it and
+   emits `load_plan.bol_generated` (schema v2). First deliberate cross-domain subscriber,
+   idempotent by conditional claim. Burns down the load-plan leak: 7 exceptions to 6. The
+   `ShipmentStopPort` half was not needed; `CreateLoadPlanCommand` reads staging assignments and
+   trackable units, not shipment stops. (M)
 
 ## Phase 2: data model untangling (~18-26 chunks)
 

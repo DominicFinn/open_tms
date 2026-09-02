@@ -1698,7 +1698,21 @@ When not ready, the check returns the list of missing requirements. This gates:
 - **Both** generate endpoints (sync and async) - they return 400 with the missing-requirements list rather than producing an incomplete document (the BOL metadata snapshot is captured immutably at generation time).
 - The **"Generate BOL" button** on the shipment Documents tab (`VNextShipmentDetail`), which greys out and shows the missing requirements inline until the data exists.
 
-The intended happy-path trigger remains `POST /load-plans/:id/complete`, which auto-generates the BOL after WMS picking and loading, by which point the cargo detail is populated.
+The happy-path trigger remains `POST /load-plans/:id/complete`, after WMS picking and loading, by
+which point the cargo detail is populated. Since #173 the route does not generate the document
+itself. Completing a load plan emits `load_plan.completed` carrying `bolRequested`, and
+`BolGenerationHandler` on the TMS side generates the BOL, links it to the load plan, and emits
+`load_plan.bol_generated` (schema v2, carrying `documentId` and `fileName`).
+
+Two consequences worth knowing:
+- Generation is asynchronous, so the completion response carries `bolRequested`, not
+  `bolDocumentId`. The load plan shows the document once the handler finishes.
+- The handler is idempotent. It skips a load plan that already has a document and claims the link
+  with a conditional update, so a redelivery cannot produce two BOL links. Two concurrent
+  deliveries can each render a PDF; only one link is ever recorded.
+
+A standalone FinnWMS registers no subscriber, produces no BOL, and completes loads normally. That
+is the point of the seam.
 
 ### Rate Confirmation PDF
 

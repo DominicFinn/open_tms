@@ -15,11 +15,6 @@
     "reason": "Same excursion-to-CAPA path as above."
   },
   {
-    "from": "routes/loadPlans.ts",
-    "to": "services/DocumentGenerationService.ts",
-    "reason": "Load plans generate the BOL inline. This is the Phase 1 load-plan seam: CompleteLoadPlanCommand emits wms.load_plan.completed and a TMS subscriber creates the BOL."
-  },
-  {
     "from": "routes/locations.ts",
     "to": "repositories/ArrivalCriteriaRepository.ts",
     "reason": "Location is the conflated TMS node / WMS facility root. Resolves in Phase 2 when Facility lands and the geographic half stays in tms."

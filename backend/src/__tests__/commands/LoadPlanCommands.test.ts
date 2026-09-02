@@ -100,7 +100,7 @@ describe('CompleteLoadPlanCommandHandler', () => {
     expect(result.success).toBe(true);
     expect(result.data?.loadedUnits).toBe(2);
     expect(result.data?.sealNumber).toBe('SEAL-456');
-    expect(result.data?.bolGenerated).toBe(true);
+    expect(result.data?.bolRequested).toBe(true);
 
     // Staging assignments updated
     expect(tx.stagingAssignment.updateMany).toHaveBeenCalledWith(
@@ -112,9 +112,14 @@ describe('CompleteLoadPlanCommandHandler', () => {
       expect.objectContaining({ data: { currentBinId: null, currentZoneId: null } })
     );
 
+    // The warehouse says a BOL was asked for and stops. Generating it, and emitting
+    // load_plan.bol_generated, is the transport side's job.
     const eventTypes = result.events.map(e => e.type);
     expect(eventTypes).toContain(EVENT_TYPES.LOAD_PLAN_COMPLETED);
-    expect(eventTypes).toContain(EVENT_TYPES.LOAD_PLAN_BOL_GENERATED);
+    expect(eventTypes).not.toContain(EVENT_TYPES.LOAD_PLAN_BOL_GENERATED);
+    expect(result.events.find(e => e.type === EVENT_TYPES.LOAD_PLAN_COMPLETED)?.payload).toEqual(
+      expect.objectContaining({ bolRequested: true })
+    );
   });
 
   it('fails if already completed', async () => {

@@ -7,7 +7,7 @@ import { Command } from '../types.js';
 export interface CompleteLoadPlanPayload {
   loadPlanId: string;
   sealNumber?: string | null;
-  /** Auto-generate BOL on completion */
+  /** Ask the transport side to generate a BOL once the load is complete. Default true. */
   generateBol?: boolean;
 }
 
@@ -15,7 +15,7 @@ export const COMPLETE_LOAD_PLAN = 'load_plan.complete';
 
 export class CompleteLoadPlanCommandHandler extends BaseCommandHandler<
   CompleteLoadPlanPayload,
-  { id: string; status: string; sealNumber: string | null; loadedUnits: number; bolGenerated: boolean }
+  { id: string; status: string; sealNumber: string | null; loadedUnits: number; bolRequested: boolean }
 > {
   readonly commandType = COMPLETE_LOAD_PLAN;
 
@@ -27,7 +27,7 @@ export class CompleteLoadPlanCommandHandler extends BaseCommandHandler<
     command: Command<CompleteLoadPlanPayload>,
     tx: TransactionClient,
     emit: EmitFn
-  ): Promise<{ id: string; status: string; sealNumber: string | null; loadedUnits: number; bolGenerated: boolean }> {
+  ): Promise<{ id: string; status: string; sealNumber: string | null; loadedUnits: number; bolRequested: boolean }> {
     const p = command.payload;
 
     const plan = await tx.loadPlan.findUnique({
@@ -75,6 +75,12 @@ export class CompleteLoadPlanCommandHandler extends BaseCommandHandler<
       },
     });
 
+    // Sealing a trailer is a warehouse act; the Bill of Lading is a transport document. The
+    // warehouse says a BOL was asked for and stops there. A TMS subscriber generates it and
+    // emits load_plan.bol_generated. A standalone FinnWMS has no subscriber, produces no BOL,
+    // and completes the load perfectly happily.
+    const bolRequested = (p.generateBol ?? true) && plan.shipmentId !== null;
+
     emit(this.createEvent(command, {
       type: EVENT_TYPES.LOAD_PLAN_COMPLETED,
       entityType: 'load_plan',
@@ -85,34 +91,17 @@ export class CompleteLoadPlanCommandHandler extends BaseCommandHandler<
         sealNumber: p.sealNumber ?? plan.sealNumber,
         dockBinId: plan.dockBinId,
         carrierId: plan.carrierId,
+        trailerNumber: plan.trailerNumber,
+        bolRequested,
       },
     }));
-
-    // BOL generation - emit event that triggers async generation
-    // The actual PDF generation would be handled by an event handler
-    // that calls DocumentGenerationService.generateBOL()
-    let bolGenerated = false;
-    if ((p.generateBol ?? true) && plan.shipmentId) {
-      emit(this.createEvent(command, {
-        type: EVENT_TYPES.LOAD_PLAN_BOL_GENERATED,
-        entityType: 'load_plan',
-        entityId: plan.id,
-        payload: {
-          shipmentId: plan.shipmentId,
-          loadPlanId: plan.id,
-          sealNumber: p.sealNumber ?? plan.sealNumber,
-          trailerNumber: plan.trailerNumber,
-        },
-      }));
-      bolGenerated = true;
-    }
 
     return {
       id: plan.id,
       status: 'completed',
       sealNumber: p.sealNumber ?? plan.sealNumber,
       loadedUnits: loadedLines.length,
-      bolGenerated,
+      bolRequested,
     };
   }
 }
