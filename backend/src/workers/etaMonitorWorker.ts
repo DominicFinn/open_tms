@@ -9,16 +9,12 @@
  * Default cron: * /10 * * * * (every 10 minutes)
  */
 
-import { PrismaClient } from '@prisma/client';
 import { IShipmentEtaMonitorService } from '../services/routing/ShipmentEtaMonitorService.js';
 
 /**
  * Creates the ETA monitor worker function for pg-boss.
  */
-export function createEtaMonitorWorker(
-  prisma: PrismaClient,
-  etaMonitorService: IShipmentEtaMonitorService,
-) {
+export function createEtaMonitorWorker(etaMonitorService: IShipmentEtaMonitorService) {
   return async () => {
     console.log('[EtaMonitorWorker] Starting ETA monitoring cycle');
 
@@ -33,29 +29,10 @@ export function createEtaMonitorWorker(
         `errors: ${result.errorsEncountered}`,
       );
 
-      // Log summary to database for observability
-      await prisma.webhookLog.create({
-        data: {
-          id: result.runId,
-          orgId: 'system',
-          provider: 'eta-monitor',
-          direction: 'internal',
-          rawPayload: {
-            type: 'eta_monitor_run',
-            shipmentsChecked: result.shipmentsChecked,
-            shipmentsSkipped: result.shipmentsSkipped,
-            delaysDetected: result.delaysDetected,
-            errorsEncountered: result.errorsEncountered,
-            startedAt: result.startedAt,
-            completedAt: result.completedAt,
-          },
-          status: result.errorsEncountered > 0 ? 'partial' : 'success',
-          processedAt: new Date(),
-        },
-      }).catch((logErr: Error) => {
-        // Non-critical: if logging fails, don't break the worker
-        console.warn('[EtaMonitorWorker] Failed to log run summary:', logErr.message);
-      });
+      // The run summary used to be written to WebhookLog. That table records
+      // inbound HTTP webhooks and has no column for an internal run, so the
+      // write never compiled and never ran. The console summary above is the
+      // record; a proper counter belongs on /metrics.
     } catch (err) {
       console.error('[EtaMonitorWorker] Fatal error in ETA monitoring cycle:', (err as Error).message);
       throw err; // Let pg-boss retry

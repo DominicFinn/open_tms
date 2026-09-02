@@ -6,7 +6,7 @@
  * - Creates its own PrismaClient with its own connection pool
  * - Creates its own PgBossQueueAdapter
  * - Registers event handlers (audit, notifications, email, webhooks, triage)
- * - Optionally runs the existing operational workers (outbound carrier/tracking, inbound webhook)
+ * - Optionally runs the existing operational workers (inbound webhook)
  *
  * The API server (index.ts) only publishes events — this process consumes them.
  * This ensures workers never starve the API of resources (CPU, memory, connections).
@@ -24,8 +24,6 @@ import { PgBossQueueAdapter } from './queue/PgBossQueueAdapter.js';
 import { PgBossEventBus } from './events/PgBossEventBus.js';
 import { registerEventHandlers } from './events/registerHandlers.js';
 import { QUEUES } from './queue/events.js';
-import { createOutboundCarrierWorker } from './workers/outboundCarrierWorker.js';
-import { createOutboundTrackingWorker } from './workers/outboundTrackingWorker.js';
 import { createInboundWebhookWorker } from './workers/inboundWebhookWorker.js';
 import { OrderDeliveryService } from './services/OrderDeliveryService.js';
 import { IEmailService } from './services/IEmailService.js';
@@ -70,11 +68,11 @@ async function startWorker() {
   await queue.start();
   console.log('[Worker] Queue adapter started');
 
-  // Integration workers (outbound carrier, outbound tracking, inbound webhook)
+  // Integration workers (inbound webhook). The legacy outbound carrier and
+  // outbound tracking workers were removed — outbound EDI is now driven by
+  // Edi856AutoSendHandler and Edi810AutoSendHandler off domain events.
   if (WORKER_MODE === 'all' || WORKER_MODE === 'integrations') {
     const deliveryService = new OrderDeliveryService(prisma);
-    await queue.subscribe(QUEUES.OUTBOUND_CARRIER, createOutboundCarrierWorker(prisma));
-    await queue.subscribe(QUEUES.OUTBOUND_TRACKING, createOutboundTrackingWorker(prisma));
     await queue.subscribe(QUEUES.INBOUND_WEBHOOK, createInboundWebhookWorker(prisma, deliveryService));
     console.log('[Worker] Integration workers registered');
   }
