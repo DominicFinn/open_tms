@@ -37,10 +37,11 @@ Roughly 50-65 PR-sized chunks end to end; every PR leaves the product shippable.
   engine (never reach triage), WMS permission family (currently none exists), issue engine
   hardcoded to `shipment` (blocks WMS issues reaching the Triage Centre), magic-link token
   scoping, qualityCentre org-scope violation
-- **Phase 1: Draw the boundary in code** 🔨 Boundary lint ✅ (#159), Prisma multi-file schema
-  split ✅ (#161), DI registration split ✅ (#164), route registration split ✅ (#166),
-  `WmsFulfilmentOrder` projection ✅ (#168), load-plan port/event seam. One new WMS read model,
-  no changes to existing tables
+- **Phase 1: Draw the boundary in code** ✅ (#159-#173; Sep 2026) Boundary lint ✅ (#159), Prisma
+  multi-file schema split ✅ (#161), DI registration split ✅ (#164), route registration
+  split ✅ (#166),
+  `WmsFulfilmentOrder` projection ✅ (#168), load-plan event seam ✅ (#173). One new WMS read
+  model, no changes to existing tables
 - **Phase 2: Data model untangling** 🔲 `Facility` (WMS off the conflated `Location`),
   `HandlingUnit` (stock without a TMS order), polymorphic `Allocation` demand ref, carton cleanup,
   `OrgWmsSettings` carve-out. All expand→contract
@@ -682,10 +683,11 @@ Base login (email + password, JWT, admin password reset, RequireAuth guard, glob
 
 ## Priorities
 
-0. **NOW:** **Track 0 Phase 0 (split pre-work)** - Bug fixes worth doing whether or not the split
-   proceeds: tenancy leak on warehouse locations, pack-audit issues never reaching triage, WMS
-   permissions, issue engine accepting WMS sources. Phases 1-2 (boundary + data untangling) follow
-   behind them, and the other tracks build on that work.
+0. **NOW:** **Track 0 Phase 2 (data model untangling)** - Phases 0 and 1 are done: the bug fixes
+   shipped, and the boundary is drawn in code and enforced by `npm run lint:boundaries`. Phase 2 is
+   the one that makes a standalone FinnWMS possible: `Facility` (WMS off the conflated `Location`),
+   `HandlingUnit` (stock without a TMS order), and a polymorphic `Allocation` demand ref. Start
+   with 2a, and batch it.
    See [docs/roadmap/split-finntms-finnwms.md](docs/roadmap/split-finntms-finnwms.md).
 1. **NEXT (Immediate):** **Carrier API Integration** - Real-time shipment tracking through carrier APIs is table stakes. FedEx/UPS/DHL first-party tracking already exist (real, sandbox-ready). Expand with **multi-carrier aggregators** (EasyPost, AfterShip) so one integration pools dozens of carriers, then broaden. Poll + webhook, all sandbox/ngrok-testable. Landscape + selection in `docs/CARRIER_INTEGRATIONS.md`; testing in `docs/CARRIER_TESTING.md`.
 2. **Immediate:** **Track 1 (Brokerage)** - Broker entity model, margin tracking, quoting workflow. This unlocks the largest market segment currently unserved.

@@ -150,7 +150,12 @@ async function start() {
       // DISABLE_EMBEDDED_WORKERS=true keeps these out so they aren't processed twice.
       try {
         const eventBus = container.resolve<IEventBus>(TOKENS.IEventBus);
-        await registerEventHandlers(eventBus, server.prisma);
+        const documentService = container.has(TOKENS.IDocumentGenerationService)
+          ? container.resolve<IDocumentGenerationService>(TOKENS.IDocumentGenerationService)
+          : undefined;
+        await registerEventHandlers(
+          eventBus, server.prisma, undefined, undefined, undefined, undefined, undefined, documentService
+        );
         await eventBus.start();
         server.log.info('Embedded event handlers registered (projections + audit + notifications)');
       } catch (err) {

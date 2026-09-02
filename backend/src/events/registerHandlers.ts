@@ -55,6 +55,8 @@ import { CarrierArchivalNotificationHandler } from './handlers/CarrierArchivalNo
 import { MarginAlertHandler } from './handlers/MarginAlertHandler.js';
 import { AutoReplenishmentHandler } from './handlers/AutoReplenishmentHandler.js';
 import { PackAuditIssueLinkHandler } from './handlers/PackAuditIssueLinkHandler.js';
+import { BolGenerationHandler } from './handlers/BolGenerationHandler.js';
+import { IDocumentGenerationService } from '../services/DocumentGenerationService.js';
 
 /** Read concurrency from env with a default */
 function envInt(key: string, fallback: number): number {
@@ -79,6 +81,7 @@ const CONCURRENCY_OVERRIDES: Record<string, () => number> = {
   'projection.agent_decision': () => envInt('PROJECTION_CONCURRENCY', 3),
   'projection.quality_issue_summary': () => envInt('PROJECTION_CONCURRENCY', 2),
   'projection.wms_fulfilment_order': () => envInt('PROJECTION_CONCURRENCY', 3),
+  'document.bol_generation': () => envInt('DOCUMENT_CONCURRENCY', 2),
   'notification.email': () => envInt('EMAIL_CONCURRENCY', 2),
   'agent.triage': () => envInt('AGENT_TRIAGE_CONCURRENCY', 2),
   'automation.rules': () => envInt('AUTOMATION_RULES_CONCURRENCY', 4),
@@ -92,6 +95,7 @@ export async function registerEventHandlers(
   llmProvider?: ILlmProvider,
   commandBus?: ICommandBus,
   skillRegistry?: SkillRegistry,
+  documentService?: IDocumentGenerationService,
 ): Promise<void> {
   const handlers: IEventHandler[] = [
     new AuditHandler(prisma),
@@ -118,6 +122,12 @@ export async function registerEventHandlers(
   }
 
   // Add cold chain compliance handler if storage provider is available
+  // The transport side of the load-plan seam. Without it a load still completes and seals; it
+  // just produces no BOL, which is exactly what a standalone FinnWMS wants.
+  if (documentService) {
+    handlers.push(new BolGenerationHandler(prisma, documentService, eventBus));
+  }
+
   if (storageProvider) {
     handlers.push(new ColdChainComplianceHandler(prisma, storageProvider));
     handlers.push(new IssueClosureReportHandler(prisma, storageProvider));

@@ -150,7 +150,7 @@ export default function VNextWmsLoadPlan() {
       if (data.error) setError(data.error);
       else {
         const r = data.data;
-        setSuccess(`Load plan completed. ${r.loadedUnits} units loaded.${r.bolGenerated ? ' BOL generated.' : ''}${r.bolError ? ` BOL warning: ${r.bolError}` : ''}`);
+        setSuccess(`Load plan completed. ${r.loadedUnits} units loaded.${r.bolRequested ? ' BOL is being generated and will appear on the load plan shortly.' : ''}`);
         setCompleting(null); setSealNumber(''); loadData();
       }
     } catch { setError('Failed'); }
@@ -161,7 +161,7 @@ export default function VNextWmsLoadPlan() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Load Plans</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Plan outbound loads with reverse load-sequence and auto BOL generation</p>
+          <p className="mt-1 text-sm text-muted-foreground">Plan outbound loads with reverse load-sequence and automatic BOL generation</p>
         </div>
         <Button variant="gradient" onClick={() => setShowCreate(true)} disabled={staged.length === 0}>
           <Plus className="h-4 w-4" />

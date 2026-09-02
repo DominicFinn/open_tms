@@ -616,7 +616,9 @@ export const EVENT_SCHEMA_VERSIONS: Record<string, number> = {
   [EVENT_TYPES.REPLENISHMENT_TRIGGERED]: 1,
   [EVENT_TYPES.LOAD_PLAN_CREATED]: 1,
   [EVENT_TYPES.LOAD_PLAN_COMPLETED]: 1,
-  [EVENT_TYPES.LOAD_PLAN_BOL_GENERATED]: 1,
+  // v2: emitted by the TMS subscriber after the document exists, carrying documentId and
+  // fileName. v1 was emitted by WMS to mean 'a BOL was asked for', which the name never said.
+  [EVENT_TYPES.LOAD_PLAN_BOL_GENERATED]: 2,
   [EVENT_TYPES.CROSS_DOCK_SORTED]: 1,
   [EVENT_TYPES.RMA_REQUESTED]: 1,
   [EVENT_TYPES.RMA_AUTHORIZED]: 1,
