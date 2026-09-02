@@ -31,6 +31,7 @@ Deploy your own Open TMS instance with one click:
 | **Google Cloud** | [![Open in Cloud Shell](https://gstatic.com/cloudssh/images/open-btn.svg)](https://shell.cloud.google.com/cloudshell/editor?cloudshell_git_repo=https://github.com/dominicfinn/open_tms&cloudshell_tutorial=DEPLOYMENT.md) | Cloud Run + Cloud SQL (guided setup) |
 | **AWS** | See [`cloudformation.yaml`](./cloudformation.yaml) | ECS Fargate + RDS PostgreSQL + ALB |
 | **Docker** | `docker compose up` | Local development stack |
+| **Your own server** | See [`docs/SELF_HOSTING.md`](docs/SELF_HOSTING.md) | Node + PostgreSQL + object storage + a reverse proxy, no managed services |
 
 > **AWS note:** Upload `cloudformation.yaml` to an S3 bucket, then use the [Launch Stack](https://console.aws.amazon.com/cloudformation/home#/stacks/new) wizard — or deploy via CLI:
 > ```bash
@@ -40,7 +41,7 @@ Deploy your own Open TMS instance with one click:
 >   --capabilities CAPABILITY_IAM
 > ```
 
-> **After deployment:** Visit `POST /api/v1/auth/setup` to create your initial admin user, then seed demo data via `POST /api/v1/seed`.
+> **After deployment:** There is no self-registration or setup endpoint, and `POST /api/v1/seed` is disabled when `NODE_ENV=production`. Create your first login by running the seed script against the database: `cd backend && npx tsx src/scripts/comprehensive-seed.ts`. It prints the demo credentials when it finishes, and wipes existing data unless you pass `--no-wipe`.
 
 ## ✨ Features
 
