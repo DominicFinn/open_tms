@@ -142,7 +142,8 @@ export default function VNextCarrierBidding() {
       mapInstance.current = null;
     }
 
-    const map = L.map(mapRef.current, { zoomControl: true, attributionControl: false, ...worldBoundsMapOptions }).setView([39.5, -98.5], 4);
+    // Attribution stays on: the OpenStreetMap licence requires it.
+    const map = L.map(mapRef.current, { zoomControl: true, ...worldBoundsMapOptions }).setView([39.5, -98.5], 4);
     addBaseTileLayer(map);
     capWorldZoomOut(map);
 

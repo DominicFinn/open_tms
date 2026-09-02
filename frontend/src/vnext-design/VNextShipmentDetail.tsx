@@ -1691,7 +1691,6 @@ export default function VNextShipmentDetail() {
     setMapLoading(true);
     const map = L.map(mapRef.current, {
       zoomControl: true,
-      attributionControl: false,
       ...worldBoundsMapOptions,
     });
     const tiles = createBaseTileLayer();
