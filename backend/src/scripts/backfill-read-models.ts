@@ -1,26 +1,28 @@
 /**
- * Backfill script — populates all read models from existing data in the
- * write model tables.
+ * Backfill script — populates read models from existing data in the write model tables.
  *
- * Run once after deploying CQRS migrations, then projections keep read
- * models in sync via events.
+ * A projection only fills a read model from events that happen after it deploys, so a newly
+ * added read model arrives empty and its features fail silently. Run this after deploying one,
+ * and the projections keep it in sync from there.
+ *
+ * Every row is written with its own source record's orgId. Never resolve a single org for the
+ * whole run: the queries are deliberately org-wide, and stamping one org's id across them would
+ * hand one tenant another tenant's rows through the read model. See the security rule.
  *
  * Usage:
  *   npx tsx backend/src/scripts/backfill-read-models.ts
+ *   npx tsx backend/src/scripts/backfill-read-models.ts --only=wmsFulfilmentOrders
+ *   npx tsx backend/src/scripts/backfill-read-models.ts --only=orders,shipments
  */
 
 import { PrismaClient } from '@prisma/client';
+import { selectSteps, type BackfillStep } from './backfillSteps.js';
 import { OrderFulfilmentDemandSource } from '../services/fulfilment/OrderFulfilmentDemandSource.js';
 import { WmsFulfilmentOrderProjection } from '../events/projections/WmsFulfilmentOrderProjection.js';
 
 const prisma = new PrismaClient();
 
-async function getOrgId(): Promise<string> {
-  const org = await prisma.organization.findFirst({ select: { id: true } });
-  return org?.id || 'default';
-}
-
-async function backfillOrders(orgId: string): Promise<number> {
+async function backfillOrders(): Promise<number> {
   const orders = await prisma.order.findMany({
     where: { archived: false },
     include: {
@@ -52,7 +54,7 @@ async function backfillOrders(orgId: string): Promise<number> {
       where: { id: order.id },
       create: {
         id: order.id,
-        orgId,
+        orgId: order.orgId,
         orderNumber: order.orderNumber,
         poNumber: order.poNumber,
         status: order.status,
@@ -96,7 +98,7 @@ async function backfillOrders(orgId: string): Promise<number> {
   return count;
 }
 
-async function backfillShipments(orgId: string): Promise<number> {
+async function backfillShipments(): Promise<number> {
   const shipments = await prisma.shipment.findMany({
     where: { archived: false },
     include: {
@@ -116,7 +118,7 @@ async function backfillShipments(orgId: string): Promise<number> {
       where: { id: shipment.id },
       create: {
         id: shipment.id,
-        orgId,
+        orgId: shipment.orgId,
         reference: shipment.reference,
         status: shipment.status,
         customerName: shipment.customer.name,
@@ -155,7 +157,7 @@ async function backfillShipments(orgId: string): Promise<number> {
   return count;
 }
 
-async function backfillCarriers(orgId: string): Promise<number> {
+async function backfillCarriers(): Promise<number> {
   const carriers = await prisma.carrier.findMany({
     where: { archived: false },
     include: {
@@ -171,7 +173,7 @@ async function backfillCarriers(orgId: string): Promise<number> {
       where: { id: carrier.id },
       create: {
         id: carrier.id,
-        orgId,
+        orgId: carrier.orgId,
         name: carrier.name,
         mcNumber: carrier.mcNumber,
         dotNumber: carrier.dotNumber,
@@ -198,7 +200,7 @@ async function backfillCarriers(orgId: string): Promise<number> {
   return count;
 }
 
-async function backfillCustomers(orgId: string): Promise<number> {
+async function backfillCustomers(): Promise<number> {
   const customers = await prisma.customer.findMany({
     where: { archived: false },
     include: {
@@ -216,7 +218,7 @@ async function backfillCustomers(orgId: string): Promise<number> {
       where: { id: customer.id },
       create: {
         id: customer.id,
-        orgId,
+        orgId: customer.orgId,
         name: customer.name,
         contactEmail: customer.contactEmail,
         activeOrderCount: activeOrders,
@@ -237,7 +239,7 @@ async function backfillCustomers(orgId: string): Promise<number> {
   return count;
 }
 
-async function backfillLanes(orgId: string): Promise<number> {
+async function backfillLanes(): Promise<number> {
   const lanes = await prisma.lane.findMany({
     where: { archived: false },
     include: {
@@ -254,7 +256,7 @@ async function backfillLanes(orgId: string): Promise<number> {
       where: { id: lane.id },
       create: {
         id: lane.id,
-        orgId,
+        orgId: lane.orgId,
         name: lane.name,
         originName: lane.origin.name,
         originCity: lane.origin.city,
@@ -428,33 +430,25 @@ async function backfillWmsFulfilmentOrders(): Promise<number> {
   return count;
 }
 
+const STEPS: readonly BackfillStep[] = [
+  { name: 'orders', label: 'orders', run: backfillOrders },
+  { name: 'shipments', label: 'shipments', run: backfillShipments },
+  { name: 'carriers', label: 'carriers', run: backfillCarriers },
+  { name: 'customers', label: 'customers', run: backfillCustomers },
+  { name: 'lanes', label: 'lanes', run: backfillLanes },
+  { name: 'issues', label: 'issues', run: backfillIssues },
+  { name: 'agentDecisions', label: 'agent decisions', run: backfillAgentDecisions },
+  { name: 'wmsFulfilmentOrders', label: 'warehouse fulfilment orders', run: backfillWmsFulfilmentOrders },
+];
+
 async function main() {
-  console.log('[Backfill] Starting read model backfill...');
-  const orgId = await getOrgId();
+  const selected = selectSteps(process.argv.slice(2), STEPS);
+  console.log(`[Backfill] Starting read model backfill (${selected.map((s) => s.name).join(', ')})...`);
 
-  const orderCount = await backfillOrders(orgId);
-  console.log(`[Backfill] ${orderCount} orders`);
-
-  const shipmentCount = await backfillShipments(orgId);
-  console.log(`[Backfill] ${shipmentCount} shipments`);
-
-  const carrierCount = await backfillCarriers(orgId);
-  console.log(`[Backfill] ${carrierCount} carriers`);
-
-  const customerCount = await backfillCustomers(orgId);
-  console.log(`[Backfill] ${customerCount} customers`);
-
-  const laneCount = await backfillLanes(orgId);
-  console.log(`[Backfill] ${laneCount} lanes`);
-
-  const issueCount = await backfillIssues();
-  console.log(`[Backfill] ${issueCount} issues`);
-
-  const agentDecisionCount = await backfillAgentDecisions();
-  console.log(`[Backfill] ${agentDecisionCount} agent decisions`);
-
-  const fulfilmentCount = await backfillWmsFulfilmentOrders();
-  console.log(`[Backfill] ${fulfilmentCount} warehouse fulfilment orders`);
+  for (const step of selected) {
+    const count = await step.run();
+    console.log(`[Backfill] ${count} ${step.label}`);
+  }
 
   console.log('[Backfill] Done.');
 }
