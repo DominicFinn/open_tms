@@ -7,7 +7,8 @@ The write path for this codebase. Applies to every entity and feature.
 - All write operations go through command handlers in `backend/src/commands/`
 - Commands execute inside `prisma.$transaction()` via `BaseCommandHandler`
 - Events are collected during execution and published AFTER the transaction commits
-- Register new handlers in `backend/src/di/registry.ts` inside the CommandBus factory
+- Register new handlers in `backend/src/di/modules/<module>.ts`, in that module's
+  `register<Module>CommandHandlers` function. See the module-boundaries rule
 - Routes dispatch commands: `commandBus.dispatch({ type, orgId, actorId, payload, metadata })`
 
 ## Events & Projections

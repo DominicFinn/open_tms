@@ -19,7 +19,7 @@ describe('CreateWaveCommandHandler', () => {
         create: jest.fn().mockResolvedValue(mockWave),
       },
       waveOrder: { createMany: jest.fn().mockResolvedValue({ count: 2 }) },
-      orderLineItem: { count: jest.fn().mockResolvedValue(5) },
+      wmsFulfilmentOrderLine: { count: jest.fn().mockResolvedValue(5) },
       domainEventLog: { create: jest.fn().mockResolvedValue({}) },
     } as any;
     const prisma = {
@@ -70,9 +70,9 @@ describe('ReleaseWaveCommandHandler', () => {
       pickStrategy: 'discrete', orgId: 'test-org',
       waveOrders: [{ orderId: 'order-1', priority: 0 }],
     };
-    const mockOrderLine = {
-      id: 'line-1', orderId: 'order-1', sku: 'SKU-001', quantity: 5,
-      order: { id: 'order-1' },
+    const mockDemandLine = {
+      sourceLineId: 'line-1', sku: 'SKU-001', quantity: 5,
+      fulfilmentOrder: { sourceId: 'order-1' },
     };
     const mockInv = {
       id: 'inv-1', sku: 'SKU-001', quantityAvailable: 10, uomCode: 'EA', lotNumber: null,
@@ -83,7 +83,7 @@ describe('ReleaseWaveCommandHandler', () => {
         findUnique: jest.fn().mockResolvedValue(mockWave),
         update: jest.fn().mockResolvedValue({}),
       },
-      orderLineItem: { findMany: jest.fn().mockResolvedValue([mockOrderLine]) },
+      wmsFulfilmentOrderLine: { findMany: jest.fn().mockResolvedValue([mockDemandLine]) },
       inventoryRecord: {
         findMany: jest.fn().mockResolvedValue([mockInv]),
         update: jest.fn().mockResolvedValue({}),
@@ -134,9 +134,9 @@ describe('ReleaseWaveCommandHandler', () => {
       pickStrategy: 'batch', orgId: 'test-org',
       waveOrders: [{ orderId: 'order-1', priority: 0 }],
     };
-    const mockOrderLine = {
-      id: 'line-1', orderId: 'order-1', sku: 'SKU-001', quantity: 50,
-      order: { id: 'order-1' },
+    const mockDemandLine = {
+      sourceLineId: 'line-1', sku: 'SKU-001', quantity: 50,
+      fulfilmentOrder: { sourceId: 'order-1' },
     };
     // Only 10 available, need 50
     const mockInv = {
@@ -148,7 +148,7 @@ describe('ReleaseWaveCommandHandler', () => {
         findUnique: jest.fn().mockResolvedValue(mockWave),
         update: jest.fn().mockResolvedValue({}),
       },
-      orderLineItem: { findMany: jest.fn().mockResolvedValue([mockOrderLine]) },
+      wmsFulfilmentOrderLine: { findMany: jest.fn().mockResolvedValue([mockDemandLine]) },
       inventoryRecord: {
         findMany: jest.fn().mockResolvedValue([mockInv]),
         update: jest.fn().mockResolvedValue({}),

@@ -39,8 +39,8 @@ Roughly 50-65 PR-sized chunks end to end; every PR leaves the product shippable.
   scoping, qualityCentre org-scope violation
 - **Phase 1: Draw the boundary in code** 🔨 Boundary lint ✅ (#159), Prisma multi-file schema
   split ✅ (#161), DI registration split ✅ (#164), route registration split ✅ (#166),
-  `WmsFulfilmentOrder` projection (first WMS read model), load-plan port/event seam.
-  Zero schema changes
+  `WmsFulfilmentOrder` projection ✅ (#168), load-plan port/event seam. One new WMS read model,
+  no changes to existing tables
 - **Phase 2: Data model untangling** 🔲 `Facility` (WMS off the conflated `Location`),
   `HandlingUnit` (stock without a TMS order), polymorphic `Allocation` demand ref, carton cleanup,
   `OrgWmsSettings` carve-out. All expand→contract

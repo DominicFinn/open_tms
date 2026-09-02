@@ -39,6 +39,8 @@ import { TradingPartnerRepository } from '../repositories/TradingPartnerReposito
 import { IBinaryStorageProvider } from '../storage/IBinaryStorageProvider.js';
 import { AgentDecisionProjection } from './projections/AgentDecisionProjection.js';
 import { QualityIssueSummaryProjection } from './projections/QualityIssueSummaryProjection.js';
+import { WmsFulfilmentOrderProjection } from './projections/WmsFulfilmentOrderProjection.js';
+import { OrderFulfilmentDemandSource } from '../services/fulfilment/OrderFulfilmentDemandSource.js';
 import { TriageAgentHandler } from './handlers/TriageAgentHandler.js';
 import { AutomationRuleHandler } from './handlers/AutomationRuleHandler.js';
 import { ILlmProvider } from '../services/llm/ILlmProvider.js';
@@ -76,6 +78,7 @@ const CONCURRENCY_OVERRIDES: Record<string, () => number> = {
   'projection.issue': () => envInt('PROJECTION_CONCURRENCY', 3),
   'projection.agent_decision': () => envInt('PROJECTION_CONCURRENCY', 3),
   'projection.quality_issue_summary': () => envInt('PROJECTION_CONCURRENCY', 2),
+  'projection.wms_fulfilment_order': () => envInt('PROJECTION_CONCURRENCY', 3),
   'notification.email': () => envInt('EMAIL_CONCURRENCY', 2),
   'agent.triage': () => envInt('AGENT_TRIAGE_CONCURRENCY', 2),
   'automation.rules': () => envInt('AUTOMATION_RULES_CONCURRENCY', 4),
@@ -104,6 +107,9 @@ export async function registerEventHandlers(
     new IssueProjection(prisma),
     new AgentDecisionProjection(prisma),
     new QualityIssueSummaryProjection(prisma),
+    // Warehouse demand. Reads TMS orders through the port so the projection itself stays
+    // inside WMS. See .claude/rules/module-boundaries.md.
+    new WmsFulfilmentOrderProjection(prisma, new OrderFulfilmentDemandSource(prisma)),
   ];
 
   // Add email handler if email service is available

@@ -37,9 +37,14 @@ Two sanctioned ways, in order of preference:
 
 1. **A domain event.** The far side subscribes. Consumers must be idempotent, since events are
    redelivered. This is the default.
-2. **A DI-resolved port.** An interface owned by the *calling* module, implemented by the other one
+2. **A DI-resolved port.** An interface the calling module depends on, implemented by the other one
    and registered in the container. Use this only when the call has to be synchronous and return a
    value.
+
+   Port interfaces live in `backend/src/ports/`, which is core. They cannot sit in the calling
+   module, because the implementing side would then have to import it, and tms may not import wms
+   in either direction. `IFulfilmentDemandSource` is the worked example: WMS calls it, TMS
+   implements it over `Order`, and a standalone FinnWMS registers something else entirely.
 
 Direct imports across a disallowed edge, and reaching into another module's Prisma models, are both
 out. No FK crosses the tms/wms boundary either. References there are soft string ids.

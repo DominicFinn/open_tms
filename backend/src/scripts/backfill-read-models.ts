@@ -10,6 +10,8 @@
  */
 
 import { PrismaClient } from '@prisma/client';
+import { OrderFulfilmentDemandSource } from '../services/fulfilment/OrderFulfilmentDemandSource.js';
+import { WmsFulfilmentOrderProjection } from '../events/projections/WmsFulfilmentOrderProjection.js';
 
 const prisma = new PrismaClient();
 
@@ -410,6 +412,22 @@ async function backfillAgentDecisions(): Promise<number> {
   return count;
 }
 
+/**
+ * Warehouse demand. Runs the projection itself rather than a second copy of its mapping, so
+ * the backfill cannot drift from the live path.
+ */
+async function backfillWmsFulfilmentOrders(): Promise<number> {
+  const demandSource = new OrderFulfilmentDemandSource(prisma);
+  const projection = new WmsFulfilmentOrderProjection(prisma, demandSource);
+
+  let count = 0;
+  for (const { orgId, sourceId } of await demandSource.listSourceIds()) {
+    await projection.project(orgId, sourceId);
+    count++;
+  }
+  return count;
+}
+
 async function main() {
   console.log('[Backfill] Starting read model backfill...');
   const orgId = await getOrgId();
@@ -434,6 +452,9 @@ async function main() {
 
   const agentDecisionCount = await backfillAgentDecisions();
   console.log(`[Backfill] ${agentDecisionCount} agent decisions`);
+
+  const fulfilmentCount = await backfillWmsFulfilmentOrders();
+  console.log(`[Backfill] ${fulfilmentCount} warehouse fulfilment orders`);
 
   console.log('[Backfill] Done.');
 }

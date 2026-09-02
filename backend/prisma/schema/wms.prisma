@@ -677,3 +677,77 @@ model ReplenishmentRule {
   @@index([orgId])
   @@index([sku])
 }
+
+// ═══════════════════════════════════════════════════════════════
+// Fulfilment demand — the warehouse's own view of what to ship
+// ═══════════════════════════════════════════════════════════════
+
+/// Table role: read model. Built by WmsFulfilmentOrderProjection from TMS order events
+/// today, and directly from a 940, an API call or a manifest in a standalone FinnWMS.
+///
+/// The reference back to whatever created the demand is a soft (sourceType, sourceId) pair,
+/// never a foreign key: a WMS-only install has no Order table to point at.
+model WmsFulfilmentOrder {
+  id String @id @default(uuid())
+
+  orgId String
+
+  /// tms_order | edi_940 | api | manifest
+  sourceType String @default("tms_order")
+  sourceId   String
+
+  orderNumber String
+  poNumber    String?
+
+  /// Carried verbatim from the source so wave template rules keep matching on it.
+  /// WMS treats it as opaque apart from those rules and the archived/cancelled exclusions.
+  status String @default("pending")
+
+  customerId   String?
+  customerName String?
+
+  /// Where the goods ship from. A Location today; Phase 2a re-points this at Facility.
+  originLocationId String?
+
+  serviceLevel          String?
+  temperatureControl    String?
+  hazmat                Boolean   @default(false)
+  requestedPickupDate   DateTime?
+  requestedDeliveryDate DateTime?
+
+  lineCount     Int @default(0)
+  totalQuantity Int @default(0)
+
+  sourceCreatedAt DateTime
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  lines WmsFulfilmentOrderLine[]
+
+  @@unique([orgId, sourceType, sourceId])
+  @@index([orgId, status])
+}
+
+/// Table role: read model. One row per line of demand, rebuilt whenever the source changes.
+model WmsFulfilmentOrderLine {
+  id                String             @id @default(uuid())
+  fulfilmentOrderId String
+  fulfilmentOrder   WmsFulfilmentOrder @relation(fields: [fulfilmentOrderId], references: [id], onDelete: Cascade)
+
+  orgId String
+
+  /// Soft reference to the source line. Allocation still keys off this id until Phase 2c
+  /// makes the demand reference polymorphic.
+  sourceLineId String
+
+  sku           String
+  description   String?
+  quantity      Int     @default(0)
+  unitOfMeasure String  @default("each")
+  weight        Float?
+  hazmat        Boolean @default(false)
+  temperature   String?
+
+  @@unique([fulfilmentOrderId, sourceLineId])
+  @@index([orgId, sku])
+}
