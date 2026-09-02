@@ -44,7 +44,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
-const NOTE_TAGS: {
+export const NOTE_TAGS: {
   key: string;
   label: string;
   variant?: 'destructive' | 'info';
