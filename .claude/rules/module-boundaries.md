@@ -67,20 +67,25 @@ stale.
 
 ## Registering a module
 
-Each module registers its own repositories, services and command handlers in
-`backend/src/di/modules/<module>.ts`, exporting `register<Module>Dependencies(prisma)` and
-`register<Module>CommandHandlers(bus, deps)`. `di/registry.ts` is the composition root: it calls
-them and does nothing else.
+A module registers itself in two places, both named after it:
 
-Put a new binding in its module's file. A binding that ends up in the composition root is a sign
-the design has a cross-module dependency that wants an event or a port instead.
+- `backend/src/di/modules/<module>.ts` — `register<Module>Dependencies(prisma)` and
+  `register<Module>CommandHandlers(bus, deps)`
+- `backend/src/routes/modules/<module>.ts` — `register<Module>PublicRoutes(server)` for routes that
+  authenticate themselves, and `register<Module>AuthenticatedRoutes(app)` for routes inside the JWT
+  scope
+
+`di/registry.ts` and `index.ts` are the composition roots: they call these and own nothing else.
+
+Put a new binding or route in its module's file. Anything that ends up in a composition root is a
+sign the design has a cross-module dependency that wants an event or a port instead.
 
 ## Composition roots and exemptions
 
 `index.ts`, `worker.ts`, `di/registry.ts`, `commands/index.ts` and `events/registerHandlers.ts`
-wire every module together, which is their job, so the check skips them. The per-module DI files
-are not exempt: each is checked against its own module's dependencies. Tests and `scripts/` are
-exempt too.
+wire every module together, which is their job, so the check skips them. The per-module DI and
+route files are not exempt: each is checked against its own module's dependencies. Tests and
+`scripts/` are exempt too.
 
 ## What the check does not catch yet
 
