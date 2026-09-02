@@ -28,6 +28,14 @@ export const EVENT_TYPES = {
   SHIPMENT_UNARCHIVED: 'shipment.unarchived',
   SHIPMENT_DELETED: 'shipment.deleted',
 
+  // Shipment sharing — public links to a redacted shipment view.
+  // Payloads carry the link id and the granted sections only. The access code, the URL token
+  // and the viewer's email never appear on an event.
+  SHIPMENT_SHARE_LINK_CREATED: 'shipment.share_link_created',
+  SHIPMENT_SHARE_LINK_UPDATED: 'shipment.share_link_updated',
+  SHIPMENT_SHARE_LINK_REVOKED: 'shipment.share_link_revoked',
+  SHIPMENT_SHARE_LINK_ACCESSED: 'shipment.share_link_accessed',
+
   // Orders
   ORDER_CREATED: 'order.created',
   ORDER_UPDATED: 'order.updated',
@@ -397,6 +405,10 @@ export const EVENT_SCHEMA_VERSIONS: Record<string, number> = {
   [EVENT_TYPES.SHIPMENT_ARCHIVED]: 1,
   [EVENT_TYPES.SHIPMENT_UNARCHIVED]: 1,
   [EVENT_TYPES.SHIPMENT_DELETED]: 1,
+  [EVENT_TYPES.SHIPMENT_SHARE_LINK_CREATED]: 1,
+  [EVENT_TYPES.SHIPMENT_SHARE_LINK_UPDATED]: 1,
+  [EVENT_TYPES.SHIPMENT_SHARE_LINK_REVOKED]: 1,
+  [EVENT_TYPES.SHIPMENT_SHARE_LINK_ACCESSED]: 1,
   // v2 added optional `packingSummary` (Phase 1 cartonization). All v2 additions
   // are nullable / optional — v1-style payloads remain valid as long as
   // emitters set the new fields to null when unused (see AcceptQuoteCommand).

@@ -88,6 +88,8 @@ import {
 } from '@/components/ui/select';
 import { DatePicker } from '@/components/ui/date-picker';
 import { cn } from '@/lib/utils';
+import { ShareShipmentDialog } from '../components/ShareShipmentDialog';
+import { ShipmentShareLinksTab } from '../components/ShipmentShareLinksTab';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { getDeviceImageUrl } from './deviceImages';
 import { keepMapSized, worldBoundsMapOptions, noWrapTileOptions, capWorldZoomOut } from '../lib/leafletMap';
@@ -1361,6 +1363,9 @@ export default function VNextShipmentDetail() {
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
   const [addingOrders, setAddingOrders] = useState(false);
   const { hasPermission } = useCurrentUser();
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  // Bumped after a link is issued so the Shared links tab reloads without a full refetch.
+  const [shareLinksVersion, setShareLinksVersion] = useState(0);
 
   const loadShipment = useCallback((showSpinner = true) => {
     if (!id) return;
@@ -1862,6 +1867,11 @@ export default function VNextShipmentDetail() {
     { value: 'telemetry', label: 'Telemetry', Icon: Thermometer },
     { value: 'sla', label: 'SLA', Icon: Timer },
     { value: 'carrier-tracking', label: 'Carriers', Icon: Target },
+    // Sharing is a separate grant: an operator who can edit a shipment is not automatically
+    // trusted to put it in front of someone outside the organisation.
+    ...(hasPermission('shipments:share')
+      ? [{ value: 'shared-links', label: 'Shared links', Icon: Share2 }]
+      : []),
   ];
 
   return (
@@ -1949,24 +1959,12 @@ export default function VNextShipmentDetail() {
             <Edit className="h-4 w-4" />
             Edit
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={async () => {
-              if (!id) return;
-              try {
-                const res = await fetch(`${API_URL}/api/v1/shipments/${id}/tracking-link`, { method: 'POST' });
-                const json = await res.json();
-                if (json.data?.url) {
-                  await navigator.clipboard.writeText(json.data.url);
-                  alert('Tracking link copied to clipboard');
-                }
-              } catch { alert('Failed to generate tracking link'); }
-            }}
-          >
-            <Share2 className="h-4 w-4" />
-            Share
-          </Button>
+          {hasPermission('shipments:share') && (
+            <Button variant="outline" size="sm" onClick={() => setShareDialogOpen(true)}>
+              <Share2 className="h-4 w-4" />
+              Share
+            </Button>
+          )}
           <Button variant="gradient" size="sm" onClick={() => setActiveTab('carrier-tracking')}>
             <Target className="h-4 w-4" />
             Track
@@ -2565,7 +2563,26 @@ export default function VNextShipmentDetail() {
             <TabsContent value="carrier-tracking" className="mt-4">
               <CarrierTrackingTab shipmentId={id!} />
             </TabsContent>
+
+            {hasPermission('shipments:share') && (
+              <TabsContent value="shared-links" className="mt-4">
+                <ShipmentShareLinksTab
+                  shipmentId={id!}
+                  refreshKey={shareLinksVersion}
+                  onShareClick={() => setShareDialogOpen(true)}
+                />
+              </TabsContent>
+            )}
       </Tabs>
+
+      {id && hasPermission('shipments:share') && (
+        <ShareShipmentDialog
+          shipmentId={id}
+          open={shareDialogOpen}
+          onOpenChange={setShareDialogOpen}
+          onIssued={() => setShareLinksVersion(v => v + 1)}
+        />
+      )}
     </div>
   );
 }

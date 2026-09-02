@@ -326,3 +326,50 @@ export async function optionalAuth(req: FastifyRequest): Promise<void> {
     // Silently ignore invalid tokens for optional auth
   }
 }
+
+/**
+ * Share-link viewer session.
+ *
+ * Issued by POST /api/v1/share/:token/authenticate once the recipient has supplied the access
+ * code. It carries the link it came from and the sections that link grants, and it is scoped to
+ * a single shipment. `iss` is `open-tms-share`, which no other guard accepts, so a viewer token
+ * cannot reach the admin API, either portal, or the warehouse surface.
+ *
+ * The granted sections travel in the token for convenience, but the share read path re-checks
+ * them against the stored link on every request — a link edited or revoked mid-session takes
+ * effect immediately rather than at the end of the session.
+ */
+export interface ShareViewerJWTPayload {
+  /** ShipmentShareLink id. */
+  sub: string;
+  shipmentId: string;
+  orgId: string;
+  sections: string[];
+  iat?: number;
+  exp?: number;
+  iss?: string;
+}
+
+declare module 'fastify' {
+  interface FastifyRequest {
+    shareViewer?: ShareViewerJWTPayload;
+  }
+}
+
+export async function authenticateShareViewerJWT(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) {
+    reply.code(401).send({ data: null, error: 'Authorization header required' });
+    return;
+  }
+
+  try {
+    const payload = verifySignatureAndExpiry(authHeader.slice(7)) as ShareViewerJWTPayload;
+    if (payload.iss !== 'open-tms-share' || !payload.sub || !payload.shipmentId || !payload.orgId) {
+      throw new Error('Invalid share token');
+    }
+    req.shareViewer = payload;
+  } catch {
+    reply.code(401).send({ data: null, error: 'Invalid or expired session' });
+  }
+}

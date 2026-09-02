@@ -54,12 +54,14 @@ function isPortalRoute(url: string): boolean {
 }
 
 function isAuthPublicRoute(url: string): boolean {
-  // Login / forgot-password / theme / public tracking — no token needed.
+  // Login / forgot-password / theme / share links — no main TMS token needed.
+  // Share routes carry their own viewer session token when they have one, and a 401 there
+  // means the access code was wrong, not that the operator's session expired.
   return (
     url.includes('/api/v1/auth/login') ||
     url.includes('/api/v1/auth/forgot-password') ||
     url.includes('/api/v1/theme') ||
-    url.includes('/api/v1/track/')
+    url.includes('/api/v1/share/')
   );
 }
 

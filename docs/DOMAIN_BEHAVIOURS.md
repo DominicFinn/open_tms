@@ -275,6 +275,60 @@ Two independent removal states, both retaining the row for audit:
 | `edi_214.received` | — | — | Auto-forward outbound 214 to customer trading partners |
 | `edi_214.sent` | — | — | — |
 
+### Public Sharing
+
+A share link puts a redacted view of one shipment in front of someone outside the organisation.
+It replaced the old deterministic HMAC `/track/:token` link (#155), which could not be revoked,
+never expired and asked for nothing at the door.
+
+| Command | Trigger | Events Emitted |
+|---------|---------|----------------|
+| `CreateShipmentShareLinkCommand` | `POST /api/v1/shipments/:shipmentId/share-links` (requires `shipments:share`) | `shipment.share_link_created` |
+| `UpdateShipmentShareLinkCommand` | `PATCH /api/v1/share-links/:id` (requires `shipments:share`) | `shipment.share_link_updated` |
+| `RevokeShipmentShareLinkCommand` | `DELETE /api/v1/share-links/:id` (requires `shipments:share`) | `shipment.share_link_revoked` |
+| `RecordShipmentShareAccessCommand` | `POST /api/v1/share/:token/authenticate` (public) | `shipment.share_link_accessed` |
+
+**Credentials.** Creation mints two secrets and returns them once. The URL token is 256 bits of
+randomness stored as a SHA-256 hash; the 8-character access code is stored as a scrypt hash. The
+code alphabet excludes I, O, 0 and 1 so it survives being read out over the phone, and codes are
+matched case- and whitespace-insensitively. Neither secret is recoverable: to replace one, revoke
+the link and issue another.
+
+**What can be shared.** An allowlist, defined in `packages/shared/src/shipmentShareSections.ts`
+and enforced on both the write and the read: `overview`, `events`, `orders`, `cargo`, `documents`,
+`telemetry`, `carrier`. Financials, activity, SLA, customs forms and rate confirmations are never
+shareable. The repository only queries the granted sections, so an ungranted relation is never
+read, and documents are narrowed further to `bol`, `label` and `attachment`.
+
+**Opening a link.** `GET /api/v1/share/:token` reports whether the gate is open without revealing
+anything about the shipment. `POST /api/v1/share/:token/authenticate` takes an email address and
+the access code and returns a viewer session JWT (`iss: open-tms-share`) scoped to one shipment,
+lasting two hours or until the link expires, whichever is sooner. No other guard accepts that
+issuer. `GET /api/v1/share/session/shipment` re-reads the link on every request, so revoking or
+narrowing a link takes effect immediately rather than at session expiry.
+
+**Audit.** Every attempt writes a `ShipmentShareAccess` row with the email supplied, a hashed
+client IP and an outcome of `granted`, `denied_bad_code`, `denied_expired`, `denied_revoked` or
+`denied_locked`. The email is deliberate audit data and must not be copied into logs, event
+payloads or broadcasts. The operator reads it from the Shared links tab, behind `shipments:share`.
+
+**Brute force.** Five wrong codes lock a link for 15 minutes, mirroring the account lockout rule.
+A correct code clears the counter. The public routes carry their own rate limits: 10 authenticate
+attempts and 60 reads per minute per IP.
+
+### Side Effects (sharing)
+
+| Event | Projection | Notification | Integration |
+|-------|-----------|--------------|-------------|
+| `shipment.share_link_created` | — | — | — |
+| `shipment.share_link_updated` | — | — | — |
+| `shipment.share_link_revoked` | — | — | — |
+| `shipment.share_link_accessed` | — | — | — |
+
+No read model: the Shared links tab lists one shipment's links, which is a bounded read straight
+off `ShipmentShareLink`, and the open count is a counter on the row rather than an aggregate over
+the access ledger.
+
 ### Tracking (IoT)
 
 | Event | Source | Side Effects |

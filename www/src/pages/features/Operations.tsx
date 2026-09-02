@@ -72,6 +72,28 @@ const sections = [
     ),
   },
   {
+    problem: 'Customers keep ringing for an update, and giving them a login is overkill',
+    solution: 'Share a shipment with a link and an access code',
+    description: 'Send a consignee or customer a read-only view of one shipment. You tick what they see, from status and route through to the BOL, and everything commercial stays behind. The link expires on a date you pick, you can withdraw it at any time, and every person who opens it is recorded against the shipment.',
+    illustration: (
+      <svg viewBox="0 0 280 200" fill="none" className="w-full h-auto">
+        <rect x="40" y="40" width="200" height="120" rx="10" stroke="rgba(99,102,241,0.3)" strokeWidth="1.5" fill="rgba(99,102,241,0.05)" />
+        <rect x="60" y="62" width="90" height="6" rx="3" fill="rgba(99,102,241,0.35)" />
+        <rect x="60" y="80" width="140" height="4" rx="2" fill="rgba(255,255,255,0.08)" />
+        <rect x="60" y="92" width="120" height="4" rx="2" fill="rgba(255,255,255,0.08)" />
+        <rect x="60" y="112" width="70" height="4" rx="2" fill="rgba(255,255,255,0.05)" />
+        <rect x="60" y="124" width="90" height="4" rx="2" fill="rgba(255,255,255,0.05)" />
+        <rect x="176" y="104" width="44" height="36" rx="6" stroke="rgba(139,92,246,0.45)" strokeWidth="1.5" fill="rgba(139,92,246,0.1)" />
+        <path d="M186 104 v-8 a12 12 0 0 1 24 0 v8" stroke="rgba(139,92,246,0.45)" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+        <circle cx="198" cy="122" r="3.5" fill="rgba(139,92,246,0.6)" />
+        <circle cx="86" cy="176" r="5" fill="rgba(59,130,246,0.5)" />
+        <circle cx="140" cy="176" r="5" fill="rgba(59,130,246,0.3)" />
+        <circle cx="194" cy="176" r="5" fill="rgba(59,130,246,0.18)" />
+        <line x1="86" y1="176" x2="194" y2="176" stroke="rgba(59,130,246,0.15)" strokeWidth="1" strokeDasharray="4 4" />
+      </svg>
+    ),
+  },
+  {
     problem: 'You don\'t know a shipment is late until the customer calls you',
     solution: 'Traffic-aware ETA monitoring',
     description: 'Real-time GPS tracking with adaptive polling  - checking more frequently as delivery approaches. Delay severity escalation (minor to warning to critical) triggers automatic alerts before your customers even notice. Supports TomTom, HERE, and self-hosted Valhalla routing.',

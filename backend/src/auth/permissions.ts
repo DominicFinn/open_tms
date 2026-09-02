@@ -17,6 +17,9 @@ export const PERMISSIONS = {
   SHIPMENTS_READ: 'shipments:read',
   SHIPMENTS_WRITE: 'shipments:write',
   SHIPMENTS_DELETE: 'shipments:delete',
+  // Minting a public share link is not the same as editing a shipment: it puts shipment data
+  // outside the organisation, so it is grantable on its own.
+  SHIPMENTS_SHARE: 'shipments:share',
 
   // Orders
   ORDERS_READ: 'orders:read',
@@ -155,7 +158,8 @@ export const SYSTEM_ROLES: RoleDefinition[] = [
     name: 'broker_agent',
     description: 'Brokerage agent/sales rep. Can quote customers, assign carriers to shipments, and view margins. Cannot manage users or settings.',
     permissions: [
-      'shipments:read', 'shipments:write', 'orders:read', 'orders:write',
+      'shipments:read', 'shipments:write', 'shipments:share',
+      'orders:read', 'orders:write',
       'carriers:read', 'customers:read',
       'locations:read', 'lanes:read',
       'issues:read', 'issues:write',

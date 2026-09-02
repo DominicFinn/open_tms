@@ -124,6 +124,9 @@ model Shipment {
   // Brokerage
   commissions Commission[]
 
+  // Public sharing
+  shareLinks ShipmentShareLink[]
+
   @@index([customerId])
   @@index([status])
   @@index([originId])
@@ -2610,4 +2613,61 @@ model PackagingType {
   @@index([orgId])
   @@index([active])
   @@index([kind])
+}
+
+// ── Shipment sharing ───────────────────────────────────────────────────
+// A revocable, expiring link to a redacted view of one shipment, opened with an access code.
+// Replaces the old deterministic HMAC tracking token, which could not be revoked or expired.
+
+// Table role: authoritative mutable. Writes are rare (create, edit, revoke) but the access
+// counters are contended by concurrent viewers, so every mutation goes through a command.
+model ShipmentShareLink {
+  id             String    @id @default(uuid())
+  orgId          String
+  shipment       Shipment  @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  shipmentId     String
+  // SHA-256 of the URL token. The plaintext is returned once, at creation, and never again.
+  tokenHash      String    @unique
+  // scrypt hash of the access code, stored as salt:derivedKey. Shown once, never recoverable.
+  accessCodeHash String
+  // Operator's own note about who the link went to. Must not hold recipient contact details.
+  label          String?
+  // Allowlisted section keys the viewer may see, validated server-side on every read.
+  // A client can never widen this by asking for a section it wasn't granted.
+  sections       String[]
+  expiresAt      DateTime
+  revokedAt      DateTime?
+  revokedBy      String?
+  createdBy      String
+  accessCount    Int       @default(0)
+  lastAccessedAt DateTime?
+  // BUSINESS RULE: five wrong access codes locks the link for 15 minutes, matching the
+  // account lockout rule. The link is the only credential, so brute force is the real threat.
+  failedAttempts Int       @default(0)
+  lockedUntil    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  accesses ShipmentShareAccess[]
+
+  @@index([orgId, shipmentId, createdAt])
+}
+
+// Table role: ledger, append-only. One row per attempt to open a share link, granted or denied.
+// Holds the viewer's email, which is PII: it exists so an operator can see who opened a shipment,
+// and it must never reach a log line, an event payload, or a broadcast.
+model ShipmentShareAccess {
+  id          String            @id @default(uuid())
+  orgId       String
+  link        ShipmentShareLink @relation(fields: [shareLinkId], references: [id], onDelete: Cascade)
+  shareLinkId String
+  shipmentId  String
+  email       String
+  // SHA-256 of the client IP. Enough to spot repeat access, not enough to identify a person.
+  ipHash      String?
+  // granted | denied_bad_code | denied_expired | denied_revoked | denied_locked
+  outcome     String
+  createdAt   DateTime          @default(now())
+
+  @@index([shareLinkId, createdAt])
 }
