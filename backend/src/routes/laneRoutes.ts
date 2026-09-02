@@ -26,9 +26,11 @@ export async function laneRouteRoutes(server: FastifyInstance) {
    */
   async function getGoogleMapsApiKey(): Promise<string | null> {
     const org = await prisma.organization.findFirst({
-      select: { googleMapsApiKey: true },
+      select: { googleMapsServerKey: true },
     });
-    return org?.googleMapsApiKey || null;
+    // Server-side Directions needs the server key. The browser key carries referrer
+    // restrictions, and Google refuses those on web service endpoints.
+    return org?.googleMapsServerKey || null;
   }
 
   // ─── GET /api/v1/lanes/:laneId/route ──────────────────────────────────────
@@ -95,7 +97,7 @@ export async function laneRouteRoutes(server: FastifyInstance) {
     if (!apiKey) {
       return reply.status(400).send({
         data: null,
-        error: 'Google Maps API key is not configured. Go to Admin > Map Settings to add your API key. Route planning requires Google Maps.',
+        error: 'No Google Maps server key is configured. Add one under Settings, Map settings. It must not be restricted by HTTP referrer.',
       });
     }
 
@@ -331,7 +333,7 @@ export async function laneRouteRoutes(server: FastifyInstance) {
         configured: Boolean(apiKey),
         message: apiKey
           ? 'Google Maps API key is configured. Route planning is available.'
-          : 'Google Maps API key is not configured. Go to Admin > Map Settings to add your API key.',
+          : 'No Google Maps server key is configured. Add one under Settings, Map settings.',
       },
       error: null,
     };
