@@ -192,11 +192,20 @@ Every TMS needs customer self-service. The carrier portal exists but there's not
     - New `PUT /api/v1/orders/:orderId/line-items/:itemId` lets operators (and customers, via portal mirror) edit any Phase 1 field on an existing line via sparse patch, replacing delete-and-recreate
     - The two legacy `/line-items` endpoints (POST add, DELETE remove) now dispatch commands instead of hitting the repo, so the read model and audit trail finally see them
     - Weight aggregation bug fix: `OrderReadModel.totalWeight` now correctly sums `weight × quantity` per line (line weights are per-piece, matching cartonization). Unit-weight overrides still take precedence. Regression test included
-- **Shareable Tracking Links** ✅
-  - HMAC-signed tracking tokens (no login required)
-  - Public tracking page at /track/:token with status, route, stops timeline, tracking events
-  - "Share" button on shipment detail copies tracking URL to clipboard
-  - Limited info only - no customer name, carrier details, or financial data exposed
+- **Shipment Share Links** ✅ (Sep 2026, #155)
+  - Replaces the old HMAC `/track/:token` link, which could not be revoked or expired and had no
+    access control. Existing tracking URLs stop working.
+  - `ShipmentShareLink` carries a hashed URL token, a scrypt-hashed access code, an expiry, a
+    revoke marker and an access counter. Both credentials are shown to the operator once.
+  - The sender ticks which sections the link exposes: overview, tracking events, orders, cargo,
+    documents and BOL, telemetry, carrier. Financials, activity, SLA, customs and rate
+    confirmations are never shareable, enforced server-side on both the write and the read.
+  - Recipients enter an email address and the access code at `/share/:token`, which buys a
+    two-hour viewer session scoped to one shipment (`iss: open-tms-share`).
+  - Every attempt, granted or denied, is written to the `ShipmentShareAccess` ledger. Five wrong
+    codes lock the link for 15 minutes; the public routes are rate limited per IP.
+  - New `shipments:share` permission gates issuing, editing, revoking and reading the access log,
+    plus the Shared links tab on shipment detail.
   - Embeddable tracking widget 🔲
 
 ### **Track 4: Route Optimization & Load Planning** (Core TMS Value / ROI Pitch)

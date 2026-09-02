@@ -91,7 +91,7 @@ import VNextCommissions from './vnext-design/VNextCommissions';
 import VNextReportsDashboard from './vnext-design/VNextReportsDashboard';
 
 // Public Pages
-import PublicTracking from './pages/PublicTracking';
+import ShipmentSharePage from './pages/ShipmentSharePage';
 
 // Customer Portal
 import { CustomerPortalLayout } from './customer-portal-layout';
@@ -251,8 +251,8 @@ root.render(
           <Route path="profile" element={<CarrierProfile />} />
         </Route>
 
-        {/* Public tracking page (no auth required) */}
-        <Route path="/track/:token" element={<PublicTracking />} />
+        {/* Shared shipment link (no login — access code and email at the gate) */}
+        <Route path="/share/:token" element={<ShipmentSharePage />} />
 
         {/* Customer Portal (standalone — outside main layout) */}
         <Route path="/customer-portal/login" element={<CustomerLogin />} />

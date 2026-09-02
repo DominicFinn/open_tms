@@ -17,11 +17,11 @@
     "seed:keep": "tsx --env-file=.env src/scripts/comprehensive-seed.ts --no-wipe"
   },
   "dependencies": {
-    "@open-tms/shared": "^0.1.0",
     "@fastify/cors": "^8.4.2",
-    "@fastify/rate-limit": "^10.3.0",
+    "@fastify/rate-limit": "^9.1.0",
     "@fastify/swagger": "^8.14.0",
     "@fastify/swagger-ui": "^1.0.0",
+    "@open-tms/shared": "^0.1.0",
     "@prisma/client": "^5.22.0",
     "exceljs": "^4.4.0",
     "fastify": "^4.28.1",

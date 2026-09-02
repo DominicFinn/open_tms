@@ -58,6 +58,18 @@ import { UpdateShipmentCommandHandler } from '../../commands/shipments/UpdateShi
 import { ArchiveShipmentCommandHandler } from '../../commands/shipments/ArchiveShipmentCommand.js';
 import { TransitionShipmentStatusCommandHandler } from '../../commands/shipments/TransitionShipmentStatusCommand.js';
 import { SoftDeleteShipmentCommandHandler } from '../../commands/shipments/SoftDeleteShipmentCommand.js';
+import {
+  ShipmentShareRepository,
+  ShipmentShareViewRepository,
+} from '../../repositories/ShipmentShareRepository.js';
+import { ShipmentShareService } from '../../services/ShipmentShareService.js';
+import { ShipmentShareViewService } from '../../services/ShipmentShareViewService.js';
+import {
+  CreateShipmentShareLinkCommandHandler,
+  UpdateShipmentShareLinkCommandHandler,
+  RevokeShipmentShareLinkCommandHandler,
+  RecordShipmentShareAccessCommandHandler,
+} from '../../commands/shipmentShare/index.js';
 import { UnarchiveShipmentCommandHandler } from '../../commands/shipments/UnarchiveShipmentCommand.js';
 import { CreateCarrierCommandHandler } from '../../commands/carriers/CreateCarrierCommand.js';
 import { UpdateCarrierCommandHandler } from '../../commands/carriers/UpdateCarrierCommand.js';
@@ -182,6 +194,22 @@ export function registerTmsDependencies(prisma: PrismaClient): void {
 
   container.singleton(TOKENS.IShipmentsRepository).toFactory(() => {
     return new ShipmentsRepository(container.resolve(TOKENS.PrismaClient));
+  });
+
+  container.singleton(TOKENS.IShipmentShareRepository).toFactory(() => {
+    return new ShipmentShareRepository(container.resolve(TOKENS.PrismaClient));
+  });
+
+  container.singleton(TOKENS.IShipmentShareViewRepository).toFactory(() => {
+    return new ShipmentShareViewRepository(container.resolve(TOKENS.PrismaClient));
+  });
+
+  container.singleton(TOKENS.IShipmentShareService).toFactory(() => {
+    return new ShipmentShareService();
+  });
+
+  container.singleton(TOKENS.IShipmentShareViewService).toFactory(() => {
+    return new ShipmentShareViewService(container.resolve(TOKENS.IShipmentShareViewRepository));
   });
 
   container.singleton(TOKENS.IShipmentTypesRepository).toFactory(() => {
@@ -547,6 +575,14 @@ export function registerTmsCommandHandlers(bus: CommandBus, deps: CommandHandler
   bus.register(new TransitionShipmentStatusCommandHandler(prisma, eventBus));
   bus.register(new SoftDeleteShipmentCommandHandler(prisma, eventBus));
   bus.register(new UnarchiveShipmentCommandHandler(prisma, eventBus));
+
+  // Shipment sharing. The create and access-record handlers need the credential service, which
+  // mints and verifies the token and access code.
+  const shareService = container.resolve<ShipmentShareService>(TOKENS.IShipmentShareService);
+  bus.register(new CreateShipmentShareLinkCommandHandler(prisma, eventBus, shareService));
+  bus.register(new UpdateShipmentShareLinkCommandHandler(prisma, eventBus));
+  bus.register(new RevokeShipmentShareLinkCommandHandler(prisma, eventBus));
+  bus.register(new RecordShipmentShareAccessCommandHandler(prisma, eventBus, shareService));
 
   // Carrier commands
   bus.register(new CreateCarrierCommandHandler(prisma, eventBus));

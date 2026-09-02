@@ -6,7 +6,7 @@
  */
 
 import type { FastifyInstance } from 'fastify';
-import { publicTrackingRoutes } from '../publicTracking.js';
+import { publicShipmentShareRoutes } from '../publicShipmentShare.js';
 import { authRoutes } from '../auth.js';
 import { carrierPortalRoutes } from '../carrierPortal.js';
 import { customerPortalRoutes } from '../customerPortal.js';
@@ -23,6 +23,7 @@ import { ediImportRoutes } from '../ediImport.js';
 import { carrierTrackingRoutes } from '../carrierTracking.js';
 import { carrierRoutes } from '../carriers.js';
 import { shipmentRoutes } from '../shipments.js';
+import { shipmentShareLinkRoutes } from '../shipmentShareLinks.js';
 import { shipmentTypeRoutes } from '../shipmentTypes.js';
 import { laneRoutes } from '../lanes.js';
 import { laneRouteRoutes } from '../laneRoutes.js';
@@ -68,7 +69,7 @@ import { reportsDashboardRoutes } from '../reportsDashboard.js';
  * themselves, so the global JWT hook must not apply to them.
  */
 export async function registerTmsPublicRoutes(server: FastifyInstance): Promise<void> {
-  await server.register(publicTrackingRoutes);      // Public shipment tracking (HMAC token)
+  await server.register(publicShipmentShareRoutes);  // Share links: own access code + viewer JWT, own rate limits
   await server.register(authRoutes);                 // Internal user login / forgot-password / me (own JWT auth internally)
   await server.register(carrierPortalRoutes);        // Own carrier JWT auth internally
   await server.register(customerPortalRoutes);       // Own customer JWT auth internally
@@ -93,6 +94,7 @@ export async function registerTmsPublicRoutes(server: FastifyInstance): Promise<
 export async function registerTmsAuthenticatedRoutes(app: FastifyInstance): Promise<void> {
   await app.register(carrierRoutes);
   await app.register(shipmentRoutes);
+  await app.register(shipmentShareLinkRoutes);
   await app.register(shipmentTypeRoutes);
   await app.register(laneRoutes);
   await app.register(laneRouteRoutes);
