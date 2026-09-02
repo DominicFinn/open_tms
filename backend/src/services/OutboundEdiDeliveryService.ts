@@ -14,6 +14,8 @@ export interface DeliveryResult {
   fileName?: string;
   responseCode?: number;
   errorMessage?: string;
+  /** Id of the EdiTransactionLog row recording the attempt, when one was written. */
+  logId?: string;
 }
 
 export interface OutboundDeliveryRequest {
@@ -96,7 +98,7 @@ export class OutboundEdiDeliveryService implements IOutboundEdiDeliveryService {
       });
     }
 
-    return result;
+    return { ...result, logId: log.id };
   }
 
   async deliverToCarrier(

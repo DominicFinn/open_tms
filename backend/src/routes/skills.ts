@@ -2,6 +2,7 @@
  * Skills API routes — catalog, configuration, and skill chains.
  */
 
+import { Prisma } from '@prisma/client';
 import { FastifyPluginAsync } from 'fastify';
 import { container } from '../di/container.js';
 import { TOKENS } from '../di/tokens.js';
@@ -81,7 +82,7 @@ export const skillRoutes: FastifyPluginAsync = async (server) => {
         orgId: org.id,
         skillType: request.body.skillType,
         name: request.body.name,
-        config: request.body.config,
+        config: request.body.config as Prisma.InputJsonValue,
       },
     });
 
@@ -105,7 +106,7 @@ export const skillRoutes: FastifyPluginAsync = async (server) => {
       where: { id: request.params.id },
       data: {
         ...(body.name !== undefined && { name: body.name }),
-        ...(body.config !== undefined && { config: body.config }),
+        ...(body.config !== undefined && { config: body.config as Prisma.InputJsonValue }),
         ...(body.enabled !== undefined && { enabled: body.enabled }),
       },
     });
@@ -163,7 +164,7 @@ export const skillRoutes: FastifyPluginAsync = async (server) => {
         orgId: org.id,
         name: request.body.name,
         description: request.body.description || null,
-        steps: request.body.steps,
+        steps: request.body.steps as Prisma.InputJsonValue,
       },
     });
 
@@ -188,7 +189,7 @@ export const skillRoutes: FastifyPluginAsync = async (server) => {
       data: {
         ...(body.name !== undefined && { name: body.name }),
         ...(body.description !== undefined && { description: body.description }),
-        ...(body.steps !== undefined && { steps: body.steps }),
+        ...(body.steps !== undefined && { steps: body.steps as Prisma.InputJsonValue }),
       },
     });
 

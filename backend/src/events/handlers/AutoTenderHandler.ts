@@ -64,21 +64,26 @@ export class AutoTenderHandler implements IEventHandler {
       const count = await this.prisma.tender.count();
       const tenderRef = `T-${String(count + 1).padStart(5, '0')}`;
 
-      // Create tender with broadcast strategy
-      const tender = await this.prisma.tender.create({
+      // Create tender with broadcast strategy. Mirrors TenderService.openTender:
+      // the open time lives on the tender, the expiry on each offer.
+      const now = new Date();
+      const durationMinutes = 120; // 2 hours default
+      const expiresAt = new Date(now.getTime() + durationMinutes * 60_000);
+
+      await this.prisma.tender.create({
         data: {
           reference: tenderRef,
           shipmentId: event.entityId,
           strategy: 'broadcast',
           status: 'open',
-          tenderDurationMinutes: 120, // 2 hours default
-          publishedAt: new Date(),
-          expiresAt: new Date(Date.now() + 120 * 60_000),
+          tenderDurationMinutes: durationMinutes,
+          openedAt: now,
           offers: {
             create: carriers.map((c) => ({
               carrierId: c.id,
               status: 'sent',
-              sentAt: new Date(),
+              sentAt: now,
+              expiresAt,
             })),
           },
         },

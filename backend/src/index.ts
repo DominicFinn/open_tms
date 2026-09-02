@@ -42,6 +42,8 @@ import {
 } from './workers/carrierTrackingPollWorker.js';
 import { CarrierTrackingService } from './services/carrierTracking/CarrierTrackingService.js';
 import { ICarrierTrackingIntegrationRepository } from './repositories/CarrierTrackingIntegrationRepository.js';
+import type { ITradingPartnerRepository } from './repositories/TradingPartnerRepository.js';
+import type { IOutboundEdiDeliveryService } from './services/OutboundEdiDeliveryService.js';
 import { authenticateJWT } from './middleware/jwtAuth.js';
 import { registerCorePublicRoutes, registerCoreAuthenticatedRoutes } from './routes/modules/core.js';
 import { registerFinancePublicRoutes, registerFinanceAuthenticatedRoutes } from './routes/modules/finance.js';
@@ -185,7 +187,7 @@ async function start() {
           const boss = (queue as any).boss; // Access pg-boss instance for schedule()
           if (boss) {
             await registerEtaMonitorSchedule(boss);
-            await queue.subscribe(ETA_MONITOR_QUEUE, createEtaMonitorWorker(server.prisma, etaMonitorService));
+            await queue.subscribe(ETA_MONITOR_QUEUE, createEtaMonitorWorker(etaMonitorService));
             server.log.info(`ETA monitor worker registered (provider: ${process.env.ROUTING_PROVIDER})`);
           }
         } catch (err) {

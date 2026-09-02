@@ -33,15 +33,20 @@ export class Edi856AutoSendHandler implements IEventHandler {
 
       // Load full shipment with related data for 856 generation
       const shipment = await this.prisma.shipment.findFirst({
-        where: { reference: shipmentReference },
+        where: { reference: shipmentReference, orgId: event.orgId },
         include: {
           origin: true,
           destination: true,
           carrier: true,
-          orders: {
+          orderShipments: {
             include: {
-              customer: true,
-              trackableUnits: { include: { lineItems: true } },
+              order: {
+                include: {
+                  customer: true,
+                  lineItems: true,
+                  trackableUnits: { include: { lineItems: true } },
+                },
+              },
             },
           },
           stops: { include: { location: true } },
@@ -50,13 +55,14 @@ export class Edi856AutoSendHandler implements IEventHandler {
 
       if (!shipment) return;
 
-      // Get customer ID from orders
-      const customerId = shipment.orders?.[0]?.customerId;
+      // Get customer ID from the orders on the shipment
+      const customerId = shipment.orderShipments[0]?.order.customerId;
       if (!customerId) return;
 
       // Find customer trading partners with outbound 856 enabled
       const partners = await this.prisma.tradingPartner.findMany({
         where: {
+          orgId: event.orgId,
           active: true,
           outboundEnabled: true,
           customerId,

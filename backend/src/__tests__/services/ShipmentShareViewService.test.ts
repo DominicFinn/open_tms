@@ -118,8 +118,13 @@ describe('ShipmentShareService', () => {
   it('verifies its own code and rejects a near miss', () => {
     const { accessCode, accessCodeHash } = service.mintCredentials();
 
+    // The code alphabet contains X, so pick a last character that differs from
+    // the real one — otherwise the "near miss" is the code itself 1 time in 32.
+    const lastChar = accessCode.slice(-1);
+    const nearMiss = accessCode.slice(0, -1) + (lastChar === 'X' ? 'Y' : 'X');
+
     expect(service.verifyAccessCode(accessCode, accessCodeHash)).toBe(true);
-    expect(service.verifyAccessCode(accessCode.slice(0, -1) + 'X', accessCodeHash)).toBe(false);
+    expect(service.verifyAccessCode(nearMiss, accessCodeHash)).toBe(false);
     expect(service.verifyAccessCode('', accessCodeHash)).toBe(false);
   });
 

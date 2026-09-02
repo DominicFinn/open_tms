@@ -2635,7 +2635,7 @@ async function backfillReadModels(orgId: string) {
         hazmat: o.requiresHazmat || false,
         trackableUnitCount: o.trackableUnits.length,
         lineItemCount: o.lineItems.length,
-        totalWeight: totalWeight > 0 ? totalWeight : null,
+        totalWeight,
         requestedDeliveryDate: o.requestedDeliveryDate,
         deliveredAt: o.deliveredAt,
         exceptionType: o.exceptionType,

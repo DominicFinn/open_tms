@@ -68,7 +68,7 @@ export const agentDecisionRoutes: FastifyPluginAsync = async (server) => {
     const org = await server.prisma.organization.findFirst();
     const orgId = org?.id || 'default';
 
-    const result = await commandBus.dispatch({
+    const result = await commandBus.dispatch<Record<string, unknown>, { id: string }>({
       type: CREATE_AGENT_DECISION,
       orgId,
       actorId: null,

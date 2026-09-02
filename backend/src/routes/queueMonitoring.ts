@@ -114,11 +114,12 @@ export async function queueMonitoringRoutes(server: FastifyInstance) {
     const since = new Date(Date.now() - hoursNum * 60 * 60 * 1000);
 
     try {
-      // Get outbound integration log activity
-      const outboundLogs = await server.prisma.outboundIntegrationLog.findMany({
-        where: { sentAt: { gte: since } },
-        select: { sentAt: true, status: true },
-        orderBy: { sentAt: 'asc' },
+      // Get outbound integration log activity. Outbound deliveries are recorded
+      // on EdiTransactionLog by OutboundEdiDeliveryService.
+      const outboundLogs = await server.prisma.ediTransactionLog.findMany({
+        where: { direction: 'outbound', createdAt: { gte: since } },
+        select: { createdAt: true, status: true },
+        orderBy: { createdAt: 'asc' },
       });
 
       // Get webhook log activity
@@ -138,7 +139,7 @@ export async function queueMonitoringRoutes(server: FastifyInstance) {
       }
 
       for (const log of outboundLogs) {
-        const key = log.sentAt.toISOString().substring(0, 13);
+        const key = log.createdAt.toISOString().substring(0, 13);
         if (buckets[key]) {
           if (log.status === 'success') buckets[key].outboundSuccess++;
           else if (log.status === 'error') buckets[key].outboundError++;

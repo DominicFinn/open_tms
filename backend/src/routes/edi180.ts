@@ -104,7 +104,7 @@ export async function edi180Routes(server: FastifyInstance) {
     }
 
     // Create the RMA via command bus
-    const result = await commandBus.dispatch({
+    const result = await commandBus.dispatch<Record<string, unknown>, { id: string; rmaNumber: string; status: string }>({
       type: CREATE_RMA,
       orgId,
       actorId,
