@@ -21,6 +21,8 @@ export interface CreateCarrierPayload {
   state?: string;
   postalCode?: string;
   country?: string;
+  proNumberPrefix?: string;
+  proNumberMaxLength?: number;
   paymentTermsDays?: number;
   currency?: string;
   validationTier?: string;

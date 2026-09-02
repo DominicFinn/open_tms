@@ -9,6 +9,7 @@ import {
   ChevronRight,
   CircleAlert,
   CreditCard,
+  Hash,
   Loader2,
   MapPin,
   Save,
@@ -58,6 +59,8 @@ export default function VNextCreateCarrier() {
   const [state, setState] = useState('');
   const [postalCode, setPostalCode] = useState('');
   const [country, setCountry] = useState('US');
+  const [proNumberPrefix, setProNumberPrefix] = useState('');
+  const [proNumberMaxLength, setProNumberMaxLength] = useState('');
   const [equipment, setEquipment] = useState<Record<string, boolean>>({
     dryVan: false, reefer: false, flatbed: false, tanker: false, intermodal: false,
   });
@@ -102,6 +105,8 @@ export default function VNextCreateCarrier() {
         setState(c.state || '');
         setPostalCode(c.postalCode || '');
         setCountry(c.country || 'US');
+        setProNumberPrefix(c.proNumberPrefix || '');
+        setProNumberMaxLength(c.proNumberMaxLength != null ? String(c.proNumberMaxLength) : '');
         setPaymentTermsDays(c.paymentTermsDays ? String(c.paymentTermsDays) : '30');
         setCarrierCurrency(c.currency || 'USD');
       })
@@ -123,6 +128,11 @@ export default function VNextCreateCarrier() {
         mcNumber, dotNumber, contactName, contactEmail: email, contactPhone: phone,
         address1, address2, city, state, postalCode, country,
         currency: carrierCurrency,
+        proNumberPrefix,
+        proNumberMaxLength: (() => {
+          const n = parseInt(proNumberMaxLength, 10);
+          return Number.isFinite(n) && n > 0 ? n : undefined;
+        })(),
       };
       const body: any = { name: name.trim(), paymentTermsDays: parseInt(paymentTermsDays) || 30 };
       for (const [k, v] of Object.entries(raw)) {
@@ -274,6 +284,31 @@ export default function VNextCreateCarrier() {
           <div className="space-y-2">
             <Label>DOT number</Label>
             <Input type="text" placeholder="0000000" value={dotNumber} onChange={e => setDotNumber(e.target.value)} />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Hash className="h-4 w-4 text-primary" />
+            PRO number format
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label>Starting characters</Label>
+            <Input type="text" placeholder="e.g. RPL-" value={proNumberPrefix} onChange={e => setProNumberPrefix(e.target.value)} />
+            <p className="text-xs text-muted-foreground">
+              Pre-fills into the PRO number field when this carrier is assigned to a shipment.
+            </p>
+          </div>
+          <div className="space-y-2">
+            <Label>Usual max length</Label>
+            <Input type="number" min={1} placeholder="e.g. 9" value={proNumberMaxLength} onChange={e => setProNumberMaxLength(e.target.value)} />
+            <p className="text-xs text-muted-foreground">
+              Shown as a hint, not enforced — a PRO number longer than this can still be saved.
+            </p>
           </div>
         </CardContent>
       </Card>
