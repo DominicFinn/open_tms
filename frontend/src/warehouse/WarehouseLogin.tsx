@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { getWarehouseToken, getWarehouseUser, saveWarehouseSession } from './warehouse-session';
 
 export default function WarehouseLogin() {
   const navigate = useNavigate();
@@ -30,8 +31,7 @@ export default function WarehouseLogin() {
 
   // Check if already logged in
   useEffect(() => {
-    const user = localStorage.getItem('warehouse_user');
-    if (user) {
+    if (getWarehouseUser() && getWarehouseToken()) {
       const loc = localStorage.getItem('warehouse_location');
       navigate(loc ? '/warehouse' : '/warehouse/select-location');
     }
@@ -50,7 +50,7 @@ export default function WarehouseLogin() {
         setMagicLinkLoading(false);
         return;
       }
-      loginSuccess(json.data.user);
+      loginSuccess(json.data.token, json.data.user);
     } catch {
       setError('Network error. Check your connection.');
       setMagicLinkLoading(false);
@@ -74,15 +74,17 @@ export default function WarehouseLogin() {
         setLoading(false);
         return;
       }
-      loginSuccess(json.data.user);
+      loginSuccess(json.data.token, json.data.user);
     } catch {
       setError('Network error. Check your connection.');
       setLoading(false);
     }
   }
 
-  function loginSuccess(user: any) {
-    localStorage.setItem('warehouse_user', JSON.stringify(user));
+  function loginSuccess(token: string, user: any) {
+    // Persist the session token alongside the user so every subsequent PWA
+    // request can be authenticated — see #137.
+    saveWarehouseSession(token, user);
 
     // If user has a preferred location, auto-select it
     if (user.preferredLocationId) {

@@ -4,6 +4,7 @@ import { ArrowLeftRight, LogOut } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { clearWarehouseSession } from './warehouse-session';
 
 export default function WarehouseSettings() {
   const navigate = useNavigate();
@@ -22,7 +23,7 @@ export default function WarehouseSettings() {
   }
 
   function handleLogout() {
-    localStorage.removeItem('warehouse_user');
+    clearWarehouseSession();
     localStorage.removeItem('warehouse_location');
     navigate('/warehouse/login');
   }
