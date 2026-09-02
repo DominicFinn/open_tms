@@ -235,3 +235,64 @@ describe('BOL / labels / customs form route guards', () => {
     await app.close();
   });
 });
+
+describe('BOL/customs form share the cargo-readiness gate (#150)', () => {
+  const notReadyShipment = {
+    id: readyShipment.id,
+    originId: 'loc-1',
+    destinationId: 'loc-2',
+    orderShipments: [], // no orders attached — nothing to declare
+  };
+
+  it('refuses to generate a customs form (sync) when the shipment has no cargo detail', async () => {
+    stub.shipment.findUnique.mockResolvedValueOnce(notReadyShipment);
+    const app = await buildApp(['documents:generate']);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/documents/generate/customs',
+      payload: { shipmentId: readyShipment.id },
+    });
+    expect(res.statusCode).toBe(400);
+    expect((res.json() as any).error).toContain('Cannot generate customs form');
+    expect(stub.generateCustomsForm).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('refuses to enqueue a customs form (async) when the shipment has no cargo detail', async () => {
+    stub.shipment.findUnique.mockResolvedValueOnce(notReadyShipment);
+    const app = await buildApp(['documents:generate']);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/documents/generate/customs/async',
+      payload: { shipmentId: readyShipment.id },
+    });
+    expect(res.statusCode).toBe(400);
+    expect((res.json() as any).error).toContain('Cannot generate customs form');
+    expect(stub.publish).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('returns 404 when the shipment does not exist', async () => {
+    stub.shipment.findUnique.mockResolvedValueOnce(null);
+    const app = await buildApp(['documents:generate']);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/documents/generate/customs',
+      payload: { shipmentId: readyShipment.id },
+    });
+    expect(res.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it('still generates the customs form when cargo detail is complete', async () => {
+    const app = await buildApp(['documents:generate']);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/documents/generate/customs',
+      payload: { shipmentId: readyShipment.id },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(stub.generateCustomsForm).toHaveBeenCalled();
+    await app.close();
+  });
+});

@@ -17,10 +17,16 @@ export interface BolReadiness {
  * can exist with no line-item weights - so a shipment can easily lack enough
  * information to produce a legally-sufficient BOL.
  *
+ * A customs declaration needs exactly the same facts — shipper, consignee,
+ * and a complete description of the goods — so it shares this check too
+ * (#150) rather than duplicating it. It doesn't need to be gated behind BOL
+ * generation itself; the underlying cargo data being complete is what
+ * matters for either document.
+ *
  * This is the single source of truth for "can this shipment produce a valid
- * BOL". It gates both the generate endpoints (sync + async) and the frontend
- * button, so the button greys out for exactly the shipments the backend would
- * reject.
+ * BOL or customs form". It gates the generate endpoints (sync + async) for
+ * both document types and the frontend buttons, so each button greys out for
+ * exactly the shipments the backend would reject.
  *
  * Returns null if the shipment does not exist.
  */
