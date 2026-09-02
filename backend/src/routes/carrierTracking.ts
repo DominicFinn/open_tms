@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { randomUUID } from 'crypto';
 import { ICarrierTrackingIntegrationRepository } from '../repositories/CarrierTrackingIntegrationRepository.js';
+import { IShipmentsRepository } from '../repositories/ShipmentsRepository.js';
 import { CarrierTrackingService } from '../services/carrierTracking/CarrierTrackingService.js';
 import { CarrierTrackingProviderRegistry } from '../services/carrierTracking/ProviderRegistry.js';
 import { ICommandBus } from '../commands/CommandBus.js';
@@ -61,6 +62,7 @@ function mapIntegration(i: any) {
 
 export async function carrierTrackingRoutes(server: FastifyInstance) {
   const integrationRepo = container.resolve<ICarrierTrackingIntegrationRepository>(TOKENS.ICarrierTrackingIntegrationRepository);
+  const shipmentsRepo = container.resolve<IShipmentsRepository>(TOKENS.IShipmentsRepository);
   const trackingService = container.resolve<CarrierTrackingService>(TOKENS.ICarrierTrackingService);
   const providerRegistry = container.resolve<CarrierTrackingProviderRegistry>(TOKENS.ICarrierTrackingProviderRegistry);
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
@@ -496,7 +498,7 @@ export async function carrierTrackingRoutes(server: FastifyInstance) {
         },
       });
 
-      const mapped = events.map(e => ({
+      const mapped = events.map((e: any) => ({
         ...e,
         location: [e.city, e.state, e.country].filter(Boolean).join(', '),
       }));
@@ -556,7 +558,16 @@ export async function carrierTrackingRoutes(server: FastifyInstance) {
         orderBy: { occurredAt: 'desc' },
         take: 1000,
       });
-      return { data: events, error: null };
+
+      const shipment = await shipmentsRepo.findById(shipmentId);
+      const integration = shipment?.carrierId ? await integrationRepo.findByCarrierId(shipment.carrierId) : null;
+      const tracking = {
+        hasCarrier: !!shipment?.carrierId,
+        hasIntegration: !!integration,
+        integrationStatus: integration?.status ?? null,
+      };
+
+      return { data: { events, tracking }, error: null };
     } catch (err: any) {
       reply.code(500);
       return { data: null, error: err.message };
