@@ -1083,10 +1083,27 @@ function SlaTab({ shipmentId }: { shipmentId: string }) {
 // shipment creation (see NOTE_TAGS in VNextCreateShipment.tsx) — a plain note,
 // an "issue" note, or an "additional requirement" note. This is distinct from
 // the platform-generated Issue Engine exceptions shown on the Activity tab.
-const NOTE_GROUPS: { key: string; label: string; Icon: typeof MessageSquare; empty: string }[] = [
-  { key: 'issue', label: 'Issues', Icon: AlertTriangle, empty: 'No issues noted for this shipment.' },
-  { key: 'requirement', label: 'Additional requirements', Icon: Info, empty: 'No additional requirements noted.' },
-  { key: '', label: 'Standard notes', Icon: MessageSquare, empty: 'No standard notes yet.' },
+const NOTE_GROUPS: {
+  key: string;
+  label: string;
+  Icon: typeof MessageSquare;
+  empty: string;
+  border: string;
+  iconBg: string;
+  iconText: string;
+}[] = [
+  {
+    key: 'issue', label: 'Issues', Icon: AlertTriangle, empty: 'No issues noted for this shipment.',
+    border: 'border-l-4 border-l-destructive', iconBg: 'bg-destructive/10', iconText: 'text-destructive',
+  },
+  {
+    key: 'requirement', label: 'Additional requirements', Icon: Info, empty: 'No additional requirements noted.',
+    border: 'border-l-4 border-l-info', iconBg: 'bg-info/10', iconText: 'text-info',
+  },
+  {
+    key: '', label: 'Standard notes', Icon: MessageSquare, empty: 'No standard notes yet.',
+    border: 'border-l-4 border-l-primary', iconBg: 'bg-primary/10', iconText: 'text-primary',
+  },
 ];
 
 function NotesTab({ shipmentId }: { shipmentId: string }) {
@@ -1289,15 +1306,19 @@ function NotesTab({ shipmentId }: { shipmentId: string }) {
         const items = comments.filter((c: any) => (group.key ? c.tag === group.key : c.tag !== 'issue' && c.tag !== 'requirement'));
         return (
           <div key={group.key || 'standard'}>
-            <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              <group.Icon className="h-4 w-4" />
-              {group.label} ({items.length})
+            <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold">
+              <span className={cn('flex h-6 w-6 items-center justify-center rounded-md', group.iconBg, group.iconText)}>
+                <group.Icon className="h-3.5 w-3.5" />
+              </span>
+              <span className="uppercase tracking-wide text-muted-foreground">
+                {group.label} ({items.length})
+              </span>
             </h3>
-            <Card>
+            <Card className={group.border}>
               <CardContent className="pt-6">
                 {items.length === 0 ? (
                   <div className="flex flex-col items-center gap-2 py-6 text-muted-foreground">
-                    <group.Icon className="h-10 w-10 opacity-40" />
+                    <group.Icon className={cn('h-10 w-10 opacity-40', group.iconText)} />
                     <p className="text-sm">{group.empty}</p>
                   </div>
                 ) : (
