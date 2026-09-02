@@ -1088,6 +1088,7 @@ const TRACKING_STATUS_VARIANT: Record<string, 'success' | 'destructive' | 'info'
 
 function CarrierTrackingTab({ shipmentId }: { shipmentId: string }) {
   const [events, setEvents] = useState<any[]>([]);
+  const [tracking, setTracking] = useState<{ hasCarrier: boolean; hasIntegration: boolean; integrationStatus: string | null } | null>(null);
   const [loading, setLoading] = useState(true);
   const [polling, setPolling] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -1095,7 +1096,10 @@ function CarrierTrackingTab({ shipmentId }: { shipmentId: string }) {
   useEffect(() => {
     fetch(`${API_URL}/api/v1/shipments/${shipmentId}/carrier-tracking`)
       .then(r => r.json())
-      .then(j => setEvents(j.data || []))
+      .then(j => {
+        setEvents(j.data?.events || []);
+        setTracking(j.data?.tracking ?? null);
+      })
       .catch(() => { })
       .finally(() => setLoading(false));
   }, [shipmentId]);
@@ -1110,7 +1114,8 @@ function CarrierTrackingTab({ shipmentId }: { shipmentId: string }) {
       setMessage(`Poll complete: ${json.data?.eventsCreated ?? 0} new events`);
       const evRes = await fetch(`${API_URL}/api/v1/shipments/${shipmentId}/carrier-tracking`);
       const evJson = await evRes.json();
-      setEvents(evJson.data || []);
+      setEvents(evJson.data?.events || []);
+      setTracking(evJson.data?.tracking ?? null);
     } catch (err) {
       setMessage(`Error: ${(err as Error).message}`);
     } finally {
@@ -1149,7 +1154,27 @@ function CarrierTrackingTab({ shipmentId }: { shipmentId: string }) {
           </div>
         )}
 
-        {events.length === 0 ? (
+        {tracking && !tracking.hasIntegration ? (
+          <div className="py-8 text-center text-muted-foreground">
+            <AlertTriangle className="mx-auto h-10 w-10 opacity-40" />
+            <p className="mt-2 text-sm">
+              {tracking.hasCarrier ? 'This carrier has no tracking integration configured.' : 'No carrier assigned yet.'}
+            </p>
+            <p className="text-xs">
+              {tracking.hasCarrier
+                ? 'Set up a tracking integration for this carrier to see live status updates here.'
+                : 'Assign a carrier to this shipment to enable tracking.'}
+            </p>
+          </div>
+        ) : tracking && tracking.integrationStatus !== 'active' ? (
+          <div className="py-8 text-center text-muted-foreground">
+            <AlertTriangle className="mx-auto h-10 w-10 opacity-40" />
+            <p className="mt-2 text-sm">
+              Tracking integration is {(tracking.integrationStatus || 'not active').replace(/_/g, ' ')}.
+            </p>
+            <p className="text-xs">Events will appear here once the integration is active.</p>
+          </div>
+        ) : events.length === 0 ? (
           <div className="py-8 text-center text-muted-foreground">
             <SearchX className="mx-auto h-10 w-10 opacity-40" />
             <p className="mt-2 text-sm">No carrier tracking events yet.</p>
