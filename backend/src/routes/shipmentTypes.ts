@@ -7,6 +7,7 @@ import { ICommandBus } from '../commands/CommandBus.js';
 import { CREATE_SHIPMENT_TYPE } from '../commands/shipmentTypes/CreateShipmentTypeCommand.js';
 import { UPDATE_SHIPMENT_TYPE } from '../commands/shipmentTypes/UpdateShipmentTypeCommand.js';
 import { ARCHIVE_SHIPMENT_TYPE } from '../commands/shipmentTypes/ArchiveShipmentTypeCommand.js';
+import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 
 const shipmentTypeSchema = {
   type: 'object',
@@ -44,13 +45,12 @@ const updateBody = z.object({
 });
 
 export async function shipmentTypeRoutes(server: FastifyInstance) {
+  // Tenant comes from the caller's token via registerOrgScope, not from whichever
+  // Organization row comes back first (#117).
+  await registerOrgScope(server);
+
   const repo = container.resolve<IShipmentTypesRepository>(TOKENS.IShipmentTypesRepository);
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
-
-  const getOrgId = async () => {
-    const org = await server.prisma.organization.findFirst({ select: { id: true } });
-    return org?.id || 'default';
-  };
 
   server.get('/api/v1/shipment-types', {
     schema: {
@@ -88,7 +88,7 @@ export async function shipmentTypeRoutes(server: FastifyInstance) {
     const body = createBody.parse((req as any).body);
     const result = await commandBus.dispatch({
       type: CREATE_SHIPMENT_TYPE,
-      orgId: await getOrgId(),
+      orgId: req.orgId!,
       actorId: null,
       payload: body,
       metadata: { correlationId: randomUUID(), source: 'api' },
@@ -113,7 +113,7 @@ export async function shipmentTypeRoutes(server: FastifyInstance) {
     const body = updateBody.parse((req as any).body);
     const result = await commandBus.dispatch({
       type: UPDATE_SHIPMENT_TYPE,
-      orgId: await getOrgId(),
+      orgId: req.orgId!,
       actorId: null,
       payload: { id, data: body },
       metadata: { correlationId: randomUUID(), source: 'api' },
@@ -136,7 +136,7 @@ export async function shipmentTypeRoutes(server: FastifyInstance) {
     const { id } = req.params as { id: string };
     const result = await commandBus.dispatch({
       type: ARCHIVE_SHIPMENT_TYPE,
-      orgId: await getOrgId(),
+      orgId: req.orgId!,
       actorId: null,
       payload: { id },
       metadata: { correlationId: randomUUID(), source: 'api' },

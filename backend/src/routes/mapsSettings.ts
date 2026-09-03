@@ -22,6 +22,7 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { guardWrites } from '../auth/guardWrites.js';
+import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 
 /** Shown in place of a stored key. Submitting it back means "leave this one alone". */
 const MASK = '••••••••••••';
@@ -31,6 +32,10 @@ function mask(key: string | null): string | null {
 }
 
 export async function mapsSettingsRoutes(server: FastifyInstance) {
+  // Resolves req.orgId from the caller's token. These handlers read and write the caller's own
+  // Organization row, so the lookup must be keyed on that id rather than taking whichever row
+  // comes back first (#117).
+  await registerOrgScope(server);
   // /test validates a key against Google (read-only check).
   server.addHook('preHandler', guardWrites('settings', { readPaths: ['/test'] }));
 
@@ -59,8 +64,9 @@ export async function mapsSettingsRoutes(server: FastifyInstance) {
         },
       },
     },
-  }, async () => {
+  }, async (req) => {
     const org = await server.prisma.organization.findFirst({
+      where: { id: req.orgId! },
       select: { googleMapsBrowserKey: true, googleMapsServerKey: true },
     });
 
@@ -91,6 +97,7 @@ export async function mapsSettingsRoutes(server: FastifyInstance) {
     const body = schema.parse((req as any).body);
 
     const org = await server.prisma.organization.findFirst({
+      where: { id: req.orgId! },
       select: { id: true, googleMapsBrowserKey: true, googleMapsServerKey: true },
     });
     if (!org) {
@@ -134,6 +141,7 @@ export async function mapsSettingsRoutes(server: FastifyInstance) {
     },
   }, async (req, reply) => {
     const org = await server.prisma.organization.findFirst({
+      where: { id: req.orgId! },
       select: { googleMapsServerKey: true },
     });
 
@@ -186,8 +194,9 @@ export async function mapsSettingsRoutes(server: FastifyInstance) {
         },
       },
     },
-  }, async () => {
+  }, async (req) => {
     const org = await server.prisma.organization.findFirst({
+      where: { id: req.orgId! },
       select: { googleMapsBrowserKey: true },
     });
 

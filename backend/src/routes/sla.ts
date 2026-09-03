@@ -12,8 +12,13 @@ import { CREATE_SLA_POLICY } from '../commands/sla/CreateSlaPolicyCommand.js';
 import { UPDATE_SLA_POLICY } from '../commands/sla/UpdateSlaPolicyCommand.js';
 import { DEACTIVATE_SLA_POLICY } from '../commands/sla/DeactivateSlaPolicyCommand.js';
 import { randomUUID } from 'crypto';
+import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 
 export const slaRoutes: FastifyPluginAsync = async (server) => {
+  // Resolves req.orgId from the caller's token. Every handler below scopes on it; previously each
+  // one took whichever Organization row came back first, which is the caller's only by luck (#117).
+  await registerOrgScope(server);
+
   // ── Policy CRUD ──
 
   // GET /api/v1/sla/policies — list SLA policies
@@ -40,8 +45,7 @@ export const slaRoutes: FastifyPluginAsync = async (server) => {
   }, async (request) => {
     const slaRepo = container.resolve<ISlaRepository>(TOKENS.ISlaRepository);
     // TODO: orgId from auth context — using first org for now
-    const org = await server.prisma.organization.findFirst();
-    const orgId = org?.id || 'default';
+    const orgId = request.orgId!;
     const customerId = request.query.customerId === 'null' ? undefined : request.query.customerId;
     const policies = await slaRepo.findPolicies(orgId, customerId);
     return { data: policies, error: null };
@@ -129,8 +133,7 @@ export const slaRoutes: FastifyPluginAsync = async (server) => {
     },
   }, async (request, reply) => {
     const commandBus = container.resolve<CommandBus>(TOKENS.ICommandBus);
-    const org = await server.prisma.organization.findFirst();
-    const orgId = org?.id || 'default';
+    const orgId = request.orgId!;
 
     const result = await commandBus.dispatch({
       type: CREATE_SLA_POLICY,
@@ -178,8 +181,7 @@ export const slaRoutes: FastifyPluginAsync = async (server) => {
     },
   }, async (request, reply) => {
     const commandBus = container.resolve<CommandBus>(TOKENS.ICommandBus);
-    const org = await server.prisma.organization.findFirst();
-    const orgId = org?.id || 'default';
+    const orgId = request.orgId!;
 
     const result = await commandBus.dispatch({
       type: UPDATE_SLA_POLICY,
@@ -218,8 +220,7 @@ export const slaRoutes: FastifyPluginAsync = async (server) => {
     },
   }, async (request, reply) => {
     const commandBus = container.resolve<CommandBus>(TOKENS.ICommandBus);
-    const org = await server.prisma.organization.findFirst();
-    const orgId = org?.id || 'default';
+    const orgId = request.orgId!;
 
     const result = await commandBus.dispatch({
       type: DEACTIVATE_SLA_POLICY,
@@ -274,8 +275,7 @@ export const slaRoutes: FastifyPluginAsync = async (server) => {
       return { data: null, error: 'Source policy not found' };
     }
 
-    const org = await server.prisma.organization.findFirst();
-    const orgId = org?.id || 'default';
+    const orgId = request.orgId!;
 
     // Clone the policy with customer override
     const rules = source.rules.map((r: any) => ({
@@ -364,8 +364,7 @@ export const slaRoutes: FastifyPluginAsync = async (server) => {
     },
   }, async (request) => {
     const slaRepo = container.resolve<ISlaRepository>(TOKENS.ISlaRepository);
-    const org = await server.prisma.organization.findFirst();
-    const orgId = org?.id || 'default';
+    const orgId = request.orgId!;
 
     const page = parseInt(request.query.page || '1', 10);
     const limit = parseInt(request.query.limit || '50', 10);
@@ -410,10 +409,9 @@ export const slaRoutes: FastifyPluginAsync = async (server) => {
         },
       },
     },
-  }, async () => {
+  }, async (request) => {
     const slaRepo = container.resolve<ISlaRepository>(TOKENS.ISlaRepository);
-    const org = await server.prisma.organization.findFirst();
-    const orgId = org?.id || 'default';
+    const orgId = request.orgId!;
     const summary = await slaRepo.getEvaluationSummary(orgId);
     return { data: summary, error: null };
   });

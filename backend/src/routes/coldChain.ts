@@ -10,18 +10,18 @@ import { SET_DISPOSITION } from '../commands/coldChain/SetDispositionCommand.js'
 import { RECORD_CALIBRATION } from '../commands/coldChain/RecordCalibrationCommand.js';
 import { CREATE_CAPA } from '../commands/capa/CreateCAPACommand.js';
 import { UPDATE_CAPA } from '../commands/capa/UpdateCAPACommand.js';
+import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 
 export async function coldChainRoutes(server: FastifyInstance) {
+  // Tenant comes from the caller's token via registerOrgScope, not from whichever
+  // Organization row comes back first (#117).
+  await registerOrgScope(server);
+
   const coldChainRepo = container.resolve<IColdChainRepository>(TOKENS.IColdChainRepository);
   const coldChainService = container.resolve<ColdChainService>(TOKENS.IColdChainService);
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
 
   // Resolve org ID once
-  const getOrgId = async () => {
-    const org = await server.prisma.organization.findFirst({ select: { id: true } });
-    return org?.id || 'default-org';
-  };
-
   // ─── Temperature Logs ────────────────────────────────────────────────────────
 
   // GET /api/v1/cold-chain/shipments/:shipmentId/temperature-logs — List temperature logs
@@ -58,7 +58,7 @@ export async function coldChainRoutes(server: FastifyInstance) {
   }, async (req: FastifyRequest, _reply: FastifyReply) => {
     const { shipmentId } = req.params as { shipmentId: string };
     const query = req.query as { since?: string; until?: string; limit?: string };
-    const orgId = await getOrgId();
+    const orgId = req.orgId!;
 
     const limit = Math.min(parseInt(query.limit || '500', 10), 5000);
 
@@ -243,7 +243,7 @@ export async function coldChainRoutes(server: FastifyInstance) {
 
     const result = await commandBus.dispatch({
       type: ACKNOWLEDGE_EXCURSION,
-      orgId: await getOrgId(),
+      orgId: req.orgId!,
       actorId: null,
       payload: { id, notes: body.notes },
       metadata: { correlationId: randomUUID(), source: 'api' },
@@ -301,7 +301,7 @@ export async function coldChainRoutes(server: FastifyInstance) {
 
     const result = await commandBus.dispatch({
       type: RESOLVE_EXCURSION,
-      orgId: await getOrgId(),
+      orgId: req.orgId!,
       actorId: null,
       payload: { id, dispositionDecision: body.dispositionDecision, notes: body.notes },
       metadata: { correlationId: randomUUID(), source: 'api' },
@@ -361,7 +361,7 @@ export async function coldChainRoutes(server: FastifyInstance) {
 
     const result = await commandBus.dispatch({
       type: SET_DISPOSITION,
-      orgId: await getOrgId(),
+      orgId: req.orgId!,
       actorId: null,
       payload: { shipmentId, disposition: body.disposition, notes: body.notes },
       metadata: { correlationId: randomUUID(), source: 'api' },
@@ -485,7 +485,7 @@ export async function coldChainRoutes(server: FastifyInstance) {
 
     const result = await commandBus.dispatch({
       type: RECORD_CALIBRATION,
-      orgId: await getOrgId(),
+      orgId: req.orgId!,
       actorId: null,
       payload: { deviceId, ...body },
       metadata: { correlationId: randomUUID(), source: 'api' },
@@ -528,7 +528,7 @@ export async function coldChainRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, _reply: FastifyReply) => {
     const { status, issueId, shipmentId } = req.query as { status?: string; issueId?: string; shipmentId?: string };
-    const orgId = await getOrgId();
+    const orgId = req.orgId!;
 
     // The repository supports status, priority, investigatorId, shipmentId filters.
     // For issueId filtering, we filter after fetching since the repo interface
@@ -634,7 +634,7 @@ export async function coldChainRoutes(server: FastifyInstance) {
 
     const result = await commandBus.dispatch({
       type: CREATE_CAPA,
-      orgId: await getOrgId(),
+      orgId: req.orgId!,
       actorId: null,
       payload: body,
       metadata: { correlationId: randomUUID(), source: 'api' },
@@ -716,7 +716,7 @@ export async function coldChainRoutes(server: FastifyInstance) {
 
     const result = await commandBus.dispatch({
       type: UPDATE_CAPA,
-      orgId: await getOrgId(),
+      orgId: req.orgId!,
       actorId: null,
       payload: { id, data: body },
       metadata: { correlationId: randomUUID(), source: 'api' },
