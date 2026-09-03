@@ -7,6 +7,7 @@
 
 import type { FastifyInstance } from 'fastify';
 import { themeRoutes } from '../theme.js';
+import { themeAdminRoutes } from '../themeAdmin.js';
 import { internalUserRoutes } from '../internalUsers.js';
 import { webhookRoutes } from '../webhook.js';
 import { seedRoutes } from '../seed.js';
@@ -36,7 +37,7 @@ import { customerUserRoutes } from '../customerUsers.js';
  * themselves, so the global JWT hook must not apply to them.
  */
 export async function registerCorePublicRoutes(server: FastifyInstance): Promise<void> {
-  await server.register(themeRoutes);                // GET endpoints intentionally public (loaded before login)
+  await server.register(themeRoutes);              // Two unauthenticated branding reads only
   await server.register(internalUserRoutes);         // Internal user admin (own JWT auth + permission check internally)
   await server.register(webhookRoutes);              // Own API key auth internally
   await server.register(seedRoutes);                 // Dev/demo only (guarded by NODE_ENV)
@@ -44,6 +45,7 @@ export async function registerCorePublicRoutes(server: FastifyInstance): Promise
 
 /** Registered inside the JWT scope: an internal user token is required. */
 export async function registerCoreAuthenticatedRoutes(app: FastifyInstance): Promise<void> {
+  await app.register(themeAdminRoutes);
   await app.register(customerRoutes);
   await app.register(locationRoutes);
   await app.register(globalSearchRoutes);
