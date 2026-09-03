@@ -6,8 +6,13 @@
  */
 
 import { FastifyPluginAsync } from 'fastify';
+import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 
 export const llmSettingsRoutes: FastifyPluginAsync = async (server) => {
+  // Tenant comes from the caller's token via registerOrgScope, not from whichever
+  // Organization row comes back first (#117).
+  await registerOrgScope(server);
+
 
   // ── GET /api/v1/settings/llm — Get current LLM config ──
 
@@ -35,8 +40,9 @@ export const llmSettingsRoutes: FastifyPluginAsync = async (server) => {
         },
       },
     },
-  }, async () => {
+  }, async (request) => {
     const org = await server.prisma.organization.findFirst({
+      where: { id: request.orgId! },
       select: {
         llmProvider: true,
         llmApiKey: true,
@@ -100,10 +106,6 @@ export const llmSettingsRoutes: FastifyPluginAsync = async (server) => {
       },
     },
   }, async (request) => {
-    const org = await server.prisma.organization.findFirst();
-    if (!org) {
-      return { data: null, error: 'Organization not found' };
-    }
 
     const updateData: Record<string, unknown> = {};
     const body = request.body;
@@ -114,12 +116,13 @@ export const llmSettingsRoutes: FastifyPluginAsync = async (server) => {
     if (body.llmEnabled !== undefined) updateData.llmEnabled = body.llmEnabled;
 
     await server.prisma.organization.update({
-      where: { id: org.id },
+      where: { id: request.orgId! },
       data: updateData,
     });
 
     // Return updated config (masked)
     const updated = await server.prisma.organization.findFirst({
+      where: { id: request.orgId! },
       select: { llmProvider: true, llmApiKey: true, llmModel: true, llmEnabled: true },
     });
 
