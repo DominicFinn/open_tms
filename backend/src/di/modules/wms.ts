@@ -10,10 +10,14 @@ import { container } from '../container.js';
 import { TOKENS } from '../tokens.js';
 import { CommandBus } from '../../commands/CommandBus.js';
 import type { CommandHandlerDeps } from '../moduleRegistration.js';
+import { FacilityRepository } from '../../repositories/FacilityRepository.js';
 import { WarehouseZoneRepository } from '../../repositories/WarehouseZoneRepository.js';
 import { ReceivingRepository } from '../../repositories/ReceivingRepository.js';
 import { PutawayRuleEvaluator } from '../../services/PutawayRuleEvaluator.js';
 import { CartonizationService } from '../../services/CartonizationService.js';
+import { CreateFacilityCommandHandler } from '../../commands/facilities/CreateFacilityCommand.js';
+import { UpdateFacilityCommandHandler } from '../../commands/facilities/UpdateFacilityCommand.js';
+import { ArchiveFacilityCommandHandler } from '../../commands/facilities/ArchiveFacilityCommand.js';
 import { CreateWarehouseZoneCommandHandler } from '../../commands/warehouse/CreateWarehouseZoneCommand.js';
 import { UpdateWarehouseZoneCommandHandler } from '../../commands/warehouse/UpdateWarehouseZoneCommand.js';
 import { CreateWarehouseBinCommandHandler } from '../../commands/warehouse/CreateWarehouseBinCommand.js';
@@ -42,6 +46,10 @@ import { CompleteLoadPlanCommandHandler } from '../../commands/warehouse/Complet
 import { RecordPackAuditCommandHandler } from '../../commands/packAudit/RecordPackAuditCommand.js';
 
 export function registerWmsDependencies(prisma: PrismaClient): void {
+  container.singleton(TOKENS.IFacilityRepository).toFactory(() => {
+    return new FacilityRepository(container.resolve(TOKENS.PrismaClient));
+  });
+
   container.singleton(TOKENS.IWarehouseZoneRepository).toFactory(() => {
     return new WarehouseZoneRepository(container.resolve(TOKENS.PrismaClient));
   });
@@ -61,6 +69,11 @@ export function registerWmsDependencies(prisma: PrismaClient): void {
 
 export function registerWmsCommandHandlers(bus: CommandBus, deps: CommandHandlerDeps): void {
   const { prisma, eventBus } = deps;
+  // Facility, the WMS root (#217)
+  bus.register(new CreateFacilityCommandHandler(prisma, eventBus));
+  bus.register(new UpdateFacilityCommandHandler(prisma, eventBus));
+  bus.register(new ArchiveFacilityCommandHandler(prisma, eventBus));
+
   bus.register(new CreateWarehouseZoneCommandHandler(prisma, eventBus));
   bus.register(new UpdateWarehouseZoneCommandHandler(prisma, eventBus));
   bus.register(new CreateWarehouseBinCommandHandler(prisma, eventBus));

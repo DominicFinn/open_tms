@@ -86,10 +86,29 @@ boundary runs through `TrackableUnit`, which is exactly the model 2b splits:
 Seven FKs and one model stand between the two products.
 
 - **2a. Location to Facility (XL, 6-9):** add `Facility`, backfill one per WMS-referenced
-  Location, add nullable `facilityId` to the 17 WMS models (batched by subdomain), dual-write,
-  switch reads to an org-scoped `/api/v1/facilities`, migrate the 19 WMS frontend files off
-  unfiltered `/api/v1/locations`, then contract after soak. Highest-risk item; batching is the
-  mitigation.
+  Location, add nullable `facilityId` to the WMS models (batched by subdomain), dual-write,
+  switch reads to an org-scoped `/api/v1/facilities`, migrate the WMS frontend off unfiltered
+  `/api/v1/locations`, then contract after soak. Highest-risk item; batching is the mitigation.
+
+  Re-baselined 2026-09-03 against the schema as it stands after #161. The original sizing (17
+  models, 19 frontend files) was taken before the schema split; the real counts are **26 WMS
+  models, 13 of them referencing `Location`, and 27 frontend files calling `/api/v1/locations`**.
+  Batches:
+
+  | # | Batch | Models | Status |
+  |---|---|---|---|
+  | 1 | Storage topology | `WarehouseZone`, `WarehouseAisle`, `WarehouseBin` | ✅ #217 |
+  | 2 | Inbound | `ReceivingTask`, `ReceivingAppointment`, `PutawayTask`, `PutawayRule` | |
+  | 3 | Outbound | `PickTask`, `PackTask`, `StagingAssignment` | |
+  | 4 | Waves | `Wave`, `WaveTemplate`, `WmsFulfilmentOrder` | |
+  | 5 | Frontend | the 27 files off `/api/v1/locations` | |
+  | 6 | Contract | drop the `Location` FKs and the two boundary-lint exceptions | |
+
+  Chunk 1 (#217) added `Facility` with a soft `sourceLocationId`, nullable `facilityId` on the
+  three topology models, a migration that backfills one facility per referenced Location taking
+  each row's `orgId` from its own source record, `facility.*` commands and events, an org-scoped
+  `/api/v1/facilities`, and dual-write on the three topology create paths. Reads still go through
+  `locationId`.
 - **2b. TrackableUnit split (L-XL, 5-7):** new WMS `HandlingUnit` (standalone LPN with soft
   order/shipment refs), backfill and dual-write, switch receiving/putaway/inventory, then drop the
   WMS FKs to TrackableUnit. **Split it; don't make `orderId` nullable as a shortcut.** The cascade
