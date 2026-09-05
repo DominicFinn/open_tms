@@ -3,6 +3,7 @@ import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { Command } from '../types.js';
+import { resolveFacilityForLocation } from '../facilities/resolveFacility.js';
 
 export interface CreateWarehouseZonePayload {
   locationId: string;
@@ -32,9 +33,14 @@ export class CreateWarehouseZoneCommandHandler extends BaseCommandHandler<
     tx: TransactionClient,
     emit: EmitFn
   ): Promise<{ id: string; name: string; zoneType: string }> {
+    // Phase 2a dual-write (#217): the zone is filed under both the Location and the Facility
+    // derived from it, so nothing is left without a facility when reads switch over.
+    const facilityId = await resolveFacilityForLocation(tx, command, command.payload.locationId, emit);
+
     const zone = await tx.warehouseZone.create({
       data: {
         locationId: command.payload.locationId,
+        facilityId,
         name: command.payload.name,
         zoneType: command.payload.zoneType,
         temperatureZone: command.payload.temperatureZone ?? null,
