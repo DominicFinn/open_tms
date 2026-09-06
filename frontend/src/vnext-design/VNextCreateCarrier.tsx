@@ -59,8 +59,11 @@ export default function VNextCreateCarrier() {
   const [state, setState] = useState('');
   const [postalCode, setPostalCode] = useState('');
   const [country, setCountry] = useState('US');
+  const [scacCode, setScacCode] = useState('');
   const [proNumberPrefix, setProNumberPrefix] = useState('');
+  const [proNumberMinLength, setProNumberMinLength] = useState('');
   const [proNumberMaxLength, setProNumberMaxLength] = useState('');
+  const [proNumberNumericOnly, setProNumberNumericOnly] = useState(false);
   const [equipment, setEquipment] = useState<Record<string, boolean>>({
     dryVan: false, reefer: false, flatbed: false, tanker: false, intermodal: false,
   });
@@ -105,8 +108,11 @@ export default function VNextCreateCarrier() {
         setState(c.state || '');
         setPostalCode(c.postalCode || '');
         setCountry(c.country || 'US');
+        setScacCode(c.scacCode || '');
         setProNumberPrefix(c.proNumberPrefix || '');
+        setProNumberMinLength(c.proNumberMinLength != null ? String(c.proNumberMinLength) : '');
         setProNumberMaxLength(c.proNumberMaxLength != null ? String(c.proNumberMaxLength) : '');
+        setProNumberNumericOnly(!!c.proNumberNumericOnly);
         setPaymentTermsDays(c.paymentTermsDays ? String(c.paymentTermsDays) : '30');
         setCarrierCurrency(c.currency || 'USD');
       })
@@ -128,11 +134,17 @@ export default function VNextCreateCarrier() {
         mcNumber, dotNumber, contactName, contactEmail: email, contactPhone: phone,
         address1, address2, city, state, postalCode, country,
         currency: carrierCurrency,
+        scacCode,
         proNumberPrefix,
+        proNumberMinLength: (() => {
+          const n = parseInt(proNumberMinLength, 10);
+          return Number.isFinite(n) && n > 0 ? n : undefined;
+        })(),
         proNumberMaxLength: (() => {
           const n = parseInt(proNumberMaxLength, 10);
           return Number.isFinite(n) && n > 0 ? n : undefined;
         })(),
+        proNumberNumericOnly,
       };
       const body: any = { name: name.trim(), paymentTermsDays: parseInt(paymentTermsDays) || 30 };
       for (const [k, v] of Object.entries(raw)) {
@@ -285,6 +297,19 @@ export default function VNextCreateCarrier() {
             <Label>DOT number</Label>
             <Input type="text" placeholder="0000000" value={dotNumber} onChange={e => setDotNumber(e.target.value)} />
           </div>
+          <div className="space-y-2">
+            <Label>SCAC code</Label>
+            <Input
+              type="text"
+              placeholder="e.g. ODFL"
+              maxLength={4}
+              value={scacCode}
+              onChange={e => setScacCode(e.target.value.toUpperCase())}
+            />
+            <p className="text-xs text-muted-foreground">
+              Standard Carrier Alpha Code — required for EDI 204/214/210 with this carrier.
+            </p>
+          </div>
         </CardContent>
       </Card>
 
@@ -304,10 +329,25 @@ export default function VNextCreateCarrier() {
             </p>
           </div>
           <div className="space-y-2">
+            <Label>Usual min length</Label>
+            <Input type="number" min={1} placeholder="e.g. 7" value={proNumberMinLength} onChange={e => setProNumberMinLength(e.target.value)} />
+          </div>
+          <div className="space-y-2">
             <Label>Usual max length</Label>
-            <Input type="number" min={1} placeholder="e.g. 9" value={proNumberMaxLength} onChange={e => setProNumberMaxLength(e.target.value)} />
+            <Input type="number" min={1} placeholder="e.g. 10" value={proNumberMaxLength} onChange={e => setProNumberMaxLength(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={proNumberNumericOnly}
+                onChange={e => setProNumberNumericOnly(e.target.checked)}
+                className="h-4 w-4 rounded border border-input bg-background accent-primary"
+              />
+              Digits only
+            </label>
             <p className="text-xs text-muted-foreground">
-              Shown as a hint, not enforced — a PRO number longer than this can still be saved.
+              Shown as a warning, not enforced — a PRO number that doesn't match can still be saved.
             </p>
           </div>
         </CardContent>

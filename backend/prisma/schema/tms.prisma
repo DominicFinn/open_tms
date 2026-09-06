@@ -310,8 +310,10 @@ model Carrier {
   // and soft-validate the PRO number field when this carrier is assigned
   // to a shipment. Not enforced server-side: a stale/wrong hint must never
   // block a real PRO number from being saved.
-  proNumberPrefix    String?
-  proNumberMaxLength Int?
+  proNumberPrefix       String?
+  proNumberMaxLength    Int?
+  proNumberMinLength    Int?
+  proNumberNumericOnly  Boolean?
   archived     Boolean         @default(false)
   archivedAt   DateTime?
   // Soft delete (tombstone). Deleted carriers 404 everywhere but are retained

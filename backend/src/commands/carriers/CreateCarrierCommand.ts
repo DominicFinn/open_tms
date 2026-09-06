@@ -23,6 +23,8 @@ export interface CreateCarrierPayload {
   country?: string;
   proNumberPrefix?: string;
   proNumberMaxLength?: number;
+  proNumberMinLength?: number;
+  proNumberNumericOnly?: boolean;
   paymentTermsDays?: number;
   currency?: string;
   validationTier?: string;
