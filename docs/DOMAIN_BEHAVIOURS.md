@@ -1871,8 +1871,18 @@ Every WMS read and write is scoped to `req.orgId`, resolved from the authenticat
 never from a request parameter (#220). Query building lives in the per-domain repositories
 (`PutawayRepository`, `ReceivingRepository`, `WaveRepository`, `PackingRepository`,
 `CycleCountRepository`, `LoadPlanRepository`, `ReplenishmentRuleRepository`,
-`WaveTemplateRepository`, `WmsDashboardRepository`, `FacilityRepository`), none of which expose an
-unscoped variant. A cross-tenant id returns 404, so existence stays opaque.
+`WaveTemplateRepository`, `WmsDashboardRepository`, `FacilityRepository`,
+`WarehouseZoneRepository`), none of which expose an unscoped variant. A cross-tenant id returns
+404, so existence stays opaque.
+
+`WarehouseZoneRepository` was missed by the #220 sweep and every read on it was unscoped until
+#231, so one tenant could list or fetch another's zones, aisles and bins. `WarehouseAisle` carries
+no `orgId` of its own and is scoped through its zone.
+
+The sweep also did not reach the queries **inside** command handlers, which #225, #227 and #229
+fixed as they went: 21 unscoped reads and writes in total. Two patterns account for all of them.
+A command that looks its aggregate up with `findUnique({ where: { id } })` is a tenancy bug, and
+`locationId` alone is never a sufficient filter.
 
 `registerWmsGuard` proves only that the caller holds `wms:read` or `wms:write` in some
 organisation. It is not a tenancy check, and must never be relied on as one.
@@ -1907,8 +1917,18 @@ kept so a combined install can reconcile the two.
   releasing a wave (#227). Receiving completion resolves once for whichever branch it takes, and
   skips resolution entirely when there is nothing to put away or stage
 - And on waves and wave templates (#229), which completes the dual-write. **Every WMS model that
-  references `Location` now carries a `facilityId` beside it.** Reads still go through
-  `locationId`; switching them over is the next batch
+  references `Location` now carries a `facilityId` beside it.**
+
+### Reading by facility
+
+Every WMS list endpoint takes **either** `facilityId` **or** `locationId`, exactly one, enforced by
+`oneOf` in the querystring schema rather than by a check in the handler (#231). New callers should
+send `facilityId`. `locationId` stays until the frontend has migrated and a soak has passed, then it
+goes with the `Location` FKs.
+
+Repositories take a `WarehouseScope` rather than a bare id, and build their filter through
+`scopedWhere(orgId, scope)`, so a read cannot be written that narrows by warehouse without also
+narrowing by tenant.
 
 ---
 

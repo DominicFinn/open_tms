@@ -6,20 +6,21 @@
  */
 
 import { PrismaClient, WaveTemplate } from '@prisma/client';
+import { WarehouseScope, scopedWhere } from './warehouseScope.js';
 
 const RECENT_WAVES = 10;
 
 export interface IWaveTemplateRepository {
-  findByLocation(orgId: string, locationId: string): Promise<WaveTemplate[]>;
+  find(orgId: string, scope: WarehouseScope): Promise<WaveTemplate[]>;
   findById(orgId: string, id: string): Promise<WaveTemplate | null>;
 }
 
 export class WaveTemplateRepository implements IWaveTemplateRepository {
   constructor(private prisma: PrismaClient) {}
 
-  async findByLocation(orgId: string, locationId: string): Promise<WaveTemplate[]> {
+  async find(orgId: string, scope: WarehouseScope): Promise<WaveTemplate[]> {
     return this.prisma.waveTemplate.findMany({
-      where: { orgId, locationId },
+      where: scopedWhere(orgId, scope),
       include: { _count: { select: { waves: true } } },
       orderBy: { priority: 'asc' },
     });

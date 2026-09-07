@@ -20,7 +20,7 @@ function buildPrisma() {
 describe('PutawayRepository org scoping', () => {
   it('filters the task list by org as well as location', async () => {
     const prisma = buildPrisma();
-    await new PutawayRepository(prisma).findTasksByLocation('org-1', 'loc-1', 'pending');
+    await new PutawayRepository(prisma).findTasks('org-1', { locationId: 'loc-1' }, 'pending');
 
     expect(prisma.putawayTask.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { orgId: 'org-1', locationId: 'loc-1', status: 'pending' } })
@@ -39,7 +39,7 @@ describe('PutawayRepository org scoping', () => {
 
   it('filters rules by org as well as location', async () => {
     const prisma = buildPrisma();
-    await new PutawayRepository(prisma).findRulesByLocation('org-1', 'loc-1');
+    await new PutawayRepository(prisma).findRules('org-1', { locationId: 'loc-1' });
 
     expect(prisma.putawayRule.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { orgId: 'org-1', locationId: 'loc-1' } })
@@ -57,7 +57,7 @@ describe('PutawayRepository org scoping', () => {
 describe('ReceivingRepository org scoping', () => {
   it('filters appointments by org as well as location', async () => {
     const prisma = buildPrisma();
-    await new ReceivingRepository(prisma).findAppointmentsByLocation('org-1', 'loc-1');
+    await new ReceivingRepository(prisma).findAppointments('org-1', { locationId: 'loc-1' });
 
     const where = prisma.receivingAppointment.findMany.mock.calls[0][0].where;
     expect(where.orgId).toBe('org-1');
@@ -66,7 +66,7 @@ describe('ReceivingRepository org scoping', () => {
 
   it('keeps the org filter alongside a date window', async () => {
     const prisma = buildPrisma();
-    await new ReceivingRepository(prisma).findAppointmentsByLocation('org-1', 'loc-1', new Date('2026-09-07'));
+    await new ReceivingRepository(prisma).findAppointments('org-1', { locationId: 'loc-1' }, new Date('2026-09-07'));
 
     const where = prisma.receivingAppointment.findMany.mock.calls[0][0].where;
     expect(where.orgId).toBe('org-1');
@@ -82,7 +82,7 @@ describe('ReceivingRepository org scoping', () => {
 
   it('filters receiving tasks by org as well as location', async () => {
     const prisma = buildPrisma();
-    await new ReceivingRepository(prisma).findTasksByLocation('org-1', 'loc-1', 'pending');
+    await new ReceivingRepository(prisma).findTasks('org-1', { locationId: 'loc-1' }, 'pending');
 
     const where = prisma.receivingTask.findMany.mock.calls[0][0].where;
     expect(where).toEqual({ orgId: 'org-1', locationId: 'loc-1', status: 'pending' });

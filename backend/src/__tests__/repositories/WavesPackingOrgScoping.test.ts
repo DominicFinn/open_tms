@@ -20,7 +20,7 @@ function buildPrisma() {
 describe('WaveRepository org scoping', () => {
   it('filters the wave list by org as well as location', async () => {
     const prisma = buildPrisma();
-    await new WaveRepository(prisma).findWavesByLocation('org-1', 'loc-1', 'released');
+    await new WaveRepository(prisma).findWaves('org-1', { locationId: 'loc-1' }, 'released');
 
     expect(prisma.wave.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { orgId: 'org-1', locationId: 'loc-1', status: 'released' } })
@@ -29,7 +29,7 @@ describe('WaveRepository org scoping', () => {
 
   it('caps the wave list rather than returning an unbounded result', async () => {
     const prisma = buildPrisma();
-    await new WaveRepository(prisma).findWavesByLocation('org-1', 'loc-1');
+    await new WaveRepository(prisma).findWaves('org-1', { locationId: 'loc-1' });
 
     expect(prisma.wave.findMany.mock.calls[0][0].take).toBe(500);
   });
@@ -45,7 +45,7 @@ describe('WaveRepository org scoping', () => {
 
   it('keeps the org filter alongside the waveId pick task filter', async () => {
     const prisma = buildPrisma();
-    await new WaveRepository(prisma).findPickTasksByLocation('org-1', 'loc-1', { waveId: 'wave-1', status: 'assigned' });
+    await new WaveRepository(prisma).findPickTasks('org-1', { locationId: 'loc-1' }, { waveId: 'wave-1', status: 'assigned' });
 
     expect(prisma.pickTask.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { orgId: 'org-1', locationId: 'loc-1', status: 'assigned', waveId: 'wave-1' } })
@@ -65,7 +65,7 @@ describe('WaveRepository org scoping', () => {
 describe('PackingRepository org scoping', () => {
   it('filters pack tasks by org as well as location', async () => {
     const prisma = buildPrisma();
-    await new PackingRepository(prisma).findPackTasksByLocation('org-1', 'loc-1', 'pending');
+    await new PackingRepository(prisma).findPackTasks('org-1', { locationId: 'loc-1' }, 'pending');
 
     expect(prisma.packTask.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { orgId: 'org-1', locationId: 'loc-1', status: 'pending' } })
@@ -83,7 +83,7 @@ describe('PackingRepository org scoping', () => {
 
   it('filters staging assignments by org as well as location', async () => {
     const prisma = buildPrisma();
-    await new PackingRepository(prisma).findStagingAssignmentsByLocation('org-1', 'loc-1');
+    await new PackingRepository(prisma).findStagingAssignments('org-1', { locationId: 'loc-1' });
 
     expect(prisma.stagingAssignment.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { orgId: 'org-1', locationId: 'loc-1' } })
@@ -94,7 +94,7 @@ describe('PackingRepository org scoping', () => {
 describe('ReplenishmentRuleRepository org scoping', () => {
   it('filters rules by org as well as location', async () => {
     const prisma = buildPrisma();
-    await new ReplenishmentRuleRepository(prisma).findByLocation('org-1', 'loc-1');
+    await new ReplenishmentRuleRepository(prisma).find('org-1', { locationId: 'loc-1' });
 
     expect(prisma.replenishmentRule.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { orgId: 'org-1', locationId: 'loc-1' }, take: 500 })
@@ -112,7 +112,7 @@ describe('ReplenishmentRuleRepository org scoping', () => {
 describe('WaveTemplateRepository org scoping', () => {
   it('filters templates by org as well as location', async () => {
     const prisma = buildPrisma();
-    await new WaveTemplateRepository(prisma).findByLocation('org-1', 'loc-1');
+    await new WaveTemplateRepository(prisma).find('org-1', { locationId: 'loc-1' });
 
     expect(prisma.waveTemplate.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { orgId: 'org-1', locationId: 'loc-1' } })

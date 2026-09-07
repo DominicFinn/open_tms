@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { container, TOKENS } from '../di/index.js';
+import { WAREHOUSE_SCOPE_QUERY, WAREHOUSE_SCOPE_ONE_OF, warehouseScopeFrom } from '../repositories/warehouseScope.js';
 import { ICommandBus } from '../commands/CommandBus.js';
 import { CREATE_CYCLE_COUNT } from '../commands/warehouse/CreateCycleCountCommand.js';
 import { RECORD_CYCLE_COUNT_LINE } from '../commands/warehouse/RecordCycleCountLineCommand.js';
@@ -21,16 +22,16 @@ export async function cycleCountRoutes(server: FastifyInstance) {
       tags: ['WMS - Cycle Counting'],
       summary: 'List cycle counts',
       querystring: {
-        type: 'object', required: ['locationId'],
+        type: 'object', oneOf: WAREHOUSE_SCOPE_ONE_OF,
         properties: {
-          locationId: { type: 'string', format: 'uuid' },
+          ...WAREHOUSE_SCOPE_QUERY,
           status: { type: 'string' },
         },
       },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const q = req.query as { locationId: string; status?: string };
-    const counts = await repo.findByLocation(req.orgId!, q.locationId, q.status);
+    const q = req.query as { facilityId?: string; locationId?: string; status?: string };
+    const counts = await repo.find(req.orgId!, warehouseScopeFrom(q), q.status);
 
     return { data: counts, error: null };
   });

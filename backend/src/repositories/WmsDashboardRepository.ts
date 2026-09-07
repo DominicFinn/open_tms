@@ -7,6 +7,7 @@
  */
 
 import { PrismaClient } from '@prisma/client';
+import { WarehouseScope, scopedWhere } from './warehouseScope.js';
 
 export interface WmsDashboardCounts {
   zones: number;
@@ -24,14 +25,14 @@ export interface WmsDashboardCounts {
 }
 
 export interface IWmsDashboardRepository {
-  countsForLocation(orgId: string, locationId: string): Promise<WmsDashboardCounts>;
+  counts(orgId: string, scope: WarehouseScope): Promise<WmsDashboardCounts>;
 }
 
 export class WmsDashboardRepository implements IWmsDashboardRepository {
   constructor(private prisma: PrismaClient) {}
 
-  async countsForLocation(orgId: string, locationId: string): Promise<WmsDashboardCounts> {
-    const scope = { orgId, locationId };
+  async counts(orgId: string, scope: WarehouseScope): Promise<WmsDashboardCounts> {
+    const where = scopedWhere(orgId, scope);
 
     const [
       zones, bins, activeBins, skus,
@@ -41,20 +42,20 @@ export class WmsDashboardRepository implements IWmsDashboardRepository {
       packPending, packInProgress,
       stagedCount,
     ] = await Promise.all([
-      this.prisma.warehouseZone.count({ where: { ...scope, active: true } }),
-      this.prisma.warehouseBin.count({ where: scope }),
-      this.prisma.warehouseBin.count({ where: { ...scope, active: true } }),
+      this.prisma.warehouseZone.count({ where: { ...where, active: true } }),
+      this.prisma.warehouseBin.count({ where }),
+      this.prisma.warehouseBin.count({ where: { ...where, active: true } }),
       this.prisma.inventoryRecord
-        .groupBy({ by: ['sku'], where: { ...scope, quantityOnHand: { gt: 0 } } })
+        .groupBy({ by: ['sku'], where: { ...where, quantityOnHand: { gt: 0 } } })
         .then(rows => rows.length),
-      this.prisma.receivingTask.count({ where: { ...scope, status: 'pending' } }),
-      this.prisma.receivingTask.count({ where: { ...scope, status: 'in_progress' } }),
-      this.prisma.putawayTask.count({ where: { ...scope, status: { in: ['pending', 'assigned'] } } }),
-      this.prisma.pickTask.count({ where: { ...scope, status: 'pending' } }),
-      this.prisma.pickTask.count({ where: { ...scope, status: { in: ['assigned', 'in_progress'] } } }),
-      this.prisma.packTask.count({ where: { ...scope, status: 'pending' } }),
-      this.prisma.packTask.count({ where: { ...scope, status: 'in_progress' } }),
-      this.prisma.stagingAssignment.count({ where: { ...scope, status: 'staged' } }),
+      this.prisma.receivingTask.count({ where: { ...where, status: 'pending' } }),
+      this.prisma.receivingTask.count({ where: { ...where, status: 'in_progress' } }),
+      this.prisma.putawayTask.count({ where: { ...where, status: { in: ['pending', 'assigned'] } } }),
+      this.prisma.pickTask.count({ where: { ...where, status: 'pending' } }),
+      this.prisma.pickTask.count({ where: { ...where, status: { in: ['assigned', 'in_progress'] } } }),
+      this.prisma.packTask.count({ where: { ...where, status: 'pending' } }),
+      this.prisma.packTask.count({ where: { ...where, status: 'in_progress' } }),
+      this.prisma.stagingAssignment.count({ where: { ...where, status: 'staged' } }),
     ]);
 
     return {

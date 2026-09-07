@@ -7,6 +7,7 @@
  */
 
 import { PrismaClient, PutawayRule, PutawayTask } from '@prisma/client';
+import { WarehouseScope, scopedWhere } from './warehouseScope.js';
 
 const TASK_LIST_INCLUDE = {
   trackableUnit: { select: { id: true, identifier: true, unitType: true, barcode: true } },
@@ -34,17 +35,17 @@ const TASK_DETAIL_INCLUDE = {
 } as const;
 
 export interface IPutawayRepository {
-  findTasksByLocation(orgId: string, locationId: string, status?: string): Promise<PutawayTask[]>;
+  findTasks(orgId: string, scope: WarehouseScope, status?: string): Promise<PutawayTask[]>;
   findTaskById(orgId: string, id: string): Promise<PutawayTask | null>;
-  findRulesByLocation(orgId: string, locationId: string): Promise<PutawayRule[]>;
+  findRules(orgId: string, scope: WarehouseScope): Promise<PutawayRule[]>;
   findRuleById(orgId: string, id: string): Promise<PutawayRule | null>;
 }
 
 export class PutawayRepository implements IPutawayRepository {
   constructor(private prisma: PrismaClient) {}
 
-  async findTasksByLocation(orgId: string, locationId: string, status?: string): Promise<PutawayTask[]> {
-    const where: any = { orgId, locationId };
+  async findTasks(orgId: string, scope: WarehouseScope, status?: string): Promise<PutawayTask[]> {
+    const where: any = scopedWhere(orgId, scope);
     if (status) where.status = status;
     return this.prisma.putawayTask.findMany({
       where,
@@ -60,9 +61,9 @@ export class PutawayRepository implements IPutawayRepository {
     });
   }
 
-  async findRulesByLocation(orgId: string, locationId: string): Promise<PutawayRule[]> {
+  async findRules(orgId: string, scope: WarehouseScope): Promise<PutawayRule[]> {
     return this.prisma.putawayRule.findMany({
-      where: { orgId, locationId },
+      where: scopedWhere(orgId, scope),
       orderBy: { priority: 'asc' },
     });
   }

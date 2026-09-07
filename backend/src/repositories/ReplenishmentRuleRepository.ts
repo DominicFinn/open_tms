@@ -6,20 +6,21 @@
  */
 
 import { PrismaClient, ReplenishmentRule } from '@prisma/client';
+import { WarehouseScope, scopedWhere } from './warehouseScope.js';
 
 const MAX_RULES = 500;
 
 export interface IReplenishmentRuleRepository {
-  findByLocation(orgId: string, locationId: string): Promise<ReplenishmentRule[]>;
+  find(orgId: string, scope: WarehouseScope): Promise<ReplenishmentRule[]>;
   findById(orgId: string, id: string): Promise<ReplenishmentRule | null>;
 }
 
 export class ReplenishmentRuleRepository implements IReplenishmentRuleRepository {
   constructor(private prisma: PrismaClient) {}
 
-  async findByLocation(orgId: string, locationId: string): Promise<ReplenishmentRule[]> {
+  async find(orgId: string, scope: WarehouseScope): Promise<ReplenishmentRule[]> {
     return this.prisma.replenishmentRule.findMany({
-      where: { orgId, locationId },
+      where: scopedWhere(orgId, scope),
       orderBy: { sku: 'asc' },
       take: MAX_RULES,
     });

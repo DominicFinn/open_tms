@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { container, TOKENS } from '../di/index.js';
+import { WAREHOUSE_SCOPE_QUERY, WAREHOUSE_SCOPE_ONE_OF, warehouseScopeFrom } from '../repositories/warehouseScope.js';
 import { ICommandBus } from '../commands/CommandBus.js';
 import { CREATE_LOAD_PLAN } from '../commands/warehouse/CreateLoadPlanCommand.js';
 import { COMPLETE_LOAD_PLAN } from '../commands/warehouse/CompleteLoadPlanCommand.js';
@@ -21,16 +22,16 @@ export async function loadPlanRoutes(server: FastifyInstance) {
       tags: ['WMS - Load Planning'],
       summary: 'List load plans',
       querystring: {
-        type: 'object', required: ['locationId'],
+        type: 'object', oneOf: WAREHOUSE_SCOPE_ONE_OF,
         properties: {
-          locationId: { type: 'string', format: 'uuid' },
+          ...WAREHOUSE_SCOPE_QUERY,
           status: { type: 'string' },
         },
       },
     },
   }, async (req: FastifyRequest) => {
-    const q = req.query as { locationId: string; status?: string };
-    const plans = await repo.findByLocation(req.orgId!, q.locationId, q.status);
+    const q = req.query as { facilityId?: string; locationId?: string; status?: string };
+    const plans = await repo.find(req.orgId!, warehouseScopeFrom(q), q.status);
 
     return { data: plans, error: null };
   });

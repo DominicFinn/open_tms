@@ -6,19 +6,20 @@
  */
 
 import { LoadPlan, PrismaClient } from '@prisma/client';
+import { WarehouseScope, scopedWhere } from './warehouseScope.js';
 
 const MAX_ROWS = 500;
 
 export interface ILoadPlanRepository {
-  findByLocation(orgId: string, locationId: string, status?: string): Promise<LoadPlan[]>;
+  find(orgId: string, scope: WarehouseScope, status?: string): Promise<LoadPlan[]>;
   findById(orgId: string, id: string): Promise<LoadPlan | null>;
 }
 
 export class LoadPlanRepository implements ILoadPlanRepository {
   constructor(private prisma: PrismaClient) {}
 
-  async findByLocation(orgId: string, locationId: string, status?: string): Promise<LoadPlan[]> {
-    const where: any = { orgId, locationId };
+  async find(orgId: string, scope: WarehouseScope, status?: string): Promise<LoadPlan[]> {
+    const where: any = scopedWhere(orgId, scope);
     if (status) where.status = status;
     return this.prisma.loadPlan.findMany({
       where,

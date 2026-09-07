@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { container, TOKENS } from '../di/index.js';
+import { WAREHOUSE_SCOPE_QUERY, WAREHOUSE_SCOPE_ONE_OF, warehouseScopeFrom } from '../repositories/warehouseScope.js';
 import { ICommandBus } from '../commands/CommandBus.js';
 import { ASSIGN_PUTAWAY_TASK } from '../commands/warehouse/AssignPutawayTaskCommand.js';
 import { COMPLETE_PUTAWAY } from '../commands/warehouse/CompletePutawayCommand.js';
@@ -23,16 +24,16 @@ export async function putawayRoutes(server: FastifyInstance) {
       summary: 'List putaway tasks for a location',
       querystring: {
         type: 'object',
-        required: ['locationId'],
+        oneOf: WAREHOUSE_SCOPE_ONE_OF,
         properties: {
-          locationId: { type: 'string', format: 'uuid' },
+          ...WAREHOUSE_SCOPE_QUERY,
           status: { type: 'string', enum: ['pending', 'assigned', 'in_progress', 'completed', 'cancelled'] },
         },
       },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const { locationId, status } = req.query as { locationId: string; status?: string };
-    const tasks = await repo.findTasksByLocation(req.orgId!, locationId, status);
+    const q = req.query as { facilityId?: string; locationId?: string; status?: string };
+    const tasks = await repo.findTasks(req.orgId!, warehouseScopeFrom(q), q.status);
 
     return { data: tasks, error: null };
   });
@@ -135,13 +136,13 @@ export async function putawayRoutes(server: FastifyInstance) {
       summary: 'List putaway rules for a location',
       querystring: {
         type: 'object',
-        required: ['locationId'],
-        properties: { locationId: { type: 'string', format: 'uuid' } },
+        oneOf: WAREHOUSE_SCOPE_ONE_OF,
+        properties: { ...WAREHOUSE_SCOPE_QUERY },
       },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const { locationId } = req.query as { locationId: string };
-    const rules = await repo.findRulesByLocation(req.orgId!, locationId);
+    const q = req.query as { facilityId?: string; locationId?: string; };
+    const rules = await repo.findRules(req.orgId!, warehouseScopeFrom(q));
     return { data: rules, error: null };
   });
 

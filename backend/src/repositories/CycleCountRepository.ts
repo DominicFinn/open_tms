@@ -6,19 +6,20 @@
  */
 
 import { CycleCount, PrismaClient } from '@prisma/client';
+import { WarehouseScope, scopedWhere } from './warehouseScope.js';
 
 const MAX_ROWS = 500;
 
 export interface ICycleCountRepository {
-  findByLocation(orgId: string, locationId: string, status?: string): Promise<CycleCount[]>;
+  find(orgId: string, scope: WarehouseScope, status?: string): Promise<CycleCount[]>;
   findById(orgId: string, id: string): Promise<CycleCount | null>;
 }
 
 export class CycleCountRepository implements ICycleCountRepository {
   constructor(private prisma: PrismaClient) {}
 
-  async findByLocation(orgId: string, locationId: string, status?: string): Promise<CycleCount[]> {
-    const where: any = { orgId, locationId };
+  async find(orgId: string, scope: WarehouseScope, status?: string): Promise<CycleCount[]> {
+    const where: any = scopedWhere(orgId, scope);
     if (status) where.status = status;
     return this.prisma.cycleCount.findMany({
       where,

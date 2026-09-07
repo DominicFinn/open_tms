@@ -28,7 +28,7 @@ function buildPrisma() {
 describe('WmsDashboardRepository org scoping', () => {
   it('carries orgId on every one of the twelve counts', async () => {
     const prisma = buildPrisma();
-    await new WmsDashboardRepository(prisma).countsForLocation('org-1', 'loc-1');
+    await new WmsDashboardRepository(prisma).counts('org-1', { locationId: 'loc-1' });
 
     const everyWhere = [
       ...prisma.warehouseZone.count.mock.calls,
@@ -50,7 +50,7 @@ describe('WmsDashboardRepository org scoping', () => {
 
   it('counts distinct SKUs with stock on hand', async () => {
     const prisma = buildPrisma();
-    const counts = await new WmsDashboardRepository(prisma).countsForLocation('org-1', 'loc-1');
+    const counts = await new WmsDashboardRepository(prisma).counts('org-1', { locationId: 'loc-1' });
 
     expect(counts.totalSkus).toBe(2);
     expect(prisma.inventoryRecord.groupBy).toHaveBeenCalledWith(
@@ -62,7 +62,7 @@ describe('WmsDashboardRepository org scoping', () => {
 describe('CycleCountRepository org scoping', () => {
   it('filters the list by org as well as location', async () => {
     const prisma = buildPrisma();
-    await new CycleCountRepository(prisma).findByLocation('org-1', 'loc-1', 'open');
+    await new CycleCountRepository(prisma).find('org-1', { locationId: 'loc-1' }, 'open');
 
     expect(prisma.cycleCount.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { orgId: 'org-1', locationId: 'loc-1', status: 'open' }, take: 500 })
@@ -82,7 +82,7 @@ describe('CycleCountRepository org scoping', () => {
 describe('LoadPlanRepository org scoping', () => {
   it('filters the list by org as well as location', async () => {
     const prisma = buildPrisma();
-    await new LoadPlanRepository(prisma).findByLocation('org-1', 'loc-1');
+    await new LoadPlanRepository(prisma).find('org-1', { locationId: 'loc-1' });
 
     expect(prisma.loadPlan.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { orgId: 'org-1', locationId: 'loc-1' } })
@@ -91,7 +91,7 @@ describe('LoadPlanRepository org scoping', () => {
 
   it('caps the list, which previously had no ceiling at all', async () => {
     const prisma = buildPrisma();
-    await new LoadPlanRepository(prisma).findByLocation('org-1', 'loc-1');
+    await new LoadPlanRepository(prisma).find('org-1', { locationId: 'loc-1' });
 
     expect(prisma.loadPlan.findMany.mock.calls[0][0].take).toBe(500);
   });

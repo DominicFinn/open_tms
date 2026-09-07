@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { container, TOKENS } from '../di/index.js';
+import { WAREHOUSE_SCOPE_QUERY, WAREHOUSE_SCOPE_ONE_OF, warehouseScopeFrom } from '../repositories/warehouseScope.js';
 import { IReceivingRepository } from '../repositories/ReceivingRepository.js';
 import { ICommandBus } from '../commands/CommandBus.js';
 import { CREATE_RECEIVING_TASK } from '../commands/warehouse/CreateReceivingTaskCommand.js';
@@ -31,16 +32,16 @@ export async function receivingRoutes(server: FastifyInstance) {
       summary: 'List receiving tasks for a location',
       querystring: {
         type: 'object',
-        required: ['locationId'],
+        oneOf: WAREHOUSE_SCOPE_ONE_OF,
         properties: {
-          locationId: { type: 'string', format: 'uuid' },
+          ...WAREHOUSE_SCOPE_QUERY,
           status: { type: 'string', enum: ['pending', 'in_progress', 'inspection', 'completed', 'cancelled'] },
         },
       },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const { locationId, status } = req.query as { locationId: string; status?: string };
-    const tasks = await repo.findTasksByLocation(req.orgId!, locationId, status);
+    const q = req.query as { facilityId?: string; locationId?: string; status?: string };
+    const tasks = await repo.findTasks(req.orgId!, warehouseScopeFrom(q), q.status);
     const mapped = tasks.map(t => ({
       id: t.id,
       status: t.status,
@@ -274,19 +275,19 @@ export async function receivingRoutes(server: FastifyInstance) {
       summary: 'List receiving appointments',
       querystring: {
         type: 'object',
-        required: ['locationId'],
+        oneOf: WAREHOUSE_SCOPE_ONE_OF,
         properties: {
-          locationId: { type: 'string', format: 'uuid' },
+          ...WAREHOUSE_SCOPE_QUERY,
           date: { type: 'string', format: 'date' },
         },
       },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const { locationId, date } = req.query as { locationId: string; date?: string };
-    const appointments = await repo.findAppointmentsByLocation(
+    const q = req.query as { facilityId?: string; locationId?: string; date?: string };
+    const appointments = await repo.findAppointments(
       req.orgId!,
-      locationId,
-      date ? new Date(date) : undefined
+      warehouseScopeFrom(q),
+      q.date ? new Date(q.date) : undefined
     );
     return { data: appointments, error: null };
   });

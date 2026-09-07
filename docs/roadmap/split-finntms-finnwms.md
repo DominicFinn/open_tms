@@ -138,8 +138,17 @@ Seven FKs and one model stand between the two products.
   | 2 | Inbound | `ReceivingTask`, `ReceivingAppointment`, `PutawayTask`, `PutawayRule` | ✅ #225 |
   | 3 | Outbound | `PickTask`, `PackTask`, `StagingAssignment` | ✅ #227 |
   | 4 | Waves | `Wave`, `WaveTemplate` | ✅ #229 |
-  | 5 | Reads + frontend | switch reads to `facilityId`; the 27 files off `/api/v1/locations` | next |
+  | 5a | Read path | WMS list endpoints and repositories accept a facility scope | ✅ #231 |
+  | 5b | Frontend | the 19 WMS files off `/api/v1/locations` | next |
   | 6 | Contract | drop the `Location` FKs and the two boundary-lint exceptions | |
+
+  Batch 5 was one row when this table was written; it is two. Doing the backend first means the
+  frontend change lands against an API that already accepts what it wants to send, and neither PR
+  breaks the running product. Note also that only **19** of the 27 frontend files are WMS; the
+  other 8 are TMS pages that use `/api/v1/locations` legitimately and stay on it.
+
+  5a also closed the last of the tenancy debt: `WarehouseZoneRepository` was missed by #220
+  entirely, and every read on it was unscoped.
 
   Batch 4 listed `WmsFulfilmentOrder` when this table was written. It has no `locationId` and no
   `Location` relation, so it needed nothing. **The dual-write is now complete: all twelve WMS

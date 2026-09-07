@@ -6,23 +6,24 @@
  */
 
 import { PrismaClient, PickTask, Wave } from '@prisma/client';
+import { WarehouseScope, scopedWhere } from './warehouseScope.js';
 
 // Carried over from the inline queries these replaced. Neither list paginates yet; the ceiling
 // stops one busy location returning an unbounded result.
 const MAX_ROWS = 500;
 
 export interface IWaveRepository {
-  findWavesByLocation(orgId: string, locationId: string, status?: string): Promise<Wave[]>;
+  findWaves(orgId: string, scope: WarehouseScope, status?: string): Promise<Wave[]>;
   findWaveById(orgId: string, id: string): Promise<Wave | null>;
-  findPickTasksByLocation(orgId: string, locationId: string, filters?: { status?: string; waveId?: string }): Promise<PickTask[]>;
+  findPickTasks(orgId: string, scope: WarehouseScope, filters?: { status?: string; waveId?: string }): Promise<PickTask[]>;
   findPickTaskById(orgId: string, id: string): Promise<PickTask | null>;
 }
 
 export class WaveRepository implements IWaveRepository {
   constructor(private prisma: PrismaClient) {}
 
-  async findWavesByLocation(orgId: string, locationId: string, status?: string): Promise<Wave[]> {
-    const where: any = { orgId, locationId };
+  async findWaves(orgId: string, scope: WarehouseScope, status?: string): Promise<Wave[]> {
+    const where: any = scopedWhere(orgId, scope);
     if (status) where.status = status;
     return this.prisma.wave.findMany({
       where,
@@ -45,12 +46,12 @@ export class WaveRepository implements IWaveRepository {
     });
   }
 
-  async findPickTasksByLocation(
+  async findPickTasks(
     orgId: string,
-    locationId: string,
+    scope: WarehouseScope,
     filters: { status?: string; waveId?: string } = {}
   ): Promise<PickTask[]> {
-    const where: any = { orgId, locationId };
+    const where: any = scopedWhere(orgId, scope);
     if (filters.status) where.status = filters.status;
     if (filters.waveId) where.waveId = filters.waveId;
     return this.prisma.pickTask.findMany({

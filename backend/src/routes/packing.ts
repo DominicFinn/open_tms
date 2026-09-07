@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { container, TOKENS } from '../di/index.js';
+import { WAREHOUSE_SCOPE_QUERY, WAREHOUSE_SCOPE_ONE_OF, warehouseScopeFrom } from '../repositories/warehouseScope.js';
 import { ICommandBus } from '../commands/CommandBus.js';
 import { CREATE_PACK_TASK } from '../commands/warehouse/CreatePackTaskCommand.js';
 import { COMPLETE_PACK_LINE } from '../commands/warehouse/CompletePackLineCommand.js';
@@ -27,16 +28,16 @@ export async function packingRoutes(server: FastifyInstance) {
       tags: ['WMS - Packing & Loading'],
       summary: 'List pack tasks',
       querystring: {
-        type: 'object', required: ['locationId'],
+        type: 'object', oneOf: WAREHOUSE_SCOPE_ONE_OF,
         properties: {
-          locationId: { type: 'string', format: 'uuid' },
+          ...WAREHOUSE_SCOPE_QUERY,
           status: { type: 'string' },
         },
       },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const q = req.query as { locationId: string; status?: string };
-    const tasks = await repo.findPackTasksByLocation(req.orgId!, q.locationId, q.status);
+    const q = req.query as { facilityId?: string; locationId?: string; status?: string };
+    const tasks = await repo.findPackTasks(req.orgId!, warehouseScopeFrom(q), q.status);
 
     const mapped = tasks.map(t => ({
       ...t,
@@ -142,16 +143,16 @@ export async function packingRoutes(server: FastifyInstance) {
       tags: ['WMS - Packing & Loading'],
       summary: 'List staging assignments',
       querystring: {
-        type: 'object', required: ['locationId'],
+        type: 'object', oneOf: WAREHOUSE_SCOPE_ONE_OF,
         properties: {
-          locationId: { type: 'string', format: 'uuid' },
+          ...WAREHOUSE_SCOPE_QUERY,
           status: { type: 'string', enum: ['staged', 'loading', 'loaded', 'dispatched'] },
         },
       },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const q = req.query as { locationId: string; status?: string };
-    const assignments = await repo.findStagingAssignmentsByLocation(req.orgId!, q.locationId, q.status);
+    const q = req.query as { facilityId?: string; locationId?: string; status?: string };
+    const assignments = await repo.findStagingAssignments(req.orgId!, warehouseScopeFrom(q), q.status);
 
     return { data: assignments, error: null };
   });
