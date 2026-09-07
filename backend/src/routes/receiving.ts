@@ -6,7 +6,10 @@ import { ICommandBus } from '../commands/CommandBus.js';
 import { CREATE_RECEIVING_TASK } from '../commands/warehouse/CreateReceivingTaskCommand.js';
 import { RECORD_RECEIVING_LINE } from '../commands/warehouse/RecordReceivingLineCommand.js';
 import { COMPLETE_RECEIVING } from '../commands/warehouse/CompleteReceivingCommand.js';
-import { PrismaClient } from '@prisma/client';
+import { CREATE_RECEIVING_APPOINTMENT } from '../commands/warehouse/CreateReceivingAppointmentCommand.js';
+import { CHECK_IN_APPOINTMENT } from '../commands/warehouse/CheckInAppointmentCommand.js';
+import { CANCEL_APPOINTMENT } from '../commands/warehouse/CancelAppointmentCommand.js';
+import { INSPECT_RECEIVING_LINE } from '../commands/warehouse/InspectReceivingLineCommand.js';
 import crypto from 'crypto';
 import { registerWmsGuard } from '../auth/wmsGuard.js';
 
@@ -16,7 +19,6 @@ export async function receivingRoutes(server: FastifyInstance) {
 
   const repo = container.resolve<IReceivingRepository>(TOKENS.IReceivingRepository);
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
-  const prisma = container.resolve<PrismaClient>(TOKENS.PrismaClient);
 
   // ═══════════════════════════════════════════════════════════
   // RECEIVING TASKS
@@ -38,7 +40,7 @@ export async function receivingRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { locationId, status } = req.query as { locationId: string; status?: string };
-    const tasks = await repo.findTasksByLocation(locationId, status);
+    const tasks = await repo.findTasksByLocation(req.orgId!, locationId, status);
     const mapped = tasks.map(t => ({
       id: t.id,
       status: t.status,
@@ -66,7 +68,8 @@ export async function receivingRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const task = await repo.findTaskById(id);
+    // A cross-tenant id misses rather than 403s, so existence stays opaque.
+    const task = await repo.findTaskById(req.orgId!, id);
     if (!task) {
       reply.code(404);
       return { data: null, error: 'Receiving task not found' };
@@ -127,13 +130,10 @@ export async function receivingRoutes(server: FastifyInstance) {
       })).optional(),
     }).parse((req as any).body);
 
-    const orgId = (req as any).orgId || 'default-org';
-    const actorId = (req as any).userId || 'system';
-
     const result = await commandBus.dispatch({
       type: CREATE_RECEIVING_TASK,
-      orgId,
-      actorId,
+      orgId: req.orgId!,
+      actorId: req.user?.sub ?? null,
       payload: body,
       metadata: { correlationId: crypto.randomUUID(), source: 'api' },
     });
@@ -184,13 +184,10 @@ export async function receivingRoutes(server: FastifyInstance) {
       expiryDate: z.string().nullable().optional(),
     }).parse((req as any).body);
 
-    const orgId = (req as any).orgId || 'default-org';
-    const actorId = (req as any).userId || 'system';
-
     const result = await commandBus.dispatch({
       type: RECORD_RECEIVING_LINE,
-      orgId,
-      actorId,
+      orgId: req.orgId!,
+      actorId: req.user?.sub ?? null,
       payload: { taskId: id, ...body },
       metadata: { correlationId: crypto.randomUUID(), source: 'api' },
     });
@@ -222,8 +219,20 @@ export async function receivingRoutes(server: FastifyInstance) {
       inspectionStatus: z.enum(['pass', 'fail', 'quarantine']),
     }).parse((req as any).body);
 
-    const line = await repo.updateLine(id, { inspectionStatus: body.inspectionStatus });
-    return { data: line, error: null };
+    const result = await commandBus.dispatch({
+      type: INSPECT_RECEIVING_LINE,
+      orgId: req.orgId!,
+      actorId: req.user?.sub ?? null,
+      payload: { lineId: id, inspectionStatus: body.inspectionStatus },
+      metadata: { correlationId: crypto.randomUUID(), source: 'api' },
+    });
+
+    if (!result.success) {
+      const notFound = result.error?.includes('not found');
+      return reply.code(notFound ? 404 : 400).send({ data: null, error: result.error });
+    }
+
+    return { data: result.data, error: null };
   });
 
   // ═══════════════════════════════════════════════════════════
@@ -238,13 +247,10 @@ export async function receivingRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const orgId = (req as any).orgId || 'default-org';
-    const actorId = (req as any).userId || 'system';
-
     const result = await commandBus.dispatch({
       type: COMPLETE_RECEIVING,
-      orgId,
-      actorId,
+      orgId: req.orgId!,
+      actorId: req.user?.sub ?? null,
       payload: { taskId: id },
       metadata: { correlationId: crypto.randomUUID(), source: 'api' },
     });
@@ -278,6 +284,7 @@ export async function receivingRoutes(server: FastifyInstance) {
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { locationId, date } = req.query as { locationId: string; date?: string };
     const appointments = await repo.findAppointmentsByLocation(
+      req.orgId!,
       locationId,
       date ? new Date(date) : undefined
     );
@@ -318,17 +325,21 @@ export async function receivingRoutes(server: FastifyInstance) {
       asnReference: z.string().nullable().optional(),
     }).parse((req as any).body);
 
-    const orgId = (req as any).orgId || 'default-org';
 
-    const appointment = await repo.createAppointment({
-      ...body,
-      scheduledAt: new Date(body.scheduledAt),
-      scheduledEndAt: new Date(body.scheduledEndAt),
-      orgId,
+    const result = await commandBus.dispatch({
+      type: CREATE_RECEIVING_APPOINTMENT,
+      orgId: req.orgId!,
+      actorId: req.user?.sub ?? null,
+      payload: body,
+      metadata: { correlationId: crypto.randomUUID(), source: 'api' },
     });
 
-    reply.code(201);
-    return { data: appointment, error: null };
+    if (!result.success) {
+      const notFound = result.error?.includes('not found');
+      return reply.code(notFound ? 404 : 400).send({ data: null, error: result.error });
+    }
+
+    return reply.code(201).send({ data: result.data, error: null });
   });
 
   // POST /api/v1/receiving/appointments/:id/check-in — carrier arrived
@@ -354,23 +365,24 @@ export async function receivingRoutes(server: FastifyInstance) {
       sealNumber: z.string().nullable().optional(),
     }).parse((req as any).body ?? {});
 
-    const existing = await prisma.receivingAppointment.findUnique({ where: { id } });
-    if (!existing) { reply.code(404); return { data: null, error: 'Appointment not found' }; }
-    if (existing.status === 'completed' || existing.status === 'cancelled') {
-      reply.code(400);
-      return { data: null, error: `Cannot check in an appointment in status "${existing.status}"` };
+    const result = await commandBus.dispatch({
+      type: CHECK_IN_APPOINTMENT,
+      orgId: req.orgId!,
+      actorId: req.user?.sub ?? null,
+      payload: { appointmentId: id, ...body },
+      metadata: { correlationId: crypto.randomUUID(), source: 'api' },
+    });
+
+    if (!result.success) {
+      if (result.error?.includes('not found')) {
+        return reply.code(404).send({ data: null, error: result.error });
+      }
+      // Checking in a completed or cancelled appointment is a state conflict, not bad input.
+      const conflict = result.error?.includes('Cannot check in');
+      return reply.code(conflict ? 409 : 400).send({ data: null, error: result.error });
     }
 
-    const updated = await prisma.receivingAppointment.update({
-      where: { id },
-      data: {
-        status: 'checked_in',
-        dockBinId: body.dockBinId ?? existing.dockBinId,
-        trailerNumber: body.trailerNumber ?? existing.trailerNumber,
-        sealNumber: body.sealNumber ?? existing.sealNumber,
-      },
-    });
-    return { data: updated, error: null };
+    return { data: result.data, error: null };
   });
 
   // POST /api/v1/receiving/appointments/:id/cancel
@@ -382,15 +394,23 @@ export async function receivingRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const existing = await prisma.receivingAppointment.findUnique({ where: { id } });
-    if (!existing) { reply.code(404); return { data: null, error: 'Appointment not found' }; }
-    if (existing.status === 'completed') {
-      reply.code(400);
-      return { data: null, error: 'Cannot cancel a completed appointment' };
-    }
-    const updated = await prisma.receivingAppointment.update({
-      where: { id }, data: { status: 'cancelled' },
+
+    const result = await commandBus.dispatch({
+      type: CANCEL_APPOINTMENT,
+      orgId: req.orgId!,
+      actorId: req.user?.sub ?? null,
+      payload: { appointmentId: id },
+      metadata: { correlationId: crypto.randomUUID(), source: 'api' },
     });
-    return { data: updated, error: null };
+
+    if (!result.success) {
+      if (result.error?.includes('not found')) {
+        return reply.code(404).send({ data: null, error: result.error });
+      }
+      const conflict = result.error?.includes('Cannot cancel');
+      return reply.code(conflict ? 409 : 400).send({ data: null, error: result.error });
+    }
+
+    return { data: result.data, error: null };
   });
 }

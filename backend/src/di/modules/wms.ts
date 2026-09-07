@@ -13,6 +13,7 @@ import type { CommandHandlerDeps } from '../moduleRegistration.js';
 import { FacilityRepository } from '../../repositories/FacilityRepository.js';
 import { WarehouseZoneRepository } from '../../repositories/WarehouseZoneRepository.js';
 import { ReceivingRepository } from '../../repositories/ReceivingRepository.js';
+import { PutawayRepository } from '../../repositories/PutawayRepository.js';
 import { PutawayRuleEvaluator } from '../../services/PutawayRuleEvaluator.js';
 import { CartonizationService } from '../../services/CartonizationService.js';
 import { CreateFacilityCommandHandler } from '../../commands/facilities/CreateFacilityCommand.js';
@@ -23,6 +24,11 @@ import { UpdateWarehouseZoneCommandHandler } from '../../commands/warehouse/Upda
 import { CreateWarehouseBinCommandHandler } from '../../commands/warehouse/CreateWarehouseBinCommand.js';
 import { UpdateWarehouseBinCommandHandler } from '../../commands/warehouse/UpdateWarehouseBinCommand.js';
 import { BulkCreateBinsCommandHandler } from '../../commands/warehouse/BulkCreateBinsCommand.js';
+import { CreatePutawayRuleCommandHandler } from '../../commands/warehouse/CreatePutawayRuleCommand.js';
+import { CreateReceivingAppointmentCommandHandler } from '../../commands/warehouse/CreateReceivingAppointmentCommand.js';
+import { CheckInAppointmentCommandHandler } from '../../commands/warehouse/CheckInAppointmentCommand.js';
+import { CancelAppointmentCommandHandler } from '../../commands/warehouse/CancelAppointmentCommand.js';
+import { InspectReceivingLineCommandHandler } from '../../commands/warehouse/InspectReceivingLineCommand.js';
 import { CreateReceivingTaskCommandHandler } from '../../commands/warehouse/CreateReceivingTaskCommand.js';
 import { RecordReceivingLineCommandHandler } from '../../commands/warehouse/RecordReceivingLineCommand.js';
 import { CompleteReceivingCommandHandler } from '../../commands/warehouse/CompleteReceivingCommand.js';
@@ -58,6 +64,10 @@ export function registerWmsDependencies(prisma: PrismaClient): void {
     return new ReceivingRepository(container.resolve(TOKENS.PrismaClient));
   });
 
+  container.singleton(TOKENS.IPutawayRepository).toFactory(() => {
+    return new PutawayRepository(container.resolve(TOKENS.PrismaClient));
+  });
+
   container.singleton(TOKENS.IPutawayRuleEvaluator).toFactory(() => {
     return new PutawayRuleEvaluator(container.resolve(TOKENS.PrismaClient));
   });
@@ -84,8 +94,13 @@ export function registerWmsCommandHandlers(bus: CommandBus, deps: CommandHandler
   bus.register(new CreateReceivingTaskCommandHandler(prisma, eventBus));
   bus.register(new RecordReceivingLineCommandHandler(prisma, eventBus));
   bus.register(new CompleteReceivingCommandHandler(prisma, eventBus));
+  bus.register(new CreateReceivingAppointmentCommandHandler(prisma, eventBus));
+  bus.register(new CheckInAppointmentCommandHandler(prisma, eventBus));
+  bus.register(new CancelAppointmentCommandHandler(prisma, eventBus));
+  bus.register(new InspectReceivingLineCommandHandler(prisma, eventBus));
 
   // Putaway commands
+  bus.register(new CreatePutawayRuleCommandHandler(prisma, eventBus));
   bus.register(new AssignPutawayTaskCommandHandler(prisma, eventBus));
   bus.register(new CompletePutawayCommandHandler(prisma, eventBus));
 
