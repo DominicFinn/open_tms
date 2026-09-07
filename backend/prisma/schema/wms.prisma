@@ -50,6 +50,10 @@ model Facility {
   putawayRules          PutawayRule[]
   putawayTasks          PutawayTask[]
 
+  pickTasks          PickTask[]
+  packTasks          PackTask[]
+  stagingAssignments StagingAssignment[]
+
   // One facility per source location per org: this is what makes the backfill and the
   // find-or-create in the dual-write path idempotent.
   @@unique([orgId, sourceLocationId])
@@ -425,6 +429,8 @@ model PickTask {
   id               String         @id @default(uuid())
   locationId       String
   location         Location       @relation(fields: [locationId], references: [id])
+  facilityId       String?
+  facility         Facility?      @relation(fields: [facilityId], references: [id])
   waveId           String?
   wave             Wave?          @relation(fields: [waveId], references: [id])
   orderId          String?
@@ -449,6 +455,7 @@ model PickTask {
   packTasks PackTask[]
 
   @@index([locationId])
+  @@index([facilityId])
   @@index([orgId])
   @@index([waveId])
   @@index([status])
@@ -489,6 +496,8 @@ model PackTask {
   id               String        @id @default(uuid())
   locationId       String
   location         Location      @relation(fields: [locationId], references: [id])
+  facilityId       String?
+  facility         Facility?     @relation(fields: [facilityId], references: [id])
   orderId          String
   pickTaskId       String?
   pickTask         PickTask?     @relation(fields: [pickTaskId], references: [id])
@@ -507,6 +516,7 @@ model PackTask {
   audits    PackAudit[]
 
   @@index([locationId])
+  @@index([facilityId])
   @@index([orgId])
   @@index([orderId])
   @@index([status])
@@ -612,6 +622,8 @@ model StagingAssignment {
   id              String        @id @default(uuid())
   locationId      String
   location        Location      @relation(fields: [locationId], references: [id])
+  facilityId      String?
+  facility        Facility?     @relation(fields: [facilityId], references: [id])
   orderId         String
   shipmentId      String?
   trackableUnitId String
@@ -627,6 +639,7 @@ model StagingAssignment {
   updatedAt DateTime @updatedAt
 
   @@index([locationId])
+  @@index([facilityId])
   @@index([orgId])
   @@index([orderId])
   @@index([shipmentId])

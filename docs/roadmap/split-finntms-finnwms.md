@@ -136,8 +136,8 @@ Seven FKs and one model stand between the two products.
   |---|---|---|---|
   | 1 | Storage topology | `WarehouseZone`, `WarehouseAisle`, `WarehouseBin` | ✅ #217 |
   | 2 | Inbound | `ReceivingTask`, `ReceivingAppointment`, `PutawayTask`, `PutawayRule` | ✅ #225 |
-  | 3 | Outbound | `PickTask`, `PackTask`, `StagingAssignment` | next |
-  | 4 | Waves | `Wave`, `WaveTemplate`, `WmsFulfilmentOrder` | |
+  | 3 | Outbound | `PickTask`, `PackTask`, `StagingAssignment` | ✅ #227 |
+  | 4 | Waves | `Wave`, `WaveTemplate`, `WmsFulfilmentOrder` | next |
   | 5 | Frontend | the 27 files off `/api/v1/locations` | |
   | 6 | Contract | drop the `Location` FKs and the two boundary-lint exceptions | |
 
@@ -163,6 +163,15 @@ Seven FKs and one model stand between the two products.
     `receiving_task.complete` looking its task up by bare id, and `receiving_task.create` moving
     another tenant's appointment to `receiving`. Expect the same in the outbound commands and fix
     them as part of the batch rather than filing them.
+
+  Batch 3 (#227) confirmed the second point and found the worst instance of it: `wave.release`
+  allocated inventory on `locationId` and SKU alone, so releasing a wave hard-allocated another
+  tenant's stock and decremented their `quantityAvailable`. Five more, including
+  `staging_assignment.create` moving another tenant's `TrackableUnit` into our staging bin.
+
+  **Batch 4 should assume the same and look at the wave and template commands first.** It also
+  inherits the one awkward case batch 3 hit: `TrackableUnit` has no `orgId`, so it can only be
+  scoped through its order. That is the argument for 2b, and it is worth doing soon.
 - **2b. TrackableUnit split (L-XL, 5-7):** new WMS `HandlingUnit` (standalone LPN with soft
   order/shipment refs), backfill and dual-write, switch receiving/putaway/inventory, then drop the
   WMS FKs to TrackableUnit. **Split it; don't make `orderId` nullable as a shortcut.** The cascade

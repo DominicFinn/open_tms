@@ -2,7 +2,7 @@ import { CreateWaveCommandHandler, CREATE_WAVE } from '../../commands/warehouse/
 import { ReleaseWaveCommandHandler, RELEASE_WAVE } from '../../commands/warehouse/ReleaseWaveCommand';
 import { CompletePickLineCommandHandler, COMPLETE_PICK_LINE } from '../../commands/warehouse/CompletePickLineCommand';
 import { EVENT_TYPES } from '../../events/eventTypes';
-import { createTestCommand, mockEventBus } from '../helpers/testUtils';
+import { createTestCommand, mockEventBus, facilityMocks } from '../helpers/testUtils';
 
 /* ── CreateWaveCommandHandler ──────────────────────────────── */
 
@@ -14,6 +14,7 @@ describe('CreateWaveCommandHandler', () => {
       orgId: 'test-org',
     };
     const tx = {
+      ...facilityMocks(),
       wave: {
         count: jest.fn().mockResolvedValue(0),
         create: jest.fn().mockResolvedValue(mockWave),
@@ -79,8 +80,9 @@ describe('ReleaseWaveCommandHandler', () => {
       bin: { id: 'bin-1', walkSequence: 5 },
     };
     const tx = {
+      ...facilityMocks(),
       wave: {
-        findUnique: jest.fn().mockResolvedValue(mockWave),
+        findFirst: jest.fn().mockResolvedValue(mockWave),
         update: jest.fn().mockResolvedValue({}),
       },
       wmsFulfilmentOrderLine: { findMany: jest.fn().mockResolvedValue([mockDemandLine]) },
@@ -144,8 +146,9 @@ describe('ReleaseWaveCommandHandler', () => {
       bin: { id: 'bin-1', walkSequence: 1 },
     };
     const tx = {
+      ...facilityMocks(),
       wave: {
-        findUnique: jest.fn().mockResolvedValue(mockWave),
+        findFirst: jest.fn().mockResolvedValue(mockWave),
         update: jest.fn().mockResolvedValue({}),
       },
       wmsFulfilmentOrderLine: { findMany: jest.fn().mockResolvedValue([mockDemandLine]) },
@@ -177,7 +180,8 @@ describe('ReleaseWaveCommandHandler', () => {
 
   it('fails if wave not in planning status', async () => {
     const tx = {
-      wave: { findUnique: jest.fn().mockResolvedValue({ id: 'wave-1', status: 'released', waveOrders: [] }) },
+      ...facilityMocks(),
+      wave: { findFirst: jest.fn().mockResolvedValue({ id: 'wave-1', status: 'released', waveOrders: [] }) },
       domainEventLog: { create: jest.fn().mockResolvedValue({}) },
     } as any;
     const prisma = {
@@ -213,6 +217,7 @@ describe('CompletePickLineCommandHandler', () => {
 
   it('completes a pick line at full quantity', async () => {
     const tx = {
+      ...facilityMocks(),
       pickLine: {
         findUnique: jest.fn().mockResolvedValue(mockLine),
         update: jest.fn().mockResolvedValue({}),
@@ -259,6 +264,7 @@ describe('CompletePickLineCommandHandler', () => {
 
   it('handles short pick and emits PICK_LINE_SHORT', async () => {
     const tx = {
+      ...facilityMocks(),
       pickLine: {
         findUnique: jest.fn().mockResolvedValue(mockLine),
         update: jest.fn().mockResolvedValue({}),
@@ -303,6 +309,7 @@ describe('CompletePickLineCommandHandler', () => {
 
   it('auto-completes task when all lines done', async () => {
     const tx = {
+      ...facilityMocks(),
       pickLine: {
         findUnique: jest.fn().mockResolvedValue(mockLine),
         update: jest.fn().mockResolvedValue({}),
@@ -342,6 +349,7 @@ describe('CompletePickLineCommandHandler', () => {
   it('fails if line already picked', async () => {
     const pickedLine = { ...mockLine, status: 'picked' };
     const tx = {
+      ...facilityMocks(),
       pickLine: { findUnique: jest.fn().mockResolvedValue(pickedLine) },
       domainEventLog: { create: jest.fn().mockResolvedValue({}) },
     } as any;

@@ -3,6 +3,7 @@ import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { Command } from '../types.js';
+import { resolveFacilityForLocation } from '../facilities/resolveFacility.js';
 
 export interface CreateStagingAssignmentPayload {
   locationId: string;
@@ -32,13 +33,30 @@ export class CreateStagingAssignmentCommandHandler extends BaseCommandHandler<
   ): Promise<{ id: string; status: string; stagingBinLabel: string }> {
     const p = command.payload;
 
-    const bin = await tx.warehouseBin.findUnique({ where: { id: p.stagingBinId } });
+    // Both lookups are scoped to the caller's org (#220). Staging another tenant's bin would put
+    // our goods on their dock, and the trackableUnit update below would move their stock.
+    const bin = await tx.warehouseBin.findFirst({
+      where: { id: p.stagingBinId, orgId: command.orgId },
+    });
     if (!bin) throw new Error(`Staging bin ${p.stagingBinId} not found`);
     if (!bin.active) throw new Error(`Staging bin "${bin.label}" is inactive`);
+
+    // TrackableUnit carries no orgId of its own, so it is scoped through its order. Splitting it
+    // into a WMS HandlingUnit that does is Phase 2b.
+    const unit = await tx.trackableUnit.findFirst({
+      where: { id: p.trackableUnitId, order: { orgId: command.orgId } },
+      select: { id: true },
+    });
+    if (!unit) throw new Error(`Trackable unit ${p.trackableUnitId} not found`);
+
+    // Phase 2a dual-write (#227): the assignment is filed under both the Location and the Facility
+    // derived from it, so nothing is left without a facility when reads switch over.
+    const facilityId = await resolveFacilityForLocation(tx, command, p.locationId, emit);
 
     const assignment = await tx.stagingAssignment.create({
       data: {
         locationId: p.locationId,
+        facilityId,
         orderId: p.orderId,
         trackableUnitId: p.trackableUnitId,
         stagingBinId: p.stagingBinId,
