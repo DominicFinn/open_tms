@@ -17,10 +17,10 @@ export async function warehouseOperationsDashboardRoutes(server: FastifyInstance
       summary: 'Aggregate warehouse operations KPIs (throughput, cycle times, quality, live work, exceptions, capacity)',
     },
   }, async (req: FastifyRequest) => {
-    const orgId = (req as any).orgId
-      || (await prisma.organization.findFirst({ select: { id: true } }))?.id
-      || 'default-org';
-    const snapshot = await service.buildSnapshot(orgId);
+    // Was resolving the org with organization.findFirst(), which the security rule forbids
+    // outright: it silently returns the first organization for every caller, so every tenant saw
+    // whichever one happens to sort first. Scope comes from the token (#220).
+    const snapshot = await service.buildSnapshot(req.orgId!);
     return { data: snapshot, error: null };
   });
 }

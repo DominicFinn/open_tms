@@ -1,13 +1,13 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { container, TOKENS } from '../di/index.js';
-import { PrismaClient } from '@prisma/client';
+import { IWmsDashboardRepository } from '../repositories/WmsDashboardRepository.js';
 import { registerWmsGuard } from '../auth/wmsGuard.js';
 
 export async function wmsDashboardRoutes(server: FastifyInstance) {
   // WMS permission guard (#134): wms:read for reads, wms:write for mutations
   await registerWmsGuard(server);
 
-  const prisma = container.resolve<PrismaClient>(TOKENS.PrismaClient);
+  const repo = container.resolve<IWmsDashboardRepository>(TOKENS.IWmsDashboardRepository);
 
   // GET /api/v1/wms/dashboard?locationId=xxx
   server.get('/api/v1/wms/dashboard', {
@@ -22,47 +22,26 @@ export async function wmsDashboardRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { locationId } = req.query as { locationId: string };
+    const c = await repo.countsForLocation(req.orgId!, locationId);
 
-    const [
-      zones, bins, activeBins,
-      skuCount,
-      receivingPending, receivingInProgress,
-      putawayPending,
-      pickPending, pickInProgress,
-      packPending, packInProgress,
-      stagedCount,
-    ] = await Promise.all([
-      prisma.warehouseZone.count({ where: { locationId, active: true } }),
-      prisma.warehouseBin.count({ where: { locationId } }),
-      prisma.warehouseBin.count({ where: { locationId, active: true } }),
-      prisma.inventoryRecord.groupBy({ by: ['sku'], where: { locationId, quantityOnHand: { gt: 0 } } }).then(r => r.length),
-      prisma.receivingTask.count({ where: { locationId, status: 'pending' } }),
-      prisma.receivingTask.count({ where: { locationId, status: 'in_progress' } }),
-      prisma.putawayTask.count({ where: { locationId, status: { in: ['pending', 'assigned'] } } }),
-      prisma.pickTask.count({ where: { locationId, status: 'pending' } }),
-      prisma.pickTask.count({ where: { locationId, status: { in: ['assigned', 'in_progress'] } } }),
-      prisma.packTask.count({ where: { locationId, status: 'pending' } }),
-      prisma.packTask.count({ where: { locationId, status: 'in_progress' } }),
-      prisma.stagingAssignment.count({ where: { locationId, status: 'staged' } }),
-    ]);
-
+    // The response keeps its shape: the totals are derived here rather than counted twice.
     return {
       data: {
-        zones,
-        bins,
-        activeBins,
-        totalSkus: skuCount,
-        receivingTasks: receivingPending + receivingInProgress,
-        receivingPending,
-        receivingInProgress,
-        putawayTasks: putawayPending,
-        pickTasks: pickPending + pickInProgress,
-        pickPending,
-        pickInProgress,
-        packTasks: packPending + packInProgress,
-        packPending,
-        packInProgress,
-        stagedCount,
+        zones: c.zones,
+        bins: c.bins,
+        activeBins: c.activeBins,
+        totalSkus: c.totalSkus,
+        receivingTasks: c.receivingPending + c.receivingInProgress,
+        receivingPending: c.receivingPending,
+        receivingInProgress: c.receivingInProgress,
+        putawayTasks: c.putawayTasks,
+        pickTasks: c.pickPending + c.pickInProgress,
+        pickPending: c.pickPending,
+        pickInProgress: c.pickInProgress,
+        packTasks: c.packPending + c.packInProgress,
+        packPending: c.packPending,
+        packInProgress: c.packInProgress,
+        stagedCount: c.stagedCount,
       },
       error: null,
     };
