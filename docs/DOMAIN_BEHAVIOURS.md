@@ -2486,6 +2486,8 @@ the demand reference polymorphic.
 ### Commands
 - `wave.create` - Create a wave from selected order IDs. Auto-generates wave number (W-YYYY-MM-DD-NNN). Counts total line items across orders.
 - `wave.release` - Release wave: hard-allocates inventory (FIFO) for each order line, creates PickTasks with walk-sequence-sorted PickLines. Discrete strategy = one task per order, batch = one task for all.
+- `pick_task.assign` - Assign a pick task to a picker. Refused once completed or cancelled; a task
+  already in progress can be reassigned, since a picker can be pulled off a job mid-walk
 - `pick_line.complete` - Complete a pick line: deducts from InventoryRecord (quantityOnHand + quantityAllocated), creates InventoryTransaction (type: pick). Short pick handling: backorder (keep allocated) or cancel_line (release back to available). Auto-completes task and wave when all lines done.
 
 ### Events
@@ -2498,6 +2500,8 @@ the demand reference polymorphic.
 - Pick line completion decrements quantityOnHand and creates pick transaction
 - Short pick with cancel_line releases allocation back to available
 - Task auto-completes when all lines done; wave auto-completes when all tasks done
+- Wave, pick task, pack task and staging reads are scoped to `req.orgId` through `WaveRepository`
+  and `PackingRepository` (#220)
 
 ---
 
@@ -2554,10 +2558,12 @@ Auto-replenishes pick face bins from bulk storage when stock drops below configu
 
 ### Commands
 - `replenishment_rule.create` - Define a rule: SKU + pick face bin + bulk zone + min/max quantities. Validates min < max, bin and zone exist.
+- `replenishment_rule.update` - Change quantities or deactivate. The min/max band is validated against the merged values, since a request moving one side alone can still invert it
+- `replenishment_rule.delete` - Remove a rule. Scoped to the caller's organisation (#220)
 - `replenishment.check` - Evaluates all active rules for a location. For each rule where pick face qty < minQuantity: finds bulk inventory, creates PutawayTask (type: `replenishment`). Skips if already being replenished or no bulk stock available.
 
 ### Events
-- `replenishment_rule.created`, `replenishment_rule.updated`
+- `replenishment_rule.created`, `replenishment_rule.updated`, `replenishment_rule.deleted`
 - `inventory.below_minimum` - Emitted when a pick face drops below its rule's minQuantity
 - `replenishment.triggered` - Emitted when a replenishment putaway task is created
 
@@ -2576,13 +2582,18 @@ Automates wave creation from reusable template definitions with grouping rules, 
 
 ### Commands
 - `wave_template.create` - Define a template: name, pick strategy, grouping rules (JSON), cutoff time (HH:MM), min/max orders, priority, cron schedule, auto-release toggle.
+- `wave_template.update` - Change a template. maxOrders is validated against the stored minOrders
+- `wave_template.delete` - Remove a template. Refused once it has released waves, since a `Wave`
+  keeps a foreign key to the template it came from and deleting one would orphan them
 - `wave_template.apply` - Run a template: finds eligible orders (excludes already-waved), applies grouping rules, enforces min/max, generates wave number, creates wave with linked orders. Skips gracefully with reason if below minimum or no eligible orders.
 
 ### Events
+- `wave_template.updated`, `wave_template.deleted`
 - `wave.created` (with templateId and templateName in payload when template-driven)
 
 ### Side Effects
 - ApplyWaveTemplate creates Wave + WaveOrder records
+- Template reads are scoped to `req.orgId` through `WaveTemplateRepository` (#220)
 - Eligible orders are those not currently in any active (non-completed, non-cancelled) wave
 - Eligibility reads `WmsFulfilmentOrder`, and both halves of the query are org-scoped. They were
   not before, so a template could pull another organisation's orders into a wave

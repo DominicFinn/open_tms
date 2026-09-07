@@ -14,6 +14,10 @@ import { FacilityRepository } from '../../repositories/FacilityRepository.js';
 import { WarehouseZoneRepository } from '../../repositories/WarehouseZoneRepository.js';
 import { ReceivingRepository } from '../../repositories/ReceivingRepository.js';
 import { PutawayRepository } from '../../repositories/PutawayRepository.js';
+import { WaveRepository } from '../../repositories/WaveRepository.js';
+import { PackingRepository } from '../../repositories/PackingRepository.js';
+import { ReplenishmentRuleRepository } from '../../repositories/ReplenishmentRuleRepository.js';
+import { WaveTemplateRepository } from '../../repositories/WaveTemplateRepository.js';
 import { PutawayRuleEvaluator } from '../../services/PutawayRuleEvaluator.js';
 import { CartonizationService } from '../../services/CartonizationService.js';
 import { CreateFacilityCommandHandler } from '../../commands/facilities/CreateFacilityCommand.js';
@@ -24,6 +28,11 @@ import { UpdateWarehouseZoneCommandHandler } from '../../commands/warehouse/Upda
 import { CreateWarehouseBinCommandHandler } from '../../commands/warehouse/CreateWarehouseBinCommand.js';
 import { UpdateWarehouseBinCommandHandler } from '../../commands/warehouse/UpdateWarehouseBinCommand.js';
 import { BulkCreateBinsCommandHandler } from '../../commands/warehouse/BulkCreateBinsCommand.js';
+import { AssignPickTaskCommandHandler } from '../../commands/warehouse/AssignPickTaskCommand.js';
+import { UpdateReplenishmentRuleCommandHandler } from '../../commands/warehouse/UpdateReplenishmentRuleCommand.js';
+import { DeleteReplenishmentRuleCommandHandler } from '../../commands/warehouse/DeleteReplenishmentRuleCommand.js';
+import { UpdateWaveTemplateCommandHandler } from '../../commands/warehouse/UpdateWaveTemplateCommand.js';
+import { DeleteWaveTemplateCommandHandler } from '../../commands/warehouse/DeleteWaveTemplateCommand.js';
 import { CreatePutawayRuleCommandHandler } from '../../commands/warehouse/CreatePutawayRuleCommand.js';
 import { CreateReceivingAppointmentCommandHandler } from '../../commands/warehouse/CreateReceivingAppointmentCommand.js';
 import { CheckInAppointmentCommandHandler } from '../../commands/warehouse/CheckInAppointmentCommand.js';
@@ -68,6 +77,22 @@ export function registerWmsDependencies(prisma: PrismaClient): void {
     return new PutawayRepository(container.resolve(TOKENS.PrismaClient));
   });
 
+  container.singleton(TOKENS.IWaveRepository).toFactory(() => {
+    return new WaveRepository(container.resolve(TOKENS.PrismaClient));
+  });
+
+  container.singleton(TOKENS.IPackingRepository).toFactory(() => {
+    return new PackingRepository(container.resolve(TOKENS.PrismaClient));
+  });
+
+  container.singleton(TOKENS.IReplenishmentRuleRepository).toFactory(() => {
+    return new ReplenishmentRuleRepository(container.resolve(TOKENS.PrismaClient));
+  });
+
+  container.singleton(TOKENS.IWaveTemplateRepository).toFactory(() => {
+    return new WaveTemplateRepository(container.resolve(TOKENS.PrismaClient));
+  });
+
   container.singleton(TOKENS.IPutawayRuleEvaluator).toFactory(() => {
     return new PutawayRuleEvaluator(container.resolve(TOKENS.PrismaClient));
   });
@@ -107,6 +132,7 @@ export function registerWmsCommandHandlers(bus: CommandBus, deps: CommandHandler
   // Wave and pick commands
   bus.register(new CreateWaveCommandHandler(prisma, eventBus));
   bus.register(new ReleaseWaveCommandHandler(prisma, eventBus));
+  bus.register(new AssignPickTaskCommandHandler(prisma, eventBus));
   bus.register(new CompletePickLineCommandHandler(prisma, eventBus));
 
   // Packing and loading commands
@@ -121,10 +147,14 @@ export function registerWmsCommandHandlers(bus: CommandBus, deps: CommandHandler
 
   // Replenishment commands
   bus.register(new CreateReplenishmentRuleCommandHandler(prisma, eventBus));
+  bus.register(new UpdateReplenishmentRuleCommandHandler(prisma, eventBus));
+  bus.register(new DeleteReplenishmentRuleCommandHandler(prisma, eventBus));
   bus.register(new CheckReplenishmentCommandHandler(prisma, eventBus));
 
   // Wave template commands
   bus.register(new CreateWaveTemplateCommandHandler(prisma, eventBus));
+  bus.register(new UpdateWaveTemplateCommandHandler(prisma, eventBus));
+  bus.register(new DeleteWaveTemplateCommandHandler(prisma, eventBus));
   bus.register(new ApplyWaveTemplateCommandHandler(prisma, eventBus));
 
   // Load plan commands

@@ -5,7 +5,8 @@ import { ICommandBus } from '../commands/CommandBus.js';
 import { CREATE_WAVE } from '../commands/warehouse/CreateWaveCommand.js';
 import { RELEASE_WAVE } from '../commands/warehouse/ReleaseWaveCommand.js';
 import { COMPLETE_PICK_LINE } from '../commands/warehouse/CompletePickLineCommand.js';
-import { PrismaClient } from '@prisma/client';
+import { IWaveRepository } from '../repositories/WaveRepository.js';
+import { ASSIGN_PICK_TASK } from '../commands/warehouse/AssignPickTaskCommand.js';
 import crypto from 'crypto';
 import { registerWmsGuard } from '../auth/wmsGuard.js';
 
@@ -14,7 +15,7 @@ export async function waveRoutes(server: FastifyInstance) {
   await registerWmsGuard(server);
 
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
-  const prisma = container.resolve<PrismaClient>(TOKENS.PrismaClient);
+  const repo = container.resolve<IWaveRepository>(TOKENS.IWaveRepository);
 
   // ═══════════════════════════════════════════════════════════
   // WAVES
@@ -36,16 +37,7 @@ export async function waveRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { locationId, status } = req.query as { locationId: string; status?: string };
-    const where: any = { locationId };
-    if (status) where.status = status;
-
-    const waves = await prisma.wave.findMany({
-      where,
-      include: { _count: { select: { pickTasks: true, waveOrders: true } } },
-      orderBy: { createdAt: 'desc' },
-      take: 500,
-    });
-
+    const waves = await repo.findWavesByLocation(req.orgId!, locationId, status);
     return { data: waves, error: null };
   });
 
@@ -57,18 +49,8 @@ export async function waveRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const wave = await prisma.wave.findUnique({
-      where: { id },
-      include: {
-        waveOrders: { select: { orderId: true, priority: true } },
-        pickTasks: {
-          include: {
-            _count: { select: { pickLines: true } },
-          },
-          orderBy: { createdAt: 'asc' },
-        },
-      },
-    });
+    // A cross-tenant id misses rather than 403s, so existence stays opaque.
+    const wave = await repo.findWaveById(req.orgId!, id);
     if (!wave) {
       reply.code(404);
       return { data: null, error: 'Wave not found' };
@@ -102,12 +84,10 @@ export async function waveRoutes(server: FastifyInstance) {
       cutoffAt: z.string().nullable().optional(),
     }).parse((req as any).body);
 
-    const orgId = (req as any).orgId || 'default-org';
-    const actorId = (req as any).userId || 'system';
-
     const result = await commandBus.dispatch({
       type: CREATE_WAVE,
-      orgId, actorId,
+      orgId: req.orgId!,
+      actorId: req.user?.sub ?? null,
       payload: body,
       metadata: { correlationId: crypto.randomUUID(), source: 'api' },
     });
@@ -125,12 +105,10 @@ export async function waveRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const orgId = (req as any).orgId || 'default-org';
-    const actorId = (req as any).userId || 'system';
-
     const result = await commandBus.dispatch({
       type: RELEASE_WAVE,
-      orgId, actorId,
+      orgId: req.orgId!,
+      actorId: req.user?.sub ?? null,
       payload: { waveId: id },
       metadata: { correlationId: crypto.randomUUID(), source: 'api' },
     });
@@ -159,20 +137,11 @@ export async function waveRoutes(server: FastifyInstance) {
       },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const q = req.query as any;
-    const where: any = { locationId: q.locationId };
-    if (q.status) where.status = q.status;
-    if (q.waveId) where.waveId = q.waveId;
-
-    const tasks = await prisma.pickTask.findMany({
-      where,
-      include: {
-        wave: { select: { waveNumber: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 500,
+    const q = req.query as { locationId: string; status?: string; waveId?: string };
+    const tasks = await repo.findPickTasksByLocation(req.orgId!, q.locationId, {
+      status: q.status,
+      waveId: q.waveId,
     });
-
     return { data: tasks, error: null };
   });
 
@@ -184,18 +153,7 @@ export async function waveRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const task = await prisma.pickTask.findUnique({
-      where: { id },
-      include: {
-        wave: { select: { waveNumber: true, pickStrategy: true } },
-        pickLines: {
-          include: {
-            bin: { select: { label: true, zone: { select: { name: true } } } },
-          },
-          orderBy: { walkSequence: 'asc' },
-        },
-      },
-    });
+    const task = await repo.findPickTaskById(req.orgId!, id);
     if (!task) { reply.code(404); return { data: null, error: 'Pick task not found' }; }
     return { data: task, error: null };
   });
@@ -213,15 +171,23 @@ export async function waveRoutes(server: FastifyInstance) {
       assignedToUserId: z.string().min(1),
     }).parse(req.body);
 
-    const task = await prisma.pickTask.findUnique({ where: { id } });
-    if (!task) { reply.code(404); return { data: null, error: 'Pick task not found' }; }
-
-    const updated = await prisma.pickTask.update({
-      where: { id },
-      data: { assignedToUserId, status: 'assigned' },
+    const result = await commandBus.dispatch({
+      type: ASSIGN_PICK_TASK,
+      orgId: req.orgId!,
+      actorId: req.user?.sub ?? null,
+      payload: { taskId: id, assignedToUserId },
+      metadata: { correlationId: crypto.randomUUID(), source: 'api' },
     });
 
-    return { data: updated, error: null };
+    if (!result.success) {
+      if (result.error?.includes('not found')) {
+        return reply.code(404).send({ data: null, error: result.error });
+      }
+      const conflict = result.error?.includes('Cannot assign');
+      return reply.code(conflict ? 409 : 400).send({ data: null, error: result.error });
+    }
+
+    return { data: result.data, error: null };
   });
 
   // POST /api/v1/pick-lines/:id/complete — complete a single pick line
@@ -245,12 +211,10 @@ export async function waveRoutes(server: FastifyInstance) {
       shortPickAction: z.enum(['backorder', 'cancel_line']).optional(),
     }).parse((req as any).body);
 
-    const orgId = (req as any).orgId || 'default-org';
-    const actorId = (req as any).userId || 'system';
-
     const result = await commandBus.dispatch({
       type: COMPLETE_PICK_LINE,
-      orgId, actorId,
+      orgId: req.orgId!,
+      actorId: req.user?.sub ?? null,
       payload: { pickLineId: id, ...body },
       metadata: { correlationId: crypto.randomUUID(), source: 'api' },
     });

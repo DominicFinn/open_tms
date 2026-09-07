@@ -1,5 +1,6 @@
 import { Prisma, PrismaClient } from '@prisma/client';
 import { PgBossEventBus } from '../../events/PgBossEventBus.js';
+import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { Command } from '../types.js';
 
@@ -55,6 +56,18 @@ export class CreateWaveTemplateCommandHandler extends BaseCommandHandler<
         orgId: command.orgId,
       },
     });
+
+    emit(this.createEvent(command, {
+      type: EVENT_TYPES.WAVE_TEMPLATE_CREATED,
+      entityType: 'wave_template',
+      entityId: template.id,
+      payload: {
+        locationId: template.locationId,
+        pickStrategy: template.pickStrategy,
+        priority: template.priority,
+        autoRelease: template.autoRelease,
+      },
+    }));
 
     return { id: template.id, name: template.name };
   }
