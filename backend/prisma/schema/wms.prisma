@@ -54,6 +54,9 @@ model Facility {
   packTasks          PackTask[]
   stagingAssignments StagingAssignment[]
 
+  waves         Wave[]
+  waveTemplates WaveTemplate[]
+
   // One facility per source location per org: this is what makes the backfill and the
   // find-or-create in the dual-write path idempotent.
   @@unique([orgId, sourceLocationId])
@@ -356,6 +359,8 @@ model WaveTemplate {
   id                 String    @id @default(uuid())
   locationId         String
   location           Location  @relation(fields: [locationId], references: [id])
+  facilityId         String?
+  facility           Facility? @relation(fields: [facilityId], references: [id])
   name               String
   groupingRules      Json? // { customer, carrier, serviceLevel, shipFrom, shipCompleteOnly }
   cutoffTime         String? // HH:MM local
@@ -379,6 +384,7 @@ model WaveTemplate {
   waves Wave[]
 
   @@index([locationId])
+  @@index([facilityId])
   @@index([orgId])
 }
 
@@ -386,6 +392,8 @@ model Wave {
   id                    String        @id @default(uuid())
   locationId            String
   location              Location      @relation(fields: [locationId], references: [id])
+  facilityId            String?
+  facility              Facility?     @relation(fields: [facilityId], references: [id])
   templateId            String?
   template              WaveTemplate? @relation(fields: [templateId], references: [id])
   waveNumber            String // auto-generated, e.g. "W-2026-04-14-001"
@@ -409,6 +417,7 @@ model Wave {
 
   @@unique([orgId, waveNumber])
   @@index([locationId])
+  @@index([facilityId])
   @@index([orgId])
   @@index([status])
 }

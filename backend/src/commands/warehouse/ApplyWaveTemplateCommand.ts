@@ -3,6 +3,7 @@ import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { Command } from '../types.js';
+import { resolveFacilityForLocation } from '../facilities/resolveFacility.js';
 
 /**
  * Applies a wave template: finds eligible orders matching the template's
@@ -31,7 +32,12 @@ export class ApplyWaveTemplateCommandHandler extends BaseCommandHandler<
     tx: TransactionClient,
     emit: EmitFn
   ): Promise<{ waveId: string | null; waveNumber: string | null; orderCount: number; skipped: boolean; skipReason: string | null }> {
-    const template = await tx.waveTemplate.findUnique({ where: { id: command.payload.templateId } });
+    // findFirst with orgId rather than findUnique by id: applying a template creates a wave at
+    // that template's location, so a bare id lookup would build our wave on another tenant's
+    // floor and against their grouping rules (#220).
+    const template = await tx.waveTemplate.findFirst({
+      where: { id: command.payload.templateId, orgId: command.orgId },
+    });
     if (!template) throw new Error(`Wave template ${command.payload.templateId} not found`);
     if (!template.active) throw new Error('Template is inactive');
 
@@ -103,10 +109,15 @@ export class ApplyWaveTemplateCommandHandler extends BaseCommandHandler<
       cutoffAt.setHours(hours, minutes, 0, 0);
     }
 
-    // Create the wave
+    // Phase 2a dual-write (#229): the wave takes its location from the template, so the facility
+    // resolves from the same place rather than being copied off the template row, which may
+    // predate the backfill.
+    const facilityId = await resolveFacilityForLocation(tx, command, template.locationId, emit);
+
     const wave = await tx.wave.create({
       data: {
         locationId: template.locationId,
+        facilityId,
         templateId: template.id,
         waveNumber,
         status: 'planning',

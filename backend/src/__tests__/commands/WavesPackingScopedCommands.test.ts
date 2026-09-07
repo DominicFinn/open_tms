@@ -11,7 +11,7 @@ import { UpdateWaveTemplateCommandHandler, UPDATE_WAVE_TEMPLATE } from '../../co
 import { DeleteWaveTemplateCommandHandler, DELETE_WAVE_TEMPLATE } from '../../commands/warehouse/DeleteWaveTemplateCommand';
 import { CreateWaveTemplateCommandHandler, CREATE_WAVE_TEMPLATE } from '../../commands/warehouse/CreateWaveTemplateCommand';
 import { EVENT_TYPES } from '../../events/eventTypes';
-import { createTestCommand, mockEventBus } from '../helpers/testUtils';
+import { createTestCommand, mockEventBus , facilityMocks } from '../helpers/testUtils';
 
 const pickTask = { id: 'task-1', status: 'pending', assignedToUserId: null, waveId: 'wave-1' };
 const rule = { id: 'rule-1', orgId: 'test-org', locationId: 'loc-1', sku: 'SKU-1', minQuantity: 10, maxQuantity: 100 };
@@ -19,6 +19,7 @@ const template = { id: 'tpl-1', orgId: 'test-org', locationId: 'loc-1', name: 'M
 
 function buildPrisma(o: any = {}) {
   const tx = {
+      ...facilityMocks(),
     pickTask: {
       findFirst: jest.fn().mockResolvedValue('pickTask' in o ? o.pickTask : pickTask),
       update: jest.fn().mockImplementation(({ data }: any) => Promise.resolve({ ...pickTask, ...data })),

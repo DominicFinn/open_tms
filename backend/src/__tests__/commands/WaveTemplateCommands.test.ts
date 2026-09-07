@@ -1,7 +1,7 @@
 import { CreateWaveTemplateCommandHandler, CREATE_WAVE_TEMPLATE } from '../../commands/warehouse/CreateWaveTemplateCommand';
 import { ApplyWaveTemplateCommandHandler, APPLY_WAVE_TEMPLATE } from '../../commands/warehouse/ApplyWaveTemplateCommand';
 import { EVENT_TYPES } from '../../events/eventTypes';
-import { createTestCommand, mockEventBus } from '../helpers/testUtils';
+import { createTestCommand, mockEventBus , facilityMocks } from '../helpers/testUtils';
 
 /* ── CreateWaveTemplateCommandHandler ──────────────────────── */
 
@@ -9,6 +9,7 @@ describe('CreateWaveTemplateCommandHandler', () => {
   it('creates template and returns id + name', async () => {
     const mockTemplate = { id: 'tpl-1', name: 'Daily FedEx 14:00', orgId: 'test-org' };
     const tx = {
+      ...facilityMocks(),
       waveTemplate: { create: jest.fn().mockResolvedValue(mockTemplate) },
       domainEventLog: { create: jest.fn().mockResolvedValue({}) },
     } as any;
@@ -40,6 +41,7 @@ describe('CreateWaveTemplateCommandHandler', () => {
   it('persists zonePickMode when supplied (for zone pick strategy)', async () => {
     const mockTemplate = { id: 'tpl-zone', name: 'Zone Sequential', orgId: 'test-org' };
     const tx = {
+      ...facilityMocks(),
       waveTemplate: { create: jest.fn().mockResolvedValue(mockTemplate) },
       domainEventLog: { create: jest.fn().mockResolvedValue({}) },
     } as any;
@@ -70,6 +72,7 @@ describe('CreateWaveTemplateCommandHandler', () => {
 
   it('defaults zonePickMode to null when omitted', async () => {
     const tx = {
+      ...facilityMocks(),
       waveTemplate: { create: jest.fn().mockResolvedValue({ id: 'tpl-null', name: 'No Zone Mode', orgId: 'test-org' }) },
       domainEventLog: { create: jest.fn().mockResolvedValue({}) },
     } as any;
@@ -105,7 +108,8 @@ describe('ApplyWaveTemplateCommandHandler', () => {
   it('creates wave from eligible orders', async () => {
     const mockWave = { id: 'wave-1', waveNumber: 'W-2026-04-16-001' };
     const tx = {
-      waveTemplate: { findUnique: jest.fn().mockResolvedValue(mockTemplate) },
+      ...facilityMocks(),
+      waveTemplate: { findFirst: jest.fn().mockResolvedValue(mockTemplate) },
       waveOrder: {
         findMany: jest.fn().mockResolvedValue([]), // no existing wave orders
         createMany: jest.fn().mockResolvedValue({ count: 3 }),
@@ -146,7 +150,8 @@ describe('ApplyWaveTemplateCommandHandler', () => {
 
   it('skips if below minOrders', async () => {
     const tx = {
-      waveTemplate: { findUnique: jest.fn().mockResolvedValue(mockTemplate) },
+      ...facilityMocks(),
+      waveTemplate: { findFirst: jest.fn().mockResolvedValue(mockTemplate) },
       waveOrder: { findMany: jest.fn().mockResolvedValue([]) },
       wmsFulfilmentOrder: { findMany: jest.fn().mockResolvedValue([{ sourceId: 'o1', lineCount: 2 }]) }, // only 1, min is 2
       domainEventLog: { create: jest.fn().mockResolvedValue({}) },
@@ -169,7 +174,8 @@ describe('ApplyWaveTemplateCommandHandler', () => {
 
   it('skips if no eligible orders', async () => {
     const tx = {
-      waveTemplate: { findUnique: jest.fn().mockResolvedValue({ ...mockTemplate, minOrders: null }) },
+      ...facilityMocks(),
+      waveTemplate: { findFirst: jest.fn().mockResolvedValue({ ...mockTemplate, minOrders: null }) },
       waveOrder: { findMany: jest.fn().mockResolvedValue([]) },
       wmsFulfilmentOrder: { findMany: jest.fn().mockResolvedValue([]) },
       domainEventLog: { create: jest.fn().mockResolvedValue({}) },
@@ -192,7 +198,8 @@ describe('ApplyWaveTemplateCommandHandler', () => {
 
   it('scopes both eligibility queries to the org', async () => {
     const tx = {
-      waveTemplate: { findUnique: jest.fn().mockResolvedValue({ ...mockTemplate, minOrders: null }) },
+      ...facilityMocks(),
+      waveTemplate: { findFirst: jest.fn().mockResolvedValue({ ...mockTemplate, minOrders: null }) },
       waveOrder: { findMany: jest.fn().mockResolvedValue([]) },
       wmsFulfilmentOrder: { findMany: jest.fn().mockResolvedValue([]) },
       domainEventLog: { create: jest.fn().mockResolvedValue({}) },
@@ -218,7 +225,8 @@ describe('ApplyWaveTemplateCommandHandler', () => {
 
   it('fails if template inactive', async () => {
     const tx = {
-      waveTemplate: { findUnique: jest.fn().mockResolvedValue({ ...mockTemplate, active: false }) },
+      ...facilityMocks(),
+      waveTemplate: { findFirst: jest.fn().mockResolvedValue({ ...mockTemplate, active: false }) },
       domainEventLog: { create: jest.fn().mockResolvedValue({}) },
     } as any;
     const prisma = {
@@ -240,7 +248,8 @@ describe('ApplyWaveTemplateCommandHandler', () => {
     const smallMaxTemplate = { ...mockTemplate, minOrders: null, maxOrders: 2 };
     const mockWave = { id: 'wave-1', waveNumber: 'W-2026-04-16-001' };
     const tx = {
-      waveTemplate: { findUnique: jest.fn().mockResolvedValue(smallMaxTemplate) },
+      ...facilityMocks(),
+      waveTemplate: { findFirst: jest.fn().mockResolvedValue(smallMaxTemplate) },
       waveOrder: {
         findMany: jest.fn().mockResolvedValue([]),
         createMany: jest.fn().mockResolvedValue({ count: 2 }),
