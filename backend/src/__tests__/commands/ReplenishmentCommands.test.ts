@@ -1,7 +1,7 @@
 import { CreateReplenishmentRuleCommandHandler, CREATE_REPLENISHMENT_RULE } from '../../commands/warehouse/CreateReplenishmentRuleCommand';
 import { CheckReplenishmentCommandHandler, CHECK_REPLENISHMENT } from '../../commands/warehouse/CheckReplenishmentCommand';
 import { EVENT_TYPES } from '../../events/eventTypes';
-import { createTestCommand, mockEventBus } from '../helpers/testUtils';
+import { createTestCommand, mockEventBus, facilityMocks } from '../helpers/testUtils';
 
 /* ── CreateReplenishmentRuleCommandHandler ─────────────────── */
 
@@ -9,6 +9,7 @@ describe('CreateReplenishmentRuleCommandHandler', () => {
   it('creates rule and emits event', async () => {
     const mockRule = { id: 'rule-1', sku: 'SKU-001', minQuantity: 5, maxQuantity: 20, orgId: 'test-org' };
     const tx = {
+      ...facilityMocks(),
       warehouseBin: { findUnique: jest.fn().mockResolvedValue({ id: 'bin-1' }) },
       warehouseZone: { findUnique: jest.fn().mockResolvedValue({ id: 'zone-1' }) },
       replenishmentRule: { create: jest.fn().mockResolvedValue(mockRule) },
@@ -64,6 +65,7 @@ describe('CheckReplenishmentCommandHandler', () => {
     const pickFaceInv = { id: 'inv-pf', binId: 'bin-pf', sku: 'SKU-001', quantityOnHand: 3 };
     const bulkInv = { id: 'inv-bulk', binId: 'bin-bulk', sku: 'SKU-001', quantityAvailable: 100, bin: { id: 'bin-bulk' } };
     const tx = {
+      ...facilityMocks(),
       replenishmentRule: { findMany: jest.fn().mockResolvedValue([rule]) },
       inventoryRecord: {
         findFirst: jest.fn()
@@ -110,6 +112,7 @@ describe('CheckReplenishmentCommandHandler', () => {
     const rule = { id: 'rule-1', locationId: 'loc-1', sku: 'SKU-001', pickFaceBinId: 'bin-pf', bulkZoneId: 'zone-bulk', minQuantity: 10, maxQuantity: 50, active: true };
     const pickFaceInv = { id: 'inv-pf', quantityOnHand: 15 }; // Above min of 10
     const tx = {
+      ...facilityMocks(),
       replenishmentRule: { findMany: jest.fn().mockResolvedValue([rule]) },
       inventoryRecord: { findFirst: jest.fn().mockResolvedValue(pickFaceInv) },
       putawayTask: { findFirst: jest.fn(), create: jest.fn() },
@@ -135,6 +138,7 @@ describe('CheckReplenishmentCommandHandler', () => {
     const rule = { id: 'rule-1', locationId: 'loc-1', sku: 'SKU-001', pickFaceBinId: 'bin-pf', bulkZoneId: 'zone-bulk', minQuantity: 10, maxQuantity: 50, active: true };
     const pickFaceInv = { id: 'inv-pf', quantityOnHand: 3 };
     const tx = {
+      ...facilityMocks(),
       replenishmentRule: { findMany: jest.fn().mockResolvedValue([rule]) },
       inventoryRecord: { findFirst: jest.fn().mockResolvedValue(pickFaceInv) },
       putawayTask: {
@@ -163,6 +167,7 @@ describe('CheckReplenishmentCommandHandler', () => {
     const rule = { id: 'rule-1', locationId: 'loc-1', sku: 'SKU-001', pickFaceBinId: 'bin-pf', bulkZoneId: 'zone-bulk', minQuantity: 10, maxQuantity: 50, active: true };
     const pickFaceInv = { id: 'inv-pf', quantityOnHand: 3 };
     const tx = {
+      ...facilityMocks(),
       replenishmentRule: { findMany: jest.fn().mockResolvedValue([rule]) },
       inventoryRecord: {
         findFirst: jest.fn()

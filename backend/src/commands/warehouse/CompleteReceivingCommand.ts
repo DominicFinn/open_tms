@@ -3,6 +3,7 @@ import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { Command } from '../types.js';
+import { resolveFacilityForLocation } from '../facilities/resolveFacility.js';
 
 export interface CompleteReceivingPayload {
   taskId: string;
@@ -25,8 +26,10 @@ export class CompleteReceivingCommandHandler extends BaseCommandHandler<
     tx: TransactionClient,
     emit: EmitFn
   ): Promise<{ id: string; status: string; totalReceived: number; totalDamaged: number; putawayTasksCreated: number }> {
-    const task = await tx.receivingTask.findUnique({
-      where: { id: command.payload.taskId },
+    // findFirst with orgId rather than findUnique by id: a bare id lookup would let one tenant
+    // complete another's receiving task and generate putaway against their racking (#220).
+    const task = await tx.receivingTask.findFirst({
+      where: { id: command.payload.taskId, orgId: command.orgId },
       include: { lines: true },
     });
     if (!task) throw new Error(`Receiving task ${command.payload.taskId} not found`);
@@ -62,6 +65,7 @@ export class CompleteReceivingCommandHandler extends BaseCommandHandler<
       const stagingBin = await tx.warehouseBin.findFirst({
         where: {
           locationId: task.locationId,
+          orgId: command.orgId,
           active: true,
           zone: { zoneType: { in: ['staging', 'shipping_dock', 'cross_dock'] }, active: true },
         },
@@ -114,8 +118,10 @@ export class CompleteReceivingCommandHandler extends BaseCommandHandler<
 
     if (linesWithUnits.length > 0 && !task.crossDock) {
       // Find a putaway target using rules, or fall back to first bulk bin
+      // orgId on both: locationId alone would match another tenant's rules and bins, and route
+      // this org's stock into their racking (#220).
       const rules = await tx.putawayRule.findMany({
-        where: { locationId: task.locationId, active: true },
+        where: { locationId: task.locationId, orgId: command.orgId, active: true },
         orderBy: { priority: 'asc' },
       });
 
@@ -123,11 +129,16 @@ export class CompleteReceivingCommandHandler extends BaseCommandHandler<
       const fallbackBin = await tx.warehouseBin.findFirst({
         where: {
           locationId: task.locationId,
+          orgId: command.orgId,
           active: true,
           zone: { zoneType: 'bulk_storage', active: true },
         },
         orderBy: { walkSequence: 'asc' },
       });
+
+      // Phase 2a dual-write (#225): every putaway task below is at the receiving task's location,
+      // so the facility is resolved once for the batch rather than per line.
+      const putawayFacilityId = await resolveFacilityForLocation(tx, command, task.locationId, emit);
 
       for (const line of linesWithUnits) {
         // Try to match a rule
@@ -151,6 +162,7 @@ export class CompleteReceivingCommandHandler extends BaseCommandHandler<
           await tx.putawayTask.create({
             data: {
               locationId: task.locationId,
+              facilityId: putawayFacilityId,
               receivingTaskId: task.id,
               trackableUnitId: (line as any).trackableUnitId,
               sourceBinId: task.dockBinId ?? null,

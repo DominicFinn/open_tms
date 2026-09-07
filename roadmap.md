@@ -42,8 +42,9 @@ Roughly 50-65 PR-sized chunks end to end; every PR leaves the product shippable.
   split ✅ (#166),
   `WmsFulfilmentOrder` projection ✅ (#168), load-plan event seam ✅ (#173). One new WMS read
   model, no changes to existing tables
-- **Phase 2: Data model untangling** 🚧 `Facility` (WMS off the conflated `Location`) — chunk 1
-  of 6 shipped ✅ (#217: `Facility`, storage topology dual-write, `/api/v1/facilities`);
+- **Phase 2: Data model untangling** 🚧 `Facility` (WMS off the conflated `Location`) — batches 1
+  and 2 of 6 shipped ✅ (#217: `Facility`, storage topology dual-write, `/api/v1/facilities`;
+  #225: the inbound models, appointments through putaway);
   `HandlingUnit` (stock without a TMS order), polymorphic `Allocation` demand ref, carton cleanup,
   `OrgWmsSettings` carve-out still to come. All expand→contract.
   Phase 0 tenancy leftovers closed alongside ✅ (#220, in #221/#222/#223): the whole WMS read and
@@ -691,9 +692,9 @@ Base login (email + password, JWT, admin password reset, RequireAuth guard, glob
    shipped, and the boundary is drawn in code and enforced by `npm run lint:boundaries`. Phase 2 is
    the one that makes a standalone FinnWMS possible: `Facility` (WMS off the conflated `Location`),
    `HandlingUnit` (stock without a TMS order), and a polymorphic `Allocation` demand ref. 2a is
-   under way: chunk 1 (#217) landed `Facility` and the storage topology dual-write, and the
-   remaining five batches are listed in the split roadmap. Batch 2 (inbound) is next, and is
-   cheaper than chunk 1 now that #220 has cleaned the same files.
+   under way: #217 landed `Facility` and the storage topology dual-write, #225 the inbound models,
+   and the remaining four batches are listed in the split roadmap. Batch 3 (outbound: `PickTask`,
+   `PackTask`, `StagingAssignment`) is next.
    See [docs/roadmap/split-finntms-finnwms.md](docs/roadmap/split-finntms-finnwms.md).
 1. **NEXT (Immediate):** **Carrier API Integration** - Real-time shipment tracking through carrier APIs is table stakes. FedEx/UPS/DHL first-party tracking already exist (real, sandbox-ready). Expand with **multi-carrier aggregators** (EasyPost, AfterShip) so one integration pools dozens of carriers, then broaden. Poll + webhook, all sandbox/ngrok-testable. Landscape + selection in `docs/CARRIER_INTEGRATIONS.md`; testing in `docs/CARRIER_TESTING.md`.
 2. **Immediate:** **Track 1 (Brokerage)** - Broker entity model, margin tracking, quoting workflow. This unlocks the largest market segment currently unserved.

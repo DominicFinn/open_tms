@@ -2,7 +2,7 @@ import { CreateReceivingTaskCommandHandler, CREATE_RECEIVING_TASK } from '../../
 import { RecordReceivingLineCommandHandler, RECORD_RECEIVING_LINE } from '../../commands/warehouse/RecordReceivingLineCommand';
 import { CompleteReceivingCommandHandler, COMPLETE_RECEIVING } from '../../commands/warehouse/CompleteReceivingCommand';
 import { EVENT_TYPES } from '../../events/eventTypes';
-import { createTestCommand, mockEventBus } from '../helpers/testUtils';
+import { createTestCommand, mockEventBus, facilityMocks } from '../helpers/testUtils';
 
 /* ── Mock Data ─────────────────────────────────────────────── */
 
@@ -27,6 +27,7 @@ const mockLine = {
 describe('CreateReceivingTaskCommandHandler', () => {
   it('creates task and emits RECEIVING_TASK_CREATED', async () => {
     const tx = {
+      ...facilityMocks(),
       receivingTask: { create: jest.fn().mockResolvedValue(mockTask) },
       receivingLine: { createMany: jest.fn().mockResolvedValue({ count: 0 }) },
       receivingAppointment: { update: jest.fn() },
@@ -55,6 +56,7 @@ describe('CreateReceivingTaskCommandHandler', () => {
 
   it('creates expected lines for ASN mode', async () => {
     const tx = {
+      ...facilityMocks(),
       receivingTask: { create: jest.fn().mockResolvedValue(mockTask) },
       receivingLine: { createMany: jest.fn().mockResolvedValue({ count: 2 }) },
       receivingAppointment: { update: jest.fn() },
@@ -92,9 +94,13 @@ describe('CreateReceivingTaskCommandHandler', () => {
   it('updates appointment status when linked', async () => {
     const taskWithAppt = { ...mockTask, appointmentId: 'appt-1' };
     const tx = {
+      ...facilityMocks(),
       receivingTask: { create: jest.fn().mockResolvedValue(taskWithAppt) },
       receivingLine: { createMany: jest.fn().mockResolvedValue({ count: 0 }) },
-      receivingAppointment: { update: jest.fn().mockResolvedValue({}) },
+      receivingAppointment: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'appt-1' }),
+        update: jest.fn().mockResolvedValue({}),
+      },
       domainEventLog: { create: jest.fn().mockResolvedValue({}) },
     } as any;
     const prisma = {
@@ -125,6 +131,7 @@ describe('RecordReceivingLineCommandHandler', () => {
   it('records a blind line and auto-starts task', async () => {
     const newLine = { ...mockLine, sku: 'BLIND-001', receivedQuantity: 5 };
     const tx = {
+      ...facilityMocks(),
       receivingTask: {
         findUnique: jest.fn().mockResolvedValue(mockTask),
         update: jest.fn().mockResolvedValue({ ...mockTask, status: 'in_progress' }),
@@ -162,6 +169,7 @@ describe('RecordReceivingLineCommandHandler', () => {
     const updatedLine = { ...mockLine, receivedQuantity: 10 };
     const inProgressTask = { ...mockTask, status: 'in_progress' };
     const tx = {
+      ...facilityMocks(),
       receivingTask: {
         findUnique: jest.fn().mockResolvedValue(inProgressTask),
         update: jest.fn(),
@@ -196,6 +204,7 @@ describe('RecordReceivingLineCommandHandler', () => {
 
   it('fails if task not found', async () => {
     const tx = {
+      ...facilityMocks(),
       receivingTask: { findUnique: jest.fn().mockResolvedValue(null) },
       domainEventLog: { create: jest.fn().mockResolvedValue({}) },
     } as any;
@@ -216,6 +225,7 @@ describe('RecordReceivingLineCommandHandler', () => {
 
   it('fails if task is completed', async () => {
     const tx = {
+      ...facilityMocks(),
       receivingTask: { findUnique: jest.fn().mockResolvedValue({ ...mockTask, status: 'completed' }) },
       domainEventLog: { create: jest.fn().mockResolvedValue({}) },
     } as any;
@@ -246,8 +256,9 @@ describe('CompleteReceivingCommandHandler', () => {
       ],
     };
     const tx = {
+      ...facilityMocks(),
       receivingTask: {
-        findUnique: jest.fn().mockResolvedValue(taskWithLines),
+        findFirst: jest.fn().mockResolvedValue(taskWithLines),
         update: jest.fn().mockResolvedValue({ ...taskWithLines, status: 'completed' }),
       },
       receivingAppointment: { update: jest.fn() },
@@ -283,8 +294,9 @@ describe('CompleteReceivingCommandHandler', () => {
     };
     const fallbackBin = { id: 'bin-bulk-1', label: 'BULK-A-01-01' };
     const tx = {
+      ...facilityMocks(),
       receivingTask: {
-        findUnique: jest.fn().mockResolvedValue(taskWithTrackedLines),
+        findFirst: jest.fn().mockResolvedValue(taskWithTrackedLines),
         update: jest.fn().mockResolvedValue({ ...taskWithTrackedLines, status: 'completed' }),
       },
       receivingAppointment: { update: jest.fn() },
@@ -320,8 +332,9 @@ describe('CompleteReceivingCommandHandler', () => {
 
   it('fails if task already completed', async () => {
     const tx = {
+      ...facilityMocks(),
       receivingTask: {
-        findUnique: jest.fn().mockResolvedValue({ ...mockTask, status: 'completed', lines: [] }),
+        findFirst: jest.fn().mockResolvedValue({ ...mockTask, status: 'completed', lines: [] }),
       },
       domainEventLog: { create: jest.fn().mockResolvedValue({}) },
     } as any;
