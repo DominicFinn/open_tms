@@ -137,9 +137,15 @@ Seven FKs and one model stand between the two products.
   | 1 | Storage topology | `WarehouseZone`, `WarehouseAisle`, `WarehouseBin` | ✅ #217 |
   | 2 | Inbound | `ReceivingTask`, `ReceivingAppointment`, `PutawayTask`, `PutawayRule` | ✅ #225 |
   | 3 | Outbound | `PickTask`, `PackTask`, `StagingAssignment` | ✅ #227 |
-  | 4 | Waves | `Wave`, `WaveTemplate`, `WmsFulfilmentOrder` | next |
-  | 5 | Frontend | the 27 files off `/api/v1/locations` | |
+  | 4 | Waves | `Wave`, `WaveTemplate` | ✅ #229 |
+  | 5 | Reads + frontend | switch reads to `facilityId`; the 27 files off `/api/v1/locations` | next |
   | 6 | Contract | drop the `Location` FKs and the two boundary-lint exceptions | |
+
+  Batch 4 listed `WmsFulfilmentOrder` when this table was written. It has no `locationId` and no
+  `Location` relation, so it needed nothing. **The dual-write is now complete: all twelve WMS
+  models that reference `Location` carry a `facilityId`.** Batch 5 is the first one that changes
+  behaviour, so it wants a soak between the backfill and the switchover rather than shipping both
+  at once.
 
   Chunk 1 (#217) added `Facility` with a soft `sourceLocationId`, nullable `facilityId` on the
   three topology models, a migration that backfills one facility per referenced Location taking
@@ -169,9 +175,14 @@ Seven FKs and one model stand between the two products.
   tenant's stock and decremented their `quantityAvailable`. Five more, including
   `staging_assignment.create` moving another tenant's `TrackableUnit` into our staging bin.
 
-  **Batch 4 should assume the same and look at the wave and template commands first.** It also
-  inherits the one awkward case batch 3 hit: `TrackableUnit` has no `orgId`, so it can only be
-  scoped through its order. That is the argument for 2b, and it is worth doing soon.
+  Batch 4 (#229) found one more, `wave_template.apply` looking its template up by bare id, which
+  built the wave on another tenant's floor. **That is 21 across the four batches, all of them
+  inside command handlers that #220 did not reach.** The pattern is stable enough to state as a
+  rule: a command that looks its aggregate up with `findUnique({ where: { id } })` is a tenancy
+  bug, and `locationId` alone is never a sufficient filter.
+
+  The one awkward case remaining is `TrackableUnit`, which has no `orgId` and can only be scoped
+  through its order. That is the argument for 2b, and it is worth doing soon.
 - **2b. TrackableUnit split (L-XL, 5-7):** new WMS `HandlingUnit` (standalone LPN with soft
   order/shipment refs), backfill and dual-write, switch receiving/putaway/inventory, then drop the
   WMS FKs to TrackableUnit. **Split it; don't make `orderId` nullable as a shortcut.** The cascade

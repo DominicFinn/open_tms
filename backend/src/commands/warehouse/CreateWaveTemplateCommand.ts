@@ -3,6 +3,7 @@ import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { Command } from '../types.js';
+import { resolveFacilityForLocation } from '../facilities/resolveFacility.js';
 
 export interface CreateWaveTemplatePayload {
   locationId: string;
@@ -38,9 +39,14 @@ export class CreateWaveTemplateCommandHandler extends BaseCommandHandler<
   ): Promise<{ id: string; name: string }> {
     const p = command.payload;
 
+    // Phase 2a dual-write (#229): the template is filed under both the Location and the Facility
+    // derived from it, so nothing is left without a facility when reads switch over.
+    const facilityId = await resolveFacilityForLocation(tx, command, p.locationId, emit);
+
     const template = await tx.waveTemplate.create({
       data: {
         locationId: p.locationId,
+        facilityId,
         name: p.name,
         groupingRules: p.groupingRules as Prisma.InputJsonValue ?? Prisma.JsonNull,
         cutoffTime: p.cutoffTime ?? null,
