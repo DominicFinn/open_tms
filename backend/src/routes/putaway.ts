@@ -4,7 +4,8 @@ import { container, TOKENS } from '../di/index.js';
 import { ICommandBus } from '../commands/CommandBus.js';
 import { ASSIGN_PUTAWAY_TASK } from '../commands/warehouse/AssignPutawayTaskCommand.js';
 import { COMPLETE_PUTAWAY } from '../commands/warehouse/CompletePutawayCommand.js';
-import { PrismaClient } from '@prisma/client';
+import { CREATE_PUTAWAY_RULE } from '../commands/warehouse/CreatePutawayRuleCommand.js';
+import { IPutawayRepository } from '../repositories/PutawayRepository.js';
 import crypto from 'crypto';
 import { registerWmsGuard } from '../auth/wmsGuard.js';
 
@@ -13,7 +14,7 @@ export async function putawayRoutes(server: FastifyInstance) {
   await registerWmsGuard(server);
 
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
-  const prisma = container.resolve<PrismaClient>(TOKENS.PrismaClient);
+  const repo = container.resolve<IPutawayRepository>(TOKENS.IPutawayRepository);
 
   // GET /api/v1/putaway/tasks?locationId=xxx&status=xxx
   server.get('/api/v1/putaway/tasks', {
@@ -31,18 +32,7 @@ export async function putawayRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { locationId, status } = req.query as { locationId: string; status?: string };
-    const where: any = { locationId };
-    if (status) where.status = status;
-
-    const tasks = await prisma.putawayTask.findMany({
-      where,
-      include: {
-        trackableUnit: { select: { id: true, identifier: true, unitType: true, barcode: true } },
-        sourceBin: { select: { id: true, label: true } },
-        targetBin: { select: { id: true, label: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    const tasks = await repo.findTasksByLocation(req.orgId!, locationId, status);
 
     return { data: tasks, error: null };
   });
@@ -56,27 +46,8 @@ export async function putawayRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const task = await prisma.putawayTask.findUnique({
-      where: { id },
-      include: {
-        trackableUnit: {
-          select: {
-            id: true, identifier: true, unitType: true, barcode: true,
-            lotNumber: true, expiryDate: true, qualityStatus: true,
-            lineItems: { select: { sku: true, description: true, quantity: true, weight: true, temperature: true, hazmat: true } },
-          },
-        },
-        sourceBin: { select: { id: true, label: true, binType: true }, },
-        targetBin: {
-          select: {
-            id: true, label: true, binType: true,
-            temperatureZone: true, hazmatCertified: true,
-            zone: { select: { name: true, zoneType: true, temperatureZone: true, hazmatCertified: true } },
-          },
-        },
-        receivingTask: { select: { id: true, receivingType: true } },
-      },
-    });
+    // A cross-tenant id misses rather than 403s, so existence stays opaque.
+    const task = await repo.findTaskById(req.orgId!, id);
 
     if (!task) {
       reply.code(404);
@@ -105,13 +76,10 @@ export async function putawayRoutes(server: FastifyInstance) {
       assignedToUserId: z.string().min(1),
     }).parse((req as any).body);
 
-    const orgId = (req as any).orgId || 'default-org';
-    const actorId = (req as any).userId || 'system';
-
     const result = await commandBus.dispatch({
       type: ASSIGN_PUTAWAY_TASK,
-      orgId,
-      actorId,
+      orgId: req.orgId!,
+      actorId: req.user?.sub ?? null,
       payload: { taskId: id, ...body },
       metadata: { correlationId: crypto.randomUUID(), source: 'api' },
     });
@@ -144,13 +112,10 @@ export async function putawayRoutes(server: FastifyInstance) {
       scannedBinLabel: z.string().min(1),
     }).parse((req as any).body);
 
-    const orgId = (req as any).orgId || 'default-org';
-    const actorId = (req as any).userId || 'system';
-
     const result = await commandBus.dispatch({
       type: COMPLETE_PUTAWAY,
-      orgId,
-      actorId,
+      orgId: req.orgId!,
+      actorId: req.user?.sub ?? null,
       payload: { taskId: id, ...body },
       metadata: { correlationId: crypto.randomUUID(), source: 'api' },
     });
@@ -176,10 +141,7 @@ export async function putawayRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { locationId } = req.query as { locationId: string };
-    const rules = await prisma.putawayRule.findMany({
-      where: { locationId },
-      orderBy: { priority: 'asc' },
-    });
+    const rules = await repo.findRulesByLocation(req.orgId!, locationId);
     return { data: rules, error: null };
   });
 
@@ -227,13 +189,19 @@ export async function putawayRoutes(server: FastifyInstance) {
       preferLevel: z.enum(['low', 'medium', 'high']).nullable().optional(),
     }).parse((req as any).body);
 
-    const orgId = (req as any).orgId || 'default-org';
-
-    const rule = await prisma.putawayRule.create({
-      data: { ...body, orgId },
+    const result = await commandBus.dispatch({
+      type: CREATE_PUTAWAY_RULE,
+      orgId: req.orgId!,
+      actorId: req.user?.sub ?? null,
+      payload: body,
+      metadata: { correlationId: crypto.randomUUID(), source: 'api' },
     });
 
-    reply.code(201);
-    return { data: rule, error: null };
+    if (!result.success) {
+      const notFound = result.error?.includes('not found');
+      return reply.code(notFound ? 404 : 400).send({ data: null, error: result.error });
+    }
+
+    return reply.code(201).send({ data: result.data, error: null });
   });
 }

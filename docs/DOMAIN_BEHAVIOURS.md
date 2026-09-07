@@ -1915,18 +1915,24 @@ Manages the physical location hierarchy within warehouses: zones (logical areas)
 Manages inbound goods - dock appointments, receiving tasks, and line-by-line item verification.
 
 ### Commands
+- `receiving_appointment.create` - Schedule a dock appointment. Rejects a window that ends before it starts, and a dock bin belonging to another organisation
+- `receiving_appointment.check_in` - Carrier has arrived. Refused on a completed or cancelled appointment
+- `receiving_appointment.cancel` - Cancel a scheduled or checked-in appointment. Refused once completed, since goods already received cannot be un-received. Cancelling twice is a no-op
 - `receiving_task.create` - Create a receiving task (ASN-based with expected lines, or blind). Auto-updates linked appointment status.
 - `receiving_line.record` - Record a received item against an existing line (ASN) or create a new line (blind). Auto-starts task on first line recorded.
+- `receiving_line.inspect` - Set a line's inspection status. Scoped through its task, since `ReceivingLine` carries no `orgId`
 - `receiving_task.complete` - Complete receiving, tally totals, auto-generate putaway tasks for units with trackableUnitIds. Evaluates putaway rules for directed routing, falls back to first available bulk bin.
 
 ### Events
-- `receiving_appointment.created`, `receiving_appointment.checked_in`
+- `receiving_appointment.created`, `receiving_appointment.checked_in`, `receiving_appointment.cancelled`
 - `receiving_task.created`, `receiving_task.started`, `receiving_task.completed`
 - `receiving_line.recorded`, `receiving_line.inspected`
 - `putaway_task.created` (emitted by CompleteReceiving for each generated putaway task)
 
 ### Side Effects
 - CompleteReceiving generates PutawayTasks using PutawayRule evaluation
+- Every receiving read and write is scoped to `req.orgId` (#220). `ReceivingRepository` exposes
+  reads only; there is no unscoped create or update on it to reach for
 - Appointment status auto-updated on task creation and completion
 
 ### Mobile flow (warehouse app)
@@ -2388,6 +2394,9 @@ Returns can enter the system through five channels, all converging on the same `
 Directs received goods to their storage location with scan-to-confirm and constraint validation.
 
 ### Commands
+- `putaway_rule.create` - Create a directed-putaway rule. Target zone and target bin are both
+  checked against the caller's organisation: a rule pointing at another tenant's bin would route
+  their stock into ours
 - `putaway_task.assign` - Assign a putaway task to a worker
 - `putaway_task.complete` - Scan-to-confirm completion:
   1. Resolves scanned bin label to actual bin
@@ -2398,6 +2407,7 @@ Directs received goods to their storage location with scan-to-confirm and constr
   6. Creates/updates InventoryRecord + immutable InventoryTransaction
 
 ### Events
+- `putaway_rule.created`
 - `putaway_task.assigned`, `putaway_task.started`, `putaway_task.completed`
 - `putaway_task.deviation` - Emitted when scanned bin differs from directed target
 - `inventory.received` - Emitted when putaway writes to inventory
@@ -2405,6 +2415,7 @@ Directs received goods to their storage location with scan-to-confirm and constr
 ### Side Effects
 - Putaway completion creates the first InventoryRecord for received goods
 - Bin capacity denormalization updated on completion
+- Every putaway read is scoped to `req.orgId` through `PutawayRepository` (#220)
 
 ### Putaway Rule Evaluation
 - Rules evaluated in priority order (lower = higher priority), first match wins
