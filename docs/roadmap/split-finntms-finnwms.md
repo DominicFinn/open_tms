@@ -135,8 +135,8 @@ Seven FKs and one model stand between the two products.
   | # | Batch | Models | Status |
   |---|---|---|---|
   | 1 | Storage topology | `WarehouseZone`, `WarehouseAisle`, `WarehouseBin` | ✅ #217 |
-  | 2 | Inbound | `ReceivingTask`, `ReceivingAppointment`, `PutawayTask`, `PutawayRule` | next |
-  | 3 | Outbound | `PickTask`, `PackTask`, `StagingAssignment` | |
+  | 2 | Inbound | `ReceivingTask`, `ReceivingAppointment`, `PutawayTask`, `PutawayRule` | ✅ #225 |
+  | 3 | Outbound | `PickTask`, `PackTask`, `StagingAssignment` | next |
   | 4 | Waves | `Wave`, `WaveTemplate`, `WmsFulfilmentOrder` | |
   | 5 | Frontend | the 27 files off `/api/v1/locations` | |
   | 6 | Contract | drop the `Location` FKs and the two boundary-lint exceptions | |
@@ -151,6 +151,18 @@ Seven FKs and one model stand between the two products.
   `locationId`, so there is no `orgId` derivation problem like `WarehouseAisle` had;
   `resolveFacilityForLocation` already exists; and #220 moved every write in those files onto the
   command bus, so the dual-write has one place to go in each case rather than several.
+
+  Batch 2 (#225) bore that out: four nullable columns, five create paths, and a backfill that is a
+  no-op wherever chunk 1 already made the facility. Two things worth carrying into batch 3:
+
+  - **Not every create path is a create command.** Two of the five were `putawayTask.create` calls
+    inside `CompleteReceivingCommand` and `CheckReplenishmentCommand`, both in loops. Search for
+    the Prisma create, not for the command named after the model.
+  - **#220 scoped the routes and repositories, not the queries inside command handlers.** Batch 2
+    found seven more unscoped reads and one unscoped write in the commands it touched, including
+    `receiving_task.complete` looking its task up by bare id, and `receiving_task.create` moving
+    another tenant's appointment to `receiving`. Expect the same in the outbound commands and fix
+    them as part of the batch rather than filing them.
 - **2b. TrackableUnit split (L-XL, 5-7):** new WMS `HandlingUnit` (standalone LPN with soft
   order/shipment refs), backfill and dual-write, switch receiving/putaway/inventory, then drop the
   WMS FKs to TrackableUnit. **Split it; don't make `orderId` nullable as a shortcut.** The cascade

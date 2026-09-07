@@ -9,7 +9,7 @@ import { CheckInAppointmentCommandHandler, CHECK_IN_APPOINTMENT } from '../../co
 import { CancelAppointmentCommandHandler, CANCEL_APPOINTMENT } from '../../commands/warehouse/CancelAppointmentCommand';
 import { InspectReceivingLineCommandHandler, INSPECT_RECEIVING_LINE } from '../../commands/warehouse/InspectReceivingLineCommand';
 import { EVENT_TYPES } from '../../events/eventTypes';
-import { createTestCommand, mockEventBus } from '../helpers/testUtils';
+import { createTestCommand, mockEventBus, facilityMocks } from '../helpers/testUtils';
 
 const appointment = {
   id: 'appt-1', orgId: 'test-org', locationId: 'loc-1', status: 'scheduled',
@@ -19,6 +19,7 @@ const appointment = {
 
 function buildPrisma(overrides: any = {}) {
   const tx = {
+      ...facilityMocks(),
     putawayRule: { create: jest.fn().mockResolvedValue({ id: 'rule-1', name: 'Cold to zone C', locationId: 'loc-1', priority: 50, targetType: 'zone' }) },
     receivingAppointment: {
       findFirst: jest.fn().mockResolvedValue('appointment' in overrides ? overrides.appointment : appointment),

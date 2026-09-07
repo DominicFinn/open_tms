@@ -1,6 +1,6 @@
 import { CompleteReceivingCommandHandler, COMPLETE_RECEIVING } from '../../commands/warehouse/CompleteReceivingCommand';
 import { EVENT_TYPES } from '../../events/eventTypes';
-import { createTestCommand, mockEventBus } from '../helpers/testUtils';
+import { createTestCommand, mockEventBus, facilityMocks } from '../helpers/testUtils';
 
 describe('Cross-dock workflow', () => {
   const mockLine = {
@@ -18,8 +18,9 @@ describe('Cross-dock workflow', () => {
     const stagingBin = { id: 'bin-staging', label: 'STAGE-01', zoneId: 'zone-ship' };
 
     const tx = {
+      ...facilityMocks(),
       receivingTask: {
-        findUnique: jest.fn().mockResolvedValue(taskWithCrossDock),
+        findFirst: jest.fn().mockResolvedValue(taskWithCrossDock),
         update: jest.fn().mockResolvedValue({}),
       },
       receivingAppointment: { update: jest.fn() },
@@ -88,8 +89,9 @@ describe('Cross-dock workflow', () => {
     const fallbackBin = { id: 'bin-bulk', label: 'BULK-A-01' };
 
     const tx = {
+      ...facilityMocks(),
       receivingTask: {
-        findUnique: jest.fn().mockResolvedValue(normalTask),
+        findFirst: jest.fn().mockResolvedValue(normalTask),
         update: jest.fn().mockResolvedValue({}),
       },
       receivingAppointment: { update: jest.fn() },

@@ -45,6 +45,11 @@ model Facility {
   aisles WarehouseAisle[]
   bins   WarehouseBin[]
 
+  receivingAppointments ReceivingAppointment[]
+  receivingTasks        ReceivingTask[]
+  putawayRules          PutawayRule[]
+  putawayTasks          PutawayTask[]
+
   // One facility per source location per org: this is what makes the backfill and the
   // find-or-create in the dual-write path idempotent.
   @@unique([orgId, sourceLocationId])
@@ -192,6 +197,8 @@ model ReceivingAppointment {
   id                String        @id @default(uuid())
   locationId        String
   location          Location      @relation(fields: [locationId], references: [id])
+  facilityId        String?
+  facility          Facility?     @relation(fields: [facilityId], references: [id])
   inboundShipmentId String?
   dockBinId         String?
   dockBin           WarehouseBin? @relation("AppointmentDock", fields: [dockBinId], references: [id])
@@ -212,6 +219,7 @@ model ReceivingAppointment {
   receivingTasks ReceivingTask[]
 
   @@index([locationId])
+  @@index([facilityId])
   @@index([orgId])
   @@index([scheduledAt])
   @@index([status])
@@ -221,6 +229,8 @@ model ReceivingTask {
   id                String                @id @default(uuid())
   locationId        String
   location          Location              @relation(fields: [locationId], references: [id])
+  facilityId        String?
+  facility          Facility?             @relation(fields: [facilityId], references: [id])
   appointmentId     String?
   appointment       ReceivingAppointment? @relation(fields: [appointmentId], references: [id])
   inboundShipmentId String?
@@ -241,6 +251,7 @@ model ReceivingTask {
   putawayTasks PutawayTask[]
 
   @@index([locationId])
+  @@index([facilityId])
   @@index([orgId])
   @@index([status])
 }
@@ -272,9 +283,11 @@ model ReceivingLine {
 model PutawayRule {
   id         String   @id @default(uuid())
   locationId String
-  location   Location @relation(fields: [locationId], references: [id])
+  location   Location  @relation(fields: [locationId], references: [id])
+  facilityId String?
+  facility   Facility? @relation(fields: [facilityId], references: [id])
   name       String
-  priority   Int      @default(50) // lower = higher priority
+  priority   Int       @default(50) // lower = higher priority
   active     Boolean  @default(true)
 
   // Criteria (all nullable = match any)
@@ -298,6 +311,7 @@ model PutawayRule {
   updatedAt DateTime @updatedAt
 
   @@index([locationId])
+  @@index([facilityId])
   @@index([orgId])
   @@index([priority])
 }
@@ -306,6 +320,8 @@ model PutawayTask {
   id               String         @id @default(uuid())
   locationId       String
   location         Location       @relation(fields: [locationId], references: [id])
+  facilityId       String?
+  facility         Facility?      @relation(fields: [facilityId], references: [id])
   receivingTaskId  String?
   receivingTask    ReceivingTask? @relation(fields: [receivingTaskId], references: [id])
   trackableUnitId  String
@@ -324,6 +340,7 @@ model PutawayTask {
   updatedAt DateTime @updatedAt
 
   @@index([locationId])
+  @@index([facilityId])
   @@index([orgId])
   @@index([status])
   @@index([trackableUnitId])

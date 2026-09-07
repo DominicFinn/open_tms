@@ -109,3 +109,24 @@ export function createTestEvent<T>(
     ...overrides,
   };
 }
+
+/**
+ * Prisma mocks for the Phase 2a facility dual-write (#217, #225). Any command that creates a row
+ * carrying a facilityId resolves the facility from its Location first, so its transaction mock
+ * needs both models present. Defaults to an existing facility, which is the steady state after
+ * the migration backfill.
+ */
+export function facilityMocks(existingFacilityId: string | null = 'fac-1') {
+  return {
+    facility: {
+      findUnique: jest.fn().mockResolvedValue(existingFacilityId ? { id: existingFacilityId } : null),
+      create: jest.fn().mockResolvedValue({ id: 'fac-new' }),
+    },
+    location: {
+      findFirst: jest.fn().mockResolvedValue({
+        name: 'Test DC', address1: null, address2: null,
+        city: null, state: null, postalCode: null, country: null,
+      }),
+    },
+  };
+}

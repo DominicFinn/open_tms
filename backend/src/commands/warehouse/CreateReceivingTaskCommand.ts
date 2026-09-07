@@ -3,6 +3,7 @@ import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { Command } from '../types.js';
+import { resolveFacilityForLocation } from '../facilities/resolveFacility.js';
 
 export interface CreateReceivingTaskPayload {
   locationId: string;
@@ -42,9 +43,25 @@ export class CreateReceivingTaskCommandHandler extends BaseCommandHandler<
   ): Promise<{ id: string; status: string; lineCount: number }> {
     const p = command.payload;
 
+    // An appointment belonging to another tenant would be moved to 'receiving' by the update
+    // below, and our task would hang off their booking. Checked against the caller's org rather
+    // than trusted from the request body (#220).
+    if (p.appointmentId) {
+      const appointment = await tx.receivingAppointment.findFirst({
+        where: { id: p.appointmentId, orgId: command.orgId },
+        select: { id: true },
+      });
+      if (!appointment) throw new Error(`Appointment ${p.appointmentId} not found`);
+    }
+
+    // Phase 2a dual-write (#225): the task is filed under both the Location and the Facility
+    // derived from it, so nothing is left without a facility when reads switch over.
+    const facilityId = await resolveFacilityForLocation(tx, command, p.locationId, emit);
+
     const task = await tx.receivingTask.create({
       data: {
         locationId: p.locationId,
+        facilityId,
         appointmentId: p.appointmentId ?? null,
         inboundShipmentId: p.inboundShipmentId ?? null,
         dockBinId: p.dockBinId ?? null,
