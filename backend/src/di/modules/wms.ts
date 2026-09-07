@@ -15,6 +15,9 @@ import { WarehouseZoneRepository } from '../../repositories/WarehouseZoneReposit
 import { ReceivingRepository } from '../../repositories/ReceivingRepository.js';
 import { PutawayRepository } from '../../repositories/PutawayRepository.js';
 import { WaveRepository } from '../../repositories/WaveRepository.js';
+import { CycleCountRepository } from '../../repositories/CycleCountRepository.js';
+import { LoadPlanRepository } from '../../repositories/LoadPlanRepository.js';
+import { WmsDashboardRepository } from '../../repositories/WmsDashboardRepository.js';
 import { PackingRepository } from '../../repositories/PackingRepository.js';
 import { ReplenishmentRuleRepository } from '../../repositories/ReplenishmentRuleRepository.js';
 import { WaveTemplateRepository } from '../../repositories/WaveTemplateRepository.js';
@@ -79,6 +82,18 @@ export function registerWmsDependencies(prisma: PrismaClient): void {
 
   container.singleton(TOKENS.IWaveRepository).toFactory(() => {
     return new WaveRepository(container.resolve(TOKENS.PrismaClient));
+  });
+
+  container.singleton(TOKENS.ICycleCountRepository).toFactory(() => {
+    return new CycleCountRepository(container.resolve(TOKENS.PrismaClient));
+  });
+
+  container.singleton(TOKENS.ILoadPlanRepository).toFactory(() => {
+    return new LoadPlanRepository(container.resolve(TOKENS.PrismaClient));
+  });
+
+  container.singleton(TOKENS.IWmsDashboardRepository).toFactory(() => {
+    return new WmsDashboardRepository(container.resolve(TOKENS.PrismaClient));
   });
 
   container.singleton(TOKENS.IPackingRepository).toFactory(() => {

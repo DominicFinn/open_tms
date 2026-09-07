@@ -1865,6 +1865,18 @@ Requests accelerated payment on a carrier invoice with a discount. Sets `quickPa
 
 ## Warehouse Management System (WMS)
 
+### Tenancy
+
+Every WMS read and write is scoped to `req.orgId`, resolved from the authenticated principal and
+never from a request parameter (#220). Query building lives in the per-domain repositories
+(`PutawayRepository`, `ReceivingRepository`, `WaveRepository`, `PackingRepository`,
+`CycleCountRepository`, `LoadPlanRepository`, `ReplenishmentRuleRepository`,
+`WaveTemplateRepository`, `WmsDashboardRepository`, `FacilityRepository`), none of which expose an
+unscoped variant. A cross-tenant id returns 404, so existence stays opaque.
+
+`registerWmsGuard` proves only that the caller holds `wms:read` or `wms:write` in some
+organisation. It is not a tenancy check, and must never be relied on as one.
+
 ### Domain: Facilities
 
 The warehouse a WMS install operates. A Facility is deliberately not a Location: Location is the
@@ -2534,7 +2546,8 @@ Verifies picked items at pack stations, stages for outbound, and loads onto vehi
 
 ### Domain: Cycle Counting
 
-Verifies inventory accuracy by comparing physical bin counts against system records.
+Verifies inventory accuracy by comparing physical bin counts against system records. Reads are
+scoped to `req.orgId` through `CycleCountRepository` (#220).
 
 ### Commands
 - `cycle_count.create` - Creates a cycle count from current inventory records. Three types: `full` (all bins), `zone` (specific zone), `random_sample` (~20% random selection). Auto-generates count lines with expected quantities.
