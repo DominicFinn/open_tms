@@ -25,6 +25,17 @@ const mockBin = {
 };
 
 const mockTx = {
+  // Phase 2a dual-write (#217): topology creates resolve a Facility from the Location first.
+  facility: {
+    findUnique: jest.fn().mockResolvedValue({ id: 'fac-1' }),
+    create: jest.fn().mockResolvedValue({ id: 'fac-1' }),
+  },
+  location: {
+    findFirst: jest.fn().mockResolvedValue({
+      name: 'Leeds DC', address1: '1 Depot Way', address2: null,
+      city: 'Leeds', state: null, postalCode: 'LS1 1AA', country: 'GB',
+    }),
+  },
   warehouseZone: {
     create: jest.fn().mockResolvedValue(mockZone),
     update: jest.fn().mockResolvedValue(mockZone),

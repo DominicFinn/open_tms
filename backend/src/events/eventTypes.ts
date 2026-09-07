@@ -299,6 +299,11 @@ export const EVENT_TYPES = {
   SOP_AUDIT_FAILED: 'sop_audit.failed',
 
   // WMS: Warehouse Zones & Bins
+  // Facility — the WMS root (Phase 2a, #217)
+  FACILITY_CREATED: 'facility.created',
+  FACILITY_UPDATED: 'facility.updated',
+  FACILITY_ARCHIVED: 'facility.archived',
+
   WAREHOUSE_ZONE_CREATED: 'warehouse_zone.created',
   WAREHOUSE_ZONE_UPDATED: 'warehouse_zone.updated',
   WAREHOUSE_ZONE_ARCHIVED: 'warehouse_zone.archived',
@@ -567,6 +572,9 @@ export const EVENT_SCHEMA_VERSIONS: Record<string, number> = {
   [EVENT_TYPES.SOP_AUDIT_FAILED]: 1,
 
   // WMS
+  [EVENT_TYPES.FACILITY_CREATED]: 1,
+  [EVENT_TYPES.FACILITY_UPDATED]: 1,
+  [EVENT_TYPES.FACILITY_ARCHIVED]: 1,
   [EVENT_TYPES.WAREHOUSE_ZONE_CREATED]: 1,
   [EVENT_TYPES.WAREHOUSE_ZONE_UPDATED]: 1,
   [EVENT_TYPES.WAREHOUSE_ZONE_ARCHIVED]: 1,

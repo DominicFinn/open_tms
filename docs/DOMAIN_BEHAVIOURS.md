@@ -1865,6 +1865,31 @@ Requests accelerated payment on a carrier invoice with a discount. Sets `quickPa
 
 ## Warehouse Management System (WMS)
 
+### Domain: Facilities
+
+The warehouse a WMS install operates. A Facility is deliberately not a Location: Location is the
+TMS geographic node used by shipment stops, lane endpoints and arrival criteria, and a standalone
+FinnWMS has no TMS schema to point at. `sourceLocationId` is a soft reference, not a foreign key,
+kept so a combined install can reconcile the two.
+
+### Commands
+- `facility.create` - Create a facility, optionally linked to a Location. One facility per source
+  location per organisation
+- `facility.update` - Update name, code, address, timezone or active flag. `sourceLocationId` is
+  not updatable: re-pointing a facility would silently move every zone and bin under it
+- `facility.archive` - Soft archive. Refused while active zones still hang off the facility
+
+### Events
+- `facility.created`, `facility.updated`, `facility.archived`
+
+### Side Effects
+- Creating a zone or a bin resolves the facility for its Location and creates one from the
+  Location's details if it does not exist yet, emitting `facility.created` with `derived: true`.
+  This is the Phase 2a dual-write (#217); reads still go through `locationId` until a later chunk
+  switches them over
+
+---
+
 ### Domain: Warehouse Zones & Bins
 
 Manages the physical location hierarchy within warehouses: zones (logical areas), aisles, and bins (individual storage locations).
@@ -1881,7 +1906,7 @@ Manages the physical location hierarchy within warehouses: zones (logical areas)
 - `warehouse_bin.created`, `warehouse_bin.updated`, `warehouse_bin.archived`, `warehouse_bin.bulk_created`
 
 ### Side Effects
-- None (pure CRUD, no projections or downstream handlers yet)
+- Zone and bin creation dual-writes `facilityId` alongside `locationId` (Phase 2a, #217)
 
 ---
 

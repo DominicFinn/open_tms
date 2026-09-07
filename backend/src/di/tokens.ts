@@ -130,6 +130,7 @@ export const TOKENS = {
   ILtlRatingService: Symbol.for('ILtlRatingService'),
 
   // WMS tokens
+  IFacilityRepository: Symbol.for('IFacilityRepository'),
   IWarehouseZoneRepository: Symbol.for('IWarehouseZoneRepository'),
   IReceivingRepository: Symbol.for('IReceivingRepository'),
   IPutawayRuleEvaluator: Symbol.for('IPutawayRuleEvaluator'),

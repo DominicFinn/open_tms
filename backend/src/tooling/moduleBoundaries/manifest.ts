@@ -109,7 +109,7 @@ export const PATH_RULES: readonly PathRule[] = [
   { pattern: /^(routes|commands|services|repositories|events\/(projections|handlers))\/.*(capa|sopChecklist|quality)/i, module: 'quality' },
 
   // --- wms ---
-  { pattern: /^(routes|commands|services|repositories|workers|events\/(projections|handlers))\/.*(warehouse|wave|pick|pack|putaway|receiving|cycleCount|replenishment|wms|loadPlan|carton|staging)/i, module: 'wms' },
+  { pattern: /^(routes|commands|services|repositories|workers|events\/(projections|handlers))\/.*(warehouse|facilit|wave|pick|pack|putaway|receiving|cycleCount|replenishment|wms|loadPlan|carton|staging)/i, module: 'wms', note: 'Facility is the wms root introduced in Phase 2a; Location stays core' },
 
   // --- tms: everything else in the domain directories ---
   { pattern: /^(routes|commands|services|repositories|workers|integrations|events\/(projections|handlers))\//, module: 'tms' },

@@ -7,6 +7,7 @@
 
 import type { FastifyInstance } from 'fastify';
 import { warehouseRoutes } from '../warehouse.js';
+import { facilityRoutes } from '../facilities.js';
 import { warehouseZoneRoutes } from '../warehouseZones.js';
 import { receivingRoutes } from '../receiving.js';
 import { putawayRoutes } from '../putaway.js';
@@ -32,6 +33,7 @@ export async function registerWmsPublicRoutes(server: FastifyInstance): Promise<
 
 /** Registered inside the JWT scope: an internal user token is required. */
 export async function registerWmsAuthenticatedRoutes(app: FastifyInstance): Promise<void> {
+  await app.register(facilityRoutes);
   await app.register(warehouseZoneRoutes);
   await app.register(receivingRoutes);
   await app.register(putawayRoutes);

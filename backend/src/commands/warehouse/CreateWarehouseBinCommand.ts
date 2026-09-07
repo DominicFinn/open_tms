@@ -3,6 +3,7 @@ import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { Command } from '../types.js';
+import { resolveFacilityForLocation } from '../facilities/resolveFacility.js';
 
 export interface CreateWarehouseBinPayload {
   zoneId: string;
@@ -46,10 +47,14 @@ export class CreateWarehouseBinCommandHandler extends BaseCommandHandler<
     });
     if (existing) throw new Error(`Bin label "${command.payload.label}" already exists at this location`);
 
+    // Phase 2a dual-write (#217): see CreateWarehouseZoneCommand.
+    const facilityId = await resolveFacilityForLocation(tx, command, command.payload.locationId, emit);
+
     const bin = await tx.warehouseBin.create({
       data: {
         zoneId: command.payload.zoneId,
         locationId: command.payload.locationId,
+        facilityId,
         aisleId: command.payload.aisleId ?? null,
         label: command.payload.label,
         binType: command.payload.binType,

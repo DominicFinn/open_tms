@@ -3,6 +3,7 @@ import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { Command } from '../types.js';
+import { resolveFacilityForLocation } from '../facilities/resolveFacility.js';
 
 export interface BulkCreateBinsPayload {
   zoneId: string;
@@ -45,10 +46,14 @@ export class BulkCreateBinsCommandHandler extends BaseCommandHandler<
     const zone = await tx.warehouseZone.findUnique({ where: { id: p.zoneId } });
     if (!zone) throw new Error(`Zone ${p.zoneId} not found`);
 
+    // Phase 2a dual-write (#217): resolved once for the batch, since every bin shares a location.
+    const facilityId = await resolveFacilityForLocation(tx, command, p.locationId, emit);
+
     // Generate all bin records
     const bins: Array<{
       zoneId: string;
       locationId: string;
+      facilityId: string;
       label: string;
       binType: string;
       maxWeightKg: number | null;
@@ -75,6 +80,7 @@ export class BulkCreateBinsCommandHandler extends BaseCommandHandler<
           bins.push({
             zoneId: p.zoneId,
             locationId: p.locationId,
+            facilityId,
             label,
             binType: p.binType,
             maxWeightKg: p.maxWeightKg ?? null,

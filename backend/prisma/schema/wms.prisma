@@ -5,18 +5,67 @@
 // WMS (Warehouse Management System) Models
 // ═══════════════════════════════════════════════════════════════
 
+// ═══════════════════════════════════════════════════════════════
+// Facility — the WMS root (Phase 2a, #217)
+// ═══════════════════════════════════════════════════════════════
+
+// BUSINESS RULE: a Facility is the warehouse a WMS install operates. It is deliberately not a
+// Location: Location is the TMS geographic node (shipment stops, lane endpoints, arrival
+// criteria), and a standalone FinnWMS has no TMS schema to point at. sourceLocationId is a soft
+// reference kept only so a combined install can reconcile the two; it is not a foreign key.
+model Facility {
+  id    String  @id @default(uuid())
+  orgId String
+  name  String
+  code  String? // short operator-facing code, e.g. "LEE1"
+
+  // Soft reference to the core Location this facility was derived from. Nullable because a
+  // facility created in a WMS-only install has no Location behind it.
+  sourceLocationId String?
+
+  // Address is copied rather than joined, for the same reason: a WMS-only install still has to
+  // print a facility address without the TMS Location table existing.
+  address1   String?
+  address2   String?
+  city       String?
+  state      String?
+  postalCode String?
+  country    String?
+  timezone   String?
+
+  active     Boolean   @default(true)
+  archived   Boolean   @default(false)
+  archivedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  zones  WarehouseZone[]
+  aisles WarehouseAisle[]
+  bins   WarehouseBin[]
+
+  // One facility per source location per org: this is what makes the backfill and the
+  // find-or-create in the dual-write path idempotent.
+  @@unique([orgId, sourceLocationId])
+  @@index([orgId])
+}
+
 model WarehouseZone {
-  id              String   @id @default(uuid())
+  id              String    @id @default(uuid())
   locationId      String
-  location        Location @relation(fields: [locationId], references: [id])
+  location        Location  @relation(fields: [locationId], references: [id])
+  // Phase 2a dual-write (#217): nullable during expand, authoritative after contract.
+  facilityId      String?
+  facility        Facility? @relation(fields: [facilityId], references: [id])
   name            String // e.g. "Bulk A", "Dock 3", "Cold Store"
   zoneType        String // receiving, bulk_storage, pick_face, staging, packing, shipping_dock, quarantine, returns, cross_dock
   temperatureZone String? // ambient, refrigerated, frozen
-  hazmatCertified Boolean  @default(false)
+  hazmatCertified Boolean   @default(false)
   maxWeightKg     Float?
   maxVolumeCbm    Float?
-  sortOrder       Int      @default(0) // display/walk order
-  active          Boolean  @default(true)
+  sortOrder       Int       @default(0) // display/walk order
+  active          Boolean   @default(true)
 
   orgId String
 
@@ -31,6 +80,7 @@ model WarehouseZone {
   pickTasks     PickTask[]
 
   @@index([locationId])
+  @@index([facilityId])
   @@index([orgId])
   @@index([zoneType])
 }
@@ -41,6 +91,9 @@ model WarehouseAisle {
   zone       WarehouseZone @relation(fields: [zoneId], references: [id], onDelete: Cascade)
   locationId String
   location   Location      @relation(fields: [locationId], references: [id])
+  // Phase 2a dual-write (#217): nullable during expand, authoritative after contract.
+  facilityId String?
+  facility   Facility?     @relation(fields: [facilityId], references: [id])
   name       String // e.g. "A", "B"
   sortOrder  Int           @default(0)
 
@@ -52,6 +105,7 @@ model WarehouseAisle {
 
   @@index([zoneId])
   @@index([locationId])
+  @@index([facilityId])
 }
 
 model WarehouseBin {
@@ -62,6 +116,9 @@ model WarehouseBin {
   aisle              WarehouseAisle? @relation(fields: [aisleId], references: [id])
   locationId         String
   location           Location        @relation(fields: [locationId], references: [id])
+  // Phase 2a dual-write (#217): nullable during expand, authoritative after contract.
+  facilityId         String?
+  facility           Facility?       @relation(fields: [facilityId], references: [id])
   label              String // unique within location, e.g. "BULK-A-01-03-B"
   binType            String // pallet, shelf, floor, dock_door, staging, pack_station
   maxWeightKg        Float?
@@ -97,6 +154,7 @@ model WarehouseBin {
   @@unique([locationId, label])
   @@index([zoneId])
   @@index([locationId])
+  @@index([facilityId])
   @@index([orgId])
   @@index([binType])
   @@index([walkSequence])
