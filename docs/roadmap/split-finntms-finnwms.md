@@ -29,6 +29,43 @@ These were live bugs. Done ahead of any split work.
 | WMS permissions | None exist: `/api/v1/wms*` is open to any authenticated user. Add a `wms.*` permission family; grant permissively to existing roles, tighten later | M |
 | Magic-link scoping | Warehouse PWA magic links mint full internal JWTs. Mint warehouse-scoped tokens; accept both during transition | M |
 
+### Phase 0 leftovers, closed Sep 2026 (#220)
+
+The Phase 0 tenancy sweep fixed `GET /api/v1/warehouse/locations` (#130) but stopped there. The
+rest of the WMS surface had the same bug and was found while scoping Phase 2a batch 2. Closed in
+#221, #222 and #223.
+
+Every WMS list filtered on a **client-supplied** `locationId` and nothing else, and every detail
+fetch was `findUnique` by bare id: putaway, receiving, waves, picking, packing, staging, cycle
+counts, load plans, replenishment, wave templates and both dashboards. `registerWmsGuard` proves
+only that the caller holds `wms:read`/`wms:write` in *some* organisation, and that was mistaken for
+a tenancy check.
+
+Four things were worse than unscoped reads:
+
+- `replenishmentRule.delete` and `waveTemplate.delete` ran `where: { id }` with no org filter,
+  wrapped in `.catch(() => null)`. One tenant could delete another's rules and templates by uuid,
+  silently
+- `/api/v1/wms/operations-dashboard` resolved the org with `prisma.organization.findFirst()`, so
+  every tenant saw whichever organisation sorts first
+- `(req as any).orgId || 'default-org'` meant a request arriving without scope was filed under a
+  literal `'default-org'` rather than rejected
+- `(req as any).userId` is never populated anywhere in the codebase, so every WMS command was
+  attributed to `'system'` rather than the acting user
+
+Ten repositories now hold the scope (`PutawayRepository`, `ReceivingRepository`, `WaveRepository`,
+`PackingRepository`, `CycleCountRepository`, `LoadPlanRepository`, `ReplenishmentRuleRepository`,
+`WaveTemplateRepository`, `WmsDashboardRepository`, `FacilityRepository`), none with an unscoped
+variant, and thirteen writes moved onto the command bus. Eight event types that were declared but
+never emitted now fire.
+
+**This was not optional groundwork for Phase 2a.** Batches 2 to 4 rewrite the same query sites, and
+doing the tenancy fix first means each batch is a mechanical `facilityId` addition rather than a
+migration tangled up with a security fix.
+
+Around 90 `organization.findFirst()` calls remain across TMS routes and services. That is #117, and
+it is considerably larger than its title suggests.
+
 ## Phase 1: draw the boundary in code ✅ (shipped Sep 2026: #159, #161, #164, #166, #168, #173)
 
 Order: lint, then schema file split, then DI/routes split, then projection, then load-plan seam.
@@ -98,7 +135,7 @@ Seven FKs and one model stand between the two products.
   | # | Batch | Models | Status |
   |---|---|---|---|
   | 1 | Storage topology | `WarehouseZone`, `WarehouseAisle`, `WarehouseBin` | ✅ #217 |
-  | 2 | Inbound | `ReceivingTask`, `ReceivingAppointment`, `PutawayTask`, `PutawayRule` | |
+  | 2 | Inbound | `ReceivingTask`, `ReceivingAppointment`, `PutawayTask`, `PutawayRule` | next |
   | 3 | Outbound | `PickTask`, `PackTask`, `StagingAssignment` | |
   | 4 | Waves | `Wave`, `WaveTemplate`, `WmsFulfilmentOrder` | |
   | 5 | Frontend | the 27 files off `/api/v1/locations` | |
@@ -109,6 +146,11 @@ Seven FKs and one model stand between the two products.
   each row's `orgId` from its own source record, `facility.*` commands and events, an org-scoped
   `/api/v1/facilities`, and dual-write on the three topology create paths. Reads still go through
   `locationId`.
+
+  Batches 2 to 4 are now cheaper than chunk 1 was. Every model they touch carries both `orgId` and
+  `locationId`, so there is no `orgId` derivation problem like `WarehouseAisle` had;
+  `resolveFacilityForLocation` already exists; and #220 moved every write in those files onto the
+  command bus, so the dual-write has one place to go in each case rather than several.
 - **2b. TrackableUnit split (L-XL, 5-7):** new WMS `HandlingUnit` (standalone LPN with soft
   order/shipment refs), backfill and dual-write, switch receiving/putaway/inventory, then drop the
   WMS FKs to TrackableUnit. **Split it; don't make `orderId` nullable as a shortcut.** The cascade
