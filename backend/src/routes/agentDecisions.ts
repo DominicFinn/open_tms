@@ -15,8 +15,13 @@ import { RECORD_DECISION_OUTCOME } from '../commands/agentDecisions/RecordDecisi
 import { randomUUID } from 'crypto';
 
 import { guardWrites } from '../auth/guardWrites.js';
+import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 
 export const agentDecisionRoutes: FastifyPluginAsync = async (server) => {
+  // Tenant comes from the caller's token via registerOrgScope, not from whichever
+  // Organization row comes back first (#117).
+  await registerOrgScope(server);
+
   server.addHook('preHandler', guardWrites('agent_decisions'));
 
   // ── POST /api/v1/agent-decisions — Log a new agent decision ──
@@ -65,8 +70,7 @@ export const agentDecisionRoutes: FastifyPluginAsync = async (server) => {
     },
   }, async (request, reply) => {
     const commandBus = container.resolve<CommandBus>(TOKENS.ICommandBus);
-    const org = await server.prisma.organization.findFirst();
-    const orgId = org?.id || 'default';
+    const orgId = request.orgId!;
 
     const result = await commandBus.dispatch<Record<string, unknown>, { id: string }>({
       type: CREATE_AGENT_DECISION,
@@ -105,10 +109,9 @@ export const agentDecisionRoutes: FastifyPluginAsync = async (server) => {
         },
       },
     },
-  }, async () => {
+  }, async (request) => {
     const repo = container.resolve<IAgentDecisionRepository>(TOKENS.IAgentDecisionRepository);
-    const org = await server.prisma.organization.findFirst();
-    const orgId = org?.id || 'default';
+    const orgId = request.orgId!;
     const stats = await repo.getStats(orgId);
     return { data: stats, error: null };
   });
@@ -135,8 +138,7 @@ export const agentDecisionRoutes: FastifyPluginAsync = async (server) => {
     },
   }, async (request) => {
     const repo = container.resolve<IAgentDecisionRepository>(TOKENS.IAgentDecisionRepository);
-    const org = await server.prisma.organization.findFirst();
-    const orgId = org?.id || 'default';
+    const orgId = request.orgId!;
     const days = request.query.days ? parseInt(request.query.days, 10) : 30;
     const usage = await repo.getDailyUsage(orgId, days);
     return { data: usage, error: null };
@@ -196,8 +198,7 @@ export const agentDecisionRoutes: FastifyPluginAsync = async (server) => {
     },
   }, async (request) => {
     const repo = container.resolve<IAgentDecisionRepository>(TOKENS.IAgentDecisionRepository);
-    const org = await server.prisma.organization.findFirst();
-    const orgId = org?.id || 'default';
+    const orgId = request.orgId!;
 
     const q = request.query;
     const result = await repo.findAll({
@@ -283,8 +284,7 @@ export const agentDecisionRoutes: FastifyPluginAsync = async (server) => {
     },
   }, async (request, reply) => {
     const commandBus = container.resolve<CommandBus>(TOKENS.ICommandBus);
-    const org = await server.prisma.organization.findFirst();
-    const orgId = org?.id || 'default';
+    const orgId = request.orgId!;
 
     const result = await commandBus.dispatch({
       type: RECORD_DECISION_OUTCOME,

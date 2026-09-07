@@ -4,8 +4,13 @@ import { IArrivalCriteriaRepository } from '../repositories/ArrivalCriteriaRepos
 import { ILocationsRepository } from '../repositories/LocationsRepository.js';
 import { container, TOKENS } from '../di/index.js';
 import { IEventBus, EVENT_TYPES, createEvent } from '../events/index.js';
+import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 
 export async function arrivalCriteriaRoutes(server: FastifyInstance) {
+  // Tenant comes from the caller's token via registerOrgScope, not from whichever
+  // Organization row comes back first (#117).
+  await registerOrgScope(server);
+
   const arrivalCriteriaRepo = container.resolve<IArrivalCriteriaRepository>(TOKENS.IArrivalCriteriaRepository);
   const locationsRepo = container.resolve<ILocationsRepository>(TOKENS.ILocationsRepository);
 
@@ -73,10 +78,9 @@ export async function arrivalCriteriaRoutes(server: FastifyInstance) {
     // Publish audit event
     try {
       const eventBus = container.resolve<IEventBus>(TOKENS.IEventBus);
-      const org = await server.prisma.organization.findFirst({ select: { id: true } });
       await eventBus.publish(createEvent({
         type: EVENT_TYPES.LOCATION_ARRIVAL_CRITERIA_ADDED,
-        orgId: org?.id || 'default',
+        orgId: req.orgId!,
         actorId: req.user?.sub,
         entityType: 'location',
         entityId: locationId,

@@ -12,8 +12,13 @@ import { container } from '../di/container.js';
 import { TOKENS } from '../di/tokens.js';
 import { IEmailService } from '../services/IEmailService.js';
 import { guardWrites } from '../auth/guardWrites.js';
+import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 
 export async function emailSettingsRoutes(server: FastifyInstance) {
+  // Tenant comes from the caller's token via registerOrgScope, not from whichever
+  // Organization row comes back first (#117).
+  await registerOrgScope(server);
+
   // /test sends a test email (an admin action, but not a settings mutation).
   server.addHook('preHandler', guardWrites('settings', { readPaths: ['/test'] }));
   // Get email settings
@@ -31,8 +36,9 @@ export async function emailSettingsRoutes(server: FastifyInstance) {
         },
       },
     },
-  }, async (_req, _reply) => {
+  }, async (req, _reply) => {
     const org = await server.prisma.organization.findFirst({
+      where: { id: req.orgId! },
       select: {
         emailProvider: true,
         smtpHost: true,
@@ -84,11 +90,6 @@ export async function emailSettingsRoutes(server: FastifyInstance) {
 
     const body = schema.parse((req as any).body);
 
-    const org = await server.prisma.organization.findFirst();
-    if (!org) {
-      reply.code(404);
-      return { data: null, error: 'Organization not found' };
-    }
 
     // Don't overwrite password with the masked value
     const updateData: any = { ...body };
@@ -97,7 +98,7 @@ export async function emailSettingsRoutes(server: FastifyInstance) {
     }
 
     const updated = await server.prisma.organization.update({
-      where: { id: org.id },
+      where: { id: req.orgId! },
       data: updateData,
       select: {
         emailProvider: true,
@@ -128,6 +129,7 @@ export async function emailSettingsRoutes(server: FastifyInstance) {
     const { to } = schema.parse((req as any).body);
 
     const org = await server.prisma.organization.findFirst({
+      where: { id: req.orgId! },
       select: {
         name: true,
         emailFromAddress: true,

@@ -19,6 +19,7 @@ import {
   CREATE_PROMPT_VERSION,
   ACTIVATE_PROMPT_VERSION,
 } from '../commands/agentConfig/index.js';
+import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 
 /** All event types available for agent subscription */
 const AVAILABLE_EVENTS = Object.entries(EVENT_TYPES).map(([key, value]) => ({
@@ -57,6 +58,10 @@ const TEMPLATE_VARIABLES = [
 ];
 
 export const agentConfigRoutes: FastifyPluginAsync = async (server) => {
+  // Tenant comes from the caller's token via registerOrgScope, not from whichever
+  // Organization row comes back first (#117).
+  await registerOrgScope(server);
+
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
 
   // ── GET /api/v1/agent-configs/available-events ──
@@ -74,7 +79,7 @@ export const agentConfigRoutes: FastifyPluginAsync = async (server) => {
     schema: { tags: ['Agent Config'], summary: 'List all agent configurations' },
   }, async (req) => {
     const orgId = req.user?.organizationId
-      ?? (await server.prisma.organization.findFirst())?.id;
+;
     if (!orgId) return { data: [], error: null };
 
     const configs = await server.prisma.agentConfig.findMany({
@@ -100,7 +105,7 @@ export const agentConfigRoutes: FastifyPluginAsync = async (server) => {
     },
   }, async (request, reply) => {
     const orgId = request.user?.organizationId
-      ?? (await server.prisma.organization.findFirst())?.id;
+;
     if (!orgId) { reply.code(404); return { data: null, error: 'Organization not found' }; }
 
     let config = await server.prisma.agentConfig.findFirst({
@@ -178,7 +183,7 @@ export const agentConfigRoutes: FastifyPluginAsync = async (server) => {
     },
   }, async (request, reply) => {
     const orgId = request.user?.organizationId
-      ?? (await server.prisma.organization.findFirst())?.id;
+;
     if (!orgId) { reply.code(404); return { data: null, error: 'Organization not found' }; }
 
     const config = await server.prisma.agentConfig.findFirst({
@@ -227,7 +232,7 @@ export const agentConfigRoutes: FastifyPluginAsync = async (server) => {
     },
   }, async (request, reply) => {
     const orgId = request.user?.organizationId
-      ?? (await server.prisma.organization.findFirst())?.id;
+;
     if (!orgId) { reply.code(404); return { data: null, error: 'Organization not found' }; }
 
     const config = await server.prisma.agentConfig.findFirst({
@@ -265,7 +270,7 @@ export const agentConfigRoutes: FastifyPluginAsync = async (server) => {
     schema: { tags: ['Agent Config'], summary: 'List prompt version history' },
   }, async (request) => {
     const orgId = request.user?.organizationId
-      ?? (await server.prisma.organization.findFirst())?.id;
+;
     if (!orgId) return { data: [], error: null };
 
     const config = await server.prisma.agentConfig.findFirst({
@@ -292,7 +297,7 @@ export const agentConfigRoutes: FastifyPluginAsync = async (server) => {
     schema: { tags: ['Agent Config'], summary: 'Activate (rollback to) a specific prompt version' },
   }, async (request, reply) => {
     const orgId = request.user?.organizationId
-      ?? (await server.prisma.organization.findFirst())?.id;
+;
     if (!orgId) { reply.code(404); return { data: null, error: 'Organization not found' }; }
 
     const config = await server.prisma.agentConfig.findFirst({
