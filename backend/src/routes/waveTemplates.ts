@@ -4,7 +4,9 @@ import { container, TOKENS } from '../di/index.js';
 import { ICommandBus } from '../commands/CommandBus.js';
 import { CREATE_WAVE_TEMPLATE } from '../commands/warehouse/CreateWaveTemplateCommand.js';
 import { APPLY_WAVE_TEMPLATE } from '../commands/warehouse/ApplyWaveTemplateCommand.js';
-import { PrismaClient } from '@prisma/client';
+import { IWaveTemplateRepository } from '../repositories/WaveTemplateRepository.js';
+import { UPDATE_WAVE_TEMPLATE } from '../commands/warehouse/UpdateWaveTemplateCommand.js';
+import { DELETE_WAVE_TEMPLATE } from '../commands/warehouse/DeleteWaveTemplateCommand.js';
 import crypto from 'crypto';
 import { registerWmsGuard } from '../auth/wmsGuard.js';
 
@@ -13,7 +15,7 @@ export async function waveTemplateRoutes(server: FastifyInstance) {
   await registerWmsGuard(server);
 
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
-  const prisma = container.resolve<PrismaClient>(TOKENS.PrismaClient);
+  const repo = container.resolve<IWaveTemplateRepository>(TOKENS.IWaveTemplateRepository);
 
   // GET /api/v1/wave-templates?locationId=xxx
   server.get('/api/v1/wave-templates', {
@@ -24,11 +26,7 @@ export async function waveTemplateRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { locationId } = req.query as { locationId: string };
-    const templates = await prisma.waveTemplate.findMany({
-      where: { locationId },
-      include: { _count: { select: { waves: true } } },
-      orderBy: { priority: 'asc' },
-    });
+    const templates = await repo.findByLocation(req.orgId!, locationId);
     return { data: templates, error: null };
   });
 
@@ -37,10 +35,8 @@ export async function waveTemplateRoutes(server: FastifyInstance) {
     schema: { tags: ['WMS - Wave Templates'], summary: 'Get wave template detail' },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const template = await prisma.waveTemplate.findUnique({
-      where: { id },
-      include: { waves: { orderBy: { createdAt: 'desc' }, take: 10, select: { id: true, waveNumber: true, status: true, orderCount: true, createdAt: true } } },
-    });
+    // A cross-tenant id misses rather than 403s, so existence stays opaque.
+    const template = await repo.findById(req.orgId!, id);
     if (!template) { reply.code(404); return { data: null, error: 'Template not found' }; }
     return { data: template, error: null };
   });
@@ -84,11 +80,8 @@ export async function waveTemplateRoutes(server: FastifyInstance) {
       autoRelease: z.boolean().optional(),
     }).parse((req as any).body);
 
-    const orgId = (req as any).orgId || 'default-org';
-    const actorId = (req as any).userId || 'system';
-
     const result = await commandBus.dispatch({
-      type: CREATE_WAVE_TEMPLATE, orgId, actorId, payload: body,
+      type: CREATE_WAVE_TEMPLATE, orgId: req.orgId!, actorId: req.user?.sub ?? null, payload: body,
       metadata: { correlationId: crypto.randomUUID(), source: 'api' },
     });
 
@@ -135,11 +128,20 @@ export async function waveTemplateRoutes(server: FastifyInstance) {
       active: z.boolean().optional(),
     }).parse((req as any).body);
 
-    const template = await prisma.waveTemplate.findUnique({ where: { id } });
-    if (!template) { reply.code(404); return { data: null, error: 'Template not found' }; }
+    const result = await commandBus.dispatch({
+      type: UPDATE_WAVE_TEMPLATE,
+      orgId: req.orgId!,
+      actorId: req.user?.sub ?? null,
+      payload: { templateId: id, ...body },
+      metadata: { correlationId: crypto.randomUUID(), source: 'api' },
+    });
 
-    const updated = await prisma.waveTemplate.update({ where: { id }, data: body as any });
-    return { data: updated, error: null };
+    if (!result.success) {
+      const notFound = result.error?.includes('not found');
+      return reply.code(notFound ? 404 : 400).send({ data: null, error: result.error });
+    }
+
+    return { data: result.data, error: null };
   });
 
   // POST /api/v1/wave-templates/:id/apply — run the template now
@@ -156,11 +158,8 @@ export async function waveTemplateRoutes(server: FastifyInstance) {
     const { id } = req.params as { id: string };
     const body = z.object({ autoRelease: z.boolean().optional() }).parse((req as any).body ?? {});
 
-    const orgId = (req as any).orgId || 'default-org';
-    const actorId = (req as any).userId || 'system';
-
     const result = await commandBus.dispatch({
-      type: APPLY_WAVE_TEMPLATE, orgId, actorId,
+      type: APPLY_WAVE_TEMPLATE, orgId: req.orgId!, actorId: req.user?.sub ?? null,
       payload: { templateId: id, ...body },
       metadata: { correlationId: crypto.randomUUID(), source: 'api' },
     });
@@ -174,7 +173,23 @@ export async function waveTemplateRoutes(server: FastifyInstance) {
     schema: { tags: ['WMS - Wave Templates'], summary: 'Delete a wave template' },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    await prisma.waveTemplate.delete({ where: { id } }).catch(() => null);
+    const result = await commandBus.dispatch({
+      type: DELETE_WAVE_TEMPLATE,
+      orgId: req.orgId!,
+      actorId: req.user?.sub ?? null,
+      payload: { templateId: id },
+      metadata: { correlationId: crypto.randomUUID(), source: 'api' },
+    });
+
+    if (!result.success) {
+      if (result.error?.includes('not found')) {
+        return reply.code(404).send({ data: null, error: result.error });
+      }
+      // Released waves still point at the template, so this is a conflict, not bad input.
+      const conflict = result.error?.includes('released waves');
+      return reply.code(conflict ? 409 : 400).send({ data: null, error: result.error });
+    }
+
     return { data: { deleted: true }, error: null };
   });
 }

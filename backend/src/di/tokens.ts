@@ -132,6 +132,10 @@ export const TOKENS = {
   // WMS tokens
   IFacilityRepository: Symbol.for('IFacilityRepository'),
   IPutawayRepository: Symbol.for('IPutawayRepository'),
+  IWaveRepository: Symbol.for('IWaveRepository'),
+  IPackingRepository: Symbol.for('IPackingRepository'),
+  IReplenishmentRuleRepository: Symbol.for('IReplenishmentRuleRepository'),
+  IWaveTemplateRepository: Symbol.for('IWaveTemplateRepository'),
   IWarehouseZoneRepository: Symbol.for('IWarehouseZoneRepository'),
   IReceivingRepository: Symbol.for('IReceivingRepository'),
   IPutawayRuleEvaluator: Symbol.for('IPutawayRuleEvaluator'),
