@@ -58,6 +58,13 @@ export class CompleteReceivingCommandHandler extends BaseCommandHandler<
     let putawayTasksCreated = 0;
     const linesWithUnits = task.lines.filter((l: any) => l.trackableUnitId && l.receivedQuantity > 0);
 
+    // Phase 2a dual-write (#225, #227): both branches below create rows at the receiving task's
+    // location, so the facility is resolved once here. Skipped entirely when there is nothing to
+    // create, so completing an empty receipt does not derive a facility as a side effect.
+    const facilityId = linesWithUnits.length > 0
+      ? await resolveFacilityForLocation(tx, command, task.locationId, emit)
+      : null;
+
     // Cross-dock: skip storage, sort directly to staging bins by destination
     let crossDockSorted = 0;
     if (linesWithUnits.length > 0 && task.crossDock) {
@@ -85,6 +92,7 @@ export class CompleteReceivingCommandHandler extends BaseCommandHandler<
           await tx.stagingAssignment.create({
             data: {
               locationId: task.locationId,
+              facilityId,
               orderId: orderLineItem?.orderId ?? 'unknown',
               trackableUnitId: (line as any).trackableUnitId,
               stagingBinId: stagingBin.id,
@@ -136,10 +144,6 @@ export class CompleteReceivingCommandHandler extends BaseCommandHandler<
         orderBy: { walkSequence: 'asc' },
       });
 
-      // Phase 2a dual-write (#225): every putaway task below is at the receiving task's location,
-      // so the facility is resolved once for the batch rather than per line.
-      const putawayFacilityId = await resolveFacilityForLocation(tx, command, task.locationId, emit);
-
       for (const line of linesWithUnits) {
         // Try to match a rule
         let targetBinId: string | null = null;
@@ -162,7 +166,7 @@ export class CompleteReceivingCommandHandler extends BaseCommandHandler<
           await tx.putawayTask.create({
             data: {
               locationId: task.locationId,
-              facilityId: putawayFacilityId,
+              facilityId,
               receivingTaskId: task.id,
               trackableUnitId: (line as any).trackableUnitId,
               sourceBinId: task.dockBinId ?? null,

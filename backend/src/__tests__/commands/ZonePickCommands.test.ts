@@ -1,6 +1,6 @@
 import { ReleaseWaveCommandHandler, RELEASE_WAVE } from '../../commands/warehouse/ReleaseWaveCommand';
 import { EVENT_TYPES } from '../../events/eventTypes';
-import { createTestCommand, mockEventBus } from '../helpers/testUtils';
+import { createTestCommand, mockEventBus, facilityMocks } from '../helpers/testUtils';
 
 describe('ReleaseWaveCommand - Zone Strategy', () => {
   it('creates one pick task per zone with zone strategy', async () => {
@@ -19,7 +19,8 @@ describe('ReleaseWaveCommand - Zone Strategy', () => {
 
     const createdTasks: any[] = [];
     const tx = {
-      wave: { findUnique: jest.fn().mockResolvedValue(mockWave), update: jest.fn() },
+      ...facilityMocks(),
+      wave: { findFirst: jest.fn().mockResolvedValue(mockWave), update: jest.fn() },
       wmsFulfilmentOrderLine: { findMany: jest.fn().mockResolvedValue(mockDemandLines) },
       inventoryRecord: {
         findMany: jest.fn()
@@ -94,7 +95,8 @@ describe('ReleaseWaveCommand - Zone Strategy', () => {
 
     const pickLineData: any[] = [];
     const tx = {
-      wave: { findUnique: jest.fn().mockResolvedValue(mockWave), update: jest.fn() },
+      ...facilityMocks(),
+      wave: { findFirst: jest.fn().mockResolvedValue(mockWave), update: jest.fn() },
       wmsFulfilmentOrderLine: { findMany: jest.fn().mockResolvedValue(mockDemandLines) },
       inventoryRecord: {
         findMany: jest.fn()

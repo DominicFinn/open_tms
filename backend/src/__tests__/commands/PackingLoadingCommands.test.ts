@@ -3,7 +3,7 @@ import { CompletePackLineCommandHandler, COMPLETE_PACK_LINE } from '../../comman
 import { CreateStagingAssignmentCommandHandler, CREATE_STAGING_ASSIGNMENT } from '../../commands/warehouse/CreateStagingAssignmentCommand';
 import { CompleteLoadingCommandHandler, COMPLETE_LOADING } from '../../commands/warehouse/CompleteLoadingCommand';
 import { EVENT_TYPES } from '../../events/eventTypes';
-import { createTestCommand, mockEventBus } from '../helpers/testUtils';
+import { createTestCommand, mockEventBus, facilityMocks } from '../helpers/testUtils';
 
 /* ── CreatePackTaskCommandHandler ──────────────────────────── */
 
@@ -11,6 +11,7 @@ describe('CreatePackTaskCommandHandler', () => {
   it('creates pack task with lines and emits PACK_TASK_CREATED', async () => {
     const mockTask = { id: 'pack-1', status: 'pending', orderId: 'order-1', orgId: 'test-org' };
     const tx = {
+      ...facilityMocks(),
       packTask: { create: jest.fn().mockResolvedValue(mockTask) },
       packLine: { createMany: jest.fn().mockResolvedValue({ count: 2 }) },
       domainEventLog: { create: jest.fn().mockResolvedValue({}) },
@@ -68,6 +69,7 @@ describe('CompletePackLineCommandHandler', () => {
 
   it('packs a line and emits PACK_LINE_VERIFIED', async () => {
     const tx = {
+      ...facilityMocks(),
       packLine: {
         findUnique: jest.fn().mockResolvedValue(mockLine),
         update: jest.fn().mockResolvedValue({}),
@@ -96,6 +98,7 @@ describe('CompletePackLineCommandHandler', () => {
 
   it('auto-completes task when all lines packed', async () => {
     const tx = {
+      ...facilityMocks(),
       packLine: {
         findUnique: jest.fn().mockResolvedValue(mockLine),
         update: jest.fn().mockResolvedValue({}),
@@ -125,6 +128,7 @@ describe('CompletePackLineCommandHandler', () => {
   it('fails if line already packed', async () => {
     const packedLine = { ...mockLine, status: 'packed' };
     const tx = {
+      ...facilityMocks(),
       packLine: { findUnique: jest.fn().mockResolvedValue(packedLine) },
       domainEventLog: { create: jest.fn().mockResolvedValue({}) },
     } as any;
@@ -150,9 +154,13 @@ describe('CreateStagingAssignmentCommandHandler', () => {
   it('creates staging assignment and moves unit', async () => {
     const mockBin = { id: 'bin-staging', label: 'STAGE-01', active: true, zoneId: 'zone-ship' };
     const tx = {
-      warehouseBin: { findUnique: jest.fn().mockResolvedValue(mockBin) },
+      ...facilityMocks(),
+      warehouseBin: { findFirst: jest.fn().mockResolvedValue(mockBin) },
       stagingAssignment: { create: jest.fn().mockResolvedValue({ id: 'sa-1', status: 'staged' }) },
-      trackableUnit: { update: jest.fn().mockResolvedValue({}) },
+      trackableUnit: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'unit-1' }),
+        update: jest.fn().mockResolvedValue({}),
+      },
       domainEventLog: { create: jest.fn().mockResolvedValue({}) },
     } as any;
     const prisma = {
@@ -179,7 +187,8 @@ describe('CreateStagingAssignmentCommandHandler', () => {
 
   it('fails if bin not found', async () => {
     const tx = {
-      warehouseBin: { findUnique: jest.fn().mockResolvedValue(null) },
+      ...facilityMocks(),
+      warehouseBin: { findFirst: jest.fn().mockResolvedValue(null) },
       domainEventLog: { create: jest.fn().mockResolvedValue({}) },
     } as any;
     const prisma = {
@@ -210,6 +219,7 @@ describe('CompleteLoadingCommandHandler', () => {
       { id: 'sa-2', status: 'staged', trackableUnitId: 'unit-2', orderId: 'order-1' },
     ];
     const tx = {
+      ...facilityMocks(),
       stagingAssignment: {
         findMany: jest.fn().mockResolvedValue(assignments),
         updateMany: jest.fn().mockResolvedValue({ count: 2 }),

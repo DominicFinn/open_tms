@@ -3,6 +3,7 @@ import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { Command } from '../types.js';
+import { resolveFacilityForLocation } from '../facilities/resolveFacility.js';
 
 export interface CreatePackTaskPayload {
   locationId: string;
@@ -39,9 +40,14 @@ export class CreatePackTaskCommandHandler extends BaseCommandHandler<
 
     if (p.lines.length === 0) throw new Error('Pack task must have at least one line');
 
+    // Phase 2a dual-write (#227): the task is filed under both the Location and the Facility
+    // derived from it, so nothing is left without a facility when reads switch over.
+    const facilityId = await resolveFacilityForLocation(tx, command, p.locationId, emit);
+
     const task = await tx.packTask.create({
       data: {
         locationId: p.locationId,
+        facilityId,
         orderId: p.orderId,
         pickTaskId: p.pickTaskId ?? null,
         packStationBinId: p.packStationBinId ?? null,
