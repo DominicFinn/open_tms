@@ -2472,6 +2472,55 @@ Tracks stock levels across warehouse bins with an immutable transaction ledger.
 
 ---
 
+### Domain: Inventory Observations (#233)
+
+A lightweight, non-authoritative record of "at time T, someone observed X at location Y" from an
+ad hoc scan or spot-check. Deliberately distinct from `CycleCount` (a formal, stateful audit
+process with expected-vs-counted variance and auto-adjust) and from `InventoryTransaction` (the
+system-driven stock ledger) — recording an observation does **not** itself change
+`quantityOnHand`. It's evidence, not a correction.
+
+**Model:** `InventoryObservation` (table role: ledger, insert-only). Best-effort linked to the
+matching `InventoryRecord` (by bin + sku + uomCode + lotNumber) when one exists; `observedQuantity`
+is nullable so a pure "I saw this SKU here" scan with no count is valid. `cycleCountLineId` is a
+soft string reference (not a Prisma relation) so it can later be promoted into a formal count line
+without requiring one up front — `CycleCountLine` is a `wms` model, and `inventory` may not hold a
+hard FK into `wms` (see the module-boundaries rule).
+
+### Commands
+- `inventory_observation.record` — Validates the bin belongs to the caller's org and the stated
+  location, then inserts the observation row directly inside the transaction (ledger write, no
+  projection needed — read paths query the table directly, same pattern as
+  `InventoryTransaction`/`GET /api/v1/inventory/transactions`).
+
+### Events
+- `inventory_observation.recorded` — Includes locationId, binId, sku, uomCode, observedQuantity,
+  inventoryRecordId (nullable)
+
+### Access surfaces
+- Admin desktop: `GET/POST /api/v1/inventory/observations`, gated by the existing `wms:read`/
+  `wms:write` permission family (`registerWmsGuard`), same as the rest of the `inventory` module's
+  routes.
+- A new **inventory-app** mobile-web surface (`frontend/src/inventory-app/`, routed under
+  `/inventory-app/*`) — a lighter, separately-scoped sibling of the warehouse PWA focused on
+  checking stock levels and recording observations, for a future companion Android client. It logs
+  in through the same magic-link/password flow as the warehouse PWA (`WarehouseService`), but
+  requests a narrower `scope: 'inventory'` session JWT instead of `scope: 'warehouse'`.
+
+### The `scope: 'inventory'` JWT (`backend/src/middleware/jwtAuth.ts`)
+Deliberately narrower than the existing `scope: 'warehouse'` PWA session, so a lost or leaked
+inventory-app device has a smaller blast radius than a warehouse-floor one:
+- **Allowed:** `GET /api/v1/inventory*` (levels, summary, detail, observations),
+  `GET /api/v1/warehouse/zones`, `GET /api/v1/warehouse/bins`, `GET /api/v1/warehouse/locations`,
+  and the single write `POST /api/v1/inventory/observations`.
+- **Not allowed:** stock adjust/transfer, cycle-count creation, zone/bin writes, and everything the
+  `warehouse` scope can reach that isn't listed above (receiving, putaway, picking, packing, RMAs).
+- `MagicLink.scope` (defaulting to `'warehouse'`) records which surface a given link mints into,
+  so the same magic-link/password-login endpoints serve both PWAs without duplicating the login
+  flow.
+
+---
+
 ### Domain: Fulfilment Demand (WmsFulfilmentOrder)
 
 The warehouse's own record of what it has been asked to ship. Wave planning, eligibility and

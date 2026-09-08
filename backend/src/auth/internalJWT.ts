@@ -30,9 +30,11 @@ export interface InternalJWTClaims {
    * Surface restriction. 'warehouse' marks a session minted by the
    * warehouse PWA login (magic link or password): authenticateJWT only
    * accepts it on warehouse/WMS task routes, so a leaked operative token
-   * cannot reach the wider admin API. Absent = unrestricted admin session.
+   * cannot reach the wider admin API. 'inventory' (#233) is narrower still
+   * — read levels and record observations only, no adjust/transfer or
+   * cycle-count access. Absent = unrestricted admin session.
    */
-  scope?: 'warehouse';
+  scope?: 'warehouse' | 'inventory';
 }
 
 /**

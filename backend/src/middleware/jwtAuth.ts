@@ -12,8 +12,12 @@ export interface JWTPayload {
   permissions: string[];
   organizationId?: string;
   customerId?: string;
-  /** 'warehouse' = PWA session, accepted only on warehouse/WMS task routes. */
-  scope?: 'warehouse';
+  /**
+   * 'warehouse' = PWA session, accepted only on warehouse/WMS task routes.
+   * 'inventory' = the lighter inventory-app session (#233), accepted only on inventory
+   * read/observation routes — narrower than 'warehouse', no adjust/transfer or cycle-count access.
+   */
+  scope?: 'warehouse' | 'inventory';
   iat?: number;
   exp?: number;
   iss?: string;
@@ -124,6 +128,27 @@ function warehouseScopeAllows(method: string, url: string): boolean {
 }
 
 /**
+ * Routes an inventory-scoped session may reach (#233): read access to stock levels and
+ * warehouse topology, plus recording new observations. No adjust/transfer and no cycle-count
+ * access — deliberately narrower than the 'warehouse' scope, since this token is meant for a
+ * lightweight, less-trusted mobile client.
+ */
+const INVENTORY_SCOPE_READONLY_PREFIXES = [
+  '/api/v1/inventory',
+  '/api/v1/warehouse/zones',
+  '/api/v1/warehouse/bins',
+  '/api/v1/warehouse/locations',
+];
+
+function inventoryScopeAllows(method: string, url: string): boolean {
+  const path = url.split('?')[0];
+  // POST /api/v1/inventory/observations is the one write this scope may perform.
+  if (method === 'POST' && path === '/api/v1/inventory/observations') return true;
+  if (method === 'GET' && INVENTORY_SCOPE_READONLY_PREFIXES.some(p => path.startsWith(p))) return true;
+  return false;
+}
+
+/**
  * Fastify preHandler hook: extracts and validates JWT from Authorization header.
  * Sets req.user if valid. Sends 401 if missing or invalid, 403 when a
  * warehouse-scoped session tries to reach a non-warehouse route.
@@ -147,6 +172,11 @@ export async function authenticateJWT(req: FastifyRequest, reply: FastifyReply):
 
   if (payload.scope === 'warehouse' && !warehouseScopeAllows(req.method, req.url)) {
     reply.code(403).send({ data: null, error: 'Warehouse session cannot access this resource' });
+    return;
+  }
+
+  if (payload.scope === 'inventory' && !inventoryScopeAllows(req.method, req.url)) {
+    reply.code(403).send({ data: null, error: 'Inventory session cannot access this resource' });
     return;
   }
 

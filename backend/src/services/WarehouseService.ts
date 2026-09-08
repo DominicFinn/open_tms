@@ -55,6 +55,7 @@ export class WarehouseService {
     userId: string,
     orgId: string,
     expiresInDays?: number,
+    scope: 'warehouse' | 'inventory' = 'warehouse',
   ): Promise<{ success: true; data: MagicLinkResult } | { success: false; error: string }> {
     // Check magic links are enabled for the caller's organization
     const org = await this.prisma.organization.findUnique({ where: { id: orgId } });
@@ -83,7 +84,7 @@ export class WarehouseService {
       : null;
 
     await this.prisma.magicLink.create({
-      data: { userId, tokenHash, expiresAt, active: true },
+      data: { userId, tokenHash, expiresAt, active: true, scope },
     });
 
     return {
@@ -158,9 +159,10 @@ export class WarehouseService {
     });
 
     const userPayload = this.buildUserPayload(magicLink.user);
+    const scope: 'warehouse' | 'inventory' = magicLink.scope === 'inventory' ? 'inventory' : 'warehouse';
     return {
       success: true,
-      data: { token: this.signSessionToken(userPayload), user: userPayload },
+      data: { token: this.signSessionToken(userPayload, scope), user: userPayload },
     };
   }
 
@@ -170,6 +172,7 @@ export class WarehouseService {
     ipAddress: string | null,
     userAgent: string | null,
     comparePassword: (plain: string, hash: string) => Promise<boolean>,
+    scope: 'warehouse' | 'inventory' = 'warehouse',
   ): Promise<{ success: true; data: LoginResult } | { success: false; error: string; statusCode: number }> {
     const user = await this.prisma.user.findUnique({
       where: { email },
@@ -216,20 +219,21 @@ export class WarehouseService {
     const userPayload = this.buildUserPayload(user);
     return {
       success: true,
-      data: { token: this.signSessionToken(userPayload), user: userPayload },
+      data: { token: this.signSessionToken(userPayload, scope), user: userPayload },
     };
   }
 
   /**
-   * Sign a session JWT for a warehouse login. Format matches the
+   * Sign a session JWT for a warehouse or inventory-app login. Format matches the
    * regular admin login so `authenticateJWT` accepts it on every
-   * subsequent warehouse request.
+   * subsequent request within the granted scope.
    */
-  private signSessionToken(user: WarehouseUser): string {
-    // BUSINESS RULE: warehouse logins (magic link or password) mint a
+  private signSessionToken(user: WarehouseUser, scope: 'warehouse' | 'inventory' = 'warehouse'): string {
+    // BUSINESS RULE: warehouse/inventory-app logins (magic link or password) mint a
     // scoped session, not a general admin token. Magic links can hang on
     // a printed QR code in a warehouse; if one leaks it must only open
-    // the warehouse/WMS task surface, never the whole admin API.
+    // the granted task surface, never the whole admin API. 'inventory' (#233) is
+    // narrower again than 'warehouse' — see jwtAuth.ts.
     return signInternalJWT({
       sub: user.id,
       email: user.email,
@@ -238,7 +242,7 @@ export class WarehouseService {
       roles: user.roles,
       permissions: user.permissions,
       organizationId: user.organizationId ?? undefined,
-      scope: 'warehouse',
+      scope,
     });
   }
 

@@ -335,6 +335,9 @@ export const EVENT_TYPES = {
   INVENTORY_ADJUSTED: 'inventory.adjusted',
   INVENTORY_TRANSFERRED: 'inventory.transferred',
 
+  // Inventory: Observations (#233) — ad hoc scan/spot-check records, distinct from CycleCount
+  INVENTORY_OBSERVATION_RECORDED: 'inventory_observation.recorded',
+
   // WMS: Waves & Picking
   WAVE_CREATED: 'wave.created',
   WAVE_RELEASED: 'wave.released',
@@ -605,6 +608,7 @@ export const EVENT_SCHEMA_VERSIONS: Record<string, number> = {
   [EVENT_TYPES.INVENTORY_RECEIVED]: 1,
   [EVENT_TYPES.INVENTORY_ADJUSTED]: 1,
   [EVENT_TYPES.INVENTORY_TRANSFERRED]: 1,
+  [EVENT_TYPES.INVENTORY_OBSERVATION_RECORDED]: 1,
   [EVENT_TYPES.WAVE_CREATED]: 1,
   [EVENT_TYPES.WAVE_RELEASED]: 1,
   [EVENT_TYPES.WAVE_COMPLETED]: 1,

@@ -56,6 +56,11 @@ export async function warehouseRoutes(server: FastifyInstance) {
         properties: {
           userId: { type: 'string', format: 'uuid' },
           expiresInDays: { type: 'number', description: 'Days until expiry. Null = never expires.' },
+          scope: {
+            type: 'string',
+            enum: ['warehouse', 'inventory'],
+            description: 'Which surface this link logs into. Defaults to warehouse.',
+          },
         },
       },
     },
@@ -63,9 +68,10 @@ export async function warehouseRoutes(server: FastifyInstance) {
     const body = z.object({
       userId: z.string().uuid(),
       expiresInDays: z.number().positive().optional(),
+      scope: z.enum(['warehouse', 'inventory']).optional(),
     }).parse(req.body);
 
-    const result = await warehouseService.generateMagicLink(body.userId, req.orgId!, body.expiresInDays);
+    const result = await warehouseService.generateMagicLink(body.userId, req.orgId!, body.expiresInDays, body.scope ?? 'warehouse');
     if (!result.success) {
       reply.code(result.error.includes('disabled') ? 403 : 404);
       return { data: null, error: result.error };
@@ -122,13 +128,19 @@ export async function warehouseRoutes(server: FastifyInstance) {
         properties: {
           email: { type: 'string', format: 'email' },
           password: { type: 'string' },
+          scope: {
+            type: 'string',
+            enum: ['warehouse', 'inventory'],
+            description: 'Which surface this login is for. Defaults to warehouse.',
+          },
         },
       },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const { email, password } = z.object({
+    const { email, password, scope } = z.object({
       email: z.string().email(),
       password: z.string().min(1),
+      scope: z.enum(['warehouse', 'inventory']).optional(),
     }).parse(req.body);
 
     // Dynamic import bcrypt
@@ -148,6 +160,7 @@ export async function warehouseRoutes(server: FastifyInstance) {
       req.ip,
       req.headers['user-agent'] || null,
       bcryptCompare,
+      scope ?? 'warehouse',
     );
     if (!result.success) {
       reply.code(result.statusCode);

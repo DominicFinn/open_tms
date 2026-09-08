@@ -140,6 +140,7 @@ model Location {
   warehouseAisles       WarehouseAisle[]
   warehouseBins         WarehouseBin[]
   inventoryRecords      InventoryRecord[]
+  inventoryObservations InventoryObservation[]
   receivingAppointments ReceivingAppointment[]
   receivingTasks        ReceivingTask[]
   putawayRules          PutawayRule[]
@@ -958,6 +959,10 @@ model MagicLink {
   tokenHash String    @unique // SHA-256 hash of the magic link token
   expiresAt DateTime? // Null = never expires (persistent QR code)
   active    Boolean   @default(true)
+  // Which scoped session this link mints on validation: 'warehouse' (WMS task surface) or
+  // 'inventory' (the lighter inventory-app surface, #233). Defaults to 'warehouse' for
+  // pre-existing links.
+  scope     String    @default("warehouse")
   createdAt DateTime  @default(now())
 
   @@index([userId])

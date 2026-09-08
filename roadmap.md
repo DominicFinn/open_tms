@@ -60,6 +60,25 @@ Roughly 50-65 PR-sized chunks end to end; every PR leaves the product shippable.
   directly, since a WMS-only install has no TMS order pipeline
 - **Phase 5: Inventory separability (FinnIMS)** 🔲 Inventory as its own module, `Product` SKU
   master; deliberately last
+  - First slice landed (#233): a lighter, standalone "inventory app" mobile-web surface
+    (`frontend/src/inventory-app/`) on top of the existing `inventory` module — read-only stock
+    levels + a new `InventoryObservation` ledger for ad hoc scan/spot-check records, behind a new
+    narrower `scope: 'inventory'` session JWT. Mobile-web first, deliberately, to validate the API
+    contract before committing to a native Android client. `Product` SKU master still not
+    introduced — `sku` stays a bare string, per this phase's own note above
+
+### Inventory management — companion mobile app (new direction)
+Web-based mobile-first companion to the desktop apps, focused on checking inventory levels and
+recording spot observations at a site — narrower in scope than the full WMS operative PWA. Android
+native is the eventual target; the mobile-web surface above validates the backend contract first.
+- [x] `InventoryObservation` ledger entity + `inventory_observation.record` command (#233)
+- [x] `scope: 'inventory'` JWT, narrower than `scope: 'warehouse'` (read levels + record
+      observations only)
+- [x] Mobile-web levels view + scan/observation flow, reusing the warehouse PWA's scanning hooks
+- [ ] Promote an observation into a formal `CycleCount` line
+- [ ] Native Android client once the mobile-web contract has seen real use
+- [ ] Extend EDI 846 (Inventory Inquiry/Advice) once a 3PL client dashboard needs it (see
+      "Extended WMS EDI" below)
 
 ### **Track 1: Brokerage Operations** (NEW - Critical Gap)
 

@@ -8,6 +8,7 @@
 import type { FastifyInstance } from 'fastify';
 import { inventoryRoutes } from '../inventory.js';
 import { productUomRoutes } from '../productUom.js';
+import { inventoryObservationRoutes } from '../inventoryObservations.js';
 
 /**
  * Registered at the root, outside the JWT scope. These routes are public or authenticate
@@ -21,4 +22,5 @@ export async function registerInventoryPublicRoutes(_server: FastifyInstance): P
 export async function registerInventoryAuthenticatedRoutes(app: FastifyInstance): Promise<void> {
   await app.register(inventoryRoutes);
   await app.register(productUomRoutes);
+  await app.register(inventoryObservationRoutes);
 }

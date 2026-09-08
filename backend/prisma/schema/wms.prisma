@@ -155,6 +155,7 @@ model WarehouseBin {
   // Relations
   unitsInBin                TrackableUnit[]        @relation("UnitCurrentBin")
   inventoryRecords          InventoryRecord[]
+  inventoryObservations     InventoryObservation[]
   putawayTasksAsSource      PutawayTask[]          @relation("PutawaySource")
   putawayTasksAsTarget      PutawayTask[]          @relation("PutawayTarget")
   pickLines                 PickLine[]
