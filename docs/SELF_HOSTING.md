@@ -254,6 +254,21 @@ DATABASE_URL=... npx --prefix backend tsx src/scripts/backfill-read-models.ts --
 
 An unknown name is refused with the list of valid ones.
 
+### Upgrading past the Facility split
+
+The `facilities` step derives a `Facility` for every warehouse `Location` that does not already
+have one. The Phase 2a migrations only derive facilities for locations a warehouse row already
+points at, so an install with warehouse locations but no zones, receiving or waves yet comes up
+with none, and every WMS page reports "No facilities".
+
+Run it once after upgrading:
+
+```bash
+DATABASE_URL=... npx --prefix backend tsx src/scripts/backfill-read-models.ts --only=facilities
+```
+
+It is idempotent, so running it again creates nothing.
+
 ## Backups
 
 Three things, and all three are needed to restore:

@@ -1889,6 +1889,11 @@ organisation. It is not a tenancy check, and must never be relied on as one.
 
 ### Domain: Facilities
 
+**On upgrade**, run `backfill-read-models.ts --only=facilities` once. The Phase 2a migrations only
+derive a facility per Location that a warehouse row already points at, so an install with warehouse
+locations but no zones, receiving or waves yet gets none, and every WMS page reports "No facilities"
+(#236). The step is idempotent.
+
 The warehouse a WMS install operates. A Facility is deliberately not a Location: Location is the
 TMS geographic node used by shipment stops, lane endpoints and arrival criteria, and a standalone
 FinnWMS has no TMS schema to point at. `sourceLocationId` is a soft reference, not a foreign key,
