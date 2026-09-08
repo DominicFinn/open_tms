@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Boxes, CircleAlert, Loader2 } from 'lucide-react';
 
 import { API_URL } from '../api';
+import { useFacilities } from '../hooks/useFacilities';
+import { FacilitySelect } from '@/components/FacilitySelect';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -65,8 +67,7 @@ export default function VNextWmsInventory() {
   const [search, setSearch] = useState('');
   const [view, setView] = useState<'detail' | 'summary'>('detail');
 
-  const [selectedLocation, setSelectedLocation] = useState('');
-  const [locations, setLocations] = useState<Array<{ id: string; name: string }>>([]);
+  const { facilities, facilityId, setFacilityId, loading: facilitiesLoading, error: facilitiesError } = useFacilities();
 
   const [adjustRecord, setAdjustRecord] = useState<InventoryRecord | null>(null);
   const [adjustForm, setAdjustForm] = useState({ quantityChange: '', reasonCode: 'recount' });
@@ -79,40 +80,26 @@ export default function VNextWmsInventory() {
   const [transferError, setTransferError] = useState('');
   const [bins, setBins] = useState<Array<{ id: string; label: string }>>([]);
 
-  useEffect(() => {
-    fetch(`${API_URL}/api/v1/locations`)
-      .then(r => r.json())
-      .then(res => {
-        const locs = (res.data || []).filter(
-          (l: any) => !l.locationType || ['warehouse', 'distribution_centre', 'cross_dock'].includes(l.locationType)
-        );
-        setLocations(locs);
-        if (locs.length > 0) setSelectedLocation(locs[0].id);
-        else setLoading(false);
-      })
-      .catch(() => setLoading(false));
-  }, []);
-
   const loadData = () => {
-    if (!selectedLocation) return;
+    if (!facilityId) { setLoading(false); return; }
     setLoading(true);
-    const detailP = fetch(`${API_URL}/api/v1/inventory?locationId=${selectedLocation}&hasStock=true`)
+    const detailP = fetch(`${API_URL}/api/v1/inventory?facilityId=${facilityId}&hasStock=true`)
       .then(r => r.json())
       .then(res => setRecords(res.data || []));
-    const summaryP = fetch(`${API_URL}/api/v1/inventory/summary?locationId=${selectedLocation}`)
+    const summaryP = fetch(`${API_URL}/api/v1/inventory/summary?facilityId=${facilityId}`)
       .then(r => r.json())
       .then(res => setSummary(res.data || []));
     Promise.all([detailP, summaryP]).finally(() => setLoading(false));
   };
 
-  useEffect(() => { loadData(); }, [selectedLocation]);
+  useEffect(() => { loadData(); }, [facilityId]);
 
   useEffect(() => {
-    if (!selectedLocation) return;
-    fetch(`${API_URL}/api/v1/warehouse/bins?locationId=${selectedLocation}`)
+    if (!facilityId) { setLoading(false); return; }
+    fetch(`${API_URL}/api/v1/warehouse/bins?facilityId=${facilityId}`)
       .then(r => r.json())
       .then(res => setBins((res.data || []).filter((b: any) => b.active)));
-  }, [selectedLocation]);
+  }, [facilityId]);
 
   const handleAdjust = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -180,16 +167,7 @@ export default function VNextWmsInventory() {
           </TabsList>
         </Tabs>
         <div className="flex flex-wrap items-center gap-2">
-          <Select value={selectedLocation} onValueChange={setSelectedLocation}>
-            <SelectTrigger className="w-[220px]">
-              <SelectValue placeholder="Select location" />
-            </SelectTrigger>
-            <SelectContent>
-              {locations.map(l => (
-                <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <FacilitySelect facilities={facilities} value={facilityId} onChange={setFacilityId} loading={facilitiesLoading} error={facilitiesError} className="w-[220px]" />
           <Input
             placeholder="Search SKU or bin..."
             value={search}

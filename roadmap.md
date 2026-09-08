@@ -45,8 +45,9 @@ Roughly 50-65 PR-sized chunks end to end; every PR leaves the product shippable.
 - **Phase 2: Data model untangling** 🚧 `Facility` (WMS off the conflated `Location`) — the
   dual-write is complete ✅, all twelve WMS models that reference `Location` now carry a
   `facilityId` (#217 storage topology, #225 inbound, #227 outbound, #229 waves), and the read path
-  accepts a facility scope (#231). The 19 WMS frontend files still send `locationId`; moving them is
-  batch 5b, then batch 6 contracts;
+  accepts a facility scope (#231), and the 15 WMS list pages now send `facilityId` (#234). What is
+  left is the write path: batch 6 makes `locationId` nullable, moves the create commands and the
+  four WMS create forms onto `facilityId`, and drops the `Location` FKs;
   `HandlingUnit` (stock without a TMS order), polymorphic `Allocation` demand ref, carton cleanup,
   `OrgWmsSettings` carve-out still to come. All expand→contract.
   Phase 0 tenancy leftovers closed alongside ✅ (#220, in #221/#222/#223): the whole WMS read and
@@ -695,9 +696,9 @@ Base login (email + password, JWT, admin password reset, RequireAuth guard, glob
    the one that makes a standalone FinnWMS possible: `Facility` (WMS off the conflated `Location`),
    `HandlingUnit` (stock without a TMS order), and a polymorphic `Allocation` demand ref. 2a is
    under way, and its dual-write is finished: #217, #225, #227 and #229 put a `facilityId` on every
-   WMS model that references `Location`, and #231 taught every WMS list endpoint to filter by
-   facility. What is left is moving the 19 WMS frontend pages onto `/api/v1/facilities` (5b), then
-   dropping the `locationId` parameter and the `Location` FKs (batch 6).
+   WMS model that references `Location`, #231 taught every WMS list endpoint to filter by facility,
+   and #234 moved the WMS UI onto it. Reads are done. Batch 6 is the write path and the contract:
+   nullable `locationId`, create commands on `facilityId`, then drop the `Location` FKs.
    See [docs/roadmap/split-finntms-finnwms.md](docs/roadmap/split-finntms-finnwms.md).
 1. **NEXT (Immediate):** **Carrier API Integration** - Real-time shipment tracking through carrier APIs is table stakes. FedEx/UPS/DHL first-party tracking already exist (real, sandbox-ready). Expand with **multi-carrier aggregators** (EasyPost, AfterShip) so one integration pools dozens of carriers, then broaden. Poll + webhook, all sandbox/ngrok-testable. Landscape + selection in `docs/CARRIER_INTEGRATIONS.md`; testing in `docs/CARRIER_TESTING.md`.
 2. **Immediate:** **Track 1 (Brokerage)** - Broker entity model, margin tracking, quoting workflow. This unlocks the largest market segment currently unserved.

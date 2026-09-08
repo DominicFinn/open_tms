@@ -3,6 +3,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Boxes, Grid3x3, Loader2, Plus } from 'lucide-react';
 
 import { API_URL } from '../api';
+import { useFacilities } from '../hooks/useFacilities';
+import { FacilitySelect } from '@/components/FacilitySelect';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -91,39 +93,21 @@ export default function VNextWmsZones() {
   );
   const [zones, setZones] = useState<WarehouseZone[]>([]);
   const [bins, setBins] = useState<WarehouseBin[]>([]);
-  const [locations, setLocations] = useState<LocationOption[]>([]);
-  const [selectedLocation, setSelectedLocation] = useState('');
+  const { facilities, facilityId, setFacilityId, loading: facilitiesLoading, error: facilitiesError } = useFacilities();
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
 
   useEffect(() => {
-    fetch(`${API_URL}/api/v1/locations`)
-      .then(r => r.json())
-      .then(res => {
-        const locs = (res.data || []).filter(
-          (l: any) => !l.locationType || ['warehouse', 'distribution_centre', 'cross_dock'].includes(l.locationType)
-        );
-        setLocations(locs);
-        if (locs.length > 0) {
-          setSelectedLocation(locs[0].id);
-        } else {
-          setLoading(false);
-        }
-      })
-      .catch(() => setLoading(false));
-  }, []);
-
-  useEffect(() => {
-    if (!selectedLocation) return;
+    if (!facilityId) { setLoading(false); return; }
     setLoading(true);
-    const zoneP = fetch(`${API_URL}/api/v1/warehouse/zones?locationId=${selectedLocation}`)
+    const zoneP = fetch(`${API_URL}/api/v1/warehouse/zones?facilityId=${facilityId}`)
       .then(r => r.json())
       .then(res => setZones((res.data || []).map((z: any) => ({ ...z, binCount: z._count?.bins ?? 0 }))));
-    const binP = fetch(`${API_URL}/api/v1/warehouse/bins?locationId=${selectedLocation}`)
+    const binP = fetch(`${API_URL}/api/v1/warehouse/bins?facilityId=${facilityId}`)
       .then(r => r.json())
       .then(res => setBins((res.data || []).map((b: any) => ({ ...b, zoneName: b.zone?.name ?? '' }))));
     Promise.all([zoneP, binP]).finally(() => setLoading(false));
-  }, [selectedLocation]);
+  }, [facilityId]);
 
   const switchTab = (t: 'zones' | 'bins') => {
     setTab(t);
@@ -177,16 +161,7 @@ export default function VNextWmsZones() {
       </Tabs>
 
       <div className="flex flex-wrap items-center gap-3">
-        <Select value={selectedLocation} onValueChange={setSelectedLocation}>
-          <SelectTrigger className="w-[260px]">
-            <SelectValue placeholder="Select location" />
-          </SelectTrigger>
-          <SelectContent>
-            {locations.map(l => (
-              <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <FacilitySelect facilities={facilities} value={facilityId} onChange={setFacilityId} loading={facilitiesLoading} error={facilitiesError} className="w-[260px]" />
         <Input
           placeholder={tab === 'zones' ? 'Search zones...' : 'Search bins...'}
           value={search}

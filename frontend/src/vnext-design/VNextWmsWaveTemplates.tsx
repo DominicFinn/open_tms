@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { CircleAlert, FileText, Loader2, Plus } from 'lucide-react';
 
 import { API_URL } from '../api';
+import { useFacilities } from '../hooks/useFacilities';
+import { FacilitySelect } from '@/components/FacilitySelect';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -54,8 +56,7 @@ export default function VNextWmsWaveTemplates() {
   const navigate = useNavigate();
   const [templates, setTemplates] = useState<WaveTemplate[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedLocation, setSelectedLocation] = useState('');
-  const [locations, setLocations] = useState<Array<{ id: string; name: string }>>([]);
+  const { facilities, facilityId, setFacilityId, facility, loading: facilitiesLoading, error: facilitiesError } = useFacilities();
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
   const [applying, setApplying] = useState<string | null>(null);
@@ -72,26 +73,17 @@ export default function VNextWmsWaveTemplates() {
     releaseSchedule: '', autoRelease: false,
   });
 
-  useEffect(() => {
-    fetch(`${API_URL}/api/v1/locations`).then(r => r.json()).then(res => {
-      const locs = (res.data || []).filter((l: any) => !l.locationType || ['warehouse', 'distribution_centre', 'cross_dock'].includes(l.locationType));
-      setLocations(locs);
-      if (locs.length > 0) setSelectedLocation(locs[0].id);
-      else setLoading(false);
-    }).catch(() => setLoading(false));
-  }, []);
-
   const loadData = () => {
-    if (!selectedLocation) return;
+    if (!facilityId) { setLoading(false); return; }
     setLoading(true);
-    fetch(`${API_URL}/api/v1/wave-templates?locationId=${selectedLocation}`)
+    fetch(`${API_URL}/api/v1/wave-templates?facilityId=${facilityId}`)
       .then(r => r.json())
       .then(res => setTemplates(res.data || []))
       .catch(() => {})
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { loadData(); }, [selectedLocation]);
+  useEffect(() => { loadData(); }, [facilityId]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -101,7 +93,7 @@ export default function VNextWmsWaveTemplates() {
       const res = await fetch(`${API_URL}/api/v1/wave-templates`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          locationId: selectedLocation,
+          locationId: facility?.sourceLocationId,
           name: form.name.trim(),
           pickStrategy: form.pickStrategy,
           cutoffTime: form.cutoffTime || null,
@@ -258,16 +250,7 @@ export default function VNextWmsWaveTemplates() {
       </Dialog>
 
       <div className="flex flex-wrap items-center gap-2">
-        <Select value={selectedLocation} onValueChange={setSelectedLocation}>
-          <SelectTrigger className="w-[260px]">
-            <SelectValue placeholder="Select location" />
-          </SelectTrigger>
-          <SelectContent>
-            {locations.map(l => (
-              <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <FacilitySelect facilities={facilities} value={facilityId} onChange={setFacilityId} loading={facilitiesLoading} error={facilitiesError} className="w-[260px]" />
       </div>
 
       {loading ? (

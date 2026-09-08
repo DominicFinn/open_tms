@@ -139,8 +139,12 @@ Seven FKs and one model stand between the two products.
   | 3 | Outbound | `PickTask`, `PackTask`, `StagingAssignment` | ✅ #227 |
   | 4 | Waves | `Wave`, `WaveTemplate` | ✅ #229 |
   | 5a | Read path | WMS list endpoints and repositories accept a facility scope | ✅ #231 |
-  | 5b | Frontend | the 19 WMS files off `/api/v1/locations` | next |
-  | 6 | Contract | drop the `Location` FKs and the two boundary-lint exceptions | |
+  | 5b | Frontend | the 15 WMS list pages onto `/api/v1/facilities` | ✅ #234 |
+  | 6 | Contract | make `locationId` nullable, move the create commands and the 4 WMS create forms onto `facilityId`, drop the `Location` FKs and the two boundary-lint exceptions | next |
+
+  5b turned out to be 15 pages, not 19: the other four are create forms whose `locationId` feeds a
+  command payload, so they stay on Locations until batch 6 moves the write path. That makes the
+  rule for this phase crisp: **reads by facility, writes by location, until the contract.**
 
   Batch 5 was one row when this table was written; it is two. Doing the backend first means the
   frontend change lands against an API that already accepts what it wants to send, and neither PR

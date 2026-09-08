@@ -1930,6 +1930,17 @@ Repositories take a `WarehouseScope` rather than a bare id, and build their filt
 `scopedWhere(orgId, scope)`, so a read cannot be written that narrows by warehouse without also
 narrowing by tenant.
 
+The WMS UI sends `facilityId` (#234). The warehouse picker is `FacilitySelect` over the
+`useFacilities` hook, one shared component rather than the nineteen copies each page used to carry.
+It also drops a filter those copies applied: they fetched `/api/v1/locations` and kept only
+`warehouse`, `distribution_centre` and `cross_dock` types, whereas a Facility is a warehouse by
+definition and the endpoint already excludes archived ones.
+
+**Reads move to facility; writes have not.** The create commands still write a non-null `locationId`
+on the row, so the four WMS create forms still choose a Location, and a list page with an inline
+create sends the selected facility's `sourceLocationId`. Both go in batch 6, when `locationId`
+becomes nullable and the commands move onto `facilityId`.
+
 ---
 
 ### Domain: Warehouse Zones & Bins

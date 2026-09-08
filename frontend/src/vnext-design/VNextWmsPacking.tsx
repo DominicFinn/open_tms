@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { Loader2, Package } from 'lucide-react';
 
 import { API_URL } from '../api';
+import { useFacilities } from '../hooks/useFacilities';
+import { FacilitySelect } from '@/components/FacilitySelect';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -53,27 +55,12 @@ export default function VNextWmsPacking() {
   const [tasks, setTasks] = useState<PackTask[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [selectedLocation, setSelectedLocation] = useState('');
-  const [locations, setLocations] = useState<Array<{ id: string; name: string }>>([]);
+  const { facilities, facilityId, setFacilityId, loading: facilitiesLoading, error: facilitiesError } = useFacilities();
 
   useEffect(() => {
-    fetch(`${API_URL}/api/v1/locations`)
-      .then(r => r.json())
-      .then(res => {
-        const locs = (res.data || []).filter(
-          (l: any) => !l.locationType || ['warehouse', 'distribution_centre', 'cross_dock'].includes(l.locationType)
-        );
-        setLocations(locs);
-        if (locs.length > 0) setSelectedLocation(locs[0].id);
-        else setLoading(false);
-      })
-      .catch(() => setLoading(false));
-  }, []);
-
-  useEffect(() => {
-    if (!selectedLocation) return;
+    if (!facilityId) { setLoading(false); return; }
     setLoading(true);
-    fetch(`${API_URL}/api/v1/pack-tasks?locationId=${selectedLocation}`)
+    fetch(`${API_URL}/api/v1/pack-tasks?facilityId=${facilityId}`)
       .then(r => r.json())
       .then(res => setTasks((res.data || []).map((t: any) => ({
         ...t,
@@ -82,7 +69,7 @@ export default function VNextWmsPacking() {
       }))))
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [selectedLocation]);
+  }, [facilityId]);
 
   return (
     <div className="space-y-6">
@@ -92,16 +79,7 @@ export default function VNextWmsPacking() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <Select value={selectedLocation} onValueChange={setSelectedLocation}>
-          <SelectTrigger className="w-[260px]">
-            <SelectValue placeholder="Select location" />
-          </SelectTrigger>
-          <SelectContent>
-            {locations.map(l => (
-              <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <FacilitySelect facilities={facilities} value={facilityId} onChange={setFacilityId} loading={facilitiesLoading} error={facilitiesError} className="w-[260px]" />
       </div>
 
       {loading ? (

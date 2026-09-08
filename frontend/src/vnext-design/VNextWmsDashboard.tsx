@@ -16,6 +16,8 @@ import {
 } from 'lucide-react';
 
 import { API_URL } from '../api';
+import { useFacilities } from '../hooks/useFacilities';
+import { FacilitySelect } from '@/components/FacilitySelect';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -51,32 +53,17 @@ export default function VNextWmsDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const [selectedLocation, setSelectedLocation] = useState('');
-  const [locations, setLocations] = useState<Array<{ id: string; name: string }>>([]);
+  const { facilities, facilityId, setFacilityId, loading: facilitiesLoading, error: facilitiesError } = useFacilities();
 
   useEffect(() => {
-    fetch(`${API_URL}/api/v1/locations`)
-      .then(r => r.json())
-      .then(res => {
-        const locs = (res.data || []).filter(
-          (l: any) => !l.locationType || ['warehouse', 'distribution_centre', 'cross_dock'].includes(l.locationType)
-        );
-        setLocations(locs);
-        if (locs.length > 0) setSelectedLocation(locs[0].id);
-        else setLoading(false);
-      })
-      .catch(() => setLoading(false));
-  }, []);
-
-  useEffect(() => {
-    if (!selectedLocation) return;
+    if (!facilityId) { setLoading(false); return; }
     setLoading(true);
-    fetch(`${API_URL}/api/v1/wms/dashboard?locationId=${selectedLocation}`)
+    fetch(`${API_URL}/api/v1/wms/dashboard?facilityId=${facilityId}`)
       .then(r => r.json())
       .then(res => { if (res.data) setStats(res.data); })
       .catch(() => setError('Failed to load dashboard'))
       .finally(() => setLoading(false));
-  }, [selectedLocation]);
+  }, [facilityId]);
 
   if (loading) {
     return (
@@ -108,16 +95,7 @@ export default function VNextWmsDashboard() {
           <h1 className="text-3xl font-bold tracking-tight">Warehouse Operations</h1>
           <p className="mt-1 text-sm text-muted-foreground">Overview of warehouse activity and performance</p>
         </div>
-        <Select value={selectedLocation} onValueChange={setSelectedLocation}>
-          <SelectTrigger className="w-[260px]">
-            <SelectValue placeholder="Select location" />
-          </SelectTrigger>
-          <SelectContent>
-            {locations.map(l => (
-              <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <FacilitySelect facilities={facilities} value={facilityId} onChange={setFacilityId} loading={facilitiesLoading} error={facilitiesError} className="w-[260px]" />
       </div>
 
       {error && (

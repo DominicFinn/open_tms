@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { CircleAlert, Loader2, Plus } from 'lucide-react';
 
 import { API_URL } from '../api';
+import { useFacilities } from '../hooks/useFacilities';
+import { FacilitySelect } from '@/components/FacilitySelect';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DatePicker } from '@/components/ui/date-picker';
@@ -52,8 +54,7 @@ function statusVariant(s: string): BadgeVariant {
 }
 
 export default function VNextWmsReceivingAppointments() {
-  const [locations, setLocations] = useState<LocationLite[]>([]);
-  const [selectedLocation, setSelectedLocation] = useState('');
+  const { facilities, facilityId, setFacilityId, facility, loading: facilitiesLoading, error: facilitiesError } = useFacilities();
   const [filterDate, setFilterDate] = useState(new Date().toISOString().slice(0, 10));
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [bins, setBins] = useState<BinLite[]>([]);
@@ -69,37 +70,28 @@ export default function VNextWmsReceivingAppointments() {
   };
   const [form, setForm] = useState(empty);
 
-  useEffect(() => {
-    fetch(`${API_URL}/api/v1/locations`).then(r => r.json()).then(res => {
-      const locs = (res.data || []).filter((l: any) => !l.locationType || ['warehouse', 'distribution_centre', 'cross_dock'].includes(l.locationType));
-      setLocations(locs);
-      if (locs.length > 0) setSelectedLocation(locs[0].id);
-      else setLoading(false);
-    });
-  }, []);
-
   const load = () => {
-    if (!selectedLocation) return;
+    if (!facilityId) { setLoading(false); return; }
     setLoading(true);
-    const params = new URLSearchParams({ locationId: selectedLocation });
+    const params = new URLSearchParams({ facilityId });
     if (filterDate) params.set('date', filterDate);
     fetch(`${API_URL}/api/v1/receiving/appointments?${params}`)
       .then(r => r.json())
       .then(res => setAppointments(res.data || []))
       .finally(() => setLoading(false));
   };
-  useEffect(load, [selectedLocation, filterDate]);
+  useEffect(load, [facilityId, filterDate]);
 
   useEffect(() => {
-    if (!selectedLocation) return;
-    fetch(`${API_URL}/api/v1/warehouse-bins?locationId=${selectedLocation}&binType=dock`)
+    if (!facilityId) { setLoading(false); return; }
+    fetch(`${API_URL}/api/v1/warehouse-bins?facilityId=${facilityId}&binType=dock`)
       .then(r => r.json())
       .then(res => setBins(res.data || []))
       .catch(() => setBins([]));
-  }, [selectedLocation]);
+  }, [facilityId]);
 
   const handleCreate = async () => {
-    if (!selectedLocation || !form.scheduledAt || !form.scheduledEndAt) {
+    if (!facilityId || !form.scheduledAt || !form.scheduledEndAt) {
       setError('Start and end time are required');
       return;
     }
@@ -108,7 +100,7 @@ export default function VNextWmsReceivingAppointments() {
       const res = await fetch(`${API_URL}/api/v1/receiving/appointments`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          locationId: selectedLocation,
+          locationId: facility?.sourceLocationId,
           scheduledAt: new Date(form.scheduledAt).toISOString(),
           scheduledEndAt: new Date(form.scheduledEndAt).toISOString(),
           carrierName: form.carrierName || undefined,
@@ -162,16 +154,7 @@ export default function VNextWmsReceivingAppointments() {
 
       <Card>
         <CardContent className="flex flex-wrap items-center gap-2 p-4">
-          <Select value={selectedLocation} onValueChange={setSelectedLocation}>
-            <SelectTrigger className="w-[260px]">
-              <SelectValue placeholder="Select location" />
-            </SelectTrigger>
-            <SelectContent>
-              {locations.map(l => (
-                <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <FacilitySelect facilities={facilities} value={facilityId} onChange={setFacilityId} loading={facilitiesLoading} error={facilitiesError} className="w-[260px]" />
           <DatePicker type="date" value={filterDate} onChange={e => setFilterDate(e.target.value)} className="w-auto min-w-[180px]" />
         </CardContent>
       </Card>
