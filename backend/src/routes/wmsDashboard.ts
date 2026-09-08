@@ -1,5 +1,6 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { container, TOKENS } from '../di/index.js';
+import { WAREHOUSE_SCOPE_QUERY, WAREHOUSE_SCOPE_ONE_OF, warehouseScopeFrom } from '../repositories/warehouseScope.js';
 import { IWmsDashboardRepository } from '../repositories/WmsDashboardRepository.js';
 import { registerWmsGuard } from '../auth/wmsGuard.js';
 
@@ -16,13 +17,13 @@ export async function wmsDashboardRoutes(server: FastifyInstance) {
       summary: 'Warehouse operations dashboard stats',
       querystring: {
         type: 'object',
-        required: ['locationId'],
-        properties: { locationId: { type: 'string', format: 'uuid' } },
+        oneOf: WAREHOUSE_SCOPE_ONE_OF,
+        properties: { ...WAREHOUSE_SCOPE_QUERY },
       },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const { locationId } = req.query as { locationId: string };
-    const c = await repo.countsForLocation(req.orgId!, locationId);
+    const q = req.query as { facilityId?: string; locationId?: string; };
+    const c = await repo.counts(req.orgId!, warehouseScopeFrom(q));
 
     // The response keeps its shape: the totals are derived here rather than counted twice.
     return {

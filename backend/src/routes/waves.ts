@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { container, TOKENS } from '../di/index.js';
+import { WAREHOUSE_SCOPE_QUERY, WAREHOUSE_SCOPE_ONE_OF, warehouseScopeFrom } from '../repositories/warehouseScope.js';
 import { ICommandBus } from '../commands/CommandBus.js';
 import { CREATE_WAVE } from '../commands/warehouse/CreateWaveCommand.js';
 import { RELEASE_WAVE } from '../commands/warehouse/ReleaseWaveCommand.js';
@@ -28,16 +29,16 @@ export async function waveRoutes(server: FastifyInstance) {
       summary: 'List waves for a location',
       querystring: {
         type: 'object',
-        required: ['locationId'],
+        oneOf: WAREHOUSE_SCOPE_ONE_OF,
         properties: {
-          locationId: { type: 'string', format: 'uuid' },
+          ...WAREHOUSE_SCOPE_QUERY,
           status: { type: 'string' },
         },
       },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const { locationId, status } = req.query as { locationId: string; status?: string };
-    const waves = await repo.findWavesByLocation(req.orgId!, locationId, status);
+    const q = req.query as { facilityId?: string; locationId?: string; status?: string };
+    const waves = await repo.findWaves(req.orgId!, warehouseScopeFrom(q), q.status);
     return { data: waves, error: null };
   });
 
@@ -128,17 +129,17 @@ export async function waveRoutes(server: FastifyInstance) {
       summary: 'List pick tasks',
       querystring: {
         type: 'object',
-        required: ['locationId'],
+        oneOf: WAREHOUSE_SCOPE_ONE_OF,
         properties: {
-          locationId: { type: 'string', format: 'uuid' },
+          ...WAREHOUSE_SCOPE_QUERY,
           status: { type: 'string' },
           waveId: { type: 'string', format: 'uuid' },
         },
       },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const q = req.query as { locationId: string; status?: string; waveId?: string };
-    const tasks = await repo.findPickTasksByLocation(req.orgId!, q.locationId, {
+    const q = req.query as { facilityId?: string; locationId?: string; status?: string; waveId?: string };
+    const tasks = await repo.findPickTasks(req.orgId!, warehouseScopeFrom(q), {
       status: q.status,
       waveId: q.waveId,
     });

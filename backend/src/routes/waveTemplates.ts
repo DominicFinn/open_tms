@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { container, TOKENS } from '../di/index.js';
+import { WAREHOUSE_SCOPE_QUERY, WAREHOUSE_SCOPE_ONE_OF, warehouseScopeFrom } from '../repositories/warehouseScope.js';
 import { ICommandBus } from '../commands/CommandBus.js';
 import { CREATE_WAVE_TEMPLATE } from '../commands/warehouse/CreateWaveTemplateCommand.js';
 import { APPLY_WAVE_TEMPLATE } from '../commands/warehouse/ApplyWaveTemplateCommand.js';
@@ -22,11 +23,11 @@ export async function waveTemplateRoutes(server: FastifyInstance) {
     schema: {
       tags: ['WMS - Wave Templates'],
       summary: 'List wave templates',
-      querystring: { type: 'object', required: ['locationId'], properties: { locationId: { type: 'string', format: 'uuid' } } },
+      querystring: { type: 'object', oneOf: WAREHOUSE_SCOPE_ONE_OF, properties: { ...WAREHOUSE_SCOPE_QUERY } },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const { locationId } = req.query as { locationId: string };
-    const templates = await repo.findByLocation(req.orgId!, locationId);
+    const q = req.query as { facilityId?: string; locationId?: string; };
+    const templates = await repo.find(req.orgId!, warehouseScopeFrom(q));
     return { data: templates, error: null };
   });
 

@@ -6,6 +6,7 @@
  */
 
 import { PrismaClient, PackLine, PackTask, StagingAssignment } from '@prisma/client';
+import { WarehouseScope, scopedWhere } from './warehouseScope.js';
 
 export interface PackTaskWithLines extends PackTask {
   packLines: Pick<PackLine, 'id' | 'status'>[];
@@ -13,16 +14,16 @@ export interface PackTaskWithLines extends PackTask {
 }
 
 export interface IPackingRepository {
-  findPackTasksByLocation(orgId: string, locationId: string, status?: string): Promise<PackTaskWithLines[]>;
+  findPackTasks(orgId: string, scope: WarehouseScope, status?: string): Promise<PackTaskWithLines[]>;
   findPackTaskById(orgId: string, id: string): Promise<PackTask | null>;
-  findStagingAssignmentsByLocation(orgId: string, locationId: string, status?: string): Promise<StagingAssignment[]>;
+  findStagingAssignments(orgId: string, scope: WarehouseScope, status?: string): Promise<StagingAssignment[]>;
 }
 
 export class PackingRepository implements IPackingRepository {
   constructor(private prisma: PrismaClient) {}
 
-  async findPackTasksByLocation(orgId: string, locationId: string, status?: string): Promise<PackTaskWithLines[]> {
-    const where: any = { orgId, locationId };
+  async findPackTasks(orgId: string, scope: WarehouseScope, status?: string): Promise<PackTaskWithLines[]> {
+    const where: any = scopedWhere(orgId, scope);
     if (status) where.status = status;
     return this.prisma.packTask.findMany({
       where,
@@ -45,8 +46,8 @@ export class PackingRepository implements IPackingRepository {
     });
   }
 
-  async findStagingAssignmentsByLocation(orgId: string, locationId: string, status?: string): Promise<StagingAssignment[]> {
-    const where: any = { orgId, locationId };
+  async findStagingAssignments(orgId: string, scope: WarehouseScope, status?: string): Promise<StagingAssignment[]> {
+    const where: any = scopedWhere(orgId, scope);
     if (status) where.status = status;
     return this.prisma.stagingAssignment.findMany({
       where,

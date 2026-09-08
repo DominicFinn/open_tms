@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { container, TOKENS } from '../di/index.js';
+import { WAREHOUSE_SCOPE_QUERY, WAREHOUSE_SCOPE_ONE_OF, warehouseScopeFrom } from '../repositories/warehouseScope.js';
 import { ICommandBus } from '../commands/CommandBus.js';
 import { CREATE_REPLENISHMENT_RULE } from '../commands/warehouse/CreateReplenishmentRuleCommand.js';
 import { CHECK_REPLENISHMENT } from '../commands/warehouse/CheckReplenishmentCommand.js';
@@ -23,13 +24,13 @@ export async function replenishmentRoutes(server: FastifyInstance) {
       tags: ['WMS - Replenishment'],
       summary: 'List replenishment rules for a location',
       querystring: {
-        type: 'object', required: ['locationId'],
-        properties: { locationId: { type: 'string', format: 'uuid' } },
+        type: 'object', oneOf: WAREHOUSE_SCOPE_ONE_OF,
+        properties: { ...WAREHOUSE_SCOPE_QUERY },
       },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const { locationId } = req.query as { locationId: string };
-    const rules = await repo.findByLocation(req.orgId!, locationId);
+    const q = req.query as { facilityId?: string; locationId?: string; };
+    const rules = await repo.find(req.orgId!, warehouseScopeFrom(q));
     return { data: rules, error: null };
   });
 

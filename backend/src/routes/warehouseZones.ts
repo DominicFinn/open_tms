@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { container, TOKENS } from '../di/index.js';
+import { WAREHOUSE_SCOPE_QUERY, WAREHOUSE_SCOPE_ONE_OF, warehouseScopeFrom } from '../repositories/warehouseScope.js';
 import { IWarehouseZoneRepository } from '../repositories/WarehouseZoneRepository.js';
 import { ICommandBus } from '../commands/CommandBus.js';
 import { CREATE_WAREHOUSE_ZONE } from '../commands/warehouse/CreateWarehouseZoneCommand.js';
@@ -33,15 +34,15 @@ export async function warehouseZoneRoutes(server: FastifyInstance) {
       summary: 'List warehouse zones for a location',
       querystring: {
         type: 'object',
-        required: ['locationId'],
+        oneOf: WAREHOUSE_SCOPE_ONE_OF,
         properties: {
-          locationId: { type: 'string', format: 'uuid' },
+          ...WAREHOUSE_SCOPE_QUERY,
         },
       },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const { locationId } = req.query as { locationId: string };
-    const zones = await repo.findZonesByLocation(locationId);
+    const q = req.query as { facilityId?: string; locationId?: string };
+    const zones = await repo.findZones(req.orgId!, warehouseScopeFrom(q));
     return { data: zones, error: null };
   });
 
@@ -54,13 +55,13 @@ export async function warehouseZoneRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const zone = await repo.findZoneById(id);
+    const zone = await repo.findZoneById(req.orgId!, id);
     if (!zone) {
       reply.code(404);
       return { data: null, error: 'Zone not found' };
     }
-    const bins = await repo.findBinsByZone(id);
-    const aisles = await repo.findAislesByZone(id);
+    const bins = await repo.findBinsByZone(req.orgId!, id);
+    const aisles = await repo.findAislesByZone(req.orgId!, id);
     return { data: { ...zone, bins, aisles }, error: null };
   });
 
@@ -178,26 +179,22 @@ export async function warehouseZoneRoutes(server: FastifyInstance) {
       summary: 'List bins (by location or zone)',
       querystring: {
         type: 'object',
+        oneOf: [...WAREHOUSE_SCOPE_ONE_OF, { required: ['zoneId'] }],
         properties: {
-          locationId: { type: 'string', format: 'uuid' },
+          ...WAREHOUSE_SCOPE_QUERY,
           zoneId: { type: 'string', format: 'uuid' },
         },
       },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const { locationId, zoneId } = req.query as { locationId?: string; zoneId?: string };
+    const q = req.query as { facilityId?: string; locationId?: string; zoneId?: string };
 
-    if (zoneId) {
-      const bins = await repo.findBinsByZone(zoneId);
-      return { data: bins, error: null };
-    }
-    if (locationId) {
-      const bins = await repo.findBinsByLocation(locationId);
-      return { data: bins, error: null };
-    }
-
-    reply.code(400);
-    return { data: null, error: 'Provide locationId or zoneId query parameter' };
+    // The schema's oneOf guarantees exactly one of the three, so there is no "none given" case
+    // left for the handler to reject.
+    const bins = q.zoneId
+      ? await repo.findBinsByZone(req.orgId!, q.zoneId)
+      : await repo.findBins(req.orgId!, warehouseScopeFrom(q));
+    return { data: bins, error: null };
   });
 
   // GET /api/v1/warehouse/bins/:id
@@ -209,7 +206,7 @@ export async function warehouseZoneRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const bin = await repo.findBinById(id);
+    const bin = await repo.findBinById(req.orgId!, id);
     if (!bin) {
       reply.code(404);
       return { data: null, error: 'Bin not found' };

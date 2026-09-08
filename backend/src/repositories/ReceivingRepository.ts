@@ -1,4 +1,5 @@
 import { PrismaClient, ReceivingAppointment, ReceivingTask, ReceivingLine } from '@prisma/client';
+import { WarehouseScope, scopedWhere } from './warehouseScope.js';
 
 // Reads only. Every receiving write goes through the command bus, so there is no unscoped
 // create or update here for a caller to reach for.
@@ -17,11 +18,11 @@ export interface ReceivingTaskWithLines extends ReceivingTask {
 // cross-tenant read, which is what #220 was raised for.
 export interface IReceivingRepository {
   // Appointments
-  findAppointmentsByLocation(orgId: string, locationId: string, date?: Date): Promise<ReceivingAppointment[]>;
+  findAppointments(orgId: string, scope: WarehouseScope, date?: Date): Promise<ReceivingAppointment[]>;
   findAppointmentById(orgId: string, id: string): Promise<ReceivingAppointment | null>;
 
   // Tasks
-  findTasksByLocation(orgId: string, locationId: string, status?: string): Promise<ReceivingTaskWithLines[]>;
+  findTasks(orgId: string, scope: WarehouseScope, status?: string): Promise<ReceivingTaskWithLines[]>;
   findTaskById(orgId: string, id: string): Promise<ReceivingTaskWithLines | null>;
 }
 
@@ -32,8 +33,8 @@ export class ReceivingRepository implements IReceivingRepository {
 
   // ── Appointments ───────────────────────────────────────────
 
-  async findAppointmentsByLocation(orgId: string, locationId: string, date?: Date): Promise<ReceivingAppointment[]> {
-    const where: any = { orgId, locationId };
+  async findAppointments(orgId: string, scope: WarehouseScope, date?: Date): Promise<ReceivingAppointment[]> {
+    const where: any = scopedWhere(orgId, scope);
     if (date) {
       const dayStart = new Date(date);
       dayStart.setHours(0, 0, 0, 0);
@@ -54,8 +55,8 @@ export class ReceivingRepository implements IReceivingRepository {
 
   // ── Tasks ──────────────────────────────────────────────────
 
-  async findTasksByLocation(orgId: string, locationId: string, status?: string): Promise<ReceivingTaskWithLines[]> {
-    const where: any = { orgId, locationId };
+  async findTasks(orgId: string, scope: WarehouseScope, status?: string): Promise<ReceivingTaskWithLines[]> {
+    const where: any = scopedWhere(orgId, scope);
     if (status) where.status = status;
     return this.prisma.receivingTask.findMany({
       where,
