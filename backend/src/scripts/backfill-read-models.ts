@@ -17,6 +17,7 @@
 
 import { PrismaClient } from '@prisma/client';
 import { selectSteps, type BackfillStep } from './backfillSteps.js';
+import { deriveFacilitiesFromLocations } from './deriveFacilities.js';
 import { OrderFulfilmentDemandSource } from '../services/fulfilment/OrderFulfilmentDemandSource.js';
 import { WmsFulfilmentOrderProjection } from '../events/projections/WmsFulfilmentOrderProjection.js';
 
@@ -439,6 +440,7 @@ const STEPS: readonly BackfillStep[] = [
   { name: 'issues', label: 'issues', run: backfillIssues },
   { name: 'agentDecisions', label: 'agent decisions', run: backfillAgentDecisions },
   { name: 'wmsFulfilmentOrders', label: 'warehouse fulfilment orders', run: backfillWmsFulfilmentOrders },
+  { name: 'facilities', label: 'facilities derived from locations', run: () => deriveFacilitiesFromLocations(prisma) },
 ];
 
 async function main() {
