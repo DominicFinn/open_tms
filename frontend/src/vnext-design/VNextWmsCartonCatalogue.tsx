@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Archive, ArchiveRestore, CircleAlert, Edit, Info, Loader2, Package, Plus, Trash2 } from 'lucide-react';
 
 import { API_URL } from '../api';
+import { useFacilities } from '../hooks/useFacilities';
+import { FacilitySelect } from '@/components/FacilitySelect';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -88,8 +90,7 @@ function cartonToForm(c: Carton): FormState {
 export default function VNextWmsCartonCatalogue() {
   const [cartons, setCartons] = useState<Carton[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedLocation, setSelectedLocation] = useState('');
-  const [locations, setLocations] = useState<Array<{ id: string; name: string }>>([]);
+  const { facilities, facilityId, setFacilityId, facility, loading: facilitiesLoading, error: facilitiesError } = useFacilities();
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -98,26 +99,17 @@ export default function VNextWmsCartonCatalogue() {
   const [showArchived, setShowArchived] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm);
 
-  useEffect(() => {
-    fetch(`${API_URL}/api/v1/locations`).then(r => r.json()).then(res => {
-      const locs = (res.data || []).filter((l: any) => !l.locationType || ['warehouse', 'distribution_centre', 'cross_dock'].includes(l.locationType));
-      setLocations(locs);
-      if (locs.length > 0) setSelectedLocation(locs[0].id);
-      else setLoading(false);
-    });
-  }, []);
-
   const loadData = () => {
-    if (!selectedLocation) return;
+    if (!facilityId) { setLoading(false); return; }
     setLoading(true);
-    const params = new URLSearchParams({ locationId: selectedLocation });
+    const params = new URLSearchParams({ facilityId });
     if (showArchived) params.set('includeArchived', 'true');
     fetch(`${API_URL}/api/v1/carton-catalogue?${params}`)
       .then(r => r.json())
       .then(res => setCartons(res.data || []))
       .finally(() => setLoading(false));
   };
-  useEffect(() => { loadData(); }, [selectedLocation, showArchived]);
+  useEffect(() => { loadData(); }, [facilityId, showArchived]);
 
   const openCreate = () => {
     setEditingId(null);
@@ -167,7 +159,7 @@ export default function VNextWmsCartonCatalogue() {
         res = await fetch(`${API_URL}/api/v1/carton-catalogue`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...body, locationId: selectedLocation }),
+          body: JSON.stringify({ ...body, locationId: facility?.sourceLocationId }),
         });
       }
       const json = await res.json();
@@ -363,16 +355,7 @@ export default function VNextWmsCartonCatalogue() {
       </Dialog>
 
       <div className="flex flex-wrap items-center gap-2">
-        <Select value={selectedLocation} onValueChange={setSelectedLocation}>
-          <SelectTrigger className="w-[260px]">
-            <SelectValue placeholder="Select location" />
-          </SelectTrigger>
-          <SelectContent>
-            {locations.map(l => (
-              <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <FacilitySelect facilities={facilities} value={facilityId} onChange={setFacilityId} loading={facilitiesLoading} error={facilitiesError} className="w-[260px]" />
         <label className="ml-auto flex items-center gap-2 text-sm">
           <input
             type="checkbox"

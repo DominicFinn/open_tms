@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { Loader2, PackagePlus } from 'lucide-react';
 
 import { API_URL } from '../api';
+import { useFacilities } from '../hooks/useFacilities';
+import { FacilitySelect } from '@/components/FacilitySelect';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -55,29 +57,14 @@ export default function VNextWmsPutaway() {
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
 
-  const [selectedLocation, setSelectedLocation] = useState('');
-  const [locations, setLocations] = useState<Array<{ id: string; name: string }>>([]);
+  const { facilities, facilityId, setFacilityId, loading: facilitiesLoading, error: facilitiesError } = useFacilities();
 
   useEffect(() => {
-    fetch(`${API_URL}/api/v1/locations`)
-      .then(r => r.json())
-      .then(res => {
-        const locs = (res.data || []).filter(
-          (l: any) => !l.locationType || ['warehouse', 'distribution_centre', 'cross_dock'].includes(l.locationType)
-        );
-        setLocations(locs);
-        if (locs.length > 0) setSelectedLocation(locs[0].id);
-        else setLoading(false);
-      })
-      .catch(() => setLoading(false));
-  }, []);
-
-  useEffect(() => {
-    if (!selectedLocation) return;
+    if (!facilityId) { setLoading(false); return; }
     setLoading(true);
     const url = statusFilter !== 'all'
-      ? `${API_URL}/api/v1/putaway/tasks?locationId=${selectedLocation}&status=${statusFilter}`
-      : `${API_URL}/api/v1/putaway/tasks?locationId=${selectedLocation}`;
+      ? `${API_URL}/api/v1/putaway/tasks?facilityId=${facilityId}&status=${statusFilter}`
+      : `${API_URL}/api/v1/putaway/tasks?facilityId=${facilityId}`;
     fetch(url)
       .then(r => r.json())
       .then(res => setTasks((res.data || []).map((t: any) => ({
@@ -89,7 +76,7 @@ export default function VNextWmsPutaway() {
       }))))
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [selectedLocation, statusFilter]);
+  }, [facilityId, statusFilter]);
 
   return (
     <div className="space-y-6">
@@ -99,16 +86,7 @@ export default function VNextWmsPutaway() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <Select value={selectedLocation} onValueChange={setSelectedLocation}>
-          <SelectTrigger className="w-[260px]">
-            <SelectValue placeholder="Select location" />
-          </SelectTrigger>
-          <SelectContent>
-            {locations.map(l => (
-              <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <FacilitySelect facilities={facilities} value={facilityId} onChange={setFacilityId} loading={facilitiesLoading} error={facilitiesError} className="w-[260px]" />
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-[180px]">
             <SelectValue />

@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { CheckCircle2, CircleAlert, Info, Loader2, Plus, RefreshCw, RotateCw } from 'lucide-react';
 
 import { API_URL } from '../api';
+import { useFacilities } from '../hooks/useFacilities';
+import { FacilitySelect } from '@/components/FacilitySelect';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -43,8 +45,7 @@ interface ReplenishmentRule {
 export default function VNextWmsReplenishment() {
   const [rules, setRules] = useState<ReplenishmentRule[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedLocation, setSelectedLocation] = useState('');
-  const [locations, setLocations] = useState<Array<{ id: string; name: string }>>([]);
+  const { facilities, facilityId, setFacilityId, facility, loading: facilitiesLoading, error: facilitiesError } = useFacilities();
   const [bins, setBins] = useState<Array<{ id: string; label: string; binType: string }>>([]);
   const [zones, setZones] = useState<Array<{ id: string; name: string }>>([]);
   const [showCreate, setShowCreate] = useState(false);
@@ -54,26 +55,17 @@ export default function VNextWmsReplenishment() {
   const [checkResult, setCheckResult] = useState<any>(null);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    fetch(`${API_URL}/api/v1/locations`).then(r => r.json()).then(res => {
-      const locs = (res.data || []).filter((l: any) => !l.locationType || ['warehouse', 'distribution_centre', 'cross_dock'].includes(l.locationType));
-      setLocations(locs);
-      if (locs.length > 0) setSelectedLocation(locs[0].id);
-      else setLoading(false);
-    }).catch(() => setLoading(false));
-  }, []);
-
   const loadData = () => {
-    if (!selectedLocation) return;
+    if (!facilityId) { setLoading(false); return; }
     setLoading(true);
     Promise.all([
-      fetch(`${API_URL}/api/v1/replenishment/rules?locationId=${selectedLocation}`).then(r => r.json()).then(res => setRules(res.data || [])),
-      fetch(`${API_URL}/api/v1/warehouse/bins?locationId=${selectedLocation}`).then(r => r.json()).then(res => setBins((res.data || []).filter((b: any) => b.active))),
-      fetch(`${API_URL}/api/v1/warehouse/zones?locationId=${selectedLocation}`).then(r => r.json()).then(res => setZones((res.data || []).map((z: any) => ({ id: z.id, name: z.name })))),
+      fetch(`${API_URL}/api/v1/replenishment/rules?facilityId=${facilityId}`).then(r => r.json()).then(res => setRules(res.data || [])),
+      fetch(`${API_URL}/api/v1/warehouse/bins?facilityId=${facilityId}`).then(r => r.json()).then(res => setBins((res.data || []).filter((b: any) => b.active))),
+      fetch(`${API_URL}/api/v1/warehouse/zones?facilityId=${facilityId}`).then(r => r.json()).then(res => setZones((res.data || []).map((z: any) => ({ id: z.id, name: z.name })))),
     ]).finally(() => setLoading(false));
   };
 
-  useEffect(() => { loadData(); }, [selectedLocation]);
+  useEffect(() => { loadData(); }, [facilityId]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,7 +75,7 @@ export default function VNextWmsReplenishment() {
       const res = await fetch(`${API_URL}/api/v1/replenishment/rules`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          locationId: selectedLocation,
+          locationId: facility?.sourceLocationId,
           sku: createForm.sku.trim(),
           pickFaceBinId: createForm.pickFaceBinId,
           bulkZoneId: createForm.bulkZoneId,
@@ -105,7 +97,7 @@ export default function VNextWmsReplenishment() {
     try {
       const res = await fetch(`${API_URL}/api/v1/replenishment/check`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ locationId: selectedLocation }),
+        body: JSON.stringify({ locationId: facility?.sourceLocationId }),
       });
       const data = await res.json();
       if (data.error) setError(data.error);
@@ -219,16 +211,7 @@ export default function VNextWmsReplenishment() {
       </Dialog>
 
       <div className="flex flex-wrap items-center gap-2">
-        <Select value={selectedLocation} onValueChange={setSelectedLocation}>
-          <SelectTrigger className="w-[260px]">
-            <SelectValue placeholder="Select location" />
-          </SelectTrigger>
-          <SelectContent>
-            {locations.map(l => (
-              <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <FacilitySelect facilities={facilities} value={facilityId} onChange={setFacilityId} loading={facilitiesLoading} error={facilitiesError} className="w-[260px]" />
       </div>
 
       {loading ? (

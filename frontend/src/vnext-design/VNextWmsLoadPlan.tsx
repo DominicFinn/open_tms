@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { CheckCircle2, CircleAlert, Loader2, Plus, Truck } from 'lucide-react';
 
 import { API_URL } from '../api';
+import { useFacilities } from '../hooks/useFacilities';
+import { FacilitySelect } from '@/components/FacilitySelect';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -77,8 +79,7 @@ export default function VNextWmsLoadPlan() {
   const [plans, setPlans] = useState<LoadPlan[]>([]);
   const [staged, setStaged] = useState<StagingAssignment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedLocation, setSelectedLocation] = useState('');
-  const [locations, setLocations] = useState<Array<{ id: string; name: string }>>([]);
+  const { facilities, facilityId, setFacilityId, facility, loading: facilitiesLoading, error: facilitiesError } = useFacilities();
 
   const [showCreate, setShowCreate] = useState(false);
   const [selectedAssignments, setSelectedAssignments] = useState<Set<string>>(new Set());
@@ -92,25 +93,16 @@ export default function VNextWmsLoadPlan() {
   const [success, setSuccess] = useState('');
   const [dockBins, setDockBins] = useState<Array<{ id: string; label: string }>>([]);
 
-  useEffect(() => {
-    fetch(`${API_URL}/api/v1/locations`).then(r => r.json()).then(res => {
-      const locs = (res.data || []).filter((l: any) => !l.locationType || ['warehouse', 'distribution_centre', 'cross_dock'].includes(l.locationType));
-      setLocations(locs);
-      if (locs.length > 0) setSelectedLocation(locs[0].id);
-      else setLoading(false);
-    });
-  }, []);
-
   const loadData = () => {
-    if (!selectedLocation) return;
+    if (!facilityId) { setLoading(false); return; }
     setLoading(true);
     Promise.all([
-      fetch(`${API_URL}/api/v1/load-plans?locationId=${selectedLocation}`).then(r => r.json()).then(res => setPlans(res.data || [])),
-      fetch(`${API_URL}/api/v1/staging?locationId=${selectedLocation}&status=staged`).then(r => r.json()).then(res => setStaged(res.data || [])),
-      fetch(`${API_URL}/api/v1/warehouse/bins?locationId=${selectedLocation}`).then(r => r.json()).then(res => setDockBins((res.data || []).filter((b: any) => b.binType === 'dock_door' && b.active))),
+      fetch(`${API_URL}/api/v1/load-plans?facilityId=${facilityId}`).then(r => r.json()).then(res => setPlans(res.data || [])),
+      fetch(`${API_URL}/api/v1/staging?facilityId=${facilityId}&status=staged`).then(r => r.json()).then(res => setStaged(res.data || [])),
+      fetch(`${API_URL}/api/v1/warehouse/bins?facilityId=${facilityId}`).then(r => r.json()).then(res => setDockBins((res.data || []).filter((b: any) => b.binType === 'dock_door' && b.active))),
     ]).finally(() => setLoading(false));
   };
-  useEffect(() => { loadData(); }, [selectedLocation]);
+  useEffect(() => { loadData(); }, [facilityId]);
 
   const toggleAssignment = (id: string) => {
     const next = new Set(selectedAssignments);
@@ -125,7 +117,7 @@ export default function VNextWmsLoadPlan() {
       const res = await fetch(`${API_URL}/api/v1/load-plans`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          locationId: selectedLocation,
+          locationId: facility?.sourceLocationId,
           stagingAssignmentIds: [...selectedAssignments],
           shipmentId: createForm.shipmentId || null,
           trailerNumber: createForm.trailerNumber || null,
@@ -183,16 +175,7 @@ export default function VNextWmsLoadPlan() {
       )}
 
       <div className="flex flex-wrap items-center gap-2">
-        <Select value={selectedLocation} onValueChange={setSelectedLocation}>
-          <SelectTrigger className="w-[260px]">
-            <SelectValue placeholder="Select location" />
-          </SelectTrigger>
-          <SelectContent>
-            {locations.map(l => (
-              <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <FacilitySelect facilities={facilities} value={facilityId} onChange={setFacilityId} loading={facilitiesLoading} error={facilitiesError} className="w-[260px]" />
       </div>
 
       <Dialog open={showCreate} onOpenChange={setShowCreate}>

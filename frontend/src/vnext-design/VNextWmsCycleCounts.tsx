@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { CircleAlert, ClipboardCheck, Loader2, Plus } from 'lucide-react';
 
 import { API_URL } from '../api';
+import { useFacilities } from '../hooks/useFacilities';
+import { FacilitySelect } from '@/components/FacilitySelect';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -63,8 +65,7 @@ export default function VNextWmsCycleCounts() {
   const navigate = useNavigate();
   const [counts, setCounts] = useState<CycleCount[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedLocation, setSelectedLocation] = useState('');
-  const [locations, setLocations] = useState<Array<{ id: string; name: string }>>([]);
+  const { facilities, facilityId, setFacilityId, facility, loading: facilitiesLoading, error: facilitiesError } = useFacilities();
   const [showCreate, setShowCreate] = useState(false);
   const [createForm, setCreateForm] = useState({ countType: 'full', zoneId: '' });
   const [zones, setZones] = useState<Array<{ id: string; name: string }>>([]);
@@ -72,31 +73,19 @@ export default function VNextWmsCycleCounts() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    fetch(`${API_URL}/api/v1/locations`)
-      .then(r => r.json())
-      .then(res => {
-        const locs = (res.data || []).filter((l: any) => !l.locationType || ['warehouse', 'distribution_centre', 'cross_dock'].includes(l.locationType));
-        setLocations(locs);
-        if (locs.length > 0) setSelectedLocation(locs[0].id);
-        else setLoading(false);
-      })
-      .catch(() => setLoading(false));
-  }, []);
-
-  useEffect(() => {
-    if (!selectedLocation) return;
+    if (!facilityId) { setLoading(false); return; }
     setLoading(true);
-    fetch(`${API_URL}/api/v1/cycle-counts?locationId=${selectedLocation}`)
+    fetch(`${API_URL}/api/v1/cycle-counts?facilityId=${facilityId}`)
       .then(r => r.json())
       .then(res => setCounts(res.data || []))
       .catch(() => {})
       .finally(() => setLoading(false));
 
-    fetch(`${API_URL}/api/v1/warehouse/zones?locationId=${selectedLocation}`)
+    fetch(`${API_URL}/api/v1/warehouse/zones?facilityId=${facilityId}`)
       .then(r => r.json())
       .then(res => setZones((res.data || []).map((z: any) => ({ id: z.id, name: z.name }))))
       .catch(() => {});
-  }, [selectedLocation]);
+  }, [facilityId]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -106,7 +95,7 @@ export default function VNextWmsCycleCounts() {
       const res = await fetch(`${API_URL}/api/v1/cycle-counts`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          locationId: selectedLocation,
+          locationId: facility?.sourceLocationId,
           countType: createForm.countType,
           zoneId: createForm.countType === 'zone' ? createForm.zoneId : null,
         }),
@@ -181,16 +170,7 @@ export default function VNextWmsCycleCounts() {
       </Dialog>
 
       <div className="flex flex-wrap items-center gap-2">
-        <Select value={selectedLocation} onValueChange={setSelectedLocation}>
-          <SelectTrigger className="w-[260px]">
-            <SelectValue placeholder="Select location" />
-          </SelectTrigger>
-          <SelectContent>
-            {locations.map(l => (
-              <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <FacilitySelect facilities={facilities} value={facilityId} onChange={setFacilityId} loading={facilitiesLoading} error={facilitiesError} className="w-[260px]" />
       </div>
 
       {loading ? (
