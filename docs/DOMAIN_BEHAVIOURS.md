@@ -1884,8 +1884,14 @@ fixed as they went: 21 unscoped reads and writes in total. Two patterns account 
 A command that looks its aggregate up with `findUnique({ where: { id } })` is a tenancy bug, and
 `locationId` alone is never a sufficient filter.
 
-`registerWmsGuard` proves only that the caller holds `wms:read` or `wms:write` in some
-organisation. It is not a tenancy check, and must never be relied on as one.
+`registerWmsGuard` now does both: it attaches the org scope and refuses a request that resolves no
+tenant, then checks the permission. Tenancy lives there rather than in each route plugin because
+**no WMS route registered the org scope at all** until #238, so `req.orgId` was undefined on every
+WMS request. Prisma reads `where: { orgId: undefined }` as no filter, which meant every WMS list
+returned every tenant's rows while the source looked correct.
+
+It still does not make the surface strictly JWT-scoped: `resolveOrgId` falls back to the first
+Organization when a token carries no `organizationId`, on every surface. That is #239.
 
 ### Domain: Facilities
 
