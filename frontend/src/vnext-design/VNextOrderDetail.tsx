@@ -1,17 +1,22 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
+  AlertTriangle,
   Archive,
   ArchiveRestore,
   ArrowLeft,
+  Bot,
   Boxes,
   CircleAlert,
   ExternalLink,
   FileText,
+  Info,
   Loader2,
+  MessageSquare,
   Pencil,
   Trash2,
   User,
+  X,
   XCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -20,7 +25,9 @@ import { API_URL } from '../api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
   Table,
   TableBody,
@@ -39,6 +46,7 @@ import {
 } from '@/components/ui/dialog';
 import HandlingUnitsEditor, { HUEditorEndpoints } from '../components/HandlingUnitsEditor';
 import { useCurrentUser } from '../hooks/useCurrentUser';
+import { NOTE_TAGS } from './VNextCreateShipment';
 import { cn } from '@/lib/utils';
 
 type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning' | 'info' | 'muted';
@@ -201,10 +209,305 @@ function InfoItem({ label, children }: { label: string; children: React.ReactNod
   );
 }
 
+// ─── Notes Tab ────────────────────────────────────────────────────────
+// Notes are grouped by the same tag taxonomy used on the shipment Notes tab
+// (see NOTE_TAGS in VNextCreateShipment.tsx) — a plain note, an "issue" note,
+// or an "additional requirement" note. This is distinct from the
+// platform-generated Issue Engine exceptions shown on the Issues tab.
+const NOTE_GROUPS: {
+  key: string;
+  label: string;
+  Icon: typeof MessageSquare;
+  empty: string;
+  border: string;
+  iconBg: string;
+  iconText: string;
+}[] = [
+  {
+    key: 'issue', label: 'Issues', Icon: AlertTriangle, empty: 'No issues noted for this order.',
+    border: 'border-l-4 border-l-destructive', iconBg: 'bg-destructive/10', iconText: 'text-destructive',
+  },
+  {
+    key: 'requirement', label: 'Additional requirements', Icon: Info, empty: 'No additional requirements noted.',
+    border: 'border-l-4 border-l-info', iconBg: 'bg-info/10', iconText: 'text-info',
+  },
+  {
+    key: '', label: 'Standard notes', Icon: MessageSquare, empty: 'No standard notes yet.',
+    border: 'border-l-4 border-l-primary', iconBg: 'bg-primary/10', iconText: 'text-primary',
+  },
+];
+
+function NotesTab({ orderId }: { orderId: string }) {
+  const { user, hasRole } = useCurrentUser();
+  const isAdmin = hasRole('admin');
+  const currentUserId = user?.id ?? null;
+
+  const [comments, setComments] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [newComment, setNewComment] = useState('');
+  const [noteTag, setNoteTag] = useState(NOTE_TAGS[0].key);
+  const [submitting, setSubmitting] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingDraft, setEditingDraft] = useState('');
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const loadComments = useCallback(() => {
+    fetch(`${API_URL}/api/v1/comments?entityType=order&entityId=${orderId}`)
+      .then(r => r.json())
+      .then(json => setComments(json.data?.items || json.data || []))
+      .catch(() => { })
+      .finally(() => setLoading(false));
+  }, [orderId]);
+
+  useEffect(() => { loadComments(); }, [loadComments]);
+
+  const handleSubmit = async () => {
+    if (!newComment.trim()) return;
+    setSubmitting(true);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/comments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entityType: 'order', entityId: orderId, body: newComment, tag: noteTag || undefined }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json.error) {
+        toast.error(json.error || 'Failed to post comment');
+        return;
+      }
+      setNewComment('');
+      setNoteTag(NOTE_TAGS[0].key);
+      loadComments();
+    } catch {
+      toast.error('Failed to post comment');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const beginEdit = (c: any) => {
+    setEditingId(c.id);
+    setEditingDraft(c.body || '');
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditingDraft('');
+  };
+
+  const saveEdit = async (id: string) => {
+    if (!editingDraft.trim()) return;
+    setBusyId(id);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/comments/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body: editingDraft }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json.error) {
+        toast.error(json.error || 'Failed to update comment');
+        return;
+      }
+      cancelEdit();
+      loadComments();
+    } catch {
+      toast.error('Failed to update comment');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('Delete this comment? It will be hidden but kept for audit.')) return;
+    setBusyId(id);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/comments/${id}`, { method: 'DELETE' });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json.error) {
+        toast.error(json.error || 'Failed to delete comment');
+        return;
+      }
+      loadComments();
+    } catch {
+      toast.error('Failed to delete comment');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center gap-2 py-12 text-muted-foreground">
+        <Loader2 className="h-6 w-6 animate-spin" />
+      </div>
+    );
+  }
+
+  const renderNote = (c: any) => {
+    const isAuthor = !!currentUserId && c.authorId === currentUserId;
+    const canEdit = isAuthor && c.authorType !== 'agent';
+    const canDelete = (isAuthor || isAdmin) && c.authorType !== 'agent';
+    const isEditing = editingId === c.id;
+    const busy = busyId === c.id;
+    return (
+      <div key={c.id} className="group flex gap-3 border-b border-border py-3 last:border-0">
+        <div
+          className={cn(
+            'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white',
+            c.authorType === 'agent' ? 'bg-info' : 'bg-primary',
+          )}
+        >
+          {c.authorType === 'agent'
+            ? <Bot className="h-4 w-4" />
+            : (c.authorName || '?').split(/\s+/).map((w: string) => w[0]).join('').toUpperCase().slice(0, 2)}
+        </div>
+        <div className="flex-1">
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <span className="text-sm font-semibold">{c.authorName || 'Unknown user'}</span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">
+                {c.createdAt ? new Date(c.createdAt).toLocaleString() : ''}
+                {c.updatedAt && c.createdAt && c.updatedAt !== c.createdAt && (
+                  <span className="ml-1 italic">(edited)</span>
+                )}
+              </span>
+              {!isEditing && (canEdit || canDelete) && (
+                <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+                  {canEdit && (
+                    <button
+                      type="button"
+                      onClick={() => beginEdit(c)}
+                      disabled={busy}
+                      className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+                      title="Edit comment"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  {canDelete && (
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(c.id)}
+                      disabled={busy}
+                      className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                      title={isAuthor ? 'Delete comment' : 'Delete (admin)'}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+          {isEditing ? (
+            <div className="flex gap-2">
+              <textarea
+                className="flex w-full flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                value={editingDraft}
+                onChange={e => setEditingDraft(e.target.value)}
+                rows={2}
+                autoFocus
+              />
+              <div className="flex flex-col gap-1 self-end">
+                <Button
+                  size="sm"
+                  variant="gradient"
+                  onClick={() => saveEdit(c.id)}
+                  disabled={busy || !editingDraft.trim() || editingDraft === c.body}
+                >
+                  {busy ? '...' : 'Save'}
+                </Button>
+                <Button size="sm" variant="ghost" onClick={cancelEdit} disabled={busy} title="Cancel">
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <p className="whitespace-pre-wrap text-sm leading-relaxed">{c.body}</p>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-6">
+      {NOTE_GROUPS.map(group => {
+        const items = comments.filter((c: any) => (group.key ? c.tag === group.key : c.tag !== 'issue' && c.tag !== 'requirement'));
+        return (
+          <div key={group.key || 'standard'}>
+            <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold">
+              <span className={cn('flex h-6 w-6 items-center justify-center rounded-md', group.iconBg, group.iconText)}>
+                <group.Icon className="h-3.5 w-3.5" />
+              </span>
+              <span className="uppercase tracking-wide text-muted-foreground">
+                {group.label} ({items.length})
+              </span>
+            </h3>
+            <Card className={group.border}>
+              <CardContent className="pt-6">
+                {items.length === 0 ? (
+                  <div className="flex flex-col items-center gap-2 py-6 text-muted-foreground">
+                    <group.Icon className={cn('h-10 w-10 opacity-40', group.iconText)} />
+                    <p className="text-sm">{group.empty}</p>
+                  </div>
+                ) : (
+                  items.map(renderNote)
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        );
+      })}
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Add a note</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="space-y-2">
+            <Label>Tag</Label>
+            <div className="flex flex-wrap gap-2">
+              {NOTE_TAGS.map(t => (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => setNoteTag(t.key)}
+                  className={cn(
+                    'inline-flex items-center gap-2 rounded-lg border-2 px-3 py-2 text-sm transition-colors',
+                    noteTag === t.key ? t.activeClass : 'border-border hover:border-primary/40 bg-transparent',
+                  )}
+                >
+                  <span className={cn('h-2 w-2 rounded-full', t.dotClass)} />
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <textarea
+              className="flex w-full flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              placeholder="Add a note..."
+              value={newComment}
+              onChange={e => setNewComment(e.target.value)}
+              rows={2}
+            />
+            <Button variant="gradient" onClick={handleSubmit} disabled={submitting || !newComment.trim()} className="self-end">
+              {submitting ? '...' : 'Post'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 export default function VNextOrderDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { hasPermission } = useCurrentUser();
+  const [activeTab, setActiveTab] = useState('details');
   const [order, setOrder] = useState<OrderData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -216,6 +519,8 @@ export default function VNextOrderDetail() {
   const [cancelling, setCancelling] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [issues, setIssues] = useState<IssueSummary[]>([]);
+
+  useEffect(() => { window.scrollTo(0, 0); }, [id]);
 
   const loadOrder = useCallback(async () => {
     try {
@@ -358,6 +663,18 @@ export default function VNextOrderDetail() {
     );
   }
 
+  const openIssues = issues.filter(i => i.status === 'open' || i.status === 'in_progress');
+
+  const tabs = [
+    { value: 'details', label: 'Details' },
+    { value: 'notes', label: 'Notes' },
+    { value: 'line-items', label: 'Line items' },
+    { value: 'handling-units', label: 'Handling units' },
+    { value: 'shipments', label: 'Shipments' },
+    { value: 'issues', label: `Issues${issues.length > 0 ? ` (${issues.length})` : ''}` },
+    { value: 'activity', label: 'Activity' },
+  ];
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -436,9 +753,7 @@ export default function VNextOrderDetail() {
       )}
 
       {/* Open issues banner */}
-      {(() => {
-        const openIssues = issues.filter(i => i.status === 'open' || i.status === 'in_progress');
-        if (openIssues.length === 0) return null;
+      {openIssues.length > 0 && (() => {
         const hasCritical = openIssues.some(i => i.priority === 'critical');
         return (
           <div
@@ -457,7 +772,7 @@ export default function VNextOrderDetail() {
                 {openIssues.length > 1 ? ` and ${openIssues.length - 1} more` : ''}
               </span>
             </div>
-            <Button variant="outline" size="sm" onClick={() => navigate(`/issues/${openIssues[0].id}`)}>
+            <Button variant="outline" size="sm" onClick={() => setActiveTab('issues')}>
               View
             </Button>
           </div>
@@ -504,57 +819,120 @@ export default function VNextOrderDetail() {
         </DialogContent>
       </Dialog>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Order information</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <InfoItem label="Customer">{order.customer?.name || '-'}</InfoItem>
-                <InfoItem label="PO number">{order.poNumber || '-'}</InfoItem>
-                <InfoItem label="Service level">{order.serviceLevel || '-'}</InfoItem>
-                <InfoItem label="Import source">{order.importSource || '-'}</InfoItem>
-                <InfoItem label="Requested pickup">{formatDate(order.requestedPickupDate)}</InfoItem>
-                <InfoItem label="Requested delivery">{formatDate(order.requestedDeliveryDate)}</InfoItem>
-                <InfoItem label="Requirements">
-                  <div className="flex flex-wrap gap-1">
-                    {order.temperatureControl && <Badge variant="muted">Temp control</Badge>}
-                    {order.requiresHazmat && <Badge variant="warning">Hazmat</Badge>}
-                    {!order.temperatureControl && !order.requiresHazmat && '-'}
-                  </div>
-                </InfoItem>
-              </div>
-            </CardContent>
-          </Card>
+      {/* Route summary bar — mirrors the shipment detail page's origin/destination strip */}
+      <Card className="overflow-hidden p-0">
+        <div className="flex flex-wrap items-center justify-between gap-3 p-4">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <span className="inline-block h-2 w-2 rounded-full bg-success" />
+            {order.origin ? `${order.origin.city}, ${order.origin.state}` : 'Origin not set'}
+            <ArrowLeft className="h-3.5 w-3.5 rotate-180 text-muted-foreground" />
+            {order.destination ? `${order.destination.city}, ${order.destination.state}` : 'Destination not set'}
+            <span className="inline-block h-2 w-2 rounded-full bg-destructive" />
+          </div>
+          <span className="text-xs text-muted-foreground">
+            {order.requestedPickupDate && `Requested pickup ${formatDate(order.requestedPickupDate)}`}
+            {order.requestedPickupDate && order.requestedDeliveryDate && ' · '}
+            {order.requestedDeliveryDate && `Requested delivery ${formatDate(order.requestedDeliveryDate)}`}
+          </span>
+        </div>
+      </Card>
 
-          <Card>
-            <CardContent className="p-6">
-              <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-success" />
-                  <div>
-                    <div className="text-sm font-semibold">{order.origin?.name || 'Origin'}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {order.origin ? `${order.origin.city}, ${order.origin.state}` : 'Not set'}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="flex w-full justify-start overflow-x-auto">
+          {tabs.map(t => (
+            <TabsTrigger key={t.value} value={t.value}>
+              {t.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+
+        <TabsContent value="details" className="mt-4 space-y-6">
+          <div className="grid gap-6 lg:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle>Order information</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <InfoItem label="Customer">{order.customer?.name || '-'}</InfoItem>
+                  <InfoItem label="PO number">{order.poNumber || '-'}</InfoItem>
+                  <InfoItem label="Service level">{order.serviceLevel || '-'}</InfoItem>
+                  <InfoItem label="Import source">{order.importSource || '-'}</InfoItem>
+                  <InfoItem label="Requirements">
+                    <div className="flex flex-wrap gap-1">
+                      {order.temperatureControl && <Badge variant="muted">Temp control</Badge>}
+                      {order.requiresHazmat && <Badge variant="warning">Hazmat</Badge>}
+                      {!order.temperatureControl && !order.requiresHazmat && '-'}
+                    </div>
+                  </InfoItem>
+                  <InfoItem label="Created">{formatDateTime(order.createdAt)}</InfoItem>
+                  <InfoItem label="Updated">{formatDateTime(order.updatedAt)}</InfoItem>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Route</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-success" />
+                    <div>
+                      <div className="text-sm font-semibold">{order.origin?.name || 'Origin'}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {order.origin ? `${order.origin.city}, ${order.origin.state}` : 'Not set'}
+                      </div>
                     </div>
                   </div>
-                </div>
-                <div className="ml-1 h-4 border-l-2 border-dashed border-border" />
-                <div className="flex items-center gap-3">
-                  <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-destructive" />
-                  <div>
-                    <div className="text-sm font-semibold">{order.destination?.name || 'Destination'}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {order.destination ? `${order.destination.city}, ${order.destination.state}` : 'Not set'}
+                  <div className="ml-1 h-4 border-l-2 border-dashed border-border" />
+                  <div className="flex items-center gap-3">
+                    <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-destructive" />
+                    <div>
+                      <div className="text-sm font-semibold">{order.destination?.name || 'Destination'}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {order.destination ? `${order.destination.city}, ${order.destination.state}` : 'Not set'}
+                      </div>
                     </div>
                   </div>
+                  <Separator />
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <InfoItem label="Requested pickup">{formatDate(order.requestedPickupDate)}</InfoItem>
+                    <InfoItem label="Requested delivery">{formatDate(order.requestedDeliveryDate)}</InfoItem>
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
 
+        <TabsContent value="notes" className="mt-4 space-y-6">
+          {(order.specialInstructions || order.notes) && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Order notes</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {order.specialInstructions && (
+                  <div>
+                    <div className="text-xs font-semibold text-muted-foreground">Special instructions</div>
+                    <p className="mt-1 text-sm">{order.specialInstructions}</p>
+                  </div>
+                )}
+                {order.notes && (
+                  <div>
+                    <div className="text-xs font-semibold text-muted-foreground">Notes</div>
+                    <p className="mt-1 text-sm">{order.notes}</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+          <NotesTab orderId={order.id} />
+        </TabsContent>
+
+        <TabsContent value="line-items" className="mt-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Line items</CardTitle>
@@ -680,7 +1058,9 @@ export default function VNextOrderDetail() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
 
+        <TabsContent value="handling-units" className="mt-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Handling units</CardTitle>
@@ -748,7 +1128,9 @@ export default function VNextOrderDetail() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
 
+        <TabsContent value="shipments" className="mt-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Shipments</CardTitle>
@@ -791,13 +1173,45 @@ export default function VNextOrderDetail() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
 
-          {order.auditLogs && order.auditLogs.length > 0 && (
+        <TabsContent value="issues" className="mt-4">
+          {issues.length > 0 ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {issues.map(issue => (
+                <Link
+                  key={issue.id}
+                  to={`/issues/${issue.id}`}
+                  className="block rounded-md border border-border p-4 text-sm hover:bg-muted/40"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <Badge variant={issuePriorityVariant(issue.priority)} className="capitalize">{issue.priority}</Badge>
+                    <span className="text-xs capitalize text-muted-foreground">{issue.status.replace(/_/g, ' ')}</span>
+                  </div>
+                  <div className="mt-2 font-medium">{issue.title}</div>
+                  {issue.category && (
+                    <div className="mt-1 text-xs capitalize text-muted-foreground">{issue.category}</div>
+                  )}
+                </Link>
+              ))}
+            </div>
+          ) : (
             <Card>
-              <CardHeader>
-                <CardTitle>Audit log</CardTitle>
-              </CardHeader>
-              <CardContent>
+              <CardContent className="flex flex-col items-center gap-2 py-12 text-muted-foreground">
+                <CircleAlert className="h-10 w-10 opacity-40" />
+                <p className="text-sm">No issues on this order.</p>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        <TabsContent value="activity" className="mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Audit log</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {order.auditLogs && order.auditLogs.length > 0 ? (
                 <ol className="relative space-y-4 border-l border-border pl-6">
                   {order.auditLogs.map((log) => (
                     <li key={log.id} className="relative">
@@ -816,87 +1230,13 @@ export default function VNextOrderDetail() {
                     </li>
                   ))}
                 </ol>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-
-        <aside className="space-y-6 lg:sticky lg:top-20 lg:self-start">
-          <Card>
-            <CardHeader>
-              <CardTitle>Status</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <InfoItem label="Order status">
-                <Badge variant={statusVariant(order.status)}>{orderStatusLabel(order.status)}</Badge>
-              </InfoItem>
-              <InfoItem label="Delivery status">
-                {order.deliveryStatus ? (
-                  <Badge variant={deliveryStatusVariant(order.deliveryStatus)}>{deliveryStatusLabel(order.deliveryStatus)}</Badge>
-                ) : '-'}
-              </InfoItem>
-            </CardContent>
-          </Card>
-
-          {issues.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Related issues</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {issues.map(issue => (
-                  <Link
-                    key={issue.id}
-                    to={`/issues/${issue.id}`}
-                    className="block rounded-md border border-border p-3 text-sm hover:bg-muted/40"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <Badge variant={issuePriorityVariant(issue.priority)} className="capitalize">{issue.priority}</Badge>
-                      <span className="text-xs capitalize text-muted-foreground">{issue.status.replace(/_/g, ' ')}</span>
-                    </div>
-                    <div className="mt-2 font-medium">{issue.title}</div>
-                  </Link>
-                ))}
-              </CardContent>
-            </Card>
-          )}
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Dates</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <InfoItem label="Created">{formatDateTime(order.createdAt)}</InfoItem>
-              <InfoItem label="Updated">{formatDateTime(order.updatedAt)}</InfoItem>
-              <InfoItem label="Req. pickup">{formatDate(order.requestedPickupDate)}</InfoItem>
-              <InfoItem label="Req. delivery">{formatDate(order.requestedDeliveryDate)}</InfoItem>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Notes</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {order.specialInstructions && (
-                <div>
-                  <div className="text-xs font-semibold text-muted-foreground">Special instructions</div>
-                  <p className="mt-1 text-sm">{order.specialInstructions}</p>
-                </div>
-              )}
-              {order.notes && (
-                <div>
-                  <div className="text-xs font-semibold text-muted-foreground">Notes</div>
-                  <p className="mt-1 text-sm">{order.notes}</p>
-                </div>
-              )}
-              {!order.specialInstructions && !order.notes && (
-                <p className="text-sm text-muted-foreground">No notes</p>
+              ) : (
+                <p className="py-8 text-center text-sm text-muted-foreground">No activity recorded yet</p>
               )}
             </CardContent>
           </Card>
-        </aside>
-      </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
