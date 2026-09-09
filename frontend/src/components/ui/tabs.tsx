@@ -3,7 +3,40 @@ import * as TabsPrimitive from '@radix-ui/react-tabs';
 
 import { cn } from '@/lib/utils';
 
-const Tabs = TabsPrimitive.Root;
+const Tabs = React.forwardRef<
+  React.ElementRef<typeof TabsPrimitive.Root>,
+  React.ComponentPropsWithoutRef<typeof TabsPrimitive.Root>
+>(({ onValueChange, ...props }, forwardedRef) => {
+  const rootRef = React.useRef<HTMLDivElement | null>(null);
+  const setRefs = React.useCallback(
+    (node: HTMLDivElement) => {
+      rootRef.current = node;
+      if (typeof forwardedRef === 'function') forwardedRef(node);
+      else if (forwardedRef) forwardedRef.current = node;
+    },
+    [forwardedRef],
+  );
+
+  const handleValueChange = React.useCallback(
+    (value: string) => {
+      // BUSINESS RULE: tab panels vary a lot in height (e.g. a shipment's
+      // Details tab with its map vs. a short Financials tab). Switching to a
+      // shorter panel while scrolled past the tab list clamps scrollY to
+      // whatever the new, shorter page happens to allow, landing the user at
+      // an unrelated spot. Realign to the tab list instead of leaving that to
+      // the browser's clamp.
+      const list = rootRef.current?.querySelector<HTMLElement>('[role="tablist"]');
+      if (list && list.getBoundingClientRect().top < 0) {
+        list.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      }
+      onValueChange?.(value);
+    },
+    [onValueChange],
+  );
+
+  return <TabsPrimitive.Root ref={setRefs} onValueChange={handleValueChange} {...props} />;
+});
+Tabs.displayName = TabsPrimitive.Root.displayName;
 
 const TabsList = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.List>,
@@ -12,7 +45,7 @@ const TabsList = React.forwardRef<
   <TabsPrimitive.List
     ref={ref}
     className={cn(
-      'inline-flex h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground',
+      'scroll-mt-20 inline-flex h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground',
       className,
     )}
     {...props}
