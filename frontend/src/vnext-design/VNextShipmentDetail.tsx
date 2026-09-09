@@ -155,6 +155,9 @@ const COLOR_WARNING = '#eab308';
 const COLOR_DESTRUCTIVE = '#ef4444';
 const COLOR_MUTED = '#94a3b8';
 const COLOR_ROUTE = '#a855f7';
+// Matches COLOR_PRIMARY in VNextShipmentMap.tsx — same "here's the shipment
+// right now" color language on both the fleet map and this detail map.
+const COLOR_PRIMARY = '#6366f1';
 
 // ─── Financials Tab ─────────────────────────────────────────────────────
 function FinancialsTab({ shipmentId, hasBol }: { shipmentId: string; hasBol: boolean }) {
@@ -2058,6 +2061,7 @@ export default function VNextShipmentDetail() {
 
   const hasOriginCoords = !!(shipment?.origin?.lat && shipment?.origin?.lng);
   const hasDestCoords = !!(shipment?.destination?.lat && shipment?.destination?.lng);
+  const hasCurrentCoords = !!(shipment?.currentLat && shipment?.currentLng);
   const hasAnyCoords = hasOriginCoords || hasDestCoords;
 
   // The map is declared, not driven. Markers and lines are derived from the shipment, and the
@@ -2103,6 +2107,26 @@ export default function VNextShipmentDetail() {
     return out;
   }, [shipment, hasOriginCoords, hasDestCoords]);
 
+  // Live tracked position — kept separate from mapMarkers because the "lane"
+  // polyline below draws a straight line through mapMarkers in array order;
+  // folding the current-position pin into that array would bend the lane
+  // line through it.
+  const currentPositionMarkers = useMemo<MapMarker[]>(() => {
+    if (!shipment || !hasCurrentCoords) return [];
+    return [{
+      id: 'current-position',
+      position: { lat: shipment.currentLat, lng: shipment.currentLng },
+      html: pin(COLOR_PRIMARY, 22, true),
+      size: { width: 22, height: 22 },
+      popupHtml: `<strong>Current position</strong>${shipment.lastLocationAt ? `<br/>${new Date(shipment.lastLocationAt).toLocaleString()}` : ''}`,
+    }];
+  }, [shipment, hasCurrentCoords]);
+
+  const allMapMarkers = useMemo(
+    () => [...mapMarkers, ...currentPositionMarkers],
+    [mapMarkers, currentPositionMarkers]
+  );
+
   const mapPolylines = useMemo<MapPolyline[]>(() => {
     const lines: MapPolyline[] = [];
     const lanePoints = mapMarkers.map((m) => m.position);
@@ -2123,14 +2147,38 @@ export default function VNextShipmentDetail() {
       });
     }
 
-    return lines;
-  }, [mapMarkers, showLane, showRoute, laneRoute]);
+    // Traveled/remaining split around the live tracked position — always on
+    // when we have a live fix, independent of the lane/route toggles above,
+    // since this reflects where the shipment actually is, not a planned path.
+    if (hasCurrentCoords) {
+      const current = { lat: shipment.currentLat, lng: shipment.currentLng };
+      if (hasOriginCoords) {
+        lines.push({
+          id: 'traveled',
+          points: [{ lat: shipment.origin.lat, lng: shipment.origin.lng }, current],
+          color: COLOR_PRIMARY,
+          weight: 4,
+        });
+      }
+      if (hasDestCoords) {
+        lines.push({
+          id: 'remaining',
+          points: [current, { lat: shipment.destination.lat, lng: shipment.destination.lng }],
+          color: COLOR_MUTED,
+          weight: 3,
+          dashed: true,
+        });
+      }
+    }
 
-  // Framing follows whatever is actually drawn, so toggling the planned route on re-frames to
-  // include it rather than leaving half the line off screen.
+    return lines;
+  }, [mapMarkers, showLane, showRoute, laneRoute, shipment, hasCurrentCoords, hasOriginCoords, hasDestCoords]);
+
+  // Framing follows whatever is actually drawn, so toggling the planned route on, or a fresh
+  // location ping coming in, re-frames to include it rather than leaving part of it off screen.
   const mapFitTo = useMemo(
-    () => [...mapMarkers.map((m) => m.position), ...mapPolylines.flatMap((l) => l.points)],
-    [mapMarkers, mapPolylines]
+    () => [...allMapMarkers.map((m) => m.position), ...mapPolylines.flatMap((l) => l.points)],
+    [allMapMarkers, mapPolylines]
   );
 
 
@@ -2501,6 +2549,12 @@ export default function VNextShipmentDetail() {
                   Planned route
                 </label>
               )}
+              {hasCurrentCoords && (
+                <span className="flex items-center gap-1.5 text-muted-foreground">
+                  <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: COLOR_PRIMARY }} />
+                  Current position
+                </span>
+              )}
               {shipment.laneId && laneRoute === null && (
                 <Link to={`/lanes/${shipment.laneId}/edit`} className="ml-auto text-muted-foreground underline">
                   Plan a route for this lane
@@ -2509,7 +2563,7 @@ export default function VNextShipmentDetail() {
             </div>
             <div className="overflow-hidden rounded-lg border border-border">
               <MapView
-                markers={mapMarkers}
+                markers={allMapMarkers}
                 polylines={mapPolylines}
                 fitTo={mapFitTo}
                 height={300}
