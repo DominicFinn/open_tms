@@ -4,6 +4,7 @@ import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { Command } from '../types.js';
 import { resolveFacilityForLocation } from '../facilities/resolveFacility.js';
+import { requireLocationForInventory } from '../inventoryLocation.js';
 
 export interface ReleaseWavePayload {
   waveId: string;
@@ -85,7 +86,7 @@ export class ReleaseWaveCommandHandler extends BaseCommandHandler<
       // tenant's quantityAvailable and hard-allocate their stock to our wave (#220).
       const inventory = await tx.inventoryRecord.findMany({
         where: {
-          locationId: wave.locationId,
+          locationId: requireLocationForInventory(wave.locationId, `Wave ${wave.id}`),
           orgId: command.orgId,
           sku: line.sku,
           quantityAvailable: { gt: 0 },
@@ -141,9 +142,11 @@ export class ReleaseWaveCommandHandler extends BaseCommandHandler<
     // Create pick tasks based on strategy
     let pickTasksCreated = 0;
 
-    // Phase 2a dual-write (#227): all three strategies create their tasks at the wave's location,
-    // so the facility is resolved once here rather than in each branch.
-    const facilityId = await resolveFacilityForLocation(tx, command, wave.locationId, emit);
+    // Phase 2a (#227, #245): all three strategies create their tasks at the wave's facility. The
+    // wave already carries it, so use that rather than re-deriving from a location that may now be
+    // null; the fallback covers waves created before the backfill.
+    const facilityId = wave.facilityId
+      ?? (wave.locationId ? await resolveFacilityForLocation(tx, command, wave.locationId, emit) : null);
 
     if (wave.pickStrategy === 'discrete') {
       // One pick task per order

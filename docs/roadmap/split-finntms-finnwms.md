@@ -140,7 +140,15 @@ Seven FKs and one model stand between the two products.
   | 4 | Waves | `Wave`, `WaveTemplate` | ✅ #229 |
   | 5a | Read path | WMS list endpoints and repositories accept a facility scope | ✅ #231 |
   | 5b | Frontend | the 15 WMS list pages onto `/api/v1/facilities` | ✅ #234 |
-  | 6 | Contract | make `locationId` nullable, move the create commands and the 4 WMS create forms onto `facilityId`, drop the `Location` FKs and the two boundary-lint exceptions | next |
+  | 6a | Nullable | `locationId` nullable on the 14 WMS models | ✅ #245 |
+  | 6b | Write path | create commands and the 4 WMS create forms onto `facilityId` | next |
+  | 6c | Contract | drop the `locationId` parameter, the `Location` FKs and the columns | |
+
+  6a had to come first: a command cannot stop writing `locationId` while the column is NOT NULL.
+  Making it nullable surfaced three places that assumed it was always there, and one more unscoped
+  command (`warehouse_bin.update` reached its bin by bare id). It also found the hard limit on this
+  phase: **`InventoryRecord` is still keyed on Location and has no facility**, so putaway, returns
+  and wave release cannot work in a Location-free install until Phase 4 gives inventory a facility.
 
   5b turned out to be 15 pages, not 19: the other four are create forms whose `locationId` feeds a
   command payload, so they stay on Locations until batch 6 moves the write path. That makes the
