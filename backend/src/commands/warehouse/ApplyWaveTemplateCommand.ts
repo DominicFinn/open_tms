@@ -112,7 +112,8 @@ export class ApplyWaveTemplateCommandHandler extends BaseCommandHandler<
     // Phase 2a dual-write (#229): the wave takes its location from the template, so the facility
     // resolves from the same place rather than being copied off the template row, which may
     // predate the backfill.
-    const facilityId = await resolveFacilityForLocation(tx, command, template.locationId, emit);
+    const facilityId = template.facilityId
+      ?? (template.locationId ? await resolveFacilityForLocation(tx, command, template.locationId, emit) : null);
 
     const wave = await tx.wave.create({
       data: {

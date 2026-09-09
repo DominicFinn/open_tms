@@ -58,12 +58,14 @@ export class CompleteReceivingCommandHandler extends BaseCommandHandler<
     let putawayTasksCreated = 0;
     const linesWithUnits = task.lines.filter((l: any) => l.trackableUnitId && l.receivedQuantity > 0);
 
-    // Phase 2a dual-write (#225, #227): both branches below create rows at the receiving task's
-    // location, so the facility is resolved once here. Skipped entirely when there is nothing to
-    // create, so completing an empty receipt does not derive a facility as a side effect.
-    const facilityId = linesWithUnits.length > 0
-      ? await resolveFacilityForLocation(tx, command, task.locationId, emit)
-      : null;
+    // Phase 2a (#225, #227, #245): the task already carries its facility, so use it rather than
+    // re-deriving from the location, which may now be null. Falling back to the location covers
+    // rows created before the backfill. Skipped entirely when there is nothing to create, so
+    // completing an empty receipt does not derive a facility as a side effect.
+    const facilityId = linesWithUnits.length === 0
+      ? null
+      : task.facilityId
+        ?? (task.locationId ? await resolveFacilityForLocation(tx, command, task.locationId, emit) : null);
 
     // Cross-dock: skip storage, sort directly to staging bins by destination
     let crossDockSorted = 0;

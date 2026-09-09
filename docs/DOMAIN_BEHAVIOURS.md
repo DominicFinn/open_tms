@@ -1947,6 +1947,16 @@ It also drops a filter those copies applied: they fetched `/api/v1/locations` an
 `warehouse`, `distribution_centre` and `cross_dock` types, whereas a Facility is a warehouse by
 definition and the endpoint already excludes archived ones.
 
+`locationId` is nullable on the WMS models from #245, so a warehouse row can exist without a
+Location, which is what a standalone FinnWMS needs. Its foreign keys became `ON DELETE SET NULL`:
+deleting a Location detaches warehouse rows rather than refusing, and they keep their `facilityId`,
+which is the reference that matters from here on.
+
+**Inventory is the exception.** `InventoryRecord.locationId` is still NOT NULL and the inventory
+module has no facility reference, so putaway completion, returns and wave release all still need a
+real Location. `requireLocationForInventory` fails loudly rather than inventing one. Giving
+inventory a facility is Phase 4.
+
 **Reads move to facility; writes have not.** The create commands still write a non-null `locationId`
 on the row, so the four WMS create forms still choose a Location, and a list page with an inline
 create sends the selected facility's `sourceLocationId`. Both go in batch 6, when `locationId`

@@ -37,15 +37,25 @@ export class UpdateWarehouseBinCommandHandler extends BaseCommandHandler<
   ): Promise<{ id: string; label: string }> {
     const { binId, ...updates } = command.payload;
 
-    const existing = await tx.warehouseBin.findUnique({ where: { id: binId } });
+    // findFirst with orgId rather than findUnique by bare id: one tenant must not be able to
+    // rename another's bin (#220).
+    const existing = await tx.warehouseBin.findFirst({ where: { id: binId, orgId: command.orgId } });
     if (!existing) throw new Error(`Bin ${binId} not found`);
 
-    // If label is changing, check uniqueness
+    // If label is changing, check uniqueness. Scoped by facility now that locationId is nullable
+    // (#245); the compound unique on (locationId, label) cannot serve a warehouse-only install,
+    // and it never carried orgId either.
     if (updates.label && updates.label !== existing.label) {
-      const duplicate = await tx.warehouseBin.findUnique({
-        where: { locationId_label: { locationId: existing.locationId, label: updates.label } },
+      const duplicate = await tx.warehouseBin.findFirst({
+        where: {
+          label: updates.label,
+          orgId: command.orgId,
+          ...(existing.facilityId
+            ? { facilityId: existing.facilityId }
+            : { locationId: existing.locationId }),
+        },
       });
-      if (duplicate) throw new Error(`Bin label "${updates.label}" already exists at this location`);
+      if (duplicate) throw new Error(`Bin label "${updates.label}" already exists at this facility`);
     }
 
     const bin = await tx.warehouseBin.update({

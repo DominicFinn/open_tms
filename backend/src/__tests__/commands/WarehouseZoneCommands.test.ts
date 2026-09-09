@@ -226,7 +226,7 @@ describe('Warehouse Bin Command Handlers', () => {
       const updatedBin = { ...mockBin, active: false };
       const updateBinTx = {
         warehouseBin: {
-          findUnique: jest.fn().mockResolvedValue(mockBin),
+          findFirst: jest.fn().mockResolvedValue(mockBin),
           update: jest.fn().mockResolvedValue(updatedBin),
         },
         domainEventLog: { create: jest.fn().mockResolvedValue({}) },
@@ -253,7 +253,7 @@ describe('Warehouse Bin Command Handlers', () => {
     it('fails if bin not found', async () => {
       const notFoundTx = {
         warehouseBin: {
-          findUnique: jest.fn().mockResolvedValue(null),
+          findFirst: jest.fn().mockResolvedValue(null),
           update: jest.fn(),
         },
         domainEventLog: { create: jest.fn().mockResolvedValue({}) },
@@ -276,7 +276,7 @@ describe('Warehouse Bin Command Handlers', () => {
     it('checks label uniqueness on rename', async () => {
       const renameTx = {
         warehouseBin: {
-          findUnique: jest.fn()
+          findFirst: jest.fn()
             .mockResolvedValueOnce(mockBin) // existing bin lookup
             .mockResolvedValueOnce({ ...mockBin, id: 'bin-other' }), // duplicate label check
           update: jest.fn(),

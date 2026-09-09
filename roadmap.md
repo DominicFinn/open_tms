@@ -45,9 +45,9 @@ Roughly 50-65 PR-sized chunks end to end; every PR leaves the product shippable.
 - **Phase 2: Data model untangling** 🚧 `Facility` (WMS off the conflated `Location`) — the
   dual-write is complete ✅, all twelve WMS models that reference `Location` now carry a
   `facilityId` (#217 storage topology, #225 inbound, #227 outbound, #229 waves), and the read path
-  accepts a facility scope (#231), and the 15 WMS list pages now send `facilityId` (#234). What is
-  left is the write path: batch 6 makes `locationId` nullable, moves the create commands and the
-  four WMS create forms onto `facilityId`, and drops the `Location` FKs;
+  accepts a facility scope (#231), and the 15 WMS list pages now send `facilityId` (#234). `locationId` is
+  now nullable (#245); what is left is moving the create commands and the four WMS create forms onto
+  `facilityId`, then dropping the `Location` FKs and columns;
   `HandlingUnit` (stock without a TMS order), polymorphic `Allocation` demand ref, carton cleanup,
   `OrgWmsSettings` carve-out still to come. All expand→contract.
   Phase 0 tenancy leftovers closed alongside ✅ (#220, in #221/#222/#223): the whole WMS read and
