@@ -1,6 +1,24 @@
-import { PrismaClient, Prisma } from '@prisma/client';
+import { randomUUID } from 'crypto';
+import { PrismaClient } from '@prisma/client';
+import { ICommandBus } from '../commands/CommandBus.js';
+import {
+  CONVERT_ORDER_TO_SHIPMENT,
+  ConvertOrderToShipmentPayload,
+  ConvertOrderToShipmentResult,
+} from '../commands/orders/ConvertOrderToShipmentCommand.js';
+import {
+  COMBINE_ORDERS_INTO_SHIPMENT,
+  CombineOrdersIntoShipmentPayload,
+  CombineOrdersIntoShipmentResult,
+} from '../commands/orders/CombineOrdersIntoShipmentCommand.js';
+import {
+  SPLIT_ORDER,
+  SplitOrderPayload,
+  SplitOrderResult as SplitOrderCommandResult,
+} from '../commands/orders/SplitOrderCommand.js';
+import { linkOrdersToShipment } from '../commands/shipments/linkOrdersToShipment.js';
 
-type TransactionClient = Prisma.TransactionClient;
+const CONVERSION_SOURCE = 'order-conversion-service';
 
 export interface BatchConvertOptions {
   mode: 'combine' | 'individual';
@@ -70,7 +88,7 @@ export interface IOrderConversionService {
 }
 
 export class OrderConversionService implements IOrderConversionService {
-  constructor(private prisma: PrismaClient) {}
+  constructor(private prisma: PrismaClient, private commandBus: ICommandBus) {}
 
   async checkCompatibility(orderIds: string[]): Promise<CompatibilityCheck> {
     const orders = await this.prisma.order.findMany({
@@ -217,50 +235,34 @@ export class OrderConversionService implements IOrderConversionService {
 
   /** Manually convert a single order into a brand-new shipment. */
   async convertOrder(orderId: string, userId?: string): Promise<{ shipmentId: string }> {
+    // Only need orgId to populate the command envelope — CONVERT_ORDER_TO_SHIPMENT
+    // re-reads the order (with all the includes it needs) inside its own transaction.
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
-      include: {
-        customer: { select: { id: true, name: true } },
-        trackableUnits: { include: { lineItems: true } },
-        lineItems: { where: { trackableUnitId: null } },
-      },
+      select: { orgId: true },
     });
-
     if (!order) throw new Error('Order not found');
-    if (order.status === 'assigned') {
-      throw new Error(`Order already ${order.status}`);
-    }
-    if (!order.originId || !order.destinationId) {
-      throw new Error('Order missing origin or destination');
-    }
 
-    return this.prisma.$transaction(async (tx) => {
-      const reference = `SH-${order.orderNumber}`;
-
-      const shipment = await tx.shipment.create({
-        data: {
-          // Multi-tenancy: copy orgId from the source Order so the shipment
-          // lands in the same tenant.
-          orgId: order.orgId,
-          reference,
-          customerId: order.customerId,
-          originId: order.originId!,
-          destinationId: order.destinationId!,
-          pickupDate: order.requestedPickupDate || undefined,
-          deliveryDate: order.requestedDeliveryDate || undefined,
-          items: [],
-          status: 'draft',
-        },
-      });
-
-      await this.linkOrdersToShipment(tx, shipment, [order], userId, () => `Order converted to shipment ${reference}`);
-
-      return { shipmentId: shipment.id };
+    const result = await this.commandBus.dispatch<ConvertOrderToShipmentPayload, ConvertOrderToShipmentResult>({
+      type: CONVERT_ORDER_TO_SHIPMENT,
+      orgId: order.orgId,
+      actorId: userId ?? null,
+      payload: { orderId },
+      metadata: { correlationId: randomUUID(), source: CONVERSION_SOURCE },
     });
+
+    if (!result.success || !result.data) {
+      throw new Error(result.error || 'Failed to convert order to shipment');
+    }
+
+    return { shipmentId: result.data.shipmentId };
   }
 
   private async combineIntoShipment(orderIds: string[], userId?: string): Promise<BatchConvertResult> {
-    // Validate compatibility first
+    // Validate compatibility first. This was already a soft pre-check run
+    // outside any transaction before the write moved onto the command bus,
+    // so this doesn't weaken anything — COMBINE_ORDERS_INTO_SHIPMENT re-reads
+    // the orders fresh inside its own transaction.
     const check = await this.checkCompatibility(orderIds);
     if (!check.compatible) {
       return {
@@ -271,283 +273,70 @@ export class OrderConversionService implements IOrderConversionService {
       };
     }
 
-    const orders = await this.prisma.order.findMany({
+    const orgLookup = await this.prisma.order.findFirst({
       where: { id: { in: orderIds }, archived: false },
-      include: {
-        customer: { select: { id: true, name: true } },
-        trackableUnits: { include: { lineItems: true }, orderBy: { sequenceNumber: 'asc' } },
-        lineItems: { where: { trackableUnitId: null } },
-      },
-      orderBy: { createdAt: 'asc' },
+      select: { orgId: true },
     });
-
-    if (orders.length === 0) {
+    if (!orgLookup) {
       return { success: false, shipmentIds: [], errors: ['No valid orders found'], message: 'No valid orders found' };
     }
 
-    try {
-      const result = await this.prisma.$transaction(async (tx) => {
-        const firstOrder = orders[0];
-        const timestamp = Date.now().toString(36).toUpperCase().slice(-6);
-        const reference = `SH-BATCH-${timestamp}`;
+    const result = await this.commandBus.dispatch<CombineOrdersIntoShipmentPayload, CombineOrdersIntoShipmentResult>({
+      type: COMBINE_ORDERS_INTO_SHIPMENT,
+      orgId: orgLookup.orgId,
+      actorId: userId ?? null,
+      payload: { orderIds },
+      metadata: { correlationId: randomUUID(), source: CONVERSION_SOURCE },
+    });
 
-        const shipment = await tx.shipment.create({
-          data: {
-            orgId: firstOrder.orgId,
-            reference,
-            customerId: firstOrder.customerId,
-            originId: firstOrder.originId!,
-            destinationId: firstOrder.destinationId!,
-            items: [],
-            status: 'draft',
-          },
-        });
-
-        await this.linkOrdersToShipment(
-          tx,
-          shipment,
-          orders,
-          userId,
-          () => `Order combined into batch shipment ${reference} with ${orders.length} orders`,
-          { batchOrderIds: orderIds },
-        );
-
-        return shipment.id;
-      });
-
-      return {
-        success: true,
-        shipmentIds: [result],
-        errors: [],
-        message: `Successfully combined ${orders.length} orders into 1 shipment`,
-      };
-    } catch (err: any) {
+    if (!result.success || !result.data) {
       return {
         success: false,
         shipmentIds: [],
-        errors: [err.message],
+        errors: [result.error || 'Failed to combine orders'],
         message: 'Failed to combine orders',
       };
     }
+
+    return {
+      success: true,
+      shipmentIds: [result.data.shipmentId],
+      errors: [],
+      message: `Successfully combined ${orderIds.length} orders into 1 shipment`,
+    };
   }
 
   async splitOrder(orderId: string, groups: SplitGroup[], userId?: string): Promise<SplitOrderResult> {
-    if (groups.length < 2) {
-      return {
-        success: false,
-        shipmentIds: [],
-        errors: ['At least 2 groups are required to split an order'],
-        message: 'Invalid split configuration',
-      };
-    }
-
+    // Only need orgId to populate the command envelope — SPLIT_ORDER validates
+    // everything else (group count, unit/item coverage, order status/locations)
+    // against a fresh read inside its own transaction.
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
-      include: {
-        customer: { select: { id: true, name: true } },
-        trackableUnits: { include: { lineItems: true }, orderBy: { sequenceNumber: 'asc' } },
-        lineItems: { where: { trackableUnitId: null } },
-      },
+      select: { orgId: true },
     });
-
     if (!order) {
       return { success: false, shipmentIds: [], errors: ['Order not found'], message: 'Order not found' };
     }
 
-    if (order.status === 'assigned') {
-      return {
-        success: false,
-        shipmentIds: [],
-        errors: [`Order already ${order.status}`],
-        message: `Order already ${order.status}`,
-      };
+    const result = await this.commandBus.dispatch<SplitOrderPayload, SplitOrderCommandResult>({
+      type: SPLIT_ORDER,
+      orgId: order.orgId,
+      actorId: userId ?? null,
+      payload: { orderId, groups },
+      metadata: { correlationId: randomUUID(), source: CONVERSION_SOURCE },
+    });
+
+    if (!result.success || !result.data) {
+      const message = result.error || 'Failed to split order';
+      return { success: false, shipmentIds: [], errors: [message], message };
     }
 
-    if (!order.originId || !order.destinationId) {
-      return {
-        success: false,
-        shipmentIds: [],
-        errors: ['Order missing origin or destination'],
-        message: 'Order missing locations',
-      };
-    }
-
-    // Validate all units/items are accounted for
-    const allUnitIds = new Set(order.trackableUnits.map((u) => u.id));
-    const allLegacyIds = new Set(order.lineItems.map((i) => i.id));
-    const assignedUnitIds = new Set<string>();
-    const assignedLegacyIds = new Set<string>();
-
-    for (const group of groups) {
-      for (const uid of group.trackableUnitIds) {
-        if (!allUnitIds.has(uid)) {
-          return {
-            success: false,
-            shipmentIds: [],
-            errors: [`Trackable unit ${uid} not found in this order`],
-            message: 'Invalid split configuration',
-          };
-        }
-        if (assignedUnitIds.has(uid)) {
-          return {
-            success: false,
-            shipmentIds: [],
-            errors: [`Trackable unit ${uid} assigned to multiple groups`],
-            message: 'Invalid split configuration',
-          };
-        }
-        assignedUnitIds.add(uid);
-      }
-      for (const lid of group.legacyItemIds) {
-        if (!allLegacyIds.has(lid)) {
-          return {
-            success: false,
-            shipmentIds: [],
-            errors: [`Line item ${lid} not found in this order`],
-            message: 'Invalid split configuration',
-          };
-        }
-        if (assignedLegacyIds.has(lid)) {
-          return {
-            success: false,
-            shipmentIds: [],
-            errors: [`Line item ${lid} assigned to multiple groups`],
-            message: 'Invalid split configuration',
-          };
-        }
-        assignedLegacyIds.add(lid);
-      }
-    }
-
-    // Check that each group has at least one item
-    for (let i = 0; i < groups.length; i++) {
-      if (groups[i].trackableUnitIds.length === 0 && groups[i].legacyItemIds.length === 0) {
-        return {
-          success: false,
-          shipmentIds: [],
-          errors: [`Group ${i + 1} is empty`],
-          message: 'Invalid split configuration',
-        };
-      }
-    }
-
-    try {
-      const shipmentIds = await this.prisma.$transaction(async (tx) => {
-        const ids: string[] = [];
-
-        for (let i = 0; i < groups.length; i++) {
-          const group = groups[i];
-          const timestamp = Date.now().toString(36).toUpperCase().slice(-6);
-          const reference = `SH-${order.orderNumber}-${i + 1}`;
-
-          // Build items for this group
-          const groupUnits = order.trackableUnits.filter((u) =>
-            group.trackableUnitIds.includes(u.id)
-          );
-          const groupLegacyItems = order.lineItems.filter((li) =>
-            group.legacyItemIds.includes(li.id)
-          );
-
-          const items: any[] = [];
-          items.push({
-            orderId: order.id,
-            orderNumber: order.orderNumber,
-            splitGroup: i + 1,
-            trackableUnits: groupUnits.map((unit) => ({
-              unitId: unit.id,
-              identifier: unit.identifier,
-              unitType: unit.unitType,
-              items: unit.lineItems.map((item) => ({
-                sku: item.sku,
-                description: item.description,
-                quantity: item.quantity,
-                weight: item.weight,
-                weightUnit: item.weightUnit,
-              })),
-            })),
-            legacyItems: groupLegacyItems.map((item) => ({
-              itemId: item.id,
-              sku: item.sku,
-              description: item.description,
-              quantity: item.quantity,
-              weight: item.weight,
-              weightUnit: item.weightUnit,
-            })),
-          });
-
-          const shipment = await tx.shipment.create({
-            data: {
-              orgId: order.orgId,
-              reference,
-              customerId: order.customerId,
-              originId: order.originId!,
-              destinationId: order.destinationId!,
-              pickupDate: order.requestedPickupDate || undefined,
-              deliveryDate: order.requestedDeliveryDate || undefined,
-              items,
-              status: 'draft',
-            },
-          });
-
-          await tx.orderShipment.create({
-            data: { orderId: order.id, shipmentId: shipment.id },
-          });
-
-          await tx.shipmentStop.create({
-            data: {
-              shipmentId: shipment.id,
-              locationId: order.destinationId!,
-              sequenceNumber: 1,
-              stopType: 'delivery',
-              status: 'pending',
-            },
-          });
-
-          ids.push(shipment.id);
-        }
-
-        // Update order status
-        await tx.order.update({
-          where: { id: orderId },
-          data: {
-            status: 'assigned',
-          },
-        });
-
-        await tx.auditLog.create({
-          data: {
-            entityType: 'order',
-            entityId: orderId,
-            orderId,
-            action: 'delivery_status_changed',
-            description: `Order split into ${groups.length} shipments`,
-            changes: {
-              before: { status: order.status },
-              after: { status: 'assigned' },
-              splitShipmentIds: ids,
-              splitGroups: groups.length,
-            },
-            userId,
-          },
-        });
-
-        return ids;
-      });
-
-      return {
-        success: true,
-        shipmentIds,
-        errors: [],
-        message: `Successfully split order into ${shipmentIds.length} shipments`,
-      };
-    } catch (err: any) {
-      return {
-        success: false,
-        shipmentIds: [],
-        errors: [err.message],
-        message: 'Failed to split order',
-      };
-    }
+    return {
+      success: true,
+      shipmentIds: result.data.shipmentIds,
+      errors: [],
+      message: `Successfully split order into ${result.data.shipmentIds.length} shipments`,
+    };
   }
 
   async addOrdersToShipment(
@@ -635,12 +424,18 @@ export class OrderConversionService implements IOrderConversionService {
 
     try {
       await this.prisma.$transaction(async (tx) => {
-        await this.linkOrdersToShipment(
+        // NOTE: this path still doesn't dispatch through the command bus, so
+        // it intentionally emits nothing — it only ever links orders to an
+        // *existing* shipment, so it's outside the SHIPMENT_CREATED gap this
+        // module was extracted to fix (#264). ORDER_ASSIGNED_TO_SHIPMENT stays
+        // dark for manual add-to-shipment until that's addressed separately.
+        await linkOrdersToShipment(
           tx,
           shipment,
           valid,
-          userId,
-          (order) => `Order manually added to shipment ${shipment.reference}`,
+          { orgId, actorId: userId ?? null },
+          () => `Order manually added to shipment ${shipment.reference}`,
+          () => {},
         );
       });
     } catch (err: any) {
@@ -719,107 +514,4 @@ export class OrderConversionService implements IOrderConversionService {
     return { success: true };
   }
 
-  /**
-   * Shared linking mechanics for attaching order(s) to a shipment — appends
-   * items, finds-or-creates a delivery stop per unique destination, links
-   * via OrderShipment, flips each order to 'assigned', and audit-logs it.
-   * Used by every order→shipment path (convert, combine, manually add to an
-   * existing shipment, and lane-based auto-assignment) so stop/status/audit
-   * mechanics live in exactly one place. Caller owns the transaction and any
-   * pre-validation (shipment status, origin/customer match, etc).
-   */
-  private async linkOrdersToShipment(
-    tx: TransactionClient,
-    shipment: { id: string; items: Prisma.JsonValue },
-    orders: any[],
-    userId: string | undefined,
-    describe: (order: any) => string,
-    extraChanges?: Record<string, unknown>,
-  ): Promise<void> {
-    const existingItems = Array.isArray(shipment.items) ? (shipment.items as any[]) : [];
-    const newItems = this.buildItemsPayload(orders);
-    await tx.shipment.update({
-      where: { id: shipment.id },
-      data: { items: [...existingItems, ...newItems] },
-    });
-
-    const maxSeq = await tx.shipmentStop.aggregate({
-      where: { shipmentId: shipment.id },
-      _max: { sequenceNumber: true },
-    });
-    let nextSeq = (maxSeq._max.sequenceNumber || 0) + 1;
-
-    for (const order of orders) {
-      let stop = await tx.shipmentStop.findFirst({
-        where: { shipmentId: shipment.id, locationId: order.destinationId! },
-      });
-      if (!stop) {
-        stop = await tx.shipmentStop.create({
-          data: {
-            shipmentId: shipment.id,
-            locationId: order.destinationId!,
-            sequenceNumber: nextSeq++,
-            stopType: 'delivery',
-            status: 'pending',
-          },
-        });
-      }
-
-      await tx.orderShipment.create({
-        data: { orderId: order.id, shipmentId: shipment.id },
-      });
-
-      await tx.order.update({
-        where: { id: order.id },
-        data: {
-          status: 'assigned',
-          deliveryStopId: stop.id,
-        },
-      });
-
-      await tx.auditLog.create({
-        data: {
-          entityType: 'order',
-          entityId: order.id,
-          orderId: order.id,
-          action: 'delivery_status_changed',
-          description: describe(order),
-          changes: {
-            before: { status: order.status },
-            after: { status: 'assigned' },
-            ...extraChanges,
-          },
-          userId,
-        },
-      });
-    }
-  }
-
-  private buildItemsPayload(orders: any[]): any[] {
-    return orders.map((order) => ({
-      orderId: order.id,
-      orderNumber: order.orderNumber,
-      trackableUnits: (order.trackableUnits || []).map((unit: any) => ({
-        unitId: unit.id,
-        identifier: unit.identifier,
-        unitType: unit.unitType,
-        items: (unit.lineItems || []).map((item: any) => ({
-          sku: item.sku,
-          description: item.description,
-          quantity: item.quantity,
-          weight: item.weight,
-          weightUnit: item.weightUnit,
-        })),
-      })),
-      legacyItems: (order.lineItems || [])
-        .filter((item: any) => !item.trackableUnitId)
-        .map((item: any) => ({
-          sku: item.sku,
-          description: item.description,
-          quantity: item.quantity,
-          weight: item.weight,
-          weightUnit: item.weightUnit,
-        })),
-    }));
-  }
 }

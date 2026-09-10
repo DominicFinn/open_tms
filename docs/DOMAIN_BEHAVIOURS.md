@@ -71,20 +71,20 @@ The only remaining repository-direct operation in this area is `validateLocation
 
 ### Service Operations (Domain Services)
 
-These call domain services with complex orchestration logic. They currently create AuditLog records but do not yet publish domain events through the event bus.
+These call domain services with complex orchestration logic. Most still create AuditLog records without publishing domain events through the event bus — the exception is the shipment-creation step of the four rows marked (#264): those now dispatch a command and emit `shipment.created`/`order.assigned_to_shipment` (see the Shipments section's Commands table). Everything else about these rows — order linking mechanics, delivery-status handling — is unchanged.
 
 | Operation | Trigger | Service | What It Does |
 |-----------|---------|---------|-------------|
-| Assign to shipment | `POST /api/v1/orders/:id/assign-to-shipment` | ShipmentAssignmentService | Matches lane, creates/reuses shipment, creates stop, updates order status |
+| Assign to shipment (#264) | `POST /api/v1/orders/:id/assign-to-shipment` | ShipmentAssignmentService | Matches lane, creates/reuses shipment (dispatches `CreateShipmentCommand` when creating), creates stop, updates order status |
 | Update delivery status | `POST /api/v1/orders/:id/delivery-status` | OrderDeliveryService | Updates deliveryStatus, creates audit log |
 | Mark delivered | `POST /api/v1/orders/:id/mark-delivered` | OrderDeliveryService | Sets deliveryStatus=delivered, deliveredAt=now |
 | Create exception | `POST /api/v1/orders/:id/delivery-exception` | OrderDeliveryService | Sets deliveryStatus=exception, records type/notes |
 | Resolve exception | `POST /api/v1/orders/:id/resolve-exception` | OrderDeliveryService | Sets deliveryStatus=in_transit, records resolution |
 | Update orders for stop | `POST /api/v1/shipment-stops/:id/update-orders` | OrderDeliveryService | Bulk updates all orders at a shipment stop |
 | Geofence check | `POST /api/v1/shipments/:id/geofence-check` | OrderDeliveryService | Calculates distance to stops, auto-updates if within radius |
-| Convert to shipment | `POST /api/v1/orders/:id/convert-to-shipment` | OrdersRepository | Creates shipment + stop + junction, updates order status (uses transaction) |
-| Batch convert | `POST /api/v1/orders/batch-convert` | OrderConversionService | Individual or combined mode, compatibility checks |
-| Split to shipments | `POST /api/v1/orders/:id/split-to-shipments` | OrderConversionService | Splits order items into multiple shipments |
+| Convert to shipment (#264) | `POST /api/v1/orders/:id/convert-to-shipment` | OrderConversionService | Dispatches `ConvertOrderToShipmentCommand`: creates shipment + stop + junction, updates order status |
+| Batch convert (#264) | `POST /api/v1/orders/batch-convert` | OrderConversionService | Individual mode loops `convertOrder`; combine mode dispatches `CombineOrdersIntoShipmentCommand`. Compatibility checks first |
+| Split to shipments (#264) | `POST /api/v1/orders/:id/split-to-shipments` | OrderConversionService | Dispatches `SplitOrderCommand`: splits order items into multiple new shipments |
 | Check compatibility | `POST /api/v1/orders/check-compatibility` | OrderConversionService | Validates orders can be combined (read-only) |
 | CSV import | `POST /api/v1/orders/import/csv` | CSVImportService | Bulk creates orders from CSV content |
 
@@ -234,6 +234,11 @@ Shipments follow a canonical lifecycle: **`draft` → `ready` → `in_progress` 
 | `UnarchiveShipmentCommand` | `POST /api/v1/shipments/:id/unarchive` (requires `shipments:delete`) | `shipment.unarchived` |
 | `SoftDeleteShipmentCommand` | `POST /api/v1/shipments/:id/soft-delete`, `POST /api/v1/shipments/bulk-delete` (requires `shipments:delete`) | `shipment.deleted` |
 | `ProcessInbound214Command` | `POST /api/v1/edi/214/inbound` | `edi_214.received`, `shipment.status_changed`, `shipment.stop_arrived`, `shipment.stop_completed`, `shipment.exception`, `shipment.delivered` |
+| `ConvertOrderToShipmentCommand` | `POST /api/v1/orders/:id/convert-to-shipment` (via `OrderConversionService`) | `shipment.created`, `order.assigned_to_shipment` |
+| `CombineOrdersIntoShipmentCommand` | `POST /api/v1/orders/batch-convert` (combine mode, via `OrderConversionService`) | `shipment.created`, `order.assigned_to_shipment` (one per combined order) |
+| `SplitOrderCommand` | `POST /api/v1/orders/:id/split-to-shipments` (via `OrderConversionService`) | `shipment.created` (one per resulting shipment) |
+
+`ShipmentAssignmentService.assignOrderToShipment` (auto-assignment on order intake, `POST /api/v1/orders/:id/assign-to-shipment`) and the warehouse app's `POST /api/v1/warehouse/shipments` also create shipments — both now dispatch the existing `CreateShipmentCommand` rather than writing the row directly, so they emit `shipment.created` too (#264). Before #264, all five of these paths wrote the `Shipment` row with a bare `prisma.shipment.create` and never emitted anything, so `ShipmentReadModel` (and therefore `GET /api/v1/shipments`, live GPS tracking, `AutoTenderHandler`, and `SlaEvaluationHandler`) silently never saw shipments created this way — only the one path that already went through `CreateShipmentCommand` (`POST /api/v1/shipments`, and `AcceptQuoteCommand`) worked.
 
 `GET /api/v1/shipments/:id/readiness` returns `{ status, missing, isValid, allowedTransitions }` for the detail-page control. Every `shipment.status_changed` is captured by the `AuditHandler` as an immutable `AuditLog` row recording the actor ("who did it") — this is the audit event for manual lifecycle moves.
 

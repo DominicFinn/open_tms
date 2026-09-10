@@ -11,6 +11,7 @@ import { TOKENS } from '../tokens.js';
 import { CommandBus } from '../../commands/CommandBus.js';
 import type { CommandHandlerDeps } from '../moduleRegistration.js';
 import { OrderFulfilmentDemandSource } from '../../services/fulfilment/OrderFulfilmentDemandSource.js';
+import { CreateShipmentPortAdapter } from '../../services/shipments/CreateShipmentPortAdapter.js';
 import { ShipmentTypesRepository } from '../../repositories/ShipmentTypesRepository.js';
 import { CarriersRepository } from '../../repositories/CarriersRepository.js';
 import { ShipmentsRepository } from '../../repositories/ShipmentsRepository.js';
@@ -39,6 +40,9 @@ import { ArchiveOrderCommandHandler } from '../../commands/orders/ArchiveOrderCo
 import { CancelOrderCommandHandler } from '../../commands/orders/CancelOrderCommand.js';
 import { SoftDeleteOrderCommandHandler } from '../../commands/orders/SoftDeleteOrderCommand.js';
 import { UnarchiveOrderCommandHandler } from '../../commands/orders/UnarchiveOrderCommand.js';
+import { ConvertOrderToShipmentCommandHandler } from '../../commands/orders/ConvertOrderToShipmentCommand.js';
+import { CombineOrdersIntoShipmentCommandHandler } from '../../commands/orders/CombineOrdersIntoShipmentCommand.js';
+import { SplitOrderCommandHandler } from '../../commands/orders/SplitOrderCommand.js';
 import {
   CreateTrackableUnitCommandHandler,
   UpdateTrackableUnitCommandHandler,
@@ -194,6 +198,16 @@ export function registerTmsDependencies(prisma: PrismaClient): void {
     return new OrderFulfilmentDemandSource(container.resolve(TOKENS.PrismaClient));
   });
 
+  // The TMS side of the create-shipment port. WMS's warehouse-app admin route
+  // resolves this token instead of importing the command bus or
+  // ShipmentsRepository directly (#264).
+  container.singleton(TOKENS.ICreateShipmentPort).toFactory(() => {
+    return new CreateShipmentPortAdapter(
+      container.resolve(TOKENS.ICommandBus),
+      container.resolve(TOKENS.IShipmentsRepository),
+    );
+  });
+
   container.singleton(TOKENS.ICarriersRepository).toFactory(() => {
     return new CarriersRepository(container.resolve(TOKENS.PrismaClient));
   });
@@ -252,6 +266,7 @@ export function registerTmsDependencies(prisma: PrismaClient): void {
     return new ShipmentAssignmentService(
       container.resolve(TOKENS.PrismaClient),
       container.resolve(TOKENS.IOrderConversionService),
+      container.resolve(TOKENS.ICommandBus),
     );
   });
 
@@ -277,7 +292,10 @@ export function registerTmsDependencies(prisma: PrismaClient): void {
   });
 
   container.singleton(TOKENS.IOrderConversionService).toFactory(() => {
-    return new OrderConversionService(container.resolve(TOKENS.PrismaClient));
+    return new OrderConversionService(
+      container.resolve(TOKENS.PrismaClient),
+      container.resolve(TOKENS.ICommandBus),
+    );
   });
 
   container.singleton(TOKENS.ICargoReconciliationService).toFactory(() => {
@@ -573,6 +591,9 @@ export function registerTmsCommandHandlers(bus: CommandBus, deps: CommandHandler
   bus.register(new CreateLineItemCommandHandler(prisma, eventBus));
   bus.register(new UpdateLineItemCommandHandler(prisma, eventBus));
   bus.register(new DeleteLineItemCommandHandler(prisma, eventBus));
+  bus.register(new ConvertOrderToShipmentCommandHandler(prisma, eventBus));
+  bus.register(new CombineOrdersIntoShipmentCommandHandler(prisma, eventBus));
+  bus.register(new SplitOrderCommandHandler(prisma, eventBus));
 
   // Shipment commands
   bus.register(new CreateShipmentCommandHandler(prisma, eventBus, queue));
