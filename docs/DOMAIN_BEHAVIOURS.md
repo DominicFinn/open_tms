@@ -157,6 +157,8 @@ Available as a read-only live preview at `POST /api/v1/order-line-items/cartoniz
 
 **Auto-generated handling units (`TrackableUnit`s):** when an order is created with `packingSummary` (packagingTypeId, unitCount, stackable) and no explicit `trackableUnits[]`, `CreateOrderCommand` auto-generates `unitCount` `TrackableUnit`s tagged with that packaging type and a sequence number. Phase 1 keeps it simple — line items are not allocated to specific units; that's Phase 2.
 
+**Explicit `trackableUnits[]` with nested `lineItems` at order-creation time:** `CreateOrderCommand` creates the `TrackableUnit`s and their `OrderLineItem`s as separate writes after the `Order` row exists, each with `orderId` supplied explicitly. A single Prisma nested create three levels deep (`order.create` → `trackableUnits.create` → `lineItems.create`) only auto-populates the FK for the relation it is directly traversing at each level (`trackableUnitId`), not `OrderLineItem.orderId` two levels up — since that FK is required, the nested form always failed the whole create (#269).
+
 **Packaging catalogue (`PackagingType`)** is org-scoped with a `kind` discriminator (pallet | carton | crate | drum | roll | bag | tote | loose | custom). Pallet-specific fields (tareWeightGrams, maxLoadGrams, material) are nullable. Generalised from the original `PalletType` model in 2026-06; admin CRUD lives at `/wms/packaging-types`.
 
 **Event payload v2:** `order.created` schema version bumped to 2 — payload now carries `packingSummary` (or null if none was provided).
