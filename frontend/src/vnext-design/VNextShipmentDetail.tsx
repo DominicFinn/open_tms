@@ -2635,6 +2635,37 @@ export default function VNextShipmentDetail() {
                 )}
               </section>
 
+              {(shipment.deviceAssignments || []).length > 0 && (
+                <section className="space-y-2 p-4 text-sm">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Assigned Devices
+                  </span>
+                  <div className="flex flex-wrap gap-3">
+                    {shipment.deviceAssignments.map((a: any) => (
+                      <div
+                        key={a.id}
+                        className="flex min-w-[220px] items-center gap-3 rounded-md border border-border bg-muted/20 px-4 py-3"
+                      >
+                        <Radio className="h-9 w-9 shrink-0 text-muted-foreground" />
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-semibold">
+                              {a.device?.name || a.device?.externalId || 'Device'}
+                            </span>
+                            {a.purpose && (
+                              <Badge variant="muted">{DEVICE_PURPOSE_LABELS[a.purpose] || a.purpose}</Badge>
+                            )}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            Assigned {a.assignedAt ? new Date(a.assignedAt).toLocaleDateString() : '-'}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
               {(shipment.tempControlled || shipment.hazmat || shipment.humidityControlled || shipment.requiredEquipmentType) && (
                 <section className="space-y-2 p-4 text-sm">
                   <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
