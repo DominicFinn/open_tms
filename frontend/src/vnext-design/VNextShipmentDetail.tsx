@@ -15,6 +15,7 @@ import {
   CircleHelp,
   Clock,
   CreditCard,
+  Crosshair,
   Download,
   Edit,
   Eye,
@@ -32,6 +33,7 @@ import {
   Pen,
   Pencil,
   Plus,
+  Radio,
   RefreshCw,
   Search,
   SearchX,
@@ -1655,6 +1657,19 @@ function EventsTab({ shipmentId }: { shipmentId: string }) {
                   <div className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
                     <MapPin className="h-3 w-3" />
                     {ev.address || ev.locationSummary}
+                  </div>
+                )}
+                {ev.lat != null && ev.lng != null && (
+                  <div className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+                    <Crosshair className="h-3 w-3" />
+                    {ev.lat.toFixed(4)}, {ev.lng.toFixed(4)}
+                  </div>
+                )}
+                {ev.deviceName && (
+                  <div className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+                    <Radio className="h-3 w-3" />
+                    {ev.deviceName}
+                    {ev.deviceId ? ` (${ev.deviceId})` : ''}
                   </div>
                 )}
               </li>
