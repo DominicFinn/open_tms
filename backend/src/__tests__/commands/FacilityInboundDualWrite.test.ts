@@ -29,6 +29,7 @@ function buildPrisma(opts: {
 } = {}) {
   const tx = {
     facility: {
+      findFirst: jest.fn().mockResolvedValue({ id: 'fac-1', sourceLocationId: 'loc-1' }),
       findUnique: jest.fn().mockResolvedValue(opts.existingFacility ?? null),
       create: jest.fn().mockResolvedValue({ id: 'fac-new', sourceLocationId: 'loc-1' }),
     },
@@ -76,17 +77,17 @@ function buildPrisma(opts: {
 }
 
 const appointmentPayload = {
-  locationId: 'loc-1',
+  facilityId: 'fac-1',
   scheduledAt: '2026-10-01T09:00:00Z',
   scheduledEndAt: '2026-10-01T11:00:00Z',
 };
-const receivingTaskPayload = { locationId: 'loc-1', receivingType: 'blind' };
-const putawayRulePayload = { locationId: 'loc-1', name: 'Pharma to cold', targetType: 'zone', targetZoneId: 'zone-1' };
+const receivingTaskPayload = { facilityId: 'fac-1', receivingType: 'blind' };
+const putawayRulePayload = { facilityId: 'fac-1', name: 'Pharma to cold', targetType: 'zone', targetZoneId: 'zone-1' };
 
 describe('Facility dual-write on inbound creates (#225)', () => {
   beforeEach(() => jest.clearAllMocks());
 
-  it('derives a facility from the location and files the appointment under it', async () => {
+  it('writes the named facility and its source location on the appointment', async () => {
     const { prisma, tx } = buildPrisma();
     const { bus } = mockEventBus();
 
@@ -94,18 +95,10 @@ describe('Facility dual-write on inbound creates (#225)', () => {
       .execute(createTestCommand(CREATE_RECEIVING_APPOINTMENT, appointmentPayload));
 
     expect(result.success).toBe(true);
-    expect(tx.facility.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ orgId: 'test-org', sourceLocationId: 'loc-1', name: 'Leeds DC' }),
-      })
-    );
     expect(tx.receivingAppointment.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ facilityId: 'fac-new', locationId: 'loc-1' }) })
+      expect.objectContaining({ data: expect.objectContaining({ facilityId: 'fac-1', locationId: 'loc-1' }) })
     );
-    expect(result.events!.map(e => e.type)).toEqual([
-      EVENT_TYPES.FACILITY_CREATED,
-      EVENT_TYPES.RECEIVING_APPOINTMENT_CREATED,
-    ]);
+    expect(result.events!.map(e => e.type)).toEqual([EVENT_TYPES.RECEIVING_APPOINTMENT_CREATED]);
   });
 
   it('reuses an existing facility for the receiving task rather than creating a second', async () => {
@@ -136,22 +129,21 @@ describe('Facility dual-write on inbound creates (#225)', () => {
     );
   });
 
-  it('resolves the facility within the calling org', async () => {
-    const { prisma, tx } = buildPrisma({ existingFacility: { id: 'fac-1' } });
+  it('looks the facility up within the calling org', async () => {
+    const { prisma, tx } = buildPrisma();
     const { bus } = mockEventBus();
 
     await new CreateReceivingTaskCommandHandler(prisma, bus)
       .execute(createTestCommand(CREATE_RECEIVING_TASK, receivingTaskPayload));
 
-    expect(tx.facility.findUnique).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { orgId_sourceLocationId: { orgId: 'test-org', sourceLocationId: 'loc-1' } },
-      })
+    expect(tx.facility.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'fac-1', orgId: 'test-org', archived: false } })
     );
   });
 
-  it('fails the whole command when the location belongs to another tenant', async () => {
-    const { prisma, tx } = buildPrisma({ location: null });
+  it('fails the whole command when the facility belongs to another tenant', async () => {
+    const { prisma, tx } = buildPrisma();
+    tx.facility.findFirst.mockResolvedValue(null);
     const { bus } = mockEventBus();
 
     const result = await new CreateReceivingTaskCommandHandler(prisma, bus)
@@ -195,7 +187,7 @@ describe('Facility dual-write on generated putaway tasks (#225)', () => {
     const { bus } = mockEventBus();
 
     const result = await new CheckReplenishmentCommandHandler(prisma, bus)
-      .execute(createTestCommand(CHECK_REPLENISHMENT, { locationId: 'loc-1' }));
+      .execute(createTestCommand(CHECK_REPLENISHMENT, { facilityId: 'fac-1' }));
 
     expect(result.success).toBe(true);
     expect(tx.putawayTask.create).toHaveBeenCalledWith(
@@ -208,7 +200,7 @@ describe('Facility dual-write on generated putaway tasks (#225)', () => {
     const { bus } = mockEventBus();
 
     const result = await new CheckReplenishmentCommandHandler(prisma, bus)
-      .execute(createTestCommand(CHECK_REPLENISHMENT, { locationId: 'loc-1' }));
+      .execute(createTestCommand(CHECK_REPLENISHMENT, { facilityId: 'fac-1' }));
 
     expect(result.success).toBe(true);
     expect(tx.facility.findUnique).not.toHaveBeenCalled();
@@ -220,7 +212,7 @@ describe('Facility dual-write on generated putaway tasks (#225)', () => {
     const { bus } = mockEventBus();
 
     await new CheckReplenishmentCommandHandler(prisma, bus)
-      .execute(createTestCommand(CHECK_REPLENISHMENT, { locationId: 'loc-1' }));
+      .execute(createTestCommand(CHECK_REPLENISHMENT, { facilityId: 'fac-1' }));
 
     expect(tx.replenishmentRule.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: expect.objectContaining({ orgId: 'test-org', locationId: 'loc-1' }) })

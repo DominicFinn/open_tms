@@ -95,7 +95,7 @@ export default function VNextWmsCycleCounts() {
       const res = await fetch(`${API_URL}/api/v1/cycle-counts`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          locationId: facility?.sourceLocationId,
+          facilityId,
           countType: createForm.countType,
           zoneId: createForm.countType === 'zone' ? createForm.zoneId : null,
         }),

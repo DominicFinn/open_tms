@@ -41,9 +41,9 @@ export async function replenishmentRoutes(server: FastifyInstance) {
       summary: 'Create a replenishment rule',
       body: {
         type: 'object',
-        required: ['locationId', 'sku', 'pickFaceBinId', 'bulkZoneId', 'minQuantity', 'maxQuantity'],
+        required: ['facilityId', 'sku', 'pickFaceBinId', 'bulkZoneId', 'minQuantity', 'maxQuantity'],
         properties: {
-          locationId: { type: 'string', format: 'uuid' },
+          facilityId: { type: 'string', format: 'uuid' },
           sku: { type: 'string' },
           pickFaceBinId: { type: 'string', format: 'uuid' },
           bulkZoneId: { type: 'string', format: 'uuid' },
@@ -54,7 +54,7 @@ export async function replenishmentRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const body = z.object({
-      locationId: z.string().uuid(),
+      facilityId: z.string().uuid(),
       sku: z.string().min(1),
       pickFaceBinId: z.string().uuid(),
       bulkZoneId: z.string().uuid(),
@@ -137,16 +137,16 @@ export async function replenishmentRoutes(server: FastifyInstance) {
       tags: ['WMS - Replenishment'],
       summary: 'Check replenishment rules and create putaway tasks for depleted pick faces',
       body: {
-        type: 'object', required: ['locationId'],
+        type: 'object', required: ['facilityId'],
         properties: {
-          locationId: { type: 'string', format: 'uuid' },
+          facilityId: { type: 'string', format: 'uuid' },
           sku: { type: 'string', description: 'Optionally scope to a single SKU' },
         },
       },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const body = z.object({
-      locationId: z.string().uuid(),
+      facilityId: z.string().uuid(),
       sku: z.string().optional(),
     }).parse((req as any).body);
 

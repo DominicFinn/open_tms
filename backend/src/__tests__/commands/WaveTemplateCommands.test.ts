@@ -22,7 +22,7 @@ describe('CreateWaveTemplateCommandHandler', () => {
 
     const result = await handler.execute(
       createTestCommand(CREATE_WAVE_TEMPLATE, {
-        locationId: 'loc-1', name: 'Daily FedEx 14:00', pickStrategy: 'batch',
+        facilityId: 'fac-1', name: 'Daily FedEx 14:00', pickStrategy: 'batch',
         cutoffTime: '14:00', maxOrders: 50, autoRelease: true,
       })
     );
@@ -54,7 +54,7 @@ describe('CreateWaveTemplateCommandHandler', () => {
 
     const result = await handler.execute(
       createTestCommand(CREATE_WAVE_TEMPLATE, {
-        locationId: 'loc-1', name: 'Zone Sequential',
+        facilityId: 'fac-1', name: 'Zone Sequential',
         pickStrategy: 'zone', zonePickMode: 'sequential',
       })
     );
@@ -84,7 +84,7 @@ describe('CreateWaveTemplateCommandHandler', () => {
 
     await handler.execute(
       createTestCommand(CREATE_WAVE_TEMPLATE, {
-        locationId: 'loc-1', name: 'No Zone Mode', pickStrategy: 'discrete',
+        facilityId: 'fac-1', name: 'No Zone Mode', pickStrategy: 'discrete',
       })
     );
 

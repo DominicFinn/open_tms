@@ -85,9 +85,9 @@ export async function receivingRoutes(server: FastifyInstance) {
       summary: 'Create a receiving task',
       body: {
         type: 'object',
-        required: ['locationId', 'receivingType'],
+        required: ['facilityId', 'receivingType'],
         properties: {
-          locationId: { type: 'string', format: 'uuid' },
+          facilityId: { type: 'string', format: 'uuid' },
           appointmentId: { type: 'string', format: 'uuid', nullable: true },
           inboundShipmentId: { type: 'string', nullable: true },
           dockBinId: { type: 'string', format: 'uuid', nullable: true },
@@ -114,7 +114,7 @@ export async function receivingRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const body = z.object({
-      locationId: z.string().uuid(),
+      facilityId: z.string().uuid(),
       appointmentId: z.string().uuid().nullable().optional(),
       inboundShipmentId: z.string().nullable().optional(),
       dockBinId: z.string().uuid().nullable().optional(),
@@ -299,9 +299,9 @@ export async function receivingRoutes(server: FastifyInstance) {
       summary: 'Schedule a receiving appointment',
       body: {
         type: 'object',
-        required: ['locationId', 'scheduledAt', 'scheduledEndAt'],
+        required: ['facilityId', 'scheduledAt', 'scheduledEndAt'],
         properties: {
-          locationId: { type: 'string', format: 'uuid' },
+          facilityId: { type: 'string', format: 'uuid' },
           inboundShipmentId: { type: 'string', nullable: true },
           dockBinId: { type: 'string', format: 'uuid', nullable: true },
           scheduledAt: { type: 'string', format: 'date-time' },
@@ -315,7 +315,7 @@ export async function receivingRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const body = z.object({
-      locationId: z.string().uuid(),
+      facilityId: z.string().uuid(),
       inboundShipmentId: z.string().nullable().optional(),
       dockBinId: z.string().uuid().nullable().optional(),
       scheduledAt: z.string(),

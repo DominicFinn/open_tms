@@ -13,6 +13,7 @@ describe('CreateLoadPlanCommandHandler', () => {
     ];
     const mockPlan = { id: 'lp-1', totalUnits: 2, status: 'planning', orgId: 'test-org' };
     const tx = {
+      facility: { findFirst: jest.fn().mockResolvedValue({ id: 'fac-1', sourceLocationId: 'loc-1' }) },
       stagingAssignment: { findMany: jest.fn().mockResolvedValue(assignments) },
       shipmentStop: { findMany: jest.fn().mockResolvedValue([]) },
       loadPlan: { create: jest.fn().mockResolvedValue(mockPlan) },
@@ -20,6 +21,7 @@ describe('CreateLoadPlanCommandHandler', () => {
       domainEventLog: { create: jest.fn().mockResolvedValue({}) },
     } as any;
     const prisma = {
+      facility: { findFirst: jest.fn().mockResolvedValue({ id: 'fac-1', sourceLocationId: 'loc-1' }) },
       $transaction: jest.fn((fn: Function) => fn(tx)),
       domainEventLog: { findFirst: jest.fn().mockResolvedValue(null) },
     } as any;
@@ -28,7 +30,7 @@ describe('CreateLoadPlanCommandHandler', () => {
 
     const result = await handler.execute(
       createTestCommand(CREATE_LOAD_PLAN, {
-        locationId: 'loc-1',
+        facilityId: 'fac-1',
         stagingAssignmentIds: ['sa-1', 'sa-2'],
         trailerNumber: 'TRL-123',
       })
@@ -47,8 +49,9 @@ describe('CreateLoadPlanCommandHandler', () => {
   });
 
   it('fails with empty assignments', async () => {
-    const tx = { domainEventLog: { create: jest.fn().mockResolvedValue({}) } } as any;
+    const tx = { facility: { findFirst: jest.fn().mockResolvedValue({ id: 'fac-1', sourceLocationId: 'loc-1' }) }, domainEventLog: { create: jest.fn().mockResolvedValue({}) } } as any;
     const prisma = {
+      facility: { findFirst: jest.fn().mockResolvedValue({ id: 'fac-1', sourceLocationId: 'loc-1' }) },
       $transaction: jest.fn((fn: Function) => fn(tx)),
       domainEventLog: { findFirst: jest.fn().mockResolvedValue(null) },
     } as any;
@@ -56,7 +59,7 @@ describe('CreateLoadPlanCommandHandler', () => {
     const handler = new CreateLoadPlanCommandHandler(prisma, bus);
 
     const result = await handler.execute(
-      createTestCommand(CREATE_LOAD_PLAN, { locationId: 'loc-1', stagingAssignmentIds: [] })
+      createTestCommand(CREATE_LOAD_PLAN, { facilityId: 'fac-1', stagingAssignmentIds: [] })
     );
 
     expect(result.success).toBe(false);
@@ -77,6 +80,7 @@ describe('CompleteLoadPlanCommandHandler', () => {
       ],
     };
     const tx = {
+      facility: { findFirst: jest.fn().mockResolvedValue({ id: 'fac-1', sourceLocationId: 'loc-1' }) },
       loadPlan: {
         findUnique: jest.fn().mockResolvedValue(plan),
         update: jest.fn().mockResolvedValue({}),
@@ -87,6 +91,7 @@ describe('CompleteLoadPlanCommandHandler', () => {
       domainEventLog: { create: jest.fn().mockResolvedValue({}) },
     } as any;
     const prisma = {
+      facility: { findFirst: jest.fn().mockResolvedValue({ id: 'fac-1', sourceLocationId: 'loc-1' }) },
       $transaction: jest.fn((fn: Function) => fn(tx)),
       domainEventLog: { findFirst: jest.fn().mockResolvedValue(null) },
     } as any;
@@ -124,10 +129,12 @@ describe('CompleteLoadPlanCommandHandler', () => {
 
   it('fails if already completed', async () => {
     const tx = {
+      facility: { findFirst: jest.fn().mockResolvedValue({ id: 'fac-1', sourceLocationId: 'loc-1' }) },
       loadPlan: { findUnique: jest.fn().mockResolvedValue({ id: 'lp-1', status: 'completed', lines: [] }) },
       domainEventLog: { create: jest.fn().mockResolvedValue({}) },
     } as any;
     const prisma = {
+      facility: { findFirst: jest.fn().mockResolvedValue({ id: 'fac-1', sourceLocationId: 'loc-1' }) },
       $transaction: jest.fn((fn: Function) => fn(tx)),
       domainEventLog: { findFirst: jest.fn().mockResolvedValue(null) },
     } as any;

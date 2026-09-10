@@ -3,9 +3,10 @@ import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { Command } from '../types.js';
+import { loadFacilityForWrite } from '../facilities/resolveFacility.js';
 
 export interface CreateCycleCountPayload {
-  locationId: string;
+  facilityId: string;
   countType: string;    // full, zone, random_sample
   zoneId?: string | null;
   assignedToUserId?: string | null;
@@ -31,8 +32,13 @@ export class CreateCycleCountCommandHandler extends BaseCommandHandler<
   ): Promise<{ id: string; totalBins: number; status: string }> {
     const p = command.payload;
 
+    // Phase 2a (#248): the caller names the facility. locationId is still written from the
+    // facility's source location until 6c drops the column, and is null in a warehouse-only
+    // install.
+    const facility = await loadFacilityForWrite(tx, command.orgId, p.facilityId);
+
     // Find inventory records to count based on count type
-    const where: any = { locationId: p.locationId, quantityOnHand: { gt: 0 } };
+    const where: any = { locationId: facility.sourceLocationId, quantityOnHand: { gt: 0 } };
     if (p.countType === 'zone' && p.zoneId) {
       where.bin = { zoneId: p.zoneId };
     }
@@ -57,7 +63,7 @@ export class CreateCycleCountCommandHandler extends BaseCommandHandler<
 
     const cycleCount = await tx.cycleCount.create({
       data: {
-        locationId: p.locationId,
+        locationId: facility.sourceLocationId,
         countType: p.countType,
         zoneId: p.zoneId ?? null,
         status: 'planned',
@@ -88,7 +94,7 @@ export class CreateCycleCountCommandHandler extends BaseCommandHandler<
       entityType: 'cycle_count',
       entityId: cycleCount.id,
       payload: {
-        locationId: p.locationId,
+        locationId: facility.sourceLocationId,
         countType: p.countType,
         totalBins: recordsToCount.length,
       },

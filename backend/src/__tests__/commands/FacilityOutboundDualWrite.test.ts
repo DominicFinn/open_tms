@@ -69,35 +69,29 @@ function buildPrisma(opts: {
 }
 
 const packPayload = {
-  locationId: 'loc-1',
+  facilityId: 'fac-1',
   orderId: 'ord-1',
   lines: [{ orderLineItemId: 'oli-1', trackableUnitId: 'tu-1', sku: 'SKU-1', expectedQuantity: 2 }],
 };
 const stagingPayload = {
-  locationId: 'loc-1', orderId: 'ord-1', trackableUnitId: 'tu-1', stagingBinId: 'bin-stage',
+  facilityId: 'fac-1', orderId: 'ord-1', trackableUnitId: 'tu-1', stagingBinId: 'bin-stage',
 };
 
 describe('Facility dual-write on outbound creates (#227)', () => {
   beforeEach(() => jest.clearAllMocks());
 
-  it('derives a facility from the location and files the pack task under it', async () => {
-    const { prisma, tx } = buildPrisma({ existingFacility: null });
+  it('writes the named facility and its source location on the pack task', async () => {
+    const { prisma, tx } = buildPrisma();
     const { bus } = mockEventBus();
 
     const result = await new CreatePackTaskCommandHandler(prisma, bus)
       .execute(createTestCommand(CREATE_PACK_TASK, packPayload));
 
     expect(result.success).toBe(true);
-    expect(tx.facility.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ orgId: 'test-org', sourceLocationId: 'loc-1' }) })
-    );
     expect(tx.packTask.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ facilityId: 'fac-new', locationId: 'loc-1' }) })
+      expect.objectContaining({ data: expect.objectContaining({ facilityId: 'fac-1', locationId: 'loc-1' }) })
     );
-    expect(result.events!.map(e => e.type)).toEqual([
-      EVENT_TYPES.FACILITY_CREATED,
-      EVENT_TYPES.PACK_TASK_CREATED,
-    ]);
+    expect(result.events!.map(e => e.type)).toEqual([EVENT_TYPES.PACK_TASK_CREATED]);
   });
 
   it('reuses an existing facility for the staging assignment', async () => {

@@ -66,9 +66,9 @@ export async function waveRoutes(server: FastifyInstance) {
       summary: 'Create a wave from selected orders',
       body: {
         type: 'object',
-        required: ['locationId', 'pickStrategy', 'orderIds'],
+        required: ['facilityId', 'pickStrategy', 'orderIds'],
         properties: {
-          locationId: { type: 'string', format: 'uuid' },
+          facilityId: { type: 'string', format: 'uuid' },
           templateId: { type: 'string', format: 'uuid', nullable: true },
           pickStrategy: { type: 'string', enum: ['discrete', 'batch', 'zone'] },
           orderIds: { type: 'array', items: { type: 'string', format: 'uuid' }, minItems: 1 },
@@ -78,7 +78,7 @@ export async function waveRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const body = z.object({
-      locationId: z.string().uuid(),
+      facilityId: z.string().uuid(),
       templateId: z.string().uuid().nullable().optional(),
       pickStrategy: z.enum(['discrete', 'batch', 'zone']),
       orderIds: z.array(z.string().uuid()).min(1),

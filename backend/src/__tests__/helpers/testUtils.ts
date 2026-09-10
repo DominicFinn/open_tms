@@ -119,6 +119,12 @@ export function createTestEvent<T>(
 export function facilityMocks(existingFacilityId: string | null = 'fac-1') {
   return {
     facility: {
+      // findFirst serves loadFacilityForWrite, which the create commands use now that the caller
+      // names the facility (#248). findUnique still serves resolveFacilityForLocation, kept by the
+      // completion paths as a fallback for rows created before the backfill.
+      findFirst: jest.fn().mockResolvedValue(
+        existingFacilityId ? { id: existingFacilityId, sourceLocationId: 'loc-1' } : null
+      ),
       findUnique: jest.fn().mockResolvedValue(existingFacilityId ? { id: existingFacilityId } : null),
       create: jest.fn().mockResolvedValue({ id: 'fac-new' }),
     },

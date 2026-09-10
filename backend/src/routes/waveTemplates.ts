@@ -48,9 +48,9 @@ export async function waveTemplateRoutes(server: FastifyInstance) {
       tags: ['WMS - Wave Templates'],
       summary: 'Create a wave template',
       body: {
-        type: 'object', required: ['locationId', 'name', 'pickStrategy'],
+        type: 'object', required: ['facilityId', 'name', 'pickStrategy'],
         properties: {
-          locationId: { type: 'string', format: 'uuid' },
+          facilityId: { type: 'string', format: 'uuid' },
           name: { type: 'string' },
           groupingRules: { type: 'object', nullable: true, description: 'e.g. { customer: "id", status: "accepted" }' },
           cutoffTime: { type: 'string', nullable: true, description: 'HH:MM format' },
@@ -67,7 +67,7 @@ export async function waveTemplateRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const body = z.object({
-      locationId: z.string().uuid(),
+      facilityId: z.string().uuid(),
       name: z.string().min(1).max(100),
       groupingRules: z.record(z.unknown()).nullable().optional(),
       cutoffTime: z.string().regex(/^\d{2}:\d{2}$/).nullable().optional(),

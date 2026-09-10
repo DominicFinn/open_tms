@@ -27,6 +27,7 @@ const mockBin = {
 const mockTx = {
   // Phase 2a dual-write (#217): topology creates resolve a Facility from the Location first.
   facility: {
+    findFirst: jest.fn().mockResolvedValue({ id: 'fac-1', sourceLocationId: 'loc-1' }),
     findUnique: jest.fn().mockResolvedValue({ id: 'fac-1' }),
     create: jest.fn().mockResolvedValue({ id: 'fac-1' }),
   },
@@ -44,6 +45,7 @@ const mockTx = {
   warehouseBin: {
     create: jest.fn().mockResolvedValue(mockBin),
     createMany: jest.fn().mockResolvedValue({ count: 120 }),
+    findFirst: jest.fn().mockResolvedValue(null),
     findUnique: jest.fn().mockResolvedValue(null),
     findMany: jest.fn().mockResolvedValue([]),
   },
@@ -51,6 +53,7 @@ const mockTx = {
 } as any;
 
 const mockPrisma = {
+  facility: { findFirst: jest.fn().mockResolvedValue({ id: 'fac-1', sourceLocationId: 'loc-1' }) },
   $transaction: jest.fn((fn: Function) => fn(mockTx)),
   domainEventLog: { findFirst: jest.fn().mockResolvedValue(null) },
 } as any;
@@ -67,7 +70,7 @@ describe('Warehouse Zone Command Handlers', () => {
 
       const result = await handler.execute(
         createTestCommand(CREATE_WAREHOUSE_ZONE, {
-          locationId: 'loc-1',
+          facilityId: 'fac-1',
           name: 'Bulk A',
           zoneType: 'bulk_storage',
         })
@@ -93,7 +96,7 @@ describe('Warehouse Zone Command Handlers', () => {
 
       await handler.execute(
         createTestCommand(CREATE_WAREHOUSE_ZONE, {
-          locationId: 'loc-1',
+          facilityId: 'fac-1',
           name: 'Cold Store',
           zoneType: 'bulk_storage',
           temperatureZone: 'frozen',
@@ -114,7 +117,7 @@ describe('Warehouse Zone Command Handlers', () => {
       const handler = new CreateWarehouseZoneCommandHandler(mockPrisma, bus);
 
       const cmd = createTestCommand(CREATE_WAREHOUSE_ZONE, {
-        locationId: 'loc-1', name: 'Dock 1', zoneType: 'receiving',
+        facilityId: 'fac-1', name: 'Dock 1', zoneType: 'receiving',
       }, { actorId: 'user-42' });
 
       const result = await handler.execute(cmd);
@@ -167,14 +170,14 @@ describe('Warehouse Bin Command Handlers', () => {
   describe('CreateWarehouseBinCommandHandler', () => {
     it('creates bin and emits WAREHOUSE_BIN_CREATED', async () => {
       mockTx.warehouseZone.findUnique.mockResolvedValueOnce(mockZone);
-      mockTx.warehouseBin.findUnique.mockResolvedValueOnce(null); // no duplicate
+      mockTx.warehouseBin.findFirst.mockResolvedValueOnce(null); // no duplicate
       const { bus } = mockEventBus();
       const handler = new CreateWarehouseBinCommandHandler(mockPrisma, bus);
 
       const result = await handler.execute(
         createTestCommand(CREATE_WAREHOUSE_BIN, {
           zoneId: 'zone-1',
-          locationId: 'loc-1',
+          facilityId: 'fac-1',
           label: 'BULK-A-01-01',
           binType: 'pallet',
         })
@@ -188,14 +191,14 @@ describe('Warehouse Bin Command Handlers', () => {
 
     it('fails if label already exists', async () => {
       mockTx.warehouseZone.findUnique.mockResolvedValueOnce(mockZone);
-      mockTx.warehouseBin.findUnique.mockResolvedValueOnce(mockBin); // duplicate!
+      mockTx.warehouseBin.findFirst.mockResolvedValueOnce(mockBin); // duplicate!
       const { bus } = mockEventBus();
       const handler = new CreateWarehouseBinCommandHandler(mockPrisma, bus);
 
       const result = await handler.execute(
         createTestCommand(CREATE_WAREHOUSE_BIN, {
           zoneId: 'zone-1',
-          locationId: 'loc-1',
+          facilityId: 'fac-1',
           label: 'BULK-A-01-01',
           binType: 'pallet',
         })
@@ -212,7 +215,7 @@ describe('Warehouse Bin Command Handlers', () => {
 
       const result = await handler.execute(
         createTestCommand(CREATE_WAREHOUSE_BIN, {
-          zoneId: 'missing', locationId: 'loc-1', label: 'X-1', binType: 'pallet',
+          zoneId: 'missing', facilityId: 'fac-1', label: 'X-1', binType: 'pallet',
         })
       );
 
@@ -225,6 +228,7 @@ describe('Warehouse Bin Command Handlers', () => {
     it('updates bin and emits WAREHOUSE_BIN_UPDATED', async () => {
       const updatedBin = { ...mockBin, active: false };
       const updateBinTx = {
+        facility: { findFirst: jest.fn().mockResolvedValue({ id: 'fac-1', sourceLocationId: 'loc-1' }) },
         warehouseBin: {
           findFirst: jest.fn().mockResolvedValue(mockBin),
           update: jest.fn().mockResolvedValue(updatedBin),
@@ -232,6 +236,7 @@ describe('Warehouse Bin Command Handlers', () => {
         domainEventLog: { create: jest.fn().mockResolvedValue({}) },
       } as any;
       const updatePrisma = {
+        facility: { findFirst: jest.fn().mockResolvedValue({ id: 'fac-1', sourceLocationId: 'loc-1' }) },
         $transaction: jest.fn((fn: Function) => fn(updateBinTx)),
         domainEventLog: { findFirst: jest.fn().mockResolvedValue(null) },
       } as any;
@@ -252,6 +257,7 @@ describe('Warehouse Bin Command Handlers', () => {
 
     it('fails if bin not found', async () => {
       const notFoundTx = {
+        facility: { findFirst: jest.fn().mockResolvedValue({ id: 'fac-1', sourceLocationId: 'loc-1' }) },
         warehouseBin: {
           findFirst: jest.fn().mockResolvedValue(null),
           update: jest.fn(),
@@ -259,6 +265,7 @@ describe('Warehouse Bin Command Handlers', () => {
         domainEventLog: { create: jest.fn().mockResolvedValue({}) },
       } as any;
       const notFoundPrisma = {
+        facility: { findFirst: jest.fn().mockResolvedValue({ id: 'fac-1', sourceLocationId: 'loc-1' }) },
         $transaction: jest.fn((fn: Function) => fn(notFoundTx)),
         domainEventLog: { findFirst: jest.fn().mockResolvedValue(null) },
       } as any;
@@ -275,6 +282,7 @@ describe('Warehouse Bin Command Handlers', () => {
 
     it('checks label uniqueness on rename', async () => {
       const renameTx = {
+        facility: { findFirst: jest.fn().mockResolvedValue({ id: 'fac-1', sourceLocationId: 'loc-1' }) },
         warehouseBin: {
           findFirst: jest.fn()
             .mockResolvedValueOnce(mockBin) // existing bin lookup
@@ -284,6 +292,7 @@ describe('Warehouse Bin Command Handlers', () => {
         domainEventLog: { create: jest.fn().mockResolvedValue({}) },
       } as any;
       const renamePrisma = {
+        facility: { findFirst: jest.fn().mockResolvedValue({ id: 'fac-1', sourceLocationId: 'loc-1' }) },
         $transaction: jest.fn((fn: Function) => fn(renameTx)),
         domainEventLog: { findFirst: jest.fn().mockResolvedValue(null) },
       } as any;
@@ -310,7 +319,7 @@ describe('Warehouse Bin Command Handlers', () => {
       const result = await handler.execute(
         createTestCommand(BULK_CREATE_BINS, {
           zoneId: 'zone-1',
-          locationId: 'loc-1',
+          facilityId: 'fac-1',
           labelPattern: 'BULK-{aisle}-{row}-{level}',
           binType: 'pallet',
           aisles: ['A', 'B', 'C'],
@@ -340,7 +349,7 @@ describe('Warehouse Bin Command Handlers', () => {
 
       const result = await handler.execute(
         createTestCommand(BULK_CREATE_BINS, {
-          zoneId: 'zone-1', locationId: 'loc-1',
+          zoneId: 'zone-1', facilityId: 'fac-1',
           labelPattern: 'BULK-{aisle}-{row}-{level}', binType: 'pallet',
           aisles: ['A'], rowStart: 1, rowEnd: 1, levelStart: 1, levelEnd: 1,
         })
@@ -357,7 +366,7 @@ describe('Warehouse Bin Command Handlers', () => {
 
       const result = await handler.execute(
         createTestCommand(BULK_CREATE_BINS, {
-          zoneId: 'missing', locationId: 'loc-1',
+          zoneId: 'missing', facilityId: 'fac-1',
           labelPattern: '{aisle}-{row}-{level}', binType: 'pallet',
           aisles: ['A'], rowStart: 1, rowEnd: 1, levelStart: 1, levelEnd: 1,
         })

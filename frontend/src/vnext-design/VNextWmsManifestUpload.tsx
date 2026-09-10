@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { CheckCircle2, CircleAlert, Info } from 'lucide-react';
 
 import { API_URL } from '../api';
+import { useFacilities } from '../hooks/useFacilities';
+import { FacilitySelect } from '@/components/FacilitySelect';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -48,9 +50,10 @@ interface ProcessResult {
 
 export default function VNextWmsManifestUpload() {
   const navigate = useNavigate();
-  const [locations, setLocations] = useState<Array<{ id: string; name: string }>>([]);
+  const { facilities, facilityId, setFacilityId, loading: facilitiesLoading, error: facilitiesError } = useFacilities();
+
   const [fields, setFields] = useState<Record<string, ManifestField>>({});
-  const [selectedLocation, setSelectedLocation] = useState('');
+  
 
   const [csvContent, setCsvContent] = useState('');
   const [fileName, setFileName] = useState('');
@@ -68,14 +71,6 @@ export default function VNextWmsManifestUpload() {
   const [supplierName, setSupplierName] = useState('');
   const [reference, setReference] = useState('');
 
-  useEffect(() => {
-    fetch(`${API_URL}/api/v1/locations`).then(r => r.json()).then(res => {
-      const locs = (res.data || []).filter((l: any) => !l.locationType || ['warehouse', 'distribution_centre', 'cross_dock'].includes(l.locationType));
-      setLocations(locs);
-      if (locs.length === 1) setSelectedLocation(locs[0].id);
-    });
-    fetch(`${API_URL}/api/v1/manifest/fields`).then(r => r.json()).then(res => setFields(res.data || {}));
-  }, []);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -87,7 +82,7 @@ export default function VNextWmsManifestUpload() {
   };
 
   const handleUpload = async () => {
-    if (!csvContent || !selectedLocation) return;
+    if (!csvContent || !facilityId) return;
     setError('');
     setUploading(true);
     setUploadResult(null);
@@ -96,7 +91,7 @@ export default function VNextWmsManifestUpload() {
     try {
       const res = await fetch(`${API_URL}/api/v1/manifest/upload`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ locationId: selectedLocation, csvContent, fileName, supplierName: supplierName || null, reference: reference || null }),
+        body: JSON.stringify({ facilityId, csvContent, fileName, supplierName: supplierName || null, reference: reference || null }),
       });
       const data = await res.json();
       if (data.error) { setError(data.error); }
@@ -171,17 +166,8 @@ export default function VNextWmsManifestUpload() {
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label>Location *</Label>
-              <Select value={selectedLocation} onValueChange={setSelectedLocation}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select warehouse..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {locations.map(l => (
-                    <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>Facility *</Label>
+              <FacilitySelect facilities={facilities} value={facilityId} onChange={setFacilityId} loading={facilitiesLoading} error={facilitiesError} className="w-full" />
             </div>
             <div className="space-y-2">
               <Label>Supplier Name</Label>
@@ -203,7 +189,7 @@ export default function VNextWmsManifestUpload() {
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2 md:col-span-2">
               <Button variant="outline" onClick={() => navigate('/wms/receiving')}>Cancel</Button>
-              <Button variant="gradient" onClick={handleUpload} disabled={uploading || !csvContent || !selectedLocation}>
+              <Button variant="gradient" onClick={handleUpload} disabled={uploading || !csvContent || !facilityId}>
                 {uploading ? 'Uploading...' : 'Upload & Detect'}
               </Button>
             </div>

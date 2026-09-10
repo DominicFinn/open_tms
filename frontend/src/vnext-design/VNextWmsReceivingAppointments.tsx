@@ -100,7 +100,7 @@ export default function VNextWmsReceivingAppointments() {
       const res = await fetch(`${API_URL}/api/v1/receiving/appointments`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          locationId: facility?.sourceLocationId,
+          facilityId,
           scheduledAt: new Date(form.scheduledAt).toISOString(),
           scheduledEndAt: new Date(form.scheduledEndAt).toISOString(),
           carrierName: form.carrierName || undefined,

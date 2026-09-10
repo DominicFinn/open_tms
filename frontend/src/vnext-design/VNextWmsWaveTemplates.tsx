@@ -93,7 +93,7 @@ export default function VNextWmsWaveTemplates() {
       const res = await fetch(`${API_URL}/api/v1/wave-templates`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          locationId: facility?.sourceLocationId,
+          facilityId,
           name: form.name.trim(),
           pickStrategy: form.pickStrategy,
           cutoffTime: form.cutoffTime || null,

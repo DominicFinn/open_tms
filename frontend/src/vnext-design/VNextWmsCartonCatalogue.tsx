@@ -159,7 +159,7 @@ export default function VNextWmsCartonCatalogue() {
         res = await fetch(`${API_URL}/api/v1/carton-catalogue`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...body, locationId: facility?.sourceLocationId }),
+          body: JSON.stringify({ ...body, facilityId }),
         });
       }
       const json = await res.json();

@@ -141,8 +141,8 @@ Seven FKs and one model stand between the two products.
   | 5a | Read path | WMS list endpoints and repositories accept a facility scope | ✅ #231 |
   | 5b | Frontend | the 15 WMS list pages onto `/api/v1/facilities` | ✅ #234 |
   | 6a | Nullable | `locationId` nullable on the 14 WMS models | ✅ #245 |
-  | 6b | Write path | create commands and the 4 WMS create forms onto `facilityId` | next |
-  | 6c | Contract | drop the `locationId` parameter, the `Location` FKs and the columns | |
+  | 6b | Write path | create commands and the WMS create forms onto `facilityId` | ✅ #248 |
+  | 6c | Contract | drop the `locationId` parameter, the `Location` FKs and the columns | next |
 
   6a had to come first: a command cannot stop writing `locationId` while the column is NOT NULL.
   Making it nullable surfaced three places that assumed it was always there, and one more unscoped

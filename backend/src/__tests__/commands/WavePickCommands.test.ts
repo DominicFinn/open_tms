@@ -32,7 +32,7 @@ describe('CreateWaveCommandHandler', () => {
 
     const result = await handler.execute(
       createTestCommand(CREATE_WAVE, {
-        locationId: 'loc-1', pickStrategy: 'discrete', orderIds: ['order-1', 'order-2'],
+        facilityId: 'fac-1', pickStrategy: 'discrete', orderIds: ['order-1', 'order-2'],
       })
     );
 
@@ -54,7 +54,7 @@ describe('CreateWaveCommandHandler', () => {
     const handler = new CreateWaveCommandHandler(prisma, bus);
 
     const result = await handler.execute(
-      createTestCommand(CREATE_WAVE, { locationId: 'loc-1', pickStrategy: 'discrete', orderIds: [] })
+      createTestCommand(CREATE_WAVE, { facilityId: 'fac-1', pickStrategy: 'discrete', orderIds: [] })
     );
 
     expect(result.success).toBe(false);

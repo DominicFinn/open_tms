@@ -280,7 +280,7 @@ describe('CreateWaveTemplateCommandHandler', () => {
 
     const result = await new CreateWaveTemplateCommandHandler(prisma, bus).execute(
       createTestCommand(CREATE_WAVE_TEMPLATE, {
-        locationId: 'loc-1', name: 'Morning', pickStrategy: 'batch',
+        facilityId: 'fac-1', name: 'Morning', pickStrategy: 'batch',
       })
     );
 

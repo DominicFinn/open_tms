@@ -29,15 +29,15 @@ export default function VNextWmsCreateBin() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const presetZone = searchParams.get('zoneId') || '';
-  const presetLocation = searchParams.get('locationId') || '';
+  const presetFacility = searchParams.get('facilityId') || '';
 
-  const [zones, setZones] = useState<Array<{ id: string; name: string; locationId: string }>>([]);
+  const [zones, setZones] = useState<Array<{ id: string; name: string; facilityId: string | null }>>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   const [form, setForm] = useState({
     zoneId: presetZone,
-    locationId: presetLocation,
+    facilityId: presetFacility,
     label: '',
     binType: 'pallet',
     temperatureZone: 'inherit',
@@ -50,12 +50,12 @@ export default function VNextWmsCreateBin() {
   });
 
   useEffect(() => {
-    if (!presetLocation) return;
-    fetch(`${API_URL}/api/v1/warehouse/zones?locationId=${presetLocation}`)
+    if (!presetFacility) return;
+    fetch(`${API_URL}/api/v1/warehouse/zones?facilityId=${presetFacility}`)
       .then(r => r.json())
       .then(res => setZones(res.data || []))
       .catch(() => {});
-  }, [presetLocation]);
+  }, [presetFacility]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,7 +67,7 @@ export default function VNextWmsCreateBin() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           zoneId: form.zoneId,
-          locationId: form.locationId,
+          facilityId: form.facilityId,
           label: form.label.trim(),
           binType: form.binType,
           temperatureZone: form.temperatureZone === 'inherit' ? null : form.temperatureZone,

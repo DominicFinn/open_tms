@@ -705,7 +705,7 @@ model LoadPlanLine {
 
 model CycleCount {
   id               String    @id @default(uuid())
-  locationId       String
+  locationId       String?
   countType        String // full, zone, random_sample
   zoneId           String? // for zone counts
   status           String    @default("planned") // planned, in_progress, completed, cancelled
@@ -757,7 +757,7 @@ model CycleCountLine {
 
 model ReplenishmentRule {
   id            String  @id @default(uuid())
-  locationId    String
+  locationId    String?
   sku           String
   pickFaceBinId String // bin to replenish
   bulkZoneId    String // zone to pull from

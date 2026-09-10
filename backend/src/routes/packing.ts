@@ -68,9 +68,9 @@ export async function packingRoutes(server: FastifyInstance) {
       tags: ['WMS - Packing & Loading'],
       summary: 'Create a pack task (typically after pick completion)',
       body: {
-        type: 'object', required: ['locationId', 'orderId', 'lines'],
+        type: 'object', required: ['facilityId', 'orderId', 'lines'],
         properties: {
-          locationId: { type: 'string', format: 'uuid' },
+          facilityId: { type: 'string', format: 'uuid' },
           orderId: { type: 'string', format: 'uuid' },
           pickTaskId: { type: 'string', format: 'uuid', nullable: true },
           packStationBinId: { type: 'string', format: 'uuid', nullable: true },
@@ -83,7 +83,7 @@ export async function packingRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const body = z.object({
-      locationId: z.string().uuid(),
+      facilityId: z.string().uuid(),
       orderId: z.string().uuid(),
       pickTaskId: z.string().uuid().nullable().optional(),
       packStationBinId: z.string().uuid().nullable().optional(),
@@ -163,9 +163,9 @@ export async function packingRoutes(server: FastifyInstance) {
       tags: ['WMS - Packing & Loading'],
       summary: 'Create a staging assignment (move packed unit to staging area)',
       body: {
-        type: 'object', required: ['locationId', 'orderId', 'trackableUnitId', 'stagingBinId'],
+        type: 'object', required: ['facilityId', 'orderId', 'trackableUnitId', 'stagingBinId'],
         properties: {
-          locationId: { type: 'string', format: 'uuid' },
+          facilityId: { type: 'string', format: 'uuid' },
           orderId: { type: 'string', format: 'uuid' },
           trackableUnitId: { type: 'string', format: 'uuid' },
           stagingBinId: { type: 'string', format: 'uuid' },
@@ -176,7 +176,7 @@ export async function packingRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const body = z.object({
-      locationId: z.string().uuid(),
+      facilityId: z.string().uuid(),
       orderId: z.string().uuid(),
       trackableUnitId: z.string().uuid(),
       stagingBinId: z.string().uuid(),

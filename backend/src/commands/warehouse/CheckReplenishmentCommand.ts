@@ -3,7 +3,7 @@ import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { Command } from '../types.js';
-import { resolveFacilityForLocation } from '../facilities/resolveFacility.js';
+import { loadFacilityForWrite } from '../facilities/resolveFacility.js';
 
 /**
  * Checks all active replenishment rules for a location and creates
@@ -13,7 +13,7 @@ import { resolveFacilityForLocation } from '../facilities/resolveFacility.js';
  * Called after pick line completion or on demand.
  */
 export interface CheckReplenishmentPayload {
-  locationId: string;
+  facilityId: string;
   /** Optionally scope to a specific SKU (e.g. after a pick of that SKU) */
   sku?: string;
 }
@@ -37,19 +37,20 @@ export class CheckReplenishmentCommandHandler extends BaseCommandHandler<
   ): Promise<{ tasksCreated: number; details: Array<{ sku: string; pickFaceBin: string; quantity: number }> }> {
     const p = command.payload;
 
+    // Phase 2a (#248): the caller names the facility. locationId is still written from the
+    // facility's source location until 6c drops the column, and is null in a warehouse-only
+    // install.
+    const facility = await loadFacilityForWrite(tx, command.orgId, p.facilityId);
+
     // orgId as well as locationId: another tenant sharing a location id would otherwise have their
     // rules evaluated against our stock (#220).
-    const where: any = { locationId: p.locationId, orgId: command.orgId, active: true };
+    const where: any = { locationId: facility.sourceLocationId, orgId: command.orgId, active: true };
     if (p.sku) where.sku = p.sku;
 
     const rules = await tx.replenishmentRule.findMany({ where });
 
     const details: Array<{ sku: string; pickFaceBin: string; quantity: number }> = [];
     let tasksCreated = 0;
-
-    // Phase 2a dual-write (#225): resolved on first use rather than up front, so a run that
-    // replenishes nothing does not create a facility as a side effect.
-    let facilityId: string | null = null;
 
     for (const rule of rules) {
       // Check current quantity at the pick face bin for this SKU
@@ -92,11 +93,10 @@ export class CheckReplenishmentCommandHandler extends BaseCommandHandler<
       const actualQty = Math.min(replenishQty, bulkInventory.quantityAvailable);
 
       // Create replenishment putaway task
-      facilityId ??= await resolveFacilityForLocation(tx, command, p.locationId, emit);
       await tx.putawayTask.create({
         data: {
-          locationId: p.locationId,
-          facilityId,
+          facilityId: facility.id,
+          locationId: facility.sourceLocationId,
           trackableUnitId: bulkInventory.id, // Using inventory record ID as reference
           sourceBinId: bulkInventory.binId,
           targetBinId: rule.pickFaceBinId,

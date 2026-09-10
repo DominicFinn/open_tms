@@ -3,11 +3,11 @@ import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { Command } from '../types.js';
-import { resolveFacilityForLocation } from '../facilities/resolveFacility.js';
+import { loadFacilityForWrite } from '../facilities/resolveFacility.js';
 
 export interface CreateWarehouseBinPayload {
   zoneId: string;
-  locationId: string;
+  facilityId: string;
   aisleId?: string | null;
   label: string;
   binType: string;
@@ -41,20 +41,23 @@ export class CreateWarehouseBinCommandHandler extends BaseCommandHandler<
     const zone = await tx.warehouseZone.findUnique({ where: { id: command.payload.zoneId } });
     if (!zone) throw new Error(`Zone ${command.payload.zoneId} not found`);
 
-    // Check label uniqueness within location
-    const existing = await tx.warehouseBin.findUnique({
-      where: { locationId_label: { locationId: command.payload.locationId, label: command.payload.label } },
-    });
-    if (existing) throw new Error(`Bin label "${command.payload.label}" already exists at this location`);
+    // Phase 2a (#248): the caller names the facility. locationId is still written from the
+    // facility's source location until 6c drops the column, and is null in a warehouse-only
+    // install.
+    const facility = await loadFacilityForWrite(tx, command.orgId, command.payload.facilityId);
 
-    // Phase 2a dual-write (#217): see CreateWarehouseZoneCommand.
-    const facilityId = await resolveFacilityForLocation(tx, command, command.payload.locationId, emit);
+    // Label uniqueness within the facility, not the (locationId, label) compound unique, which
+    // cannot serve a warehouse-only install and never carried orgId.
+    const existing = await tx.warehouseBin.findFirst({
+      where: { facilityId: facility.id, label: command.payload.label, orgId: command.orgId },
+    });
+    if (existing) throw new Error(`Bin label "${command.payload.label}" already exists at this facility`);
 
     const bin = await tx.warehouseBin.create({
       data: {
         zoneId: command.payload.zoneId,
-        locationId: command.payload.locationId,
-        facilityId,
+        locationId: facility.sourceLocationId,
+        facilityId: facility.id,
         aisleId: command.payload.aisleId ?? null,
         label: command.payload.label,
         binType: command.payload.binType,

@@ -3,11 +3,11 @@ import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { Command } from '../types.js';
-import { resolveFacilityForLocation } from '../facilities/resolveFacility.js';
+import { loadFacilityForWrite } from '../facilities/resolveFacility.js';
 
 export interface BulkCreateBinsPayload {
   zoneId: string;
-  locationId: string;
+  facilityId: string;
   /** Pattern with placeholders: {aisle}, {row}, {level} e.g. "BULK-{aisle}-{row}-{level}" */
   labelPattern: string;
   binType: string;
@@ -46,13 +46,15 @@ export class BulkCreateBinsCommandHandler extends BaseCommandHandler<
     const zone = await tx.warehouseZone.findUnique({ where: { id: p.zoneId } });
     if (!zone) throw new Error(`Zone ${p.zoneId} not found`);
 
-    // Phase 2a dual-write (#217): resolved once for the batch, since every bin shares a location.
-    const facilityId = await resolveFacilityForLocation(tx, command, p.locationId, emit);
+    // Phase 2a (#248): the caller names the facility. locationId is still written from the
+    // facility's source location until 6c drops the column, and is null in a warehouse-only
+    // install.
+    const facility = await loadFacilityForWrite(tx, command.orgId, p.facilityId);
 
     // Generate all bin records
     const bins: Array<{
       zoneId: string;
-      locationId: string;
+      locationId: string | null;
       facilityId: string;
       label: string;
       binType: string;
@@ -79,8 +81,8 @@ export class BulkCreateBinsCommandHandler extends BaseCommandHandler<
 
           bins.push({
             zoneId: p.zoneId,
-            locationId: p.locationId,
-            facilityId,
+            locationId: facility.sourceLocationId,
+            facilityId: facility.id,
             label,
             binType: p.binType,
             maxWeightKg: p.maxWeightKg ?? null,
@@ -102,7 +104,7 @@ export class BulkCreateBinsCommandHandler extends BaseCommandHandler<
 
     // Check for label conflicts
     const existingLabels = await tx.warehouseBin.findMany({
-      where: { locationId: p.locationId, label: { in: labels } },
+      where: { locationId: facility.sourceLocationId, label: { in: labels } },
       select: { label: true },
     });
     if (existingLabels.length > 0) {
@@ -117,7 +119,7 @@ export class BulkCreateBinsCommandHandler extends BaseCommandHandler<
       entityId: p.zoneId,
       payload: {
         zoneId: p.zoneId,
-        locationId: p.locationId,
+        locationId: facility.sourceLocationId,
         count: result.count,
         labelPattern: p.labelPattern,
         binType: p.binType,

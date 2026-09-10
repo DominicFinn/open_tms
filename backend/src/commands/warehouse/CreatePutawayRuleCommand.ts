@@ -3,10 +3,10 @@ import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { Command } from '../types.js';
-import { resolveFacilityForLocation } from '../facilities/resolveFacility.js';
+import { loadFacilityForWrite } from '../facilities/resolveFacility.js';
 
 export interface CreatePutawayRulePayload {
-  locationId: string;
+  facilityId: string;
   name: string;
   priority?: number;
   skuPattern?: string | null;
@@ -58,14 +58,15 @@ export class CreatePutawayRuleCommandHandler extends BaseCommandHandler<
       if (!bin) throw new Error(`Bin ${p.targetBinId} not found`);
     }
 
-    // Phase 2a dual-write (#225): the rule is filed under both the Location and the Facility
-    // derived from it, so nothing is left without a facility when reads switch over.
-    const facilityId = await resolveFacilityForLocation(tx, command, p.locationId, emit);
+    // Phase 2a (#248): the caller names the facility. locationId is still written from the
+    // facility's source location until 6c drops the column, and is null in a warehouse-only
+    // install.
+    const facility = await loadFacilityForWrite(tx, command.orgId, p.facilityId);
 
     const rule = await tx.putawayRule.create({
       data: {
-        locationId: p.locationId,
-        facilityId,
+        facilityId: facility.id,
+        locationId: facility.sourceLocationId,
         name: p.name,
         priority: p.priority ?? 50,
         skuPattern: p.skuPattern ?? null,
