@@ -47,7 +47,7 @@ export const mapRoutes: FastifyPluginAsync = async (server) => {
               type: 'object',
               properties: {
                 type: { type: 'string' },
-                features: { type: 'array', items: { type: 'object' } },
+                features: { type: 'array', items: { type: 'object', additionalProperties: true } },
                 total: { type: 'number' },
                 truncated: { type: 'boolean' },
               },
@@ -108,6 +108,7 @@ export const mapRoutes: FastifyPluginAsync = async (server) => {
           id: true,
           reference: true,
           status: true,
+          hasException: true,
           customerName: true,
           carrierName: true,
           originName: true,
@@ -161,6 +162,7 @@ export const mapRoutes: FastifyPluginAsync = async (server) => {
         id: s.id,
         reference: s.reference,
         status: s.status,
+        hasException: s.hasException,
         customerName: s.customerName,
         carrierName: s.carrierName,
         originName: s.originName,
@@ -222,7 +224,7 @@ export const mapRoutes: FastifyPluginAsync = async (server) => {
               type: 'object',
               properties: {
                 type: { type: 'string' },
-                features: { type: 'array', items: { type: 'object' } },
+                features: { type: 'array', items: { type: 'object', additionalProperties: true } },
                 total: { type: 'number' },
               },
             },
@@ -310,7 +312,7 @@ export const mapRoutes: FastifyPluginAsync = async (server) => {
               type: 'object',
               properties: {
                 type: { type: 'string' },
-                features: { type: 'array', items: { type: 'object' } },
+                features: { type: 'array', items: { type: 'object', additionalProperties: true } },
                 total: { type: 'number' },
               },
             },
@@ -409,7 +411,7 @@ export const mapRoutes: FastifyPluginAsync = async (server) => {
               type: 'object',
               properties: {
                 type: { type: 'string' },
-                features: { type: 'array', items: { type: 'object' } },
+                features: { type: 'array', items: { type: 'object', additionalProperties: true } },
                 total: { type: 'number' },
               },
             },
