@@ -1,7 +1,11 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { seedSystemRoles } from '../auth/seedRoles.js';
+import { DevSeedResetRepository } from '../repositories/DevSeedResetRepository.js';
+import { runBackfillSteps } from '../scripts/backfill-read-models.js';
 
 export async function seedRoutes(server: FastifyInstance) {
+  const devSeedRepo = new DevSeedResetRepository(server.prisma);
+
   // Block seed routes in production to prevent accidental data loss
   if (process.env.NODE_ENV === 'production') {
     server.post('/api/v1/seed/roles', async (_req: FastifyRequest, reply: FastifyReply) => {
@@ -24,13 +28,10 @@ export async function seedRoutes(server: FastifyInstance) {
   // Seed data endpoint
   server.post('/api/v1/seed', async (_req: FastifyRequest, reply: FastifyReply) => {
     try {
-      // Clear existing data in dependency order
-      await server.prisma.orderShipment.deleteMany();
-      await server.prisma.order.deleteMany();
-      await server.prisma.shipment.deleteMany();
-      await server.prisma.carrier.deleteMany();
-      await server.prisma.location.deleteMany();
-      await server.prisma.customer.deleteMany();
+      // Clear existing data — walks the live FK graph rather than a
+      // hand-maintained deleteMany chain, so a newly added dependent table
+      // is picked up automatically instead of 500ing on the next seed (#251).
+      await devSeedRepo.resetSeedTables();
 
       const seedOrg = await server.prisma.organization.findFirst({ select: { id: true } });
       if (!seedOrg) {
@@ -1057,6 +1058,14 @@ export async function seedRoutes(server: FastifyInstance) {
       }
 
       const laneCount = await server.prisma.lane.count();
+
+      // Writes above go straight to the tables and emit no domain events, so
+      // the *ReadModel tables list endpoints actually query (see the backend
+      // rule) would otherwise stay empty until someone thought to run the
+      // backfill script by hand — comprehensive-seed.ts already does this at
+      // the end of its own run; this route hadn't (#253).
+      await runBackfillSteps(server.prisma, ['customers', 'carriers', 'lanes', 'shipments', 'orders']);
+
       reply.code(201);
       return {
         data: {
