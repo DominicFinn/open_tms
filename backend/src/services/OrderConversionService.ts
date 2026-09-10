@@ -16,7 +16,11 @@ import {
   SplitOrderPayload,
   SplitOrderResult as SplitOrderCommandResult,
 } from '../commands/orders/SplitOrderCommand.js';
-import { linkOrdersToShipment } from '../commands/shipments/linkOrdersToShipment.js';
+import {
+  ADD_ORDERS_TO_SHIPMENT,
+  AddOrdersToShipmentPayload,
+  AddOrdersToShipmentResult,
+} from '../commands/orders/AddOrdersToShipmentCommand.js';
 
 const CONVERSION_SOURCE = 'order-conversion-service';
 
@@ -422,24 +426,21 @@ export class OrderConversionService implements IOrderConversionService {
       };
     }
 
-    try {
-      await this.prisma.$transaction(async (tx) => {
-        // NOTE: this path still doesn't dispatch through the command bus, so
-        // it intentionally emits nothing — it only ever links orders to an
-        // *existing* shipment, so it's outside the SHIPMENT_CREATED gap this
-        // module was extracted to fix (#264). ORDER_ASSIGNED_TO_SHIPMENT stays
-        // dark for manual add-to-shipment until that's addressed separately.
-        await linkOrdersToShipment(
-          tx,
-          shipment,
-          valid,
-          { orgId, actorId: userId ?? null },
-          () => `Order manually added to shipment ${shipment.reference}`,
-          () => {},
-        );
-      });
-    } catch (err: any) {
-      return { success: false, shipmentIds: [], errors: [err.message], message: 'Failed to add orders to shipment' };
+    const result = await this.commandBus.dispatch<AddOrdersToShipmentPayload, AddOrdersToShipmentResult>({
+      type: ADD_ORDERS_TO_SHIPMENT,
+      orgId,
+      actorId: userId ?? null,
+      payload: { shipmentId, orderIds: valid.map((o) => o.id) },
+      metadata: { correlationId: randomUUID(), source: CONVERSION_SOURCE },
+    });
+
+    if (!result.success || !result.data) {
+      return {
+        success: false,
+        shipmentIds: [],
+        errors: [result.error || 'Failed to add orders to shipment'],
+        message: 'Failed to add orders to shipment',
+      };
     }
 
     return {
