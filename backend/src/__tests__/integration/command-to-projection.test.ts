@@ -10,10 +10,12 @@ import { CreateCarrierCommandHandler, CREATE_CARRIER } from '../../commands/carr
 import { ArchiveCarrierCommandHandler, ARCHIVE_CARRIER } from '../../commands/carriers/ArchiveCarrierCommand';
 import { CreateIssueCommandHandler, CREATE_ISSUE } from '../../commands/issues/CreateIssueCommand';
 import { EscalateIssueCommandHandler, ESCALATE_ISSUE } from '../../commands/issues/EscalateIssueCommand';
+import { ConvertOrderToShipmentCommandHandler, CONVERT_ORDER_TO_SHIPMENT } from '../../commands/orders/ConvertOrderToShipmentCommand';
 import { CarrierProjection } from '../../events/projections/CarrierProjection';
 import { IssueProjection } from '../../events/projections/IssueProjection';
+import { ShipmentProjection } from '../../events/projections/ShipmentProjection';
 import { EVENT_TYPES } from '../../events/eventTypes';
-import { createTestCommand, mockEventBus } from '../helpers/testUtils';
+import { createTestCommand, createTestEvent, mockEventBus } from '../helpers/testUtils';
 
 describe('CQRS Pipeline Integration', () => {
   describe('Carrier: create -> project -> archive -> project', () => {
@@ -217,6 +219,132 @@ describe('CQRS Pipeline Integration', () => {
       // Event carries the command's correlation ID
       expect(result.events[0].metadata.correlationId).toBe('trace-abc-123');
       expect(result.events[0].metadata.source).toBe('api');
+    });
+  });
+
+  describe('Shipment created via order conversion -> read model -> live tracking (#264)', () => {
+    /**
+     * Before #264, ShipmentAssignmentService/OrderConversionService wrote the
+     * Shipment row with a bare prisma call and never dispatched a command, so
+     * SHIPMENT_CREATED never fired, ShipmentReadModel never got a row, and a
+     * later TRACKING_LOCATION_RECEIVED for that shipment matched zero rows in
+     * ShipmentProjection.onLocationReceived's updateMany. This fake read-model
+     * store behaves like the real WHERE-guarded updateMany (see the
+     * concurrency comment on onLocationReceived) so the test actually proves
+     * that relationship, rather than asserting shapes past a stub.
+     */
+    function makeShipmentReadModelStore() {
+      const rows = new Map<string, any>();
+      return {
+        upsert: jest.fn(async ({ where, create }: any) => {
+          rows.set(where.id, { ...create });
+          return rows.get(where.id);
+        }),
+        updateMany: jest.fn(async ({ where, data }: any) => {
+          const row = rows.get(where.id);
+          if (!row) return { count: 0 };
+          Object.assign(row, data);
+          return { count: 1 };
+        }),
+        get(id: string) {
+          return rows.get(id);
+        },
+      };
+    }
+
+    it('a shipment created through order conversion gets a read-model row, and a subsequent tracking ping updates it', async () => {
+      const order = {
+        id: 'order-1',
+        orgId: 'org-1',
+        orderNumber: 'ORD-001',
+        status: 'verified',
+        customerId: 'cust-1',
+        originId: 'loc-origin',
+        destinationId: 'loc-dest',
+        requestedPickupDate: null,
+        requestedDeliveryDate: null,
+        customer: { id: 'cust-1', name: 'Acme' },
+        trackableUnits: [],
+        lineItems: [],
+      };
+      const liveShipment = {
+        id: 'ship-1',
+        reference: 'SH-ORD-001',
+        status: 'draft',
+        hasException: false,
+        customerId: 'cust-1',
+        customer: { id: 'cust-1', name: 'Acme' },
+        origin: { name: 'Chicago WH', city: 'Chicago', state: 'IL' },
+        destination: { name: 'NY Depot', city: 'New York', state: 'NY' },
+        carrier: null,
+        carrierId: null,
+        lane: null,
+        laneId: null,
+        proNumber: null,
+        pickupDate: null,
+        deliveryDate: null,
+        orderShipments: [],
+        stops: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        deletedAt: null,
+      };
+
+      const shipmentReadModel = makeShipmentReadModelStore();
+      const mockTx = {
+        order: { findUnique: jest.fn().mockResolvedValue(order), update: jest.fn().mockResolvedValue({}) },
+        shipment: {
+          create: jest.fn().mockResolvedValue({ id: 'ship-1', reference: 'SH-ORD-001', items: [] }),
+          update: jest.fn().mockResolvedValue({}),
+        },
+        orderShipment: { create: jest.fn().mockResolvedValue({}) },
+        shipmentStop: {
+          findFirst: jest.fn().mockResolvedValue(null),
+          create: jest.fn().mockResolvedValue({ id: 'stop-1' }),
+          aggregate: jest.fn().mockResolvedValue({ _max: { sequenceNumber: null } }),
+        },
+        auditLog: { create: jest.fn().mockResolvedValue({}) },
+      } as any;
+      const mockPrisma = {
+        $transaction: jest.fn((fn: Function) => fn(mockTx)),
+        domainEventLog: { findFirst: jest.fn().mockResolvedValue(null) },
+        shipment: { findUnique: jest.fn().mockResolvedValue(liveShipment) },
+        shipmentReadModel,
+      } as any;
+
+      // 1. Order-conversion path dispatches CONVERT_ORDER_TO_SHIPMENT (this is
+      // what ShipmentAssignmentService/OrderConversionService now do instead
+      // of a bare prisma.shipment.create).
+      const { bus } = mockEventBus();
+      const handler = new ConvertOrderToShipmentCommandHandler(mockPrisma, bus);
+      const result = await handler.execute(
+        createTestCommand(CONVERT_ORDER_TO_SHIPMENT, { orderId: 'order-1' }, { orgId: 'org-1', actorId: 'user-1' })
+      );
+      expect(result.success).toBe(true);
+
+      // 2. Feed SHIPMENT_CREATED to the projection — this is what GET
+      // /api/v1/shipments reads from.
+      const shipmentCreated = result.events.find((e) => e.type === EVENT_TYPES.SHIPMENT_CREATED)!;
+      const projection = new ShipmentProjection(mockPrisma);
+      await projection.handle(shipmentCreated);
+
+      expect(shipmentReadModel.get('ship-1')).toBeTruthy();
+      expect(shipmentReadModel.get('ship-1').reference).toBe('SH-ORD-001');
+
+      // 3. A live tracking webhook ping for this shipment now finds a row to
+      // update, instead of updateMany silently matching zero rows.
+      const locationReceived = createTestEvent(
+        EVENT_TYPES.TRACKING_LOCATION_RECEIVED,
+        'shipment',
+        'ship-1',
+        { shipmentId: 'ship-1', lat: 41.8781, lng: -87.6298, eventTime: new Date().toISOString() },
+        { orgId: 'org-1' },
+      );
+      await projection.handle(locationReceived);
+
+      const readModelRow = shipmentReadModel.get('ship-1');
+      expect(readModelRow.currentLat).toBe(41.8781);
+      expect(readModelRow.currentLng).toBe(-87.6298);
     });
   });
 });

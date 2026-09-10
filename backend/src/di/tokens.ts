@@ -144,6 +144,7 @@ export const TOKENS = {
   IPutawayRuleEvaluator: Symbol.for('IPutawayRuleEvaluator'),
   ICartonizationService: Symbol.for('ICartonizationService'),
   IFulfilmentDemandSource: Symbol.for('IFulfilmentDemandSource'),
+  ICreateShipmentPort: Symbol.for('ICreateShipmentPort'),
 
   // Order line-item rating tokens (Phase 1)
   IModeRulesService: Symbol.for('IModeRulesService'),

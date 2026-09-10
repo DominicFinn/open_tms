@@ -1,4 +1,7 @@
+import { randomUUID } from 'crypto';
 import { PrismaClient } from '@prisma/client';
+import { CREATE_SHIPMENT, CreateShipmentPayload, CreateShipmentResult } from '../commands/shipments/CreateShipmentCommand.js';
+import { ICommandBus } from '../commands/CommandBus.js';
 import { IOrderConversionService } from './OrderConversionService.js';
 
 export interface AssignmentResult {
@@ -9,20 +12,23 @@ export interface AssignmentResult {
 }
 
 export interface IShipmentAssignmentService {
-  assignOrderToShipment(orderId: string): Promise<AssignmentResult>;
+  assignOrderToShipment(orderId: string, actorId?: string | null): Promise<AssignmentResult>;
 }
+
+const ASSIGNMENT_SOURCE = 'shipment-assignment-service';
 
 export class ShipmentAssignmentService implements IShipmentAssignmentService {
   constructor(
     private prisma: PrismaClient,
     private orderConversionService: IOrderConversionService,
+    private commandBus: ICommandBus,
   ) {}
 
   /**
    * Attempt to assign an order to a shipment based on matching lanes.
    * If no matching lane exists, create a pending lane request.
    */
-  async assignOrderToShipment(orderId: string): Promise<AssignmentResult> {
+  async assignOrderToShipment(orderId: string, actorId: string | null = null): Promise<AssignmentResult> {
     // Fetch order with all details
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
@@ -116,7 +122,8 @@ export class ShipmentAssignmentService implements IShipmentAssignmentService {
       order.customerId,
       order.originId,
       order.destinationId,
-      order.serviceLevel
+      order.serviceLevel,
+      actorId,
     );
 
     // Link the order to the shipment (item append, stop find-or-create,
@@ -129,6 +136,7 @@ export class ShipmentAssignmentService implements IShipmentAssignmentService {
       order.orgId,
       shipment.id,
       [orderId],
+      actorId ?? undefined,
     );
 
     if (!linkResult.success) {
@@ -215,11 +223,12 @@ export class ShipmentAssignmentService implements IShipmentAssignmentService {
     customerId: string,
     originId: string,
     destinationId: string,
-    serviceLevel: string
+    serviceLevel: string,
+    actorId: string | null,
   ) {
     // For FTL, always create a new shipment (dedicated)
     if (serviceLevel === 'FTL') {
-      return this.createShipment(laneId, customerId, originId, destinationId, serviceLevel);
+      return this.createShipment(laneId, customerId, originId, destinationId, serviceLevel, actorId);
     }
 
     // For LTL, try to find an existing draft shipment
@@ -239,18 +248,23 @@ export class ShipmentAssignmentService implements IShipmentAssignmentService {
     }
 
     // No existing shipment - create new one
-    return this.createShipment(laneId, customerId, originId, destinationId, serviceLevel);
+    return this.createShipment(laneId, customerId, originId, destinationId, serviceLevel, actorId);
   }
 
   /**
-   * Create a new shipment
+   * Create a new shipment via the command bus (CREATE_SHIPMENT), so it emits
+   * SHIPMENT_CREATED like every other shipment-creation path — this used to
+   * be a bare prisma.shipment.create with no command dispatch, which meant
+   * auto-assigned shipments never got a ShipmentReadModel row and never
+   * tripped AutoTenderHandler/SlaEvaluationHandler (#264).
    */
   private async createShipment(
     laneId: string,
     customerId: string,
     originId: string,
     destinationId: string,
-    serviceLevel: string
+    serviceLevel: string,
+    actorId: string | null,
   ) {
     const timestamp = Date.now().toString(36).toUpperCase().slice(-6);
     const reference = `SH-${serviceLevel}-${timestamp}`;
@@ -263,18 +277,19 @@ export class ShipmentAssignmentService implements IShipmentAssignmentService {
       select: { orgId: true },
     });
 
-    return this.prisma.shipment.create({
-      data: {
-        orgId: customer.orgId,
-        reference,
-        customerId,
-        originId,
-        destinationId,
-        laneId,
-        status: 'draft',
-        items: [] // Will be populated as orders are added
-      }
+    const result = await this.commandBus.dispatch<CreateShipmentPayload, CreateShipmentResult>({
+      type: CREATE_SHIPMENT,
+      orgId: customer.orgId,
+      actorId,
+      payload: { reference, customerId, laneId, originId, destinationId },
+      metadata: { correlationId: randomUUID(), source: ASSIGNMENT_SOURCE },
     });
+
+    if (!result.success || !result.data) {
+      throw new Error(result.error || 'Failed to create shipment');
+    }
+
+    return result.data;
   }
 
   /**
