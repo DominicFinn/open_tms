@@ -9,6 +9,10 @@
  * whole run: the queries are deliberately org-wide, and stamping one org's id across them would
  * hand one tenant another tenant's rows through the read model. See the security rule.
  *
+ * `buildBackfillSteps`/`runBackfillSteps` are exported so another entry point that already holds
+ * a `PrismaClient` (e.g. the dev seed route, #253) can reuse this exact logic instead of a second
+ * copy of the mapping — see `routes/seed.ts`.
+ *
  * Usage:
  *   npx tsx backend/src/scripts/backfill-read-models.ts
  *   npx tsx backend/src/scripts/backfill-read-models.ts --only=wmsFulfilmentOrders
@@ -21,9 +25,7 @@ import { deriveFacilitiesFromLocations } from './deriveFacilities.js';
 import { OrderFulfilmentDemandSource } from '../services/fulfilment/OrderFulfilmentDemandSource.js';
 import { WmsFulfilmentOrderProjection } from '../events/projections/WmsFulfilmentOrderProjection.js';
 
-const prisma = new PrismaClient();
-
-async function backfillOrders(): Promise<number> {
+async function backfillOrders(prisma: PrismaClient): Promise<number> {
   const orders = await prisma.order.findMany({
     where: { archived: false },
     include: {
@@ -99,7 +101,7 @@ async function backfillOrders(): Promise<number> {
   return count;
 }
 
-async function backfillShipments(): Promise<number> {
+async function backfillShipments(prisma: PrismaClient): Promise<number> {
   const shipments = await prisma.shipment.findMany({
     where: { archived: false },
     include: {
@@ -158,7 +160,7 @@ async function backfillShipments(): Promise<number> {
   return count;
 }
 
-async function backfillCarriers(): Promise<number> {
+async function backfillCarriers(prisma: PrismaClient): Promise<number> {
   const carriers = await prisma.carrier.findMany({
     where: { archived: false },
     include: {
@@ -201,7 +203,7 @@ async function backfillCarriers(): Promise<number> {
   return count;
 }
 
-async function backfillCustomers(): Promise<number> {
+async function backfillCustomers(prisma: PrismaClient): Promise<number> {
   const customers = await prisma.customer.findMany({
     where: { archived: false },
     include: {
@@ -240,7 +242,7 @@ async function backfillCustomers(): Promise<number> {
   return count;
 }
 
-async function backfillLanes(): Promise<number> {
+async function backfillLanes(prisma: PrismaClient): Promise<number> {
   const lanes = await prisma.lane.findMany({
     where: { archived: false },
     include: {
@@ -300,7 +302,7 @@ async function backfillLanes(): Promise<number> {
  * IssueLabelAssignment and Comment, and the projection maintains them
  * incrementally, so a rebuild has to recompute them from source.
  */
-async function backfillIssues(): Promise<number> {
+async function backfillIssues(prisma: PrismaClient): Promise<number> {
   const issues = await prisma.issue.findMany({
     include: { labelAssignments: { include: { label: true } } },
   });
@@ -371,7 +373,7 @@ async function backfillIssues(): Promise<number> {
   return count;
 }
 
-async function backfillAgentDecisions(): Promise<number> {
+async function backfillAgentDecisions(prisma: PrismaClient): Promise<number> {
   const decisions = await prisma.agentDecision.findMany();
 
   let count = 0;
@@ -419,7 +421,7 @@ async function backfillAgentDecisions(): Promise<number> {
  * Warehouse demand. Runs the projection itself rather than a second copy of its mapping, so
  * the backfill cannot drift from the live path.
  */
-async function backfillWmsFulfilmentOrders(): Promise<number> {
+async function backfillWmsFulfilmentOrders(prisma: PrismaClient): Promise<number> {
   const demandSource = new OrderFulfilmentDemandSource(prisma);
   const projection = new WmsFulfilmentOrderProjection(prisma, demandSource);
 
@@ -431,33 +433,61 @@ async function backfillWmsFulfilmentOrders(): Promise<number> {
   return count;
 }
 
-const STEPS: readonly BackfillStep[] = [
-  { name: 'orders', label: 'orders', run: backfillOrders },
-  { name: 'shipments', label: 'shipments', run: backfillShipments },
-  { name: 'carriers', label: 'carriers', run: backfillCarriers },
-  { name: 'customers', label: 'customers', run: backfillCustomers },
-  { name: 'lanes', label: 'lanes', run: backfillLanes },
-  { name: 'issues', label: 'issues', run: backfillIssues },
-  { name: 'agentDecisions', label: 'agent decisions', run: backfillAgentDecisions },
-  { name: 'wmsFulfilmentOrders', label: 'warehouse fulfilment orders', run: backfillWmsFulfilmentOrders },
-  { name: 'facilities', label: 'facilities derived from locations', run: () => deriveFacilitiesFromLocations(prisma) },
-];
-
-async function main() {
-  const selected = selectSteps(process.argv.slice(2), STEPS);
-  console.log(`[Backfill] Starting read model backfill (${selected.map((s) => s.name).join(', ')})...`);
-
-  for (const step of selected) {
-    const count = await step.run();
-    console.log(`[Backfill] ${count} ${step.label}`);
-  }
-
-  console.log('[Backfill] Done.');
+/**
+ * Builds the step list against a caller-supplied `PrismaClient` rather than a module-level one,
+ * so an entry point that already holds a connection (the CLI's own client below, or a route's
+ * `server.prisma`) can run these without opening a second connection.
+ */
+export function buildBackfillSteps(prisma: PrismaClient): readonly BackfillStep[] {
+  return [
+    { name: 'orders', label: 'orders', run: () => backfillOrders(prisma) },
+    { name: 'shipments', label: 'shipments', run: () => backfillShipments(prisma) },
+    { name: 'carriers', label: 'carriers', run: () => backfillCarriers(prisma) },
+    { name: 'customers', label: 'customers', run: () => backfillCustomers(prisma) },
+    { name: 'lanes', label: 'lanes', run: () => backfillLanes(prisma) },
+    { name: 'issues', label: 'issues', run: () => backfillIssues(prisma) },
+    { name: 'agentDecisions', label: 'agent decisions', run: () => backfillAgentDecisions(prisma) },
+    { name: 'wmsFulfilmentOrders', label: 'warehouse fulfilment orders', run: () => backfillWmsFulfilmentOrders(prisma) },
+    { name: 'facilities', label: 'facilities derived from locations', run: () => deriveFacilitiesFromLocations(prisma) },
+  ];
 }
 
-main()
-  .catch((err) => {
+/**
+ * Runs the named steps (or all of them, if `only` is omitted) against the given `PrismaClient`.
+ * `only` takes step names, e.g. `['customers', 'carriers', 'lanes', 'shipments', 'orders']` —
+ * the same names accepted by the CLI's `--only=` flag.
+ */
+export async function runBackfillSteps(prisma: PrismaClient, only?: readonly string[]): Promise<void> {
+  const steps = buildBackfillSteps(prisma);
+  const selected = selectSteps(only ? [`--only=${only.join(',')}`] : [], steps);
+  for (const step of selected) {
+    await step.run();
+  }
+}
+
+async function main() {
+  const prisma = new PrismaClient();
+  try {
+    const steps = buildBackfillSteps(prisma);
+    const selected = selectSteps(process.argv.slice(2), steps);
+    console.log(`[Backfill] Starting read model backfill (${selected.map((s) => s.name).join(', ')})...`);
+
+    for (const step of selected) {
+      const count = await step.run();
+      console.log(`[Backfill] ${count} ${step.label}`);
+    }
+
+    console.log('[Backfill] Done.');
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+// Only run the CLI when invoked directly (`tsx backfill-read-models.ts`), not when imported by
+// another module (e.g. the seed route) for its exported helpers.
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main().catch((err) => {
     console.error('[Backfill] Error:', err);
     process.exit(1);
-  })
-  .finally(() => prisma.$disconnect());
+  });
+}
