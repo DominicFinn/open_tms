@@ -1967,10 +1967,14 @@ module has no facility reference, so putaway completion, returns and wave releas
 real Location. `requireLocationForInventory` fails loudly rather than inventing one. Giving
 inventory a facility is Phase 4.
 
-**Reads move to facility; writes have not.** The create commands still write a non-null `locationId`
-on the row, so the four WMS create forms still choose a Location, and a list page with an inline
-create sends the selected facility's `sourceLocationId`. Both go in batch 6, when `locationId`
-becomes nullable and the commands move onto `facilityId`.
+**Writes moved too** (#248). Create command payloads name the `facilityId`, which
+`loadFacilityForWrite` looks up within the caller's org, so naming another tenant's facility misses
+rather than writing into their warehouse. `locationId` is still written alongside, from the
+facility's `sourceLocationId`, and is null for a facility that has none. Dropping the column, the
+`Location` foreign keys and the `locationId` query parameter is 6c.
+
+Bin label uniqueness is checked per facility rather than through the `(locationId, label)` compound
+unique, which cannot serve a warehouse-only install and never carried `orgId`.
 
 ---
 

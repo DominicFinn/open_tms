@@ -75,7 +75,7 @@ export default function VNextWmsReplenishment() {
       const res = await fetch(`${API_URL}/api/v1/replenishment/rules`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          locationId: facility?.sourceLocationId,
+          facilityId,
           sku: createForm.sku.trim(),
           pickFaceBinId: createForm.pickFaceBinId,
           bulkZoneId: createForm.bulkZoneId,
@@ -97,7 +97,7 @@ export default function VNextWmsReplenishment() {
     try {
       const res = await fetch(`${API_URL}/api/v1/replenishment/check`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ locationId: facility?.sourceLocationId }),
+        body: JSON.stringify({ facilityId }),
       });
       const data = await res.json();
       if (data.error) setError(data.error);

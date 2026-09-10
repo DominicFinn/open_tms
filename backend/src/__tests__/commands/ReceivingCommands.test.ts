@@ -42,7 +42,7 @@ describe('CreateReceivingTaskCommandHandler', () => {
 
     const result = await handler.execute(
       createTestCommand(CREATE_RECEIVING_TASK, {
-        locationId: 'loc-1',
+        facilityId: 'fac-1',
         receivingType: 'blind',
       })
     );
@@ -71,7 +71,7 @@ describe('CreateReceivingTaskCommandHandler', () => {
 
     const result = await handler.execute(
       createTestCommand(CREATE_RECEIVING_TASK, {
-        locationId: 'loc-1',
+        facilityId: 'fac-1',
         receivingType: 'asn',
         expectedLines: [
           { sku: 'SKU-001', expectedQuantity: 10 },
@@ -112,7 +112,7 @@ describe('CreateReceivingTaskCommandHandler', () => {
 
     await handler.execute(
       createTestCommand(CREATE_RECEIVING_TASK, {
-        locationId: 'loc-1',
+        facilityId: 'fac-1',
         receivingType: 'blind',
         appointmentId: 'appt-1',
       })

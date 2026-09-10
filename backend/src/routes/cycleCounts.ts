@@ -61,9 +61,9 @@ export async function cycleCountRoutes(server: FastifyInstance) {
       tags: ['WMS - Cycle Counting'],
       summary: 'Create a cycle count (full, zone, or random sample)',
       body: {
-        type: 'object', required: ['locationId', 'countType'],
+        type: 'object', required: ['facilityId', 'countType'],
         properties: {
-          locationId: { type: 'string', format: 'uuid' },
+          facilityId: { type: 'string', format: 'uuid' },
           countType: { type: 'string', enum: ['full', 'zone', 'random_sample'] },
           zoneId: { type: 'string', format: 'uuid', nullable: true },
           assignedToUserId: { type: 'string', nullable: true },
@@ -73,7 +73,7 @@ export async function cycleCountRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const body = z.object({
-      locationId: z.string().uuid(),
+      facilityId: z.string().uuid(),
       countType: z.enum(['full', 'zone', 'random_sample']),
       zoneId: z.string().uuid().nullable().optional(),
       assignedToUserId: z.string().nullable().optional(),

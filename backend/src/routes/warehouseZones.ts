@@ -72,9 +72,9 @@ export async function warehouseZoneRoutes(server: FastifyInstance) {
       summary: 'Create a warehouse zone',
       body: {
         type: 'object',
-        required: ['locationId', 'name', 'zoneType'],
+        required: ['facilityId', 'name', 'zoneType'],
         properties: {
-          locationId: { type: 'string', format: 'uuid' },
+          facilityId: { type: 'string', format: 'uuid' },
           name: { type: 'string' },
           zoneType: { type: 'string', enum: [...ZONE_TYPES] },
           temperatureZone: { type: 'string', enum: [...TEMP_ZONES], nullable: true },
@@ -87,7 +87,7 @@ export async function warehouseZoneRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const body = z.object({
-      locationId: z.string().uuid(),
+      facilityId: z.string().uuid(),
       name: z.string().min(1).max(100),
       zoneType: z.enum(ZONE_TYPES),
       temperatureZone: z.enum(TEMP_ZONES).nullable().optional(),
@@ -221,10 +221,10 @@ export async function warehouseZoneRoutes(server: FastifyInstance) {
       summary: 'Create a single warehouse bin',
       body: {
         type: 'object',
-        required: ['zoneId', 'locationId', 'label', 'binType'],
+        required: ['zoneId', 'facilityId', 'label', 'binType'],
         properties: {
           zoneId: { type: 'string', format: 'uuid' },
-          locationId: { type: 'string', format: 'uuid' },
+          facilityId: { type: 'string', format: 'uuid' },
           aisleId: { type: 'string', format: 'uuid', nullable: true },
           label: { type: 'string' },
           binType: { type: 'string', enum: [...BIN_TYPES] },
@@ -241,7 +241,7 @@ export async function warehouseZoneRoutes(server: FastifyInstance) {
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const body = z.object({
       zoneId: z.string().uuid(),
-      locationId: z.string().uuid(),
+      facilityId: z.string().uuid(),
       aisleId: z.string().uuid().nullable().optional(),
       label: z.string().min(1).max(50),
       binType: z.enum(BIN_TYPES),
@@ -337,10 +337,10 @@ export async function warehouseZoneRoutes(server: FastifyInstance) {
       description: 'Generate bins using a pattern with {aisle}, {row}, {level} placeholders. Example: "BULK-{aisle}-{row}-{level}" with aisles ["A","B"], rows 1-10, levels 1-4 creates 80 bins.',
       body: {
         type: 'object',
-        required: ['zoneId', 'locationId', 'labelPattern', 'binType', 'aisles', 'rowStart', 'rowEnd', 'levelStart', 'levelEnd'],
+        required: ['zoneId', 'facilityId', 'labelPattern', 'binType', 'aisles', 'rowStart', 'rowEnd', 'levelStart', 'levelEnd'],
         properties: {
           zoneId: { type: 'string', format: 'uuid' },
-          locationId: { type: 'string', format: 'uuid' },
+          facilityId: { type: 'string', format: 'uuid' },
           labelPattern: { type: 'string' },
           binType: { type: 'string', enum: [...BIN_TYPES] },
           aisles: { type: 'array', items: { type: 'string' } },
@@ -359,7 +359,7 @@ export async function warehouseZoneRoutes(server: FastifyInstance) {
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const body = z.object({
       zoneId: z.string().uuid(),
-      locationId: z.string().uuid(),
+      facilityId: z.string().uuid(),
       labelPattern: z.string().min(1),
       binType: z.enum(BIN_TYPES),
       aisles: z.array(z.string().min(1)).min(1),

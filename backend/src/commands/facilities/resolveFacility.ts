@@ -71,3 +71,27 @@ export async function resolveFacilityForLocation(
 
   return facility.id;
 }
+
+/**
+ * The facility a write is being made against (#248).
+ *
+ * Create commands now name the facility rather than the Location, so this is a lookup rather than
+ * the find-or-create above. Scoped to the caller's org, so naming another tenant's facility misses
+ * rather than writing into their warehouse.
+ *
+ * `sourceLocationId` comes back because commands still write `locationId` alongside `facilityId`
+ * until 6c drops the column. It is null in a warehouse-only install, which is why #245 made the
+ * column nullable.
+ */
+export async function loadFacilityForWrite(
+  tx: TransactionClient,
+  orgId: string,
+  facilityId: string
+): Promise<{ id: string; sourceLocationId: string | null }> {
+  const facility = await tx.facility.findFirst({
+    where: { id: facilityId, orgId, archived: false },
+    select: { id: true, sourceLocationId: true },
+  });
+  if (!facility) throw new Error(`Facility ${facilityId} not found`);
+  return facility;
+}

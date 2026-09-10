@@ -16,6 +16,7 @@ describe('CreateReplenishmentRuleCommandHandler', () => {
       domainEventLog: { create: jest.fn().mockResolvedValue({}) },
     } as any;
     const prisma = {
+      facility: { findFirst: jest.fn().mockResolvedValue({ id: 'fac-1', sourceLocationId: 'loc-1' }) },
       $transaction: jest.fn((fn: Function) => fn(tx)),
       domainEventLog: { findFirst: jest.fn().mockResolvedValue(null) },
     } as any;
@@ -24,7 +25,7 @@ describe('CreateReplenishmentRuleCommandHandler', () => {
 
     const result = await handler.execute(
       createTestCommand(CREATE_REPLENISHMENT_RULE, {
-        locationId: 'loc-1', sku: 'SKU-001',
+        facilityId: 'fac-1', sku: 'SKU-001',
         pickFaceBinId: 'bin-1', bulkZoneId: 'zone-1',
         minQuantity: 5, maxQuantity: 20,
       })
@@ -36,8 +37,9 @@ describe('CreateReplenishmentRuleCommandHandler', () => {
   });
 
   it('fails if min >= max', async () => {
-    const tx = { domainEventLog: { create: jest.fn().mockResolvedValue({}) } } as any;
+    const tx = { facility: { findFirst: jest.fn().mockResolvedValue({ id: 'fac-1', sourceLocationId: 'loc-1' }) }, domainEventLog: { create: jest.fn().mockResolvedValue({}) } } as any;
     const prisma = {
+      facility: { findFirst: jest.fn().mockResolvedValue({ id: 'fac-1', sourceLocationId: 'loc-1' }) },
       $transaction: jest.fn((fn: Function) => fn(tx)),
       domainEventLog: { findFirst: jest.fn().mockResolvedValue(null) },
     } as any;
@@ -46,7 +48,7 @@ describe('CreateReplenishmentRuleCommandHandler', () => {
 
     const result = await handler.execute(
       createTestCommand(CREATE_REPLENISHMENT_RULE, {
-        locationId: 'loc-1', sku: 'SKU-001',
+        facilityId: 'fac-1', sku: 'SKU-001',
         pickFaceBinId: 'bin-1', bulkZoneId: 'zone-1',
         minQuantity: 20, maxQuantity: 5,
       })
@@ -80,6 +82,7 @@ describe('CheckReplenishmentCommandHandler', () => {
       domainEventLog: { create: jest.fn().mockResolvedValue({}) },
     } as any;
     const prisma = {
+      facility: { findFirst: jest.fn().mockResolvedValue({ id: 'fac-1', sourceLocationId: 'loc-1' }) },
       $transaction: jest.fn((fn: Function) => fn(tx)),
       domainEventLog: { findFirst: jest.fn().mockResolvedValue(null) },
     } as any;
@@ -87,7 +90,7 @@ describe('CheckReplenishmentCommandHandler', () => {
     const handler = new CheckReplenishmentCommandHandler(prisma, bus);
 
     const result = await handler.execute(
-      createTestCommand(CHECK_REPLENISHMENT, { locationId: 'loc-1' })
+      createTestCommand(CHECK_REPLENISHMENT, { facilityId: 'fac-1' })
     );
 
     expect(result.success).toBe(true);
@@ -119,6 +122,7 @@ describe('CheckReplenishmentCommandHandler', () => {
       domainEventLog: { create: jest.fn().mockResolvedValue({}) },
     } as any;
     const prisma = {
+      facility: { findFirst: jest.fn().mockResolvedValue({ id: 'fac-1', sourceLocationId: 'loc-1' }) },
       $transaction: jest.fn((fn: Function) => fn(tx)),
       domainEventLog: { findFirst: jest.fn().mockResolvedValue(null) },
     } as any;
@@ -126,7 +130,7 @@ describe('CheckReplenishmentCommandHandler', () => {
     const handler = new CheckReplenishmentCommandHandler(prisma, bus);
 
     const result = await handler.execute(
-      createTestCommand(CHECK_REPLENISHMENT, { locationId: 'loc-1' })
+      createTestCommand(CHECK_REPLENISHMENT, { facilityId: 'fac-1' })
     );
 
     expect(result.success).toBe(true);
@@ -148,6 +152,7 @@ describe('CheckReplenishmentCommandHandler', () => {
       domainEventLog: { create: jest.fn().mockResolvedValue({}) },
     } as any;
     const prisma = {
+      facility: { findFirst: jest.fn().mockResolvedValue({ id: 'fac-1', sourceLocationId: 'loc-1' }) },
       $transaction: jest.fn((fn: Function) => fn(tx)),
       domainEventLog: { findFirst: jest.fn().mockResolvedValue(null) },
     } as any;
@@ -155,7 +160,7 @@ describe('CheckReplenishmentCommandHandler', () => {
     const handler = new CheckReplenishmentCommandHandler(prisma, bus);
 
     const result = await handler.execute(
-      createTestCommand(CHECK_REPLENISHMENT, { locationId: 'loc-1' })
+      createTestCommand(CHECK_REPLENISHMENT, { facilityId: 'fac-1' })
     );
 
     expect(result.success).toBe(true);
@@ -178,6 +183,7 @@ describe('CheckReplenishmentCommandHandler', () => {
       domainEventLog: { create: jest.fn().mockResolvedValue({}) },
     } as any;
     const prisma = {
+      facility: { findFirst: jest.fn().mockResolvedValue({ id: 'fac-1', sourceLocationId: 'loc-1' }) },
       $transaction: jest.fn((fn: Function) => fn(tx)),
       domainEventLog: { findFirst: jest.fn().mockResolvedValue(null) },
     } as any;
@@ -185,7 +191,7 @@ describe('CheckReplenishmentCommandHandler', () => {
     const handler = new CheckReplenishmentCommandHandler(prisma, bus);
 
     const result = await handler.execute(
-      createTestCommand(CHECK_REPLENISHMENT, { locationId: 'loc-1' })
+      createTestCommand(CHECK_REPLENISHMENT, { facilityId: 'fac-1' })
     );
 
     expect(result.success).toBe(true);

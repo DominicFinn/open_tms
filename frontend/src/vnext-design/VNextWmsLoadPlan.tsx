@@ -117,7 +117,7 @@ export default function VNextWmsLoadPlan() {
       const res = await fetch(`${API_URL}/api/v1/load-plans`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          locationId: facility?.sourceLocationId,
+          facilityId,
           stagingAssignmentIds: [...selectedAssignments],
           shipmentId: createForm.shipmentId || null,
           trailerNumber: createForm.trailerNumber || null,

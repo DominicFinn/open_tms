@@ -49,7 +49,7 @@ describe('CreatePutawayRuleCommandHandler', () => {
     const { bus } = mockEventBus();
 
     const result = await new CreatePutawayRuleCommandHandler(prisma, bus).execute(
-      createTestCommand(CREATE_PUTAWAY_RULE, { locationId: 'loc-1', name: 'Cold to zone C', targetType: 'zone' })
+      createTestCommand(CREATE_PUTAWAY_RULE, { facilityId: 'fac-1', name: 'Cold to zone C', targetType: 'zone' })
     );
 
     expect(result.success).toBe(true);
@@ -64,7 +64,7 @@ describe('CreatePutawayRuleCommandHandler', () => {
     const { bus } = mockEventBus();
 
     const result = await new CreatePutawayRuleCommandHandler(prisma, bus).execute(
-      createTestCommand(CREATE_PUTAWAY_RULE, { locationId: 'loc-1', name: 'Rule', targetType: 'zone', targetZoneId: 'other-org-zone' })
+      createTestCommand(CREATE_PUTAWAY_RULE, { facilityId: 'fac-1', name: 'Rule', targetType: 'zone', targetZoneId: 'other-org-zone' })
     );
 
     expect(result.success).toBe(false);
@@ -80,7 +80,7 @@ describe('CreatePutawayRuleCommandHandler', () => {
     const { bus } = mockEventBus();
 
     const result = await new CreatePutawayRuleCommandHandler(prisma, bus).execute(
-      createTestCommand(CREATE_PUTAWAY_RULE, { locationId: 'loc-1', name: 'Rule', targetType: 'specific_bin', targetBinId: 'other-org-bin' })
+      createTestCommand(CREATE_PUTAWAY_RULE, { facilityId: 'fac-1', name: 'Rule', targetType: 'specific_bin', targetBinId: 'other-org-bin' })
     );
 
     expect(result.success).toBe(false);
@@ -97,7 +97,7 @@ describe('CreateReceivingAppointmentCommandHandler', () => {
 
     const result = await new CreateReceivingAppointmentCommandHandler(prisma, bus).execute(
       createTestCommand(CREATE_RECEIVING_APPOINTMENT, {
-        locationId: 'loc-1',
+        facilityId: 'fac-1',
         scheduledAt: '2026-09-07T09:00:00Z',
         scheduledEndAt: '2026-09-07T10:00:00Z',
         carrierName: 'A Haulier',
@@ -118,7 +118,7 @@ describe('CreateReceivingAppointmentCommandHandler', () => {
 
     const result = await new CreateReceivingAppointmentCommandHandler(prisma, bus).execute(
       createTestCommand(CREATE_RECEIVING_APPOINTMENT, {
-        locationId: 'loc-1',
+        facilityId: 'fac-1',
         scheduledAt: '2026-09-07T10:00:00Z',
         scheduledEndAt: '2026-09-07T09:00:00Z',
       })
@@ -134,7 +134,7 @@ describe('CreateReceivingAppointmentCommandHandler', () => {
 
     const result = await new CreateReceivingAppointmentCommandHandler(prisma, bus).execute(
       createTestCommand(CREATE_RECEIVING_APPOINTMENT, {
-        locationId: 'loc-1',
+        facilityId: 'fac-1',
         scheduledAt: '2026-09-07T09:00:00Z',
         scheduledEndAt: '2026-09-07T10:00:00Z',
         dockBinId: 'other-org-bin',

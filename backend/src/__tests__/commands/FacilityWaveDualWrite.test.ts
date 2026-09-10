@@ -43,30 +43,24 @@ function buildPrisma(opts: {
   return { prisma, tx };
 }
 
-const wavePayload = { locationId: 'loc-1', pickStrategy: 'discrete', orderIds: ['ord-1'] };
-const templatePayload = { locationId: 'loc-1', name: 'Morning pick', pickStrategy: 'discrete' };
+const wavePayload = { facilityId: 'fac-1', pickStrategy: 'discrete', orderIds: ['ord-1'] };
+const templatePayload = { facilityId: 'fac-1', name: 'Morning pick', pickStrategy: 'discrete' };
 
 describe('Facility dual-write on wave creates (#229)', () => {
   beforeEach(() => jest.clearAllMocks());
 
-  it('derives a facility from the location and files the wave under it', async () => {
-    const { prisma, tx } = buildPrisma({ existingFacility: null });
+  it('writes the named facility and its source location on the wave', async () => {
+    const { prisma, tx } = buildPrisma();
     const { bus } = mockEventBus();
 
     const result = await new CreateWaveCommandHandler(prisma, bus)
       .execute(createTestCommand(CREATE_WAVE, wavePayload));
 
     expect(result.success).toBe(true);
-    expect(tx.facility.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ orgId: 'test-org', sourceLocationId: 'loc-1' }) })
-    );
     expect(tx.wave.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ facilityId: 'fac-new', locationId: 'loc-1' }) })
+      expect.objectContaining({ data: expect.objectContaining({ facilityId: 'fac-1', locationId: 'loc-1' }) })
     );
-    expect(result.events!.map(e => e.type)).toEqual([
-      EVENT_TYPES.FACILITY_CREATED,
-      EVENT_TYPES.WAVE_CREATED,
-    ]);
+    expect(result.events!.map(e => e.type)).toEqual([EVENT_TYPES.WAVE_CREATED]);
   });
 
   it('reuses an existing facility for the wave template', async () => {

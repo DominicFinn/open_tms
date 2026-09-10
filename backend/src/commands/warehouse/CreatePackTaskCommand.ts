@@ -3,10 +3,10 @@ import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { Command } from '../types.js';
-import { resolveFacilityForLocation } from '../facilities/resolveFacility.js';
+import { loadFacilityForWrite } from '../facilities/resolveFacility.js';
 
 export interface CreatePackTaskPayload {
-  locationId: string;
+  facilityId: string;
   orderId: string;
   pickTaskId?: string | null;
   packStationBinId?: string | null;
@@ -40,14 +40,15 @@ export class CreatePackTaskCommandHandler extends BaseCommandHandler<
 
     if (p.lines.length === 0) throw new Error('Pack task must have at least one line');
 
-    // Phase 2a dual-write (#227): the task is filed under both the Location and the Facility
-    // derived from it, so nothing is left without a facility when reads switch over.
-    const facilityId = await resolveFacilityForLocation(tx, command, p.locationId, emit);
+    // Phase 2a (#248): the caller names the facility. locationId is still written from the
+    // facility's source location until 6c drops the column, and is null in a warehouse-only
+    // install.
+    const facility = await loadFacilityForWrite(tx, command.orgId, p.facilityId);
 
     const task = await tx.packTask.create({
       data: {
-        locationId: p.locationId,
-        facilityId,
+        facilityId: facility.id,
+        locationId: facility.sourceLocationId,
         orderId: p.orderId,
         pickTaskId: p.pickTaskId ?? null,
         packStationBinId: p.packStationBinId ?? null,

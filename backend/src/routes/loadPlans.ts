@@ -53,9 +53,9 @@ export async function loadPlanRoutes(server: FastifyInstance) {
       tags: ['WMS - Load Planning'],
       summary: 'Create a load plan from staged assignments',
       body: {
-        type: 'object', required: ['locationId', 'stagingAssignmentIds'],
+        type: 'object', required: ['facilityId', 'stagingAssignmentIds'],
         properties: {
-          locationId: { type: 'string', format: 'uuid' },
+          facilityId: { type: 'string', format: 'uuid' },
           shipmentId: { type: 'string', nullable: true },
           dockBinId: { type: 'string', format: 'uuid', nullable: true },
           carrierId: { type: 'string', nullable: true },
@@ -66,7 +66,7 @@ export async function loadPlanRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const body = z.object({
-      locationId: z.string().uuid(),
+      facilityId: z.string().uuid(),
       shipmentId: z.string().nullable().optional(),
       dockBinId: z.string().uuid().nullable().optional(),
       carrierId: z.string().nullable().optional(),

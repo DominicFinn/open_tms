@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { CircleAlert, Plus, X } from 'lucide-react';
 
 import { API_URL } from '../api';
+import { useFacilities } from '../hooks/useFacilities';
+import { FacilitySelect } from '@/components/FacilitySelect';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -28,13 +30,14 @@ interface BinOption { id: string; label: string; binType: string; }
 
 export default function VNextWmsCreateReceiving() {
   const navigate = useNavigate();
-  const [locations, setLocations] = useState<LocationOption[]>([]);
+  const { facilities, facilityId, setFacilityId, loading: facilitiesLoading, error: facilitiesError } = useFacilities();
+
   const [dockBins, setDockBins] = useState<BinOption[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   const [form, setForm] = useState({
-    locationId: '',
+    facilityId: '',
     receivingType: 'blind' as 'asn' | 'blind',
     dockBinId: 'none',
     crossDock: false,
@@ -46,29 +49,17 @@ export default function VNextWmsCreateReceiving() {
 
   const [lines, setLines] = useState<Array<{ sku: string; expectedQuantity: string; lotNumber: string }>>([]);
 
-  useEffect(() => {
-    fetch(`${API_URL}/api/v1/locations`)
-      .then(r => r.json())
-      .then(res => {
-        const locs = (res.data || []).filter(
-          (l: any) => !l.locationType || ['warehouse', 'distribution_centre', 'cross_dock'].includes(l.locationType)
-        );
-        setLocations(locs);
-        if (locs.length === 1) setForm(f => ({ ...f, locationId: locs[0].id }));
-      })
-      .catch(() => {});
-  }, []);
 
   useEffect(() => {
-    if (!form.locationId) { setDockBins([]); return; }
-    fetch(`${API_URL}/api/v1/warehouse/bins?locationId=${form.locationId}`)
+    if (!form.facilityId) { setDockBins([]); return; }
+    fetch(`${API_URL}/api/v1/warehouse/bins?facilityId=${form.facilityId}`)
       .then(r => r.json())
       .then(res => {
         const docks = (res.data || []).filter((b: any) => b.binType === 'dock_door');
         setDockBins(docks);
       })
       .catch(() => {});
-  }, [form.locationId]);
+  }, [form.facilityId]);
 
   const addLine = () => {
     setLines([...lines, { sku: '', expectedQuantity: '1', lotNumber: '' }]);
@@ -88,7 +79,7 @@ export default function VNextWmsCreateReceiving() {
     setSaving(true);
 
     const payload: Record<string, unknown> = {
-      locationId: form.locationId,
+      facilityId: form.facilityId,
       receivingType: form.receivingType,
       dockBinId: form.dockBinId === 'none' ? null : form.dockBinId,
       crossDock: form.crossDock,
@@ -142,17 +133,15 @@ export default function VNextWmsCreateReceiving() {
         <Card className="max-w-4xl">
           <CardContent className="grid gap-4 p-6 md:grid-cols-2">
             <div className="space-y-2">
-              <Label>Location *</Label>
-              <Select value={form.locationId} onValueChange={v => setForm({ ...form, locationId: v })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select warehouse..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {locations.map(l => (
-                    <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>Facility *</Label>
+              <FacilitySelect
+                facilities={facilities}
+                value={form.facilityId}
+                onChange={v => setForm({ ...form, facilityId: v })}
+                loading={facilitiesLoading}
+                error={facilitiesError}
+                className="w-full"
+              />
             </div>
 
             <div className="space-y-2">

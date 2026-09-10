@@ -25,7 +25,7 @@ describe('CreatePackTaskCommandHandler', () => {
 
     const result = await handler.execute(
       createTestCommand(CREATE_PACK_TASK, {
-        locationId: 'loc-1', orderId: 'order-1',
+        facilityId: 'fac-1', orderId: 'order-1',
         lines: [
           { orderLineItemId: 'oli-1', trackableUnitId: 'unit-1', sku: 'SKU-001', expectedQuantity: 5 },
           { orderLineItemId: 'oli-2', trackableUnitId: 'unit-1', sku: 'SKU-002', expectedQuantity: 3 },
@@ -49,7 +49,7 @@ describe('CreatePackTaskCommandHandler', () => {
     const handler = new CreatePackTaskCommandHandler(prisma, bus);
 
     const result = await handler.execute(
-      createTestCommand(CREATE_PACK_TASK, { locationId: 'loc-1', orderId: 'order-1', lines: [] })
+      createTestCommand(CREATE_PACK_TASK, { facilityId: 'fac-1', orderId: 'order-1', lines: [] })
     );
 
     expect(result.success).toBe(false);
@@ -172,7 +172,7 @@ describe('CreateStagingAssignmentCommandHandler', () => {
 
     const result = await handler.execute(
       createTestCommand(CREATE_STAGING_ASSIGNMENT, {
-        locationId: 'loc-1', orderId: 'order-1',
+        facilityId: 'fac-1', orderId: 'order-1',
         trackableUnitId: 'unit-1', stagingBinId: 'bin-staging',
       })
     );
@@ -200,7 +200,7 @@ describe('CreateStagingAssignmentCommandHandler', () => {
 
     const result = await handler.execute(
       createTestCommand(CREATE_STAGING_ASSIGNMENT, {
-        locationId: 'loc-1', orderId: 'order-1',
+        facilityId: 'fac-1', orderId: 'order-1',
         trackableUnitId: 'unit-1', stagingBinId: 'missing',
       })
     );

@@ -153,9 +153,9 @@ export async function putawayRoutes(server: FastifyInstance) {
       summary: 'Create a putaway rule',
       body: {
         type: 'object',
-        required: ['locationId', 'name', 'targetType'],
+        required: ['facilityId', 'name', 'targetType'],
         properties: {
-          locationId: { type: 'string', format: 'uuid' },
+          facilityId: { type: 'string', format: 'uuid' },
           name: { type: 'string' },
           priority: { type: 'integer' },
           skuPattern: { type: 'string', nullable: true },
@@ -174,7 +174,7 @@ export async function putawayRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const body = z.object({
-      locationId: z.string().uuid(),
+      facilityId: z.string().uuid(),
       name: z.string().min(1).max(100),
       priority: z.number().int().min(1).max(100).optional().default(50),
       skuPattern: z.string().nullable().optional(),
