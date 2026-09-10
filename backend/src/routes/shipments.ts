@@ -325,7 +325,26 @@ export async function shipmentRoutes(server: FastifyInstance) {
       reply.code(404);
       return { data: null, error: 'Shipment not found' };
     }
-    return { data: shipment, error: null };
+
+    // currentLat/currentLng/lastLocationAt live only on ShipmentReadModel — kept
+    // fresh by ShipmentProjection.onLocationReceived from inbound tracking
+    // webhooks — the live Shipment row has no such columns. Display-only (the
+    // map pin and a route-deviation check), so reading the read model here
+    // doesn't cross into deciding anything from it.
+    const readModel = await server.prisma.shipmentReadModel.findUnique({
+      where: { id },
+      select: { currentLat: true, currentLng: true, lastLocationAt: true },
+    });
+
+    return {
+      data: {
+        ...shipment,
+        currentLat: readModel?.currentLat ?? null,
+        currentLng: readModel?.currentLng ?? null,
+        lastLocationAt: readModel?.lastLocationAt ?? null,
+      },
+      error: null,
+    };
   });
 
   // Orders eligible to be manually added to this shipment: validated, same
