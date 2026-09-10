@@ -79,17 +79,26 @@ export class AuditHandler implements IEventHandler {
     let userName: string | undefined;
 
     if (event.actorId) {
-      userId = event.actorId;
+      // userId is a real FK to User — only set it once a matching row is
+      // confirmed. Plenty of actorIds aren't User ids at all ('system' for
+      // background jobs, a carrier-portal user, a webhook), so setting it
+      // unconditionally 500'd every audit write for those (never caught
+      // until a code path — like the live-tracking webhook — actually
+      // exercised one; see #250). userName still records the raw actor for
+      // display even when it isn't a resolvable User.
       try {
         const user = await this.prisma.user.findUnique({
           where: { id: event.actorId },
           select: { firstName: true, lastName: true, email: true },
         });
         if (user) {
+          userId = event.actorId;
           userName = `${user.firstName} ${user.lastName}`.trim() || user.email;
+        } else {
+          userName = event.actorId;
         }
       } catch {
-        // Non-critical — proceed with userId only
+        userName = event.actorId;
       }
     }
 

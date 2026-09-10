@@ -123,6 +123,8 @@ export class ShipmentAssignmentService implements IShipmentAssignmentService {
       order.originId,
       order.destinationId,
       order.serviceLevel,
+      order.temperatureControl === 'refrigerated' || order.temperatureControl === 'frozen',
+      order.requiresHazmat,
       actorId,
     );
 
@@ -224,19 +226,26 @@ export class ShipmentAssignmentService implements IShipmentAssignmentService {
     originId: string,
     destinationId: string,
     serviceLevel: string,
+    tempControlled: boolean,
+    hazmat: boolean,
     actorId: string | null,
   ) {
     // For FTL, always create a new shipment (dedicated)
     if (serviceLevel === 'FTL') {
-      return this.createShipment(laneId, customerId, originId, destinationId, serviceLevel, actorId);
+      return this.createShipment(laneId, customerId, originId, destinationId, serviceLevel, tempControlled, hazmat, actorId);
     }
 
-    // For LTL, try to find an existing draft shipment
+    // For LTL, try to find an existing draft shipment — matching the same
+    // declared restrictions, so an ambient order doesn't consolidate onto a
+    // reefer/hazmat shipment or vice versa (addOrdersToShipment rejects that
+    // mismatch anyway; filtering here finds a shipment that actually fits).
     const existingShipment = await this.prisma.shipment.findFirst({
       where: {
         laneId,
         status: 'draft', // Only consolidate into draft shipments
-        archived: false
+        archived: false,
+        tempControlled,
+        hazmat,
       },
       orderBy: {
         createdAt: 'desc'
@@ -248,7 +257,7 @@ export class ShipmentAssignmentService implements IShipmentAssignmentService {
     }
 
     // No existing shipment - create new one
-    return this.createShipment(laneId, customerId, originId, destinationId, serviceLevel, actorId);
+    return this.createShipment(laneId, customerId, originId, destinationId, serviceLevel, tempControlled, hazmat, actorId);
   }
 
   /**
@@ -264,6 +273,8 @@ export class ShipmentAssignmentService implements IShipmentAssignmentService {
     originId: string,
     destinationId: string,
     serviceLevel: string,
+    tempControlled: boolean,
+    hazmat: boolean,
     actorId: string | null,
   ) {
     const timestamp = Date.now().toString(36).toUpperCase().slice(-6);
@@ -281,7 +292,11 @@ export class ShipmentAssignmentService implements IShipmentAssignmentService {
       type: CREATE_SHIPMENT,
       orgId: customer.orgId,
       actorId,
-      payload: { reference, customerId, laneId, originId, destinationId },
+      // tempControlled/hazmat are declared at creation, not left unset —
+      // otherwise a temperature-controlled or hazmat order matches a capable
+      // lane and then its own auto-created shipment gets rejected by
+      // addOrdersToShipment for not being flagged for either (#250).
+      payload: { reference, customerId, laneId, originId, destinationId, tempControlled, hazmat },
       metadata: { correlationId: randomUUID(), source: ASSIGNMENT_SOURCE },
     });
 
