@@ -38,6 +38,16 @@ export async function laneRoutes(server: FastifyInstance) {
         destinationId: z.string().uuid(),
         distance: z.number().positive().optional(),
         notes: z.string().optional(),
+        // CreateLaneCommand has always accepted this; it was just never
+        // exposed here, so every lane created through this route silently
+        // took the schema default (LTL) — findMatchingLane's serviceLevel
+        // filter then rejected any FTL order for it (#250).
+        serviceLevel: z.enum(['FTL', 'LTL', 'Both']).optional(),
+        // Same gap as serviceLevel above — findMatchingLane requires these
+        // for any refrigerated/frozen/hazmat order, but nothing ever let a
+        // lane be marked capable of either (#250).
+        supportsTemperatureControl: z.boolean().optional(),
+        supportsHazmat: z.boolean().optional(),
         stops: z.array(z.object({
           locationId: z.string().uuid(),
           order: z.number().int().positive(),
@@ -105,6 +115,9 @@ export async function laneRoutes(server: FastifyInstance) {
         destinationId: body.destinationId,
         distance: body.distance,
         notes: body.notes,
+        serviceLevel: body.serviceLevel,
+        supportsTemperatureControl: body.supportsTemperatureControl,
+        supportsHazmat: body.supportsHazmat,
         stops: body.stops,
       },
       metadata: { correlationId: randomUUID(), source: 'api' },

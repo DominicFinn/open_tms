@@ -214,6 +214,11 @@ export async function seedRoutes(server: FastifyInstance) {
             originId: loc(l.from).id,
             destinationId: loc(l.to).id,
             distance: l.distance,
+            // Without this every seeded lane silently took the schema
+            // default (LTL), so ShipmentAssignmentService.findMatchingLane's
+            // serviceLevel filter rejected every FTL order against it (#250)
+            // — none of these demo lanes are meant to be LTL-only.
+            serviceLevel: 'Both',
           }))
         });
       }
