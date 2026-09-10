@@ -17,8 +17,8 @@ function makeEvent(overrides: Partial<any> = {}): any {
 
 function makePrisma(overrides: any = {}) {
   return {
-    pickTask: { findUnique: jest.fn() },
-    warehouseBin: { findUnique: jest.fn() },
+    pickTask: { findFirst: jest.fn() },
+    warehouseBin: { findFirst: jest.fn() },
     ...overrides,
   } as any;
 }
@@ -29,29 +29,29 @@ describe('AutoReplenishmentHandler', () => {
     expect(h.eventPatterns).toEqual(['pick_line.completed', 'inventory.adjusted']);
   });
 
-  it('resolves locationId from pick task and dispatches CHECK_REPLENISHMENT', async () => {
+  it('resolves the facility from pick task and dispatches CHECK_REPLENISHMENT', async () => {
     const dispatch = jest.fn().mockResolvedValue({ success: true });
     const prisma = makePrisma({
-      pickTask: { findUnique: jest.fn().mockResolvedValue({ locationId: 'loc-1' }) },
+      pickTask: { findFirst: jest.fn().mockResolvedValue({ facilityId: 'fac-1' }) },
     });
     const handler = new AutoReplenishmentHandler(prisma, { dispatch } as any);
 
     await handler.handle(makeEvent());
 
-    expect(prisma.pickTask.findUnique).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'pt-1' }, select: { locationId: true } }),
+    expect(prisma.pickTask.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'pt-1', orgId: 'org1' }, select: { facilityId: true } }),
     );
     expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({
       type: 'replenishment.check',
-      payload: { locationId: 'loc-1', sku: 'SKU-A' },
+      payload: { facilityId: 'fac-1', sku: 'SKU-A' },
       orgId: 'org1',
     }));
   });
 
-  it('resolves locationId from bin for inventory.adjusted events', async () => {
+  it('resolves the facility from bin for inventory.adjusted events', async () => {
     const dispatch = jest.fn().mockResolvedValue({ success: true });
     const prisma = makePrisma({
-      warehouseBin: { findUnique: jest.fn().mockResolvedValue({ locationId: 'loc-2' }) },
+      warehouseBin: { findFirst: jest.fn().mockResolvedValue({ facilityId: 'fac-2' }) },
     });
     const handler = new AutoReplenishmentHandler(prisma, { dispatch } as any);
 
@@ -61,27 +61,27 @@ describe('AutoReplenishmentHandler', () => {
       payload: { binId: 'bin-1', sku: 'SKU-B', quantityChange: -5 },
     }));
 
-    expect(prisma.warehouseBin.findUnique).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'bin-1' }, select: { locationId: true } }),
+    expect(prisma.warehouseBin.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'bin-1', orgId: 'org1' }, select: { facilityId: true } }),
     );
     expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({
-      payload: { locationId: 'loc-2', sku: 'SKU-B' },
+      payload: { facilityId: 'fac-2', sku: 'SKU-B' },
     }));
   });
 
-  it('uses payload.locationId directly when present', async () => {
+  it('uses payload.facilityId directly when present', async () => {
     const dispatch = jest.fn().mockResolvedValue({ success: true });
     const prisma = makePrisma();
     const handler = new AutoReplenishmentHandler(prisma, { dispatch } as any);
 
     await handler.handle(makeEvent({
-      payload: { pickTaskId: 'pt-x', sku: 'SKU-C', locationId: 'loc-direct' },
+      payload: { pickTaskId: 'pt-x', sku: 'SKU-C', facilityId: 'fac-direct' },
     }));
 
-    // Should NOT look up pickTask when locationId is already in payload
-    expect(prisma.pickTask.findUnique).not.toHaveBeenCalled();
+    // Should NOT look up pickTask when the event already names the facility
+    expect(prisma.pickTask.findFirst).not.toHaveBeenCalled();
     expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({
-      payload: { locationId: 'loc-direct', sku: 'SKU-C' },
+      payload: { facilityId: 'fac-direct', sku: 'SKU-C' },
     }));
   });
 
@@ -95,7 +95,7 @@ describe('AutoReplenishmentHandler', () => {
   it('silently skips when locationId cannot be resolved', async () => {
     const dispatch = jest.fn();
     const prisma = makePrisma({
-      pickTask: { findUnique: jest.fn().mockResolvedValue(null) },
+      pickTask: { findFirst: jest.fn().mockResolvedValue(null) },
     });
     const handler = new AutoReplenishmentHandler(prisma, { dispatch } as any);
     await handler.handle(makeEvent());
@@ -105,7 +105,7 @@ describe('AutoReplenishmentHandler', () => {
   it('catches dispatch errors without throwing', async () => {
     const dispatch = jest.fn().mockRejectedValue(new Error('bus down'));
     const prisma = makePrisma({
-      pickTask: { findUnique: jest.fn().mockResolvedValue({ locationId: 'loc-1' }) },
+      pickTask: { findFirst: jest.fn().mockResolvedValue({ facilityId: 'fac-1' }) },
     });
     const handler = new AutoReplenishmentHandler(prisma, { dispatch } as any);
     await expect(handler.handle(makeEvent())).resolves.toBeUndefined();

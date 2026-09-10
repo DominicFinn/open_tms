@@ -66,7 +66,6 @@ model Facility {
 model WarehouseZone {
   id              String    @id @default(uuid())
   locationId      String?
-  location        Location?  @relation(fields: [locationId], references: [id])
   // Phase 2a dual-write (#217): nullable during expand, authoritative after contract.
   facilityId      String?
   facility        Facility? @relation(fields: [facilityId], references: [id])
@@ -102,7 +101,6 @@ model WarehouseAisle {
   zoneId     String
   zone       WarehouseZone @relation(fields: [zoneId], references: [id], onDelete: Cascade)
   locationId String?
-  location   Location?      @relation(fields: [locationId], references: [id])
   // Phase 2a dual-write (#217): nullable during expand, authoritative after contract.
   facilityId String?
   facility   Facility?     @relation(fields: [facilityId], references: [id])
@@ -127,7 +125,6 @@ model WarehouseBin {
   aisleId            String?
   aisle              WarehouseAisle? @relation(fields: [aisleId], references: [id])
   locationId         String?
-  location           Location?        @relation(fields: [locationId], references: [id])
   // Phase 2a dual-write (#217): nullable during expand, authoritative after contract.
   facilityId         String?
   facility           Facility?       @relation(fields: [facilityId], references: [id])
@@ -203,7 +200,6 @@ model IndoorZoneAnchor {
 model ReceivingAppointment {
   id                String        @id @default(uuid())
   locationId        String?
-  location          Location?      @relation(fields: [locationId], references: [id])
   facilityId        String?
   facility          Facility?     @relation(fields: [facilityId], references: [id])
   inboundShipmentId String?
@@ -235,7 +231,6 @@ model ReceivingAppointment {
 model ReceivingTask {
   id                String                @id @default(uuid())
   locationId        String?
-  location          Location?              @relation(fields: [locationId], references: [id])
   facilityId        String?
   facility          Facility?             @relation(fields: [facilityId], references: [id])
   appointmentId     String?
@@ -290,7 +285,6 @@ model ReceivingLine {
 model PutawayRule {
   id         String   @id @default(uuid())
   locationId String?
-  location   Location?  @relation(fields: [locationId], references: [id])
   facilityId String?
   facility   Facility? @relation(fields: [facilityId], references: [id])
   name       String
@@ -326,7 +320,6 @@ model PutawayRule {
 model PutawayTask {
   id               String         @id @default(uuid())
   locationId       String?
-  location         Location?       @relation(fields: [locationId], references: [id])
   facilityId       String?
   facility         Facility?      @relation(fields: [facilityId], references: [id])
   receivingTaskId  String?
@@ -358,7 +351,6 @@ model PutawayTask {
 model WaveTemplate {
   id                 String    @id @default(uuid())
   locationId         String?
-  location           Location?  @relation(fields: [locationId], references: [id])
   facilityId         String?
   facility           Facility? @relation(fields: [facilityId], references: [id])
   name               String
@@ -391,7 +383,6 @@ model WaveTemplate {
 model Wave {
   id                    String        @id @default(uuid())
   locationId            String?
-  location              Location?      @relation(fields: [locationId], references: [id])
   facilityId            String?
   facility              Facility?     @relation(fields: [facilityId], references: [id])
   templateId            String?
@@ -437,7 +428,6 @@ model WaveOrder {
 model PickTask {
   id               String         @id @default(uuid())
   locationId       String?
-  location         Location?       @relation(fields: [locationId], references: [id])
   facilityId       String?
   facility         Facility?      @relation(fields: [facilityId], references: [id])
   waveId           String?
@@ -504,7 +494,6 @@ model PickLine {
 model PackTask {
   id               String        @id @default(uuid())
   locationId       String?
-  location         Location?      @relation(fields: [locationId], references: [id])
   facilityId       String?
   facility         Facility?     @relation(fields: [facilityId], references: [id])
   orderId          String
@@ -630,7 +619,6 @@ model CartonCatalogue {
 model StagingAssignment {
   id              String        @id @default(uuid())
   locationId      String?
-  location        Location?      @relation(fields: [locationId], references: [id])
   facilityId      String?
   facility        Facility?     @relation(fields: [facilityId], references: [id])
   orderId         String

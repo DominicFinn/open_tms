@@ -1976,6 +1976,15 @@ facility's `sourceLocationId`, and is null for a facility that has none. Droppin
 Bin label uniqueness is checked per facility rather than through the `(locationId, label)` compound
 unique, which cannot serve a warehouse-only install and never carried `orgId`.
 
+**The `Location` foreign keys are gone** (#280). `locationId` survives on the warehouse tables as a
+soft string reference, which is what the module rule asks for, and a schema without a `Location`
+table now resolves. The list endpoints take `facilityId` only.
+
+The columns themselves cannot go yet. `InventoryRecord.locationId` is NOT NULL and the inventory
+module has no facility, so putaway completion, returns and wave release still need a real Location;
+`CompletePutaway` also resolves a scanned bin by `(locationId, label)`. Giving inventory a facility
+is Phase 4, and the columns go with it.
+
 ---
 
 ### Domain: Warehouse Zones & Bins
