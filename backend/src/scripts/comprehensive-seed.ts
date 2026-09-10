@@ -1640,8 +1640,11 @@ async function seedShipments(
       },
     });
 
-    // Link delivery stop to the order + order<->shipment junction.
-    await prisma.order.update({ where: { id: order.id }, data: { deliveryStopId: delivery.id } });
+    // Link delivery stop to the order + order<->shipment junction. Mirrors
+    // linkOrdersToShipment: creating the OrderShipment row always flips the
+    // order to 'assigned', so a seeded order never sits at 'verified' while
+    // already linked to a shipment.
+    await prisma.order.update({ where: { id: order.id }, data: { deliveryStopId: delivery.id, status: 'assigned' } });
     await prisma.orderShipment.create({ data: { orderId: order.id, shipmentId: shipment.id } });
 
     // Load (vehicle + driver) for launched shipments only.
