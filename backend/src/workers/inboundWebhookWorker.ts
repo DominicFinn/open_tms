@@ -241,6 +241,34 @@ export function createInboundWebhookWorker(
           });
           shipmentEventId = shipmentEvent.id;
 
+          // Publish the resolved position so the shipment read model's current
+          // location updates (ShipmentProjection.onLocationReceived → map/list dot).
+          // Mirrors the System Loco path above — this branch has no gateOrg in
+          // scope of its own, so it's resolved here the same way.
+          if (eventBus) {
+            try {
+              const gateOrg = await prisma.organization.findFirst({ select: { id: true } });
+              if (gateOrg) {
+                const lat = parseFloat(String(location.lat));
+                const lng = parseFloat(String(location.lon || location.lng));
+                const eventTime = event?.startTime
+                  ? new Date(event.startTime).toISOString()
+                  : new Date().toISOString();
+                await eventBus.publish(createEvent({
+                  type: EVENT_TYPES.TRACKING_LOCATION_RECEIVED,
+                  orgId: gateOrg.id,
+                  actorId: 'system',
+                  entityType: 'shipment',
+                  entityId: shipmentId,
+                  payload: { shipmentId, lat, lng, eventTime },
+                  source: 'legacy_webhook',
+                }));
+              }
+            } catch (err) {
+              console.error(`[WebhookWorker] Failed to publish location event: ${(err as Error).message}`);
+            }
+          }
+
           // Trigger geofence check
           try {
             const lat = parseFloat(String(location.lat));
