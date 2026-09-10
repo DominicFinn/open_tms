@@ -43,6 +43,7 @@ import { UnarchiveOrderCommandHandler } from '../../commands/orders/UnarchiveOrd
 import { ConvertOrderToShipmentCommandHandler } from '../../commands/orders/ConvertOrderToShipmentCommand.js';
 import { CombineOrdersIntoShipmentCommandHandler } from '../../commands/orders/CombineOrdersIntoShipmentCommand.js';
 import { SplitOrderCommandHandler } from '../../commands/orders/SplitOrderCommand.js';
+import { AddOrdersToShipmentCommandHandler } from '../../commands/orders/AddOrdersToShipmentCommand.js';
 import {
   CreateTrackableUnitCommandHandler,
   UpdateTrackableUnitCommandHandler,
@@ -594,6 +595,7 @@ export function registerTmsCommandHandlers(bus: CommandBus, deps: CommandHandler
   bus.register(new ConvertOrderToShipmentCommandHandler(prisma, eventBus));
   bus.register(new CombineOrdersIntoShipmentCommandHandler(prisma, eventBus));
   bus.register(new SplitOrderCommandHandler(prisma, eventBus));
+  bus.register(new AddOrdersToShipmentCommandHandler(prisma, eventBus));
 
   // Shipment commands
   bus.register(new CreateShipmentCommandHandler(prisma, eventBus, queue));

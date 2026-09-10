@@ -2,6 +2,7 @@ import { OrderConversionService } from '../../services/OrderConversionService';
 import { CONVERT_ORDER_TO_SHIPMENT } from '../../commands/orders/ConvertOrderToShipmentCommand';
 import { COMBINE_ORDERS_INTO_SHIPMENT } from '../../commands/orders/CombineOrdersIntoShipmentCommand';
 import { SPLIT_ORDER } from '../../commands/orders/SplitOrderCommand';
+import { ADD_ORDERS_TO_SHIPMENT } from '../../commands/orders/AddOrdersToShipmentCommand';
 
 function makeOrder(overrides: any = {}) {
   return {
@@ -66,9 +67,10 @@ describe('OrderConversionService', () => {
   // flips, audit logging, SHIPMENT_CREATED/ORDER_ASSIGNED_TO_SHIPMENT
   // emission) now lives with the command handlers themselves:
   // ConvertOrderToShipmentCommand.test.ts, CombineOrdersIntoShipmentCommand.test.ts,
-  // SplitOrderCommand.test.ts. These tests cover only the service's thin
-  // wrapper: resolving orgId for the command envelope and mapping the
-  // CommandResult back onto this service's public return shapes (#264).
+  // SplitOrderCommand.test.ts, AddOrdersToShipmentCommand.test.ts. These tests
+  // cover only the service's thin wrapper: resolving orgId for the command
+  // envelope and mapping the CommandResult back onto this service's public
+  // return shapes (#264, #266).
 
   describe('convertOrder', () => {
     it('dispatches CONVERT_ORDER_TO_SHIPMENT with the order\'s orgId and actorId, and maps the result', async () => {
@@ -199,87 +201,94 @@ describe('OrderConversionService', () => {
       };
     }
 
-    it('appends to the existing items array rather than overwriting it', async () => {
+    it('dispatches ADD_ORDERS_TO_SHIPMENT with only the eligible order ids, and maps a successful result', async () => {
       const order = makeOrder();
-      const tx = makeTx();
       const shipment = makeShipment();
       const prisma = {
         shipment: { findFirst: jest.fn().mockResolvedValue(shipment) },
         order: { findMany: jest.fn().mockResolvedValue([order]) },
-        $transaction: jest.fn((fn: Function) => fn(tx)),
       } as any;
-      const service = new OrderConversionService(prisma, makeCommandBus());
+      const commandBus = makeCommandBus({ success: true, data: { shipmentId: 'ship-1', addedOrderIds: ['order-1'] }, events: [] });
+      const service = new OrderConversionService(prisma, commandBus);
 
       const result = await service.addOrdersToShipment('test-org', 'ship-1', ['order-1'], 'user-1');
 
       expect(result.success).toBe(true);
-      const itemsWritten = tx.shipment.update.mock.calls[0][0].data.items;
-      expect(itemsWritten).toHaveLength(2);
-      expect(itemsWritten[0].orderId).toBe('order-existing');
-      expect(itemsWritten[1].orderId).toBe('order-1');
+      expect(result.shipmentIds).toEqual(['ship-1']);
+      expect(commandBus.dispatch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: ADD_ORDERS_TO_SHIPMENT,
+          orgId: 'test-org',
+          actorId: 'user-1',
+          payload: { shipmentId: 'ship-1', orderIds: ['order-1'] },
+        })
+      );
     });
 
-    it('rejects orders with a different origin than the shipment', async () => {
+    it('propagates a command failure as a failed result, without touching shipmentIds', async () => {
+      const order = makeOrder();
+      const shipment = makeShipment();
+      const prisma = {
+        shipment: { findFirst: jest.fn().mockResolvedValue(shipment) },
+        order: { findMany: jest.fn().mockResolvedValue([order]) },
+      } as any;
+      const commandBus = makeCommandBus({ success: false, error: 'Shipment not found', events: [] });
+      const service = new OrderConversionService(prisma, commandBus);
+
+      const result = await service.addOrdersToShipment('test-org', 'ship-1', ['order-1']);
+
+      expect(result.success).toBe(false);
+      expect(result.shipmentIds).toEqual([]);
+      expect(result.errors).toEqual(['Shipment not found']);
+    });
+
+    it('rejects orders with a different origin than the shipment, without dispatching', async () => {
       const order = makeOrder({ originId: 'some-other-origin' });
       const shipment = makeShipment();
       const prisma = {
         shipment: { findFirst: jest.fn().mockResolvedValue(shipment) },
         order: { findMany: jest.fn().mockResolvedValue([order]) },
       } as any;
-      const service = new OrderConversionService(prisma, makeCommandBus());
+      const commandBus = makeCommandBus();
+      const service = new OrderConversionService(prisma, commandBus);
 
       const result = await service.addOrdersToShipment('test-org', 'ship-1', ['order-1']);
 
       expect(result.success).toBe(false);
       expect(result.errors[0]).toMatch(/different origin/);
+      expect(commandBus.dispatch).not.toHaveBeenCalled();
     });
 
-    it('rejects orders with a different customer than the shipment', async () => {
+    it('rejects orders with a different customer than the shipment, without dispatching', async () => {
       const order = makeOrder({ customerId: 'some-other-customer' });
       const shipment = makeShipment();
       const prisma = {
         shipment: { findFirst: jest.fn().mockResolvedValue(shipment) },
         order: { findMany: jest.fn().mockResolvedValue([order]) },
       } as any;
-      const service = new OrderConversionService(prisma, makeCommandBus());
+      const commandBus = makeCommandBus();
+      const service = new OrderConversionService(prisma, commandBus);
 
       const result = await service.addOrdersToShipment('test-org', 'ship-1', ['order-1']);
 
       expect(result.success).toBe(false);
       expect(result.errors[0]).toMatch(/different customer/);
+      expect(commandBus.dispatch).not.toHaveBeenCalled();
     });
 
-    it('rejects adding orders to a shipment that has already left draft/ready', async () => {
+    it('rejects adding orders to a shipment that has already left draft/ready, without dispatching', async () => {
       const shipment = makeShipment({ status: 'in_progress' });
       const prisma = {
         shipment: { findFirst: jest.fn().mockResolvedValue(shipment) },
       } as any;
-      const service = new OrderConversionService(prisma, makeCommandBus());
+      const commandBus = makeCommandBus();
+      const service = new OrderConversionService(prisma, commandBus);
 
       const result = await service.addOrdersToShipment('test-org', 'ship-1', ['order-1']);
 
       expect(result.success).toBe(false);
       expect(result.message).toMatch(/already left draft\/ready/);
-    });
-
-    it('reuses an existing stop for a destination rather than creating a duplicate', async () => {
-      const order = makeOrder();
-      const tx = makeTx();
-      tx.shipmentStop.findFirst.mockResolvedValue({ id: 'existing-stop-1' });
-      const shipment = makeShipment();
-      const prisma = {
-        shipment: { findFirst: jest.fn().mockResolvedValue(shipment) },
-        order: { findMany: jest.fn().mockResolvedValue([order]) },
-        $transaction: jest.fn((fn: Function) => fn(tx)),
-      } as any;
-      const service = new OrderConversionService(prisma, makeCommandBus());
-
-      await service.addOrdersToShipment('test-org', 'ship-1', ['order-1']);
-
-      expect(tx.shipmentStop.create).not.toHaveBeenCalled();
-      expect(tx.order.update).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ deliveryStopId: 'existing-stop-1' }) })
-      );
+      expect(commandBus.dispatch).not.toHaveBeenCalled();
     });
   });
 
