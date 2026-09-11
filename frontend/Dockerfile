@@ -1,18 +1,24 @@
 # Frontend Dockerfile
+# Build context must be the repository root (npm workspaces monorepo), e.g.:
+#   docker build -f frontend/Dockerfile -t open-tms-frontend .
 FROM node:20-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json* .npmrc* ./
+COPY backend/package.json ./backend/package.json
+COPY frontend/package.json ./frontend/package.json
+COPY packages/shared/package.json ./packages/shared/package.json
 RUN npm install
 
 FROM node:20-alpine AS build
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-RUN npm run build
+RUN npm -w packages/shared run build
+RUN npm -w frontend run build
 
 FROM nginx:1.27-alpine AS runner
 WORKDIR /usr/share/nginx/html
-COPY --from=build /app/dist .
+COPY --from=build /app/frontend/dist .
 # Create entrypoint script for runtime API URL override
 RUN echo '#!/bin/sh' > /docker-entrypoint.d/99-envsubst.sh && \
     echo 'set -e' >> /docker-entrypoint.d/99-envsubst.sh && \
