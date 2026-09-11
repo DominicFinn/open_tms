@@ -10,6 +10,7 @@ COPY packages/shared/package.json ./packages/shared/package.json
 RUN npm install
 
 FROM public.ecr.aws/docker/library/node:20-alpine AS build
+RUN apk add --no-cache openssl
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
@@ -18,6 +19,7 @@ RUN npm -w backend run prisma:generate
 RUN npm -w backend run build
 
 FROM public.ecr.aws/docker/library/node:20-alpine AS runner
+RUN apk add --no-cache openssl
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=build /app/node_modules ./node_modules
