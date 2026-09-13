@@ -44,14 +44,14 @@ export class AutoReplenishmentHandler implements IEventHandler {
       const sku = payload?.sku as string | undefined;
       if (!sku) return;
 
-      const locationId = await this.resolveLocationId(event);
-      if (!locationId) return;
+      const facilityId = await this.resolveFacilityId(event);
+      if (!facilityId) return;
 
       await this.commandBus.dispatch({
         type: CHECK_REPLENISHMENT,
         orgId: event.orgId,
         actorId: 'auto-replenishment',
-        payload: { locationId, sku },
+        payload: { facilityId, sku },
         metadata: { correlationId: crypto.randomUUID(), source: 'auto-replenishment-handler' },
       });
     } catch (err) {
@@ -60,27 +60,30 @@ export class AutoReplenishmentHandler implements IEventHandler {
   }
 
   /**
-   * Resolve the locationId for the event. inventory.adjusted carries it directly;
-   * pick_line.completed carries pickTaskId so we walk PickTask → locationId.
+   * Resolve the facility the command should run against (#280).
+   *
+   * It used to resolve a locationId, which CHECK_REPLENISHMENT no longer takes. The warehouse row
+   * the event points at carries the facility directly, so this reads that rather than walking back
+   * out to a Location that a warehouse-only install would not have.
    */
-  private async resolveLocationId(event: DomainEvent): Promise<string | null> {
+  private async resolveFacilityId(event: DomainEvent): Promise<string | null> {
     const payload = event.payload as Record<string, unknown>;
-    if (typeof payload.locationId === 'string') return payload.locationId;
+    if (typeof payload.facilityId === 'string') return payload.facilityId;
 
     if (event.type === 'pick_line.completed' && typeof payload.pickTaskId === 'string') {
-      const task = await this.prisma.pickTask.findUnique({
-        where: { id: payload.pickTaskId },
-        select: { locationId: true },
+      const task = await this.prisma.pickTask.findFirst({
+        where: { id: payload.pickTaskId, orgId: event.orgId },
+        select: { facilityId: true },
       });
-      return task?.locationId ?? null;
+      return task?.facilityId ?? null;
     }
 
     if (event.type === 'inventory.adjusted' && typeof payload.binId === 'string') {
-      const bin = await this.prisma.warehouseBin.findUnique({
-        where: { id: payload.binId },
-        select: { locationId: true },
+      const bin = await this.prisma.warehouseBin.findFirst({
+        where: { id: payload.binId, orgId: event.orgId },
+        select: { facilityId: true },
       });
-      return bin?.locationId ?? null;
+      return bin?.facilityId ?? null;
     }
 
     return null;

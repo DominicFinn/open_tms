@@ -142,7 +142,14 @@ Seven FKs and one model stand between the two products.
   | 5b | Frontend | the 15 WMS list pages onto `/api/v1/facilities` | ✅ #234 |
   | 6a | Nullable | `locationId` nullable on the 14 WMS models | ✅ #245 |
   | 6b | Write path | create commands and the WMS create forms onto `facilityId` | ✅ #248 |
-  | 6c | Contract | drop the `locationId` parameter, the `Location` FKs and the columns | next |
+  | 6c | Contract | drop the `locationId` parameter and the `Location` FKs | ✅ #280 |
+
+  **Phase 2a ends here, one step short of where the plan said.** 6c cut the foreign keys and the
+  `locationId` query parameter, but the columns stay: `InventoryRecord` is still keyed on Location
+  and has no facility, so putaway, returns and wave release need one, and `CompletePutaway` resolves
+  a scanned bin by `(locationId, label)`. Giving inventory a facility is Phase 4 work, and the
+  columns go with it. What Phase 2a did deliver is the thing that mattered: no foreign key crosses
+  the boundary, so a schema without a `Location` table resolves.
 
   6a had to come first: a command cannot stop writing `locationId` while the column is NOT NULL.
   Making it nullable surfaced three places that assumed it was always there, and one more unscoped

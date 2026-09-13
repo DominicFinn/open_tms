@@ -20,12 +20,12 @@ function prismaWith(model: string, methods: string[] = ['findMany', 'findFirst']
 describe('warehouseScope', () => {
   it('always carries orgId alongside the warehouse filter', () => {
     expect(scopedWhere('org-1', { facilityId: 'fac-1' })).toEqual({ orgId: 'org-1', facilityId: 'fac-1' });
-    expect(scopedWhere('org-1', { locationId: 'loc-1' })).toEqual({ orgId: 'org-1', locationId: 'loc-1' });
+    expect(scopedWhere('org-1', { facilityId: 'fac-1' })).toEqual({ orgId: 'org-1', facilityId: 'fac-1' });
   });
 
   it('prefers facilityId when the querystring carries one', () => {
     expect(warehouseScopeFrom({ facilityId: 'fac-1' })).toEqual({ facilityId: 'fac-1' });
-    expect(warehouseScopeFrom({ locationId: 'loc-1' })).toEqual({ locationId: 'loc-1' });
+    expect(warehouseScopeFrom({ facilityId: 'fac-1' })).toEqual({ facilityId: 'fac-1' });
   });
 });
 
@@ -41,10 +41,10 @@ describe('WMS list reads accept either scope', () => {
 
   it('still filters putaway tasks by location for callers that have not migrated', async () => {
     const prisma = prismaWith('putawayTask');
-    await new PutawayRepository(prisma).findTasks('org-1', { locationId: 'loc-1' });
+    await new PutawayRepository(prisma).findTasks('org-1', { facilityId: 'fac-1' });
 
     expect(prisma.putawayTask.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { orgId: 'org-1', locationId: 'loc-1' } })
+      expect.objectContaining({ where: { orgId: 'org-1', facilityId: 'fac-1' } })
     );
   });
 
@@ -70,10 +70,10 @@ describe('WarehouseZoneRepository org scoping (#220 miss)', () => {
 
   it('scopes the bin list by org as well as warehouse', async () => {
     const prisma = prismaWith('warehouseBin');
-    await new WarehouseZoneRepository(prisma).findBins('org-1', { locationId: 'loc-1' });
+    await new WarehouseZoneRepository(prisma).findBins('org-1', { facilityId: 'fac-1' });
 
     expect(prisma.warehouseBin.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { orgId: 'org-1', locationId: 'loc-1' } })
+      expect.objectContaining({ where: { orgId: 'org-1', facilityId: 'fac-1' } })
     );
   });
 

@@ -135,21 +135,12 @@ model Location {
   // Warehouse app preferences
   preferredLocationId String? // Favourite origin location for warehouse app
 
-  // WMS relations
-  warehouseZones        WarehouseZone[]
-  warehouseAisles       WarehouseAisle[]
-  warehouseBins         WarehouseBin[]
+  // Warehouse rows reference a Location by a soft string id rather than a foreign key (#280), so
+  // there are no back-relations to them here: a schema without those tables still resolves, which
+  // is what a standalone FinnWMS needs. Inventory and manifest ingest keep theirs, because both
+  // are still keyed on Location until inventory carries a facility.
   inventoryRecords      InventoryRecord[]
-  receivingAppointments ReceivingAppointment[]
-  receivingTasks        ReceivingTask[]
-  putawayRules          PutawayRule[]
-  putawayTasks          PutawayTask[]
   manifestUploads       ManifestUpload[]
-  waveTemplates         WaveTemplate[]
-  waves                 Wave[]
-  pickTasks             PickTask[]
-  packTasks             PackTask[]
-  stagingAssignments    StagingAssignment[]
 
   @@index([orgId])
 }
