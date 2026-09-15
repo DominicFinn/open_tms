@@ -2,8 +2,13 @@ import { FastifyInstance, FastifyRequest } from 'fastify';
 import { PrismaClient } from '@prisma/client';
 import { container, TOKENS } from '../di/index.js';
 import { ContainerIntelligenceService } from '../services/containers/ContainerIntelligenceService.js';
+import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 
 export async function containerIntelligenceRoutes(server: FastifyInstance) {
+  // Tenant comes from the caller's token via registerOrgScope, not from whichever
+  // Organization row comes back first (#117).
+  await registerOrgScope(server);
+
   const prisma = container.resolve<PrismaClient>(TOKENS.PrismaClient);
   const service = new ContainerIntelligenceService();
 
@@ -44,8 +49,7 @@ export async function containerIntelligenceRoutes(server: FastifyInstance) {
   }, async (req: FastifyRequest) => {
     const body = req.body as any;
     const orgId = (req as any).orgId
-      || (await prisma.organization.findFirst({ select: { id: true } }))?.id
-      || 'default-org';
+;
 
     const where: any = { orgId, active: true };
     if (body.locationId) where.locationId = body.locationId;

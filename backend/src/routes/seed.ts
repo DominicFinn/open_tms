@@ -33,6 +33,9 @@ export async function seedRoutes(server: FastifyInstance) {
       // is picked up automatically instead of 500ing on the next seed (#251).
       await devSeedRepo.resetSeedTables();
 
+      // Deliberate exception to the no-inline-findFirst rule (#117). Seeding has no caller
+      // tenant and is meant to populate the sole development organisation; the endpoint is 403'd
+      // in production above. It throws rather than inventing an org if none exists.
       const seedOrg = await server.prisma.organization.findFirst({ select: { id: true } });
       if (!seedOrg) {
         throw new Error('No Organization row exists — run migrations before seeding');

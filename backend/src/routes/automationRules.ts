@@ -16,16 +16,20 @@ import {
 } from '../commands/automationRules/index.js';
 
 import { guardWrites } from '../auth/guardWrites.js';
+import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 
 export const automationRuleRoutes: FastifyPluginAsync = async (server) => {
+  // Tenant comes from the caller's token via registerOrgScope, not from whichever
+  // Organization row comes back first (#117).
+  await registerOrgScope(server);
+
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
   // /test is a dry-run evaluation (read-only).
   server.addHook('preHandler', guardWrites('automation_rules', { readPaths: ['/test'] }));
 
   const resolveOrgId = async (req: any): Promise<string | null> => {
-    if (req.user?.organizationId) return req.user.organizationId;
-    const org = await server.prisma.organization.findFirst();
-    return org?.id ?? null;
+    // registerOrgScope has already resolved this from the token.
+    return req.orgId ?? null;
   };
 
   // ── GET /api/v1/automation-rules ──

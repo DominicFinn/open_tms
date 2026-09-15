@@ -15,6 +15,7 @@ import { z } from 'zod';
 import crypto from 'crypto';
 import { createHash, randomBytes } from 'crypto';
 import { authenticateCustomerJWT } from '../middleware/jwtAuth.js';
+import { attachOrgScopeFromCustomerUserHook } from '../auth/orgScopeMiddleware.js';
 import { CustomerWebhookDeliveryService } from '../services/webhooks/CustomerWebhookDeliveryService.js';
 import { container, TOKENS } from '../di/index.js';
 import { ICommandBus } from '../commands/CommandBus.js';
@@ -57,18 +58,11 @@ export async function customerDeveloperRoutes(server: FastifyInstance) {
   const deliveryService = new CustomerWebhookDeliveryService(server.prisma);
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
 
-  // Customer-portal users authenticate via req.customerUser, not req.user;
-  // the surrounding tables don't carry orgId so for now we resolve a fallback
-  // org for the command envelope. See orgId-survey snag for the bigger fix.
-  const resolveOrgId = async (): Promise<string> => {
-    const org = await server.prisma.organization.findFirst({ select: { id: true } });
-    return org?.id ?? 'default-org';
-  };
 
   // ── Dashboard summary ────────────────────────────────────────────────
 
   server.get('/api/v1/customer-portal/developer/summary', {
-    preHandler: [authenticateCustomerJWT],
+    preHandler: [authenticateCustomerJWT, attachOrgScopeFromCustomerUserHook(server.prisma)],
     schema: { tags: ['Customer Portal - Developer'], summary: 'Developer area overview stats' },
   }, async (req: FastifyRequest) => {
     const customerId = req.customerUser!.customerId;
@@ -99,7 +93,7 @@ export async function customerDeveloperRoutes(server: FastifyInstance) {
   // ── API Keys ─────────────────────────────────────────────────────────
 
   server.get('/api/v1/customer-portal/developer/api-keys', {
-    preHandler: [authenticateCustomerJWT],
+    preHandler: [authenticateCustomerJWT, attachOrgScopeFromCustomerUserHook(server.prisma)],
     schema: { tags: ['Customer Portal - Developer'], summary: 'List your API keys' },
   }, async (req: FastifyRequest) => {
     const customerId = req.customerUser!.customerId;
@@ -112,7 +106,7 @@ export async function customerDeveloperRoutes(server: FastifyInstance) {
   });
 
   server.post('/api/v1/customer-portal/developer/api-keys', {
-    preHandler: [authenticateCustomerJWT],
+    preHandler: [authenticateCustomerJWT, attachOrgScopeFromCustomerUserHook(server.prisma)],
     schema: {
       tags: ['Customer Portal - Developer'],
       summary: 'Create a new API key. The plaintext key is returned once and is not retrievable later.',
@@ -125,7 +119,7 @@ export async function customerDeveloperRoutes(server: FastifyInstance) {
     const customerId = req.customerUser!.customerId;
     const body = z.object({ name: z.string().min(1).max(100) }).parse((req as any).body);
     const { key, keyHash, keyPrefix } = generateApiKey();
-    const orgId = await resolveOrgId();
+    const orgId = req.orgId!;
 
     const result = await commandBus.dispatch({
       type: CREATE_API_KEY,
@@ -157,7 +151,7 @@ export async function customerDeveloperRoutes(server: FastifyInstance) {
   });
 
   server.put('/api/v1/customer-portal/developer/api-keys/:id', {
-    preHandler: [authenticateCustomerJWT],
+    preHandler: [authenticateCustomerJWT, attachOrgScopeFromCustomerUserHook(server.prisma)],
     schema: {
       tags: ['Customer Portal - Developer'],
       summary: 'Update API key name or active status',
@@ -177,7 +171,7 @@ export async function customerDeveloperRoutes(server: FastifyInstance) {
     const existing = await server.prisma.apiKey.findFirst({ where: { id, customerId }, select: { id: true } });
     if (!existing) { reply.code(404); return { data: null, error: 'API key not found' }; }
 
-    const orgId = await resolveOrgId();
+    const orgId = req.orgId!;
     const result = await commandBus.dispatch({
       type: UPDATE_API_KEY,
       orgId,
@@ -194,7 +188,7 @@ export async function customerDeveloperRoutes(server: FastifyInstance) {
   });
 
   server.delete('/api/v1/customer-portal/developer/api-keys/:id', {
-    preHandler: [authenticateCustomerJWT],
+    preHandler: [authenticateCustomerJWT, attachOrgScopeFromCustomerUserHook(server.prisma)],
     schema: { tags: ['Customer Portal - Developer'], summary: 'Revoke an API key' },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const customerId = req.customerUser!.customerId;
@@ -202,7 +196,7 @@ export async function customerDeveloperRoutes(server: FastifyInstance) {
     const existing = await server.prisma.apiKey.findFirst({ where: { id, customerId }, select: { id: true } });
     if (!existing) { reply.code(404); return { data: null, error: 'API key not found' }; }
 
-    const orgId = await resolveOrgId();
+    const orgId = req.orgId!;
     const result = await commandBus.dispatch({
       type: DELETE_API_KEY,
       orgId,
@@ -221,7 +215,7 @@ export async function customerDeveloperRoutes(server: FastifyInstance) {
   // ── Webhooks ─────────────────────────────────────────────────────────
 
   server.get('/api/v1/customer-portal/developer/webhooks', {
-    preHandler: [authenticateCustomerJWT],
+    preHandler: [authenticateCustomerJWT, attachOrgScopeFromCustomerUserHook(server.prisma)],
     schema: { tags: ['Customer Portal - Developer'], summary: 'List your webhooks' },
   }, async (req: FastifyRequest) => {
     const customerId = req.customerUser!.customerId;
@@ -233,14 +227,14 @@ export async function customerDeveloperRoutes(server: FastifyInstance) {
   });
 
   server.get('/api/v1/customer-portal/developer/webhooks/events', {
-    preHandler: [authenticateCustomerJWT],
+    preHandler: [authenticateCustomerJWT, attachOrgScopeFromCustomerUserHook(server.prisma)],
     schema: { tags: ['Customer Portal - Developer'], summary: 'Allowed event patterns' },
   }, async () => {
     return { data: ALLOWED_EVENT_PATTERNS, error: null };
   });
 
   server.post('/api/v1/customer-portal/developer/webhooks', {
-    preHandler: [authenticateCustomerJWT],
+    preHandler: [authenticateCustomerJWT, attachOrgScopeFromCustomerUserHook(server.prisma)],
     schema: {
       tags: ['Customer Portal - Developer'],
       summary: 'Register a new webhook endpoint',
@@ -269,7 +263,7 @@ export async function customerDeveloperRoutes(server: FastifyInstance) {
       return { data: null, error: `Unsupported event patterns: ${invalid.join(', ')}` };
     }
 
-    const orgId = await resolveOrgId();
+    const orgId = req.orgId!;
     const result = await commandBus.dispatch({
       type: CREATE_CUSTOMER_WEBHOOK,
       orgId,
@@ -298,7 +292,7 @@ export async function customerDeveloperRoutes(server: FastifyInstance) {
   });
 
   server.put('/api/v1/customer-portal/developer/webhooks/:id', {
-    preHandler: [authenticateCustomerJWT],
+    preHandler: [authenticateCustomerJWT, attachOrgScopeFromCustomerUserHook(server.prisma)],
     schema: {
       tags: ['Customer Portal - Developer'],
       summary: 'Update a webhook',
@@ -335,7 +329,7 @@ export async function customerDeveloperRoutes(server: FastifyInstance) {
       }
     }
 
-    const orgId = await resolveOrgId();
+    const orgId = req.orgId!;
     const result = await commandBus.dispatch({
       type: UPDATE_CUSTOMER_WEBHOOK,
       orgId,
@@ -354,7 +348,7 @@ export async function customerDeveloperRoutes(server: FastifyInstance) {
   });
 
   server.delete('/api/v1/customer-portal/developer/webhooks/:id', {
-    preHandler: [authenticateCustomerJWT],
+    preHandler: [authenticateCustomerJWT, attachOrgScopeFromCustomerUserHook(server.prisma)],
     schema: { tags: ['Customer Portal - Developer'], summary: 'Delete a webhook' },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const customerId = req.customerUser!.customerId;
@@ -362,7 +356,7 @@ export async function customerDeveloperRoutes(server: FastifyInstance) {
     const existing = await server.prisma.customerWebhook.findFirst({ where: { id, customerId }, select: { id: true } });
     if (!existing) { reply.code(404); return { data: null, error: 'Webhook not found' }; }
 
-    const orgId = await resolveOrgId();
+    const orgId = req.orgId!;
     const result = await commandBus.dispatch({
       type: DELETE_CUSTOMER_WEBHOOK,
       orgId,
@@ -379,7 +373,7 @@ export async function customerDeveloperRoutes(server: FastifyInstance) {
   });
 
   server.post('/api/v1/customer-portal/developer/webhooks/:id/rotate-secret', {
-    preHandler: [authenticateCustomerJWT],
+    preHandler: [authenticateCustomerJWT, attachOrgScopeFromCustomerUserHook(server.prisma)],
     schema: { tags: ['Customer Portal - Developer'], summary: 'Rotate the webhook signing secret' },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const customerId = req.customerUser!.customerId;
@@ -387,7 +381,7 @@ export async function customerDeveloperRoutes(server: FastifyInstance) {
     const existing = await server.prisma.customerWebhook.findFirst({ where: { id, customerId }, select: { id: true } });
     if (!existing) { reply.code(404); return { data: null, error: 'Webhook not found' }; }
 
-    const orgId = await resolveOrgId();
+    const orgId = req.orgId!;
     const result = await commandBus.dispatch({
       type: ROTATE_WEBHOOK_SECRET,
       orgId,
@@ -405,7 +399,7 @@ export async function customerDeveloperRoutes(server: FastifyInstance) {
   });
 
   server.post('/api/v1/customer-portal/developer/webhooks/:id/test', {
-    preHandler: [authenticateCustomerJWT],
+    preHandler: [authenticateCustomerJWT, attachOrgScopeFromCustomerUserHook(server.prisma)],
     schema: {
       tags: ['Customer Portal - Developer'],
       summary: 'Send a test event to the webhook endpoint',
@@ -433,7 +427,7 @@ export async function customerDeveloperRoutes(server: FastifyInstance) {
   });
 
   server.get('/api/v1/customer-portal/developer/webhooks/:id/deliveries', {
-    preHandler: [authenticateCustomerJWT],
+    preHandler: [authenticateCustomerJWT, attachOrgScopeFromCustomerUserHook(server.prisma)],
     schema: {
       tags: ['Customer Portal - Developer'],
       summary: 'List recent deliveries for a webhook',
@@ -456,7 +450,7 @@ export async function customerDeveloperRoutes(server: FastifyInstance) {
   // ── EDI / Trading Partners ───────────────────────────────────────────
 
   server.get('/api/v1/customer-portal/developer/trading-partners', {
-    preHandler: [authenticateCustomerJWT],
+    preHandler: [authenticateCustomerJWT, attachOrgScopeFromCustomerUserHook(server.prisma)],
     schema: { tags: ['Customer Portal - Developer'], summary: 'View your trading partner configurations (read-only)' },
   }, async (req: FastifyRequest) => {
     const customerId = req.customerUser!.customerId;
@@ -480,7 +474,7 @@ export async function customerDeveloperRoutes(server: FastifyInstance) {
   });
 
   server.get('/api/v1/customer-portal/developer/edi-logs', {
-    preHandler: [authenticateCustomerJWT],
+    preHandler: [authenticateCustomerJWT, attachOrgScopeFromCustomerUserHook(server.prisma)],
     schema: {
       tags: ['Customer Portal - Developer'],
       summary: 'Recent EDI transactions across your trading partners',

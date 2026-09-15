@@ -13,6 +13,7 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { EmailTemplateRenderer } from '../services/EmailTemplateRenderer.js';
 import { EVENT_TYPES } from '../events/eventTypes.js';
+import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 
 const renderer = new EmailTemplateRenderer();
 
@@ -28,6 +29,10 @@ const SUPPORTED_EVENT_TYPES = [
 ];
 
 export async function emailTemplateRoutes(server: FastifyInstance) {
+  // Tenant comes from the caller's token via registerOrgScope, not from whichever
+  // Organization row comes back first (#117).
+  await registerOrgScope(server);
+
   // List all email templates
   server.get('/api/v1/email/templates', {
     schema: {
@@ -43,12 +48,10 @@ export async function emailTemplateRoutes(server: FastifyInstance) {
         },
       },
     },
-  }, async (_req, _reply) => {
-    const org = await server.prisma.organization.findFirst({ select: { id: true } });
-    if (!org) return { data: [], error: null };
+  }, async (req, _reply) => {
 
     const templates = await server.prisma.emailTemplate.findMany({
-      where: { organizationId: org.id },
+      where: { organizationId: req.orgId! },
       orderBy: { eventType: 'asc' },
       take: 500,
     });
@@ -98,15 +101,10 @@ export async function emailTemplateRoutes(server: FastifyInstance) {
 
     const body = schema.parse((req as any).body);
 
-    const org = await server.prisma.organization.findFirst({ select: { id: true } });
-    if (!org) {
-      reply.code(400);
-      return { data: null, error: 'Organization not found' };
-    }
 
     // Check if a template already exists for this event type
     const existing = await server.prisma.emailTemplate.findFirst({
-      where: { organizationId: org.id, eventType: body.eventType },
+      where: { organizationId: req.orgId!, eventType: body.eventType },
     });
 
     if (existing) {
@@ -117,7 +115,7 @@ export async function emailTemplateRoutes(server: FastifyInstance) {
     const template = await server.prisma.emailTemplate.create({
       data: {
         ...body,
-        organizationId: org.id,
+        organizationId: req.orgId!,
       },
     });
 
@@ -195,6 +193,7 @@ export async function emailTemplateRoutes(server: FastifyInstance) {
 
     // Get org branding
     const org = await server.prisma.organization.findFirst({
+      where: { id: req.orgId! },
       select: { name: true, themeConfig: true, emailHeaderHtml: true, emailFooterHtml: true },
     });
 

@@ -1164,7 +1164,8 @@ export async function customerPortalRoutes(server: FastifyInstance) {
 
     if (!invoice) { reply.code(404); return { data: null, error: 'Invoice not found' }; }
 
-    const orgId = (await server.prisma.organization.findFirst({ select: { id: true } }))?.id || '';
+    // attachOrgScopeFromCustomerUserHook has already walked customerUser.customerId -> Customer.orgId.
+    const orgId = req.orgId!;
 
     // Create a financial query (dispute)
     const queryCount = await server.prisma.financialQuery.count();

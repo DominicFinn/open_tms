@@ -7,14 +7,19 @@ import { FastifyPluginAsync } from 'fastify';
 import { container } from '../di/container.js';
 import { TOKENS } from '../di/tokens.js';
 import { SkillRegistry } from '../services/skills/SkillRegistry.js';
+import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 
 export const skillRoutes: FastifyPluginAsync = async (server) => {
+  // Tenant comes from the caller's token via registerOrgScope, not from whichever
+  // Organization row comes back first (#117).
+  await registerOrgScope(server);
+
 
   // ── GET /api/v1/skills — List available skill definitions ──
 
   server.get('/api/v1/skills', {
     schema: { tags: ['Skills'], summary: 'List all available skill definitions with field schemas' },
-  }, async () => {
+  }, async (request) => {
     const registry = container.resolve<SkillRegistry>(TOKENS.ISkillRegistry);
     return { data: registry.getDefinitions(), error: null };
   });
@@ -34,11 +39,10 @@ export const skillRoutes: FastifyPluginAsync = async (server) => {
 
   server.get('/api/v1/skill-configs', {
     schema: { tags: ['Skills'], summary: 'List skill configurations for the org' },
-  }, async () => {
-    const org = await server.prisma.organization.findFirst();
-    if (!org) return { data: [], error: null };
+  }, async (request) => {
+
     const configs = await server.prisma.skillConfig.findMany({
-      where: { orgId: org.id },
+      where: { orgId: request.orgId! },
       orderBy: { createdAt: 'desc' },
     });
     return { data: configs, error: null };
@@ -63,8 +67,6 @@ export const skillRoutes: FastifyPluginAsync = async (server) => {
       },
     },
   }, async (request, reply) => {
-    const org = await server.prisma.organization.findFirst();
-    if (!org) { reply.code(404); return { data: null, error: 'Organization not found' }; }
 
     // Validate config against skill schema
     const registry = container.resolve<SkillRegistry>(TOKENS.ISkillRegistry);
@@ -79,7 +81,7 @@ export const skillRoutes: FastifyPluginAsync = async (server) => {
 
     const config = await server.prisma.skillConfig.create({
       data: {
-        orgId: org.id,
+        orgId: request.orgId!,
         skillType: request.body.skillType,
         name: request.body.name,
         config: request.body.config as Prisma.InputJsonValue,
@@ -127,11 +129,10 @@ export const skillRoutes: FastifyPluginAsync = async (server) => {
 
   server.get('/api/v1/skill-chains', {
     schema: { tags: ['Skills'], summary: 'List skill chains' },
-  }, async () => {
-    const org = await server.prisma.organization.findFirst();
-    if (!org) return { data: [], error: null };
+  }, async (request) => {
+
     const chains = await server.prisma.skillChain.findMany({
-      where: { orgId: org.id },
+      where: { orgId: request.orgId! },
       orderBy: { createdAt: 'desc' },
     });
     return { data: chains, error: null };
@@ -156,12 +157,10 @@ export const skillRoutes: FastifyPluginAsync = async (server) => {
       },
     },
   }, async (request, reply) => {
-    const org = await server.prisma.organization.findFirst();
-    if (!org) { reply.code(404); return { data: null, error: 'Organization not found' }; }
 
     const chain = await server.prisma.skillChain.create({
       data: {
-        orgId: org.id,
+        orgId: request.orgId!,
         name: request.body.name,
         description: request.body.description || null,
         steps: request.body.steps as Prisma.InputJsonValue,

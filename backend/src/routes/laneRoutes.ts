@@ -14,8 +14,13 @@ import {
   decodePolyline,
 } from '../services/routing/GoogleMapsDirectionsService.js';
 import { RouteDeviationService } from '../services/routing/RouteDeviationService.js';
+import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 
 export async function laneRouteRoutes(server: FastifyInstance) {
+  // Tenant comes from the caller's token via registerOrgScope, not from whichever
+  // Organization row comes back first (#117).
+  await registerOrgScope(server);
+
   const prisma = server.prisma as PrismaClient;
   const directionsService: IGoogleMapsDirectionsService = new GoogleMapsDirectionsService();
   const deviationService = new RouteDeviationService();
@@ -24,8 +29,9 @@ export async function laneRouteRoutes(server: FastifyInstance) {
    * Helper: get the Google Maps API key from organization settings.
    * Returns null if not configured.
    */
-  async function getGoogleMapsApiKey(): Promise<string | null> {
+  async function getGoogleMapsApiKey(orgId: string): Promise<string | null> {
     const org = await prisma.organization.findFirst({
+      where: { id: orgId },
       select: { googleMapsServerKey: true },
     });
     // Server-side Directions needs the server key. The browser key carries referrer
@@ -93,7 +99,7 @@ export async function laneRouteRoutes(server: FastifyInstance) {
     Params: { laneId: string };
     Body: { waypoints?: Array<{ lat: number; lng: number }>; avoidTolls?: boolean; avoidHighways?: boolean };
   }>, reply: FastifyReply) => {
-    const apiKey = await getGoogleMapsApiKey();
+    const apiKey = await getGoogleMapsApiKey(req.orgId!);
     if (!apiKey) {
       return reply.status(400).send({
         data: null,
@@ -215,9 +221,7 @@ export async function laneRouteRoutes(server: FastifyInstance) {
       return reply.status(404).send({ data: null, error: 'Lane not found' });
     }
 
-    // Derive orgId from a related entity or default
-    const org = await prisma.organization.findFirst({ select: { id: true } });
-    const orgId = org?.id || 'default';
+    const orgId = req.orgId!;
 
     // Decode polyline if waypoints not provided
     const routeWaypoints = waypoints || decodePolyline(encodedPolyline);
@@ -326,8 +330,8 @@ export async function laneRouteRoutes(server: FastifyInstance) {
       tags: ['Lane Routes'],
       summary: 'Check if Google Maps API key is configured (for frontend feature gating)',
     },
-  }, async (_req: FastifyRequest, _reply: FastifyReply) => {
-    const apiKey = await getGoogleMapsApiKey();
+  }, async (req: FastifyRequest, _reply: FastifyReply) => {
+    const apiKey = await getGoogleMapsApiKey(req.orgId!);
     return {
       data: {
         configured: Boolean(apiKey),

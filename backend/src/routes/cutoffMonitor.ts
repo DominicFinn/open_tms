@@ -5,8 +5,13 @@ import { container, TOKENS } from '../di/index.js';
 import { ShipmentCutoffMonitorService } from '../services/cutoff/ShipmentCutoffMonitorService.js';
 import type { PgBossEventBus } from '../events/PgBossEventBus.js';
 import { registerWmsGuard } from '../auth/wmsGuard.js';
+import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 
 export async function cutoffMonitorRoutes(server: FastifyInstance) {
+  // Tenant comes from the caller's token via registerOrgScope, not from whichever
+  // Organization row comes back first (#117).
+  await registerOrgScope(server);
+
   // WMS permission guard (#134): wms:read for reads, wms:write for mutations
   await registerWmsGuard(server);
 
@@ -50,7 +55,7 @@ export async function cutoffMonitorRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { carrierId } = req.params as { carrierId: string };
-    const orgId = (req as any).orgId || (await prisma.organization.findFirst({ select: { id: true } }))?.id || 'default-org';
+    const orgId = req.orgId!;
     const body = z.object({
       dayOfWeek: z.number().int().min(0).max(6),
       cutoffLocalTime: z.string().regex(/^[0-2][0-9]:[0-5][0-9]$/),
@@ -153,8 +158,7 @@ export async function cutoffMonitorRoutes(server: FastifyInstance) {
     });
     if (!shipment) { reply.code(404); return { data: null, error: 'Shipment not found' }; }
 
-    const org = await prisma.organization.findFirst({ select: { id: true } });
-    const result = await service.evaluateShipment(shipment as any, new Date(), org?.id ?? 'default-org');
+    const result = await service.evaluateShipment(shipment as any, new Date(), req.orgId!);
     return { data: result, error: null };
   });
 

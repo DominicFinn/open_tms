@@ -4,12 +4,12 @@
 
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 
 export async function commissionRoutes(server: FastifyInstance) {
-  const getOrgId = async () => {
-    const org = await server.prisma.organization.findFirst({ select: { id: true } });
-    return org?.id || 'default';
-  };
+  // Tenant comes from the caller's token via registerOrgScope, not from whichever
+  // Organization row comes back first (#117).
+  await registerOrgScope(server);
 
   // List commissions with filters
   server.get('/api/v1/commissions', {
@@ -71,7 +71,7 @@ export async function commissionRoutes(server: FastifyInstance) {
       notes: z.string().optional(),
     }).parse((req as any).body);
 
-    const orgId = await getOrgId();
+    const orgId = req.orgId!;
 
     // Look up the shipment's financial summary
     const summary = await server.prisma.shipmentFinancialSummary.findUnique({

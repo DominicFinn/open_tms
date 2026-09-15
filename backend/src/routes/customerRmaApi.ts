@@ -47,9 +47,19 @@ export async function customerRmaApiRoutes(server: FastifyInstance) {
       return null;
     }
 
-    // Look up org from the customer record (single-org model for now)
-    const org = await prisma.organization.findFirst({ select: { id: true } });
-    return { customerId: authResult.customerId, orgId: org?.id ?? 'default-org' };
+    // API-key callers carry no token, so the tenant is walked from the customer the key
+    // belongs to — the same path attachOrgScopeFromCustomerUserHook takes for the portal.
+    // Never widen scope from a client-supplied id: this one comes from the authenticated key.
+    const customer = await prisma.customer.findUnique({
+      where: { id: authResult.customerId },
+      select: { orgId: true },
+    });
+    if (!customer) {
+      reply.code(403);
+      reply.send({ data: null, error: 'This API key is not linked to a known customer.' });
+      return null;
+    }
+    return { customerId: authResult.customerId, orgId: customer.orgId };
   }
 
   // POST /api/v1/customer-api/rmas — Create a return merchandise authorization
