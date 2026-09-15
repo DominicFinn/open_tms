@@ -52,6 +52,7 @@ model InventoryRecord {
   transactions InventoryTransaction[]
   allocations  Allocation[]
   pickLines    PickLine[]
+  observations InventoryObservation[]
 
   @@unique([binId, sku, uomCode, lotNumber, ownerCustomerId])
   @@index([locationId])
@@ -83,6 +84,40 @@ model InventoryTransaction {
   @@index([orgId])
   @@index([transactionType])
   @@index([createdAt])
+}
+
+// A lightweight, non-authoritative record of "at time T, someone observed X at location Y" from
+// an ad hoc scan/spot-check — distinct from CycleCount (a formal, stateful audit process with
+// expected-vs-counted variance and auto-adjust) and from InventoryTransaction (the system-driven
+// stock ledger). Recording an observation does not itself change quantityOnHand. Table role:
+// ledger (insert-only, never edited).
+//
+// cycleCountLineId is deliberately a soft string reference, not a Prisma relation:
+// CycleCountLine is a wms model, and the inventory module may not hold a hard FK into wms — see
+// .claude/rules/module-boundaries.md. It lets an observation be promoted into a formal count line
+// later without requiring one up front.
+model InventoryObservation {
+  id                String           @id @default(uuid())
+  locationId        String
+  location          Location         @relation(fields: [locationId], references: [id])
+  binId             String
+  bin               WarehouseBin     @relation(fields: [binId], references: [id])
+  sku               String
+  uomCode           String           @default("EA")
+  observedQuantity  Int? // null = a pure "I saw this SKU here" scan, no count taken
+  lotNumber         String?
+  notes             String?
+  observedByUserId  String?
+  observedAt        DateTime         @default(now())
+  inventoryRecordId String?
+  inventoryRecord   InventoryRecord? @relation(fields: [inventoryRecordId], references: [id])
+  cycleCountLineId  String? // soft reference — see comment above
+
+  orgId String
+
+  createdAt DateTime @default(now())
+
+  @@index([orgId, locationId, observedAt])
 }
 
 model Allocation {

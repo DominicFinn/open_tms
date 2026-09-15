@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 
 import { API_URL } from '../api';
+import { describeProFormat, checkProFormat } from '../lib/proNumberFormat';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DatePicker } from '@/components/ui/date-picker';
@@ -94,6 +95,7 @@ interface RestrictionPreset {
   description?: string | null;
   defaults: Record<string, any>;
 }
+
 
 export default function VNextCreateShipment() {
   const { id } = useParams();
@@ -746,18 +748,11 @@ export default function VNextCreateShipment() {
               value={proNumber}
               onChange={e => setProNumber(e.target.value)}
             />
-            {selectedCarrier && (selectedCarrier.proNumberPrefix || selectedCarrier.proNumberMaxLength) && (
-              <p className="text-xs text-muted-foreground">
-                {selectedCarrier.name} PRO numbers
-                {selectedCarrier.proNumberPrefix ? ` start with "${selectedCarrier.proNumberPrefix}"` : ''}
-                {selectedCarrier.proNumberPrefix && selectedCarrier.proNumberMaxLength ? ' and' : ''}
-                {selectedCarrier.proNumberMaxLength ? ` run up to ${selectedCarrier.proNumberMaxLength} characters` : ''}.
-              </p>
+            {selectedCarrier && describeProFormat(selectedCarrier) && (
+              <p className="text-xs text-muted-foreground">{describeProFormat(selectedCarrier)}</p>
             )}
-            {selectedCarrier?.proNumberMaxLength && proNumber.length > selectedCarrier.proNumberMaxLength && (
-              <p className="text-xs text-warning">
-                Longer than {selectedCarrier.name}'s usual {selectedCarrier.proNumberMaxLength} characters — double-check it.
-              </p>
+            {selectedCarrier && checkProFormat(proNumber, selectedCarrier) && (
+              <p className="text-xs text-warning">{checkProFormat(proNumber, selectedCarrier)}</p>
             )}
           </div>
         </CardContent>

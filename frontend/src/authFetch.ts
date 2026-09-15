@@ -1,6 +1,7 @@
 import { toast } from 'sonner';
 import { API_URL } from './api';
 import { clearWarehouseSession, getWarehouseToken } from './warehouse/warehouse-session';
+import { clearInventoryAppSession, getInventoryAppToken } from './inventory-app/inventory-session';
 
 /**
  * Global fetch interceptor for the main TMS app.
@@ -56,6 +57,35 @@ function isWarehousePwaRoute(url: string): boolean {
   return url.includes('/api/v1/warehouse');
 }
 
+/**
+ * Inventory-app requests (#233): the mobile-web surface at /inventory-app/* hits some of the
+ * same API paths the admin desktop app (VNextWmsInventory) already uses — /api/v1/inventory* and
+ * a handful of read-only warehouse topology routes — so the URL alone can't tell them apart. Gate
+ * on the current page instead: only attach the inventory-app token when the browser is actually
+ * on an /inventory-app/* page, leaving the admin app's calls to those same endpoints on the
+ * standard main-TMS token path untouched.
+ */
+const INVENTORY_APP_API_PREFIXES = [
+  '/api/v1/inventory',
+  '/api/v1/warehouse/zones',
+  '/api/v1/warehouse/bins',
+  '/api/v1/warehouse/locations',
+];
+
+function isInventoryAppAuthPublicRoute(url: string): boolean {
+  return (
+    url.includes('/api/v1/warehouse/auth/login') ||
+    url.includes('/api/v1/warehouse/auth/magic-link/validate')
+  );
+}
+
+function isInventoryAppRoute(url: string): boolean {
+  if (!window.location.pathname.startsWith('/inventory-app')) return false;
+  if (isInventoryAppAuthPublicRoute(url)) return false;
+  return INVENTORY_APP_API_PREFIXES.some(p => url.includes(p))
+    || url.includes('/api/v1/warehouse/auth/');
+}
+
 function isWarehouseAuthPublicRoute(url: string): boolean {
   // These two endpoints authenticate the request themselves and return 401
   // for plain bad credentials — the generic warehouse 401 handler (session
@@ -70,6 +100,7 @@ function isPortalRoute(url: string): boolean {
   // Portals manage their own tokens — don't inject the main TMS token into them.
   return (
     isWarehousePwaRoute(url) ||
+    isInventoryAppRoute(url) ||
     url.includes('/api/v1/carrier-portal') ||
     url.includes('/api/v1/customer-portal') ||
     url.includes('/api/v1/customer-api')
@@ -80,11 +111,18 @@ function isAuthPublicRoute(url: string): boolean {
   // Login / forgot-password / theme / share links — no main TMS token needed.
   // Share routes carry their own viewer session token when they have one, and a 401 there
   // means the access code was wrong, not that the operator's session expired.
+  //
+  // maps/api-key is fetched unconditionally by MapProvider, which wraps every surface —
+  // the main app, the warehouse PWA, the inventory app, and every portal — regardless of
+  // which (if any) session is logged in. MapProvider already falls back to OSM gracefully
+  // on any failure, so a 401 here (no main-app session yet) must not force a redirect to
+  // the admin /login screen out from under an unrelated, unauthenticated surface.
   return (
     url.includes('/api/v1/auth/login') ||
     url.includes('/api/v1/auth/forgot-password') ||
     url.includes('/api/v1/theme') ||
-    url.includes('/api/v1/share/')
+    url.includes('/api/v1/share/') ||
+    url.includes('/api/v1/maps/api-key')
   );
 }
 
@@ -109,6 +147,12 @@ function redirectToWarehouseLogin() {
   // Avoid ping-pong if we're already on the warehouse login page.
   if (window.location.pathname !== '/warehouse/login') {
     window.location.assign('/warehouse/login');
+  }
+}
+
+function redirectToInventoryAppLogin() {
+  if (window.location.pathname !== '/inventory-app/login') {
+    window.location.assign('/inventory-app/login');
   }
 }
 
@@ -155,6 +199,17 @@ export function installAuthFetchInterceptor() {
       }
     }
 
+    // Attach Authorization for inventory-app routes (#233).
+    const isInventoryAppRequest = isInventoryAppRoute(url);
+    if (isInventoryAppRequest && !requestAlreadyHasAuth(init, input)) {
+      const inventoryAppToken = getInventoryAppToken();
+      if (inventoryAppToken) {
+        const headers = new Headers(init?.headers as HeadersInit | undefined);
+        headers.set('Authorization', `Bearer ${inventoryAppToken}`);
+        finalInit = { ...init, headers };
+      }
+    }
+
     const res = await originalFetch(input, finalInit);
 
     // On 401 from main TMS routes, bounce to /login.
@@ -169,6 +224,12 @@ export function installAuthFetchInterceptor() {
     if (res.status === 401 && isWarehouseRequest) {
       clearWarehouseSession();
       redirectToWarehouseLogin();
+    }
+
+    // On 401 from an inventory-app route, same idea — clear and bounce to its own login.
+    if (res.status === 401 && isInventoryAppRequest) {
+      clearInventoryAppSession();
+      redirectToInventoryAppLogin();
     }
 
     // On 403 from a mutating main TMS request, surface a permission error.

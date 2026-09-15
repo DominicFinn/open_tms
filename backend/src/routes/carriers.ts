@@ -12,6 +12,7 @@ import { SOFT_DELETE_CARRIER } from '../commands/carriers/SoftDeleteCarrierComma
 import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 import { guardWrites } from '../auth/guardWrites.js';
 import { requirePermission } from '../middleware/jwtAuth.js';
+import { STANDARD_NATIONAL_LTL_CARRIERS } from '../services/carriers/standardNationalLtlCarriers.js';
 
 // Treat an empty string as "not provided" so a blank optional field (e.g. a
 // carrier with no email yet) doesn't fail format validation.
@@ -50,6 +51,59 @@ export async function carrierRoutes(server: FastifyInstance) {
     return { data: carriers, error: null };
   });
 
+  // Available seed data for national LTL carriers (see standardNationalLtlCarriers.ts
+  // module doc for the "verify before production EDI use" caveat on this data).
+  // Registered as a static path so it is matched ahead of the /:id route.
+  server.get('/api/v1/carriers/standards/ltl', {
+    schema: {
+      tags: ['Carriers'],
+      summary: 'Available seed data for national LTL carriers',
+      description: 'Reference SCAC + PRO number format data for major US national LTL carriers. Public reference data — verify against each carrier\'s own EDI implementation guide before relying on it for production EDI.',
+    },
+  }, async () => {
+    return { data: STANDARD_NATIONAL_LTL_CARRIERS, error: null };
+  });
+
+  // Bulk-seed the national LTL carriers (skips any SCAC already present for this org).
+  server.post('/api/v1/carriers/seed-standards/ltl', {
+    schema: {
+      tags: ['Carriers'],
+      summary: 'Bulk-seed national LTL carriers (skips SCACs that already exist)',
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const orgId = req.orgId!;
+    const existing = await carriersRepo.all(orgId, { includeArchived: true });
+    const existingScacs = new Set(existing.map(c => c.scacCode).filter(Boolean));
+    const toCreate = STANDARD_NATIONAL_LTL_CARRIERS.filter(s => !existingScacs.has(s.scacCode));
+
+    for (const spec of toCreate) {
+      const result = await commandBus.dispatch({
+        type: CREATE_CARRIER,
+        orgId,
+        actorId: req.user?.sub ?? null,
+        payload: {
+          orgId,
+          name: spec.name,
+          scacCode: spec.scacCode,
+          proNumberMinLength: spec.proNumberMinLength,
+          proNumberMaxLength: spec.proNumberMaxLength,
+          proNumberNumericOnly: spec.proNumberNumericOnly,
+          validationNotes: spec.notes,
+        },
+        metadata: { correlationId: randomUUID(), source: 'seed-standards-ltl' },
+      });
+      if (!result.success) {
+        reply.code(400);
+        return { data: null, error: `Failed to create ${spec.name}: ${result.error}` };
+      }
+    }
+
+    return {
+      data: { created: toCreate.length, skipped: STANDARD_NATIONAL_LTL_CARRIERS.length - toCreate.length, total: STANDARD_NATIONAL_LTL_CARRIERS.length },
+      error: null,
+    };
+  });
+
   // Get carrier by ID — 404 (not 403) when the row belongs to another tenant.
   server.get('/api/v1/carriers/:id', async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
@@ -82,6 +136,8 @@ export async function carrierRoutes(server: FastifyInstance) {
         country: z.string().optional(),
         proNumberPrefix: z.string().optional(),
         proNumberMaxLength: z.coerce.number().int().positive().optional(),
+        proNumberMinLength: z.coerce.number().int().positive().optional(),
+        proNumberNumericOnly: z.boolean().optional(),
         paymentTermsDays: z.coerce.number().int().nonnegative().optional(),
         currency: z.string().optional(),
         validationTier: z.string().optional(),
@@ -135,6 +191,8 @@ export async function carrierRoutes(server: FastifyInstance) {
       country: z.string().optional(),
       proNumberPrefix: z.string().optional(),
       proNumberMaxLength: z.coerce.number().int().positive().optional(),
+      proNumberMinLength: z.coerce.number().int().positive().optional(),
+      proNumberNumericOnly: z.boolean().optional(),
       paymentTermsDays: z.coerce.number().int().nonnegative().optional(),
       currency: z.string().optional(),
       validationTier: z.string().optional(),
