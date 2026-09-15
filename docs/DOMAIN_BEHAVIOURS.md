@@ -1976,6 +1976,13 @@ facility's `sourceLocationId`, and is null for a facility that has none. Droppin
 Bin label uniqueness is checked per facility rather than through the `(locationId, label)` compound
 unique, which cannot serve a warehouse-only install and never carried `orgId`.
 
+All sixteen WMS models carry `facilityId` (#285). Four of them — `CycleCount`, `ReplenishmentRule`,
+`LoadPlan` and `CartonCatalogue` — hold `locationId` as a plain column with no `Location` relation,
+so every dual-write batch built its list from the relation fields and missed them.
+
+`InventoryRecord` deliberately has none. It is still keyed on Location, so the WMS dashboard counts
+stock through the bins a facility owns rather than filtering inventory by facility directly.
+
 **The `Location` foreign keys are gone** (#280). `locationId` survives on the warehouse tables as a
 soft string reference, which is what the module rule asks for, and a schema without a `Location`
 table now resolves. The list endpoints take `facilityId` only.

@@ -45,8 +45,14 @@ export class WmsDashboardRepository implements IWmsDashboardRepository {
       this.prisma.warehouseZone.count({ where: { ...where, active: true } }),
       this.prisma.warehouseBin.count({ where }),
       this.prisma.warehouseBin.count({ where: { ...where, active: true } }),
+      // InventoryRecord has no facilityId: inventory is still keyed on Location and gets one in
+      // Phase 4 (#245). Spreading the facility filter into it was a 500 (#285), so the stock count
+      // is scoped through the bins the facility owns instead.
       this.prisma.inventoryRecord
-        .groupBy({ by: ['sku'], where: { ...where, quantityOnHand: { gt: 0 } } })
+        .groupBy({
+          by: ['sku'],
+          where: { orgId, bin: scopedWhere(orgId, scope), quantityOnHand: { gt: 0 } },
+        })
         .then(rows => rows.length),
       this.prisma.receivingTask.count({ where: { ...where, status: 'pending' } }),
       this.prisma.receivingTask.count({ where: { ...where, status: 'in_progress' } }),
