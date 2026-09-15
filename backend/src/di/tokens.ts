@@ -129,6 +129,9 @@ export const TOKENS = {
   IQuoteRepository: Symbol.for('IQuoteRepository'),
   ILtlRatingService: Symbol.for('ILtlRatingService'),
 
+  // Inventory tokens
+  IInventoryObservationRepository: Symbol.for('IInventoryObservationRepository'),
+
   // WMS tokens
   IFacilityRepository: Symbol.for('IFacilityRepository'),
   IPutawayRepository: Symbol.for('IPutawayRepository'),
