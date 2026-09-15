@@ -1507,10 +1507,14 @@ async function seedShipments(
   orgId: string,
 ) {
   const created: any[] = [];
-  // Only convert non-pending / non-cancelled / non-issue orders to shipments
-  const shippableOrders = orders.filter((o) =>
-    ['assigned', 'verified'].includes(o.status)
-  );
+  // Only 'assigned' orders convert to a shipment — that status means the
+  // order is already committed to one, so a shipment must exist to back it.
+  // 'verified' orders are deliberately left alone: that's the pool
+  // GET .../eligible-orders draws from (status: 'verified' + no
+  // OrderShipment), and orders sharing a route/spec share customer+origin+
+  // serviceLevel identically, so leaving them unconverted is what makes them
+  // real eligible candidates for a sibling shipment.
+  const shippableOrders = orders.filter((o) => o.status === 'assigned');
 
   let refCounter = 1;
   for (const order of shippableOrders) {
@@ -1640,8 +1644,11 @@ async function seedShipments(
       },
     });
 
-    // Link delivery stop to the order + order<->shipment junction.
-    await prisma.order.update({ where: { id: order.id }, data: { deliveryStopId: delivery.id } });
+    // Link delivery stop to the order + order<->shipment junction. Mirrors
+    // linkOrdersToShipment: creating the OrderShipment row always flips the
+    // order to 'assigned', so a seeded order never sits at 'verified' while
+    // already linked to a shipment.
+    await prisma.order.update({ where: { id: order.id }, data: { deliveryStopId: delivery.id, status: 'assigned' } });
     await prisma.orderShipment.create({ data: { orderId: order.id, shipmentId: shipment.id } });
 
     // Load (vehicle + driver) for launched shipments only.

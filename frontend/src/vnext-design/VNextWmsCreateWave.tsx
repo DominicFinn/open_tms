@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { CircleAlert, Loader2 } from 'lucide-react';
 
 import { API_URL } from '../api';
+import { useFacilities } from '../hooks/useFacilities';
+import { FacilitySelect } from '@/components/FacilitySelect';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DatePicker } from '@/components/ui/date-picker';
@@ -36,30 +38,20 @@ interface OrderOption {
 
 export default function VNextWmsCreateWave() {
   const navigate = useNavigate();
-  const [locations, setLocations] = useState<Array<{ id: string; name: string }>>([]);
+  const { facilities, facilityId, setFacilityId, loading: facilitiesLoading, error: facilitiesError } = useFacilities();
+
   const [orders, setOrders] = useState<OrderOption[]>([]);
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const [form, setForm] = useState<{ locationId: string; pickStrategy: string; cutoffAt: string; zonePickMode?: string }>({
-    locationId: '',
+  const [form, setForm] = useState<{ facilityId: string; pickStrategy: string; cutoffAt: string; zonePickMode?: string }>({
+    facilityId: '',
     pickStrategy: 'discrete',
     cutoffAt: '',
   });
 
-  useEffect(() => {
-    fetch(`${API_URL}/api/v1/locations`)
-      .then(r => r.json())
-      .then(res => {
-        const locs = (res.data || []).filter(
-          (l: any) => !l.locationType || ['warehouse', 'distribution_centre', 'cross_dock'].includes(l.locationType)
-        );
-        setLocations(locs);
-        if (locs.length === 1) setForm(f => ({ ...f, locationId: locs[0].id }));
-      });
-  }, []);
 
   useEffect(() => {
     setLoading(true);
@@ -96,7 +88,7 @@ export default function VNextWmsCreateWave() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedOrders.size === 0) { setError('Select at least one order'); return; }
-    if (!form.locationId) { setError('Select a location'); return; }
+    if (!form.facilityId) { setError('Select a location'); return; }
     setError('');
     setSaving(true);
 
@@ -105,7 +97,7 @@ export default function VNextWmsCreateWave() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          locationId: form.locationId,
+          facilityId: form.facilityId,
           pickStrategy: form.pickStrategy,
           orderIds: [...selectedOrders],
           cutoffAt: form.cutoffAt || null,
@@ -140,17 +132,15 @@ export default function VNextWmsCreateWave() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label>Location *</Label>
-                <Select value={form.locationId} onValueChange={v => setForm({ ...form, locationId: v })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {locations.map(l => (
-                      <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label>Facility *</Label>
+              <FacilitySelect
+                facilities={facilities}
+                value={form.facilityId}
+                onChange={v => setForm({ ...form, facilityId: v })}
+                loading={facilitiesLoading}
+                error={facilitiesError}
+                className="w-full"
+              />
               </div>
               <div className="space-y-2">
                 <Label>Pick Strategy *</Label>

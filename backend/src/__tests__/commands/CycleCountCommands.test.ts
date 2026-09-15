@@ -13,12 +13,14 @@ describe('CreateCycleCountCommandHandler', () => {
     ];
     const mockCount = { id: 'cc-1', totalBins: 2, status: 'planned', orgId: 'test-org' };
     const tx = {
+      facility: { findFirst: jest.fn().mockResolvedValue({ id: 'fac-1', sourceLocationId: 'loc-1' }) },
       inventoryRecord: { findMany: jest.fn().mockResolvedValue(mockInvRecords) },
       cycleCount: { create: jest.fn().mockResolvedValue(mockCount) },
       cycleCountLine: { createMany: jest.fn().mockResolvedValue({ count: 2 }) },
       domainEventLog: { create: jest.fn().mockResolvedValue({}) },
     } as any;
     const prisma = {
+      facility: { findFirst: jest.fn().mockResolvedValue({ id: 'fac-1', sourceLocationId: 'loc-1' }) },
       $transaction: jest.fn((fn: Function) => fn(tx)),
       domainEventLog: { findFirst: jest.fn().mockResolvedValue(null) },
     } as any;
@@ -26,7 +28,7 @@ describe('CreateCycleCountCommandHandler', () => {
     const handler = new CreateCycleCountCommandHandler(prisma, bus);
 
     const result = await handler.execute(
-      createTestCommand(CREATE_CYCLE_COUNT, { locationId: 'loc-1', countType: 'full' })
+      createTestCommand(CREATE_CYCLE_COUNT, { facilityId: 'fac-1', countType: 'full' })
     );
 
     expect(result.success).toBe(true);
@@ -43,10 +45,12 @@ describe('CreateCycleCountCommandHandler', () => {
 
   it('fails if no inventory to count', async () => {
     const tx = {
+      facility: { findFirst: jest.fn().mockResolvedValue({ id: 'fac-1', sourceLocationId: 'loc-1' }) },
       inventoryRecord: { findMany: jest.fn().mockResolvedValue([]) },
       domainEventLog: { create: jest.fn().mockResolvedValue({}) },
     } as any;
     const prisma = {
+      facility: { findFirst: jest.fn().mockResolvedValue({ id: 'fac-1', sourceLocationId: 'loc-1' }) },
       $transaction: jest.fn((fn: Function) => fn(tx)),
       domainEventLog: { findFirst: jest.fn().mockResolvedValue(null) },
     } as any;
@@ -54,7 +58,7 @@ describe('CreateCycleCountCommandHandler', () => {
     const handler = new CreateCycleCountCommandHandler(prisma, bus);
 
     const result = await handler.execute(
-      createTestCommand(CREATE_CYCLE_COUNT, { locationId: 'loc-1', countType: 'full' })
+      createTestCommand(CREATE_CYCLE_COUNT, { facilityId: 'fac-1', countType: 'full' })
     );
 
     expect(result.success).toBe(false);
@@ -77,6 +81,7 @@ describe('RecordCycleCountLineCommandHandler', () => {
 
   it('records a count with no variance', async () => {
     const tx = {
+      facility: { findFirst: jest.fn().mockResolvedValue({ id: 'fac-1', sourceLocationId: 'loc-1' }) },
       cycleCountLine: {
         findUnique: jest.fn().mockResolvedValue(mockLine),
         update: jest.fn().mockResolvedValue({}),
@@ -96,6 +101,7 @@ describe('RecordCycleCountLineCommandHandler', () => {
       domainEventLog: { create: jest.fn().mockResolvedValue({}) },
     } as any;
     const prisma = {
+      facility: { findFirst: jest.fn().mockResolvedValue({ id: 'fac-1', sourceLocationId: 'loc-1' }) },
       $transaction: jest.fn((fn: Function) => fn(tx)),
       domainEventLog: { findFirst: jest.fn().mockResolvedValue(null) },
     } as any;
@@ -117,6 +123,7 @@ describe('RecordCycleCountLineCommandHandler', () => {
 
   it('detects variance and emits variance event', async () => {
     const tx = {
+      facility: { findFirst: jest.fn().mockResolvedValue({ id: 'fac-1', sourceLocationId: 'loc-1' }) },
       cycleCountLine: {
         findUnique: jest.fn().mockResolvedValue({ ...mockLine, cycleCount: { ...mockCount, status: 'in_progress' } }),
         update: jest.fn().mockResolvedValue({}),
@@ -130,6 +137,7 @@ describe('RecordCycleCountLineCommandHandler', () => {
       domainEventLog: { create: jest.fn().mockResolvedValue({}) },
     } as any;
     const prisma = {
+      facility: { findFirst: jest.fn().mockResolvedValue({ id: 'fac-1', sourceLocationId: 'loc-1' }) },
       $transaction: jest.fn((fn: Function) => fn(tx)),
       domainEventLog: { findFirst: jest.fn().mockResolvedValue(null) },
     } as any;
@@ -149,6 +157,7 @@ describe('RecordCycleCountLineCommandHandler', () => {
     const invRecord = { id: 'inv-1', quantityOnHand: 50, quantityAllocated: 0, quantityOnHold: 0 };
     const varianceLine = { ...mockLine, countedQuantity: 48, variance: -2, inventoryRecordId: 'inv-1' };
     const tx = {
+      facility: { findFirst: jest.fn().mockResolvedValue({ id: 'fac-1', sourceLocationId: 'loc-1' }) },
       cycleCountLine: {
         findUnique: jest.fn().mockResolvedValue({ ...mockLine, cycleCount: { ...mockCount, status: 'in_progress', totalBins: 1 } }),
         update: jest.fn().mockResolvedValue({}),
@@ -170,6 +179,7 @@ describe('RecordCycleCountLineCommandHandler', () => {
       domainEventLog: { create: jest.fn().mockResolvedValue({}) },
     } as any;
     const prisma = {
+      facility: { findFirst: jest.fn().mockResolvedValue({ id: 'fac-1', sourceLocationId: 'loc-1' }) },
       $transaction: jest.fn((fn: Function) => fn(tx)),
       domainEventLog: { findFirst: jest.fn().mockResolvedValue(null) },
     } as any;

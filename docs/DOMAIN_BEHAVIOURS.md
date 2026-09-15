@@ -71,20 +71,20 @@ The only remaining repository-direct operation in this area is `validateLocation
 
 ### Service Operations (Domain Services)
 
-These call domain services with complex orchestration logic. They currently create AuditLog records but do not yet publish domain events through the event bus.
+These call domain services with complex orchestration logic. Most still create AuditLog records without publishing domain events through the event bus — the exception is the shipment-creation step of the four rows marked (#264): those now dispatch a command and emit `shipment.created`/`order.assigned_to_shipment` (see the Shipments section's Commands table). Everything else about these rows — order linking mechanics, delivery-status handling — is unchanged.
 
 | Operation | Trigger | Service | What It Does |
 |-----------|---------|---------|-------------|
-| Assign to shipment | `POST /api/v1/orders/:id/assign-to-shipment` | ShipmentAssignmentService | Matches lane, creates/reuses shipment, creates stop, updates order status |
+| Assign to shipment (#264) | `POST /api/v1/orders/:id/assign-to-shipment` | ShipmentAssignmentService | Matches lane, creates/reuses shipment (dispatches `CreateShipmentCommand` when creating), creates stop, updates order status |
 | Update delivery status | `POST /api/v1/orders/:id/delivery-status` | OrderDeliveryService | Updates deliveryStatus, creates audit log |
 | Mark delivered | `POST /api/v1/orders/:id/mark-delivered` | OrderDeliveryService | Sets deliveryStatus=delivered, deliveredAt=now |
 | Create exception | `POST /api/v1/orders/:id/delivery-exception` | OrderDeliveryService | Sets deliveryStatus=exception, records type/notes |
 | Resolve exception | `POST /api/v1/orders/:id/resolve-exception` | OrderDeliveryService | Sets deliveryStatus=in_transit, records resolution |
 | Update orders for stop | `POST /api/v1/shipment-stops/:id/update-orders` | OrderDeliveryService | Bulk updates all orders at a shipment stop |
 | Geofence check | `POST /api/v1/shipments/:id/geofence-check` | OrderDeliveryService | Calculates distance to stops, auto-updates if within radius |
-| Convert to shipment | `POST /api/v1/orders/:id/convert-to-shipment` | OrdersRepository | Creates shipment + stop + junction, updates order status (uses transaction) |
-| Batch convert | `POST /api/v1/orders/batch-convert` | OrderConversionService | Individual or combined mode, compatibility checks |
-| Split to shipments | `POST /api/v1/orders/:id/split-to-shipments` | OrderConversionService | Splits order items into multiple shipments |
+| Convert to shipment (#264) | `POST /api/v1/orders/:id/convert-to-shipment` | OrderConversionService | Dispatches `ConvertOrderToShipmentCommand`: creates shipment + stop + junction, updates order status |
+| Batch convert (#264) | `POST /api/v1/orders/batch-convert` | OrderConversionService | Individual mode loops `convertOrder`; combine mode dispatches `CombineOrdersIntoShipmentCommand`. Compatibility checks first |
+| Split to shipments (#264) | `POST /api/v1/orders/:id/split-to-shipments` | OrderConversionService | Dispatches `SplitOrderCommand`: splits order items into multiple new shipments |
 | Check compatibility | `POST /api/v1/orders/check-compatibility` | OrderConversionService | Validates orders can be combined (read-only) |
 | CSV import | `POST /api/v1/orders/import/csv` | CSVImportService | Bulk creates orders from CSV content |
 
@@ -156,6 +156,8 @@ Org-level overrides (`required` / `recommended` / `hidden` per field) are accept
 Available as a read-only live preview at `POST /api/v1/order-line-items/cartonization/preview` (pure compute, no persistence).
 
 **Auto-generated handling units (`TrackableUnit`s):** when an order is created with `packingSummary` (packagingTypeId, unitCount, stackable) and no explicit `trackableUnits[]`, `CreateOrderCommand` auto-generates `unitCount` `TrackableUnit`s tagged with that packaging type and a sequence number. Phase 1 keeps it simple — line items are not allocated to specific units; that's Phase 2.
+
+**Explicit `trackableUnits[]` with nested `lineItems` at order-creation time:** `CreateOrderCommand` creates the `TrackableUnit`s and their `OrderLineItem`s as separate writes after the `Order` row exists, each with `orderId` supplied explicitly. A single Prisma nested create three levels deep (`order.create` → `trackableUnits.create` → `lineItems.create`) only auto-populates the FK for the relation it is directly traversing at each level (`trackableUnitId`), not `OrderLineItem.orderId` two levels up — since that FK is required, the nested form always failed the whole create (#269).
 
 **Packaging catalogue (`PackagingType`)** is org-scoped with a `kind` discriminator (pallet | carton | crate | drum | roll | bag | tote | loose | custom). Pallet-specific fields (tareWeightGrams, maxLoadGrams, material) are nullable. Generalised from the original `PalletType` model in 2026-06; admin CRUD lives at `/wms/packaging-types`.
 
@@ -234,6 +236,14 @@ Shipments follow a canonical lifecycle: **`draft` → `ready` → `in_progress` 
 | `UnarchiveShipmentCommand` | `POST /api/v1/shipments/:id/unarchive` (requires `shipments:delete`) | `shipment.unarchived` |
 | `SoftDeleteShipmentCommand` | `POST /api/v1/shipments/:id/soft-delete`, `POST /api/v1/shipments/bulk-delete` (requires `shipments:delete`) | `shipment.deleted` |
 | `ProcessInbound214Command` | `POST /api/v1/edi/214/inbound` | `edi_214.received`, `shipment.status_changed`, `shipment.stop_arrived`, `shipment.stop_completed`, `shipment.exception`, `shipment.delivered` |
+| `ConvertOrderToShipmentCommand` | `POST /api/v1/orders/:id/convert-to-shipment` (via `OrderConversionService`) | `shipment.created`, `order.assigned_to_shipment` |
+| `CombineOrdersIntoShipmentCommand` | `POST /api/v1/orders/batch-convert` (combine mode, via `OrderConversionService`) | `shipment.created`, `order.assigned_to_shipment` (one per combined order) |
+| `SplitOrderCommand` | `POST /api/v1/orders/:id/split-to-shipments` (via `OrderConversionService`) | `shipment.created` (one per resulting shipment) |
+| `AddOrdersToShipmentCommand` (#266) | `POST /api/v1/shipments/:id/add-orders` (via `OrderConversionService.addOrdersToShipment`) | `order.assigned_to_shipment` (one per added order) |
+
+Eligibility filtering for `AddOrdersToShipmentCommand` (shipment status, origin/customer/service-level/hazmat/temp-control match) runs in `OrderConversionService` as a soft pre-dispatch check — same pattern as `CombineOrdersIntoShipmentCommand`'s `checkCompatibility` — so a batch can partially succeed: eligible orders are linked and dispatched, ineligible ones are reported back as per-order errors without ever reaching the command. Before #266 this path linked orders via a bare `prisma.$transaction` with a no-op `emit`, so despite `OrderProjection.onAssignedToShipment` being implemented and tested, `OrderReadModel.shipmentId`/`shipmentReference` never populated for orders added to an *existing* shipment this way (`removeOrderFromShipment`, the reverse operation, and `SplitOrderCommand`'s one-order-to-many-shipments case remain open — see #266 for why those need a design call rather than a mechanical fix).
+
+`ShipmentAssignmentService.assignOrderToShipment` (auto-assignment on order intake, `POST /api/v1/orders/:id/assign-to-shipment`) and the warehouse app's `POST /api/v1/warehouse/shipments` also create shipments — both now dispatch the existing `CreateShipmentCommand` rather than writing the row directly, so they emit `shipment.created` too (#264). Before #264, all five of these paths wrote the `Shipment` row with a bare `prisma.shipment.create` and never emitted anything, so `ShipmentReadModel` (and therefore `GET /api/v1/shipments`, live GPS tracking, `AutoTenderHandler`, and `SlaEvaluationHandler`) silently never saw shipments created this way — only the one path that already went through `CreateShipmentCommand` (`POST /api/v1/shipments`, and `AcceptQuoteCommand`) worked.
 
 `GET /api/v1/shipments/:id/readiness` returns `{ status, missing, isValid, allowedTransitions }` for the detail-page control. Every `shipment.status_changed` is captured by the `AuditHandler` as an immutable `AuditLog` row recording the actor ("who did it") — this is the audit event for manual lifecycle moves.
 
@@ -1865,7 +1875,40 @@ Requests accelerated payment on a carrier invoice with a discount. Sets `quickPa
 
 ## Warehouse Management System (WMS)
 
+### Tenancy
+
+Every WMS read and write is scoped to `req.orgId`, resolved from the authenticated principal and
+never from a request parameter (#220). Query building lives in the per-domain repositories
+(`PutawayRepository`, `ReceivingRepository`, `WaveRepository`, `PackingRepository`,
+`CycleCountRepository`, `LoadPlanRepository`, `ReplenishmentRuleRepository`,
+`WaveTemplateRepository`, `WmsDashboardRepository`, `FacilityRepository`,
+`WarehouseZoneRepository`), none of which expose an unscoped variant. A cross-tenant id returns
+404, so existence stays opaque.
+
+`WarehouseZoneRepository` was missed by the #220 sweep and every read on it was unscoped until
+#231, so one tenant could list or fetch another's zones, aisles and bins. `WarehouseAisle` carries
+no `orgId` of its own and is scoped through its zone.
+
+The sweep also did not reach the queries **inside** command handlers, which #225, #227 and #229
+fixed as they went: 21 unscoped reads and writes in total. Two patterns account for all of them.
+A command that looks its aggregate up with `findUnique({ where: { id } })` is a tenancy bug, and
+`locationId` alone is never a sufficient filter.
+
+`registerWmsGuard` now does both: it attaches the org scope and refuses a request that resolves no
+tenant, then checks the permission. Tenancy lives there rather than in each route plugin because
+**no WMS route registered the org scope at all** until #238, so `req.orgId` was undefined on every
+WMS request. Prisma reads `where: { orgId: undefined }` as no filter, which meant every WMS list
+returned every tenant's rows while the source looked correct.
+
+It still does not make the surface strictly JWT-scoped: `resolveOrgId` falls back to the first
+Organization when a token carries no `organizationId`, on every surface. That is #239.
+
 ### Domain: Facilities
+
+**On upgrade**, run `backfill-read-models.ts --only=facilities` once. The Phase 2a migrations only
+derive a facility per Location that a warehouse row already points at, so an install with warehouse
+locations but no zones, receiving or waves yet gets none, and every WMS page reports "No facilities"
+(#236). The step is idempotent.
 
 The warehouse a WMS install operates. A Facility is deliberately not a Location: Location is the
 TMS geographic node used by shipment stops, lane endpoints and arrival criteria, and a standalone
@@ -1887,6 +1930,60 @@ kept so a combined install can reconcile the two.
   Location's details if it does not exist yet, emitting `facility.created` with `derived: true`.
   This is the Phase 2a dual-write (#217); reads still go through `locationId` until a later chunk
   switches them over
+- The same resolution runs on every inbound create: appointments, receiving tasks, putaway rules,
+  and the putaway tasks generated by receiving completion and replenishment (#225). Replenishment
+  resolves on first use, so a run that replenishes nothing does not create a facility as a side
+  effect
+- And on every outbound create: pack tasks, staging assignments, and the pick tasks generated by
+  releasing a wave (#227). Receiving completion resolves once for whichever branch it takes, and
+  skips resolution entirely when there is nothing to put away or stage
+- And on waves and wave templates (#229), which completes the dual-write. **Every WMS model that
+  references `Location` now carries a `facilityId` beside it.**
+
+### Reading by facility
+
+Every WMS list endpoint takes **either** `facilityId` **or** `locationId`, exactly one, enforced by
+`oneOf` in the querystring schema rather than by a check in the handler (#231). New callers should
+send `facilityId`. `locationId` stays until the frontend has migrated and a soak has passed, then it
+goes with the `Location` FKs.
+
+Repositories take a `WarehouseScope` rather than a bare id, and build their filter through
+`scopedWhere(orgId, scope)`, so a read cannot be written that narrows by warehouse without also
+narrowing by tenant.
+
+The WMS UI sends `facilityId` (#234). The warehouse picker is `FacilitySelect` over the
+`useFacilities` hook, one shared component rather than the nineteen copies each page used to carry.
+It also drops a filter those copies applied: they fetched `/api/v1/locations` and kept only
+`warehouse`, `distribution_centre` and `cross_dock` types, whereas a Facility is a warehouse by
+definition and the endpoint already excludes archived ones.
+
+`locationId` is nullable on the WMS models from #245, so a warehouse row can exist without a
+Location, which is what a standalone FinnWMS needs. Its foreign keys became `ON DELETE SET NULL`:
+deleting a Location detaches warehouse rows rather than refusing, and they keep their `facilityId`,
+which is the reference that matters from here on.
+
+**Inventory is the exception.** `InventoryRecord.locationId` is still NOT NULL and the inventory
+module has no facility reference, so putaway completion, returns and wave release all still need a
+real Location. `requireLocationForInventory` fails loudly rather than inventing one. Giving
+inventory a facility is Phase 4.
+
+**Writes moved too** (#248). Create command payloads name the `facilityId`, which
+`loadFacilityForWrite` looks up within the caller's org, so naming another tenant's facility misses
+rather than writing into their warehouse. `locationId` is still written alongside, from the
+facility's `sourceLocationId`, and is null for a facility that has none. Dropping the column, the
+`Location` foreign keys and the `locationId` query parameter is 6c.
+
+Bin label uniqueness is checked per facility rather than through the `(locationId, label)` compound
+unique, which cannot serve a warehouse-only install and never carried `orgId`.
+
+**The `Location` foreign keys are gone** (#280). `locationId` survives on the warehouse tables as a
+soft string reference, which is what the module rule asks for, and a schema without a `Location`
+table now resolves. The list endpoints take `facilityId` only.
+
+The columns themselves cannot go yet. `InventoryRecord.locationId` is NOT NULL and the inventory
+module has no facility, so putaway completion, returns and wave release still need a real Location;
+`CompletePutaway` also resolves a scanned bin by `(locationId, label)`. Giving inventory a facility
+is Phase 4, and the columns go with it.
 
 ---
 
@@ -1915,19 +2012,31 @@ Manages the physical location hierarchy within warehouses: zones (logical areas)
 Manages inbound goods - dock appointments, receiving tasks, and line-by-line item verification.
 
 ### Commands
+- `receiving_appointment.create` - Schedule a dock appointment. Rejects a window that ends before it starts, and a dock bin belonging to another organisation
+- `receiving_appointment.check_in` - Carrier has arrived. Refused on a completed or cancelled appointment
+- `receiving_appointment.cancel` - Cancel a scheduled or checked-in appointment. Refused once completed, since goods already received cannot be un-received. Cancelling twice is a no-op
 - `receiving_task.create` - Create a receiving task (ASN-based with expected lines, or blind). Auto-updates linked appointment status.
 - `receiving_line.record` - Record a received item against an existing line (ASN) or create a new line (blind). Auto-starts task on first line recorded.
+- `receiving_line.inspect` - Set a line's inspection status. Scoped through its task, since `ReceivingLine` carries no `orgId`
 - `receiving_task.complete` - Complete receiving, tally totals, auto-generate putaway tasks for units with trackableUnitIds. Evaluates putaway rules for directed routing, falls back to first available bulk bin.
 
 ### Events
-- `receiving_appointment.created`, `receiving_appointment.checked_in`
+- `receiving_appointment.created`, `receiving_appointment.checked_in`, `receiving_appointment.cancelled`
 - `receiving_task.created`, `receiving_task.started`, `receiving_task.completed`
 - `receiving_line.recorded`, `receiving_line.inspected`
 - `putaway_task.created` (emitted by CompleteReceiving for each generated putaway task)
 
 ### Side Effects
 - CompleteReceiving generates PutawayTasks using PutawayRule evaluation
+- Every receiving read and write is scoped to `req.orgId` (#220). `ReceivingRepository` exposes
+  reads only; there is no unscoped create or update on it to reach for
+- The org filter reaches inside the commands too (#220): `receiving_task.create` rejects an
+  appointment belonging to another organisation rather than moving it to `receiving`, and
+  `receiving_task.complete` looks its task up by id **and** `orgId`, as do the putaway rules and
+  bins it evaluates
 - Appointment status auto-updated on task creation and completion
+- Appointments, receiving tasks and the putaway tasks generated on completion dual-write
+  `facilityId` alongside `locationId` (Phase 2a, #225)
 
 ### Mobile flow (warehouse app)
 - `/warehouse/tasks/receive/:id` opens the task. Summary card shows receiving type (ASN vs blind) + cross-dock flag + dock bin
@@ -2388,6 +2497,9 @@ Returns can enter the system through five channels, all converging on the same `
 Directs received goods to their storage location with scan-to-confirm and constraint validation.
 
 ### Commands
+- `putaway_rule.create` - Create a directed-putaway rule. Target zone and target bin are both
+  checked against the caller's organisation: a rule pointing at another tenant's bin would route
+  their stock into ours
 - `putaway_task.assign` - Assign a putaway task to a worker
 - `putaway_task.complete` - Scan-to-confirm completion:
   1. Resolves scanned bin label to actual bin
@@ -2398,6 +2510,7 @@ Directs received goods to their storage location with scan-to-confirm and constr
   6. Creates/updates InventoryRecord + immutable InventoryTransaction
 
 ### Events
+- `putaway_rule.created`
 - `putaway_task.assigned`, `putaway_task.started`, `putaway_task.completed`
 - `putaway_task.deviation` - Emitted when scanned bin differs from directed target
 - `inventory.received` - Emitted when putaway writes to inventory
@@ -2405,6 +2518,8 @@ Directs received goods to their storage location with scan-to-confirm and constr
 ### Side Effects
 - Putaway completion creates the first InventoryRecord for received goods
 - Bin capacity denormalization updated on completion
+- Every putaway read is scoped to `req.orgId` through `PutawayRepository` (#220)
+- Putaway rules and tasks dual-write `facilityId` alongside `locationId` (Phase 2a, #225)
 
 ### Putaway Rule Evaluation
 - Rules evaluated in priority order (lower = higher priority), first match wins
@@ -2475,6 +2590,8 @@ the demand reference polymorphic.
 ### Commands
 - `wave.create` - Create a wave from selected order IDs. Auto-generates wave number (W-YYYY-MM-DD-NNN). Counts total line items across orders.
 - `wave.release` - Release wave: hard-allocates inventory (FIFO) for each order line, creates PickTasks with walk-sequence-sorted PickLines. Discrete strategy = one task per order, batch = one task for all.
+- `pick_task.assign` - Assign a pick task to a picker. Refused once completed or cancelled; a task
+  already in progress can be reassigned, since a picker can be pulled off a job mid-walk
 - `pick_line.complete` - Complete a pick line: deducts from InventoryRecord (quantityOnHand + quantityAllocated), creates InventoryTransaction (type: pick). Short pick handling: backorder (keep allocated) or cancel_line (release back to available). Auto-completes task and wave when all lines done.
 
 ### Events
@@ -2487,6 +2604,19 @@ the demand reference polymorphic.
 - Pick line completion decrements quantityOnHand and creates pick transaction
 - Short pick with cancel_line releases allocation back to available
 - Task auto-completes when all lines done; wave auto-completes when all tasks done
+- Wave, pick task, pack task and staging reads are scoped to `req.orgId` through `WaveRepository`
+  and `PackingRepository` (#220)
+- `wave.release` looks its wave up by id **and** `orgId`, and allocates only inventory in the
+  caller's org. Filtering on location and SKU alone hard-allocated another tenant's stock and
+  decremented their `quantityAvailable` (#220)
+- Pick tasks dual-write `facilityId` alongside `locationId`, resolved once per release and shared
+  by all three picking strategies (Phase 2a, #227)
+- Waves and wave templates do the same (Phase 2a, #229). `wave_template.apply` resolves the
+  facility from the template's location rather than copying the template's own `facilityId`, which
+  may predate the backfill, and skips resolution entirely when no eligible orders are found
+- `wave_template.apply` looks its template up by id **and** `orgId`. Applying a template creates a
+  wave at that template's location, so a bare id lookup built the wave on another tenant's floor
+  and against their grouping rules (#220)
 
 ---
 
@@ -2507,6 +2637,11 @@ Verifies picked items at pack stations, stages for outbound, and loads onto vehi
 ### Side Effects
 - Staging moves TrackableUnit.currentBinId to the staging bin
 - Loading clears TrackableUnit.currentBinId and currentZoneId (unit is on vehicle)
+- `staging_assignment.create` checks both the bin and the unit against the caller's org before it
+  writes. `TrackableUnit` carries no `orgId` of its own, so it is scoped through its order until
+  Phase 2b splits out a WMS `HandlingUnit` (#220)
+- Pack tasks and staging assignments dual-write `facilityId` alongside `locationId`, including the
+  assignments a cross-dock receipt creates (Phase 2a, #227)
 
 ### Mobile flow (warehouse app)
 - `/warehouse/tasks/pack/:id` opens the task with a summary card, carton selector (lists active `CartonCatalogue` entries with temperature zone and max weight), and one row per pack line
@@ -2519,7 +2654,8 @@ Verifies picked items at pack stations, stages for outbound, and loads onto vehi
 
 ### Domain: Cycle Counting
 
-Verifies inventory accuracy by comparing physical bin counts against system records.
+Verifies inventory accuracy by comparing physical bin counts against system records. Reads are
+scoped to `req.orgId` through `CycleCountRepository` (#220).
 
 ### Commands
 - `cycle_count.create` - Creates a cycle count from current inventory records. Three types: `full` (all bins), `zone` (specific zone), `random_sample` (~20% random selection). Auto-generates count lines with expected quantities.
@@ -2543,15 +2679,18 @@ Auto-replenishes pick face bins from bulk storage when stock drops below configu
 
 ### Commands
 - `replenishment_rule.create` - Define a rule: SKU + pick face bin + bulk zone + min/max quantities. Validates min < max, bin and zone exist.
-- `replenishment.check` - Evaluates all active rules for a location. For each rule where pick face qty < minQuantity: finds bulk inventory, creates PutawayTask (type: `replenishment`). Skips if already being replenished or no bulk stock available.
+- `replenishment_rule.update` - Change quantities or deactivate. The min/max band is validated against the merged values, since a request moving one side alone can still invert it
+- `replenishment_rule.delete` - Remove a rule. Scoped to the caller's organisation (#220)
+- `replenishment.check` - Evaluates all active rules for a location. For each rule where pick face qty < minQuantity: finds bulk inventory, creates PutawayTask (type: `replenishment`). Skips if already being replenished or no bulk stock available. Rules, pick face stock, bulk stock and the duplicate-task check are all filtered by `orgId` as well as location (#220)
 
 ### Events
-- `replenishment_rule.created`, `replenishment_rule.updated`
+- `replenishment_rule.created`, `replenishment_rule.updated`, `replenishment_rule.deleted`
 - `inventory.below_minimum` - Emitted when a pick face drops below its rule's minQuantity
 - `replenishment.triggered` - Emitted when a replenishment putaway task is created
 
 ### Side Effects
 - CheckReplenishment creates PutawayTask records (putawayType: `replenishment`) that appear in the putaway task queue
+- Those tasks dual-write `facilityId` alongside `locationId`, resolved on first use so a run that replenishes nothing creates no facility (Phase 2a, #225)
 - Deduplication: skips if a pending/assigned/in-progress replenishment task already exists for the same target bin
 
 ### Event-driven auto-trigger
@@ -2565,13 +2704,18 @@ Automates wave creation from reusable template definitions with grouping rules, 
 
 ### Commands
 - `wave_template.create` - Define a template: name, pick strategy, grouping rules (JSON), cutoff time (HH:MM), min/max orders, priority, cron schedule, auto-release toggle.
+- `wave_template.update` - Change a template. maxOrders is validated against the stored minOrders
+- `wave_template.delete` - Remove a template. Refused once it has released waves, since a `Wave`
+  keeps a foreign key to the template it came from and deleting one would orphan them
 - `wave_template.apply` - Run a template: finds eligible orders (excludes already-waved), applies grouping rules, enforces min/max, generates wave number, creates wave with linked orders. Skips gracefully with reason if below minimum or no eligible orders.
 
 ### Events
+- `wave_template.updated`, `wave_template.deleted`
 - `wave.created` (with templateId and templateName in payload when template-driven)
 
 ### Side Effects
 - ApplyWaveTemplate creates Wave + WaveOrder records
+- Template reads are scoped to `req.orgId` through `WaveTemplateRepository` (#220)
 - Eligible orders are those not currently in any active (non-completed, non-cancelled) wave
 - Eligibility reads `WmsFulfilmentOrder`, and both halves of the query are org-scoped. They were
   not before, so a template could pull another organisation's orders into a wave

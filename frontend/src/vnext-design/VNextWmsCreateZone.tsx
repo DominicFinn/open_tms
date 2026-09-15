@@ -3,6 +3,8 @@ import { useNavigate, useParams, Link } from 'react-router-dom';
 import { ArrowLeft, ChevronRight, CircleAlert, Loader2, Save } from 'lucide-react';
 
 import { API_URL } from '../api';
+import { useFacilities } from '../hooks/useFacilities';
+import { FacilitySelect } from '@/components/FacilitySelect';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -45,13 +47,15 @@ export default function VNextWmsCreateZone() {
   const { id } = useParams<{ id: string }>();
   const isEdit = !!id;
 
-  const [locations, setLocations] = useState<LocationOption[]>([]);
+  const { facilities, facilityId, setFacilityId, loading: facilitiesLoading, error: facilitiesError } = useFacilities();
+
+
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   const [form, setForm] = useState({
-    locationId: '',
+    facilityId: '',
     name: '',
     zoneType: 'bulk_storage',
     temperatureZone: 'none',
@@ -61,20 +65,6 @@ export default function VNextWmsCreateZone() {
     sortOrder: '0',
   });
 
-  useEffect(() => {
-    fetch(`${API_URL}/api/v1/locations`)
-      .then(r => r.json())
-      .then(res => {
-        const warehouseLocations = (res.data || []).filter(
-          (l: LocationOption) => !l.locationType || ['warehouse', 'distribution_centre', 'cross_dock'].includes(l.locationType)
-        );
-        setLocations(warehouseLocations);
-        if (warehouseLocations.length === 1 && !isEdit) {
-          setForm(f => ({ ...f, locationId: warehouseLocations[0].id }));
-        }
-      })
-      .catch(() => {});
-  }, []);
 
   useEffect(() => {
     if (!isEdit) return;
@@ -85,7 +75,7 @@ export default function VNextWmsCreateZone() {
         if (res.data) {
           const z = res.data;
           setForm({
-            locationId: z.locationId,
+            facilityId: z.facilityId ?? '',
             name: z.name,
             zoneType: z.zoneType,
             temperatureZone: z.temperatureZone || 'none',
@@ -105,7 +95,7 @@ export default function VNextWmsCreateZone() {
     setSaving(true);
 
     const payload: Record<string, unknown> = {
-      locationId: form.locationId,
+      facilityId: form.facilityId,
       name: form.name.trim(),
       zoneType: form.zoneType,
       temperatureZone: form.temperatureZone === 'none' ? null : form.temperatureZone,
@@ -173,23 +163,15 @@ export default function VNextWmsCreateZone() {
         <Card className="max-w-3xl">
           <CardContent className="grid gap-4 p-6 md:grid-cols-2">
             <div className="space-y-2 md:col-span-2">
-              <Label>Location *</Label>
-              <Select
-                value={form.locationId}
-                onValueChange={(v) => setForm({ ...form, locationId: v })}
-                disabled={isEdit}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a warehouse location..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {locations.map(l => (
-                    <SelectItem key={l.id} value={l.id}>
-                      {l.name}{l.locationType ? ` (${l.locationType})` : ''}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>Facility *</Label>
+              <FacilitySelect
+                facilities={facilities}
+                value={form.facilityId}
+                onChange={v => setForm({ ...form, facilityId: v })}
+                loading={facilitiesLoading}
+                error={facilitiesError}
+                className="w-full"
+              />
             </div>
 
             <div className="space-y-2">

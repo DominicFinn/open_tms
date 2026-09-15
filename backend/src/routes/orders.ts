@@ -1377,7 +1377,7 @@ export async function orderRoutes(server: FastifyInstance) {
         return { data: null, error: 'Order not found' };
       }
 
-      const result = await assignmentService.assignOrderToShipment(id);
+      const result = await assignmentService.assignOrderToShipment(id, req.user?.sub ?? null);
 
       if (!result.success) {
         reply.code(400);

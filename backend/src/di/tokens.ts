@@ -131,11 +131,20 @@ export const TOKENS = {
 
   // WMS tokens
   IFacilityRepository: Symbol.for('IFacilityRepository'),
+  IPutawayRepository: Symbol.for('IPutawayRepository'),
+  IWaveRepository: Symbol.for('IWaveRepository'),
+  ICycleCountRepository: Symbol.for('ICycleCountRepository'),
+  ILoadPlanRepository: Symbol.for('ILoadPlanRepository'),
+  IWmsDashboardRepository: Symbol.for('IWmsDashboardRepository'),
+  IPackingRepository: Symbol.for('IPackingRepository'),
+  IReplenishmentRuleRepository: Symbol.for('IReplenishmentRuleRepository'),
+  IWaveTemplateRepository: Symbol.for('IWaveTemplateRepository'),
   IWarehouseZoneRepository: Symbol.for('IWarehouseZoneRepository'),
   IReceivingRepository: Symbol.for('IReceivingRepository'),
   IPutawayRuleEvaluator: Symbol.for('IPutawayRuleEvaluator'),
   ICartonizationService: Symbol.for('ICartonizationService'),
   IFulfilmentDemandSource: Symbol.for('IFulfilmentDemandSource'),
+  ICreateShipmentPort: Symbol.for('ICreateShipmentPort'),
 
   // Order line-item rating tokens (Phase 1)
   IModeRulesService: Symbol.for('IModeRulesService'),

@@ -3,9 +3,10 @@ import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { Command } from '../types.js';
+import { loadFacilityForWrite } from '../facilities/resolveFacility.js';
 
 export interface CreateLoadPlanPayload {
-  locationId: string;
+  facilityId: string;
   shipmentId?: string | null;
   dockBinId?: string | null;
   carrierId?: string | null;
@@ -32,6 +33,11 @@ export class CreateLoadPlanCommandHandler extends BaseCommandHandler<
     emit: EmitFn
   ): Promise<{ id: string; totalUnits: number; status: string }> {
     const p = command.payload;
+
+    // Phase 2a (#248): the caller names the facility. locationId is still written from the
+    // facility's source location until 6c drops the column, and is null in a warehouse-only
+    // install.
+    const facility = await loadFacilityForWrite(tx, command.orgId, p.facilityId);
 
     if (p.stagingAssignmentIds.length === 0) throw new Error('Load plan must include at least one staged unit');
 
@@ -66,7 +72,7 @@ export class CreateLoadPlanCommandHandler extends BaseCommandHandler<
 
     const loadPlan = await tx.loadPlan.create({
       data: {
-        locationId: p.locationId,
+        locationId: facility.sourceLocationId,
         shipmentId: p.shipmentId ?? null,
         dockBinId: p.dockBinId ?? null,
         carrierId: p.carrierId ?? null,
@@ -95,7 +101,7 @@ export class CreateLoadPlanCommandHandler extends BaseCommandHandler<
       entityType: 'load_plan',
       entityId: loadPlan.id,
       payload: {
-        locationId: p.locationId,
+        locationId: facility.sourceLocationId,
         shipmentId: p.shipmentId,
         totalUnits: assignments.length,
         orderCount: orderIds.length,

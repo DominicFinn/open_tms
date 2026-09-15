@@ -3,6 +3,7 @@ import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { Command } from '../types.js';
+import { loadFacilityForWrite } from '../facilities/resolveFacility.js';
 
 /**
  * Checks all active replenishment rules for a location and creates
@@ -12,7 +13,7 @@ import { Command } from '../types.js';
  * Called after pick line completion or on demand.
  */
 export interface CheckReplenishmentPayload {
-  locationId: string;
+  facilityId: string;
   /** Optionally scope to a specific SKU (e.g. after a pick of that SKU) */
   sku?: string;
 }
@@ -36,8 +37,14 @@ export class CheckReplenishmentCommandHandler extends BaseCommandHandler<
   ): Promise<{ tasksCreated: number; details: Array<{ sku: string; pickFaceBin: string; quantity: number }> }> {
     const p = command.payload;
 
-    // Find active rules, optionally filtered by SKU
-    const where: any = { locationId: p.locationId, active: true };
+    // Phase 2a (#248): the caller names the facility. locationId is still written from the
+    // facility's source location until 6c drops the column, and is null in a warehouse-only
+    // install.
+    const facility = await loadFacilityForWrite(tx, command.orgId, p.facilityId);
+
+    // orgId as well as locationId: another tenant sharing a location id would otherwise have their
+    // rules evaluated against our stock (#220).
+    const where: any = { locationId: facility.sourceLocationId, orgId: command.orgId, active: true };
     if (p.sku) where.sku = p.sku;
 
     const rules = await tx.replenishmentRule.findMany({ where });
@@ -48,7 +55,7 @@ export class CheckReplenishmentCommandHandler extends BaseCommandHandler<
     for (const rule of rules) {
       // Check current quantity at the pick face bin for this SKU
       const pickFaceInventory = await tx.inventoryRecord.findFirst({
-        where: { binId: rule.pickFaceBinId, sku: rule.sku },
+        where: { binId: rule.pickFaceBinId, sku: rule.sku, orgId: command.orgId },
       });
 
       const currentQty = pickFaceInventory?.quantityOnHand ?? 0;
@@ -59,6 +66,7 @@ export class CheckReplenishmentCommandHandler extends BaseCommandHandler<
       const existingTask = await tx.putawayTask.findFirst({
         where: {
           targetBinId: rule.pickFaceBinId,
+          orgId: command.orgId,
           putawayType: 'replenishment',
           status: { in: ['pending', 'assigned', 'in_progress'] },
         },
@@ -73,6 +81,7 @@ export class CheckReplenishmentCommandHandler extends BaseCommandHandler<
         where: {
           bin: { zoneId: rule.bulkZoneId },
           sku: rule.sku,
+          orgId: command.orgId,
           quantityAvailable: { gt: 0 },
         },
         include: { bin: true },
@@ -86,7 +95,8 @@ export class CheckReplenishmentCommandHandler extends BaseCommandHandler<
       // Create replenishment putaway task
       await tx.putawayTask.create({
         data: {
-          locationId: p.locationId,
+          facilityId: facility.id,
+          locationId: facility.sourceLocationId,
           trackableUnitId: bulkInventory.id, // Using inventory record ID as reference
           sourceBinId: bulkInventory.binId,
           targetBinId: rule.pickFaceBinId,

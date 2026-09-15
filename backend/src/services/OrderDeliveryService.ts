@@ -112,7 +112,12 @@ export class OrderDeliveryService implements IOrderDeliveryService {
             ...(update.exceptionType && { exceptionType: update.exceptionType }),
           }
         },
-        userId: update.deliveryConfirmedBy || undefined,
+        // deliveryConfirmedBy is free text ("Warehouse Receiver - Portland",
+        // a name, a system identifier) — AuditLog.userId is a real FK to
+        // User and only ever holds one of those values by coincidence, so
+        // this always 500'd on a real confirmer name (#250). userName is
+        // the unconstrained denormalized-display column this belongs in.
+        userName: update.deliveryConfirmedBy || undefined,
       }
     });
 
@@ -198,7 +203,9 @@ export class OrderDeliveryService implements IOrderDeliveryService {
           before: { deliveryStatus: 'exception', exceptionType: order.exceptionType },
           after: { deliveryStatus: 'in_transit' }
         },
-        userId: resolvedBy || undefined,
+        // Same fix as updateOrderDeliveryStatus above — resolvedBy is free
+        // text, not a User id.
+        userName: resolvedBy || undefined,
       }
     });
 

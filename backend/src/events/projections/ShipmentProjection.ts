@@ -295,12 +295,24 @@ export class ShipmentProjection implements IEventHandler {
 
   private async onLocationReceived(event: DomainEvent): Promise<void> {
     const payload = event.payload as { shipmentId: string; lat: number; lng: number; eventTime: string };
-    await this.prisma.shipmentReadModel.update({
-      where: { id: payload.shipmentId },
+    const eventTime = new Date(payload.eventTime);
+
+    // Concurrency: this handler runs with concurrency 3 (see registerHandlers.ts), and pg-boss
+    // delivery isn't ordered, so two location pings for the same shipment can be processed at once
+    // or out of order (batched/redelivered IoT pings routinely arrive late). Guarding with a WHERE
+    // clause on the UPDATE itself — rather than reading lastLocationAt first and branching — means
+    // Postgres's row-level locking serializes concurrent writers: whichever commits second
+    // re-evaluates the condition against the row the first one just wrote, so the read model always
+    // ends up holding whichever eventTime is actually newest, regardless of processing order.
+    await this.prisma.shipmentReadModel.updateMany({
+      where: {
+        id: payload.shipmentId,
+        OR: [{ lastLocationAt: null }, { lastLocationAt: { lt: eventTime } }],
+      },
       data: {
         currentLat: payload.lat,
         currentLng: payload.lng,
-        lastLocationAt: new Date(payload.eventTime),
+        lastLocationAt: eventTime,
         updatedAt: new Date(),
       },
     }).catch((err: Error) => {

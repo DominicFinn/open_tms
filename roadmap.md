@@ -42,10 +42,18 @@ Roughly 50-65 PR-sized chunks end to end; every PR leaves the product shippable.
   split ✅ (#166),
   `WmsFulfilmentOrder` projection ✅ (#168), load-plan event seam ✅ (#173). One new WMS read
   model, no changes to existing tables
-- **Phase 2: Data model untangling** 🚧 `Facility` (WMS off the conflated `Location`) — chunk 1
-  of 6 shipped ✅ (#217: `Facility`, storage topology dual-write, `/api/v1/facilities`);
+- **Phase 2: Data model untangling** 🚧 `Facility` (WMS off the conflated `Location`) — the
+  dual-write is complete ✅, all twelve WMS models that reference `Location` now carry a
+  `facilityId` (#217 storage topology, #225 inbound, #227 outbound, #229 waves), and the read path
+  accepts a facility scope (#231), and the 15 WMS list pages now send `facilityId` (#234). `locationId` is
+  nullable (#245), the write path names the facility (#248) and the `Location` foreign keys are cut
+  (#280), so no FK crosses the boundary. The `locationId` columns stay as soft references until
+  inventory carries a facility, which is Phase 4;
   `HandlingUnit` (stock without a TMS order), polymorphic `Allocation` demand ref, carton cleanup,
-  `OrgWmsSettings` carve-out still to come. All expand→contract
+  `OrgWmsSettings` carve-out still to come. All expand→contract.
+  Phase 0 tenancy leftovers closed alongside ✅ (#220, in #221/#222/#223): the whole WMS read and
+  write surface is now scoped to `req.orgId` through ten repositories, including two deletes that
+  let one tenant remove another's replenishment rules and wave templates by uuid
 - **Phase 3: App shell & entitlements** 🔲 `ENABLED_MODULES` composition, `OrgApp` entitlements
   + `GET /api/v1/apps` (replaces the hardcoded frontend APPS array), `packages/contracts`,
   warehouse PWA split, delete `auth-service/`, per-product frontend builds (`VITE_PRODUCT`)
@@ -180,6 +188,7 @@ Every TMS needs customer self-service. The carrier portal exists but there's not
     - `OrderCartonizationService.computeOrderFromUnits` computes per-unit weight/cube/density/class with three-tier fallback (override → lines → packagingType external dims). Live preview at `POST /api/v1/order-line-items/cartonization/preview-units`
     - `HandlingUnitsEditor` component (shared portal + admin): drag-and-drop line items between units via `@dnd-kit`, per-unit dim/weight edit fields, create/delete/merge/split actions, generate-barcode, live cartonization summary
     - Customer portal mirrors the 8 admin endpoints under `/customer-portal/...` with customer-owns-order ownership checks
+    - **Order creation with explicit `trackableUnits[].lineItems` bug fix** ✅ (Sep 2026, #269): `CreateOrderCommand`'s doubly-nested Prisma create (`order.create` → `trackableUnits.create` → `lineItems.create`) left the required `OrderLineItem.orderId` FK unset — Prisma only auto-fills the FK for the relation it directly traverses at each nesting level, not a grandparent FK two levels up — so every order creation with unit-attached line items failed outright. Fixed by creating the order first, then trackable units and their line items as separate writes with `orderId` supplied explicitly. Regression test included
   - Order templates for recurring shipments 🔲
   - **Bulk order upload (CSV) through portal** ✅ (Jun 2026, Phase 3 of Order Line Items work)
     - CSVImportService rewritten to dispatch `CREATE_ORDER` per order through the command bus (events fire and OrderProjection stays in sync; previously this was bypassed)
@@ -688,8 +697,10 @@ Base login (email + password, JWT, admin password reset, RequireAuth guard, glob
    shipped, and the boundary is drawn in code and enforced by `npm run lint:boundaries`. Phase 2 is
    the one that makes a standalone FinnWMS possible: `Facility` (WMS off the conflated `Location`),
    `HandlingUnit` (stock without a TMS order), and a polymorphic `Allocation` demand ref. 2a is
-   under way: chunk 1 (#217) landed `Facility` and the storage topology dual-write, and the
-   remaining five batches are listed in the split roadmap.
+   under way, and its dual-write is finished: #217, #225, #227 and #229 put a `facilityId` on every
+   WMS model that references `Location`, #231 taught every WMS list endpoint to filter by facility,
+   and #234 moved the WMS UI onto it. Reads are done. Batch 6 is the write path and the contract:
+   nullable `locationId`, create commands on `facilityId`, then drop the `Location` FKs.
    See [docs/roadmap/split-finntms-finnwms.md](docs/roadmap/split-finntms-finnwms.md).
 1. **NEXT (Immediate):** **Carrier API Integration** - Real-time shipment tracking through carrier APIs is table stakes. FedEx/UPS/DHL first-party tracking already exist (real, sandbox-ready). Expand with **multi-carrier aggregators** (EasyPost, AfterShip) so one integration pools dozens of carriers, then broaden. Poll + webhook, all sandbox/ngrok-testable. Landscape + selection in `docs/CARRIER_INTEGRATIONS.md`; testing in `docs/CARRIER_TESTING.md`.
 2. **Immediate:** **Track 1 (Brokerage)** - Broker entity model, margin tracking, quoting workflow. This unlocks the largest market segment currently unserved.

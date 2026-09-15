@@ -45,6 +45,18 @@ model Facility {
   aisles WarehouseAisle[]
   bins   WarehouseBin[]
 
+  receivingAppointments ReceivingAppointment[]
+  receivingTasks        ReceivingTask[]
+  putawayRules          PutawayRule[]
+  putawayTasks          PutawayTask[]
+
+  pickTasks          PickTask[]
+  packTasks          PackTask[]
+  stagingAssignments StagingAssignment[]
+
+  waves         Wave[]
+  waveTemplates WaveTemplate[]
+
   // One facility per source location per org: this is what makes the backfill and the
   // find-or-create in the dual-write path idempotent.
   @@unique([orgId, sourceLocationId])
@@ -53,8 +65,7 @@ model Facility {
 
 model WarehouseZone {
   id              String    @id @default(uuid())
-  locationId      String
-  location        Location  @relation(fields: [locationId], references: [id])
+  locationId      String?
   // Phase 2a dual-write (#217): nullable during expand, authoritative after contract.
   facilityId      String?
   facility        Facility? @relation(fields: [facilityId], references: [id])
@@ -89,8 +100,7 @@ model WarehouseAisle {
   id         String        @id @default(uuid())
   zoneId     String
   zone       WarehouseZone @relation(fields: [zoneId], references: [id], onDelete: Cascade)
-  locationId String
-  location   Location      @relation(fields: [locationId], references: [id])
+  locationId String?
   // Phase 2a dual-write (#217): nullable during expand, authoritative after contract.
   facilityId String?
   facility   Facility?     @relation(fields: [facilityId], references: [id])
@@ -114,8 +124,7 @@ model WarehouseBin {
   zone               WarehouseZone   @relation(fields: [zoneId], references: [id], onDelete: Cascade)
   aisleId            String?
   aisle              WarehouseAisle? @relation(fields: [aisleId], references: [id])
-  locationId         String
-  location           Location        @relation(fields: [locationId], references: [id])
+  locationId         String?
   // Phase 2a dual-write (#217): nullable during expand, authoritative after contract.
   facilityId         String?
   facility           Facility?       @relation(fields: [facilityId], references: [id])
@@ -190,8 +199,9 @@ model IndoorZoneAnchor {
 
 model ReceivingAppointment {
   id                String        @id @default(uuid())
-  locationId        String
-  location          Location      @relation(fields: [locationId], references: [id])
+  locationId        String?
+  facilityId        String?
+  facility          Facility?     @relation(fields: [facilityId], references: [id])
   inboundShipmentId String?
   dockBinId         String?
   dockBin           WarehouseBin? @relation("AppointmentDock", fields: [dockBinId], references: [id])
@@ -212,6 +222,7 @@ model ReceivingAppointment {
   receivingTasks ReceivingTask[]
 
   @@index([locationId])
+  @@index([facilityId])
   @@index([orgId])
   @@index([scheduledAt])
   @@index([status])
@@ -219,8 +230,9 @@ model ReceivingAppointment {
 
 model ReceivingTask {
   id                String                @id @default(uuid())
-  locationId        String
-  location          Location              @relation(fields: [locationId], references: [id])
+  locationId        String?
+  facilityId        String?
+  facility          Facility?             @relation(fields: [facilityId], references: [id])
   appointmentId     String?
   appointment       ReceivingAppointment? @relation(fields: [appointmentId], references: [id])
   inboundShipmentId String?
@@ -241,6 +253,7 @@ model ReceivingTask {
   putawayTasks PutawayTask[]
 
   @@index([locationId])
+  @@index([facilityId])
   @@index([orgId])
   @@index([status])
 }
@@ -271,10 +284,11 @@ model ReceivingLine {
 
 model PutawayRule {
   id         String   @id @default(uuid())
-  locationId String
-  location   Location @relation(fields: [locationId], references: [id])
+  locationId String?
+  facilityId String?
+  facility   Facility? @relation(fields: [facilityId], references: [id])
   name       String
-  priority   Int      @default(50) // lower = higher priority
+  priority   Int       @default(50) // lower = higher priority
   active     Boolean  @default(true)
 
   // Criteria (all nullable = match any)
@@ -298,14 +312,16 @@ model PutawayRule {
   updatedAt DateTime @updatedAt
 
   @@index([locationId])
+  @@index([facilityId])
   @@index([orgId])
   @@index([priority])
 }
 
 model PutawayTask {
   id               String         @id @default(uuid())
-  locationId       String
-  location         Location       @relation(fields: [locationId], references: [id])
+  locationId       String?
+  facilityId       String?
+  facility         Facility?      @relation(fields: [facilityId], references: [id])
   receivingTaskId  String?
   receivingTask    ReceivingTask? @relation(fields: [receivingTaskId], references: [id])
   trackableUnitId  String
@@ -324,6 +340,7 @@ model PutawayTask {
   updatedAt DateTime @updatedAt
 
   @@index([locationId])
+  @@index([facilityId])
   @@index([orgId])
   @@index([status])
   @@index([trackableUnitId])
@@ -333,8 +350,9 @@ model PutawayTask {
 
 model WaveTemplate {
   id                 String    @id @default(uuid())
-  locationId         String
-  location           Location  @relation(fields: [locationId], references: [id])
+  locationId         String?
+  facilityId         String?
+  facility           Facility? @relation(fields: [facilityId], references: [id])
   name               String
   groupingRules      Json? // { customer, carrier, serviceLevel, shipFrom, shipCompleteOnly }
   cutoffTime         String? // HH:MM local
@@ -358,13 +376,15 @@ model WaveTemplate {
   waves Wave[]
 
   @@index([locationId])
+  @@index([facilityId])
   @@index([orgId])
 }
 
 model Wave {
   id                    String        @id @default(uuid())
-  locationId            String
-  location              Location      @relation(fields: [locationId], references: [id])
+  locationId            String?
+  facilityId            String?
+  facility              Facility?     @relation(fields: [facilityId], references: [id])
   templateId            String?
   template              WaveTemplate? @relation(fields: [templateId], references: [id])
   waveNumber            String // auto-generated, e.g. "W-2026-04-14-001"
@@ -388,6 +408,7 @@ model Wave {
 
   @@unique([orgId, waveNumber])
   @@index([locationId])
+  @@index([facilityId])
   @@index([orgId])
   @@index([status])
 }
@@ -406,8 +427,9 @@ model WaveOrder {
 
 model PickTask {
   id               String         @id @default(uuid())
-  locationId       String
-  location         Location       @relation(fields: [locationId], references: [id])
+  locationId       String?
+  facilityId       String?
+  facility         Facility?      @relation(fields: [facilityId], references: [id])
   waveId           String?
   wave             Wave?          @relation(fields: [waveId], references: [id])
   orderId          String?
@@ -432,6 +454,7 @@ model PickTask {
   packTasks PackTask[]
 
   @@index([locationId])
+  @@index([facilityId])
   @@index([orgId])
   @@index([waveId])
   @@index([status])
@@ -470,8 +493,9 @@ model PickLine {
 
 model PackTask {
   id               String        @id @default(uuid())
-  locationId       String
-  location         Location      @relation(fields: [locationId], references: [id])
+  locationId       String?
+  facilityId       String?
+  facility         Facility?     @relation(fields: [facilityId], references: [id])
   orderId          String
   pickTaskId       String?
   pickTask         PickTask?     @relation(fields: [pickTaskId], references: [id])
@@ -490,6 +514,7 @@ model PackTask {
   audits    PackAudit[]
 
   @@index([locationId])
+  @@index([facilityId])
   @@index([orgId])
   @@index([orderId])
   @@index([status])
@@ -559,7 +584,7 @@ model PackAudit {
 
 model CartonCatalogue {
   id             String  @id @default(uuid())
-  locationId     String
+  locationId     String?
   name           String // e.g. "Small Mailer", "Medium Box"
   lengthMm       Int
   widthMm        Int
@@ -593,8 +618,9 @@ model CartonCatalogue {
 
 model StagingAssignment {
   id              String        @id @default(uuid())
-  locationId      String
-  location        Location      @relation(fields: [locationId], references: [id])
+  locationId      String?
+  facilityId      String?
+  facility        Facility?     @relation(fields: [facilityId], references: [id])
   orderId         String
   shipmentId      String?
   trackableUnitId String
@@ -610,6 +636,7 @@ model StagingAssignment {
   updatedAt DateTime @updatedAt
 
   @@index([locationId])
+  @@index([facilityId])
   @@index([orgId])
   @@index([orderId])
   @@index([shipmentId])
@@ -620,7 +647,7 @@ model StagingAssignment {
 
 model LoadPlan {
   id            String    @id @default(uuid())
-  locationId    String
+  locationId    String?
   shipmentId    String? // target shipment (may be created during load plan)
   dockBinId     String? // assigned dock door
   status        String    @default("planning") // planning, loading, completed, cancelled
@@ -666,7 +693,7 @@ model LoadPlanLine {
 
 model CycleCount {
   id               String    @id @default(uuid())
-  locationId       String
+  locationId       String?
   countType        String // full, zone, random_sample
   zoneId           String? // for zone counts
   status           String    @default("planned") // planned, in_progress, completed, cancelled
@@ -718,7 +745,7 @@ model CycleCountLine {
 
 model ReplenishmentRule {
   id            String  @id @default(uuid())
-  locationId    String
+  locationId    String?
   sku           String
   pickFaceBinId String // bin to replenish
   bulkZoneId    String // zone to pull from

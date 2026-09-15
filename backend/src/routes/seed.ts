@@ -1,7 +1,11 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { seedSystemRoles } from '../auth/seedRoles.js';
+import { DevSeedResetRepository } from '../repositories/DevSeedResetRepository.js';
+import { runBackfillSteps } from '../scripts/backfill-read-models.js';
 
 export async function seedRoutes(server: FastifyInstance) {
+  const devSeedRepo = new DevSeedResetRepository(server.prisma);
+
   // Block seed routes in production to prevent accidental data loss
   if (process.env.NODE_ENV === 'production') {
     server.post('/api/v1/seed/roles', async (_req: FastifyRequest, reply: FastifyReply) => {
@@ -24,13 +28,10 @@ export async function seedRoutes(server: FastifyInstance) {
   // Seed data endpoint
   server.post('/api/v1/seed', async (_req: FastifyRequest, reply: FastifyReply) => {
     try {
-      // Clear existing data in dependency order
-      await server.prisma.orderShipment.deleteMany();
-      await server.prisma.order.deleteMany();
-      await server.prisma.shipment.deleteMany();
-      await server.prisma.carrier.deleteMany();
-      await server.prisma.location.deleteMany();
-      await server.prisma.customer.deleteMany();
+      // Clear existing data — walks the live FK graph rather than a
+      // hand-maintained deleteMany chain, so a newly added dependent table
+      // is picked up automatically instead of 500ing on the next seed (#251).
+      await devSeedRepo.resetSeedTables();
 
       // Deliberate exception to the no-inline-findFirst rule (#117). Seeding has no caller
       // tenant and is meant to populate the sole development organisation; the endpoint is 403'd
@@ -216,6 +217,11 @@ export async function seedRoutes(server: FastifyInstance) {
             originId: loc(l.from).id,
             destinationId: loc(l.to).id,
             distance: l.distance,
+            // Without this every seeded lane silently took the schema
+            // default (LTL), so ShipmentAssignmentService.findMatchingLane's
+            // serviceLevel filter rejected every FTL order against it (#250)
+            // — none of these demo lanes are meant to be LTL-only.
+            serviceLevel: 'Both',
           }))
         });
       }
@@ -1060,6 +1066,14 @@ export async function seedRoutes(server: FastifyInstance) {
       }
 
       const laneCount = await server.prisma.lane.count();
+
+      // Writes above go straight to the tables and emit no domain events, so
+      // the *ReadModel tables list endpoints actually query (see the backend
+      // rule) would otherwise stay empty until someone thought to run the
+      // backfill script by hand — comprehensive-seed.ts already does this at
+      // the end of its own run; this route hadn't (#253).
+      await runBackfillSteps(server.prisma, ['customers', 'carriers', 'lanes', 'shipments', 'orders']);
+
       reply.code(201);
       return {
         data: {

@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { FileText, Loader2, Plus, Waves } from 'lucide-react';
 
 import { API_URL } from '../api';
+import { useFacilities } from '../hooks/useFacilities';
+import { FacilitySelect } from '@/components/FacilitySelect';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -59,27 +61,12 @@ export default function VNextWmsWaves() {
   const [waves, setWaves] = useState<Wave[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [selectedLocation, setSelectedLocation] = useState('');
-  const [locations, setLocations] = useState<Array<{ id: string; name: string }>>([]);
+  const { facilities, facilityId, setFacilityId, loading: facilitiesLoading, error: facilitiesError } = useFacilities();
 
   useEffect(() => {
-    fetch(`${API_URL}/api/v1/locations`)
-      .then(r => r.json())
-      .then(res => {
-        const locs = (res.data || []).filter(
-          (l: any) => !l.locationType || ['warehouse', 'distribution_centre', 'cross_dock'].includes(l.locationType)
-        );
-        setLocations(locs);
-        if (locs.length > 0) setSelectedLocation(locs[0].id);
-        else setLoading(false);
-      })
-      .catch(() => setLoading(false));
-  }, []);
-
-  useEffect(() => {
-    if (!selectedLocation) return;
+    if (!facilityId) { setLoading(false); return; }
     setLoading(true);
-    fetch(`${API_URL}/api/v1/waves?locationId=${selectedLocation}`)
+    fetch(`${API_URL}/api/v1/waves?facilityId=${facilityId}`)
       .then(r => r.json())
       .then(res => setWaves((res.data || []).map((w: any) => ({
         ...w,
@@ -87,7 +74,7 @@ export default function VNextWmsWaves() {
       }))))
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [selectedLocation]);
+  }, [facilityId]);
 
   return (
     <div className="space-y-6">
@@ -97,6 +84,7 @@ export default function VNextWmsWaves() {
           <p className="mt-1 text-sm text-muted-foreground">Group orders into pick waves for efficient fulfillment</p>
         </div>
         <div className="flex gap-2">
+          <FacilitySelect facilities={facilities} value={facilityId} onChange={setFacilityId} loading={facilitiesLoading} error={facilitiesError} className="w-[220px]" />
           <Button variant="outline" onClick={() => navigate('/wms/waves/templates')}>
             <FileText className="h-4 w-4" />
             Templates

@@ -3,6 +3,7 @@ import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { Command } from '../types.js';
+import { requireLocationForInventory } from '../inventoryLocation.js';
 
 export interface CompletePutawayPayload {
   taskId: string;
@@ -186,7 +187,7 @@ export class CompletePutawayCommandHandler extends BaseCommandHandler<
       // Create new record
       inventoryRecord = await tx.inventoryRecord.create({
         data: {
-          locationId: task.locationId,
+          locationId: requireLocationForInventory(task.locationId, `Putaway task ${task.id}`),
           binId: actualBinId,
           sku,
           uomCode: 'EA',

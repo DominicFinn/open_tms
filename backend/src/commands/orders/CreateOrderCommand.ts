@@ -184,9 +184,6 @@ export class CreateOrderCommandHandler extends BaseCommandHandler<CreateOrderPay
         notes: orderData.notes,
         status,
         // Use 'as any' to match existing OrdersRepository pattern for nested creates
-        trackableUnits: trackableUnitsCreate?.length
-          ? { create: trackableUnitsCreate as any }
-          : undefined,
         lineItems: lineItemsCreate?.length
           ? { create: lineItemsCreate as any }
           : undefined,
@@ -195,12 +192,36 @@ export class CreateOrderCommandHandler extends BaseCommandHandler<CreateOrderPay
         customer: { select: { id: true, name: true, contactEmail: true } },
         origin: { select: { id: true, name: true, city: true, state: true } },
         destination: { select: { id: true, name: true, city: true, state: true } },
-        trackableUnits: { include: { lineItems: true }, orderBy: { sequenceNumber: 'asc' } },
         lineItems: true,
       },
     });
 
-    const tuCount = (order as any).trackableUnits?.length ?? 0;
+    // TrackableUnits (and their lineItems) are created as separate steps, now
+    // that order.id exists. A doubly-nested create here — order.create ->
+    // trackableUnits.create -> lineItems.create — only auto-fills the FK for
+    // the relation Prisma is directly traversing at each level (trackableUnitId),
+    // not a grandparent FK two levels up. OrderLineItem.orderId is required and
+    // was being left unset, which failed the whole create.
+    if (trackableUnitsCreate?.length) {
+      for (const unitInput of trackableUnitsCreate) {
+        const { lineItems, ...unitFields } = unitInput as any;
+        const trackableUnit = await tx.trackableUnit.create({
+          data: { ...unitFields, orderId: order.id },
+        });
+        const lineItemInputs = lineItems?.create ?? [];
+        if (lineItemInputs.length) {
+          await tx.orderLineItem.createMany({
+            data: lineItemInputs.map((li: any) => ({
+              ...li,
+              orderId: order.id,
+              trackableUnitId: trackableUnit.id,
+            })),
+          });
+        }
+      }
+    }
+
+    const tuCount = trackableUnitsCreate?.length ?? 0;
     const liCount = (order as any).lineItems?.length ?? 0;
 
     // status='issue' at creation time means location resolution failed

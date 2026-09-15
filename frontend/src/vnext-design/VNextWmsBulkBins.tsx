@@ -105,7 +105,7 @@ export default function VNextWmsBulkBins() {
 
       const payload = {
         zoneId,
-        locationId: zoneData.data.locationId,
+        facilityId: zoneData.data.facilityId,
         ...getPayload(),
         binType: form.binType,
         maxWeightKg: form.maxWeightKg ? parseFloat(form.maxWeightKg) : null,

@@ -4,17 +4,29 @@
  *
  * Drives the entire TMS lifecycle through the HTTP API:
  *   Order intake -> Shipment creation -> Carrier tendering -> Bids ->
- *   Award -> GPS tracking -> Stop arrivals -> Cargo scanning ->
- *   Delivery -> Charges -> Invoicing -> Payment
+ *   Award -> IoT GPS tracking -> Lifecycle transitions -> Delivery ->
+ *   Charges -> Invoicing -> Payment
  *
  * Usage:
- *   1. Start the backend: cd backend && npm run dev
- *   2. Run:  npx tsx backend/src/scripts/simulate.ts
+ *   1. Seed the demo admin login (one-time, or whenever the DB is reset):
+ *        cd backend && npm run seed
+ *   2. Start the backend: cd backend && npm run dev
+ *   3. Run:  npx tsx backend/src/scripts/simulate.ts
  *
- * The script expects the backend on http://localhost:3001
+ * The script expects the backend on http://localhost:3001. Most routes require
+ * an internal-user JWT (see login() below) — only /health and POST /api/v1/seed
+ * are unauthenticated. IoT/GPS pings go through the real System Loco webhook
+ * shape (POST /api/v1/webhook, x-api-key auth), not a legacy shortcut.
  */
 
 const BASE = process.env.API_URL || 'http://localhost:3001';
+
+// The admin login is created by `npm run seed` (comprehensive-seed.ts), which
+// is separate from the HTTP POST /api/v1/seed route this script calls below —
+// that route only resets Customer/Carrier/Location/Shipment/Order and their
+// dependents, and deliberately excludes User (see DevSeedResetRepository).
+const ADMIN_EMAIL = 'admin@meridian-tms.demo';
+const ADMIN_PASSWORD = 'Password1!';
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -58,11 +70,12 @@ async function api(method: string, path: string, body?: unknown, headers?: Recor
   const opts: RequestInit = {
     method,
     headers: {
-      'Content-Type': 'application/json',
+      ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+      ...(state.token ? { Authorization: `Bearer ${state.token}` } : {}),
       ...headers,
     },
   };
-  if (body) opts.body = JSON.stringify(body);
+  if (body !== undefined) opts.body = JSON.stringify(body);
 
   const res = await fetch(url, opts);
   const json = await res.json() as { data?: any; error?: any };
@@ -74,9 +87,150 @@ async function api(method: string, path: string, body?: unknown, headers?: Recor
   return json.data;
 }
 
+/**
+ * Sends one GPS/IoT ping through the real System Loco device-event webhook
+ * shape (see SystemLocoAdapter.detect/processDeviceEvent) rather than the
+ * legacy `{event: {device, type, location}}` shortcut — that legacy shape
+ * never populated SensorReading/ShipmentEvent rows correctly (#250). The
+ * device resolves to a shipment via the active DeviceAssignment created in
+ * dispatchShipment() below, not by name-matching.
+ */
+async function sendLocationPing(opts: {
+  shipmentId: string;
+  index: number;
+  deviceExternalId: string;
+  deviceName: string;
+  lat: number;
+  lon: number;
+  label: string;
+  eventTime: Date;
+}) {
+  if (!state.apiKey) return;
+  await api('POST', '/api/v1/webhook', {
+    id: `evt-sim-${opts.shipmentId}-${opts.index}`,
+    owner: { id: state.orgId, name: 'Meridian TMS Demo' },
+    category: 'event',
+    type: 'globalLocation',
+    startTime: opts.eventTime.toISOString(),
+    latestTime: opts.eventTime.toISOString(),
+    endTime: null,
+    location: {
+      summary: opts.label,
+      type: 'gps',
+      time: opts.eventTime.toISOString(),
+      global: { lat: opts.lat, lon: opts.lon },
+    },
+    payload: {},
+    device: {
+      id: opts.deviceExternalId,
+      displayId: opts.deviceExternalId,
+      name: opts.deviceName,
+      model: { name: 'Sim GPS Tracker' },
+      firmware: '1.0.0',
+      labels: [],
+    },
+  }, { 'x-api-key': state.apiKey });
+}
+
+/**
+ * Carrier assignment, pickup/delivery dates, and IoT device all land in one
+ * PUT (reconcileShipmentDevices upserts the Device and creates the active
+ * DeviceAssignment), then the shipment is walked one adjacent lifecycle step
+ * at a time through the gated transition endpoint. There is no `in_transit`/
+ * `dispatched`/`delivered` status value in this codebase — the real lifecycle
+ * is draft -> ready -> in_progress -> complete (#250, #261).
+ */
+async function dispatchShipment(shipment: any, opts: {
+  carrierId: string;
+  pickupDate: Date;
+  deliveryDate: Date;
+  deviceExternalId: string;
+  deviceName: string;
+}) {
+  subheader('Dispatching Shipment');
+  log('  Assigning carrier, dates, and IoT tracker...', 'blue');
+  await api('PUT', `/api/v1/shipments/${shipment.id}`, {
+    carrierId: opts.carrierId,
+    pickupDate: opts.pickupDate.toISOString(),
+    deliveryDate: opts.deliveryDate.toISOString(),
+    devices: [{ name: opts.deviceName, externalId: opts.deviceExternalId }],
+  });
+
+  log('  Transitioning draft -> ready...', 'blue');
+  await api('POST', `/api/v1/shipments/${shipment.id}/transition`, { toStatus: 'ready' });
+
+  log('  Transitioning ready -> in_progress...', 'blue');
+  await api('POST', `/api/v1/shipments/${shipment.id}/transition`, { toStatus: 'in_progress' });
+
+  log('  Shipment is now IN PROGRESS (tracker live)', 'green');
+}
+
+async function completeShipment(shipmentId: string) {
+  await api('POST', `/api/v1/shipments/${shipmentId}/transition`, { toStatus: 'complete' });
+}
+
+/**
+ * Seeded customer names carry a legal suffix ("Walmart Inc.", "CVS Health
+ * Corporation") that doesn't match a plain slug like `walmart_inc` reliably
+ * across seed-data changes, so this matches on a substring of the name
+ * instead of an exact slugged key (#250).
+ */
+function findCustomer(keyword: string): any {
+  return Object.values(state.customers).find((c: any) =>
+    c.name?.toLowerCase().includes(keyword.toLowerCase())
+  );
+}
+
+/**
+ * Looks up a lane by origin/destination city among what /api/v1/seed
+ * actually created, creating one on demand if this narrative's route isn't
+ * among the seeded lanes (#250 — hardcoded lane lookups silently skipped
+ * whichever shipments their lane wasn't seeded for). The list endpoint
+ * returns flat originCity/destinationCity with no location ids, so a match
+ * there is re-fetched by id for the nested origin/destination objects the
+ * rest of this script needs.
+ */
+async function findOrCreateLane(
+  originCityKey: string,
+  destCityKey: string,
+  label: string,
+  opts: { temperatureControl?: boolean; hazmat?: boolean } = {}
+): Promise<any> {
+  const origin = state.locations[originCityKey];
+  const dest = state.locations[destCityKey];
+  if (!origin || !dest) {
+    log(`  No seeded location for ${label} - skipping`, 'yellow');
+    return null;
+  }
+
+  const allLanes = await api('GET', '/api/v1/lanes');
+  const existing = allLanes?.find((l: any) =>
+    l.originCity?.toLowerCase() === origin.city?.toLowerCase() &&
+    l.destinationCity?.toLowerCase() === dest.city?.toLowerCase()
+  );
+  if (existing) {
+    // The list can carry phantom rows the dev seed reset didn't clean out of
+    // the read model (see the flagged read-model-staleness issue) — fall
+    // through to creating a fresh lane rather than giving up on a 404 here.
+    const detail = await api('GET', `/api/v1/lanes/${existing.id}`);
+    if (detail) return detail;
+  }
+
+  log(`  No seeded lane for ${label} - creating one...`, 'blue');
+  return api('POST', '/api/v1/lanes', {
+    originId: origin.id,
+    destinationId: dest.id,
+    serviceLevel: 'Both',
+    supportsTemperatureControl: opts.temperatureControl ?? false,
+    supportsHazmat: opts.hazmat ?? false,
+  });
+}
+
 // ── State accumulated across phases ──────────────────────────────────
 
 interface SimState {
+  token: string;
+  orgId: string;
   customers: Record<string, any>;
   locations: Record<string, any>;
   carriers: Record<string, any>;
@@ -97,6 +251,8 @@ interface SimState {
 }
 
 const state: SimState = {
+  token: '',
+  orgId: '',
   customers: {},
   locations: {},
   carriers: {},
@@ -106,10 +262,33 @@ const state: SimState = {
   shipments: { s1: {}, s2: {}, s3: {} },
 };
 
-// ── Phase 0: Seed reference data ─────────────────────────────────────
+// ── Phase 0: Login and seed reference data ────────────────────────────
+
+async function login(): Promise<boolean> {
+  header('Phase 0a: Internal User Login');
+
+  log(`Logging in as ${ADMIN_EMAIL}...`, 'blue');
+  const result = await api('POST', '/api/v1/auth/login', {
+    email: ADMIN_EMAIL,
+    password: ADMIN_PASSWORD,
+  });
+
+  if (!result?.token) {
+    log('  Login failed.', 'red');
+    log(`  ${ADMIN_EMAIL} is created by the standalone seed script, not by the`, 'red');
+    log('  POST /api/v1/seed route this script calls next. Run this once and retry:', 'red');
+    log('    cd backend && npm run seed', 'yellow');
+    return false;
+  }
+
+  state.token = result.token;
+  state.orgId = result.user?.organizationId || '';
+  log(`  Logged in as ${result.user?.name || ADMIN_EMAIL} (${result.user?.role || 'admin'})`, 'green');
+  return true;
+}
 
 async function seedData() {
-  header('Phase 0: Seeding Reference Data');
+  header('Phase 0b: Seeding Reference Data');
 
   log('Calling POST /api/v1/seed to create customers, locations, and lanes...', 'blue');
   const result = await api('POST', '/api/v1/seed');
@@ -128,6 +307,13 @@ async function seedData() {
       state.customers[key] = c;
     }
     log(`  Found ${customersData.length} customers: ${customersData.map((c: any) => c.name).join(', ')}`, 'green');
+
+    // Short aliases for the narrative below, matched on a substring of the
+    // real seeded name (e.g. "Walmart Inc.") rather than an exact slug (#250).
+    for (const alias of ['walmart', 'cvs', 'target', 'best_buy']) {
+      const match = findCustomer(alias.replace('_', ' '));
+      if (match) state.customers[alias] = match;
+    }
   }
 
   // Fetch locations
@@ -150,7 +336,7 @@ async function seedData() {
     log(`  Indexed ${Object.keys(state.locations).length} location keys from ${locationsData.length} locations`, 'green');
   }
 
-  // Create an API key for webhook calls
+  // Create an API key for webhook calls (JWT-protected — needs login() first)
   log('Creating API key for IoT webhook...', 'blue');
   const apiKeyData = await api('POST', '/api/v1/api-keys', { name: 'Simulation IoT Key' });
   if (apiKeyData) {
@@ -256,23 +442,8 @@ async function setupCarriers() {
 async function setupLaneCarriers() {
   header('Phase 2: Assigning Carriers to Lanes');
 
-  // Fetch all lanes to find the ones we need
-  const allLanes = await api('GET', '/api/v1/lanes');
-  if (!allLanes) {
-    log('Failed to fetch lanes!', 'red');
-    return;
-  }
-
-  // Find lanes by origin/destination city
-  function findLane(originCity: string, destCity: string) {
-    return allLanes.find((l: any) =>
-      l.origin?.city?.toLowerCase().includes(originCity.toLowerCase()) &&
-      l.destination?.city?.toLowerCase().includes(destCity.toLowerCase())
-    );
-  }
-
   // Lane 1: Phoenix -> Portland
-  const lane1 = findLane('phoenix', 'portland');
+  const lane1 = await findOrCreateLane('phoenix', 'portland', 'Phoenix -> Portland');
   if (lane1) {
     state.lanes['phoenix_portland'] = lane1;
     log(`Found lane: ${lane1.origin.city} -> ${lane1.destination.city} (${lane1.id})`, 'green');
@@ -289,12 +460,10 @@ async function setupLaneCarriers() {
         log(`  Added ${carrier.name} to lane at $${ck === 'swift' ? '2,800' : '3,100'}`, 'blue');
       }
     }
-  } else {
-    log('Lane Phoenix -> Portland not found in seed data', 'yellow');
   }
 
   // Lane 2: Dallas -> Chicago
-  const lane2 = findLane('dallas', 'chicago');
+  const lane2 = await findOrCreateLane('dallas', 'chicago', 'Dallas -> Chicago', { temperatureControl: true });
   if (lane2) {
     state.lanes['dallas_chicago'] = lane2;
     log(`Found lane: ${lane2.origin.city} -> ${lane2.destination.city} (${lane2.id})`, 'green');
@@ -312,12 +481,10 @@ async function setupLaneCarriers() {
         log(`  Added ${carrier.name} to lane at $${price.toLocaleString()}`, 'blue');
       }
     }
-  } else {
-    log('Lane Dallas -> Chicago not found in seed data', 'yellow');
   }
 
   // Lane 3: Houston -> Atlanta
-  const lane3 = findLane('houston', 'atlanta');
+  const lane3 = await findOrCreateLane('houston', 'atlanta', 'Houston -> Atlanta');
   if (lane3) {
     state.lanes['houston_atlanta'] = lane3;
     log(`Found lane: ${lane3.origin.city} -> ${lane3.destination.city} (${lane3.id})`, 'green');
@@ -332,8 +499,6 @@ async function setupLaneCarriers() {
       });
       log(`  Added ${metro.name} to lane at $1,800`, 'blue');
     }
-  } else {
-    log('Lane Houston -> Atlanta not found in seed data', 'yellow');
   }
 }
 
@@ -395,32 +560,25 @@ async function simulateShipment1() {
 
   await sleep(500);
 
-  // Assign order to shipment (auto-matches lane)
+  // Assign order to shipment (auto-matches lane). Order has no shipmentId
+  // column — the link only exists via ShipmentAssignmentService's response
+  // and the OrderShipment join table, so assignment.shipmentId is the only
+  // reliable way to find what got created (#250).
   subheader('Assigning Order to Shipment');
   const assignment = await api('POST', `/api/v1/orders/${order.id}/assign-to-shipment`);
-  if (assignment) {
-    state.shipments.s1.shipment = assignment.shipment || assignment;
-    log(`  Order assigned to shipment: ${assignment.shipment?.reference || assignment.shipmentId || 'created'}`, 'green');
+  if (!assignment?.shipmentId) {
+    log(`  ${assignment?.message || 'Assignment failed'} - skipping tender`, 'red');
+    return;
   }
+  log(`  Order assigned to shipment (${assignment.shipmentId})`, 'green');
 
   await sleep(500);
 
-  // If we got a shipment ID, fetch the full shipment
-  let shipment = state.shipments.s1.shipment;
-  if (assignment?.shipmentId && !shipment?.id) {
-    shipment = await api('GET', `/api/v1/shipments/${assignment.shipmentId}`);
-    state.shipments.s1.shipment = shipment;
-  } else if (!shipment?.id) {
-    // Try to find it via the order's read model
-    const orderDetail = await api('GET', `/api/v1/orders/${order.id}`);
-    if (orderDetail?.shipmentId) {
-      shipment = await api('GET', `/api/v1/shipments/${orderDetail.shipmentId}`);
-      state.shipments.s1.shipment = shipment;
-    }
-  }
+  const shipment = await api('GET', `/api/v1/shipments/${assignment.shipmentId}`);
+  state.shipments.s1.shipment = shipment;
 
   if (!shipment?.id) {
-    log('  Could not find created shipment - skipping tender', 'red');
+    log('  Could not fetch created shipment - skipping tender', 'red');
     return;
   }
 
@@ -510,20 +668,18 @@ async function simulateShipment1() {
 
   await sleep(1000);
 
-  // Move shipment to in_transit
-  subheader('Dispatching Shipment');
-  log('  Setting shipment status to in_transit...', 'blue');
-  await api('PUT', `/api/v1/shipments/${shipment.id}`, {
-    status: 'in_transit',
+  // Dispatch: carrier + dates + IoT device, then draft -> ready -> in_progress
+  await dispatchShipment(shipment, {
     carrierId: swift.id,
-    pickupDate: pickupDate.toISOString(),
-    deliveryDate: deliveryDate.toISOString(),
+    pickupDate,
+    deliveryDate,
+    deviceExternalId: `SIM-DEV-${shipment.reference}`,
+    deviceName: `${shipment.reference} Tracker`,
   });
-  log('  Shipment is now IN TRANSIT', 'green');
 
   await sleep(500);
 
-  // Simulate GPS pings along the route
+  // Simulate GPS pings along the route, via the real System Loco webhook shape
   subheader('GPS Tracking - In Transit');
   const waypoints = [
     { lat: 33.45, lon: -112.07, label: 'Phoenix, AZ (origin)' },
@@ -538,20 +694,16 @@ async function simulateShipment1() {
     const eventTime = new Date(now.getTime() + (1 + i * 0.5) * 24 * 60 * 60 * 1000);
     log(`  GPS ping ${i + 1}/${waypoints.length}: ${wp.label}`, 'blue');
 
-    if (state.apiKey) {
-      await api('POST', '/api/v1/webhook', {
-        event: {
-          device: { name: shipment.reference },
-          type: 'location',
-          startTime: eventTime.toISOString(),
-          latestTime: eventTime.toISOString(),
-          location: {
-            global: { lat: wp.lat, lon: wp.lon },
-            summary: wp.label,
-          },
-        },
-      }, { 'x-api-key': state.apiKey });
-    }
+    await sendLocationPing({
+      shipmentId: shipment.id,
+      index: i,
+      deviceExternalId: `SIM-DEV-${shipment.reference}`,
+      deviceName: `${shipment.reference} Tracker`,
+      lat: wp.lat,
+      lon: wp.lon,
+      label: wp.label,
+      eventTime,
+    });
     await sleep(300);
   }
   log('  All GPS waypoints transmitted', 'green');
@@ -560,8 +712,8 @@ async function simulateShipment1() {
 
   // Mark as delivered
   subheader('Delivery Confirmation');
-  log('  Marking shipment as delivered...', 'blue');
-  await api('PUT', `/api/v1/shipments/${shipment.id}`, { status: 'delivered' });
+  log('  Transitioning in_progress -> complete...', 'blue');
+  await completeShipment(shipment.id);
   log('  Shipment DELIVERED at Portland Walmart Supercenter', 'green');
 
   // Mark order delivered
@@ -670,25 +822,17 @@ async function simulateShipment2() {
   // Assign order to shipment
   subheader('Assigning Order to Shipment');
   const assignment = await api('POST', `/api/v1/orders/${order.id}/assign-to-shipment`);
-  if (assignment) {
-    log(`  Order assigned to shipment`, 'green');
+  if (!assignment?.shipmentId) {
+    log(`  ${assignment?.message || 'Assignment failed'} - skipping`, 'red');
+    return;
   }
+  log(`  Order assigned to shipment (${assignment.shipmentId})`, 'green');
 
   await sleep(500);
 
-  // Find the shipment
-  let shipment: any = null;
-  const orderDetail = await api('GET', `/api/v1/orders/${order.id}`);
-  if (orderDetail?.shipmentId) {
-    shipment = await api('GET', `/api/v1/shipments/${orderDetail.shipmentId}`);
-  } else if (assignment?.shipmentId) {
-    shipment = await api('GET', `/api/v1/shipments/${assignment.shipmentId}`);
-  } else if (assignment?.shipment?.id) {
-    shipment = assignment.shipment;
-  }
-
+  const shipment = await api('GET', `/api/v1/shipments/${assignment.shipmentId}`);
   if (!shipment?.id) {
-    log('  Could not find created shipment - skipping', 'red');
+    log('  Could not fetch created shipment - skipping', 'red');
     return;
   }
   state.shipments.s2.shipment = shipment;
@@ -768,15 +912,15 @@ async function simulateShipment2() {
   await sleep(1000);
 
   // Dispatch
-  subheader('Dispatching Shipment');
   const coldstar = state.carriers['coldstar'];
-  await api('PUT', `/api/v1/shipments/${shipment.id}`, {
-    status: 'in_transit',
+  await dispatchShipment(shipment, {
     carrierId: coldstar.id,
-    pickupDate: pickupDate.toISOString(),
-    deliveryDate: deliveryDate.toISOString(),
+    pickupDate,
+    deliveryDate,
+    deviceExternalId: `SIM-DEV-${shipment.reference}`,
+    deviceName: `${shipment.reference} Reefer Tracker`,
   });
-  log('  Shipment is now IN TRANSIT (reefer unit active, 4C setpoint)', 'green');
+  log('  Reefer unit active, 4C setpoint', 'green');
 
   // GPS pings with a temperature excursion mid-route
   subheader('GPS Tracking - In Transit (with Temperature Excursion)');
@@ -799,7 +943,9 @@ async function simulateShipment2() {
       log('    Temperature exceeded 8C threshold! Reefer unit malfunction detected.', 'red');
       log('    Creating shipment exception...', 'yellow');
 
-      // Create an exception on the order
+      // Create an exception on the order (Order.deliveryStatus - independent
+      // of Shipment.status/hasException, which are set by automated handlers
+      // such as CarrierTrackingHandler, not by this script)
       await api('POST', `/api/v1/orders/${order.id}/delivery-status`, {
         deliveryStatus: 'exception',
         exceptionType: 'other',
@@ -818,26 +964,22 @@ async function simulateShipment2() {
       log('    Issue created in Triage Centre', 'yellow');
     }
 
-    if (state.apiKey) {
-      await api('POST', '/api/v1/webhook', {
-        event: {
-          device: { name: shipment.reference },
-          type: 'location',
-          startTime: eventTime.toISOString(),
-          latestTime: eventTime.toISOString(),
-          location: {
-            global: { lat: wp.lat, lon: wp.lon },
-            summary: wp.label,
-          },
-        },
-      }, { 'x-api-key': state.apiKey });
-    }
+    await sendLocationPing({
+      shipmentId: shipment.id,
+      index: i,
+      deviceExternalId: `SIM-DEV-${shipment.reference}`,
+      deviceName: `${shipment.reference} Reefer Tracker`,
+      lat: wp.lat,
+      lon: wp.lon,
+      label: wp.label,
+      eventTime,
+    });
     await sleep(300);
   }
 
   // Deliver despite exception (cargo needs disposition decision)
   subheader('Delivery with Exception');
-  await api('PUT', `/api/v1/shipments/${shipment.id}`, { status: 'delivered' });
+  await completeShipment(shipment.id);
   log('  Shipment DELIVERED at Chicago DC - pending quality review', 'yellow');
 
   await api('POST', `/api/v1/orders/${order.id}/delivery-status`, {
@@ -865,16 +1007,18 @@ async function simulateShipment2() {
     state.shipments.s2.charges = [revCharge];
   }
 
-  // Raise a financial query for the temperature excursion
+  // Raise a financial query for the temperature excursion. queryType is
+  // customer_dispute/carrier_dispute (not a free-text 'claim'), reason is a
+  // fixed enum, and the amount field is disputedAmountCents, not amountCents.
   const query = await api('POST', '/api/v1/financial-queries', {
     shipmentId: shipment.id,
-    queryType: 'claim',
+    queryType: 'customer_dispute',
+    reason: 'temperature_excursion',
     description: 'Temperature excursion during transit - potential cargo damage. Insulin and vaccine pallets may be compromised. Estimated loss: $45,000 wholesale value.',
-    amountCents: 4500000, // $45,000 claim
-    priority: 'high',
+    disputedAmountCents: 4500000, // $45,000 claim
   });
   if (query) {
-    log(`  Financial query raised: $45,000 potential claim (${query.id})`, 'yellow');
+    log(`  Financial query raised: $45,000 potential claim (${query.queryNumber || query.id})`, 'yellow');
   }
 
   log('  Shipment 2 complete - pending exception resolution and quality disposition', 'yellow');
@@ -970,30 +1114,18 @@ async function simulateShipment3() {
     mode: 'combine',
   });
 
-  let shipment: any = null;
-  if (batchResult) {
-    log('  Orders consolidated into single shipment', 'green');
-    // Find the shipment
-    const orderADetail = await api('GET', `/api/v1/orders/${orderA.id}`);
-    if (orderADetail?.shipmentId) {
-      shipment = await api('GET', `/api/v1/shipments/${orderADetail.shipmentId}`);
-    }
+  // batchConvert's own result carries the created shipment id(s) directly —
+  // Order has no shipmentId column to look one up by afterward (#250).
+  const consolidatedShipmentId = batchResult?.shipmentIds?.[0];
+  if (!consolidatedShipmentId) {
+    log(`  ${batchResult?.message || 'Batch convert failed'} - skipping`, 'red');
+    return;
   }
+  log(`  Orders consolidated into shipment (${consolidatedShipmentId})`, 'green');
 
+  const shipment = await api('GET', `/api/v1/shipments/${consolidatedShipmentId}`);
   if (!shipment?.id) {
-    // Fallback: assign individually
-    log('  Batch convert may not have worked - trying individual assignment', 'yellow');
-    await api('POST', `/api/v1/orders/${orderA.id}/assign-to-shipment`);
-    await sleep(300);
-    const orderADetail = await api('GET', `/api/v1/orders/${orderA.id}`);
-    if (orderADetail?.shipmentId) {
-      await api('POST', `/api/v1/orders/${orderB.id}/assign-to-shipment`);
-      shipment = await api('GET', `/api/v1/shipments/${orderADetail.shipmentId}`);
-    }
-  }
-
-  if (!shipment?.id) {
-    log('  Could not create consolidated shipment - skipping', 'red');
+    log('  Could not fetch consolidated shipment - skipping', 'red');
     return;
   }
   state.shipments.s3.shipment = shipment;
@@ -1055,14 +1187,14 @@ async function simulateShipment3() {
   await sleep(1000);
 
   // Dispatch
-  subheader('Dispatching Shipment');
-  await api('PUT', `/api/v1/shipments/${shipment.id}`, {
-    status: 'in_transit',
+  await dispatchShipment(shipment, {
     carrierId: metro.id,
-    pickupDate: pickupDate.toISOString(),
-    deliveryDate: deliveryDate.toISOString(),
+    pickupDate,
+    deliveryDate,
+    deviceExternalId: `SIM-DEV-${shipment.reference}`,
+    deviceName: `${shipment.reference} Tracker`,
   });
-  log('  Shipment is now IN TRANSIT (LTL consolidated)', 'green');
+  log('  LTL consolidated load underway', 'green');
 
   // GPS pings
   subheader('GPS Tracking - In Transit');
@@ -1079,26 +1211,22 @@ async function simulateShipment3() {
     const eventTime = new Date(now.getTime() + (3 + i * 0.6) * 24 * 60 * 60 * 1000);
     log(`  GPS ping ${i + 1}/${waypoints.length}: ${wp.label}`, 'blue');
 
-    if (state.apiKey) {
-      await api('POST', '/api/v1/webhook', {
-        event: {
-          device: { name: shipment.reference },
-          type: 'location',
-          startTime: eventTime.toISOString(),
-          latestTime: eventTime.toISOString(),
-          location: {
-            global: { lat: wp.lat, lon: wp.lon },
-            summary: wp.label,
-          },
-        },
-      }, { 'x-api-key': state.apiKey });
-    }
+    await sendLocationPing({
+      shipmentId: shipment.id,
+      index: i,
+      deviceExternalId: `SIM-DEV-${shipment.reference}`,
+      deviceName: `${shipment.reference} Tracker`,
+      lat: wp.lat,
+      lon: wp.lon,
+      label: wp.label,
+      eventTime,
+    });
     await sleep(300);
   }
 
   // Deliver
   subheader('Delivery Confirmation');
-  await api('PUT', `/api/v1/shipments/${shipment.id}`, { status: 'delivered' });
+  await completeShipment(shipment.id);
   log('  Shipment DELIVERED at Atlanta', 'green');
 
   // Mark both orders delivered
@@ -1402,9 +1530,9 @@ async function main() {
   console.log(`  Backend: ${BASE}`);
   console.log('');
 
-  // Check backend is running
+  // Check backend is running (unauthenticated health check)
   try {
-    const res = await fetch(`${BASE}/api/v1/customers`);
+    const res = await fetch(`${BASE}/health`);
     if (!res.ok) throw new Error(`Status ${res.status}`);
   } catch {
     console.error(`${COLORS.red}ERROR: Backend not reachable at ${BASE}`);
@@ -1415,6 +1543,11 @@ async function main() {
   const startTime = Date.now();
 
   try {
+    const loggedIn = await login();
+    if (!loggedIn) {
+      process.exitCode = 1;
+      return;
+    }
     await seedData();
     await setupCarriers();
     await setupLaneCarriers();

@@ -29,6 +29,43 @@ These were live bugs. Done ahead of any split work.
 | WMS permissions | None exist: `/api/v1/wms*` is open to any authenticated user. Add a `wms.*` permission family; grant permissively to existing roles, tighten later | M |
 | Magic-link scoping | Warehouse PWA magic links mint full internal JWTs. Mint warehouse-scoped tokens; accept both during transition | M |
 
+### Phase 0 leftovers, closed Sep 2026 (#220)
+
+The Phase 0 tenancy sweep fixed `GET /api/v1/warehouse/locations` (#130) but stopped there. The
+rest of the WMS surface had the same bug and was found while scoping Phase 2a batch 2. Closed in
+#221, #222 and #223.
+
+Every WMS list filtered on a **client-supplied** `locationId` and nothing else, and every detail
+fetch was `findUnique` by bare id: putaway, receiving, waves, picking, packing, staging, cycle
+counts, load plans, replenishment, wave templates and both dashboards. `registerWmsGuard` proves
+only that the caller holds `wms:read`/`wms:write` in *some* organisation, and that was mistaken for
+a tenancy check.
+
+Four things were worse than unscoped reads:
+
+- `replenishmentRule.delete` and `waveTemplate.delete` ran `where: { id }` with no org filter,
+  wrapped in `.catch(() => null)`. One tenant could delete another's rules and templates by uuid,
+  silently
+- `/api/v1/wms/operations-dashboard` resolved the org with `prisma.organization.findFirst()`, so
+  every tenant saw whichever organisation sorts first
+- `(req as any).orgId || 'default-org'` meant a request arriving without scope was filed under a
+  literal `'default-org'` rather than rejected
+- `(req as any).userId` is never populated anywhere in the codebase, so every WMS command was
+  attributed to `'system'` rather than the acting user
+
+Ten repositories now hold the scope (`PutawayRepository`, `ReceivingRepository`, `WaveRepository`,
+`PackingRepository`, `CycleCountRepository`, `LoadPlanRepository`, `ReplenishmentRuleRepository`,
+`WaveTemplateRepository`, `WmsDashboardRepository`, `FacilityRepository`), none with an unscoped
+variant, and thirteen writes moved onto the command bus. Eight event types that were declared but
+never emitted now fire.
+
+**This was not optional groundwork for Phase 2a.** Batches 2 to 4 rewrite the same query sites, and
+doing the tenancy fix first means each batch is a mechanical `facilityId` addition rather than a
+migration tangled up with a security fix.
+
+Around 90 `organization.findFirst()` calls remain across TMS routes and services. That is #117, and
+it is considerably larger than its title suggests.
+
 ## Phase 1: draw the boundary in code ✅ (shipped Sep 2026: #159, #161, #164, #166, #168, #173)
 
 Order: lint, then schema file split, then DI/routes split, then projection, then load-plan seam.
@@ -98,17 +135,82 @@ Seven FKs and one model stand between the two products.
   | # | Batch | Models | Status |
   |---|---|---|---|
   | 1 | Storage topology | `WarehouseZone`, `WarehouseAisle`, `WarehouseBin` | ✅ #217 |
-  | 2 | Inbound | `ReceivingTask`, `ReceivingAppointment`, `PutawayTask`, `PutawayRule` | |
-  | 3 | Outbound | `PickTask`, `PackTask`, `StagingAssignment` | |
-  | 4 | Waves | `Wave`, `WaveTemplate`, `WmsFulfilmentOrder` | |
-  | 5 | Frontend | the 27 files off `/api/v1/locations` | |
-  | 6 | Contract | drop the `Location` FKs and the two boundary-lint exceptions | |
+  | 2 | Inbound | `ReceivingTask`, `ReceivingAppointment`, `PutawayTask`, `PutawayRule` | ✅ #225 |
+  | 3 | Outbound | `PickTask`, `PackTask`, `StagingAssignment` | ✅ #227 |
+  | 4 | Waves | `Wave`, `WaveTemplate` | ✅ #229 |
+  | 5a | Read path | WMS list endpoints and repositories accept a facility scope | ✅ #231 |
+  | 5b | Frontend | the 15 WMS list pages onto `/api/v1/facilities` | ✅ #234 |
+  | 6a | Nullable | `locationId` nullable on the 14 WMS models | ✅ #245 |
+  | 6b | Write path | create commands and the WMS create forms onto `facilityId` | ✅ #248 |
+  | 6c | Contract | drop the `locationId` parameter and the `Location` FKs | ✅ #280 |
+
+  **Phase 2a ends here, one step short of where the plan said.** 6c cut the foreign keys and the
+  `locationId` query parameter, but the columns stay: `InventoryRecord` is still keyed on Location
+  and has no facility, so putaway, returns and wave release need one, and `CompletePutaway` resolves
+  a scanned bin by `(locationId, label)`. Giving inventory a facility is Phase 4 work, and the
+  columns go with it. What Phase 2a did deliver is the thing that mattered: no foreign key crosses
+  the boundary, so a schema without a `Location` table resolves.
+
+  6a had to come first: a command cannot stop writing `locationId` while the column is NOT NULL.
+  Making it nullable surfaced three places that assumed it was always there, and one more unscoped
+  command (`warehouse_bin.update` reached its bin by bare id). It also found the hard limit on this
+  phase: **`InventoryRecord` is still keyed on Location and has no facility**, so putaway, returns
+  and wave release cannot work in a Location-free install until Phase 4 gives inventory a facility.
+
+  5b turned out to be 15 pages, not 19: the other four are create forms whose `locationId` feeds a
+  command payload, so they stay on Locations until batch 6 moves the write path. That makes the
+  rule for this phase crisp: **reads by facility, writes by location, until the contract.**
+
+  Batch 5 was one row when this table was written; it is two. Doing the backend first means the
+  frontend change lands against an API that already accepts what it wants to send, and neither PR
+  breaks the running product. Note also that only **19** of the 27 frontend files are WMS; the
+  other 8 are TMS pages that use `/api/v1/locations` legitimately and stay on it.
+
+  5a also closed the last of the tenancy debt: `WarehouseZoneRepository` was missed by #220
+  entirely, and every read on it was unscoped.
+
+  Batch 4 listed `WmsFulfilmentOrder` when this table was written. It has no `locationId` and no
+  `Location` relation, so it needed nothing. **The dual-write is now complete: all twelve WMS
+  models that reference `Location` carry a `facilityId`.** Batch 5 is the first one that changes
+  behaviour, so it wants a soak between the backfill and the switchover rather than shipping both
+  at once.
 
   Chunk 1 (#217) added `Facility` with a soft `sourceLocationId`, nullable `facilityId` on the
   three topology models, a migration that backfills one facility per referenced Location taking
   each row's `orgId` from its own source record, `facility.*` commands and events, an org-scoped
   `/api/v1/facilities`, and dual-write on the three topology create paths. Reads still go through
   `locationId`.
+
+  Batches 2 to 4 are now cheaper than chunk 1 was. Every model they touch carries both `orgId` and
+  `locationId`, so there is no `orgId` derivation problem like `WarehouseAisle` had;
+  `resolveFacilityForLocation` already exists; and #220 moved every write in those files onto the
+  command bus, so the dual-write has one place to go in each case rather than several.
+
+  Batch 2 (#225) bore that out: four nullable columns, five create paths, and a backfill that is a
+  no-op wherever chunk 1 already made the facility. Two things worth carrying into batch 3:
+
+  - **Not every create path is a create command.** Two of the five were `putawayTask.create` calls
+    inside `CompleteReceivingCommand` and `CheckReplenishmentCommand`, both in loops. Search for
+    the Prisma create, not for the command named after the model.
+  - **#220 scoped the routes and repositories, not the queries inside command handlers.** Batch 2
+    found seven more unscoped reads and one unscoped write in the commands it touched, including
+    `receiving_task.complete` looking its task up by bare id, and `receiving_task.create` moving
+    another tenant's appointment to `receiving`. Expect the same in the outbound commands and fix
+    them as part of the batch rather than filing them.
+
+  Batch 3 (#227) confirmed the second point and found the worst instance of it: `wave.release`
+  allocated inventory on `locationId` and SKU alone, so releasing a wave hard-allocated another
+  tenant's stock and decremented their `quantityAvailable`. Five more, including
+  `staging_assignment.create` moving another tenant's `TrackableUnit` into our staging bin.
+
+  Batch 4 (#229) found one more, `wave_template.apply` looking its template up by bare id, which
+  built the wave on another tenant's floor. **That is 21 across the four batches, all of them
+  inside command handlers that #220 did not reach.** The pattern is stable enough to state as a
+  rule: a command that looks its aggregate up with `findUnique({ where: { id } })` is a tenancy
+  bug, and `locationId` alone is never a sufficient filter.
+
+  The one awkward case remaining is `TrackableUnit`, which has no `orgId` and can only be scoped
+  through its order. That is the argument for 2b, and it is worth doing soon.
 - **2b. TrackableUnit split (L-XL, 5-7):** new WMS `HandlingUnit` (standalone LPN with soft
   order/shipment refs), backfill and dual-write, switch receiving/putaway/inventory, then drop the
   WMS FKs to TrackableUnit. **Split it; don't make `orderId` nullable as a shortcut.** The cascade

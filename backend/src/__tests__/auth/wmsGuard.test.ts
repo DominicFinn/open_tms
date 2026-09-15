@@ -5,14 +5,21 @@
  * route, simulates the authenticated user via an earlier preHandler
  * (mirroring authenticateJWT populating req.user), and asserts the
  * read/write permission split.
+ *
+ * The guard also attaches and requires the tenant scope (#238), so the fixture supplies an orgId
+ * the way a real request gets one. `attachOrgScopeHook` is idempotent and skips when `req.orgId`
+ * is already set, so setting it here stands in for the JWT resolution. The no-tenant case has its
+ * own test below.
  */
 
 import Fastify from 'fastify';
 import { registerWmsGuard } from '../../auth/wmsGuard';
 
-async function buildApp(permissions: string[] | null) {
+async function buildApp(permissions: string[] | null, orgId: string | null = 'org-1') {
   const app = Fastify();
+  app.decorate('prisma', {} as any);
   app.addHook('preHandler', async (req) => {
+    if (orgId) (req as any).orgId = orgId;
     if (permissions) {
       (req as any).user = {
         sub: 'user-1',
@@ -97,5 +104,18 @@ describe('system role wms grants', () => {
 
   it('broker_admin has full WMS access', () => {
     expect(perms('broker_admin')).toContain('wms:*');
+  });
+
+  /**
+   * #238: no WMS route registered the org scope, so req.orgId was undefined on every WMS request
+   * and Prisma read `where: { orgId: undefined }` as no filter. The guard now refuses rather than
+   * serving a request that would span tenants.
+   */
+  it('refuses a request with no tenant context rather than spanning tenants', async () => {
+    const app = await buildApp(['wms:read', 'wms:write'], null);
+    const read = await app.inject({ method: 'GET', url: '/api/v1/wms/thing' });
+    expect(read.statusCode).toBe(401);
+    expect(JSON.parse(read.body).error).toMatch(/tenant/i);
+    await app.close();
   });
 });

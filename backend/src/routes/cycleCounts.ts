@@ -1,10 +1,11 @@
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { container, TOKENS } from '../di/index.js';
+import { WAREHOUSE_SCOPE_QUERY, WAREHOUSE_SCOPE_ONE_OF, warehouseScopeFrom } from '../repositories/warehouseScope.js';
 import { ICommandBus } from '../commands/CommandBus.js';
 import { CREATE_CYCLE_COUNT } from '../commands/warehouse/CreateCycleCountCommand.js';
 import { RECORD_CYCLE_COUNT_LINE } from '../commands/warehouse/RecordCycleCountLineCommand.js';
-import { PrismaClient } from '@prisma/client';
+import { ICycleCountRepository } from '../repositories/CycleCountRepository.js';
 import crypto from 'crypto';
 import { registerWmsGuard } from '../auth/wmsGuard.js';
 
@@ -13,7 +14,7 @@ export async function cycleCountRoutes(server: FastifyInstance) {
   await registerWmsGuard(server);
 
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
-  const prisma = container.resolve<PrismaClient>(TOKENS.PrismaClient);
+  const repo = container.resolve<ICycleCountRepository>(TOKENS.ICycleCountRepository);
 
   // GET /api/v1/cycle-counts?locationId=xxx&status=xxx
   server.get('/api/v1/cycle-counts', {
@@ -21,24 +22,16 @@ export async function cycleCountRoutes(server: FastifyInstance) {
       tags: ['WMS - Cycle Counting'],
       summary: 'List cycle counts',
       querystring: {
-        type: 'object', required: ['locationId'],
+        type: 'object', oneOf: WAREHOUSE_SCOPE_ONE_OF,
         properties: {
-          locationId: { type: 'string', format: 'uuid' },
+          ...WAREHOUSE_SCOPE_QUERY,
           status: { type: 'string' },
         },
       },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const q = req.query as any;
-    const where: any = { locationId: q.locationId };
-    if (q.status) where.status = q.status;
-
-    const counts = await prisma.cycleCount.findMany({
-      where,
-      include: { _count: { select: { lines: true } } },
-      orderBy: { createdAt: 'desc' },
-      take: 500,
-    });
+    const q = req.query as { facilityId?: string; locationId?: string; status?: string };
+    const counts = await repo.find(req.orgId!, warehouseScopeFrom(q), q.status);
 
     return { data: counts, error: null };
   });
@@ -56,15 +49,8 @@ export async function cycleCountRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const count = await prisma.cycleCount.findUnique({
-      where: { id },
-      include: {
-        lines: {
-          include: { },
-          orderBy: { createdAt: 'asc' },
-        },
-      },
-    });
+    // A cross-tenant id misses rather than 403s, so existence stays opaque.
+    const count = await repo.findById(req.orgId!, id);
     if (!count) { reply.code(404); return { data: null, error: 'Cycle count not found' }; }
     return { data: count, error: null };
   });
@@ -75,9 +61,9 @@ export async function cycleCountRoutes(server: FastifyInstance) {
       tags: ['WMS - Cycle Counting'],
       summary: 'Create a cycle count (full, zone, or random sample)',
       body: {
-        type: 'object', required: ['locationId', 'countType'],
+        type: 'object', required: ['facilityId', 'countType'],
         properties: {
-          locationId: { type: 'string', format: 'uuid' },
+          facilityId: { type: 'string', format: 'uuid' },
           countType: { type: 'string', enum: ['full', 'zone', 'random_sample'] },
           zoneId: { type: 'string', format: 'uuid', nullable: true },
           assignedToUserId: { type: 'string', nullable: true },
@@ -87,18 +73,15 @@ export async function cycleCountRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const body = z.object({
-      locationId: z.string().uuid(),
+      facilityId: z.string().uuid(),
       countType: z.enum(['full', 'zone', 'random_sample']),
       zoneId: z.string().uuid().nullable().optional(),
       assignedToUserId: z.string().nullable().optional(),
       plannedAt: z.string().nullable().optional(),
     }).parse((req as any).body);
 
-    const orgId = (req as any).orgId || 'default-org';
-    const actorId = (req as any).userId || 'system';
-
     const result = await commandBus.dispatch({
-      type: CREATE_CYCLE_COUNT, orgId, actorId, payload: body,
+      type: CREATE_CYCLE_COUNT, orgId: req.orgId!, actorId: req.user?.sub ?? null, payload: body,
       metadata: { correlationId: crypto.randomUUID(), source: 'api' },
     });
 
@@ -127,11 +110,8 @@ export async function cycleCountRoutes(server: FastifyInstance) {
       notes: z.string().optional(),
     }).parse((req as any).body);
 
-    const orgId = (req as any).orgId || 'default-org';
-    const actorId = (req as any).userId || 'system';
-
     const result = await commandBus.dispatch({
-      type: RECORD_CYCLE_COUNT_LINE, orgId, actorId,
+      type: RECORD_CYCLE_COUNT_LINE, orgId: req.orgId!, actorId: req.user?.sub ?? null,
       payload: { lineId: id, ...body },
       metadata: { correlationId: crypto.randomUUID(), source: 'api' },
     });

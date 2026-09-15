@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { WarehouseService } from '../services/WarehouseService.js';
 import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 import { authenticateJWT } from '../middleware/jwtAuth.js';
+import { container, TOKENS } from '../di/index.js';
+import { ICreateShipmentPort } from '../ports/createShipment.js';
 
 /**
  * Warehouse App API Routes
@@ -15,6 +17,7 @@ import { authenticateJWT } from '../middleware/jwtAuth.js';
 export async function warehouseRoutes(server: FastifyInstance) {
   const prisma = server.prisma;
   const warehouseService = new WarehouseService(prisma);
+  const createShipmentPort = container.resolve<ICreateShipmentPort>(TOKENS.ICreateShipmentPort);
 
   // Auth — every operational warehouse route requires a valid session JWT.
   // Only the two login endpoints are excluded (they're the way to GET the
@@ -651,27 +654,31 @@ export async function warehouseRoutes(server: FastifyInstance) {
       reply.code(404);
       return { data: null, error: 'Customer not found' };
     }
-    const shipment = await prisma.shipment.create({
-      data: {
-        orgId: cust.orgId,
-        reference: body.reference,
-        customerId: body.customerId,
-        originId: body.originId,
-        destinationId: body.destinationId,
-        pickupDate: body.pickupDate ? new Date(body.pickupDate) : null,
-        deliveryDate: body.deliveryDate ? new Date(body.deliveryDate) : null,
-        carrierId: body.carrierId || null,
-        status: 'draft',
-      },
-      include: {
-        customer: { select: { name: true } },
-        origin: { select: { name: true, city: true, state: true } },
-        destination: { select: { name: true, city: true, state: true } },
-      },
+    // Goes through the TMS-owned create-shipment port (command bus underneath)
+    // rather than writing the row directly — this route file is wms, and a
+    // bare prisma.shipment.create here never emitted SHIPMENT_CREATED, so the
+    // shipment never got a ShipmentReadModel row (#264). Warehouse code can't
+    // import tms's command/repository files directly (module-boundaries.md),
+    // so this crosses through ICreateShipmentPort instead.
+    const result = await createShipmentPort.createShipment({
+      orgId: cust.orgId,
+      actorId: req.user?.sub ?? null,
+      reference: body.reference,
+      customerId: body.customerId,
+      originId: body.originId,
+      destinationId: body.destinationId,
+      pickupDate: body.pickupDate,
+      deliveryDate: body.deliveryDate,
+      carrierId: body.carrierId,
     });
 
+    if (!result.success || !result.shipment) {
+      reply.code(400);
+      return { data: null, error: result.error || 'Failed to create shipment' };
+    }
+
     reply.code(201);
-    return { data: shipment, error: null };
+    return { data: result.shipment, error: null };
   });
 
   // ─── Trackable Unit Lookup ────────────────────────────────────────────────

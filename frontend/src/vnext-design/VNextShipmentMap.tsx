@@ -68,18 +68,19 @@ const COLOR_DESTRUCTIVE = '#ef4444';
 const COLOR_MUTED = '#94a3b8';
 const COLOR_PRIMARY = '#6366f1';
 
-function getStatusColor(status: string): string {
+// Shipment lifecycle is draft -> ready -> in_progress -> complete (see the
+// tracking-and-routing rule). An exception is orthogonal to that lifecycle —
+// Shipment.hasException, not a status value — so it's checked first and
+// overrides whatever the status color would otherwise be.
+function getStatusColor(status: string, hasException?: boolean): string {
+  if (hasException) return COLOR_DESTRUCTIVE;
   switch (status) {
-    case 'in_transit':
-    case 'dispatched':
+    case 'in_progress':
       return COLOR_INFO;
-    case 'delivered':
-    case 'completed':
+    case 'complete':
       return COLOR_SUCCESS;
-    case 'exception':
-      return COLOR_DESTRUCTIVE;
     case 'draft':
-    case 'pending':
+    case 'ready':
       return COLOR_MUTED;
     default:
       return COLOR_MUTED;
@@ -118,6 +119,7 @@ function buildPopupHtml(entityType: EntityType, props: Record<string, any>): str
         </div>
         <div style="font-size:12px;line-height:1.6">
           <div><strong>Status:</strong> ${(props.status || '').replace(/_/g, ' ')}</div>
+          ${props.hasException ? `<div style="color:${COLOR_DESTRUCTIVE}">Exception</div>` : ''}
           ${props.customerName ? `<div><strong>Customer:</strong> ${props.customerName}</div>` : ''}
           ${props.carrierName ? `<div><strong>Carrier:</strong> ${props.carrierName}</div>` : ''}
           <div><strong>Origin:</strong> ${props.originName || ''}${props.originCity ? `, ${props.originCity}` : ''}</div>
@@ -395,7 +397,7 @@ export default function VNextShipmentMap() {
       } else {
         const props = c.properties;
         const status = props.status || '';
-        const color = getStatusColor(status);
+        const color = getStatusColor(status, props.hasException);
 
         const marker = L.marker([lat, lng], {
           icon: L.divIcon({
@@ -626,7 +628,9 @@ export default function VNextShipmentMap() {
 
       if (!oLat || !oLng || !dLat || !dLng) continue;
 
-      if (!['in_transit', 'dispatched'].includes(props.status)) continue;
+      // Traveled/remaining is only meaningful mid-route: draft/ready haven't
+      // left yet, complete has already arrived.
+      if (props.status !== 'in_progress') continue;
 
       const traveledLine = L.polyline(
         [[oLat, oLng], [curLat, curLng]],
@@ -654,7 +658,7 @@ export default function VNextShipmentMap() {
     }
   }, [features, showRoutes, entityType]);
 
-  const shipmentStatuses = ['draft', 'dispatched', 'in_transit', 'delivered', 'exception'];
+  const shipmentStatuses = ['draft', 'ready', 'in_progress', 'complete'];
 
   return (
     <div
@@ -796,8 +800,8 @@ export default function VNextShipmentMap() {
       {entityType === 'shipments' && (
         <div className="absolute bottom-6 right-6 z-[1000] rounded-md border border-border bg-card/95 p-3 text-xs shadow-lg backdrop-blur">
           <div className="mb-1.5 font-semibold">Legend</div>
-          <LegendItem color={COLOR_INFO} label="In Transit" Icon={Truck} />
-          <LegendItem color={COLOR_SUCCESS} label="Delivered" Icon={CheckCircle2} />
+          <LegendItem color={COLOR_INFO} label="In Progress" Icon={Truck} />
+          <LegendItem color={COLOR_SUCCESS} label="Complete" Icon={CheckCircle2} />
           <LegendItem color={COLOR_DESTRUCTIVE} label="Exception" Icon={AlertTriangle} />
           <LegendItem color={COLOR_MUTED} label="Draft / Other" Icon={Edit3} />
           {showRoutes && (

@@ -3,10 +3,10 @@ import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { Command } from '../types.js';
-import { resolveFacilityForLocation } from '../facilities/resolveFacility.js';
+import { loadFacilityForWrite } from '../facilities/resolveFacility.js';
 
 export interface CreateWarehouseZonePayload {
-  locationId: string;
+  facilityId: string;
   name: string;
   zoneType: string;
   temperatureZone?: string | null;
@@ -33,14 +33,15 @@ export class CreateWarehouseZoneCommandHandler extends BaseCommandHandler<
     tx: TransactionClient,
     emit: EmitFn
   ): Promise<{ id: string; name: string; zoneType: string }> {
-    // Phase 2a dual-write (#217): the zone is filed under both the Location and the Facility
-    // derived from it, so nothing is left without a facility when reads switch over.
-    const facilityId = await resolveFacilityForLocation(tx, command, command.payload.locationId, emit);
+    // Phase 2a (#248): the caller names the facility. locationId is still written from the
+    // facility's source location until 6c drops the column, and is null in a warehouse-only
+    // install.
+    const facility = await loadFacilityForWrite(tx, command.orgId, command.payload.facilityId);
 
     const zone = await tx.warehouseZone.create({
       data: {
-        locationId: command.payload.locationId,
-        facilityId,
+        locationId: facility.sourceLocationId,
+        facilityId: facility.id,
         name: command.payload.name,
         zoneType: command.payload.zoneType,
         temperatureZone: command.payload.temperatureZone ?? null,

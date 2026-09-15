@@ -22,6 +22,7 @@ const mockPrisma = {
   shipmentReadModel: {
     upsert: jest.fn().mockResolvedValue({}),
     update: jest.fn().mockResolvedValue({}),
+    updateMany: jest.fn().mockResolvedValue({ count: 1 }),
   },
   shipmentStop: {
     count: jest.fn().mockResolvedValue(3),
@@ -252,12 +253,24 @@ describe('ShipmentProjection', () => {
 
       await projection.handle(event);
 
-      expect(mockPrisma.shipmentReadModel.update).toHaveBeenCalledWith(
+      // Regression test for #252: the update must be guarded by a WHERE clause
+      // (lastLocationAt null or older than this event) rather than an
+      // unconditional write, so an out-of-order or redelivered ping can't
+      // regress the read model to a stale position. Doing this as a WHERE on
+      // the write itself (not a separate read-then-branch) is what makes it
+      // race-free under concurrent processing — see the projection's doc
+      // comment; that atomicity isn't something a mocked Prisma can exercise,
+      // only that the guard clause is always present on the query.
+      expect(mockPrisma.shipmentReadModel.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'ship-1' },
+          where: {
+            id: 'ship-1',
+            OR: [{ lastLocationAt: null }, { lastLocationAt: { lt: new Date('2026-04-10T12:00:00Z') } }],
+          },
           data: expect.objectContaining({
             currentLat: 41.8781,
             currentLng: -87.6298,
+            lastLocationAt: new Date('2026-04-10T12:00:00Z'),
           }),
         })
       );

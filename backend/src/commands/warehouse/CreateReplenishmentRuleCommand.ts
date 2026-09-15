@@ -3,9 +3,10 @@ import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { Command } from '../types.js';
+import { loadFacilityForWrite } from '../facilities/resolveFacility.js';
 
 export interface CreateReplenishmentRulePayload {
-  locationId: string;
+  facilityId: string;
   sku: string;
   pickFaceBinId: string;
   bulkZoneId: string;
@@ -32,6 +33,11 @@ export class CreateReplenishmentRuleCommandHandler extends BaseCommandHandler<
   ): Promise<{ id: string; sku: string; minQuantity: number; maxQuantity: number }> {
     const p = command.payload;
 
+    // Phase 2a (#248): the caller names the facility. locationId is still written from the
+    // facility's source location until 6c drops the column, and is null in a warehouse-only
+    // install.
+    const facility = await loadFacilityForWrite(tx, command.orgId, p.facilityId);
+
     if (p.minQuantity >= p.maxQuantity) {
       throw new Error('minQuantity must be less than maxQuantity');
     }
@@ -45,7 +51,7 @@ export class CreateReplenishmentRuleCommandHandler extends BaseCommandHandler<
 
     const rule = await tx.replenishmentRule.create({
       data: {
-        locationId: p.locationId,
+        locationId: facility.sourceLocationId,
         sku: p.sku,
         pickFaceBinId: p.pickFaceBinId,
         bulkZoneId: p.bulkZoneId,

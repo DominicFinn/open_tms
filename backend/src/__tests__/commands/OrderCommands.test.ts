@@ -30,6 +30,14 @@ const mockTx = {
   packagingType: {
     findUnique: jest.fn().mockResolvedValue({ kind: 'pallet' }),
   },
+  trackableUnit: {
+    create: jest.fn().mockImplementation(({ data }: any) =>
+      Promise.resolve({ id: `tu-${data.sequenceNumber}`, ...data })
+    ),
+  },
+  orderLineItem: {
+    createMany: jest.fn().mockResolvedValue({ count: 0 }),
+  },
   // Phase 1+4 review fix: CreateOrderCommand verifies customer belongs to org.
   customer: {
     findFirst: jest.fn().mockResolvedValue({ id: 'cust-1' }),
@@ -193,6 +201,7 @@ describe('Order Command Handlers', () => {
 
     it('auto-generates N TrackableUnits when packingSummary is supplied', async () => {
       mockTx.order.create.mockClear();
+      mockTx.trackableUnit.create.mockClear();
       mockTx.packagingType.findUnique.mockResolvedValueOnce({ kind: 'pallet' });
       const { bus } = mockEventBus();
       const handler = new CreateOrderCommandHandler(mockPrisma, bus);
@@ -216,16 +225,76 @@ describe('Order Command Handlers', () => {
         })
       );
 
+      // TrackableUnits are no longer nested under order.create — they're created
+      // as separate tx.trackableUnit.create() calls, with orderId supplied explicitly.
       const dataArg = mockTx.order.create.mock.calls[0][0].data;
-      expect(dataArg.trackableUnits).toBeDefined();
-      const units = dataArg.trackableUnits.create;
-      expect(units).toHaveLength(3);
+      expect(dataArg.trackableUnits).toBeUndefined();
+
+      expect(mockTx.trackableUnit.create).toHaveBeenCalledTimes(3);
+      const units = mockTx.trackableUnit.create.mock.calls.map((call: any) => call[0].data);
       expect(units[0]).toEqual(expect.objectContaining({
         unitType: 'pallet',
         sequenceNumber: 1,
         packagingTypeId: 'pt-eur1',
+        orderId: 'order-1',
       }));
       expect(units[2].sequenceNumber).toBe(3);
+    });
+
+    it('creates a TrackableUnit with lineItems that carry both orderId and trackableUnitId (#269)', async () => {
+      mockTx.order.create.mockClear();
+      mockTx.trackableUnit.create.mockClear();
+      mockTx.orderLineItem.createMany.mockClear();
+      const { bus } = mockEventBus();
+      const handler = new CreateOrderCommandHandler(mockPrisma, bus);
+
+      const result = await handler.execute(
+        createTestCommand(CREATE_ORDER, {
+          orderData: {
+            orgId: 'test-org',
+            orderNumber: 'ORD-UNIT-LINES-1',
+            customerId: 'cust-1',
+            trackableUnits: [
+              {
+                identifier: 'PALLET-001',
+                unitType: 'pallet',
+                lineItems: [
+                  { sku: 'WIDGET', description: 'widget', quantity: 10, weight: 2, weightUnit: 'kg' },
+                ],
+              },
+            ],
+          },
+          status: 'pending',
+        })
+      );
+
+      expect(result.success).toBe(true);
+
+      // order.create must not attempt the doubly-nested lineItems create that
+      // leaves OrderLineItem.orderId unset (#269).
+      const orderCreateData = mockTx.order.create.mock.calls[0][0].data;
+      expect(orderCreateData.trackableUnits).toBeUndefined();
+
+      expect(mockTx.trackableUnit.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            identifier: 'PALLET-001',
+            unitType: 'pallet',
+            orderId: 'order-1',
+          }),
+        })
+      );
+
+      expect(mockTx.orderLineItem.createMany).toHaveBeenCalledWith({
+        data: [
+          expect.objectContaining({
+            sku: 'WIDGET',
+            quantity: 10,
+            orderId: 'order-1',
+            trackableUnitId: 'tu-1',
+          }),
+        ],
+      });
     });
 
     it('passes packingSummary through to the ORDER_CREATED event payload', async () => {

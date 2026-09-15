@@ -3,6 +3,8 @@ import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { Command } from '../types.js';
+import { resolveFacilityForLocation } from '../facilities/resolveFacility.js';
+import { requireLocationForInventory } from '../inventoryLocation.js';
 
 export interface ReleaseWavePayload {
   waveId: string;
@@ -32,8 +34,10 @@ export class ReleaseWaveCommandHandler extends BaseCommandHandler<
     tx: TransactionClient,
     emit: EmitFn
   ): Promise<{ waveId: string; status: string; pickTasksCreated: number; allocationFailures: string[] }> {
-    const wave = await tx.wave.findUnique({
-      where: { id: command.payload.waveId },
+    // findFirst with orgId rather than findUnique by id: releasing a wave allocates stock and
+    // creates pick tasks, so a bare id lookup would let one tenant drive another's floor (#220).
+    const wave = await tx.wave.findFirst({
+      where: { id: command.payload.waveId, orgId: command.orgId },
       include: { waveOrders: { orderBy: { priority: 'asc' } } },
     });
     if (!wave) throw new Error(`Wave ${command.payload.waveId} not found`);
@@ -78,9 +82,12 @@ export class ReleaseWaveCommandHandler extends BaseCommandHandler<
 
     for (const line of orderLines) {
       // Find available inventory for this SKU at this location
+      // orgId as well as location: without it the allocation below would decrement another
+      // tenant's quantityAvailable and hard-allocate their stock to our wave (#220).
       const inventory = await tx.inventoryRecord.findMany({
         where: {
-          locationId: wave.locationId,
+          locationId: requireLocationForInventory(wave.locationId, `Wave ${wave.id}`),
+          orgId: command.orgId,
           sku: line.sku,
           quantityAvailable: { gt: 0 },
         },
@@ -135,6 +142,12 @@ export class ReleaseWaveCommandHandler extends BaseCommandHandler<
     // Create pick tasks based on strategy
     let pickTasksCreated = 0;
 
+    // Phase 2a (#227, #245): all three strategies create their tasks at the wave's facility. The
+    // wave already carries it, so use that rather than re-deriving from a location that may now be
+    // null; the fallback covers waves created before the backfill.
+    const facilityId = wave.facilityId
+      ?? (wave.locationId ? await resolveFacilityForLocation(tx, command, wave.locationId, emit) : null);
+
     if (wave.pickStrategy === 'discrete') {
       // One pick task per order
       const byOrder = new Map<string, typeof allocatedLines>();
@@ -149,6 +162,7 @@ export class ReleaseWaveCommandHandler extends BaseCommandHandler<
         const pickTask = await tx.pickTask.create({
           data: {
             locationId: wave.locationId,
+            facilityId,
             waveId: wave.id,
             orderId,
             status: 'pending',
@@ -226,6 +240,7 @@ export class ReleaseWaveCommandHandler extends BaseCommandHandler<
         const pickTask = await tx.pickTask.create({
           data: {
             locationId: wave.locationId,
+            facilityId,
             waveId: wave.id,
             orderId: null, // zone tasks span multiple orders
             status: isSequential && seq > 0 ? 'pending' : 'pending',
@@ -272,6 +287,7 @@ export class ReleaseWaveCommandHandler extends BaseCommandHandler<
         const pickTask = await tx.pickTask.create({
           data: {
             locationId: wave.locationId,
+            facilityId,
             waveId: wave.id,
             status: 'pending',
             pickType: 'batch',

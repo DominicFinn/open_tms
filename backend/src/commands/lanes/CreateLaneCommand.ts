@@ -13,6 +13,8 @@ export interface CreateLanePayload {
   distance?: number;
   notes?: string;
   serviceLevel?: string;
+  supportsTemperatureControl?: boolean;
+  supportsHazmat?: boolean;
   stops?: Array<{ locationId: string; order: number; notes?: string; purpose?: string }>;
 }
 
