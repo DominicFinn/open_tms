@@ -44,8 +44,35 @@ describe('WmsDashboardRepository org scoping', () => {
     expect(everyWhere).toHaveLength(12);
     for (const where of everyWhere) {
       expect(where.orgId).toBe('org-1');
+    }
+  });
+
+  /**
+   * Every count is narrowed to the facility, but not all of them the same way. InventoryRecord has
+   * no facilityId, because inventory is still keyed on Location until Phase 4, so spreading the
+   * facility filter into it was a 500 (#285). It goes through the bins the facility owns instead.
+   */
+  it('narrows every count to the facility, inventory through its bins', async () => {
+    const prisma = buildPrisma();
+    await new WmsDashboardRepository(prisma).counts('org-1', { facilityId: 'fac-1' });
+
+    const direct = [
+      ...prisma.warehouseZone.count.mock.calls,
+      ...prisma.warehouseBin.count.mock.calls,
+      ...prisma.receivingTask.count.mock.calls,
+      ...prisma.putawayTask.count.mock.calls,
+      ...prisma.pickTask.count.mock.calls,
+      ...prisma.packTask.count.mock.calls,
+      ...prisma.stagingAssignment.count.mock.calls,
+    ].map((call: any) => call[0].where);
+
+    for (const where of direct) {
       expect(where.facilityId).toBe('fac-1');
     }
+
+    const stock = prisma.inventoryRecord.groupBy.mock.calls[0][0].where;
+    expect(stock.facilityId).toBeUndefined();
+    expect(stock.bin).toEqual({ orgId: 'org-1', facilityId: 'fac-1' });
   });
 
   it('counts distinct SKUs with stock on hand', async () => {
