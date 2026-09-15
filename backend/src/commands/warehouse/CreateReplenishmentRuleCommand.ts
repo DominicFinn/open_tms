@@ -51,6 +51,7 @@ export class CreateReplenishmentRuleCommandHandler extends BaseCommandHandler<
 
     const rule = await tx.replenishmentRule.create({
       data: {
+        facilityId: facility.id,
         locationId: facility.sourceLocationId,
         sku: p.sku,
         pickFaceBinId: p.pickFaceBinId,

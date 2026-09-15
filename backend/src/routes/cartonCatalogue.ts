@@ -10,7 +10,7 @@ export async function cartonCatalogueRoutes(server: FastifyInstance) {
 
   const prisma = container.resolve<PrismaClient>(TOKENS.PrismaClient);
 
-  // GET /api/v1/carton-catalogue?locationId=xxx&includeArchived=true
+  // GET /api/v1/carton-catalogue?facilityId=xxx&includeArchived=true
   server.get('/api/v1/carton-catalogue', {
     schema: {
       tags: ['WMS - Cartonization'],
@@ -18,7 +18,7 @@ export async function cartonCatalogueRoutes(server: FastifyInstance) {
       querystring: {
         type: 'object',
         properties: {
-          locationId: { type: 'string', format: 'uuid' },
+          facilityId: { type: 'string', format: 'uuid' },
           includeArchived: { type: 'boolean' },
         },
       },
@@ -29,7 +29,7 @@ export async function cartonCatalogueRoutes(server: FastifyInstance) {
     const where: any = { orgId };
     const includeArchived = q.includeArchived === true || q.includeArchived === 'true';
     if (!includeArchived) where.active = true;
-    if (q.locationId) where.locationId = q.locationId;
+    if (q.facilityId) where.facilityId = q.facilityId;
 
     const cartons = await prisma.cartonCatalogue.findMany({
       where,
@@ -45,9 +45,9 @@ export async function cartonCatalogueRoutes(server: FastifyInstance) {
       tags: ['WMS - Cartonization'],
       summary: 'Add a carton type to the catalogue',
       body: {
-        type: 'object', required: ['locationId', 'name', 'lengthMm', 'widthMm', 'heightMm', 'maxWeightGrams'],
+        type: 'object', required: ['facilityId', 'name', 'lengthMm', 'widthMm', 'heightMm', 'maxWeightGrams'],
         properties: {
-          locationId: { type: 'string', format: 'uuid' },
+          facilityId: { type: 'string', format: 'uuid' },
           name: { type: 'string' },
           lengthMm: { type: 'integer', minimum: 1 },
           widthMm: { type: 'integer', minimum: 1 },
@@ -59,7 +59,7 @@ export async function cartonCatalogueRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const body = z.object({
-      locationId: z.string().uuid(),
+      facilityId: z.string().uuid(),
       name: z.string().min(1),
       lengthMm: z.number().int().min(1),
       widthMm: z.number().int().min(1),

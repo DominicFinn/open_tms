@@ -63,6 +63,7 @@ export class CreateCycleCountCommandHandler extends BaseCommandHandler<
 
     const cycleCount = await tx.cycleCount.create({
       data: {
+        facilityId: facility.id,
         locationId: facility.sourceLocationId,
         countType: p.countType,
         zoneId: p.zoneId ?? null,

@@ -57,6 +57,11 @@ model Facility {
   waves         Wave[]
   waveTemplates WaveTemplate[]
 
+  cycleCounts       CycleCount[]
+  replenishmentRules ReplenishmentRule[]
+  loadPlans         LoadPlan[]
+  cartonCatalogue   CartonCatalogue[]
+
   // One facility per source location per org: this is what makes the backfill and the
   // find-or-create in the dual-write path idempotent.
   @@unique([orgId, sourceLocationId])
@@ -585,6 +590,8 @@ model PackAudit {
 model CartonCatalogue {
   id             String  @id @default(uuid())
   locationId     String?
+  facilityId String?
+  facility   Facility? @relation(fields: [facilityId], references: [id])
   name           String // e.g. "Small Mailer", "Medium Box"
   lengthMm       Int
   widthMm        Int
@@ -609,6 +616,7 @@ model CartonCatalogue {
   updatedAt DateTime @updatedAt
 
   @@index([locationId])
+  @@index([facilityId])
   @@index([orgId])
   @@index([active])
   @@index([temperatureZone])
@@ -648,6 +656,8 @@ model StagingAssignment {
 model LoadPlan {
   id            String    @id @default(uuid())
   locationId    String?
+  facilityId String?
+  facility   Facility? @relation(fields: [facilityId], references: [id])
   shipmentId    String? // target shipment (may be created during load plan)
   dockBinId     String? // assigned dock door
   status        String    @default("planning") // planning, loading, completed, cancelled
@@ -667,6 +677,7 @@ model LoadPlan {
   lines LoadPlanLine[]
 
   @@index([locationId])
+  @@index([facilityId])
   @@index([orgId])
   @@index([shipmentId])
   @@index([status])
@@ -694,6 +705,8 @@ model LoadPlanLine {
 model CycleCount {
   id               String    @id @default(uuid())
   locationId       String?
+  facilityId String?
+  facility   Facility? @relation(fields: [facilityId], references: [id])
   countType        String // full, zone, random_sample
   zoneId           String? // for zone counts
   status           String    @default("planned") // planned, in_progress, completed, cancelled
@@ -713,6 +726,7 @@ model CycleCount {
   lines CycleCountLine[]
 
   @@index([locationId])
+  @@index([facilityId])
   @@index([orgId])
   @@index([status])
 }
@@ -746,6 +760,8 @@ model CycleCountLine {
 model ReplenishmentRule {
   id            String  @id @default(uuid())
   locationId    String?
+  facilityId String?
+  facility   Facility? @relation(fields: [facilityId], references: [id])
   sku           String
   pickFaceBinId String // bin to replenish
   bulkZoneId    String // zone to pull from
@@ -759,6 +775,7 @@ model ReplenishmentRule {
   updatedAt DateTime @updatedAt
 
   @@index([locationId])
+  @@index([facilityId])
   @@index([orgId])
   @@index([sku])
 }

@@ -72,6 +72,7 @@ export class CreateLoadPlanCommandHandler extends BaseCommandHandler<
 
     const loadPlan = await tx.loadPlan.create({
       data: {
+        facilityId: facility.id,
         locationId: facility.sourceLocationId,
         shipmentId: p.shipmentId ?? null,
         dockBinId: p.dockBinId ?? null,
