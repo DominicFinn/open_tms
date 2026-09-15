@@ -125,6 +125,11 @@ export const EVENT_TYPES = {
   // Tracking
   TRACKING_LOCATION_RECEIVED: 'tracking.location_received',
   TRACKING_GEOFENCE_ENTERED: 'tracking.geofence_entered',
+  // Device left a geofence it had previously entered (e.g. departed the origin).
+  TRACKING_GEOFENCE_EXITED: 'tracking.geofence_exited',
+  // In-transit progress report, fired as a shipment crosses a segment of its
+  // planned route between departing the origin and arriving at the destination.
+  TRACKING_JOURNEY_CHECKPOINT: 'tracking.journey_checkpoint',
   TRACKING_ETA_UPDATED: 'tracking.eta_updated',
   // A previously-delayed shipment's ETA has returned within threshold. Consumed
   // by the Issue Engine to auto-resolve the (unlatched) shipment_eta_delay issue.
@@ -461,6 +466,8 @@ export const EVENT_SCHEMA_VERSIONS: Record<string, number> = {
   [EVENT_TYPES.LANE_ARCHIVED]: 1,
   [EVENT_TYPES.TRACKING_LOCATION_RECEIVED]: 1,
   [EVENT_TYPES.TRACKING_GEOFENCE_ENTERED]: 1,
+  [EVENT_TYPES.TRACKING_GEOFENCE_EXITED]: 1,
+  [EVENT_TYPES.TRACKING_JOURNEY_CHECKPOINT]: 1,
   [EVENT_TYPES.TRACKING_ETA_UPDATED]: 1,
   [EVENT_TYPES.TRACKING_ETA_RECOVERED]: 1,
   [EVENT_TYPES.TRACKING_ROUTE_DEVIATION]: 1,
@@ -712,6 +719,27 @@ export interface TrackingLocationReceivedPayload {
   lng: number;
   eventTime: string;
   deviceId?: string;
+}
+
+/**
+ * Shared shape for the three full-journey proof events — departure
+ * (tracking.geofence_exited), in-transit progress (tracking.journey_checkpoint),
+ * and arrival (tracking.geofence_entered). Deliberately flat and additive so
+ * sensor fields (temperature, etc.) can be appended later without breaking
+ * existing consumers.
+ */
+export interface JourneyLocationEventPayload {
+  shipmentId: string;
+  stopId: string;
+  locationId: string;
+  /** Absent when the arrival was matched by WiFi/BLE presence rather than GPS. */
+  lat?: number;
+  lng?: number;
+  eventTime: string;
+  /** Only set on tracking.journey_checkpoint (1-9) */
+  checkpointIndex?: number;
+  /** Only set on tracking.journey_checkpoint */
+  totalCheckpoints?: number;
 }
 
 export interface CargoMisdropPayload {

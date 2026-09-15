@@ -140,20 +140,10 @@ export function createInboundWebhookWorker(
           }
         }
 
-        // Trigger geofence check if we have a shipment + location
-        if (result.shipmentId && location.lat) {
-          try {
-            await deliveryService.checkGeofenceAndUpdateOrders(
-              result.shipmentId,
-              Number(location.lat),
-              Number(location.lon || location.lng),
-            );
-          } catch {
-            // Geofence check is non-critical
-          }
-        }
-
-        // Evaluate arrival criteria (WiFi, BLE, enhanced geofence) from IoT payload
+        // Evaluate arrival criteria (WiFi, BLE, enhanced geofence) from IoT payload FIRST.
+        // This is the event-publishing path (full-journey departure/checkpoint/arrival, #283) —
+        // it must win the race to flip ShipmentStop.status before the legacy
+        // checkGeofenceAndUpdateOrders below, which does a silent direct write with no event.
         if (result.shipmentId && arrivalCriteriaService) {
           try {
             await arrivalCriteriaService.evaluateAndUpdateOrders({
@@ -165,6 +155,21 @@ export function createInboundWebhookWorker(
             });
           } catch {
             // Arrival criteria evaluation is non-critical
+          }
+        }
+
+        // Trigger legacy geofence check if we have a shipment + location. Runs second
+        // so it becomes a no-op once arrivalCriteriaService above has already transitioned
+        // the stop for orgs configured via ArrivalCriteria.
+        if (result.shipmentId && location.lat) {
+          try {
+            await deliveryService.checkGeofenceAndUpdateOrders(
+              result.shipmentId,
+              Number(location.lat),
+              Number(location.lon || location.lng),
+            );
+          } catch {
+            // Geofence check is non-critical
           }
         }
 

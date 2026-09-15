@@ -111,6 +111,9 @@ import { UpdateDeviceCommandHandler } from '../../commands/devices/UpdateDeviceC
 import { AssignDeviceCommandHandler } from '../../commands/devices/AssignDeviceCommand.js';
 import { CreateCarrierUserCommandHandler } from '../../commands/carrierUsers/CreateCarrierUserCommand.js';
 import { RecordCargoScanCommandHandler } from '../../commands/cargoTracking/RecordCargoScanCommand.js';
+import { RecordGeofenceArrivalCommandHandler } from '../../commands/tracking/RecordGeofenceArrivalCommand.js';
+import { RecordGeofenceDepartureCommandHandler } from '../../commands/tracking/RecordGeofenceDepartureCommand.js';
+import { RecordJourneyCheckpointCommandHandler } from '../../commands/tracking/RecordJourneyCheckpointCommand.js';
 import { AcknowledgeExcursionCommandHandler } from '../../commands/coldChain/AcknowledgeExcursionCommand.js';
 import { ResolveExcursionCommandHandler } from '../../commands/coldChain/ResolveExcursionCommand.js';
 import { SetDispositionCommandHandler } from '../../commands/coldChain/SetDispositionCommand.js';
@@ -288,7 +291,8 @@ export function registerTmsDependencies(prisma: PrismaClient): void {
   container.singleton(TOKENS.IArrivalCriteriaEvaluationService).toFactory(() => {
     return new ArrivalCriteriaEvaluationService(
       container.resolve(TOKENS.PrismaClient),
-      container.resolve(TOKENS.IOrderDeliveryService)
+      container.resolve(TOKENS.IOrderDeliveryService),
+      container.resolve(TOKENS.ICommandBus)
     );
   });
 
@@ -660,6 +664,11 @@ export function registerTmsCommandHandlers(bus: CommandBus, deps: CommandHandler
 
   // Cargo Tracking commands
   bus.register(new RecordCargoScanCommandHandler(prisma, eventBus));
+
+  // Journey tracking commands (full-journey proof: departure/checkpoint/arrival)
+  bus.register(new RecordGeofenceArrivalCommandHandler(prisma, eventBus));
+  bus.register(new RecordGeofenceDepartureCommandHandler(prisma, eventBus));
+  bus.register(new RecordJourneyCheckpointCommandHandler(prisma, eventBus));
 
   // Cold Chain commands
   bus.register(new AcknowledgeExcursionCommandHandler(prisma, eventBus));

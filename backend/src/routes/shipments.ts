@@ -498,6 +498,53 @@ export async function shipmentRoutes(server: FastifyInstance) {
     return { data: events, error: null };
   });
 
+  // Full-journey proof: origin departure, in-transit checkpoints, destination
+  // arrival (#283). Checkpoint count is bounded (~10), so no pagination.
+  server.get('/api/v1/shipments/:id/journey', {
+    schema: {
+      tags: ['Shipments'],
+      summary: 'Shipment full-journey proof',
+      description: 'Returns the origin departure, in-transit route checkpoints, and destination arrival recorded for a shipment as proof of a continuous journey.',
+      params: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+    },
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const orgId = req.orgId!;
+    const shipment = await server.prisma.shipment.findFirst({
+      where: { id, orgId, deletedAt: null },
+      select: {
+        originId: true,
+        destinationId: true,
+        stops: { select: { locationId: true, status: true, actualArrival: true, actualDeparture: true } },
+      },
+    });
+    if (!shipment) {
+      reply.code(404);
+      return { data: null, error: 'Shipment not found' };
+    }
+
+    const originStop = shipment.stops.find((s) => s.locationId === shipment.originId) ?? null;
+    const destinationStop = shipment.stops.find((s) => s.locationId === shipment.destinationId) ?? null;
+
+    const checkpoints = await server.prisma.shipmentJourneyCheckpoint.findMany({
+      where: { shipmentId: id },
+      orderBy: { checkpointIndex: 'asc' },
+    });
+
+    return {
+      data: {
+        origin: originStop
+          ? { status: originStop.status, actualArrival: originStop.actualArrival, actualDeparture: originStop.actualDeparture }
+          : null,
+        checkpoints,
+        destination: destinationStop
+          ? { status: destinationStop.status, actualArrival: destinationStop.actualArrival }
+          : null,
+      },
+      error: null,
+    };
+  });
+
   // Exception-signal + issue activity for the shipment — data behind the
   // "events over time" and "issues over time" graphs. Signals come from the
   // deterministic Issue Engine's ledger; issues are the ones it raised.
