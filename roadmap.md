@@ -25,6 +25,31 @@ portals, EDI hub, maps, AI, warehouse app) have moved to the changelog at
 
 The following tracks are ordered by impact on TMS credibility. Items within each track are sequenced by dependency.
 
+### **Track -1: Carrier Integrations — US LTL Focus** (NEW - active focus)
+
+Deepening carrier tracking specifically for the US LTL market, leaning on EDI 214 (already built —
+inbound/outbound parsing, auto-forward) as the primary path over per-carrier direct APIs, since it
+scales to any carrier with a trading-partner relationship without bespoke integration work per
+carrier.
+
+- **National LTL carrier catalogue** ✅ (Sep 2026)
+  - Extends the existing per-carrier PRO number hint (`proNumberPrefix`/`proNumberMaxLength`,
+    #172/#175) with `proNumberMinLength` and `proNumberNumericOnly` for a more precise — still
+    non-blocking — warning on shipment assignment (too short / non-numeric, not just "too long")
+  - SCAC code field added to the carrier create/edit form (the field already existed on the
+    model/API for EDI 204/214/210, just had no UI)
+  - One-click **"Load national LTL carriers"** on the Carriers list seeds 10 major US national
+    carriers (Old Dominion, Estes, ABF/ArcBest, Saia, XPO, FedEx Freight, R+L, Southeastern,
+    Averitt, TForce Freight) with SCAC + PRO format, same on-demand pattern as the PackagingType
+    standards seed. **Caveat: SCAC codes and PRO formats are public reference data, not verified
+    against each carrier's own EDI implementation guide** — verify before relying on this for
+    production EDI/tendering. No check-digit validation yet; several national carriers have one,
+    but it's carrier-specific and unconfirmed per carrier.
+- EDI trading-partner setup + inbound 214 verification for the seeded national carriers 🔲
+- Per-carrier PRO check-digit validation, once verified against real carrier documentation 🔲
+- Direct API integrations for carriers that offer one (developer-agreement gated, one integration
+  each) — deferred behind the EDI path 🔲
+
 ### **Track 0: FinnTMS / FinnWMS Split** (NEW - the split programme)
 
 Separating WMS from TMS into composable products over a shared core, per

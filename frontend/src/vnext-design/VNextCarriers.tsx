@@ -66,31 +66,42 @@ export default function VNextCarriers() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [statFilter, setStatFilter] = useState<string | null>(null);
+  const [seedingLtl, setSeedingLtl] = useState(false);
+
+  const loadCarriers = async () => {
+    try {
+      setLoading(true);
+      // Archived carriers are excluded here by default — they're admin
+      // territory, surfaced on /settings/archives instead.
+      const res = await fetch(`${API_URL}/api/v1/carriers`);
+      if (!res.ok) throw new Error(`Failed to load carriers (${res.status})`);
+      const json = await res.json();
+      setCarriers(json.data || []);
+      setError('');
+    } catch (err: any) {
+      setError(err.message || 'Failed to load carriers');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        setLoading(true);
-        // Archived carriers are excluded here by default — they're admin
-        // territory, surfaced on /settings/archives instead.
-        const res = await fetch(`${API_URL}/api/v1/carriers`);
-        if (!res.ok) throw new Error(`Failed to load carriers (${res.status})`);
-        const json = await res.json();
-        if (!cancelled) {
-          setCarriers(json.data || []);
-          setError('');
-        }
-      } catch (err: any) {
-        if (!cancelled) setError(err.message || 'Failed to load carriers');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+    loadCarriers();
   }, []);
+
+  const handleSeedNationalLtl = async () => {
+    if (!confirm('Add any missing national LTL carriers (Old Dominion, Estes, ABF, Saia, XPO, FedEx Freight, R+L, Southeastern, Averitt, TForce) to your carrier list?')) return;
+    setSeedingLtl(true);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/carriers/seed-standards/ltl`, { method: 'POST' });
+      const json = await res.json();
+      if (json.error) { alert(json.error); return; }
+      alert(`Seed complete. Created: ${json.data.created}, skipped (already exist): ${json.data.skipped}.`);
+      await loadCarriers();
+    } finally {
+      setSeedingLtl(false);
+    }
+  };
 
   // Clickable stat boxes each carry a predicate; selecting one filters the list.
   const statDefs = [
@@ -158,6 +169,11 @@ export default function VNextCarriers() {
               <ListIcon className="h-4 w-4" />
             </Button>
           </div>
+          {hasPermission('carriers:write') && (
+            <Button variant="outline" onClick={handleSeedNationalLtl} disabled={seedingLtl}>
+              {seedingLtl ? 'Seeding...' : 'Load national LTL carriers'}
+            </Button>
+          )}
           {hasPermission('carriers:write') && (
             <Button variant="gradient" onClick={() => navigate('/carriers/create')}>
               <Plus className="h-4 w-4" />
