@@ -1,61 +1,25 @@
 import { PrismaClient, CargoScan, CargoDiscrepancy } from '@prisma/client';
 
-// ─── DTOs ─────────────────────────────────────────────────────────────────────
-
-export interface CreateCargoScanDTO {
-  trackableUnitId: string;
-  shipmentStopId: string;
-  shipmentId: string;
-  scanType: 'load' | 'unload' | 'checkpoint';
-  scanMethod: 'barcode' | 'rfid' | 'manual' | 'geofence' | 'iot';
-  scannedBy?: string;
-  lat?: number;
-  lng?: number;
-  expected?: boolean;
-  notes?: string;
-}
-
-export interface CreateCargoDiscrepancyDTO {
-  shipmentId: string;
-  trackableUnitId: string;
-  discrepancyType: 'misdrop_early' | 'misdrop_late' | 'missing_at_stop' | 'unexpected_at_stop' | 'left_on_vehicle' | 'damaged' | 'wrong_destination';
-  severity?: 'critical' | 'high' | 'medium' | 'low';
-  expectedStopId?: string;
-  actualStopId?: string;
-  detectedBy?: string;
-  description: string;
-  notes?: string;
-}
-
-export interface UpdateCargoDiscrepancyDTO {
-  status?: 'open' | 'investigating' | 'resolved' | 'dismissed';
-  resolvedBy?: string;
-  resolution?: string;
-  notes?: string;
-  severity?: 'critical' | 'high' | 'medium' | 'low';
-}
-
 // ─── Interface ────────────────────────────────────────────────────────────────
 
+// Writes go through the cargo tracking command handlers. Every read here takes the caller's orgId,
+// so an id from another tenant reads as not found.
 export interface ICargoTrackingRepository {
+  // Scope lookups, used by routes to turn a cross-tenant id into a 404 before dispatching
+  findShipmentInOrg(orgId: string, shipmentId: string): Promise<{ id: string } | null>;
+  findStopInOrg(orgId: string, shipmentStopId: string): Promise<{ id: string; shipmentId: string } | null>;
+
   // Cargo Scans
-  createScan(data: CreateCargoScanDTO): Promise<CargoScan>;
-  findScansByShipment(shipmentId: string): Promise<CargoScan[]>;
-  findScansByStop(shipmentStopId: string): Promise<CargoScan[]>;
-  findScansByUnit(trackableUnitId: string): Promise<CargoScan[]>;
+  findScansByShipment(orgId: string, shipmentId: string): Promise<CargoScan[]>;
+  findScansByStop(orgId: string, shipmentStopId: string): Promise<CargoScan[]>;
 
   // Cargo Discrepancies
-  createDiscrepancy(data: CreateCargoDiscrepancyDTO): Promise<CargoDiscrepancy>;
-  findDiscrepanciesByShipment(shipmentId: string): Promise<CargoDiscrepancy[]>;
-  findOpenDiscrepancies(): Promise<CargoDiscrepancy[]>;
-  findDiscrepancyById(id: string): Promise<CargoDiscrepancy | null>;
-  updateDiscrepancy(id: string, data: UpdateCargoDiscrepancyDTO): Promise<CargoDiscrepancy>;
+  findDiscrepanciesByShipment(orgId: string, shipmentId: string): Promise<CargoDiscrepancy[]>;
+  findOpenDiscrepancies(orgId: string): Promise<CargoDiscrepancy[]>;
+  findDiscrepancyById(orgId: string, id: string): Promise<CargoDiscrepancy | null>;
 
-  // Cargo Manifest — expected vs actual at each stop
-  getCargoManifest(shipmentId: string): Promise<CargoManifestResult>;
-
-  // Update trackable unit location
-  updateUnitLocation(trackableUnitId: string, currentStopId: string | null, condition?: string): Promise<void>;
+  // Cargo Manifest: expected vs actual at each stop. Null when the shipment isn't in the org.
+  getCargoManifest(orgId: string, shipmentId: string): Promise<CargoManifestResult | null>;
 }
 
 export interface CargoManifestStop {
@@ -96,19 +60,20 @@ export interface CargoManifestResult {
 export class CargoTrackingRepository implements ICargoTrackingRepository {
   constructor(private prisma: PrismaClient) {}
 
-  async createScan(data: CreateCargoScanDTO): Promise<CargoScan> {
-    // Also update the trackable unit's last scanned time
-    await this.prisma.trackableUnit.update({
-      where: { id: data.trackableUnitId },
-      data: { lastScannedAt: new Date() },
-    });
-
-    return this.prisma.cargoScan.create({ data });
+  async findShipmentInOrg(orgId: string, shipmentId: string): Promise<{ id: string } | null> {
+    return this.prisma.shipment.findFirst({ where: { id: shipmentId, orgId }, select: { id: true } });
   }
 
-  async findScansByShipment(shipmentId: string): Promise<CargoScan[]> {
+  async findStopInOrg(orgId: string, shipmentStopId: string): Promise<{ id: string; shipmentId: string } | null> {
+    return this.prisma.shipmentStop.findFirst({
+      where: { id: shipmentStopId, shipment: { orgId } },
+      select: { id: true, shipmentId: true },
+    });
+  }
+
+  async findScansByShipment(orgId: string, shipmentId: string): Promise<CargoScan[]> {
     return this.prisma.cargoScan.findMany({
-      where: { shipmentId },
+      where: { orgId, shipmentId },
       orderBy: { scannedAt: 'desc' },
       include: {
         trackableUnit: { include: { order: true } },
@@ -117,9 +82,9 @@ export class CargoTrackingRepository implements ICargoTrackingRepository {
     });
   }
 
-  async findScansByStop(shipmentStopId: string): Promise<CargoScan[]> {
+  async findScansByStop(orgId: string, shipmentStopId: string): Promise<CargoScan[]> {
     return this.prisma.cargoScan.findMany({
-      where: { shipmentStopId },
+      where: { orgId, shipmentStopId },
       orderBy: { scannedAt: 'desc' },
       include: {
         trackableUnit: { include: { order: true } },
@@ -127,30 +92,9 @@ export class CargoTrackingRepository implements ICargoTrackingRepository {
     });
   }
 
-  async findScansByUnit(trackableUnitId: string): Promise<CargoScan[]> {
-    return this.prisma.cargoScan.findMany({
-      where: { trackableUnitId },
-      orderBy: { scannedAt: 'desc' },
-      include: {
-        shipmentStop: { include: { location: true } },
-      },
-    });
-  }
-
-  async createDiscrepancy(data: CreateCargoDiscrepancyDTO): Promise<CargoDiscrepancy> {
-    return this.prisma.cargoDiscrepancy.create({
-      data,
-      include: {
-        trackableUnit: { include: { order: true } },
-        expectedStop: { include: { location: true } },
-        actualStop: { include: { location: true } },
-      },
-    });
-  }
-
-  async findDiscrepanciesByShipment(shipmentId: string): Promise<CargoDiscrepancy[]> {
+  async findDiscrepanciesByShipment(orgId: string, shipmentId: string): Promise<CargoDiscrepancy[]> {
     return this.prisma.cargoDiscrepancy.findMany({
-      where: { shipmentId },
+      where: { orgId, shipmentId },
       orderBy: { detectedAt: 'desc' },
       include: {
         trackableUnit: { include: { order: true } },
@@ -160,9 +104,9 @@ export class CargoTrackingRepository implements ICargoTrackingRepository {
     });
   }
 
-  async findOpenDiscrepancies(): Promise<CargoDiscrepancy[]> {
+  async findOpenDiscrepancies(orgId: string): Promise<CargoDiscrepancy[]> {
     return this.prisma.cargoDiscrepancy.findMany({
-      where: { status: { in: ['open', 'investigating'] } },
+      where: { orgId, status: { in: ['open', 'investigating'] } },
       orderBy: [{ severity: 'asc' }, { detectedAt: 'desc' }],
       include: {
         shipment: true,
@@ -173,9 +117,9 @@ export class CargoTrackingRepository implements ICargoTrackingRepository {
     });
   }
 
-  async findDiscrepancyById(id: string): Promise<CargoDiscrepancy | null> {
-    return this.prisma.cargoDiscrepancy.findUnique({
-      where: { id },
+  async findDiscrepancyById(orgId: string, id: string): Promise<CargoDiscrepancy | null> {
+    return this.prisma.cargoDiscrepancy.findFirst({
+      where: { id, orgId },
       include: {
         shipment: true,
         trackableUnit: { include: { order: true, lineItems: true } },
@@ -185,32 +129,10 @@ export class CargoTrackingRepository implements ICargoTrackingRepository {
     });
   }
 
-  async updateDiscrepancy(id: string, data: UpdateCargoDiscrepancyDTO): Promise<CargoDiscrepancy> {
-    const updateData: any = { ...data };
-    if (data.status === 'resolved') {
-      updateData.resolvedAt = new Date();
-    }
-    return this.prisma.cargoDiscrepancy.update({
-      where: { id },
-      data: updateData,
-      include: {
-        trackableUnit: { include: { order: true } },
-        expectedStop: { include: { location: true } },
-        actualStop: { include: { location: true } },
-      },
-    });
-  }
+  async getCargoManifest(orgId: string, shipmentId: string): Promise<CargoManifestResult | null> {
+    const shipment = await this.findShipmentInOrg(orgId, shipmentId);
+    if (!shipment) return null;
 
-  async updateUnitLocation(trackableUnitId: string, currentStopId: string | null, condition?: string): Promise<void> {
-    const data: any = { currentStopId };
-    if (condition) data.condition = condition;
-    await this.prisma.trackableUnit.update({
-      where: { id: trackableUnitId },
-      data,
-    });
-  }
-
-  async getCargoManifest(shipmentId: string): Promise<CargoManifestResult> {
     // Get all stops for the shipment with their expected orders and trackable units
     const stops = await this.prisma.shipmentStop.findMany({
       where: { shipmentId },
@@ -225,6 +147,7 @@ export class CargoTrackingRepository implements ICargoTrackingRepository {
           },
         },
         cargoScans: {
+          where: { orgId },
           include: {
             trackableUnit: {
               include: { order: true, lineItems: true },
@@ -232,6 +155,7 @@ export class CargoTrackingRepository implements ICargoTrackingRepository {
           },
         },
         discrepanciesExpected: {
+          where: { orgId },
           include: {
             trackableUnit: { include: { order: true } },
             actualStop: { include: { location: true } },

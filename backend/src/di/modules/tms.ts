@@ -110,7 +110,12 @@ import { CreateDeviceCommandHandler } from '../../commands/devices/CreateDeviceC
 import { UpdateDeviceCommandHandler } from '../../commands/devices/UpdateDeviceCommand.js';
 import { AssignDeviceCommandHandler } from '../../commands/devices/AssignDeviceCommand.js';
 import { CreateCarrierUserCommandHandler } from '../../commands/carrierUsers/CreateCarrierUserCommand.js';
-import { RecordCargoScanCommandHandler } from '../../commands/cargoTracking/RecordCargoScanCommand.js';
+import {
+  RecordCargoScanCommandHandler,
+  ReconcileStopCargoCommandHandler,
+  CheckLeftOnVehicleCommandHandler,
+  UpdateCargoDiscrepancyCommandHandler,
+} from '../../commands/cargoTracking/index.js';
 import { AcknowledgeExcursionCommandHandler } from '../../commands/coldChain/AcknowledgeExcursionCommand.js';
 import { ResolveExcursionCommandHandler } from '../../commands/coldChain/ResolveExcursionCommand.js';
 import { SetDispositionCommandHandler } from '../../commands/coldChain/SetDispositionCommand.js';
@@ -300,11 +305,7 @@ export function registerTmsDependencies(prisma: PrismaClient): void {
   });
 
   container.singleton(TOKENS.ICargoReconciliationService).toFactory(() => {
-    return new CargoReconciliationService(
-      container.resolve(TOKENS.PrismaClient),
-      container.resolve(TOKENS.ICargoTrackingRepository),
-      container.resolve(TOKENS.IEventBus)
-    );
+    return new CargoReconciliationService(container.resolve(TOKENS.ICommandBus));
   });
 
   // Document repositories
@@ -660,6 +661,9 @@ export function registerTmsCommandHandlers(bus: CommandBus, deps: CommandHandler
 
   // Cargo Tracking commands
   bus.register(new RecordCargoScanCommandHandler(prisma, eventBus));
+  bus.register(new ReconcileStopCargoCommandHandler(prisma, eventBus));
+  bus.register(new CheckLeftOnVehicleCommandHandler(prisma, eventBus));
+  bus.register(new UpdateCargoDiscrepancyCommandHandler(prisma, eventBus));
 
   // Cold Chain commands
   bus.register(new AcknowledgeExcursionCommandHandler(prisma, eventBus));

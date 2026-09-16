@@ -998,20 +998,28 @@ All EDI operations log to `EdiTransactionLog` with: transaction type, direction,
 
 ## Cargo Tracking
 
+`CargoScan` and `CargoDiscrepancy` carry `orgId`. Every route resolves the shipment, stop or
+discrepancy under `req.orgId` first, so another tenant's id is a 404, and every write goes through a
+command whose events carry the real `orgId` and actor.
+
 ### Commands
 
 | Command | Trigger | Events Emitted |
 |---------|---------|----------------|
-| `RecordCargoScanCommand` | `POST /api/v1/cargo-scans` | `cargo.scan_recorded` |
+| `RecordCargoScanCommand` (`cargo.record_scan`) | `POST /api/v1/cargo-scans` | `cargo.scan_recorded`; `cargo.misdrop_detected` when an unload lands at a stop the unit wasn't bound for |
+| `ReconcileStopCargoCommand` (`cargo.reconcile_stop`) | `POST /api/v1/shipment-stops/:stopId/reconcile-cargo`; stop completion in `OrderDeliveryService` (with `autoScanMethod`) | `cargo.missing_at_stop` per expected unit never unloaded |
+| `CheckLeftOnVehicleCommand` (`cargo.check_left_on_vehicle`) | `POST /api/v1/shipments/:shipmentId/check-left-on-vehicle`; last stop completed in `OrderDeliveryService` | `cargo.left_on_vehicle` per unit never confirmed delivered |
+| `UpdateCargoDiscrepancyCommand` (`cargo.update_discrepancy`) | `PATCH /api/v1/cargo-discrepancies/:id` | `cargo.discrepancy_resolved` when the status first moves to `resolved` |
 
-### Auto-Generated Events (from CargoReconciliationService)
+### Side Effects
 
-| Event | Trigger |
-|-------|---------|
-| `cargo.misdrop_detected` | Scan at wrong stop |
-| `cargo.missing_at_stop` | Expected unit not scanned at stop |
-| `cargo.left_on_vehicle` | Unit not delivered after final stop |
-| `cargo.discrepancy_resolved` | Manual resolution of discrepancy |
+- An unload scan sets the unit's `currentStopId`; every scan sets `lastScannedAt`.
+- A misdrop is `misdrop_early` or `misdrop_late` against the unit's own delivery stop, or
+  `wrong_destination` when it has none.
+- A stop completed automatically (geofence, IoT) gets an unload scan for every expected unit before
+  reconciling. A completed stop with no unload scans at all is treated as fully delivered.
+- `CargoReconciliationService` is now a thin facade that dispatches the two reconciliation commands
+  under the shipment's own org.
 
 ---
 

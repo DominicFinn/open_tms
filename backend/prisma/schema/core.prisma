@@ -235,6 +235,8 @@ model Organization {
   // Issue & Read model relations
   issues             Issue[]
   issueSignals       IssueSignal[]
+  cargoScans         CargoScan[]
+  cargoDiscrepancies CargoDiscrepancy[]
   carrierReadModels  CarrierReadModel[]
   customerReadModels CustomerReadModel[]
   issueReadModels    IssueReadModel[]
