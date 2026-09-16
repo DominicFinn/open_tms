@@ -27,6 +27,8 @@ paths:
 - **Never write `(req as any).orgId`, and never fall back to a `'default-org'` literal.** The cast
   defeats the type system, and the literal is not an org id, so whatever it writes matches nothing.
   Four sites still do this (#239).
+- The shared `resolveOrgId`/`resolveActorId` functions in `backend/src/auth/orgScope.ts` are now
+  mostly internal; new routes should consume `req.orgId` via the middleware.
 
 ## A scope that resolves to nothing is not a scope
 
@@ -42,8 +44,6 @@ passed typecheck, ~1980 unit tests and CI, and leaked across tenants against a r
 `registerWmsGuard`, which every WMS route already calls. And when you change anything tenancy-
 related, **start the server, seed a second organization, and call the endpoint.** Unit tests mock
 Prisma, so they never see this class of bug.
-- The shared `resolveOrgId`/`resolveActorId` functions in `backend/src/auth/orgScope.ts` are now
-  mostly internal; new routes should consume `req.orgId` via the middleware.
 
 ## Per-surface scope helpers
 
