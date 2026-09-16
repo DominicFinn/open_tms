@@ -1,7 +1,7 @@
 /**
  * documentGenerationWorker — async PDF generation.
  *
- * Subscribers to QUEUES.DOCUMENT_GENERATION receive { kind, entityId,
+ * Subscribers to QUEUES.DOCUMENT_GENERATION receive { kind, entityId, orgId,
  * templateId, correlationId } payloads, call the corresponding method on
  * DocumentGenerationService, and stamp the resulting GeneratedDocument row's
  * metadata with the correlationId so the status endpoint can resolve it.
@@ -12,36 +12,38 @@
  * for the full PDF render time (typically 100-500ms of CPU per document).
  */
 
-import type { PrismaClient } from '@prisma/client';
 import type { IDocumentGenerationService } from '../services/DocumentGenerationService.js';
+import type { IGeneratedDocumentRepository } from '../repositories/GeneratedDocumentRepository.js';
 import type { QueueMessage } from '../queue/IQueueAdapter.js';
 import type { DocumentGenerationJob } from '../queue/events.js';
 
 export function createDocumentGenerationWorker(
   docService: IDocumentGenerationService,
-  prisma: PrismaClient,
+  docRepo: IGeneratedDocumentRepository,
 ) {
   return async (message: QueueMessage): Promise<void> => {
     const job = message.payload as DocumentGenerationJob;
-    if (!job?.kind || !job?.entityId) {
+    // orgId is required: the job renders one tenant's data and must never guess which (#294).
+    if (!job?.kind || !job?.entityId || !job?.orgId) {
       throw new Error('Invalid document generation job payload');
     }
+    const { orgId } = job;
 
     const startedAt = Date.now();
     try {
       let result: { id: string; fileName: string };
       switch (job.kind) {
         case 'bol':
-          result = await docService.generateBOL(job.entityId, job.templateId ?? undefined, job.requestedBy ?? undefined);
+          result = await docService.generateBOL(orgId, job.entityId, job.templateId ?? undefined, job.requestedBy ?? undefined);
           break;
         case 'labels':
-          result = await docService.generateLabels(job.entityId, job.templateId ?? undefined, job.requestedBy ?? undefined);
+          result = await docService.generateLabels(orgId, job.entityId, job.templateId ?? undefined, job.requestedBy ?? undefined);
           break;
         case 'customs':
-          result = await docService.generateCustomsForm(job.entityId, job.templateId ?? undefined, job.requestedBy ?? undefined);
+          result = await docService.generateCustomsForm(orgId, job.entityId, job.templateId ?? undefined, job.requestedBy ?? undefined);
           break;
         case 'rate_confirmation':
-          result = await docService.generateRateConfirmation(job.entityId, job.requestedBy ?? undefined);
+          result = await docService.generateRateConfirmation(orgId, job.entityId, job.requestedBy ?? undefined);
           break;
         default: {
           const exhaustive: never = job.kind;
@@ -51,18 +53,9 @@ export function createDocumentGenerationWorker(
 
       // Stamp the correlationId onto the document's metadata so the status
       // endpoint can resolve "did my job finish?" with a single query.
-      const existing = await prisma.generatedDocument.findUnique({
-        where: { id: result.id },
-        select: { metadata: true },
-      });
-      const mergedMetadata = {
-        ...((existing?.metadata as Record<string, unknown>) ?? {}),
+      await docRepo.mergeMetadata(orgId, result.id, {
         correlationId: job.correlationId,
         generationKind: job.kind,
-      };
-      await prisma.generatedDocument.update({
-        where: { id: result.id },
-        data: { metadata: mergedMetadata },
       });
 
       console.log(

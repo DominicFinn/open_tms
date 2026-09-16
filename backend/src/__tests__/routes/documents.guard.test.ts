@@ -32,7 +32,7 @@ const stub = {
   generateLabels: jest.fn().mockResolvedValue({ id: 'doc-label-1', fileName: 'Labels-1.pdf' }),
   generateCustomsForm: jest.fn().mockResolvedValue({ id: 'doc-customs-1', fileName: 'Customs-1.pdf' }),
   publish: jest.fn().mockResolvedValue('job-1'),
-  shipment: { findUnique: jest.fn().mockResolvedValue(readyShipment) },
+  shipment: { findFirst: jest.fn().mockResolvedValue(readyShipment) },
 };
 
 jest.mock('../../di/container.js', () => ({
@@ -46,7 +46,7 @@ import { documentRoutes } from '../../routes/documents';
 
 beforeEach(() => {
   jest.clearAllMocks();
-  stub.shipment.findUnique.mockResolvedValue(readyShipment);
+  stub.shipment.findFirst.mockResolvedValue(readyShipment);
 });
 
 async function buildApp(permissions: string[]) {
@@ -91,7 +91,7 @@ describe('rate confirmation route guards', () => {
       payload: { shipmentId: 'ship-1' },
     });
     expect(res.statusCode).toBe(201);
-    expect(stub.generateRateConfirmation).toHaveBeenCalledWith('ship-1');
+    expect(stub.generateRateConfirmation).toHaveBeenCalledWith('org-1', 'ship-1', 'u-1');
     await app.close();
   });
 
@@ -203,7 +203,7 @@ describe('BOL / labels / customs form route guards', () => {
       payload: { shipmentId: readyShipment.id },
     });
     expect(bol.statusCode).toBe(201);
-    expect(stub.generateBOL).toHaveBeenCalledWith(readyShipment.id, undefined);
+    expect(stub.generateBOL).toHaveBeenCalledWith('org-1', readyShipment.id, undefined, 'u-1');
 
     const labels = await app.inject({
       method: 'POST',
@@ -245,7 +245,7 @@ describe('BOL/customs form share the cargo-readiness gate (#150)', () => {
   };
 
   it('refuses to generate a customs form (sync) when the shipment has no cargo detail', async () => {
-    stub.shipment.findUnique.mockResolvedValueOnce(notReadyShipment);
+    stub.shipment.findFirst.mockResolvedValueOnce(notReadyShipment);
     const app = await buildApp(['documents:generate']);
     const res = await app.inject({
       method: 'POST',
@@ -259,7 +259,7 @@ describe('BOL/customs form share the cargo-readiness gate (#150)', () => {
   });
 
   it('refuses to enqueue a customs form (async) when the shipment has no cargo detail', async () => {
-    stub.shipment.findUnique.mockResolvedValueOnce(notReadyShipment);
+    stub.shipment.findFirst.mockResolvedValueOnce(notReadyShipment);
     const app = await buildApp(['documents:generate']);
     const res = await app.inject({
       method: 'POST',
@@ -273,7 +273,7 @@ describe('BOL/customs form share the cargo-readiness gate (#150)', () => {
   });
 
   it('returns 404 when the shipment does not exist', async () => {
-    stub.shipment.findUnique.mockResolvedValueOnce(null);
+    stub.shipment.findFirst.mockResolvedValueOnce(null);
     const app = await buildApp(['documents:generate']);
     const res = await app.inject({
       method: 'POST',

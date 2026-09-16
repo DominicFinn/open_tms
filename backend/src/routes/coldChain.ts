@@ -11,6 +11,7 @@ import { RECORD_CALIBRATION } from '../commands/coldChain/RecordCalibrationComma
 import { CREATE_CAPA } from '../commands/capa/CreateCAPACommand.js';
 import { UPDATE_CAPA } from '../commands/capa/UpdateCAPACommand.js';
 import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
+import { DocumentSourceNotFoundError } from '../services/DocumentGenerationService.js';
 
 export async function coldChainRoutes(server: FastifyInstance) {
   // Tenant comes from the caller's token via registerOrgScope, not from whichever
@@ -768,12 +769,12 @@ export async function coldChainRoutes(server: FastifyInstance) {
 
     try {
       const complianceService = container.resolve<any>(TOKENS.IComplianceReportService);
-      const document = await complianceService.generateComplianceReport(shipmentId);
+      const document = await complianceService.generateComplianceReport(req.orgId!, shipmentId);
 
       reply.code(201);
       return { data: document, error: null };
     } catch (err: any) {
-      reply.code(400);
+      reply.code(err instanceof DocumentSourceNotFoundError ? 404 : 400);
       return { data: null, error: err.message };
     }
   });

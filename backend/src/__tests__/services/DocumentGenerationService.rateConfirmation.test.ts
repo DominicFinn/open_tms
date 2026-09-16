@@ -18,10 +18,10 @@ function makePrisma(shipmentOverrides: Partial<typeof mockShipment> = {}) {
   const shipment = { ...mockShipment, ...shipmentOverrides };
   return {
     shipment: {
-      findUniqueOrThrow: jest.fn().mockResolvedValue(shipment),
+      findFirst: jest.fn().mockResolvedValue(shipment),
     },
     organization: {
-      findFirst: jest.fn().mockResolvedValue({ name: 'Open TMS', mcNumber: 'MC-123', themeConfig: null, logoStorageKey: null }),
+      findUnique: jest.fn().mockResolvedValue({ name: 'Open TMS', mcNumber: 'MC-123', themeConfig: null, logoStorageKey: null }),
     },
   } as any;
 }
@@ -38,7 +38,7 @@ describe('DocumentGenerationService.generateRateConfirmation', () => {
     const prisma = makePrisma({ carrier: null as any });
     const service = new DocumentGenerationService(prisma, templateRepo, docRepo);
 
-    await expect(service.generateRateConfirmation('ship-1')).rejects.toThrow('Shipment has no carrier assigned');
+    await expect(service.generateRateConfirmation('org-1', 'ship-1')).rejects.toThrow('Shipment has no carrier assigned');
   });
 
   it('throws when there is no approved cost charge, even if a pending one exists', async () => {
@@ -46,11 +46,11 @@ describe('DocumentGenerationService.generateRateConfirmation', () => {
       charges: [{ id: 'c1', description: 'Linehaul', amountCents: 50000, chargeCategory: 'cost', status: 'pending' }],
     });
     // The pending charge is filtered out by the query itself in production; simulate that
-    // by having findUniqueOrThrow return it pre-filtered, matching the real `where` clause.
-    prisma.shipment.findUniqueOrThrow.mockResolvedValueOnce({ ...mockShipment, charges: [] });
+    // by having findFirst return it pre-filtered, matching the real `where` clause.
+    prisma.shipment.findFirst.mockResolvedValueOnce({ ...mockShipment, charges: [] });
     const service = new DocumentGenerationService(prisma, templateRepo, docRepo);
 
-    await expect(service.generateRateConfirmation('ship-1')).rejects.toThrow(
+    await expect(service.generateRateConfirmation('org-1', 'ship-1')).rejects.toThrow(
       'Shipment has no approved cost charge — award a tender or approve a cost charge before generating a rate confirmation',
     );
   });
@@ -63,12 +63,13 @@ describe('DocumentGenerationService.generateRateConfirmation', () => {
     });
     const service = new DocumentGenerationService(prisma, templateRepo, docRepo);
 
-    const result = await service.generateRateConfirmation('ship-1');
+    const result = await service.generateRateConfirmation('org-1', 'ship-1');
 
     expect(result).toEqual({ id: 'doc-1', fileName: 'RateConfirmation-SH-001.pdf' });
     expect(docRepo.create).toHaveBeenCalledTimes(1);
     const dto = docRepo.create.mock.calls[0][0];
     expect(dto.documentType).toBe('rate_confirmation');
+    expect(dto.orgId).toBe('org-1');
     expect(dto.metadata.totalRate).toBe('500.00');
   });
 
@@ -78,9 +79,10 @@ describe('DocumentGenerationService.generateRateConfirmation', () => {
     });
     const service = new DocumentGenerationService(prisma, templateRepo, docRepo);
 
-    await service.generateRateConfirmation('ship-1');
+    await service.generateRateConfirmation('org-1', 'ship-1');
 
-    const call = prisma.shipment.findUniqueOrThrow.mock.calls[0][0];
+    const call = prisma.shipment.findFirst.mock.calls[0][0];
+    expect(call.where).toEqual({ id: 'ship-1', orgId: 'org-1' });
     expect(call.include.charges.where).toEqual({
       chargeCategory: 'cost',
       status: { in: ['approved', 'invoiced'] },

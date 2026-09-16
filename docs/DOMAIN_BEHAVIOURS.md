@@ -1744,6 +1744,25 @@ The frontend "Accept & Book" button (visible for broker orgs) triggers this flow
 
 `CreditCheckService` sums unpaid invoices (draft, approved, sent, overdue, partial) and compares against `Customer.creditLimitCents`. Returns pass/fail with outstanding balance and available credit. Null credit limit = unlimited.
 
+### Document Tenancy (#294)
+
+`GeneratedDocument` and `DocumentTemplate` each belong to one organization (`orgId`, NOT NULL).
+
+- Every document route runs under `registerOrgScope` plus `requireOrgScope`, and every repository
+  read and write filters on `req.orgId`. A document, template, shipment or order id from another
+  organization returns 404, never 403.
+- Generation (`DocumentGenerationService`, `evaluateBolReadiness`, the compliance and issue closure
+  reports) looks its source up by `{ id, orgId }`. A miss throws `DocumentSourceNotFoundError`,
+  which the routes answer with 404. Nothing is written and no BOL number is consumed.
+- Async generation jobs carry the requesting user's `orgId`; the worker scopes every lookup to it.
+- Templates and defaults are per organization. Setting a default unsets only the caller's own
+  default for that document type.
+- The customer portal document list and download are narrowed by the customer's organization as
+  well as its `customerId`.
+- **Backfill:** each existing document took its org from its own shipment, then order, issue,
+  customer or carrier. Templates had no owner, so each one went to the org that first used it (or
+  the oldest org), and every other org received its own copy, with its documents repointed to it.
+
 ### Bill of Lading Generation & Readiness Gate
 
 **Endpoints:**
