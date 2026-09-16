@@ -67,18 +67,13 @@ Roughly 50-65 PR-sized chunks end to end; every PR leaves the product shippable.
   split ✅ (#166),
   `WmsFulfilmentOrder` projection ✅ (#168), load-plan event seam ✅ (#173). One new WMS read
   model, no changes to existing tables
-- **Phase 2: Data model untangling** 🚧 `Facility` (WMS off the conflated `Location`) — the
-  dual-write is complete ✅, all twelve WMS models that reference `Location` now carry a
-  `facilityId` (#217 storage topology, #225 inbound, #227 outbound, #229 waves), and the read path
-  accepts a facility scope (#231), and the 15 WMS list pages now send `facilityId` (#234). `locationId` is
-  nullable (#245), the write path names the facility (#248) and the `Location` foreign keys are cut
-  (#280), so no FK crosses the boundary. The `locationId` columns stay as soft references until
-  inventory carries a facility, which is Phase 4;
-  `HandlingUnit` (stock without a TMS order), polymorphic `Allocation` demand ref, carton cleanup,
-  `OrgWmsSettings` carve-out still to come. All expand→contract.
-  Phase 0 tenancy leftovers closed alongside ✅ (#220, in #221/#222/#223): the whole WMS read and
-  write surface is now scoped to `req.orgId` through ten repositories, including two deletes that
-  let one tenant remove another's replenishment rules and wave templates by uuid
+- **Phase 2: Data model untangling** — `Facility` ✅ **done** (#217, #225, #227, #229, #231, #234,
+  #245, #248, #280, #285). WMS is off the conflated `Location`: all sixteen WMS models carry a
+  `facilityId`, reads and writes name the facility, and no foreign key crosses the tms/wms boundary,
+  so a schema without a `Location` table resolves. The `locationId` columns survive as soft
+  references until `InventoryRecord` carries a facility, which is **#297** and the last piece.
+  🔲 Still to come: `HandlingUnit` (stock without a TMS order), polymorphic `Allocation` demand ref,
+  carton cleanup, `OrgWmsSettings` carve-out. All expand→contract.
 - **Phase 3: App shell & entitlements** 🔲 `ENABLED_MODULES` composition, `OrgApp` entitlements
   + `GET /api/v1/apps` (replaces the hardcoded frontend APPS array), `packages/contracts`,
   warehouse PWA split, delete `auth-service/`, per-product frontend builds (`VITE_PRODUCT`)
@@ -737,14 +732,17 @@ Base login (email + password, JWT, admin password reset, RequireAuth guard, glob
 
 ## Priorities
 
-0. **NOW:** **Track 0 Phase 2 (data model untangling)** - Phases 0 and 1 are done: the bug fixes
-   shipped, and the boundary is drawn in code and enforced by `npm run lint:boundaries`. Phase 2 is
-   the one that makes a standalone FinnWMS possible: `Facility` (WMS off the conflated `Location`),
-   `HandlingUnit` (stock without a TMS order), and a polymorphic `Allocation` demand ref. 2a is
-   under way, and its dual-write is finished: #217, #225, #227 and #229 put a `facilityId` on every
-   WMS model that references `Location`, #231 taught every WMS list endpoint to filter by facility,
-   and #234 moved the WMS UI onto it. Reads are done. Batch 6 is the write path and the contract:
-   nullable `locationId`, create commands on `facilityId`, then drop the `Location` FKs.
+0. **NOW:** **Track 0 Phase 2a is done.** WMS is off the conflated `Location` and onto `Facility`,
+   across ten PRs (#217 through #285). No foreign key crosses the tms/wms boundary, so a schema
+   without a `Location` table resolves, which is what a standalone FinnWMS needs.
+
+   Four things are left, each with a self-contained ticket: **#297** gives `InventoryRecord` a
+   facility, which is what blocks dropping the `locationId` columns and is the last piece of the
+   split. **#239** and **#296** are the org-scope endgame, and matter more than their size suggests
+   — see the note under the multi-tenancy rule about why a scope that resolves to nothing is not a
+   scope. **#298** is the jest teardown leak, which taxes every run.
+
+   Then 2b (`HandlingUnit`), 2c (polymorphic `Allocation` demand ref), 2d, 2e.
    See [docs/roadmap/split-finntms-finnwms.md](docs/roadmap/split-finntms-finnwms.md).
 1. **NEXT (Immediate):** **Carrier API Integration** - Real-time shipment tracking through carrier APIs is table stakes. FedEx/UPS/DHL first-party tracking already exist (real, sandbox-ready). Expand with **multi-carrier aggregators** (EasyPost, AfterShip) so one integration pools dozens of carriers, then broaden. Poll + webhook, all sandbox/ngrok-testable. Landscape + selection in `docs/CARRIER_INTEGRATIONS.md`; testing in `docs/CARRIER_TESTING.md`.
 2. **Immediate:** **Track 1 (Brokerage)** - Broker entity model, margin tracking, quoting workflow. This unlocks the largest market segment currently unserved.
