@@ -269,7 +269,14 @@ export class ArrivalCriteriaEvaluationService implements IArrivalCriteriaEvaluat
             if (arrived) {
               arrivedThisPing = true;
               const method = criteria.criteriaType === 'geofence' ? 'geofence' : 'geofence_iot';
-              await this.deliveryService.updateOrdersForStop(entry.stopId, 'arrived', method);
+              // Destination arrival is the only signal this pipeline has that a
+              // delivery happened — 'completed' is what makes updateOrdersForStop
+              // mark the orders at this stop delivered, not just in_transit.
+              // ShipmentCompletionHandler completes the *shipment* on the same
+              // event; without this, the order's own status never follows it.
+              await this.deliveryService.updateOrdersForStop(
+                entry.stopId, entry.isDestination ? 'completed' : 'arrived', method,
+              );
             }
           }
 

@@ -106,6 +106,12 @@ export async function buildTimelineRow(
       if (kind === 'waypoint') return { ...base, eventType: 'exited_waypoint', description: `Exited waypoint${base.address ? ` (${base.address})` : ''}` };
       return null; // departure from destination is not meaningful
     }
+    case 'tracking.journey_checkpoint':
+      return {
+        ...base,
+        eventType: 'journey_checkpoint',
+        description: `Checkpoint ${payload.checkpointIndex}/${payload.totalCheckpoints} reached`,
+      };
     default:
       return null;
   }
@@ -113,7 +119,7 @@ export async function buildTimelineRow(
 
 export class ShipmentTimelineProjection implements IEventHandler {
   readonly name = 'projection.shipment_timeline';
-  readonly eventPatterns = ['shipment.*'];
+  readonly eventPatterns = ['shipment.*', 'tracking.journey_checkpoint'];
   readonly options: SubscribeOptions = {
     concurrency: 3,
     priority: 5,
