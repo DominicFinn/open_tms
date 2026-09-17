@@ -1,7 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { WarehouseService } from '../services/WarehouseService.js';
-import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
+import { registerOrgScope, requireOrgScope } from '../auth/orgScopeMiddleware.js';
 import { authenticateJWT } from '../middleware/jwtAuth.js';
 import { container, TOKENS } from '../di/index.js';
 import { ICreateShipmentPort } from '../ports/createShipment.js';
@@ -28,21 +28,26 @@ export async function warehouseRoutes(server: FastifyInstance) {
     '/api/v1/warehouse/auth/magic-link/validate',
     '/api/v1/warehouse/auth/login',
   ]);
+  const matchedPath = (req: FastifyRequest): string =>
+    (req.routeOptions?.url as string | undefined) ?? req.url.split('?')[0];
   server.addHook('preHandler', async (req: FastifyRequest, reply: FastifyReply) => {
-    const matched = (req.routeOptions?.url as string | undefined)
-      ?? (req as any).routerPath
-      ?? req.url.split('?')[0];
-    if (unauthPaths.has(matched)) return;
+    if (unauthPaths.has(matchedPath(req))) return;
     await (authenticateJWT as any).call(server, req, reply);
   });
 
-  // Multi-tenancy: now that operational routes carry a session JWT with
-  // organizationId, the standard org-scope hook works the same way as
-  // every other authed plugin. Unauthed auth endpoints fall through to
-  // the sole-Organization fallback, which is null once a second org
-  // exists (#239). Those endpoints should resolve the org from the link or
-  // user they are given instead (#303).
+  // Multi-tenancy: operational routes carry a session JWT with organizationId, so the standard
+  // org-scope hook works as it does on every other authed plugin. This plugin is mounted outside
+  // the strict authenticated block, so it refuses a tenantless request itself (#303); otherwise a
+  // token without an org would reach the handlers with a null scope once a second org exists.
+  //
+  // The two login endpoints are exempt and never read req.orgId: the tenant comes from the user
+  // the email or magic link identifies, and is signed into the session token they return.
   await registerOrgScope(server);
+  server.addHook('preHandler', async (req: FastifyRequest, reply: FastifyReply) => {
+    if (unauthPaths.has(matchedPath(req))) return;
+    await requireOrgScope.call(server, req, reply, () => {});
+    if (reply.sent) return reply;
+  });
 
   // ─── Auth: Magic Link ───────────────────────────────────────────────────────
 

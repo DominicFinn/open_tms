@@ -87,7 +87,7 @@ export class CartonizationService implements ICartonizationService {
 
     // 3. Get available cartons, sorted by volume
     const cartons = await this.prisma.cartonCatalogue.findMany({
-      where: { locationId, active: true },
+      where: { orgId, locationId, active: true },
       orderBy: [{ lengthMm: 'asc' }],
     });
 

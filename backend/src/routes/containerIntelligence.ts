@@ -48,8 +48,7 @@ export async function containerIntelligenceRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest) => {
     const body = req.body as any;
-    const orgId = (req as any).orgId
-;
+    const orgId = req.orgId!;
 
     const where: any = { orgId, active: true };
     if (body.locationId) where.locationId = body.locationId;

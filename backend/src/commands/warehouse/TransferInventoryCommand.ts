@@ -33,15 +33,15 @@ export class TransferInventoryCommandHandler extends BaseCommandHandler<
     if (p.quantity <= 0) throw new Error('Transfer quantity must be positive');
 
     // Load source record
-    const source = await tx.inventoryRecord.findUnique({ where: { id: p.inventoryRecordId } });
+    const source = await tx.inventoryRecord.findFirst({ where: { id: p.inventoryRecordId, orgId: command.orgId } });
     if (!source) throw new Error(`Inventory record ${p.inventoryRecordId} not found`);
     if (source.quantityAvailable < p.quantity) {
       throw new Error(`Insufficient available stock: have ${source.quantityAvailable}, need ${p.quantity}`);
     }
 
     // Load target bin
-    const targetBin = await tx.warehouseBin.findUnique({
-      where: { id: p.targetBinId },
+    const targetBin = await tx.warehouseBin.findFirst({
+      where: { id: p.targetBinId, orgId: command.orgId },
       include: { zone: true },
     });
     if (!targetBin) throw new Error(`Target bin ${p.targetBinId} not found`);

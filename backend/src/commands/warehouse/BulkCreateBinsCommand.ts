@@ -43,7 +43,7 @@ export class BulkCreateBinsCommandHandler extends BaseCommandHandler<
     const p = command.payload;
 
     // Verify zone exists
-    const zone = await tx.warehouseZone.findUnique({ where: { id: p.zoneId } });
+    const zone = await tx.warehouseZone.findFirst({ where: { id: p.zoneId, orgId: command.orgId } });
     if (!zone) throw new Error(`Zone ${p.zoneId} not found`);
 
     // Phase 2a (#248): the caller names the facility. locationId is still written from the

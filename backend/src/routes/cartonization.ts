@@ -44,7 +44,7 @@ export async function cartonizationRoutes(server: FastifyInstance) {
       })).min(1),
     }).parse((req as any).body);
 
-    const orgId = (req as any).orgId || 'default-org';
+    const orgId = req.orgId!;
 
     const result = await cartonService.recommend(body.locationId, orgId, body.items);
     return { data: result, error: null };

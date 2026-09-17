@@ -97,8 +97,8 @@ export async function warehouseZoneRoutes(server: FastifyInstance) {
       sortOrder: z.number().int().optional(),
     }).parse((req as any).body);
 
-    const orgId = (req as any).orgId || 'default-org';
-    const actorId = (req as any).userId || 'system';
+    const orgId = req.orgId!;
+    const actorId = req.user?.sub ?? null;
 
     const result = await commandBus.dispatch({
       type: CREATE_WAREHOUSE_ZONE,
@@ -149,8 +149,13 @@ export async function warehouseZoneRoutes(server: FastifyInstance) {
       active: z.boolean().optional(),
     }).parse((req as any).body);
 
-    const orgId = (req as any).orgId || 'default-org';
-    const actorId = (req as any).userId || 'system';
+    const orgId = req.orgId!;
+    const actorId = req.user?.sub ?? null;
+
+    if (!(await repo.findZoneById(orgId, id))) {
+      reply.code(404);
+      return { data: null, error: 'Zone not found' };
+    }
 
     const result = await commandBus.dispatch({
       type: UPDATE_WAREHOUSE_ZONE,
@@ -254,8 +259,13 @@ export async function warehouseZoneRoutes(server: FastifyInstance) {
       walkSequence: z.number().int().optional(),
     }).parse((req as any).body);
 
-    const orgId = (req as any).orgId || 'default-org';
-    const actorId = (req as any).userId || 'system';
+    const orgId = req.orgId!;
+    const actorId = req.user?.sub ?? null;
+
+    if (!(await repo.findZoneById(orgId, body.zoneId))) {
+      reply.code(404);
+      return { data: null, error: 'Zone not found' };
+    }
 
     const result = await commandBus.dispatch({
       type: CREATE_WAREHOUSE_BIN,
@@ -310,8 +320,13 @@ export async function warehouseZoneRoutes(server: FastifyInstance) {
       active: z.boolean().optional(),
     }).parse((req as any).body);
 
-    const orgId = (req as any).orgId || 'default-org';
-    const actorId = (req as any).userId || 'system';
+    const orgId = req.orgId!;
+    const actorId = req.user?.sub ?? null;
+
+    if (!(await repo.findBinById(orgId, id))) {
+      reply.code(404);
+      return { data: null, error: 'Bin not found' };
+    }
 
     const result = await commandBus.dispatch({
       type: UPDATE_WAREHOUSE_BIN,
@@ -383,8 +398,13 @@ export async function warehouseZoneRoutes(server: FastifyInstance) {
       return { data: null, error: 'levelEnd must be >= levelStart' };
     }
 
-    const orgId = (req as any).orgId || 'default-org';
-    const actorId = (req as any).userId || 'system';
+    const orgId = req.orgId!;
+    const actorId = req.user?.sub ?? null;
+
+    if (!(await repo.findZoneById(orgId, body.zoneId))) {
+      reply.code(404);
+      return { data: null, error: 'Zone not found' };
+    }
 
     const result = await commandBus.dispatch({
       type: BULK_CREATE_BINS,
