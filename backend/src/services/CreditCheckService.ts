@@ -11,23 +11,25 @@ export interface CreditCheckResult {
 }
 
 export interface ICreditCheckService {
-  checkCredit(customerId: string, additionalAmountCents?: number): Promise<CreditCheckResult>;
+  checkCredit(customerId: string, orgId: string, additionalAmountCents?: number): Promise<CreditCheckResult | null>;
 }
 
 export class CreditCheckService implements ICreditCheckService {
   constructor(private prisma: PrismaClient) {}
 
-  async checkCredit(customerId: string, additionalAmountCents = 0): Promise<CreditCheckResult> {
-    const customer = await this.prisma.customer.findUnique({
-      where: { id: customerId },
+  /** Returns null when the customer doesn't exist in the caller's org. */
+  async checkCredit(customerId: string, orgId: string, additionalAmountCents = 0): Promise<CreditCheckResult | null> {
+    const customer = await this.prisma.customer.findFirst({
+      where: { id: customerId, orgId },
       select: { id: true, name: true, creditLimitCents: true },
     });
 
-    if (!customer) throw new Error('Customer not found');
+    if (!customer) return null;
 
     // Sum all unpaid invoices (sent, approved, overdue - not voided or paid)
     const unpaidInvoices = await this.prisma.invoice.aggregate({
       where: {
+        orgId,
         customerId,
         status: { in: ['draft', 'approved', 'sent', 'overdue', 'partial'] },
       },

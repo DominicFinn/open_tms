@@ -2,8 +2,8 @@ import { PrismaClient } from '@prisma/client';
 import ExcelJS from 'exceljs';
 
 export interface IDailyReportService {
-  generateExcel(date: string): Promise<Buffer>;
-  getSummary(date: string): Promise<DailyReportSummary>;
+  generateExcel(orgId: string, date: string): Promise<Buffer>;
+  getSummary(orgId: string, date: string): Promise<DailyReportSummary>;
 }
 
 export interface DailyReportSummary {
@@ -24,11 +24,11 @@ function formatDate(d: Date | null | undefined): string {
 export class DailyReportService implements IDailyReportService {
   constructor(private prisma: PrismaClient) {}
 
-  async getSummary(date: string): Promise<DailyReportSummary> {
+  async getSummary(orgId: string, date: string): Promise<DailyReportSummary> {
     const { dayStart, dayEnd } = this.parseDateRange(date);
 
-    const shipments = await this.getShipments(dayStart, dayEnd);
-    const orders = await this.getOrders(dayStart, dayEnd, shipments.map(s => s.id));
+    const shipments = await this.getShipments(orgId, dayStart, dayEnd);
+    const orders = await this.getOrders(orgId, dayStart, dayEnd, shipments.map(s => s.id));
 
     const shipmentsByStatus: Record<string, number> = {};
     for (const s of shipments) {
@@ -54,23 +54,19 @@ export class DailyReportService implements IDailyReportService {
     };
   }
 
-  async generateExcel(date: string): Promise<Buffer> {
+  async generateExcel(orgId: string, date: string): Promise<Buffer> {
     const { dayStart, dayEnd } = this.parseDateRange(date);
 
-    const shipments = await this.getShipments(dayStart, dayEnd);
+    const shipments = await this.getShipments(orgId, dayStart, dayEnd);
     const shipmentIds = shipments.map(s => s.id);
-    const orders = await this.getOrders(dayStart, dayEnd, shipmentIds);
-    const stops = await this.getStops(dayStart, dayEnd, shipmentIds);
+    const orders = await this.getOrders(orgId, dayStart, dayEnd, shipmentIds);
+    const stops = await this.getStops(orgId, dayStart, dayEnd, shipmentIds);
     const exceptions = orders.filter(o => o.deliveryStatus === 'exception');
 
     const workbook = new ExcelJS.Workbook();
     // Use org name for workbook creator metadata
-    let creatorName = 'Open TMS';
-    try {
-      const org = await this.prisma.organization.findFirst({ select: { name: true } });
-      if (org?.name && org.name !== 'Default Organization') creatorName = org.name;
-    } catch { /* use fallback */ }
-    workbook.creator = creatorName;
+    const org = await this.prisma.organization.findUnique({ where: { id: orgId }, select: { name: true } });
+    workbook.creator = org?.name && org.name !== 'Default Organization' ? org.name : 'Open TMS';
     workbook.created = new Date();
 
     // --- Sheet 1: Summary ---
@@ -254,9 +250,10 @@ export class DailyReportService implements IDailyReportService {
     return { dayStart, dayEnd };
   }
 
-  private async getShipments(dayStart: Date, dayEnd: Date) {
+  private async getShipments(orgId: string, dayStart: Date, dayEnd: Date) {
     return this.prisma.shipment.findMany({
       where: {
+        orgId,
         archived: false,
         OR: [
           { pickupDate: { gte: dayStart, lte: dayEnd } },
@@ -277,9 +274,10 @@ export class DailyReportService implements IDailyReportService {
     });
   }
 
-  private async getOrders(dayStart: Date, dayEnd: Date, shipmentIds: string[]) {
+  private async getOrders(orgId: string, dayStart: Date, dayEnd: Date, shipmentIds: string[]) {
     return this.prisma.order.findMany({
       where: {
+        orgId,
         archived: false,
         OR: [
           { orderShipments: { some: { shipmentId: { in: shipmentIds } } } },
@@ -297,9 +295,10 @@ export class DailyReportService implements IDailyReportService {
     });
   }
 
-  private async getStops(dayStart: Date, dayEnd: Date, shipmentIds: string[]) {
+  private async getStops(orgId: string, dayStart: Date, dayEnd: Date, shipmentIds: string[]) {
     return this.prisma.shipmentStop.findMany({
       where: {
+        shipment: { orgId },
         OR: [
           { estimatedArrival: { gte: dayStart, lte: dayEnd } },
           { shipmentId: { in: shipmentIds } },

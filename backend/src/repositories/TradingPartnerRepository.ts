@@ -1,4 +1,4 @@
-import { PrismaClient, TradingPartner, TradingPartnerTransaction } from '@prisma/client';
+import { Prisma, PrismaClient, TradingPartner, TradingPartnerTransaction } from '@prisma/client';
 
 export interface CreateTradingPartnerDTO {
   /** Multi-tenancy scope. Required post phase-2 tightening. */
@@ -72,7 +72,7 @@ export interface ITradingPartnerRepository {
   updateTransaction(id: string, data: Partial<TradingPartnerTransaction>): Promise<TradingPartnerTransaction>;
   removeTransaction(id: string): Promise<void>;
   // Logs
-  createLog(data: any): Promise<any>;
+  createLog(data: Prisma.EdiTransactionLogUncheckedCreateInput): Promise<any>;
   findLogById(id: string): Promise<any>;
   findLogs(filters: { orgId?: string; partnerId?: string; transactionType?: string; direction?: string; status?: string }): Promise<any[]>;
   findLogsWithPagination(filters: { orgId?: string; partnerId?: string; transactionType?: string; direction?: string; status?: string; source?: string; search?: string }, limit?: number, offset?: number): Promise<{ logs: any[]; total: number }>;
@@ -188,12 +188,7 @@ export class TradingPartnerRepository implements ITradingPartnerRepository {
 
   // ── Logs ──
 
-  async createLog(data: any): Promise<any> {
-    // Note on orgId: the surrounding domain (Customer, Carrier, TradingPartner,
-    // Shipment) does not carry orgId directly today, so we can't auto-derive
-    // it. Route handlers should pass `req.user.organizationId` explicitly so
-    // new rows are scoped; legacy rows backfilled to NULL are handled
-    // tolerantly by the read endpoints.
+  async createLog(data: Prisma.EdiTransactionLogUncheckedCreateInput): Promise<any> {
     return this.prisma.ediTransactionLog.create({ data });
   }
 

@@ -79,10 +79,10 @@ describe('ChargeRepository', () => {
       const prisma = buildPrisma();
       const repo = new ChargeRepository(prisma);
 
-      await repo.findAll({ shipmentIds: ['s1', 's2', 's3'], status: 'approved' });
+      await repo.findAll({ orgId: 'org-1', shipmentIds: ['s1', 's2', 's3'], status: 'approved' });
 
       expect(prisma.charge.findMany).toHaveBeenCalledWith({
-        where: { shipmentId: { in: ['s1', 's2', 's3'] }, status: 'approved' },
+        where: { orgId: 'org-1', shipmentId: { in: ['s1', 's2', 's3'] }, status: 'approved' },
         orderBy: { createdAt: 'desc' },
       });
     });
@@ -91,20 +91,20 @@ describe('ChargeRepository', () => {
       const prisma = buildPrisma();
       const repo = new ChargeRepository(prisma);
 
-      await repo.findAll({ shipmentIds: [], status: 'approved' });
+      await repo.findAll({ orgId: 'org-1', shipmentIds: [], status: 'approved' });
 
       const where = prisma.charge.findMany.mock.calls[0][0].where;
       expect(where.shipmentId).toBeUndefined();
       expect(where.status).toBe('approved');
     });
 
-    it('passes orderId through unchanged', async () => {
+    it('passes orderId through unchanged, always scoped to the org', async () => {
       const prisma = buildPrisma();
       const repo = new ChargeRepository(prisma);
 
-      await repo.findAll({ orderId: 'o-1' });
+      await repo.findAll({ orgId: 'org-1', orderId: 'o-1' });
 
-      expect(prisma.charge.findMany.mock.calls[0][0].where).toEqual({ orderId: 'o-1' });
+      expect(prisma.charge.findMany.mock.calls[0][0].where).toEqual({ orgId: 'org-1', orderId: 'o-1' });
     });
   });
 
@@ -140,7 +140,7 @@ describe('ChargeRepository', () => {
       prisma.charge.aggregate.mockResolvedValue({ _sum: { amountCents: null } });
       const repo = new ChargeRepository(prisma);
 
-      const total = await repo.sumByShipment('s1', 'revenue');
+      const total = await repo.sumByShipment('s1', 'org-1', 'revenue');
       expect(total).toBe(0);
     });
 
@@ -149,10 +149,10 @@ describe('ChargeRepository', () => {
       prisma.charge.aggregate.mockResolvedValue({ _sum: { amountCents: 12500 } });
       const repo = new ChargeRepository(prisma);
 
-      await repo.sumByShipment('s1', 'revenue');
+      await repo.sumByShipment('s1', 'org-1', 'revenue');
 
       expect(prisma.charge.aggregate).toHaveBeenCalledWith({
-        where: { shipmentId: 's1', chargeCategory: 'revenue', status: { not: 'written_off' } },
+        where: { shipmentId: 's1', orgId: 'org-1', chargeCategory: 'revenue', status: { not: 'written_off' } },
         _sum: { amountCents: true },
       });
     });

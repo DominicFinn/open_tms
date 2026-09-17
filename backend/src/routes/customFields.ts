@@ -89,7 +89,7 @@ export async function customFieldRoutes(server: FastifyInstance) {
     },
   }, async (req) => {
     const { entityType } = req.params as { entityType: string };
-    const version = await customFieldService.getActiveVersion(entityType);
+    const version = await customFieldService.getActiveVersion(req.orgId!, entityType);
     return { data: version, error: null };
   });
 
@@ -110,7 +110,7 @@ export async function customFieldRoutes(server: FastifyInstance) {
     },
   }, async (req) => {
     const { entityType } = req.params as { entityType: string };
-    const versions = await customFieldService.listVersions(entityType);
+    const versions = await customFieldService.listVersions(req.orgId!, entityType);
     return { data: versions, error: null };
   });
 
@@ -132,7 +132,7 @@ export async function customFieldRoutes(server: FastifyInstance) {
     },
   }, async (req, reply) => {
     const { id } = req.params as { id: string };
-    const version = await customFieldService.getVersion(id);
+    const version = await customFieldService.getVersion(req.orgId!, id);
     if (!version) {
       reply.code(404);
       return { data: null, error: 'Version not found' };
@@ -187,6 +187,7 @@ export async function customFieldRoutes(server: FastifyInstance) {
 
     try {
       const version = await customFieldService.createVersion(
+        req.orgId!,
         parsed.data.entityType,
         parsed.data.fields,
         parsed.data.description,
@@ -235,7 +236,7 @@ export async function customFieldRoutes(server: FastifyInstance) {
       return { data: null, error: parsed.error.issues.map(i => i.message).join('. ') };
     }
 
-    const result = await customFieldService.validateValues(parsed.data.versionId, parsed.data.values);
+    const result = await customFieldService.validateValues(req.orgId!, parsed.data.versionId, parsed.data.values);
     return { data: result, error: null };
   });
 
@@ -277,12 +278,7 @@ export async function customFieldRoutes(server: FastifyInstance) {
     },
   }, async (req) => {
     const { entityType } = req.query as { entityType?: string };
-    const where = entityType ? { entityType } : {};
-    const audits = await container.resolve<any>(TOKENS.PrismaClient).customFieldAudit.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      take: 100,
-    });
+    const audits = await customFieldService.listAudit(req.orgId!, entityType);
     return { data: audits, error: null };
   });
 }

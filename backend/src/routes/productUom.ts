@@ -25,7 +25,7 @@ export async function productUomRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest) => {
     const q = req.query as any;
-    const orgId = (req as any).orgId || 'default-org';
+    const orgId = req.orgId!;
     const where: any = { orgId };
     if (q.sku) where.sku = q.sku;
     if (q.search) where.sku = { contains: q.search, mode: 'insensitive' };
@@ -44,7 +44,7 @@ export async function productUomRoutes(server: FastifyInstance) {
     schema: { tags: ['WMS - Product UOM'], summary: 'Get product UOM detail' },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const record = await prisma.productUom.findUnique({ where: { id } });
+    const record = await prisma.productUom.findFirst({ where: { id, orgId: req.orgId! } });
     if (!record) { reply.code(404); return { data: null, error: 'Not found' }; }
     return { data: record, error: null };
   });
@@ -84,7 +84,7 @@ export async function productUomRoutes(server: FastifyInstance) {
       isDefault: z.boolean().optional().default(false),
     }).parse((req as any).body);
 
-    const orgId = (req as any).orgId || 'default-org';
+    const orgId = req.orgId!;
 
     // Upsert by org+sku+uomCode
     const existing = await prisma.productUom.findFirst({
@@ -121,19 +121,21 @@ export async function productUomRoutes(server: FastifyInstance) {
       isDefault: z.boolean().optional(),
     }).parse((req as any).body);
 
-    const record = await prisma.productUom.findUnique({ where: { id } });
+    const record = await prisma.productUom.findFirst({ where: { id, orgId: req.orgId! } });
     if (!record) { reply.code(404); return { data: null, error: 'Not found' }; }
 
-    const updated = await prisma.productUom.update({ where: { id }, data: body });
+    const updated = await prisma.productUom.update({ where: { id: record.id }, data: body });
     return { data: updated, error: null };
   });
 
   // DELETE /api/v1/product-uom/:id
   server.delete('/api/v1/product-uom/:id', {
     schema: { tags: ['WMS - Product UOM'], summary: 'Delete product UOM record' },
-  }, async (req: FastifyRequest) => {
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    await prisma.productUom.delete({ where: { id } }).catch(() => null);
+    const record = await prisma.productUom.findFirst({ where: { id, orgId: req.orgId! } });
+    if (!record) { reply.code(404); return { data: null, error: 'Not found' }; }
+    await prisma.productUom.delete({ where: { id: record.id } });
     return { data: { deleted: true }, error: null };
   });
 
@@ -142,7 +144,7 @@ export async function productUomRoutes(server: FastifyInstance) {
     schema: { tags: ['WMS - Product UOM'], summary: 'Look up dimensions for a SKU (for cartonization)' },
   }, async (req: FastifyRequest) => {
     const { sku } = req.params as { sku: string };
-    const orgId = (req as any).orgId || 'default-org';
+    const orgId = req.orgId!;
 
     const uom = await prisma.productUom.findFirst({
       where: { orgId, sku, isDefault: true },

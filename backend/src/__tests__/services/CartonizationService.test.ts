@@ -30,6 +30,9 @@ describe('CartonizationService', () => {
     expect(result.recommended!.fits).toBe(true);
     expect(result.recommended!.volumeUtilization).toBeLessThan(100);
     expect(result.itemsMissingDimensions).toEqual([]);
+    expect(prisma.cartonCatalogue.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ orgId: 'org-1', locationId: 'loc-1' }) }),
+    );
   });
 
   it('returns alternatives after recommended', async () => {

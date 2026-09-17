@@ -1,4 +1,4 @@
-import { PrismaClient, CustomFieldVersion, CustomFieldDefinition } from '@prisma/client';
+import { PrismaClient, CustomFieldVersion, CustomFieldDefinition, CustomFieldAudit } from '@prisma/client';
 
 const VALID_ENTITY_TYPES = ['shipment', 'order', 'carrier', 'customer', 'location'];
 const VALID_FIELD_TYPES = ['text', 'decimal', 'integer', 'date', 'boolean', 'list', 'multi_list'];
@@ -14,17 +14,22 @@ export interface FieldDefinitionInput {
   displayOrder?: number;
 }
 
+// Custom field definitions are per tenant: each org versions its own fields, so every method
+// takes the caller's orgId and a version id from another org reads as not found.
 export interface ICustomFieldService {
-  getActiveVersion(entityType: string): Promise<(CustomFieldVersion & { fields: CustomFieldDefinition[] }) | null>;
-  getVersion(versionId: string): Promise<(CustomFieldVersion & { fields: CustomFieldDefinition[] }) | null>;
-  listVersions(entityType: string): Promise<CustomFieldVersion[]>;
+  getActiveVersion(orgId: string, entityType: string): Promise<(CustomFieldVersion & { fields: CustomFieldDefinition[] }) | null>;
+  getVersion(orgId: string, versionId: string): Promise<(CustomFieldVersion & { fields: CustomFieldDefinition[] }) | null>;
+  listVersions(orgId: string, entityType: string): Promise<CustomFieldVersion[]>;
+  listAudit(orgId: string, entityType?: string): Promise<CustomFieldAudit[]>;
   createVersion(
+    orgId: string,
     entityType: string,
     fields: FieldDefinitionInput[],
     description?: string,
     performedBy?: string,
   ): Promise<CustomFieldVersion & { fields: CustomFieldDefinition[] }>;
   validateValues(
+    orgId: string,
     versionId: string,
     values: Record<string, any>,
   ): Promise<{ valid: boolean; errors: string[] }>;
@@ -33,28 +38,37 @@ export interface ICustomFieldService {
 export class CustomFieldService implements ICustomFieldService {
   constructor(private prisma: PrismaClient) {}
 
-  async getActiveVersion(entityType: string) {
+  async getActiveVersion(orgId: string, entityType: string) {
     return this.prisma.customFieldVersion.findFirst({
-      where: { entityType, active: true },
+      where: { orgId, entityType, active: true },
       include: { fields: { orderBy: { displayOrder: 'asc' } } },
     });
   }
 
-  async getVersion(versionId: string) {
-    return this.prisma.customFieldVersion.findUnique({
-      where: { id: versionId },
+  async getVersion(orgId: string, versionId: string) {
+    return this.prisma.customFieldVersion.findFirst({
+      where: { id: versionId, orgId },
       include: { fields: { orderBy: { displayOrder: 'asc' } } },
     });
   }
 
-  async listVersions(entityType: string) {
+  async listVersions(orgId: string, entityType: string) {
     return this.prisma.customFieldVersion.findMany({
-      where: { entityType },
+      where: { orgId, entityType },
       orderBy: { version: 'desc' },
     });
   }
 
+  async listAudit(orgId: string, entityType?: string) {
+    return this.prisma.customFieldAudit.findMany({
+      where: { orgId, ...(entityType ? { entityType } : {}) },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+  }
+
   async createVersion(
+    orgId: string,
     entityType: string,
     fields: FieldDefinitionInput[],
     description?: string,
@@ -83,13 +97,13 @@ export class CustomFieldService implements ICustomFieldService {
 
     // Get previous active version for audit
     const previousVersion = await this.prisma.customFieldVersion.findFirst({
-      where: { entityType, active: true },
+      where: { orgId, entityType, active: true },
       include: { fields: true },
     });
 
     // Determine next version number
     const maxVersion = await this.prisma.customFieldVersion.aggregate({
-      where: { entityType },
+      where: { orgId, entityType },
       _max: { version: true },
     });
     const nextVersion = (maxVersion._max.version ?? 0) + 1;
@@ -98,13 +112,14 @@ export class CustomFieldService implements ICustomFieldService {
     const result = await this.prisma.$transaction(async (tx) => {
       // Deactivate all previous versions for this entity type
       await tx.customFieldVersion.updateMany({
-        where: { entityType, active: true },
+        where: { orgId, entityType, active: true },
         data: { active: false },
       });
 
       // Create new version with fields
       const version = await tx.customFieldVersion.create({
         data: {
+          orgId,
           entityType,
           version: nextVersion,
           description,
@@ -130,6 +145,7 @@ export class CustomFieldService implements ICustomFieldService {
       const changes = this.diffVersions(previousVersion, version, fields);
       await tx.customFieldAudit.create({
         data: {
+          orgId,
           entityType,
           action: previousVersion ? 'version_created' : 'version_created',
           versionId: version.id,
@@ -146,10 +162,11 @@ export class CustomFieldService implements ICustomFieldService {
   }
 
   async validateValues(
+    orgId: string,
     versionId: string,
     values: Record<string, any>,
   ): Promise<{ valid: boolean; errors: string[] }> {
-    const version = await this.getVersion(versionId);
+    const version = await this.getVersion(orgId, versionId);
     if (!version) {
       return { valid: false, errors: ['Custom field version not found'] };
     }

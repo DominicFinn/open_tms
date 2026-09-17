@@ -7,17 +7,20 @@ import { ITradingPartnerRepository } from '../repositories/TradingPartnerReposit
 import { ICommandBus } from '../commands/CommandBus.js';
 import { RECEIVE_CARRIER_INVOICE, ReceiveCarrierInvoicePayload } from '../commands/carrierInvoices/ReceiveCarrierInvoiceCommand.js';
 import { PrismaClient } from '@prisma/client';
-
-import { registerOrgScopeForEdi } from '../auth/orgScopeMiddleware.js';
+import { EdiReferenceRepository } from '../repositories/EdiReferenceRepository.js';
+import { registerOrgScopeForEdi, requireOrgScope } from '../auth/orgScopeMiddleware.js';
 
 export async function edi210Routes(server: FastifyInstance) {
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
   const tradingPartnerRepo = container.resolve<ITradingPartnerRepository>(TOKENS.ITradingPartnerRepository);
-  const prisma = container.resolve<PrismaClient>(TOKENS.PrismaClient);
+  const ediRefs = new EdiReferenceRepository(container.resolve<PrismaClient>(TOKENS.PrismaClient));
   const edi210ParseService = new EDI210ParseService();
   const edi810Service = new EDI810Service();
 
   await registerOrgScopeForEdi(server);
+  // Every lookup below is by a reference that is only unique within an org, so a request that
+  // resolves no tenant is refused rather than matched against every tenant.
+  server.addHook('preHandler', requireOrgScope);
 
   // Inbound EDI 210 — parse carrier freight invoice and create carrier invoice
   server.post('/api/v1/edi/210/inbound', {
@@ -67,14 +70,8 @@ export async function edi210Routes(server: FastifyInstance) {
       return { data: null, error: `EDI 210 parse failed: ${parsed.errors.join('; ')}` };
     }
 
-    // Find the carrier by SCAC code
-    const carrier = await prisma.carrier.findFirst({
-      where: {
-        scacCode: parsed.carrierScac,
-        archived: false,
-      },
-      select: { id: true, name: true },
-    });
+    const orgId = req.orgId!;
+    const carrier = await ediRefs.findCarrierByScac(orgId, parsed.carrierScac);
 
     if (!carrier) {
       reply.code(400);
@@ -84,23 +81,16 @@ export async function edi210Routes(server: FastifyInstance) {
     // Find the shipment by reference
     let shipmentId: string | undefined;
     if (parsed.shipmentReference) {
-      const shipment = await prisma.shipment.findFirst({
-        where: { reference: parsed.shipmentReference },
-        select: { id: true },
-      });
-      shipmentId = shipment?.id;
+      shipmentId = (await ediRefs.findShipmentIdByReference(orgId, parsed.shipmentReference)) ?? undefined;
     }
 
     // Also check N9 reference numbers for shipment references
     if (!shipmentId) {
       for (const ref of parsed.referenceNumbers) {
         if (['SI', 'BM', 'CN'].includes(ref.qualifier)) {
-          const shipment = await prisma.shipment.findFirst({
-            where: { reference: ref.number },
-            select: { id: true },
-          });
-          if (shipment) {
-            shipmentId = shipment.id;
+          const found = await ediRefs.findShipmentIdByReference(orgId, ref.number);
+          if (found) {
+            shipmentId = found;
             break;
           }
         }
@@ -132,8 +122,8 @@ export async function edi210Routes(server: FastifyInstance) {
     try {
       const result = await commandBus.dispatch<ReceiveCarrierInvoicePayload, { id: string; matchStatus: string; autoApproved: boolean }>({
         type: RECEIVE_CARRIER_INVOICE,
-        orgId: (req as any).orgId ?? '',
-        actorId: (req as any).user?.sub ?? null,
+        orgId,
+        actorId: req.user?.sub ?? null,
         payload: {
           carrierId: carrier.id,
           invoiceNumber: parsed.invoiceNumber,
@@ -237,13 +227,7 @@ export async function edi210Routes(server: FastifyInstance) {
     }).parse((req as any).body);
 
     // Load the invoice with all related data
-    const invoice = await prisma.invoice.findUnique({
-      where: { id: body.invoiceId },
-      include: {
-        customer: true,
-        lineItems: true,
-      },
-    });
+    const invoice = await ediRefs.findInvoiceForEdi810(req.orgId!, body.invoiceId);
 
     if (!invoice) {
       reply.code(404);
@@ -252,12 +236,7 @@ export async function edi210Routes(server: FastifyInstance) {
 
     // Collect shipment references from line items
     const shipmentIds = [...new Set(invoice.lineItems.map(li => li.shipmentId).filter(Boolean) as string[])];
-    const shipments = shipmentIds.length > 0
-      ? await prisma.shipment.findMany({
-          where: { id: { in: shipmentIds } },
-          select: { id: true, reference: true, carrierId: true, carrier: { select: { name: true, scacCode: true } } },
-        })
-      : [];
+    const shipments = await ediRefs.findShipmentsForEdi810(req.orgId!, shipmentIds);
 
     const shipmentRefMap = new Map(shipments.map(s => [s.id, s.reference]));
     const carrier = shipments.find(s => s.carrier)?.carrier;

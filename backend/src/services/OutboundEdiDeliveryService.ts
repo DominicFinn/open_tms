@@ -56,6 +56,7 @@ export class OutboundEdiDeliveryService implements IOutboundEdiDeliveryService {
 
     // Log the attempt
     const log = await this.partnerRepo.createLog({
+      orgId: partner.orgId,
       partnerId: partner.id,
       transactionType: request.transactionType,
       direction: 'outbound',

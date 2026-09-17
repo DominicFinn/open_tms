@@ -50,8 +50,8 @@ export class InvoicingService implements IInvoicingService {
     }
 
     // Get customer info for payment terms
-    const customer = await this.prisma.customer.findUnique({
-      where: { id: input.customerId },
+    const customer = await this.prisma.customer.findFirst({
+      where: { id: input.customerId, orgId: input.orgId },
       select: {
         id: true,
         name: true,
@@ -64,6 +64,7 @@ export class InvoicingService implements IInvoicingService {
     // Batch-fetch approved revenue charges across all selected shipments in a
     // single query instead of N separate findAll calls.
     const allCharges = await this.chargeRepo.findAll({
+      orgId: input.orgId,
       shipmentIds: input.shipmentIds,
       chargeCategory: 'revenue',
       status: 'approved',
@@ -129,13 +130,13 @@ export class InvoicingService implements IInvoicingService {
     const uniqueShipmentIds = [...new Set(allCharges.map(c => c.shipmentId).filter(Boolean) as string[])];
     if (uniqueShipmentIds.length > 0) {
       await this.prisma.shipmentFinancialSummary.updateMany({
-        where: { shipmentId: { in: uniqueShipmentIds } },
+        where: { orgId: input.orgId, shipmentId: { in: uniqueShipmentIds } },
         data: { billingStatus: 'invoiced' },
       });
     }
 
     // Fetch the full invoice with relations
-    const fullInvoice = await this.invoiceRepo.findById(invoice.id);
+    const fullInvoice = await this.invoiceRepo.findById(invoice.id, input.orgId);
     if (!fullInvoice) throw new Error('Failed to fetch created invoice');
 
     return {
@@ -161,6 +162,7 @@ export class InvoicingService implements IInvoicingService {
     const shipments = await this.prisma.shipment.findMany({
       where: {
         id: { in: shipmentIds },
+        orgId,
         ...(customerId && { customerId }),
       },
       select: {
@@ -175,6 +177,7 @@ export class InvoicingService implements IInvoicingService {
     // Single batch query for all approved revenue charges across all candidate
     // shipments, then group in memory — was previously one query per shipment.
     const allCharges = await this.chargeRepo.findAll({
+      orgId,
       shipmentIds: shipments.map(s => s.id),
       chargeCategory: 'revenue',
       status: 'approved',

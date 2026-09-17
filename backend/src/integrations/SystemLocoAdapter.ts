@@ -54,6 +54,18 @@ export interface ProcessingResult {
   };
 }
 
+/**
+ * The device in a feed is registered to a different Organization than the credential that sent
+ * the feed. Device external ids are globally unique, so this is either a misconfigured feed or an
+ * attempt to write into another tenant.
+ */
+export class DeviceTenantMismatchError extends Error {
+  constructor(readonly deviceId: string) {
+    super('Device is registered to another organization');
+    this.name = 'DeviceTenantMismatchError';
+  }
+}
+
 export class SystemLocoAdapter {
   private coldChainService: ColdChainService | null = null;
   private eventBus: IEventBus | null = null;
@@ -117,19 +129,19 @@ export class SystemLocoAdapter {
   }
 
   /**
-   * Process a System Loco Device Event
+   * Process a System Loco Device Event for the tenant whose credential sent it.
    */
-  async processDeviceEvent(payload: any): Promise<ProcessingResult> {
+  async processDeviceEvent(payload: any, orgId: string): Promise<ProcessingResult> {
     const deviceInfo = payload.device || {};
     const location = payload.location?.global || payload.location || {};
     const eventType: string = payload.type || 'unknown';
     const eventTime = new Date(payload.startTime || Date.now());
 
     // 1. Upsert device
-    const device = await this.upsertDevice(deviceInfo, location, payload);
+    const device = await this.upsertDevice(orgId, deviceInfo, location, payload);
 
     // 2. Resolve shipment/order/trackable unit assignment
-    const { shipmentId, orderId, trackableUnitId } = await this.resolveAssignment(device.id, deviceInfo.name);
+    const { shipmentId, orderId, trackableUnitId } = await this.resolveAssignment(orgId, device.id, deviceInfo.name);
 
     let sensorReadingId: string | null = null;
     let deviceEventId: string | null = null;
@@ -158,9 +170,8 @@ export class SystemLocoAdapter {
       const temperature = p.temperature != null ? Number(p.temperature) : null;
       if (temperature !== null) {
         try {
-          const org = await this.prisma.organization.findFirst({ select: { id: true } });
           coldChain = await this.coldChainService.processTemperatureReading({
-            orgId: org?.id || '',
+            orgId,
             shipmentId,
             deviceId: device.id,
             orderId: orderId ?? undefined,
@@ -191,9 +202,9 @@ export class SystemLocoAdapter {
   }
 
   /**
-   * Process a System Loco Shipment Event
+   * Process a System Loco Shipment Event for the tenant whose credential sent it.
    */
-  async processShipmentEvent(payload: any): Promise<ProcessingResult> {
+  async processShipmentEvent(payload: any, orgId: string): Promise<ProcessingResult> {
     const eventType: string = payload.type || 'unknown';
     const eventTime = new Date(payload.time || Date.now());
     const location = payload.location || {};
@@ -203,13 +214,13 @@ export class SystemLocoAdapter {
     // 1. Upsert device if present
     let device: { id: string } | null = null;
     if (deviceInfo.id) {
-      device = await this.upsertDevice(deviceInfo, location, payload);
+      device = await this.upsertDevice(orgId, deviceInfo, location, payload);
     }
 
     // 2. Resolve shipment/order/trackable unit
     const deviceId = device?.id || null;
     const { shipmentId, orderId, trackableUnitId } = deviceId
-      ? await this.resolveAssignment(deviceId, deviceInfo.name)
+      ? await this.resolveAssignment(orgId, deviceId, deviceInfo.name)
       : { shipmentId: null, orderId: null, trackableUnitId: null };
 
     let sensorReadingId: string | null = null;
@@ -315,9 +326,8 @@ export class SystemLocoAdapter {
         : null;
       if (temperature !== null) {
         try {
-          const org = await this.prisma.organization.findFirst({ select: { id: true } });
           coldChain = await this.coldChainService.processTemperatureReading({
-            orgId: org?.id || '',
+            orgId,
             shipmentId,
             deviceId,
             orderId: orderId ?? undefined,
@@ -349,9 +359,10 @@ export class SystemLocoAdapter {
 
   // ── Helpers ───────────────────────────────────────────────
 
-  private async upsertDevice(deviceInfo: any, location: any, payload: any) {
+  private async upsertDevice(orgId: string, deviceInfo: any, location: any, payload: any) {
     const externalId = String(deviceInfo.id || deviceInfo.displayId || '');
     const existing = await this.prisma.device.findUnique({ where: { externalId } });
+    if (existing && existing.orgId !== orgId) throw new DeviceTenantMismatchError(existing.id);
 
     if (existing) {
       return this.prisma.device.update({
@@ -366,18 +377,10 @@ export class SystemLocoAdapter {
       });
     }
 
-    // Multi-tenancy: external IoT webhooks have no JWT context, so we
-    // attribute the new Device to the first Organization. Multi-tenant
-    // deployments should attach an explicit orgId hint to the webhook
-    // payload (future work) so the adapter can pick the right tenant.
-    const fallbackOrg = await this.prisma.organization.findFirst({ select: { id: true } });
-    if (!fallbackOrg) {
-      throw new Error('SystemLocoAdapter: no Organization in DB; cannot attribute new Device');
-    }
-
+    // A new device belongs to the tenant whose credential sent the feed.
     return this.prisma.device.create({
       data: {
-        orgId: fallbackOrg.id,
+        orgId,
         externalId,
         displayId: deviceInfo.displayId || null,
         name: deviceInfo.name || externalId,
@@ -392,7 +395,7 @@ export class SystemLocoAdapter {
     });
   }
 
-  private async resolveAssignment(deviceId: string, deviceName?: string): Promise<{ shipmentId: string | null; orderId: string | null; trackableUnitId: string | null }> {
+  private async resolveAssignment(orgId: string, deviceId: string, deviceName?: string): Promise<{ shipmentId: string | null; orderId: string | null; trackableUnitId: string | null }> {
     // 1. Check active DeviceAssignment
     const assignment = await this.prisma.deviceAssignment.findFirst({
       where: { deviceId, active: true },
@@ -404,13 +407,13 @@ export class SystemLocoAdapter {
     // 2. Fallback: match device name against shipment reference
     if (deviceName) {
       const shipment = await this.prisma.shipment.findFirst({
-        where: { reference: deviceName, archived: false },
+        where: { orgId, reference: deviceName, archived: false },
       });
       if (shipment) return { shipmentId: shipment.id, orderId: null, trackableUnitId: null };
 
       // 3. Fallback: match against order number
       const order = await this.prisma.order.findFirst({
-        where: { orderNumber: deviceName, archived: false },
+        where: { orgId, orderNumber: deviceName, archived: false },
       });
       if (order) return { shipmentId: null, orderId: order.id, trackableUnitId: null };
     }

@@ -4,6 +4,7 @@ import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { Command } from '../types.js';
 import { sealCredentials } from '../../security/secretVault.js';
+import { CarrierTrackingNotFoundError } from './errors.js';
 
 export interface UpdateCarrierTrackingIntegrationPayload {
   id: string;
@@ -44,7 +45,10 @@ export class UpdateCarrierTrackingIntegrationCommandHandler extends BaseCommandH
       dataToWrite.credentials = sealCredentials(updateData.credentials) ?? Prisma.JsonNull;
     }
 
-    const before = await tx.carrierTrackingIntegration.findUniqueOrThrow({ where: { id } });
+    const before = await tx.carrierTrackingIntegration.findFirst({
+      where: { id, carrier: { orgId: command.orgId } },
+    });
+    if (!before) throw new CarrierTrackingNotFoundError('integration', id);
 
     const updated = await tx.carrierTrackingIntegration.update({
       where: { id },

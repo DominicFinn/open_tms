@@ -18,8 +18,8 @@ export class SendInvoiceCommandHandler extends BaseCommandHandler<SendInvoicePay
   }
 
   protected async handle(command: Command<SendInvoicePayload>, tx: TransactionClient, emit: EmitFn) {
-    const invoice = await tx.invoice.findUnique({
-      where: { id: command.payload.invoiceId },
+    const invoice = await tx.invoice.findFirst({
+      where: { id: command.payload.invoiceId, orgId: command.orgId },
       include: {
         customer: { select: { name: true, contactEmail: true, billingEmail: true } },
       },

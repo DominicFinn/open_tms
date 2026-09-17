@@ -31,7 +31,7 @@ export interface UpdateChargeDTO {
 }
 
 export interface ChargeFilters {
-  orgId?: string;
+  orgId: string;
   shipmentId?: string;
   shipmentIds?: string[];
   orderId?: string;
@@ -44,14 +44,14 @@ export interface ChargeFilters {
 
 export interface IChargeRepository {
   create(data: CreateChargeDTO): Promise<Charge>;
-  findById(id: string): Promise<Charge | null>;
+  findById(id: string, orgId: string): Promise<Charge | null>;
   findAll(filters: ChargeFilters): Promise<Charge[]>;
-  findByShipmentId(shipmentId: string): Promise<Charge[]>;
-  findByOrderId(orderId: string): Promise<Charge[]>;
+  findByShipmentId(shipmentId: string, orgId: string): Promise<Charge[]>;
+  findByOrderId(orderId: string, orgId: string): Promise<Charge[]>;
   update(id: string, data: UpdateChargeDTO): Promise<Charge>;
   updateMany(ids: string[], data: UpdateChargeDTO): Promise<{ count: number }>;
   delete(id: string): Promise<void>;
-  sumByShipment(shipmentId: string, chargeCategory: string): Promise<number>;
+  sumByShipment(shipmentId: string, orgId: string, chargeCategory: string): Promise<number>;
 }
 
 // ─── Implementation ─────────────────────────────────────────────────────────
@@ -83,14 +83,14 @@ export class ChargeRepository implements IChargeRepository {
     });
   }
 
-  async findById(id: string): Promise<Charge | null> {
-    return this.prisma.charge.findUnique({ where: { id } });
+  async findById(id: string, orgId: string): Promise<Charge | null> {
+    return this.prisma.charge.findFirst({ where: { id, orgId } });
   }
 
   async findAll(filters: ChargeFilters): Promise<Charge[]> {
     return this.prisma.charge.findMany({
       where: {
-        ...(filters.orgId && { orgId: filters.orgId }),
+        orgId: filters.orgId,
         ...(filters.shipmentId && { shipmentId: filters.shipmentId }),
         ...(filters.shipmentIds && filters.shipmentIds.length > 0 && {
           shipmentId: { in: filters.shipmentIds },
@@ -104,16 +104,16 @@ export class ChargeRepository implements IChargeRepository {
     });
   }
 
-  async findByShipmentId(shipmentId: string): Promise<Charge[]> {
+  async findByShipmentId(shipmentId: string, orgId: string): Promise<Charge[]> {
     return this.prisma.charge.findMany({
-      where: { shipmentId },
+      where: { shipmentId, orgId },
       orderBy: { createdAt: 'asc' },
     });
   }
 
-  async findByOrderId(orderId: string): Promise<Charge[]> {
+  async findByOrderId(orderId: string, orgId: string): Promise<Charge[]> {
     return this.prisma.charge.findMany({
-      where: { orderId },
+      where: { orderId, orgId },
       orderBy: { createdAt: 'asc' },
     });
   }
@@ -138,9 +138,9 @@ export class ChargeRepository implements IChargeRepository {
     await this.prisma.charge.delete({ where: { id } });
   }
 
-  async sumByShipment(shipmentId: string, chargeCategory: string): Promise<number> {
+  async sumByShipment(shipmentId: string, orgId: string, chargeCategory: string): Promise<number> {
     const result = await this.prisma.charge.aggregate({
-      where: { shipmentId, chargeCategory, status: { not: 'written_off' } },
+      where: { shipmentId, orgId, chargeCategory, status: { not: 'written_off' } },
       _sum: { amountCents: true },
     });
     return result._sum.amountCents ?? 0;

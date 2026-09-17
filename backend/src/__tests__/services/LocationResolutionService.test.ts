@@ -33,7 +33,7 @@ const mockPrisma = {
     findFirst: jest.fn().mockResolvedValue(null),
   },
   organization: {
-    findFirst: jest.fn().mockResolvedValue({ id: 'org-1', defaultGeofenceRadiusMeters: 200 }),
+    findUnique: jest.fn().mockResolvedValue({ defaultGeofenceRadiusMeters: 200 }),
   },
 } as any;
 
@@ -60,7 +60,7 @@ describe('LocationResolutionService — Audit Events', () => {
       mockEventBus,
     );
 
-    const result = await service.resolveOrCreate({
+    const result = await service.resolveOrCreate('org-1', {
       name: 'Test Warehouse',
       address1: '123 Main St',
       city: 'Chicago',
@@ -91,7 +91,7 @@ describe('LocationResolutionService — Audit Events', () => {
       mockEventBus,
     );
 
-    await service.resolveOrCreate({
+    await service.resolveOrCreate('org-1', {
       name: 'Test Warehouse',
       address1: '123 Main St',
       city: 'Chicago',
@@ -102,7 +102,7 @@ describe('LocationResolutionService — Audit Events', () => {
     expect(publishedEvent.actorId).toBe('user-42');
   });
 
-  it('includes orgId from the database in the emitted event', async () => {
+  it('includes the caller org in the emitted event', async () => {
     const service = new LocationResolutionService(
       mockPrisma,
       mockLocationsRepo,
@@ -110,7 +110,7 @@ describe('LocationResolutionService — Audit Events', () => {
       mockEventBus,
     );
 
-    await service.resolveOrCreate({
+    await service.resolveOrCreate('org-1', {
       name: 'Test Warehouse',
       address1: '123 Main St',
       city: 'Chicago',
@@ -119,6 +119,39 @@ describe('LocationResolutionService — Audit Events', () => {
 
     const publishedEvent = mockEventBus.publish.mock.calls[0][0];
     expect(publishedEvent.orgId).toBe('org-1');
+  });
+
+  it('matches existing locations only within the caller org, and creates under it', async () => {
+    const service = new LocationResolutionService(
+      mockPrisma,
+      mockLocationsRepo,
+      mockArrivalCriteriaRepo,
+      mockEventBus,
+    );
+
+    await service.resolveOrCreate('org-b', {
+      name: 'Test Warehouse',
+      address1: '123 Main St',
+      city: 'Chicago',
+      country: 'US',
+    });
+
+    expect(mockPrisma.location.findFirst.mock.calls[0][0].where.orgId).toBe('org-b');
+    expect(mockLocationsRepo.create.mock.calls[0][0].orgId).toBe('org-b');
+    expect(mockPrisma.organization.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'org-b' } }),
+    );
+    expect(mockEventBus.publish.mock.calls[0][0].orgId).toBe('org-b');
+  });
+
+  it('ensureArrivalCriteria does nothing for a location outside the caller org', async () => {
+    mockLocationsRepo.findById.mockResolvedValueOnce(null);
+    const service = new LocationResolutionService(mockPrisma, mockLocationsRepo, mockArrivalCriteriaRepo);
+
+    await service.ensureArrivalCriteria('org-b', 'loc-a');
+
+    expect(mockLocationsRepo.findById).toHaveBeenCalledWith('loc-a', 'org-b');
+    expect(mockArrivalCriteriaRepo.createDefaultGeofence).not.toHaveBeenCalled();
   });
 
   it('does NOT emit event when an existing location is matched', async () => {
@@ -131,7 +164,7 @@ describe('LocationResolutionService — Audit Events', () => {
       mockEventBus,
     );
 
-    const result = await service.resolveOrCreate({
+    const result = await service.resolveOrCreate('org-1', {
       name: 'Test Warehouse',
       address1: '123 Main St',
       city: 'Chicago',
@@ -152,7 +185,7 @@ describe('LocationResolutionService — Audit Events', () => {
       mockEventBus,
     );
 
-    const result = await service.resolveOrCreate({
+    const result = await service.resolveOrCreate('org-1', {
       name: 'Test Warehouse',
       address1: '123 Main St',
       city: 'Chicago',
@@ -172,7 +205,7 @@ describe('LocationResolutionService — Audit Events', () => {
       // No event bus provided
     );
 
-    const result = await service.resolveOrCreate({
+    const result = await service.resolveOrCreate('org-1', {
       name: 'Test Warehouse',
       address1: '123 Main St',
       city: 'Chicago',
@@ -192,7 +225,7 @@ describe('LocationResolutionService — Audit Events', () => {
       mockEventBus,
     );
 
-    await service.resolveOrCreate({
+    await service.resolveOrCreate('org-1', {
       name: 'Test Warehouse',
       address1: '123 Main St',
       city: 'Chicago',

@@ -217,4 +217,20 @@ describe('WarehouseOperationsDashboardService', () => {
     expect(snap.exceptions.cutoffAtRisk.critical).toBe(3);
     expect(snap.exceptions.cutoffAtRisk.warning).toBe(5);
   });
+
+  it('scopes every query on a tenant-owned model to the org (#303)', async () => {
+    const prisma = makePrisma();
+    const svc = new WarehouseOperationsDashboardService(prisma);
+    await svc.buildSnapshot('org-1', now);
+
+    // CycleCountLine has no orgId of its own; it is scoped through its cycle count.
+    const ownOrgModels = Object.keys(prisma).filter((m) => m !== 'cycleCountLine');
+    for (const model of ownOrgModels) {
+      for (const fn of Object.values(prisma[model]) as jest.Mock[]) {
+        for (const [args] of fn.mock.calls) {
+          expect({ model, orgId: args?.where?.orgId }).toEqual({ model, orgId: 'org-1' });
+        }
+      }
+    }
+  });
 });

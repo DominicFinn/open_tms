@@ -40,8 +40,8 @@ export class CreateQuoteCommandHandler extends BaseCommandHandler<CreateQuotePay
     const { payload } = command;
 
     // Validate customer
-    const customer = await tx.customer.findUnique({
-      where: { id: payload.customerId },
+    const customer = await tx.customer.findFirst({
+      where: { id: payload.customerId, orgId: command.orgId },
       select: { id: true, name: true },
     });
     if (!customer) throw new Error('Customer not found');

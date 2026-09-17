@@ -50,8 +50,43 @@ import { CreateIssueSkill } from './services/skills/CreateIssueSkill.js';
 import { EscalateIssueSkill } from './services/skills/EscalateIssueSkill.js';
 import { SendEmailSkill } from './services/skills/SendEmailSkill.js';
 import { CallWebhookSkill } from './services/skills/CallWebhookSkill.js';
+import { resolveSoleOrganizationId } from './auth/orgScope.js';
 
 const WORKER_MODE = process.env.WORKER_MODE || 'all';
+
+/** Give every org without one the default triage agent config. Safe to run on every start. */
+async function seedTriageAgentConfigs(prisma: PrismaClient): Promise<void> {
+  const orgs = await prisma.organization.findMany({
+    where: { NOT: { agentConfigs: { some: { agentType: 'triage' } } } },
+    select: { id: true },
+  });
+  for (const { id: orgId } of orgs) {
+    const config = await prisma.agentConfig.create({
+      data: {
+        orgId,
+        agentType: 'triage',
+        name: 'Shipment Triage Agent',
+        description: 'Analyzes shipment exceptions, SLA breaches, cargo issues, and cold chain excursions using AI to decide what action to take.',
+        enabled: true,
+        subscribedEvents: DEFAULT_TRIAGE_EVENTS,
+        versions: {
+          create: {
+            versionNumber: 1,
+            systemPrompt: DEFAULT_TRIAGE_PROMPT,
+            changeNote: 'Default prompt (auto-seeded)',
+            createdBy: 'system',
+          },
+        },
+      },
+      include: { versions: true },
+    });
+    await prisma.agentConfig.update({
+      where: { id: config.id },
+      data: { activeVersionId: config.versions[0].id },
+    });
+    console.log('[Worker] Auto-seeded default triage agent config (version 1)', { orgId });
+  }
+}
 
 async function startWorker() {
   console.log(`[Worker] Starting in mode="${WORKER_MODE}"`);
@@ -117,14 +152,20 @@ async function startWorker() {
 
     const eventBus = new PgBossEventBus(prisma, queue);
 
-    // LLM provider for AI agent features (optional)
-    // Priority: org database config > environment variables
+    // LLM provider for AI agent features (optional).
+    // BUSINESS RULE (#303): the worker builds one provider for the whole process, so an org's own
+    // LLM key may only drive it when that org is the only tenant. With several orgs, one tenant's
+    // key would pay for, and see, every other tenant's agent traffic, so the environment is used.
     let llmProvider: ILlmProvider | undefined;
     let workerCommandBus: ICommandBus | undefined;
 
-    const org = await prisma.organization.findFirst({
-      select: { llmProvider: true, llmApiKey: true, llmModel: true, llmEnabled: true },
-    });
+    const soleOrgId = await resolveSoleOrganizationId(prisma);
+    const org = soleOrgId
+      ? await prisma.organization.findUnique({
+          where: { id: soleOrgId },
+          select: { llmProvider: true, llmApiKey: true, llmModel: true, llmEnabled: true },
+        })
+      : null;
 
     const llmApiKey = org?.llmApiKey || process.env.ANTHROPIC_API_KEY;
     const llmEnabled = org?.llmEnabled ?? !!process.env.ANTHROPIC_API_KEY;
@@ -150,40 +191,7 @@ async function startWorker() {
       const source = org?.llmApiKey ? 'org config' : 'env var';
       console.log(`[Worker] LLM provider configured (Anthropic via ${source}), AI agents enabled`);
 
-      // Auto-seed default triage agent config if none exists
-      const orgRecord = await prisma.organization.findFirst({ select: { id: true } });
-      if (orgRecord) {
-        const existingConfig = await prisma.agentConfig.findFirst({
-          where: { orgId: orgRecord.id, agentType: 'triage' },
-        });
-        if (!existingConfig) {
-          const config = await prisma.agentConfig.create({
-            data: {
-              orgId: orgRecord.id,
-              agentType: 'triage',
-              name: 'Shipment Triage Agent',
-              description: 'Analyzes shipment exceptions, SLA breaches, cargo issues, and cold chain excursions using AI to decide what action to take.',
-              enabled: true,
-              subscribedEvents: DEFAULT_TRIAGE_EVENTS,
-              versions: {
-                create: {
-                  versionNumber: 1,
-                  systemPrompt: DEFAULT_TRIAGE_PROMPT,
-                  changeNote: 'Default prompt (auto-seeded)',
-                  createdBy: 'system',
-                },
-              },
-            },
-            include: { versions: true },
-          });
-          // Set active version
-          await prisma.agentConfig.update({
-            where: { id: config.id },
-            data: { activeVersionId: config.versions[0].id },
-          });
-          console.log('[Worker] Auto-seeded default triage agent config (version 1)');
-        }
-      }
+      await seedTriageAgentConfigs(prisma);
     } else if (llmApiKey && !llmEnabled) {
       console.log('[Worker] LLM API key found but agents disabled (llmEnabled=false)');
     }

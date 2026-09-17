@@ -76,13 +76,26 @@ export async function userRoutes(server: FastifyInstance) {
       return { data: null, error: validation.errors.join('. ') };
     }
 
+    // An admin creates users in their own org. Naming a different org is refused, so a token for
+    // one tenant can't be used to add users to another.
+    const callerOrgId = req.user!.organizationId;
+    if (parsed.data.organizationId && callerOrgId && parsed.data.organizationId !== callerOrgId) {
+      reply.code(403);
+      return { data: null, error: 'Cannot create a user in another organization' };
+    }
+    const organizationId = callerOrgId ?? parsed.data.organizationId ?? await userRepo.soleOrganizationId();
+    if (!organizationId) {
+      reply.code(400);
+      return { data: null, error: 'organizationId is required' };
+    }
+
     const passwordHash = await passwordService.hash(parsed.data.password);
     const user = await userRepo.create({
       email: parsed.data.email,
       passwordHash,
       firstName: parsed.data.firstName,
       lastName: parsed.data.lastName,
-      organizationId: parsed.data.organizationId,
+      organizationId,
       customerId: parsed.data.customerId,
       phone: parsed.data.phone,
       timezone: parsed.data.timezone,

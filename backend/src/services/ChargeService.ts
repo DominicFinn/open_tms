@@ -38,10 +38,10 @@ export interface ShipmentFinancialSnapshot {
 
 export interface IChargeService {
   addCharge(input: AddChargeInput): Promise<Charge>;
-  approveCharge(chargeId: string, approvedBy: string): Promise<Charge>;
-  getShipmentFinancials(shipmentId: string): Promise<ShipmentFinancialSnapshot>;
+  approveCharge(chargeId: string, orgId: string, approvedBy: string): Promise<Charge>;
+  getShipmentFinancials(shipmentId: string, orgId: string): Promise<ShipmentFinancialSnapshot | null>;
   getCharges(filters: ChargeFilters): Promise<Charge[]>;
-  recalculateShipmentSummary(shipmentId: string): Promise<void>;
+  recalculateShipmentSummary(shipmentId: string, orgId: string): Promise<void>;
 }
 
 // ─── Implementation ─────────────────────────────────────────────────────────
@@ -60,7 +60,7 @@ export class ChargeService implements IChargeService {
 
     // Enforce same-currency constraint on shipment charges
     if (input.shipmentId) {
-      const existing = await this.chargeRepo.findByShipmentId(input.shipmentId);
+      const existing = await this.chargeRepo.findByShipmentId(input.shipmentId, input.orgId);
       if (existing.length > 0) {
         const existingCurrency = existing[0].currency;
         if ((input.currency ?? 'USD') !== existingCurrency) {
@@ -73,14 +73,14 @@ export class ChargeService implements IChargeService {
 
     // Recalculate shipment financial summary if charge is on a shipment
     if (input.shipmentId) {
-      await this.recalculateShipmentSummary(input.shipmentId);
+      await this.recalculateShipmentSummary(input.shipmentId, input.orgId);
     }
 
     return charge;
   }
 
-  async approveCharge(chargeId: string, approvedBy: string): Promise<Charge> {
-    const charge = await this.chargeRepo.findById(chargeId);
+  async approveCharge(chargeId: string, orgId: string, approvedBy: string): Promise<Charge> {
+    const charge = await this.chargeRepo.findById(chargeId, orgId);
     if (!charge) throw new Error('Charge not found');
     if (charge.status !== 'pending') {
       throw new Error(`Cannot approve charge in status "${charge.status}"`);
@@ -93,14 +93,21 @@ export class ChargeService implements IChargeService {
     });
 
     if (charge.shipmentId) {
-      await this.recalculateShipmentSummary(charge.shipmentId);
+      await this.recalculateShipmentSummary(charge.shipmentId, orgId);
     }
 
     return updated;
   }
 
-  async getShipmentFinancials(shipmentId: string): Promise<ShipmentFinancialSnapshot> {
-    const charges = await this.chargeRepo.findByShipmentId(shipmentId);
+  /** Returns null when the shipment doesn't exist in the caller's org. */
+  async getShipmentFinancials(shipmentId: string, orgId: string): Promise<ShipmentFinancialSnapshot | null> {
+    const shipment = await this.prisma.shipment.findFirst({
+      where: { id: shipmentId, orgId },
+      select: { id: true },
+    });
+    if (!shipment) return null;
+
+    const charges = await this.chargeRepo.findByShipmentId(shipmentId, orgId);
 
     const revenueCents = charges
       .filter(c => c.chargeCategory === 'revenue' && c.status !== 'written_off')
@@ -146,28 +153,15 @@ export class ChargeService implements IChargeService {
     return this.chargeRepo.findAll(filters);
   }
 
-  async recalculateShipmentSummary(shipmentId: string): Promise<void> {
-    const snapshot = await this.getShipmentFinancials(shipmentId);
-
-    // Upsert the ShipmentFinancialSummary
-    const shipment = await this.prisma.shipment.findUnique({
-      where: { id: shipmentId },
-      select: { customerId: true },
-    });
-    if (!shipment) return;
-
-    // Get org from customer
-    const customer = await this.prisma.customer.findUnique({
-      where: { id: shipment.customerId },
-      select: { id: true },
-    });
-    if (!customer) return;
+  async recalculateShipmentSummary(shipmentId: string, orgId: string): Promise<void> {
+    const snapshot = await this.getShipmentFinancials(shipmentId, orgId);
+    if (!snapshot) return;
 
     await this.prisma.shipmentFinancialSummary.upsert({
       where: { shipmentId },
       create: {
         shipmentId,
-        orgId: '', // Will be set from context in command handlers
+        orgId,
         expectedRevenueCents: snapshot.expectedRevenueCents,
         expectedCostCents: snapshot.expectedCostCents,
         expectedMarginCents: snapshot.expectedMarginCents,

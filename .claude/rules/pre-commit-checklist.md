@@ -17,6 +17,8 @@ Walk this before opening a PR. Not a formality — most of these have bitten us.
       widened or query reused before adding a new one
 - [ ] Table role declared for any new table (ledger / hot row / read model / reference)
 - [ ] `orgId` present on any new tenant-scoped model, and passed into every repo read and dispatch
+- [ ] `npm run lint:tenancy` passes, with nothing added to its baseline, and fixed entries deleted
+- [ ] No lookup by id alone on tenant data; cross-tenant ids return 404
 - [ ] Money stored as integer cents
 - [ ] New read model has a working backfill path
 - [ ] Migration is one concern, descriptively named, and doesn't edit a migration already run in prod

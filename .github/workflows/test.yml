@@ -30,6 +30,9 @@ jobs:
       - name: Check module boundaries
         run: npm run lint:boundaries
 
+      - name: Check tenancy
+        run: npm run lint:tenancy
+
       # jest only transpiles (#310), so the backend's types are checked here
       - name: Type-check backend
         run: npx tsc --noEmit -p backend/tsconfig.json

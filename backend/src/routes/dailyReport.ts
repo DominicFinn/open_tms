@@ -54,7 +54,7 @@ export async function dailyReportRoutes(server: FastifyInstance) {
       return { data: null, error: 'date query parameter required (YYYY-MM-DD)' };
     }
 
-    const summary = await reportService.getSummary(date);
+    const summary = await reportService.getSummary(req.orgId!, date);
     return { data: summary, error: null };
   });
 
@@ -86,7 +86,7 @@ export async function dailyReportRoutes(server: FastifyInstance) {
     const reportFormat = format || 'xlsx';
 
     if (reportFormat === 'xlsx') {
-      const buffer = await reportService.generateExcel(date);
+      const buffer = await reportService.generateExcel(req.orgId!, date);
       reply.header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       reply.header('Content-Disposition', `attachment; filename="Daily-Report-${date}.xlsx"`);
       reply.header('Content-Length', buffer.length);

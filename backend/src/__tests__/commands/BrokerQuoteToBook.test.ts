@@ -2,6 +2,10 @@ import { AcceptQuoteCommandHandler, ACCEPT_QUOTE } from '../../commands/quotes/A
 import { EVENT_TYPES } from '../../events/eventTypes';
 import { createTestCommand, mockEventBus } from '../helpers/testUtils';
 
+// Entity lookups are by { id, orgId }; number-sequence lookups carry no id.
+const findById = (row: unknown) =>
+  jest.fn().mockImplementation(({ where }: any) => Promise.resolve(where?.id ? row : null));
+
 const futureDate = new Date(Date.now() + 30 * 86400000);
 
 const mockQuote = {
@@ -22,15 +26,15 @@ const mockQuote = {
 
 function buildMockTx(orgType = 'broker') {
   return {
-    customer: { findUnique: jest.fn().mockResolvedValue({ id: 'cust-1', name: 'Acme Corp' }) },
+    customer: { findFirst: findById({ id: 'cust-1', name: 'Acme Corp' }) },
     quote: {
-      findUnique: jest.fn().mockResolvedValue(mockQuote),
+      findFirst: findById(mockQuote),
       update: jest.fn().mockResolvedValue(mockQuote),
     },
     order: { create: jest.fn().mockResolvedValue({ id: 'order-1' }) },
     charge: { create: jest.fn().mockResolvedValue({ id: 'charge-1' }) },
     organization: {
-      findFirst: jest.fn().mockResolvedValue({ organizationType: orgType }),
+      findUnique: jest.fn().mockResolvedValue({ organizationType: orgType }),
     },
     shipment: {
       create: jest.fn().mockResolvedValue({ id: 'ship-1', reference: 'SH-Q-0001' }),

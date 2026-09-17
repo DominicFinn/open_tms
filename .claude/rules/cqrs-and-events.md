@@ -26,6 +26,9 @@ The write path for this codebase. Applies to every entity and feature.
 
 **You MUST do ALL of the following — this is not optional:**
 
+0. **Tenancy**: `orgId String` (NOT NULL) on the model, or a declared parent in
+   `tooling/tenancy/policy.ts`. Every repository method takes `orgId`, and `npm run lint:tenancy`
+   passes. See the multi-tenancy rule
 1. **Command handlers** — Create/Update/Archive commands in `backend/src/commands/<entity>/`
 2. **Event types** — Add to `backend/src/events/eventTypes.ts` with schema version
 3. **Projection** — Create `<Entity>Projection.ts` in `backend/src/events/projections/` if a read model exists

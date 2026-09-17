@@ -66,8 +66,8 @@ export class RecordPackAuditCommandHandler extends BaseCommandHandler<
     const tolerance = p.weightTolerancePercent ?? 10;
     if (tolerance < 0 || tolerance > 100) throw new Error('weightTolerancePercent must be between 0 and 100');
 
-    const packTask = await tx.packTask.findUnique({
-      where: { id: p.packTaskId },
+    const packTask = await tx.packTask.findFirst({
+      where: { id: p.packTaskId, orgId: command.orgId },
       include: {
         packLines: true,
       },
@@ -98,13 +98,12 @@ export class RecordPackAuditCommandHandler extends BaseCommandHandler<
     let expectedWidthMm: number | null = null;
     let expectedHeightMm: number | null = null;
     if (p.cartonCatalogueId) {
-      const carton = await tx.cartonCatalogue.findUnique({ where: { id: p.cartonCatalogueId } });
-      if (carton) {
-        expectedLengthMm = carton.lengthMm;
-        expectedWidthMm = carton.widthMm;
-        expectedHeightMm = carton.heightMm;
-        // Carton tare is not modelled; if it were we'd add it here.
-      }
+      const carton = await tx.cartonCatalogue.findFirst({ where: { id: p.cartonCatalogueId, orgId: command.orgId } });
+      if (!carton) throw new Error(`CartonCatalogue ${p.cartonCatalogueId} not found`);
+      expectedLengthMm = carton.lengthMm;
+      expectedWidthMm = carton.widthMm;
+      expectedHeightMm = carton.heightMm;
+      // Carton tare is not modelled; if it were we'd add it here.
     }
 
     if (expectedWeightGrams <= 0) {

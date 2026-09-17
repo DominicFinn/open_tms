@@ -1,4 +1,4 @@
-import { PrismaClient, Issue, IssueReadModel } from '@prisma/client';
+import { PrismaClient, Prisma, Issue, IssueReadModel, IssueLabel, KanbanView } from '@prisma/client';
 
 // ─── DTOs ───────────────────────────────────────────────────────────────────
 
@@ -29,16 +29,38 @@ export interface IssueStats {
   snoozed: number;
 }
 
+export interface IssueActivityEntry {
+  type: 'event' | 'comment';
+  id: string;
+  timestamp: string;
+  [key: string]: unknown;
+}
+
+export interface KanbanViewInput {
+  name?: string;
+  description?: string | null;
+  filters?: Prisma.InputJsonValue;
+  groupBy?: string;
+  sortBy?: string;
+  isDefault?: boolean;
+}
+
 // ─── Interface ──────────────────────────────────────────────────────────────
 
 export interface IIssueRepository {
-  findById(id: string): Promise<Issue | null>;
-  findByIdWithRelations(id: string): Promise<any>; // Issue with labels, capaReports
+  findById(id: string, orgId: string): Promise<Issue | null>;
+  findByIdWithRelations(id: string, orgId: string): Promise<any>; // Issue with labels, capaReports, SLA
   findByOrg(filters: IssueFilters): Promise<{ items: IssueReadModel[]; total: number }>;
   findByEntityId(sourceEntityType: string, sourceEntityId: string, orgId: string): Promise<IssueReadModel[]>;
   getStats(orgId: string): Promise<IssueStats>;
-  getLabels(issueId: string): Promise<Array<{ id: string; name: string; color: string }>>;
-  updateLabelsCache(issueId: string): Promise<void>;
+  getLabels(issueId: string, orgId: string): Promise<Array<{ id: string; name: string; color: string }>>;
+  updateLabelsCache(issueId: string, orgId: string): Promise<void>;
+  getActivity(issueId: string, orgId: string): Promise<IssueActivityEntry[]>;
+  findLabelsByOrg(orgId: string): Promise<IssueLabel[]>;
+  findKanbanViews(orgId: string): Promise<KanbanView[]>;
+  createKanbanView(orgId: string, createdBy: string | null, input: KanbanViewInput): Promise<KanbanView>;
+  updateKanbanView(id: string, orgId: string, input: KanbanViewInput): Promise<KanbanView | null>;
+  deleteKanbanView(id: string, orgId: string): Promise<boolean>;
 }
 
 // ─── Implementation ─────────────────────────────────────────────────────────
@@ -46,13 +68,13 @@ export interface IIssueRepository {
 export class IssueRepository implements IIssueRepository {
   constructor(private prisma: PrismaClient) {}
 
-  async findById(id: string): Promise<Issue | null> {
-    return this.prisma.issue.findUnique({ where: { id } });
+  async findById(id: string, orgId: string): Promise<Issue | null> {
+    return this.prisma.issue.findFirst({ where: { id, orgId } });
   }
 
-  async findByIdWithRelations(id: string): Promise<any> {
-    const issue = await this.prisma.issue.findUnique({
-      where: { id },
+  async findByIdWithRelations(id: string, orgId: string): Promise<any> {
+    const issue = await this.prisma.issue.findFirst({
+      where: { id, orgId },
       include: {
         labelAssignments: {
           include: { label: true },
@@ -65,10 +87,14 @@ export class IssueRepository implements IIssueRepository {
 
     if (!issue) return null;
 
-    // Count comments separately
-    const commentCount = await this.prisma.comment.count({
-      where: { entityType: 'issue', entityId: id },
-    });
+    const [commentCount, slaEvaluations] = await Promise.all([
+      this.prisma.comment.count({ where: { orgId, entityType: 'issue', entityId: id } }),
+      this.prisma.slaEvaluation.findMany({
+        where: { orgId, entityType: 'issue', entityId: id },
+        orderBy: { createdAt: 'desc' },
+        take: 500,
+      }),
+    ]);
 
     return {
       ...issue,
@@ -78,6 +104,7 @@ export class IssueRepository implements IIssueRepository {
         color: a.label.color,
       })),
       commentCount,
+      slaEvaluations,
     };
   }
 
@@ -188,9 +215,9 @@ export class IssueRepository implements IIssueRepository {
     return { total, open, inProgress, resolved, closed, critical, needsCapa, snoozed };
   }
 
-  async getLabels(issueId: string): Promise<Array<{ id: string; name: string; color: string }>> {
+  async getLabels(issueId: string, orgId: string): Promise<Array<{ id: string; name: string; color: string }>> {
     const assignments = await this.prisma.issueLabelAssignment.findMany({
-      where: { issueId },
+      where: { issueId, issue: { orgId } },
       include: { label: true },
     });
     return assignments.map((a) => ({
@@ -200,12 +227,104 @@ export class IssueRepository implements IIssueRepository {
     }));
   }
 
-  async updateLabelsCache(issueId: string): Promise<void> {
-    const labels = await this.getLabels(issueId);
+  async updateLabelsCache(issueId: string, orgId: string): Promise<void> {
+    const labels = await this.getLabels(issueId, orgId);
     const labelNames = labels.map((l) => l.name);
-    await this.prisma.issueReadModel.update({
-      where: { id: issueId },
+    await this.prisma.issueReadModel.updateMany({
+      where: { id: issueId, orgId },
       data: { labels: labelNames },
     });
   }
+
+  /** Domain events and comments for one issue, merged oldest first. Empty when the issue is not in the org. */
+  async getActivity(issueId: string, orgId: string): Promise<IssueActivityEntry[]> {
+    const where = { orgId, entityType: 'issue', entityId: issueId };
+    const [events, comments] = await Promise.all([
+      this.prisma.domainEventLog.findMany({ where, orderBy: { createdAt: 'asc' }, take: 200 }),
+      this.prisma.comment.findMany({ where, orderBy: { createdAt: 'asc' }, take: 500 }),
+    ]);
+
+    const entries: IssueActivityEntry[] = [
+      ...events.map((e) => ({
+        type: 'event' as const,
+        id: e.id,
+        eventType: e.type,
+        payload: e.payload,
+        actorId: (e.metadata as any)?.actorId || e.actorId || null,
+        timestamp: e.timestamp || e.createdAt.toISOString(),
+      })),
+      ...comments.map((c) => ({
+        type: 'comment' as const,
+        id: c.id,
+        authorId: c.authorId,
+        authorName: c.authorName,
+        authorType: c.authorType,
+        body: c.body,
+        visibleToCustomer: c.visibleToCustomer,
+        timestamp: c.createdAt.toISOString(),
+      })),
+    ];
+    return entries.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  }
+
+  async findLabelsByOrg(orgId: string): Promise<IssueLabel[]> {
+    return this.prisma.issueLabel.findMany({ where: { orgId }, orderBy: { name: 'asc' }, take: 500 });
+  }
+
+  async findKanbanViews(orgId: string): Promise<KanbanView[]> {
+    return this.prisma.kanbanView.findMany({
+      where: { orgId },
+      orderBy: [{ isDefault: 'desc' }, { name: 'asc' }],
+      take: 500,
+    });
+  }
+
+  // One default view per org: setting a new default clears the old one in the same transaction.
+  async createKanbanView(orgId: string, createdBy: string | null, input: KanbanViewInput): Promise<KanbanView> {
+    return this.prisma.$transaction(async (tx) => {
+      if (input.isDefault) {
+        await tx.kanbanView.updateMany({ where: { orgId, isDefault: true }, data: { isDefault: false } });
+      }
+      return tx.kanbanView.create({
+        data: {
+          orgId,
+          name: input.name ?? '',
+          description: input.description,
+          filters: input.filters ?? {},
+          groupBy: input.groupBy || 'status',
+          sortBy: input.sortBy || 'createdAt',
+          isDefault: input.isDefault || false,
+          createdBy,
+        },
+      });
+    });
+  }
+
+  async updateKanbanView(id: string, orgId: string, input: KanbanViewInput): Promise<KanbanView | null> {
+    return this.prisma.$transaction(async (tx) => {
+      const existing = await tx.kanbanView.findFirst({ where: { id, orgId } });
+      if (!existing) return null;
+      if (input.isDefault) {
+        await tx.kanbanView.updateMany({ where: { orgId, isDefault: true }, data: { isDefault: false } });
+      }
+      return tx.kanbanView.update({ where: { id }, data: pickKanbanFields(input) });
+    });
+  }
+
+  async deleteKanbanView(id: string, orgId: string): Promise<boolean> {
+    const { count } = await this.prisma.kanbanView.deleteMany({ where: { id, orgId } });
+    return count > 0;
+  }
+}
+
+// Only these columns are client-editable; anything else in the body (orgId, createdBy) is dropped.
+function pickKanbanFields(input: KanbanViewInput): Prisma.KanbanViewUpdateInput {
+  const data: Prisma.KanbanViewUpdateInput = {};
+  if (input.name !== undefined) data.name = input.name;
+  if (input.description !== undefined) data.description = input.description;
+  if (input.filters !== undefined) data.filters = input.filters;
+  if (input.groupBy !== undefined) data.groupBy = input.groupBy;
+  if (input.sortBy !== undefined) data.sortBy = input.sortBy;
+  if (input.isDefault !== undefined) data.isDefault = input.isDefault;
+  return data;
 }

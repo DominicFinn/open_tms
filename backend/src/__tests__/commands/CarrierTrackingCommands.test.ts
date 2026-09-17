@@ -61,9 +61,12 @@ const mockTrackingEvent = {
 };
 
 const mockTx = {
+  carrier: {
+    findFirst: jest.fn().mockResolvedValue({ id: 'carrier-1' }),
+  },
   carrierTrackingIntegration: {
     create: jest.fn().mockResolvedValue(mockIntegration),
-    findUniqueOrThrow: jest.fn().mockResolvedValue(mockIntegration),
+    findFirst: jest.fn().mockResolvedValue(mockIntegration),
     update: jest.fn().mockResolvedValue({ ...mockIntegration, providerType: 'UPS', pollingEnabled: false }),
     delete: jest.fn().mockResolvedValue(mockIntegration),
   },
@@ -251,6 +254,60 @@ describe('Carrier Tracking Command Handlers', () => {
           providerType: 'FedEx',
         }),
       );
+    });
+  });
+
+  /* ---- Tenancy ---- */
+  describe('org scoping', () => {
+    it('refuses to create an integration for a carrier outside the command org', async () => {
+      const { bus } = mockEventBus();
+      mockTx.carrier.findFirst.mockResolvedValueOnce(null);
+      const handler = new CreateCarrierTrackingIntegrationCommandHandler(mockPrisma, bus);
+
+      const result = await handler.execute(
+        createTestCommand(
+          CREATE_CARRIER_TRACKING_INTEGRATION,
+          { carrierId: 'carrier-b', providerType: 'FedEx' },
+          { orgId: 'org-a' },
+        ),
+      );
+
+      expect(mockTx.carrier.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'carrier-b', orgId: 'org-a' } }),
+      );
+      expect(result.success).toBe(false);
+      expect(mockTx.carrierTrackingIntegration.create).not.toHaveBeenCalled();
+      expect(result.events).toHaveLength(0);
+    });
+
+    it('looks the integration up through its carrier org on update and refuses a miss', async () => {
+      const { bus } = mockEventBus();
+      mockTx.carrierTrackingIntegration.findFirst.mockResolvedValueOnce(null);
+      const handler = new UpdateCarrierTrackingIntegrationCommandHandler(mockPrisma, bus);
+
+      const result = await handler.execute(
+        createTestCommand(UPDATE_CARRIER_TRACKING_INTEGRATION, { id: 'int-b', notes: 'x' }, { orgId: 'org-a' }),
+      );
+
+      expect(mockTx.carrierTrackingIntegration.findFirst).toHaveBeenCalledWith({
+        where: { id: 'int-b', carrier: { orgId: 'org-a' } },
+      });
+      expect(result.success).toBe(false);
+      expect(mockTx.carrierTrackingIntegration.update).not.toHaveBeenCalled();
+    });
+
+    it('refuses to delete another org\'s integration and leaves its events alone', async () => {
+      const { bus } = mockEventBus();
+      mockTx.carrierTrackingIntegration.findFirst.mockResolvedValueOnce(null);
+      const handler = new DeleteCarrierTrackingIntegrationCommandHandler(mockPrisma, bus);
+
+      const result = await handler.execute(
+        createTestCommand(DELETE_CARRIER_TRACKING_INTEGRATION, { id: 'int-b' }, { orgId: 'org-a' }),
+      );
+
+      expect(result.success).toBe(false);
+      expect(mockTx.carrierTrackingEvent.deleteMany).not.toHaveBeenCalled();
+      expect(mockTx.carrierTrackingIntegration.delete).not.toHaveBeenCalled();
     });
   });
 

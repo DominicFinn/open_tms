@@ -14,17 +14,22 @@ const mockRecord = {
 };
 
 const mockTargetBin = {
-  id: 'bin-2', label: 'BULK-B-01-01', active: true, locationId: 'loc-1',
+  id: 'bin-2', label: 'BULK-B-01-01', active: true, locationId: 'loc-1', orgId: 'test-org',
   zone: { temperatureZone: null },
   temperatureZone: null,
 };
+
+// Org-aware finder: returns the row only when the where clause names its id and its orgId, the
+// way the database would once the handler scopes the lookup.
+const findInOrg = (row: any) => jest.fn(({ where }: any) =>
+  Promise.resolve(row && where.id === row.id && where.orgId === row.orgId ? row : null));
 
 /* ── AdjustInventoryCommandHandler ────────────────────────── */
 
 describe('AdjustInventoryCommandHandler', () => {
   const buildTx = (overrides: any = {}) => ({
     inventoryRecord: {
-      findUnique: jest.fn().mockResolvedValue(overrides.record ?? mockRecord),
+      findFirst: findInOrg(overrides.record ?? mockRecord),
       update: jest.fn().mockResolvedValue({}),
     },
     inventoryTransaction: { create: jest.fn().mockResolvedValue({ id: 'txn-1' }) },
@@ -120,7 +125,7 @@ describe('AdjustInventoryCommandHandler', () => {
   it('fails if record not found', async () => {
     const notFoundTx = {
       inventoryRecord: {
-        findUnique: jest.fn().mockResolvedValue(null),
+        findFirst: jest.fn().mockResolvedValue(null),
         update: jest.fn(),
       },
       inventoryTransaction: { create: jest.fn() },
@@ -146,14 +151,15 @@ describe('AdjustInventoryCommandHandler', () => {
 describe('TransferInventoryCommandHandler', () => {
   const buildTx = (overrides: any = {}) => ({
     inventoryRecord: {
-      findUnique: jest.fn().mockResolvedValue(overrides.source ?? mockRecord),
-      findFirst: jest.fn().mockResolvedValue(overrides.targetRecord ?? null),
+      findFirst: jest.fn(({ where }: any) => where.id
+        ? findInOrg(overrides.source ?? mockRecord)({ where })
+        : Promise.resolve(overrides.targetRecord ?? null)),
       update: jest.fn().mockResolvedValue({}),
       create: jest.fn().mockResolvedValue({ id: 'inv-new', quantityOnHand: 20 }),
       delete: jest.fn().mockResolvedValue({}),
     },
     warehouseBin: {
-      findUnique: jest.fn().mockResolvedValue(overrides.targetBin ?? mockTargetBin),
+      findFirst: findInOrg(overrides.targetBin ?? mockTargetBin),
     },
     warehouseZone: {
       findFirst: jest.fn().mockResolvedValue(null),
@@ -244,13 +250,12 @@ describe('TransferInventoryCommandHandler', () => {
   it('fails if target bin not found', async () => {
     const notFoundTx = {
       inventoryRecord: {
-        findUnique: jest.fn().mockResolvedValue(mockRecord),
-        findFirst: jest.fn().mockResolvedValue(null),
+        findFirst: jest.fn(({ where }: any) => Promise.resolve(where.id ? mockRecord : null)),
         update: jest.fn(),
         create: jest.fn(),
         delete: jest.fn(),
       },
-      warehouseBin: { findUnique: jest.fn().mockResolvedValue(null) },
+      warehouseBin: { findFirst: jest.fn().mockResolvedValue(null) },
       warehouseZone: { findFirst: jest.fn().mockResolvedValue(null) },
       inventoryTransaction: { create: jest.fn() },
       domainEventLog: { create: jest.fn().mockResolvedValue({}) },
@@ -301,5 +306,61 @@ describe('TransferInventoryCommandHandler', () => {
 
     expect(result.success).toBe(true);
     expect(tx.inventoryRecord.delete).toHaveBeenCalledWith({ where: { id: 'inv-1' } });
+  });
+});
+
+/* ── Tenancy (#303) ───────────────────────────────────────── */
+
+describe('inventory commands refuse another org\'s records', () => {
+  const buildPrisma = (tx: any) => ({
+    $transaction: jest.fn((fn: Function) => fn(tx)),
+    domainEventLog: { findFirst: jest.fn().mockResolvedValue(null) },
+  } as any);
+
+  it('adjust: a record owned by another org reads as not found and is not written', async () => {
+    const tx = {
+      inventoryRecord: { findFirst: findInOrg(mockRecord), update: jest.fn() },
+      inventoryTransaction: { create: jest.fn() },
+      domainEventLog: { create: jest.fn() },
+    } as any;
+    const handler = new AdjustInventoryCommandHandler(buildPrisma(tx), mockEventBus().bus);
+
+    const result = await handler.execute(
+      createTestCommand(ADJUST_INVENTORY, {
+        inventoryRecordId: 'inv-1', quantityChange: 5, reasonCode: 'found',
+      }, { orgId: 'other-org' })
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('not found');
+    expect(tx.inventoryRecord.update).not.toHaveBeenCalled();
+    expect(tx.inventoryTransaction.create).not.toHaveBeenCalled();
+  });
+
+  it('transfer: a target bin owned by another org reads as not found and nothing moves', async () => {
+    const ownRecord = { ...mockRecord, orgId: 'org-a' };
+    const foreignBin = { ...mockTargetBin, orgId: 'org-b' };
+    const tx = {
+      inventoryRecord: {
+        findFirst: jest.fn(({ where }: any) => where.id ? findInOrg(ownRecord)({ where }) : Promise.resolve(null)),
+        update: jest.fn(), create: jest.fn(), delete: jest.fn(),
+      },
+      warehouseBin: { findFirst: findInOrg(foreignBin) },
+      warehouseZone: { findFirst: jest.fn().mockResolvedValue(null) },
+      inventoryTransaction: { create: jest.fn() },
+      domainEventLog: { create: jest.fn() },
+    } as any;
+    const handler = new TransferInventoryCommandHandler(buildPrisma(tx), mockEventBus().bus);
+
+    const result = await handler.execute(
+      createTestCommand(TRANSFER_INVENTORY, {
+        inventoryRecordId: 'inv-1', targetBinId: 'bin-2', quantity: 5,
+      }, { orgId: 'org-a' })
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('not found');
+    expect(tx.inventoryRecord.update).not.toHaveBeenCalled();
+    expect(tx.inventoryRecord.create).not.toHaveBeenCalled();
   });
 });

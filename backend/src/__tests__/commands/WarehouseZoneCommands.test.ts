@@ -40,7 +40,10 @@ const mockTx = {
   warehouseZone: {
     create: jest.fn().mockResolvedValue(mockZone),
     update: jest.fn().mockResolvedValue(mockZone),
-    findUnique: jest.fn().mockResolvedValue(mockZone),
+    findFirst: jest.fn().mockResolvedValue(mockZone),
+  },
+  warehouseAisle: {
+    findFirst: jest.fn().mockResolvedValue(null),
   },
   warehouseBin: {
     create: jest.fn().mockResolvedValue(mockBin),
@@ -147,7 +150,7 @@ describe('Warehouse Zone Command Handlers', () => {
     });
 
     it('fails if zone not found', async () => {
-      mockTx.warehouseZone.findUnique.mockResolvedValueOnce(null);
+      mockTx.warehouseZone.findFirst.mockResolvedValueOnce(null);
       const { bus } = mockEventBus();
       const handler = new UpdateWarehouseZoneCommandHandler(mockPrisma, bus);
 
@@ -169,7 +172,7 @@ describe('Warehouse Bin Command Handlers', () => {
 
   describe('CreateWarehouseBinCommandHandler', () => {
     it('creates bin and emits WAREHOUSE_BIN_CREATED', async () => {
-      mockTx.warehouseZone.findUnique.mockResolvedValueOnce(mockZone);
+      mockTx.warehouseZone.findFirst.mockResolvedValueOnce(mockZone);
       mockTx.warehouseBin.findFirst.mockResolvedValueOnce(null); // no duplicate
       const { bus } = mockEventBus();
       const handler = new CreateWarehouseBinCommandHandler(mockPrisma, bus);
@@ -190,7 +193,7 @@ describe('Warehouse Bin Command Handlers', () => {
     });
 
     it('fails if label already exists', async () => {
-      mockTx.warehouseZone.findUnique.mockResolvedValueOnce(mockZone);
+      mockTx.warehouseZone.findFirst.mockResolvedValueOnce(mockZone);
       mockTx.warehouseBin.findFirst.mockResolvedValueOnce(mockBin); // duplicate!
       const { bus } = mockEventBus();
       const handler = new CreateWarehouseBinCommandHandler(mockPrisma, bus);
@@ -209,7 +212,7 @@ describe('Warehouse Bin Command Handlers', () => {
     });
 
     it('fails if zone not found', async () => {
-      mockTx.warehouseZone.findUnique.mockResolvedValueOnce(null);
+      mockTx.warehouseZone.findFirst.mockResolvedValueOnce(null);
       const { bus } = mockEventBus();
       const handler = new CreateWarehouseBinCommandHandler(mockPrisma, bus);
 
@@ -310,7 +313,7 @@ describe('Warehouse Bin Command Handlers', () => {
 
   describe('BulkCreateBinsCommandHandler', () => {
     it('creates bins from pattern and emits WAREHOUSE_BIN_BULK_CREATED', async () => {
-      mockTx.warehouseZone.findUnique.mockResolvedValueOnce(mockZone);
+      mockTx.warehouseZone.findFirst.mockResolvedValueOnce(mockZone);
       mockTx.warehouseBin.findMany.mockResolvedValueOnce([]); // no conflicts
       mockTx.warehouseBin.createMany.mockResolvedValueOnce({ count: 120 });
       const { bus } = mockEventBus();
@@ -342,7 +345,7 @@ describe('Warehouse Bin Command Handlers', () => {
     });
 
     it('fails if labels already exist', async () => {
-      mockTx.warehouseZone.findUnique.mockResolvedValueOnce(mockZone);
+      mockTx.warehouseZone.findFirst.mockResolvedValueOnce(mockZone);
       mockTx.warehouseBin.findMany.mockResolvedValueOnce([{ label: 'BULK-A-01-01' }]);
       const { bus } = mockEventBus();
       const handler = new BulkCreateBinsCommandHandler(mockPrisma, bus);
@@ -360,7 +363,7 @@ describe('Warehouse Bin Command Handlers', () => {
     });
 
     it('fails if zone not found', async () => {
-      mockTx.warehouseZone.findUnique.mockResolvedValueOnce(null);
+      mockTx.warehouseZone.findFirst.mockResolvedValueOnce(null);
       const { bus } = mockEventBus();
       const handler = new BulkCreateBinsCommandHandler(mockPrisma, bus);
 
@@ -375,5 +378,72 @@ describe('Warehouse Bin Command Handlers', () => {
       expect(result.success).toBe(false);
       expect(result.error).toContain('Zone');
     });
+  });
+});
+
+/* ── Tenancy (#303) ───────────────────────────────────────── */
+
+describe('Warehouse topology commands stay inside the command org', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('update zone: a zone outside the org reads as not found and is not written', async () => {
+    mockTx.warehouseZone.findFirst.mockResolvedValueOnce(null);
+    const handler = new UpdateWarehouseZoneCommandHandler(mockPrisma, mockEventBus().bus);
+
+    const result = await handler.execute(
+      createTestCommand(UPDATE_WAREHOUSE_ZONE, { zoneId: 'zone-1', name: 'Hijacked' }, { orgId: 'org-b' })
+    );
+
+    expect(result.success).toBe(false);
+    expect(mockTx.warehouseZone.findFirst).toHaveBeenCalledWith({ where: { id: 'zone-1', orgId: 'org-b' } });
+    expect(mockTx.warehouseZone.update).not.toHaveBeenCalled();
+  });
+
+  it('create bin: the zone is looked up inside the org', async () => {
+    mockTx.warehouseZone.findFirst.mockResolvedValueOnce(null);
+    const handler = new CreateWarehouseBinCommandHandler(mockPrisma, mockEventBus().bus);
+
+    const result = await handler.execute(
+      createTestCommand(CREATE_WAREHOUSE_BIN, {
+        zoneId: 'zone-1', facilityId: 'fac-1', label: 'X-01', binType: 'pallet',
+      }, { orgId: 'org-b' })
+    );
+
+    expect(result.success).toBe(false);
+    expect(mockTx.warehouseZone.findFirst).toHaveBeenCalledWith({ where: { id: 'zone-1', orgId: 'org-b' } });
+    expect(mockTx.warehouseBin.create).not.toHaveBeenCalled();
+  });
+
+  it('create bin: an aisle from outside the zone is refused', async () => {
+    mockTx.warehouseZone.findFirst.mockResolvedValueOnce(mockZone);
+    mockTx.warehouseAisle.findFirst.mockResolvedValueOnce(null);
+    const handler = new CreateWarehouseBinCommandHandler(mockPrisma, mockEventBus().bus);
+
+    const result = await handler.execute(
+      createTestCommand(CREATE_WAREHOUSE_BIN, {
+        zoneId: 'zone-1', facilityId: 'fac-1', aisleId: 'aisle-elsewhere', label: 'X-01', binType: 'pallet',
+      })
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('Aisle');
+    expect(mockTx.warehouseAisle.findFirst).toHaveBeenCalledWith({ where: { id: 'aisle-elsewhere', zoneId: 'zone-1' } });
+    expect(mockTx.warehouseBin.create).not.toHaveBeenCalled();
+  });
+
+  it('bulk create bins: the zone is looked up inside the org', async () => {
+    mockTx.warehouseZone.findFirst.mockResolvedValueOnce(null);
+    const handler = new BulkCreateBinsCommandHandler(mockPrisma, mockEventBus().bus);
+
+    const result = await handler.execute(
+      createTestCommand(BULK_CREATE_BINS, {
+        zoneId: 'zone-1', facilityId: 'fac-1', labelPattern: 'B-{aisle}-{row}-{level}', binType: 'pallet',
+        aisles: ['A'], rowStart: 1, rowEnd: 1, levelStart: 1, levelEnd: 1,
+      }, { orgId: 'org-b' })
+    );
+
+    expect(result.success).toBe(false);
+    expect(mockTx.warehouseZone.findFirst).toHaveBeenCalledWith({ where: { id: 'zone-1', orgId: 'org-b' } });
+    expect(mockTx.warehouseBin.createMany).not.toHaveBeenCalled();
   });
 });

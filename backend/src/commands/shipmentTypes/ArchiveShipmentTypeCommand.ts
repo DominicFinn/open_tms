@@ -19,7 +19,10 @@ export class ArchiveShipmentTypeCommandHandler extends BaseCommandHandler<{ id: 
     emit: EmitFn
   ): Promise<{ id: string }> {
     const { id } = command.payload;
-    const existing = await tx.shipmentType.findUniqueOrThrow({ where: { id } });
+    const existing = await tx.shipmentType.findFirst({ where: { id, orgId: command.orgId } });
+    if (!existing) {
+      throw new Error('Shipment type not found');
+    }
     if (existing.isBuiltIn) {
       throw new Error('Built-in shipment types cannot be archived');
     }

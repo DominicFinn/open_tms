@@ -35,7 +35,7 @@ export interface CreateQuoteLineItemDTO {
 }
 
 export interface QuoteFilters {
-  orgId?: string;
+  orgId: string;
   customerId?: string;
   status?: string;
 }
@@ -50,7 +50,7 @@ export type QuoteWithLineItems = Quote & {
 
 export interface IQuoteRepository {
   create(data: CreateQuoteDTO): Promise<Quote>;
-  findById(id: string): Promise<QuoteWithLineItems | null>;
+  findById(id: string, orgId: string): Promise<QuoteWithLineItems | null>;
   findAll(filters: QuoteFilters): Promise<QuoteWithLineItems[]>;
   update(id: string, data: Partial<Quote>): Promise<Quote>;
   addLineItems(data: CreateQuoteLineItemDTO[]): Promise<number>;
@@ -89,9 +89,9 @@ export class QuoteRepository implements IQuoteRepository {
     }});
   }
 
-  async findById(id: string): Promise<QuoteWithLineItems | null> {
-    return this.prisma.quote.findUnique({
-      where: { id },
+  async findById(id: string, orgId: string): Promise<QuoteWithLineItems | null> {
+    return this.prisma.quote.findFirst({
+      where: { id, orgId },
       include: this.includeRelations,
     }) as Promise<QuoteWithLineItems | null>;
   }
@@ -99,7 +99,7 @@ export class QuoteRepository implements IQuoteRepository {
   async findAll(filters: QuoteFilters): Promise<QuoteWithLineItems[]> {
     return this.prisma.quote.findMany({
       where: {
-        ...(filters.orgId && { orgId: filters.orgId }),
+        orgId: filters.orgId,
         ...(filters.customerId && { customerId: filters.customerId }),
         ...(filters.status && { status: filters.status }),
       },

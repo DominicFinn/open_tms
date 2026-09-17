@@ -29,6 +29,8 @@ export class RaiseQueryCommandHandler extends BaseCommandHandler<RaiseQueryPaylo
   protected async handle(command: Command<RaiseQueryPayload>, tx: TransactionClient, emit: EmitFn) {
     const { payload } = command;
 
+    await this.assertReferencesInOrg(tx, command.orgId, payload);
+
     // Generate query number
     const latest = await tx.financialQuery.findFirst({
       where: { orgId: command.orgId },
@@ -72,5 +74,25 @@ export class RaiseQueryCommandHandler extends BaseCommandHandler<RaiseQueryPaylo
     }));
 
     return { id: query.id, queryNumber };
+  }
+
+  // A query may only point at records in the caller's org. Anything else reads
+  // as not found, so another tenant's ids stay opaque.
+  private async assertReferencesInOrg(tx: TransactionClient, orgId: string, payload: RaiseQueryPayload) {
+    if (payload.invoiceId) {
+      const invoice = await tx.invoice.findFirst({ where: { id: payload.invoiceId, orgId }, select: { id: true } });
+      if (!invoice) throw new Error('Invoice not found');
+    }
+    if (payload.carrierInvoiceId) {
+      const carrierInvoice = await tx.carrierInvoice.findFirst({
+        where: { id: payload.carrierInvoiceId, orgId },
+        select: { id: true },
+      });
+      if (!carrierInvoice) throw new Error('Carrier invoice not found');
+    }
+    if (payload.shipmentId) {
+      const shipment = await tx.shipment.findFirst({ where: { id: payload.shipmentId, orgId }, select: { id: true } });
+      if (!shipment) throw new Error('Shipment not found');
+    }
   }
 }

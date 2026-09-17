@@ -47,7 +47,7 @@ export interface CreatePaymentDTO {
 }
 
 export interface InvoiceFilters {
-  orgId?: string;
+  orgId: string;
   customerId?: string;
   status?: string;
   dueBefore?: Date;
@@ -64,7 +64,7 @@ export type InvoiceWithLineItems = Invoice & {
 
 export interface IInvoiceRepository {
   create(data: CreateInvoiceDTO): Promise<Invoice>;
-  findById(id: string): Promise<InvoiceWithLineItems | null>;
+  findById(id: string, orgId: string): Promise<InvoiceWithLineItems | null>;
   findAll(filters: InvoiceFilters): Promise<InvoiceWithLineItems[]>;
   update(id: string, data: Partial<Invoice>): Promise<Invoice>;
   addLineItem(data: CreateInvoiceLineItemDTO): Promise<InvoiceLineItem>;
@@ -110,9 +110,9 @@ export class InvoiceRepository implements IInvoiceRepository {
     }});
   }
 
-  async findById(id: string): Promise<InvoiceWithLineItems | null> {
-    return this.prisma.invoice.findUnique({
-      where: { id },
+  async findById(id: string, orgId: string): Promise<InvoiceWithLineItems | null> {
+    return this.prisma.invoice.findFirst({
+      where: { id, orgId },
       include: this.includeRelations,
     }) as Promise<InvoiceWithLineItems | null>;
   }
@@ -124,7 +124,7 @@ export class InvoiceRepository implements IInvoiceRepository {
 
     return this.prisma.invoice.findMany({
       where: {
-        ...(filters.orgId && { orgId: filters.orgId }),
+        orgId: filters.orgId,
         ...(filters.customerId && { customerId: filters.customerId }),
         ...(filters.status && { status: filters.status }),
         ...((filters.dueBefore || filters.dueAfter) && { dueDate }),

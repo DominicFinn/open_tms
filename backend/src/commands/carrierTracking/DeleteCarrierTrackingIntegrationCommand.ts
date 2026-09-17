@@ -3,6 +3,7 @@ import { PgBossEventBus } from '../../events/PgBossEventBus.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { Command } from '../types.js';
+import { CarrierTrackingNotFoundError } from './errors.js';
 
 export interface DeleteCarrierTrackingIntegrationPayload {
   id: string;
@@ -27,7 +28,10 @@ export class DeleteCarrierTrackingIntegrationCommandHandler extends BaseCommandH
   ): Promise<{ id: string }> {
     const { id } = command.payload;
 
-    const integration = await tx.carrierTrackingIntegration.findUniqueOrThrow({ where: { id } });
+    const integration = await tx.carrierTrackingIntegration.findFirst({
+      where: { id, carrier: { orgId: command.orgId } },
+    });
+    if (!integration) throw new CarrierTrackingNotFoundError('integration', id);
 
     // Delete related tracking events first
     await tx.carrierTrackingEvent.deleteMany({ where: { integrationId: id } });

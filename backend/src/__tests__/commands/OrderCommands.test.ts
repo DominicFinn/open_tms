@@ -110,6 +110,36 @@ describe('Order Command Handlers', () => {
       expect(result.events[0].metadata.source).toBe('test');
     });
 
+    it('writes under command.orgId and ignores an orgId in the payload', async () => {
+      const { bus } = mockEventBus();
+      const handler = new CreateOrderCommandHandler(mockPrisma, bus);
+      mockTx.order.create.mockClear();
+      mockTx.customer.findFirst.mockClear();
+
+      const result = await handler.execute(createTestCommand(CREATE_ORDER, {
+        orderData: { orgId: 'org-other', orderNumber: 'ORD-003', customerId: 'cust-1' },
+        status: 'pending',
+      }, { orgId: 'org-mine' }));
+
+      expect(result.success).toBe(true);
+      expect(mockTx.customer.findFirst.mock.calls[0][0].where).toMatchObject({ orgId: 'org-mine' });
+      expect(mockTx.order.create.mock.calls[0][0].data.orgId).toBe('org-mine');
+    });
+
+    it('reports a customer from another org as not found', async () => {
+      const { bus } = mockEventBus();
+      const handler = new CreateOrderCommandHandler(mockPrisma, bus);
+      mockTx.customer.findFirst.mockResolvedValueOnce(null);
+
+      const result = await handler.execute(createTestCommand(CREATE_ORDER, {
+        orderData: { orgId: 'test-org', orderNumber: 'ORD-004', customerId: 'cust-other-org' },
+        status: 'pending',
+      }));
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Customer not found');
+    });
+
     it('passes Phase 1 line fields (hazmat detail, customs, temp range) to the create call', async () => {
       mockTx.order.create.mockClear();
       const { bus } = mockEventBus();

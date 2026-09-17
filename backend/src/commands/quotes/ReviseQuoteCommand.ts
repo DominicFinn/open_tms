@@ -26,8 +26,8 @@ export class ReviseQuoteCommandHandler extends BaseCommandHandler<ReviseQuotePay
     const { payload } = command;
 
     // Get the original quote
-    const original = await tx.quote.findUnique({
-      where: { id: payload.originalQuoteId },
+    const original = await tx.quote.findFirst({
+      where: { id: payload.originalQuoteId, orgId: command.orgId },
       include: { customer: { select: { id: true, name: true } } },
     });
 

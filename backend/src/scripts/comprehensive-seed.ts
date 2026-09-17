@@ -1465,7 +1465,7 @@ async function seedBulkOrders(
 
 // ─── Shipment Types ─────────────────────────────────────────────────────────
 
-async function seedShipmentTypes() {
+async function seedShipmentTypes(orgId: string) {
   const defs = [
     { key: 'standard', name: 'Standard', icon: 'local_shipping', color: '#6366F1', description: 'General dry freight.', defaults: {} },
     { key: 'refrigerated', name: 'Refrigerated', icon: 'ac_unit', color: '#3b82f6', description: 'Cold chain 2-8°C.', defaults: { temperatureControlled: true, tempMode: 'refrigerated' } },
@@ -1477,7 +1477,7 @@ async function seedShipmentTypes() {
     // requiredFields kept empty so the readiness gate (customer, route, carrier,
     // dates, reference) is the only thing to satisfy during lifecycle testing.
     byKey[d.key] = await prisma.shipmentType.create({
-      data: { name: d.name, icon: d.icon, color: d.color, description: d.description, defaults: d.defaults, requiredFields: [], isBuiltIn: true },
+      data: { orgId, name: d.name, icon: d.icon, color: d.color, description: d.description, defaults: d.defaults, requiredFields: [], isBuiltIn: true },
     });
   }
   return byKey;
@@ -2369,6 +2369,7 @@ async function seedTradingPartners(customers: any[], carriers: any[], orgId: str
     // Sample inbound 850 log
     await prisma.ediTransactionLog.create({
       data: {
+        orgId,
         partnerId: p.id,
         transactionType: '850',
         direction: 'inbound',
@@ -2823,7 +2824,7 @@ async function main() {
   console.log(`✓ Orders: ${orders.length}`);
 
   console.log('Seeding shipment types...');
-  const shipmentTypes = await seedShipmentTypes();
+  const shipmentTypes = await seedShipmentTypes(org.id);
   console.log(`✓ Shipment types: ${Object.keys(shipmentTypes).length}`);
 
   console.log('Seeding shipments + stops (mostly fresh drafts, a subset launched)...');

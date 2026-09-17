@@ -37,7 +37,7 @@ export async function inventoryRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const q = req.query as any;
-    const where: any = { locationId: q.locationId };
+    const where: any = { orgId: req.orgId!, locationId: q.locationId };
     if (q.sku) where.sku = { contains: q.sku, mode: 'insensitive' };
     if (q.binId) where.binId = q.binId;
     if (q.zoneId) where.bin = { zoneId: q.zoneId };
@@ -75,7 +75,7 @@ export async function inventoryRoutes(server: FastifyInstance) {
 
     const summary = await prisma.inventoryRecord.groupBy({
       by: ['sku', 'uomCode'],
-      where: { locationId, quantityOnHand: { gt: 0 } },
+      where: { orgId: req.orgId!, locationId, quantityOnHand: { gt: 0 } },
       _sum: {
         quantityOnHand: true,
         quantityAllocated: true,
@@ -108,8 +108,8 @@ export async function inventoryRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const record = await prisma.inventoryRecord.findUnique({
-      where: { id },
+    const record = await prisma.inventoryRecord.findFirst({
+      where: { id, orgId: req.orgId! },
       include: {
         bin: { select: { id: true, label: true, binType: true, zone: { select: { name: true, zoneType: true } } } },
         transactions: { orderBy: { createdAt: 'desc' }, take: 50 },
@@ -142,7 +142,7 @@ export async function inventoryRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const q = req.query as any;
-    const where: any = { inventoryRecord: { locationId: q.locationId } };
+    const where: any = { orgId: req.orgId!, inventoryRecord: { locationId: q.locationId } };
     if (q.transactionType) where.transactionType = q.transactionType;
 
     const transactions = await prisma.inventoryTransaction.findMany({
@@ -180,8 +180,14 @@ export async function inventoryRoutes(server: FastifyInstance) {
       notes: z.string().optional(),
     }).parse((req as any).body);
 
-    const orgId = (req as any).orgId || 'default-org';
-    const actorId = (req as any).userId || 'system';
+    const orgId = req.orgId!;
+    const actorId = req.user?.sub ?? null;
+
+    const record = await prisma.inventoryRecord.findFirst({ where: { id, orgId }, select: { id: true } });
+    if (!record) {
+      reply.code(404);
+      return { data: null, error: 'Inventory record not found' };
+    }
 
     const result = await commandBus.dispatch({
       type: ADJUST_INVENTORY,
@@ -222,8 +228,17 @@ export async function inventoryRoutes(server: FastifyInstance) {
       notes: z.string().optional(),
     }).parse((req as any).body);
 
-    const orgId = (req as any).orgId || 'default-org';
-    const actorId = (req as any).userId || 'system';
+    const orgId = req.orgId!;
+    const actorId = req.user?.sub ?? null;
+
+    const [record, targetBin] = await Promise.all([
+      prisma.inventoryRecord.findFirst({ where: { id, orgId }, select: { id: true } }),
+      prisma.warehouseBin.findFirst({ where: { id: body.targetBinId, orgId }, select: { id: true } }),
+    ]);
+    if (!record || !targetBin) {
+      reply.code(404);
+      return { data: null, error: record ? 'Target bin not found' : 'Inventory record not found' };
+    }
 
     const result = await commandBus.dispatch({
       type: TRANSFER_INVENTORY,

@@ -53,24 +53,67 @@ describe('CarrierTrackingIntegrationRepository', () => {
   });
 
   describe('findAll', () => {
-    it('translates filters and orders by createdAt desc', async () => {
+    it('translates filters, scopes through the carrier org, and orders by createdAt desc', async () => {
       const prisma = buildPrisma();
       const repo = new CarrierTrackingIntegrationRepository(prisma);
 
-      await repo.findAll({ providerType: 'fedex', status: 'active' });
+      await repo.findAll('org-a', { providerType: 'fedex', status: 'active' });
 
       const args = prisma.carrierTrackingIntegration.findMany.mock.calls[0][0];
-      expect(args.where).toEqual({ providerType: 'fedex', status: 'active' });
+      expect(args.where).toEqual({ carrier: { orgId: 'org-a' }, providerType: 'fedex', status: 'active' });
       expect(args.orderBy).toEqual({ createdAt: 'desc' });
     });
 
-    it('returns all rows when no filters supplied', async () => {
+    it('returns only the org rows when no filters supplied', async () => {
       const prisma = buildPrisma();
       const repo = new CarrierTrackingIntegrationRepository(prisma);
 
-      await repo.findAll();
+      await repo.findAll('org-a');
 
-      expect(prisma.carrierTrackingIntegration.findMany.mock.calls[0][0].where).toEqual({});
+      expect(prisma.carrierTrackingIntegration.findMany.mock.calls[0][0].where).toEqual({ carrier: { orgId: 'org-a' } });
+    });
+  });
+
+  describe('org-scoped lookups', () => {
+    it('findById filters on id and the carrier org', async () => {
+      const prisma = buildPrisma();
+      const repo = new CarrierTrackingIntegrationRepository(prisma);
+
+      await repo.findById('int-1', 'org-a');
+
+      expect(prisma.carrierTrackingIntegration.findFirst.mock.calls[0][0].where).toEqual({
+        id: 'int-1',
+        carrier: { orgId: 'org-a' },
+      });
+    });
+
+    it('findByCarrierId filters on the carrier org', async () => {
+      const prisma = buildPrisma();
+      const repo = new CarrierTrackingIntegrationRepository(prisma);
+
+      await repo.findByCarrierId('car-1', 'org-a');
+
+      expect(prisma.carrierTrackingIntegration.findFirst.mock.calls[0][0].where).toEqual({
+        carrierId: 'car-1',
+        carrier: { orgId: 'org-a' },
+      });
+    });
+
+    it('event reads filter through the shipment org', async () => {
+      const prisma = { ...buildPrisma(), carrierTrackingEvent: { findMany: jest.fn().mockResolvedValue([]) } } as any;
+      const repo = new CarrierTrackingIntegrationRepository(prisma);
+
+      await repo.findRecentEvents('int-1', 'org-a', 20);
+      await repo.findEventsByShipment('ship-1', 'org-a', 1000);
+
+      expect(prisma.carrierTrackingEvent.findMany.mock.calls[0][0].where).toEqual({
+        integrationId: 'int-1',
+        shipment: { orgId: 'org-a' },
+      });
+      expect(prisma.carrierTrackingEvent.findMany.mock.calls[1][0].where).toEqual({
+        shipmentId: 'ship-1',
+        shipment: { orgId: 'org-a' },
+      });
     });
   });
 

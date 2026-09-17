@@ -114,6 +114,7 @@ export class AuditHandler implements IEventHandler {
     try {
       await this.prisma.auditLog.create({
         data: {
+          orgId: event.orgId,
           entityType: event.entityType,
           entityId: event.entityId,
           orderId: orderId || undefined,

@@ -18,8 +18,8 @@ export class ApproveInvoiceCommandHandler extends BaseCommandHandler<ApproveInvo
   }
 
   protected async handle(command: Command<ApproveInvoicePayload>, tx: TransactionClient, emit: EmitFn) {
-    const invoice = await tx.invoice.findUnique({
-      where: { id: command.payload.invoiceId },
+    const invoice = await tx.invoice.findFirst({
+      where: { id: command.payload.invoiceId, orgId: command.orgId },
     });
 
     if (!invoice) throw new Error('Invoice not found');

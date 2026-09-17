@@ -29,7 +29,7 @@ export interface ThreeWayMatchResult {
 // ─── Interface ──────────────────────────────────────────────────────────────
 
 export interface IFreightAuditService {
-  threeWayMatch(carrierId: string, lineItems: MatchLineItemInput[]): Promise<ThreeWayMatchResult>;
+  threeWayMatch(orgId: string, carrierId: string, lineItems: MatchLineItemInput[]): Promise<ThreeWayMatchResult>;
   getAutoApproveTolerancePercent(orgId: string): Promise<number>;
 }
 
@@ -41,7 +41,7 @@ export class FreightAuditService implements IFreightAuditService {
     private prisma: PrismaClient,
   ) {}
 
-  async threeWayMatch(carrierId: string, lineItems: MatchLineItemInput[]): Promise<ThreeWayMatchResult> {
+  async threeWayMatch(orgId: string, carrierId: string, lineItems: MatchLineItemInput[]): Promise<ThreeWayMatchResult> {
     const lineResults: Array<MatchLineItemInput & MatchResult> = [];
     let totalExpectedCents = 0;
     let totalInvoicedCents = 0;
@@ -49,6 +49,7 @@ export class FreightAuditService implements IFreightAuditService {
     for (const item of lineItems) {
       // Find expected cost charges for this shipment + charge type
       const expectedCharges = await this.chargeRepo.findAll({
+        orgId,
         shipmentId: item.shipmentId,
         chargeCategory: 'cost',
         chargeType: item.chargeType,

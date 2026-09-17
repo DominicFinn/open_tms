@@ -25,7 +25,7 @@ export async function cartonCatalogueRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest) => {
     const q = req.query as any;
-    const orgId = (req as any).orgId || 'default-org';
+    const orgId = req.orgId!;
     const where: any = { orgId };
     const includeArchived = q.includeArchived === true || q.includeArchived === 'true';
     if (!includeArchived) where.active = true;
@@ -76,7 +76,7 @@ export async function cartonCatalogueRoutes(server: FastifyInstance) {
       materialType: z.enum(['corrugated', 'plastic', 'metal', 'foam', 'composite']).optional(),
     }).parse((req as any).body);
 
-    const orgId = (req as any).orgId || 'default-org';
+    const orgId = req.orgId!;
     const carton = await prisma.cartonCatalogue.create({ data: { ...body, orgId } });
 
     reply.code(201);
@@ -106,8 +106,9 @@ export async function cartonCatalogueRoutes(server: FastifyInstance) {
       active: z.boolean().optional(),
     }).parse((req as any).body);
 
-    const updated = await prisma.cartonCatalogue.update({ where: { id }, data: body }).catch(() => null);
-    if (!updated) { reply.code(404); return { data: null, error: 'Not found' }; }
+    const existing = await prisma.cartonCatalogue.findFirst({ where: { id, orgId: req.orgId! } });
+    if (!existing) { reply.code(404); return { data: null, error: 'Not found' }; }
+    const updated = await prisma.cartonCatalogue.update({ where: { id: existing.id }, data: body });
     return { data: updated, error: null };
   });
 
@@ -116,19 +117,20 @@ export async function cartonCatalogueRoutes(server: FastifyInstance) {
   // preserving history for quality compliance.
   server.delete('/api/v1/carton-catalogue/:id', {
     schema: { tags: ['WMS - Cartonization'], summary: 'Archive (soft-delete) or remove a carton type' },
-  }, async (req: FastifyRequest) => {
+  }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
+    const orgId = req.orgId!;
 
-    const referencedCount = await prisma.packAudit.count({ where: { cartonCatalogueId: id } });
+    const existing = await prisma.cartonCatalogue.findFirst({ where: { id, orgId } });
+    if (!existing) { reply.code(404); return { data: null, error: 'Not found' }; }
+
+    const referencedCount = await prisma.packAudit.count({ where: { cartonCatalogueId: id, orgId } });
     if (referencedCount > 0) {
-      const archived = await prisma.cartonCatalogue
-        .update({ where: { id }, data: { active: false } })
-        .catch(() => null);
-      if (!archived) return { data: null, error: 'Not found' };
+      await prisma.cartonCatalogue.update({ where: { id: existing.id }, data: { active: false } });
       return { data: { archived: true, referencedCount }, error: null };
     }
 
-    await prisma.cartonCatalogue.delete({ where: { id } }).catch(() => null);
+    await prisma.cartonCatalogue.delete({ where: { id: existing.id } });
     return { data: { deleted: true }, error: null };
   });
 }

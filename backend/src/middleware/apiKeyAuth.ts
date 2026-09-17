@@ -9,6 +9,7 @@ export function hashApiKey(key: string): string {
 export interface AuthResult {
   apiKeyId: string | null;
   customerId: string | null;
+  orgId: string | null;
   error: string | null;
 }
 
@@ -19,7 +20,7 @@ export async function authenticateApiKey(server: FastifyInstance, req: FastifyRe
 
   if (!apiKeyHeader) {
     reply.code(401);
-    return { apiKeyId: null, customerId: null, error: 'API key required. Please provide x-api-key header or Authorization Bearer token.' };
+    return { apiKeyId: null, customerId: null, orgId: null, error: 'API key required. Please provide x-api-key header or Authorization Bearer token.' };
   }
 
   const keyHash = hashApiKey(apiKeyHeader);
@@ -28,13 +29,14 @@ export async function authenticateApiKey(server: FastifyInstance, req: FastifyRe
     select: {
       id: true,
       active: true,
-      customerId: true
+      customerId: true,
+      orgId: true
     }
   });
 
   if (!apiKey || !apiKey.active) {
     reply.code(403);
-    return { apiKeyId: null, customerId: null, error: 'Invalid or inactive API key.' };
+    return { apiKeyId: null, customerId: null, orgId: null, error: 'Invalid or inactive API key.' };
   }
 
   // Update last used
@@ -43,7 +45,7 @@ export async function authenticateApiKey(server: FastifyInstance, req: FastifyRe
     data: { lastUsedAt: new Date() }
   });
 
-  return { apiKeyId: apiKey.id, customerId: apiKey.customerId, error: null };
+  return { apiKeyId: apiKey.id, customerId: apiKey.customerId, orgId: apiKey.orgId, error: null };
 }
 
 // Helper to redact API key from headers

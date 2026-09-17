@@ -1,56 +1,45 @@
-import { resolveOrgId, resolveActorId, resetOrgScopeCache } from '../../auth/orgScope';
+import { resolveOrgId, resolveActorId } from '../../auth/orgScope';
+
+const orgsInDatabase = (...ids: string[]): any => ({
+  organization: { findMany: jest.fn().mockResolvedValue(ids.map((id) => ({ id }))) },
+});
 
 describe('resolveOrgId', () => {
-  beforeEach(() => resetOrgScopeCache());
-
   it('prefers req.user.organizationId when present', async () => {
     const req: any = { user: { organizationId: 'org-from-jwt' } };
-    const prisma: any = { organization: { findFirst: jest.fn() } };
+    const prisma = orgsInDatabase('org-a', 'org-b');
     expect(await resolveOrgId(req, prisma)).toBe('org-from-jwt');
-    expect(prisma.organization.findFirst).not.toHaveBeenCalled();
+    expect(prisma.organization.findMany).not.toHaveBeenCalled();
   });
 
-  it('falls back to first Organization when JWT lacks orgId', async () => {
+  it('falls back to the sole Organization when the JWT lacks orgId', async () => {
     const req: any = { user: { organizationId: undefined } };
-    const prisma: any = {
-      organization: {
-        findFirst: jest.fn().mockResolvedValue({ id: 'first-org' }),
-      },
-    };
-    expect(await resolveOrgId(req, prisma)).toBe('first-org');
+    expect(await resolveOrgId(req, orgsInDatabase('only-org'))).toBe('only-org');
   });
 
-  it('returns default-org literal when no Organization rows exist', async () => {
-    const req: any = {};
-    const prisma: any = {
-      organization: { findFirst: jest.fn().mockResolvedValue(null) },
-    };
-    expect(await resolveOrgId(req, prisma)).toBe('default-org');
+  it('refuses to guess once a second Organization exists (#239)', async () => {
+    const req: any = { user: { sub: 'user-1' } };
+    expect(await resolveOrgId(req, orgsInDatabase('org-a', 'org-b'))).toBeNull();
   });
 
-  it('caches the fallback so we do not hit the DB on every request', async () => {
-    const req: any = {};
-    const prisma: any = {
-      organization: {
-        findFirst: jest.fn().mockResolvedValue({ id: 'cached-org' }),
-      },
-    };
-    await resolveOrgId(req, prisma);
-    await resolveOrgId(req, prisma);
-    await resolveOrgId(req, prisma);
-    expect(prisma.organization.findFirst).toHaveBeenCalledTimes(1);
+  it('returns null rather than a literal when no Organization exists', async () => {
+    expect(await resolveOrgId({} as any, orgsInDatabase())).toBeNull();
   });
 
-  it('JWT always wins even when the fallback is cached', async () => {
-    const req: any = {};
-    const prisma: any = {
-      organization: {
-        findFirst: jest.fn().mockResolvedValue({ id: 'fallback' }),
-      },
-    };
-    await resolveOrgId(req, prisma); // primes the cache
-    const jwtReq: any = { user: { organizationId: 'jwt-org' } };
-    expect(await resolveOrgId(jwtReq, prisma)).toBe('jwt-org');
+  it('reads at most two ids, which is all the decision needs', async () => {
+    const prisma = orgsInDatabase('only-org');
+    await resolveOrgId({} as any, prisma);
+    expect(prisma.organization.findMany).toHaveBeenCalledWith({ select: { id: true }, take: 2 });
+  });
+
+  it('does not keep serving the sole org after a second one is created', async () => {
+    const findMany = jest
+      .fn()
+      .mockResolvedValueOnce([{ id: 'org-a' }])
+      .mockResolvedValueOnce([{ id: 'org-a' }, { id: 'org-b' }]);
+    const prisma: any = { organization: { findMany } };
+    expect(await resolveOrgId({} as any, prisma)).toBe('org-a');
+    expect(await resolveOrgId({} as any, prisma)).toBeNull();
   });
 });
 

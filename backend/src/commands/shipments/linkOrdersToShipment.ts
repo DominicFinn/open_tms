@@ -83,6 +83,7 @@ export async function linkOrdersToShipment(
 
     await tx.auditLog.create({
       data: {
+        orgId: ctx.orgId,
         entityType: 'order',
         entityId: order.id,
         orderId: order.id,

@@ -31,6 +31,7 @@ export class CreateShipmentTypeCommandHandler extends BaseCommandHandler<CreateS
     const p = command.payload;
     const created = await tx.shipmentType.create({
       data: {
+        orgId: command.orgId,
         name: p.name,
         icon: p.icon ?? 'local_shipping',
         color: p.color ?? '#6366F1',
