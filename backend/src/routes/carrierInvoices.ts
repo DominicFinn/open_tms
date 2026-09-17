@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { container, TOKENS } from '../di/index.js';
@@ -8,11 +9,14 @@ import { APPROVE_CARRIER_INVOICE, ApproveCarrierInvoicePayload } from '../comman
 import { RECORD_CARRIER_PAYMENT, RecordCarrierPaymentPayload } from '../commands/carrierInvoices/RecordCarrierPaymentCommand.js';
 import { CarrierPaymentBatchService } from '../services/CarrierPaymentBatchService.js';
 import { guardWrites } from '../auth/guardWrites.js';
+import { commandFailureStatus } from '../commands/types.js';
+import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 
 export async function carrierInvoiceRoutes(server: FastifyInstance) {
   const carrierInvoiceRepo = container.resolve<ICarrierInvoiceRepository>(TOKENS.ICarrierInvoiceRepository);
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
 
+  await registerOrgScope(server);
   server.addHook('preHandler', guardWrites('carrier_invoices'));
 
   // List carrier invoices
@@ -32,6 +36,7 @@ export async function carrierInvoiceRoutes(server: FastifyInstance) {
   }, async (req: FastifyRequest) => {
     const query = req.query as Record<string, string>;
     const invoices = await carrierInvoiceRepo.findAll({
+      orgId: req.orgId!,
       carrierId: query.carrierId,
       status: query.status,
       matchStatus: query.matchStatus,
@@ -47,7 +52,7 @@ export async function carrierInvoiceRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const invoice = await carrierInvoiceRepo.findById(id);
+    const invoice = await carrierInvoiceRepo.findById(id, req.orgId!);
     if (!invoice) {
       reply.code(404);
       return { data: null, error: 'Carrier invoice not found' };
@@ -110,14 +115,14 @@ export async function carrierInvoiceRoutes(server: FastifyInstance) {
     try {
       const result = await commandBus.dispatch<ReceiveCarrierInvoicePayload, { id: string; matchStatus: string; autoApproved: boolean }>({
         type: RECEIVE_CARRIER_INVOICE,
-        orgId: (req as any).orgId ?? '',
+        orgId: req.orgId!,
         actorId: (req as any).user?.sub ?? null,
         payload: body,
         metadata: { correlationId: crypto.randomUUID(), source: 'api' },
       });
 
       if (!result.success) {
-        reply.code(400);
+        reply.code(commandFailureStatus(result.error));
         return { data: null, error: result.error };
       }
 
@@ -150,13 +155,13 @@ export async function carrierInvoiceRoutes(server: FastifyInstance) {
     try {
       const result = await commandBus.dispatch<ApproveCarrierInvoicePayload, { id: string }>({
         type: APPROVE_CARRIER_INVOICE,
-        orgId: (req as any).orgId ?? '',
+        orgId: req.orgId!,
         actorId: (req as any).user?.sub ?? null,
         payload: { carrierInvoiceId: id, ...body },
         metadata: { correlationId: crypto.randomUUID(), source: 'api' },
       });
       if (!result.success) {
-        reply.code(400);
+        reply.code(commandFailureStatus(result.error));
         return { data: null, error: result.error };
       }
       return { data: result.data, error: null };
@@ -190,13 +195,13 @@ export async function carrierInvoiceRoutes(server: FastifyInstance) {
     try {
       const result = await commandBus.dispatch<RecordCarrierPaymentPayload, { id: string }>({
         type: RECORD_CARRIER_PAYMENT,
-        orgId: (req as any).orgId ?? '',
+        orgId: req.orgId!,
         actorId: (req as any).user?.sub ?? null,
         payload: { carrierInvoiceId: id, ...body },
         metadata: { correlationId: crypto.randomUUID(), source: 'api' },
       });
       if (!result.success) {
-        reply.code(400);
+        reply.code(commandFailureStatus(result.error));
         return { data: null, error: result.error };
       }
       return { data: result.data, error: null };
@@ -227,21 +232,18 @@ export async function carrierInvoiceRoutes(server: FastifyInstance) {
       daysToPayment: z.number().int().min(1),
     }).parse((req as any).body);
 
-    const invoice = await server.prisma.carrierInvoice.findUnique({ where: { id } });
+    const invoice = await carrierInvoiceRepo.findById(id, req.orgId!);
     if (!invoice) { reply.code(404); return { data: null, error: 'Invoice not found' }; }
 
     const discountCents = Math.round(invoice.totalCents * body.discountPercent / 100);
     const quickPayDueDate = new Date();
     quickPayDueDate.setDate(quickPayDueDate.getDate() + body.daysToPayment);
 
-    const updated = await server.prisma.carrierInvoice.update({
-      where: { id },
-      data: {
-        quickPayRequested: true,
-        quickPayDiscountPct: body.discountPercent,
-        quickPayDiscountCents: discountCents,
-        quickPayDueDate: quickPayDueDate,
-      },
+    const updated = await carrierInvoiceRepo.update(id, {
+      quickPayRequested: true,
+      quickPayDiscountPct: new Prisma.Decimal(body.discountPercent),
+      quickPayDiscountCents: discountCents,
+      quickPayDueDate: quickPayDueDate,
     });
 
     return { data: updated, error: null };
@@ -268,7 +270,7 @@ export async function carrierInvoiceRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest) => {
     const query = req.query as Record<string, string>;
-    const batches = await batchService.getPendingBatches({
+    const batches = await batchService.getPendingBatches(req.orgId!, {
       carrierId: query.carrierId,
       dueBefore: query.dueBefore ? new Date(query.dueBefore) : undefined,
     });
@@ -281,8 +283,8 @@ export async function carrierInvoiceRoutes(server: FastifyInstance) {
       tags: ['Financial - Carrier Payment Batching'],
       summary: 'Get summary of scheduled carrier payments by date',
     },
-  }, async () => {
-    const summary = await batchService.getScheduledSummary();
+  }, async (req: FastifyRequest) => {
+    const summary = await batchService.getScheduledSummary(req.orgId!);
     return { data: summary, error: null };
   });
 
@@ -311,7 +313,7 @@ export async function carrierInvoiceRoutes(server: FastifyInstance) {
     }).parse((req as any).body);
 
     try {
-      const result = await batchService.scheduleBatch({
+      const result = await batchService.scheduleBatch(req.orgId!, {
         carrierInvoiceIds: body.carrierInvoiceIds,
         carrierId: body.carrierId,
         dueBefore: body.dueBefore ? new Date(body.dueBefore) : undefined,
@@ -344,7 +346,7 @@ export async function carrierInvoiceRoutes(server: FastifyInstance) {
     }).parse((req as any).body ?? {});
 
     try {
-      const result = await batchService.executeScheduledPayments({
+      const result = await batchService.executeScheduledPayments(req.orgId!, {
         payDate: body.payDate ? new Date(body.payDate) : undefined,
         paymentReference: body.paymentReference,
       });

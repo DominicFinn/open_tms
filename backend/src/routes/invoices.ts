@@ -10,12 +10,15 @@ import { SEND_INVOICE, SendInvoicePayload } from '../commands/invoices/SendInvoi
 import { RECORD_PAYMENT, RecordPaymentPayload } from '../commands/invoices/RecordPaymentCommand.js';
 import { VOID_INVOICE, VoidInvoicePayload } from '../commands/invoices/VoidInvoiceCommand.js';
 import { guardWrites } from '../auth/guardWrites.js';
+import { commandFailureStatus } from '../commands/types.js';
+import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 
 export async function invoiceRoutes(server: FastifyInstance) {
   const invoiceRepo = container.resolve<IInvoiceRepository>(TOKENS.IInvoiceRepository);
   const invoicingService = container.resolve<IInvoicingService>(TOKENS.IInvoicingService);
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
 
+  await registerOrgScope(server);
   server.addHook('preHandler', guardWrites('invoices'));
 
   // List invoices
@@ -34,6 +37,7 @@ export async function invoiceRoutes(server: FastifyInstance) {
   }, async (req: FastifyRequest) => {
     const query = req.query as Record<string, string>;
     const invoices = await invoiceRepo.findAll({
+      orgId: req.orgId!,
       customerId: query.customerId,
       status: query.status,
     });
@@ -54,7 +58,7 @@ export async function invoiceRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest) => {
     const query = req.query as Record<string, string>;
-    const orgId = (req as any).orgId ?? '';
+    const orgId = req.orgId!;
     const shipments = await invoicingService.findReadyToInvoice(orgId, query.customerId);
     return { data: shipments, error: null };
   });
@@ -67,7 +71,7 @@ export async function invoiceRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const invoice = await invoiceRepo.findById(id);
+    const invoice = await invoiceRepo.findById(id, req.orgId!);
     if (!invoice) {
       reply.code(404);
       return { data: null, error: 'Invoice not found' };
@@ -102,14 +106,14 @@ export async function invoiceRoutes(server: FastifyInstance) {
     try {
       const result = await commandBus.dispatch<CreateInvoicePayload, { id: string; invoiceNumber: string }>({
         type: CREATE_INVOICE,
-        orgId: (req as any).orgId ?? '',
+        orgId: req.orgId!,
         actorId: (req as any).user?.sub ?? null,
         payload: body,
         metadata: { correlationId: crypto.randomUUID(), source: 'api' },
       });
 
       if (!result.success) {
-        reply.code(400);
+        reply.code(commandFailureStatus(result.error));
         return { data: null, error: result.error };
       }
 
@@ -132,13 +136,13 @@ export async function invoiceRoutes(server: FastifyInstance) {
     try {
       const result = await commandBus.dispatch<ApproveInvoicePayload, { id: string }>({
         type: APPROVE_INVOICE,
-        orgId: (req as any).orgId ?? '',
+        orgId: req.orgId!,
         actorId: (req as any).user?.sub ?? null,
         payload: { invoiceId: id },
         metadata: { correlationId: crypto.randomUUID(), source: 'api' },
       });
       if (!result.success) {
-        reply.code(400);
+        reply.code(commandFailureStatus(result.error));
         return { data: null, error: result.error };
       }
       return { data: result.data, error: null };
@@ -159,13 +163,13 @@ export async function invoiceRoutes(server: FastifyInstance) {
     try {
       const result = await commandBus.dispatch<SendInvoicePayload, { id: string }>({
         type: SEND_INVOICE,
-        orgId: (req as any).orgId ?? '',
+        orgId: req.orgId!,
         actorId: (req as any).user?.sub ?? null,
         payload: { invoiceId: id },
         metadata: { correlationId: crypto.randomUUID(), source: 'api' },
       });
       if (!result.success) {
-        reply.code(400);
+        reply.code(commandFailureStatus(result.error));
         return { data: null, error: result.error };
       }
       return { data: result.data, error: null };
@@ -205,13 +209,13 @@ export async function invoiceRoutes(server: FastifyInstance) {
     try {
       const result = await commandBus.dispatch<RecordPaymentPayload, { id: string; invoiceStatus: string }>({
         type: RECORD_PAYMENT,
-        orgId: (req as any).orgId ?? '',
+        orgId: req.orgId!,
         actorId: (req as any).user?.sub ?? null,
         payload: { invoiceId: id, ...body },
         metadata: { correlationId: crypto.randomUUID(), source: 'api' },
       });
       if (!result.success) {
-        reply.code(400);
+        reply.code(commandFailureStatus(result.error));
         return { data: null, error: result.error };
       }
       return { data: result.data, error: null };
@@ -242,13 +246,13 @@ export async function invoiceRoutes(server: FastifyInstance) {
     try {
       const result = await commandBus.dispatch<VoidInvoicePayload, { id: string }>({
         type: VOID_INVOICE,
-        orgId: (req as any).orgId ?? '',
+        orgId: req.orgId!,
         actorId: (req as any).user?.sub ?? null,
         payload: { invoiceId: id, ...body },
         metadata: { correlationId: crypto.randomUUID(), source: 'api' },
       });
       if (!result.success) {
-        reply.code(400);
+        reply.code(commandFailureStatus(result.error));
         return { data: null, error: result.error };
       }
       return { data: result.data, error: null };
@@ -279,15 +283,8 @@ export async function invoiceRoutes(server: FastifyInstance) {
     }).parse((req as any).body);
 
     try {
-      const orgId = (req as any).orgId ?? '';
+      const orgId = req.orgId!;
 
-      // Find all ready-to-invoice shipments for this customer
-      const summaries = await invoiceRepo.findAll({ status: 'ready_to_invoice' } as any);
-
-      // We need to find shipments via the financial summary
-      const prisma = container.resolve<any>(TOKENS.IChargeRepository);
-
-      // Simpler approach: use the invoicingService.findReadyToInvoice
       const ready = await invoicingService.findReadyToInvoice(orgId, body.customerId);
 
       if (ready.length === 0) {
@@ -312,7 +309,7 @@ export async function invoiceRoutes(server: FastifyInstance) {
       });
 
       if (!result.success) {
-        reply.code(400);
+        reply.code(commandFailureStatus(result.error));
         return { data: null, error: result.error };
       }
 

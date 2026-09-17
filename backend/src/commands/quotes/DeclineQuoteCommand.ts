@@ -19,8 +19,8 @@ export class DeclineQuoteCommandHandler extends BaseCommandHandler<DeclineQuoteP
   }
 
   protected async handle(command: Command<DeclineQuotePayload>, tx: TransactionClient, emit: EmitFn) {
-    const quote = await tx.quote.findUnique({
-      where: { id: command.payload.quoteId },
+    const quote = await tx.quote.findFirst({
+      where: { id: command.payload.quoteId, orgId: command.orgId },
     });
 
     if (!quote) throw new Error('Quote not found');

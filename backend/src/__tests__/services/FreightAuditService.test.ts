@@ -20,7 +20,7 @@ describe('FreightAuditService', () => {
         { amountCents: 150000, status: 'approved', chargeCategory: 'cost', chargeType: 'linehaul' },
       ]);
 
-      const result = await service.threeWayMatch('carrier-1', [
+      const result = await service.threeWayMatch('org-1', 'carrier-1', [
         { shipmentId: 'ship-1', chargeType: 'linehaul', invoicedAmountCents: 150000 },
       ]);
 
@@ -41,7 +41,7 @@ describe('FreightAuditService', () => {
         { amountCents: 150000, status: 'approved', chargeCategory: 'cost', chargeType: 'linehaul' },
       ]);
 
-      const result = await service.threeWayMatch('carrier-1', [
+      const result = await service.threeWayMatch('org-1', 'carrier-1', [
         { shipmentId: 'ship-1', chargeType: 'linehaul', invoicedAmountCents: 160000 },
       ]);
 
@@ -55,7 +55,7 @@ describe('FreightAuditService', () => {
     it('returns unmatched when no expected charges', async () => {
       mockChargeRepo.findAll.mockResolvedValue([]);
 
-      const result = await service.threeWayMatch('carrier-1', [
+      const result = await service.threeWayMatch('org-1', 'carrier-1', [
         { shipmentId: 'ship-1', chargeType: 'linehaul', invoicedAmountCents: 150000 },
       ]);
 
@@ -73,7 +73,7 @@ describe('FreightAuditService', () => {
       ]);
 
       // 1% variance ($1,500 on $150,000) — within the default 2% tolerance
-      const result = await service.threeWayMatch('carrier-1', [
+      const result = await service.threeWayMatch('org-1', 'carrier-1', [
         { shipmentId: 'ship-1', chargeType: 'linehaul', invoicedAmountCents: 151500 },
       ]);
 
@@ -90,7 +90,7 @@ describe('FreightAuditService', () => {
       ]);
 
       // 20% variance — way over 2% tolerance
-      const result = await service.threeWayMatch('carrier-1', [
+      const result = await service.threeWayMatch('org-1', 'carrier-1', [
         { shipmentId: 'ship-1', chargeType: 'linehaul', invoicedAmountCents: 120000 },
       ]);
 
@@ -102,7 +102,7 @@ describe('FreightAuditService', () => {
     it('does not auto-approve unmatched line items regardless of tolerance', async () => {
       mockChargeRepo.findAll.mockResolvedValue([]);
 
-      const result = await service.threeWayMatch('carrier-1', [
+      const result = await service.threeWayMatch('org-1', 'carrier-1', [
         { shipmentId: 'ship-1', chargeType: 'linehaul', invoicedAmountCents: 100 },
       ]);
 
@@ -115,7 +115,7 @@ describe('FreightAuditService', () => {
         .mockResolvedValueOnce([{ amountCents: 150000, status: 'approved' }]) // linehaul
         .mockResolvedValueOnce([{ amountCents: 27000, status: 'approved' }]); // fuel_surcharge
 
-      const result = await service.threeWayMatch('carrier-1', [
+      const result = await service.threeWayMatch('org-1', 'carrier-1', [
         { shipmentId: 'ship-1', chargeType: 'linehaul', invoicedAmountCents: 150000 },
         { shipmentId: 'ship-1', chargeType: 'fuel_surcharge', invoicedAmountCents: 27000 },
       ]);
@@ -136,7 +136,7 @@ describe('FreightAuditService', () => {
         { amountCents: 30000, status: 'written_off', chargeCategory: 'cost' },
       ]);
 
-      const result = await service.threeWayMatch('carrier-1', [
+      const result = await service.threeWayMatch('org-1', 'carrier-1', [
         { shipmentId: 'ship-1', chargeType: 'linehaul', invoicedAmountCents: 150000 },
       ]);
 
@@ -150,18 +150,20 @@ describe('FreightAuditService', () => {
         .mockResolvedValueOnce([{ amountCents: 100000, status: 'approved' }])
         .mockResolvedValueOnce([{ amountCents: 15000, status: 'approved' }]);
 
-      await service.threeWayMatch('carrier-1', [
+      await service.threeWayMatch('org-1', 'carrier-1', [
         { shipmentId: 'ship-1', chargeType: 'linehaul', invoicedAmountCents: 100000 },
         { shipmentId: 'ship-2', chargeType: 'fuel_surcharge', invoicedAmountCents: 15000 },
       ]);
 
       expect(mockChargeRepo.findAll).toHaveBeenCalledTimes(2);
       expect(mockChargeRepo.findAll).toHaveBeenNthCalledWith(1, {
+        orgId: 'org-1',
         shipmentId: 'ship-1',
         chargeCategory: 'cost',
         chargeType: 'linehaul',
       });
       expect(mockChargeRepo.findAll).toHaveBeenNthCalledWith(2, {
+        orgId: 'org-1',
         shipmentId: 'ship-2',
         chargeCategory: 'cost',
         chargeType: 'fuel_surcharge',

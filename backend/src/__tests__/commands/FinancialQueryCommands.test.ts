@@ -3,6 +3,10 @@ import { ResolveQueryCommandHandler, RESOLVE_QUERY } from '../../commands/querie
 import { EVENT_TYPES } from '../../events/eventTypes';
 import { createTestCommand, mockEventBus } from '../helpers/testUtils';
 
+// Entity lookups are by { id, orgId }; number-sequence lookups carry no id.
+const findById = (row: unknown) =>
+  jest.fn().mockImplementation(({ where }: any) => Promise.resolve(where?.id ? row : null));
+
 const mockQuery = {
   id: 'qry-1', orgId: 'test-org', queryNumber: 'QRY-0001',
   queryType: 'customer_dispute', reason: 'overcharge',
@@ -13,8 +17,7 @@ const mockQuery = {
 
 const mockTx = {
   financialQuery: {
-    findFirst: jest.fn().mockResolvedValue(null),
-    findUnique: jest.fn().mockResolvedValue(mockQuery),
+    findFirst: findById(mockQuery),
     create: jest.fn().mockResolvedValue(mockQuery),
     update: jest.fn().mockResolvedValue(mockQuery),
   },
@@ -24,6 +27,9 @@ const mockTx = {
       id: 'cn-1', creditNoteNumber: 'CN-0001', amountCents: 15000,
     }),
   },
+  shipment: { findFirst: findById({ id: 'ship-1' }) },
+  invoice: { findFirst: findById({ id: 'inv-1' }) },
+  carrierInvoice: { findFirst: findById({ id: 'cinv-1' }) },
   domainEventLog: { create: jest.fn().mockResolvedValue({}) },
 } as any;
 
@@ -34,6 +40,29 @@ const mockPrisma = {
 
 describe('Financial Query Command Handlers', () => {
   beforeEach(() => jest.clearAllMocks());
+
+  it.each([
+    ['invoice', { invoiceId: 'inv-other-org' }, 'Invoice not found'],
+    ['carrier invoice', { carrierInvoiceId: 'cinv-other-org' }, 'Carrier invoice not found'],
+    ['shipment', { shipmentId: 'ship-other-org' }, 'Shipment not found'],
+  ])('will not raise a query against another org\'s %s', async (_name, ref, message) => {
+    const missing = { findFirst: jest.fn().mockResolvedValue(null) };
+    const tx = { ...mockTx, invoice: missing, carrierInvoice: missing, shipment: missing } as any;
+    const prisma = {
+      $transaction: jest.fn((fn: Function) => fn(tx)),
+      domainEventLog: { findFirst: jest.fn().mockResolvedValue(null) },
+    } as any;
+    const { bus } = mockEventBus();
+    const handler = new RaiseQueryCommandHandler(prisma, bus);
+
+    const result = await handler.execute(createTestCommand(RAISE_QUERY, {
+      queryType: 'customer_dispute', reason: 'overcharge', description: 'x', ...ref,
+    }));
+
+    expect(result.error).toBe(message);
+    expect(missing.findFirst.mock.calls[0][0].where).toMatchObject({ orgId: 'test-org' });
+    expect(tx.financialQuery.create).not.toHaveBeenCalled();
+  });
 
   describe('RaiseQueryCommandHandler', () => {
     it('raises a query and emits FINANCIAL_QUERY_RAISED', async () => {
@@ -119,7 +148,7 @@ describe('Financial Query Command Handlers', () => {
         ...mockTx,
         financialQuery: {
           ...mockTx.financialQuery,
-          findUnique: jest.fn().mockResolvedValue({ ...mockQuery, status: 'resolved_adjusted' }),
+          findFirst: findById({ ...mockQuery, status: 'resolved_adjusted' }),
         },
       };
       const prisma = {

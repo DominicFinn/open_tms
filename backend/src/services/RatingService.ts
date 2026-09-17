@@ -47,7 +47,7 @@ export interface RateLineItem {
 // ─── Interface ──────────────────────────────────────────────────────────────
 
 export interface IRatingService {
-  calculateRate(request: RateRequest): Promise<RateBreakdown>;
+  calculateRate(orgId: string, request: RateRequest): Promise<RateBreakdown>;
 }
 
 // ─── Implementation ─────────────────────────────────────────────────────────
@@ -55,7 +55,7 @@ export interface IRatingService {
 export class RatingService implements IRatingService {
   constructor(private prisma: PrismaClient) {}
 
-  async calculateRate(request: RateRequest): Promise<RateBreakdown> {
+  async calculateRate(orgId: string, request: RateRequest): Promise<RateBreakdown> {
     const details: RateLineItem[] = [];
     let linehaulCents = 0;
     let fuelSurchargeCents = 0;
@@ -63,7 +63,7 @@ export class RatingService implements IRatingService {
     const currency = 'USD';
 
     // Find the LaneCarrier rate
-    const laneCarrier = await this.findLaneCarrier(request);
+    const laneCarrier = await this.findLaneCarrier(orgId, request);
 
     if (!laneCarrier) {
       return {
@@ -132,12 +132,14 @@ export class RatingService implements IRatingService {
     };
   }
 
-  private async findLaneCarrier(request: RateRequest) {
+  // Lane carrier rates are tenant pricing, so the lane must belong to the caller.
+  private async findLaneCarrier(orgId: string, request: RateRequest) {
     if (request.laneId && request.carrierId) {
       return this.prisma.laneCarrier.findFirst({
         where: {
           laneId: request.laneId,
           carrierId: request.carrierId,
+          lane: { orgId },
         },
         include: {
           lane: { select: { distance: true } },
@@ -150,6 +152,7 @@ export class RatingService implements IRatingService {
       return this.prisma.laneCarrier.findFirst({
         where: {
           laneId: request.laneId,
+          lane: { orgId },
           carrier: { archived: false },
         },
         include: {

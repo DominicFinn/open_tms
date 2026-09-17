@@ -734,6 +734,26 @@ draft → open → evaluating → awarded
 | `charge.approved` | `ShipmentFinancialSummary` actual figures updated |
 | `tender.awarded` | `TenderAwardFinancialHandler` auto-creates cost charge from winning bid |
 
+### Financial tenancy
+
+Charges, invoices, carrier invoices, financial queries, credit notes and quotes are all scoped to
+the caller's org (#303). Before that, the routes dispatched with an empty org when none was set and
+looked records up by id alone.
+
+- Every repository `findById` and list filter takes `orgId`, and a cross-tenant id returns 404.
+- Command handlers load their aggregate with `{ id, orgId: command.orgId }`. A command that fails
+  with "not found" maps to 404 through `commandFailureStatus`.
+- `CreateChargeCommand` and `ReweighAdjustmentCommand` refuse a shipment or order from another org.
+  `RaiseQueryCommand` does the same for the invoice, carrier invoice and shipment it references.
+- `CreateOrderCommand` writes under `command.orgId` only. An `orgId` in the payload used to override
+  it.
+- Carrier payment batching (list, schedule, execute, scheduled summary) only reads and pays the
+  caller's invoices.
+- Rate calculation and quick quotes only price lanes that belong to the caller, and the credit check
+  only sums the caller's invoices.
+- `MarginAlertHandler` reads margin settings from the org that raised the charge event, not the first
+  organization.
+
 ### Charge Lifecycle
 
 ```

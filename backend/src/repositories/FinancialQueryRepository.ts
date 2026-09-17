@@ -34,7 +34,7 @@ export interface CreateCreditNoteDTO {
 }
 
 export interface FinancialQueryFilters {
-  orgId?: string;
+  orgId: string;
   queryType?: string;
   status?: string;
   invoiceId?: string;
@@ -45,7 +45,7 @@ export interface FinancialQueryFilters {
 
 export interface IFinancialQueryRepository {
   create(data: CreateFinancialQueryDTO): Promise<FinancialQuery>;
-  findById(id: string): Promise<FinancialQuery | null>;
+  findById(id: string, orgId: string): Promise<FinancialQuery | null>;
   findAll(filters: FinancialQueryFilters): Promise<FinancialQuery[]>;
   update(id: string, data: Partial<FinancialQuery>): Promise<FinancialQuery>;
   getNextQueryNumber(orgId: string): Promise<string>;
@@ -53,7 +53,7 @@ export interface IFinancialQueryRepository {
 
 export interface ICreditNoteRepository {
   create(data: CreateCreditNoteDTO): Promise<CreditNote>;
-  findById(id: string): Promise<CreditNote | null>;
+  findById(id: string, orgId: string): Promise<CreditNote | null>;
   findAll(orgId: string): Promise<CreditNote[]>;
   update(id: string, data: Partial<CreditNote>): Promise<CreditNote>;
   getNextCreditNoteNumber(orgId: string): Promise<string>;
@@ -68,14 +68,14 @@ export class FinancialQueryRepository implements IFinancialQueryRepository {
     return this.prisma.financialQuery.create({ data });
   }
 
-  async findById(id: string): Promise<FinancialQuery | null> {
-    return this.prisma.financialQuery.findUnique({ where: { id } });
+  async findById(id: string, orgId: string): Promise<FinancialQuery | null> {
+    return this.prisma.financialQuery.findFirst({ where: { id, orgId } });
   }
 
   async findAll(filters: FinancialQueryFilters): Promise<FinancialQuery[]> {
     return this.prisma.financialQuery.findMany({
       where: {
-        ...(filters.orgId && { orgId: filters.orgId }),
+        orgId: filters.orgId,
         ...(filters.queryType && { queryType: filters.queryType }),
         ...(filters.status && { status: filters.status }),
         ...(filters.invoiceId && { invoiceId: filters.invoiceId }),
@@ -108,8 +108,8 @@ export class CreditNoteRepository implements ICreditNoteRepository {
     return this.prisma.creditNote.create({ data });
   }
 
-  async findById(id: string): Promise<CreditNote | null> {
-    return this.prisma.creditNote.findUnique({ where: { id } });
+  async findById(id: string, orgId: string): Promise<CreditNote | null> {
+    return this.prisma.creditNote.findFirst({ where: { id, orgId } });
   }
 
   async findAll(orgId: string): Promise<CreditNote[]> {

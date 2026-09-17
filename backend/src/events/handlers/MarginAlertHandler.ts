@@ -31,8 +31,9 @@ export class MarginAlertHandler implements IEventHandler {
     const payload = event.payload as { shipmentId?: string };
     if (!payload.shipmentId) return;
 
-    // Check if margin alerts are enabled
-    const org = await this.prisma.organization.findFirst({
+    // Margin alert settings belong to the org that raised the charge event.
+    const org = await this.prisma.organization.findUnique({
+      where: { id: event.orgId },
       select: {
         id: true,
         marginAlertEnabled: true,
@@ -46,8 +47,8 @@ export class MarginAlertHandler implements IEventHandler {
     if (threshold <= 0) return;
 
     // Get the financial summary for this shipment
-    const summary = await this.prisma.shipmentFinancialSummary.findUnique({
-      where: { shipmentId: payload.shipmentId },
+    const summary = await this.prisma.shipmentFinancialSummary.findFirst({
+      where: { shipmentId: payload.shipmentId, orgId: org.id },
     });
 
     if (!summary) return;
@@ -64,8 +65,8 @@ export class MarginAlertHandler implements IEventHandler {
     if (marginPct >= threshold) return;
 
     // Margin is below threshold - check if we already have an open issue for this
-    const shipment = await this.prisma.shipment.findUnique({
-      where: { id: payload.shipmentId },
+    const shipment = await this.prisma.shipment.findFirst({
+      where: { id: payload.shipmentId, orgId: org.id },
       select: { id: true, reference: true },
     });
 
@@ -73,6 +74,7 @@ export class MarginAlertHandler implements IEventHandler {
 
     const existingIssue = await this.prisma.issue.findFirst({
       where: {
+        orgId: org.id,
         sourceEntityType: 'shipment',
         sourceEntityId: payload.shipmentId,
         category: 'margin_alert',

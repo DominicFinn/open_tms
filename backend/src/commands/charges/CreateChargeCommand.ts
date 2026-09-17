@@ -37,10 +37,25 @@ export class CreateChargeCommandHandler extends BaseCommandHandler<CreateChargeP
       throw new Error('A charge must be linked to a shipment or order');
     }
 
+    if (payload.shipmentId) {
+      const shipment = await tx.shipment.findFirst({
+        where: { id: payload.shipmentId, orgId: command.orgId },
+        select: { id: true },
+      });
+      if (!shipment) throw new Error('Shipment not found');
+    }
+    if (payload.orderId) {
+      const order = await tx.order.findFirst({
+        where: { id: payload.orderId, orgId: command.orgId },
+        select: { id: true },
+      });
+      if (!order) throw new Error('Order not found');
+    }
+
     // Enforce same-currency on shipment charges
     if (payload.shipmentId) {
       const existing = await tx.charge.findFirst({
-        where: { shipmentId: payload.shipmentId },
+        where: { shipmentId: payload.shipmentId, orgId: command.orgId },
         select: { currency: true },
       });
       if (existing && (payload.currency ?? 'USD') !== existing.currency) {
@@ -96,7 +111,7 @@ export class CreateChargeCommandHandler extends BaseCommandHandler<CreateChargeP
 
   private async recalculateShipmentSummary(tx: TransactionClient, shipmentId: string, orgId: string) {
     const charges = await tx.charge.findMany({
-      where: { shipmentId, status: { not: 'written_off' } },
+      where: { shipmentId, orgId, status: { not: 'written_off' } },
     });
 
     const revenueCents = charges

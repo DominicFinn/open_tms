@@ -50,9 +50,9 @@ describe('FinancialQueryRepository', () => {
       const prisma = buildPrisma();
       const repo = new FinancialQueryRepository(prisma);
 
-      await repo.findAll({});
+      await repo.findAll({ orgId: 'org-1' });
 
-      expect(prisma.financialQuery.findMany.mock.calls[0][0].where).toEqual({});
+      expect(prisma.financialQuery.findMany.mock.calls[0][0].where).toEqual({ orgId: 'org-1' });
     });
   });
 

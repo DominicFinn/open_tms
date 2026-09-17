@@ -18,8 +18,8 @@ export class ApproveChargeCommandHandler extends BaseCommandHandler<ApproveCharg
   }
 
   protected async handle(command: Command<ApproveChargePayload>, tx: TransactionClient, emit: EmitFn) {
-    const charge = await tx.charge.findUnique({
-      where: { id: command.payload.chargeId },
+    const charge = await tx.charge.findFirst({
+      where: { id: command.payload.chargeId, orgId: command.orgId },
     });
 
     if (!charge) {
@@ -61,7 +61,7 @@ export class ApproveChargeCommandHandler extends BaseCommandHandler<ApproveCharg
 
   private async recalculateShipmentSummary(tx: TransactionClient, shipmentId: string, orgId: string) {
     const charges = await tx.charge.findMany({
-      where: { shipmentId, status: { not: 'written_off' } },
+      where: { shipmentId, orgId, status: { not: 'written_off' } },
     });
 
     const revenueCents = charges

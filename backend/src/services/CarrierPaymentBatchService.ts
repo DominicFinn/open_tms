@@ -4,7 +4,7 @@
  * payment dates and bulk execution.
  */
 
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 
 export interface PaymentBatchItem {
   carrierInvoiceId: string;
@@ -43,18 +43,21 @@ export interface ExecuteBatchResult {
   carriers: Array<{ carrierId: string; carrierName: string; invoiceCount: number; paidCents: number }>;
 }
 
+// Every method takes the caller's orgId and applies it to each read and bulk
+// write, so one tenant can never schedule or pay another tenant's invoices.
 export class CarrierPaymentBatchService {
   constructor(private prisma: PrismaClient) {}
 
   /**
    * Get all approved carrier invoices ready for payment, grouped by carrier.
    */
-  async getPendingBatches(filters?: {
+  async getPendingBatches(orgId: string, filters?: {
     carrierId?: string;
     dueBefore?: Date;
   }): Promise<PaymentBatch[]> {
     const invoices = await this.prisma.carrierInvoice.findMany({
       where: {
+        orgId,
         status: 'approved',
         ...(filters?.carrierId && { carrierId: filters.carrierId }),
         ...(filters?.dueBefore && { dueDate: { lte: filters.dueBefore } }),
@@ -111,7 +114,7 @@ export class CarrierPaymentBatchService {
    * Schedule a batch of approved invoices for payment on a specific date.
    * Sets status to 'scheduled' and records the scheduledPayDate.
    */
-  async scheduleBatch(params: {
+  async scheduleBatch(orgId: string, params: {
     carrierInvoiceIds?: string[];
     carrierId?: string;
     dueBefore?: Date;
@@ -120,7 +123,7 @@ export class CarrierPaymentBatchService {
     const { scheduledPayDate } = params;
 
     // Build the where clause
-    const where: any = { status: 'approved' };
+    const where: Prisma.CarrierInvoiceWhereInput = { orgId, status: 'approved' };
     if (params.carrierInvoiceIds?.length) {
       where.id = { in: params.carrierInvoiceIds };
     } else {
@@ -140,7 +143,7 @@ export class CarrierPaymentBatchService {
 
     // Update all to scheduled
     await this.prisma.carrierInvoice.updateMany({
-      where: { id: { in: invoices.map((i: { id: string }) => i.id) } },
+      where: { orgId, id: { in: invoices.map((i: { id: string }) => i.id) } },
       data: {
         status: 'scheduled',
         scheduledPayDate,
@@ -176,7 +179,7 @@ export class CarrierPaymentBatchService {
    * Execute payment for all scheduled invoices due on or before the given date.
    * Marks them as paid and records the payment reference.
    */
-  async executeScheduledPayments(params: {
+  async executeScheduledPayments(orgId: string, params: {
     payDate?: Date;
     paymentReference?: string;
   }): Promise<ExecuteBatchResult> {
@@ -184,6 +187,7 @@ export class CarrierPaymentBatchService {
 
     const invoices = await this.prisma.carrierInvoice.findMany({
       where: {
+        orgId,
         status: 'scheduled',
         scheduledPayDate: { lte: payDate },
       },
@@ -217,7 +221,7 @@ export class CarrierPaymentBatchService {
       const shipmentIds = [...new Set(inv.lineItems.map((l: { shipmentId: string | null }) => l.shipmentId).filter(Boolean) as string[])];
       if (shipmentIds.length > 0) {
         await this.prisma.shipmentFinancialSummary.updateMany({
-          where: { shipmentId: { in: shipmentIds } },
+          where: { orgId, shipmentId: { in: shipmentIds } },
           data: { carrierPaymentStatus: 'paid' },
         });
       }
@@ -248,7 +252,7 @@ export class CarrierPaymentBatchService {
   /**
    * Get summary of scheduled payments (for dashboard/preview).
    */
-  async getScheduledSummary(): Promise<{
+  async getScheduledSummary(orgId: string): Promise<{
     totalScheduled: number;
     totalCents: number;
     batches: Array<{
@@ -259,7 +263,7 @@ export class CarrierPaymentBatchService {
     }>;
   }> {
     const scheduled = await this.prisma.carrierInvoice.findMany({
-      where: { status: 'scheduled' },
+      where: { orgId, status: 'scheduled' },
       include: { carrier: { select: { id: true, name: true } } },
       orderBy: { scheduledPayDate: 'asc' },
     });
