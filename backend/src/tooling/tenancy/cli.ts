@@ -14,6 +14,7 @@ const REASONS: Record<string, string> = {
   'route-without-scope': 'Public plugin with no org scope helper. Register one.',
   'route-not-registered': 'Route file no module registers. Register or delete it.',
   'org-fallback': 'Falls back to a literal or an any-cast org. Read req.orgId from the scope hook.',
+  'id-only-lookup': 'Tenant data looked up or written by id alone. Put the org in the where.',
   'unscoped-org-lookup': 'Picks the first organization for every tenant (#296). Key it on the caller org.',
 };
 

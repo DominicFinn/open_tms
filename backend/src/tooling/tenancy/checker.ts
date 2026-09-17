@@ -10,6 +10,7 @@ export type Rule =
   | 'route-not-registered'
   | 'org-fallback'
   | 'unscoped-org-lookup'
+  | 'id-only-lookup'
   | 'policy-invalid';
 
 export interface Finding {
@@ -31,6 +32,7 @@ export interface Policy {
   readonly scopeHelpers: readonly string[];
   readonly unscopedRouteFiles: Readonly<Record<string, string>>;
   readonly orgLookupExemptions: Readonly<Record<string, string>>;
+  readonly idLookupExemptions: Readonly<Record<string, string>>;
   readonly exemptPaths: readonly RegExp[];
 }
 
@@ -40,6 +42,7 @@ export const DEFAULT_POLICY: Policy = {
   scopeHelpers: defaults.SCOPE_HELPERS,
   unscopedRouteFiles: defaults.UNSCOPED_ROUTE_FILES,
   orgLookupExemptions: defaults.ORG_LOOKUP_EXEMPTIONS,
+  idLookupExemptions: defaults.ID_LOOKUP_EXEMPTIONS,
   exemptPaths: defaults.EXEMPT_PATHS,
 };
 
@@ -162,6 +165,38 @@ function unscopedOrgLookupLines(source: string): number[] {
   });
 }
 
+const ID_LOOKUP_CALL =
+  /\.(\w+)\.(findUnique|findUniqueOrThrow|findFirst|findFirstOrThrow|update|delete|upsert)\(\s*\{\s*where\s*:\s*\{/g;
+
+/** The text of the object literal whose opening brace is at `open`, or null if it never closes. */
+function objectLiteralAt(source: string, open: number): string | null {
+  let depth = 0;
+  for (let index = open; index < source.length; index += 1) {
+    if (source[index] === '{') depth += 1;
+    else if (source[index] === '}' && --depth === 0) return source.slice(open, index + 1);
+  }
+  return null;
+}
+
+/**
+ * A lookup or write on tenant data keyed by the row's id alone (#314). The multi-tenancy rule bans
+ * these: an id guessed from another tenant finds the row. Tenant models must name their org in the
+ * `where`; inherited models must reach it through their parent, so either way the `where` mentions
+ * the org column.
+ */
+function idOnlyLookupLines(source: string, tenantModels: ReadonlySet<string>): number[] {
+  const lines: number[] = [];
+  for (const match of source.matchAll(ID_LOOKUP_CALL)) {
+    const model = match[1][0].toUpperCase() + match[1].slice(1);
+    if (!tenantModels.has(model)) continue;
+    const where = objectLiteralAt(source, match.index! + match[0].length - 1);
+    if (!where || !/^\{\s*id\b/.test(where) || /\b(orgId|organizationId)\b/.test(where)) continue;
+    const line = source.slice(0, match.index).split('\n').length;
+    if (!isComment(source.split('\n')[line - 1])) lines.push(line);
+  }
+  return lines;
+}
+
 // ─── Routes ──────────────────────────────────────────────────────────────────
 
 interface RouteRegistration {
@@ -226,6 +261,9 @@ export async function check(
   const files = (await listSourceFiles(sourceRoot)).filter(
     (file) => !policy.exemptPaths.some((pattern) => pattern.test(file)),
   );
+  const tenantModels = new Set(
+    models.filter((model) => resolvesToOrg(model, byName, policy)).map((model) => model.name),
+  );
   const moduleFiles = files.filter((file) => file.startsWith('routes/modules/'));
   const registration = await readRouteRegistration(sourceRoot, moduleFiles);
 
@@ -241,6 +279,11 @@ export async function check(
     const fallbacks = fallbackLines(source);
     if (fallbacks.length > 0) {
       all.push({ rule: 'org-fallback', target: file, detail: `lines ${fallbacks.join(', ')}` });
+    }
+
+    const idOnly = idOnlyLookupLines(source, tenantModels);
+    if (idOnly.length > 0 && !(file in policy.idLookupExemptions)) {
+      all.push({ rule: 'id-only-lookup', target: file, detail: `lines ${idOnly.join(', ')}` });
     }
 
     const lookups = unscopedOrgLookupLines(source);

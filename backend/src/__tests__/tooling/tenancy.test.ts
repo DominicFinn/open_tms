@@ -63,6 +63,7 @@ const POLICY: Policy = {
   inheritedModels: { ShipmentStop: 'shipment', StopNote: 'stop' },
   unscopedRouteFiles: {},
   orgLookupExemptions: {},
+  idLookupExemptions: {},
 };
 
 async function fixture(
@@ -197,6 +198,49 @@ describe('tenancy check: source patterns', () => {
     });
     const result = await check(sourceRoot, schemaDir, [], POLICY);
     expect(result.findings.some((finding) => /__tests__|scripts/.test(finding.target))).toBe(false);
+  });
+});
+
+describe('tenancy check: id-only lookups', () => {
+  const idOnly = async (source: string, policy: Policy = POLICY): Promise<string[]> => {
+    const { sourceRoot, schemaDir } = await fixture({ 'src/services/lookups.ts': source });
+    const result = await check(sourceRoot, schemaDir, [], policy);
+    return result.findings.filter((finding) => finding.rule === 'id-only-lookup').map((finding) => finding.detail);
+  };
+
+  it('flags reads and writes on tenant models keyed by id alone', async () => {
+    const source = [
+      'await prisma.shipment.findUnique({ where: { id } });',
+      'await tx.shipment.update({',
+      '  where: { id: input.id, archived: false },',
+      '  data: {},',
+      '});',
+      'await prisma.shipmentStop.delete({ where: { id: stopId } });',
+    ].join('\n');
+    expect(await idOnly(source)).toEqual(['lines 1, 2, 6']);
+  });
+
+  it('accepts a where that names the org, directly or through the parent', async () => {
+    const source = [
+      'await prisma.shipment.findUnique({ where: { id, orgId } });',
+      'await prisma.shipmentStop.findFirst({ where: { id, shipment: { orgId } } });',
+      'await prisma.shipment.findFirst({ where: { orgId, id } });',
+    ].join('\n');
+    expect(await idOnly(source)).toEqual([]);
+  });
+
+  it('ignores global models, variable wheres and comments', async () => {
+    const source = [
+      'await prisma.organization.findUnique({ where: { id } });',
+      'await prisma.shipment.findUnique({ where });',
+      '// await prisma.shipment.findUnique({ where: { id } });',
+    ].join('\n');
+    expect(await idOnly(source)).toEqual([]);
+  });
+
+  it('skips files on the exemption list', async () => {
+    const policy: Policy = { ...POLICY, idLookupExemptions: { 'services/lookups.ts': 'The id is the proof.' } };
+    expect(await idOnly('await prisma.shipment.findUnique({ where: { id } });', policy)).toEqual([]);
   });
 });
 
