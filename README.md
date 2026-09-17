@@ -461,6 +461,12 @@ On first run, call `POST /api/v1/auth/setup` to seed default roles (admin, dispa
 - `PUT /api/v1/locations/:id` - Update location
 - `DELETE /api/v1/locations/:id` - Archive location
 
+#### Geofences
+- `GET /api/v1/geofences?entityType=&entityId=` - List active geofences for an entity
+- `POST /api/v1/geofences` - Create a radial or polygon geofence
+- `PUT /api/v1/geofences/:id` - Update a geofence
+- `DELETE /api/v1/geofences/:id` - Archive a geofence
+
 #### Carriers
 - `GET /api/v1/carriers` - List all carriers
 - `POST /api/v1/carriers` - Create new carrier

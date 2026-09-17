@@ -10,10 +10,10 @@ import {
   Crosshair,
   Factory,
   Loader2,
-  Map as MapIcon,
   MapPin,
   Network,
   Save,
+  Shapes,
   ShieldCheck,
   Ship,
   Store,
@@ -25,6 +25,7 @@ import {
 
 import { API_URL } from '../api';
 import { LOCATION_TYPE_META } from './locationTypesMeta';
+import GeofenceEditor, { type GeofenceValue } from '../components/GeofenceEditor';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -94,6 +95,10 @@ export default function VNextCreateLocation() {
   const [hasHazmatCert, setHasHazmatCert] = useState(false);
   const [hasBondedStorage, setHasBondedStorage] = useState(false);
 
+  const [geofenceValue, setGeofenceValue] = useState<GeofenceValue | null>(null);
+  const [existingGeofenceId, setExistingGeofenceId] = useState<string | null>(null);
+  const [geofenceDirty, setGeofenceDirty] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -127,6 +132,11 @@ export default function VNextCreateLocation() {
         setHasColdStorage(caps.hasColdStorage || false);
         setHasHazmatCert(caps.hasHazmatCert || false);
         setHasBondedStorage(caps.hasBondedStorage || false);
+        const geofence = (l.geofences || [])[0];
+        if (geofence) {
+          setExistingGeofenceId(geofence.id);
+          setGeofenceValue({ name: geofence.name, shapeType: geofence.shapeType, geometry: geofence.geometry });
+        }
       })
       .catch(err => setSubmitError(err.message))
       .finally(() => setLoading(false));
@@ -165,6 +175,44 @@ export default function VNextCreateLocation() {
       if (json.error) throw new Error(json.error);
       const newId = json.data?.id ?? id;
       const label = json.data?.name || name || newId?.slice(0, 8);
+
+      if (geofenceDirty && newId) {
+        try {
+          if (geofenceValue) {
+            const geofenceBody = {
+              entityType: 'location',
+              entityId: newId,
+              name: geofenceValue.name,
+              shapeType: geofenceValue.shapeType,
+              geometry: geofenceValue.geometry,
+            };
+            const geofenceRes = existingGeofenceId
+              ? await fetch(`${API_URL}/api/v1/geofences/${existingGeofenceId}`, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    name: geofenceValue.name,
+                    shapeType: geofenceValue.shapeType,
+                    geometry: geofenceValue.geometry,
+                  }),
+                })
+              : await fetch(`${API_URL}/api/v1/geofences`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(geofenceBody),
+                });
+            if (!geofenceRes.ok) throw new Error('Failed to save geofence');
+          } else if (existingGeofenceId) {
+            const geofenceRes = await fetch(`${API_URL}/api/v1/geofences/${existingGeofenceId}`, {
+              method: 'DELETE',
+            });
+            if (!geofenceRes.ok) throw new Error('Failed to remove geofence');
+          }
+        } catch (geofenceErr: any) {
+          toast.warning(`Location saved, but the geofence failed to save: ${geofenceErr.message}`);
+        }
+      }
+
       if (isEdit) {
         toast.success(`Location ${label} updated`);
       } else {
@@ -374,12 +422,23 @@ export default function VNextCreateLocation() {
             <Label>Longitude</Label>
             <Input type="number" step="any" placeholder="e.g. -87.6588" value={longitude} onChange={e => setLongitude(e.target.value)} />
           </div>
-          <div className="md:col-span-2">
-            <div className="flex h-[200px] items-center justify-center gap-2 rounded-md border border-dashed border-border bg-muted/40 text-muted-foreground">
-              <MapIcon className="h-8 w-8 opacity-50" />
-              <span className="text-sm">Map preview will appear here</span>
-            </div>
-          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Shapes className="h-4 w-4 text-primary" />
+            Geofence
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <GeofenceEditor
+            value={geofenceValue}
+            onChange={(next) => { setGeofenceValue(next); setGeofenceDirty(true); }}
+            centerLat={latitude ? parseFloat(latitude) : null}
+            centerLng={longitude ? parseFloat(longitude) : null}
+          />
         </CardContent>
       </Card>
 

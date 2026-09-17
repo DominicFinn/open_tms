@@ -316,6 +316,10 @@ Building on the existing map view, ETA monitoring, and route deviation system.
   - Draw route polylines between origin and destination on map view
   - Colour-code by status (on-time, delayed, deviated)
   - Animate in-transit shipments along route
+- **Manual Location Geofencing** ✅ (#309)
+  - Generic, polymorphic `Geofence` model (radial or polygon) with CRUD API, embedded on Location responses
+  - `GeofenceEditor` (Leaflet, hand-drawn) as its own section on the Locations create/edit form
+  - 🔲 Arrival/departure detection against these geofences — `ArrivalCriteria` is separate and untouched
 - **Spatial Indexing** 🔲
   - PostGIS extension for inverse geofence queries (ST_DWithin with spatial index)
   - Geography column on Location model for fast spatial lookups
