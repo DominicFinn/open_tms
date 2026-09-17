@@ -323,6 +323,12 @@ export default function GeofenceEditor({
           setPoints(next);
           emitChange('polygon', center, radiusMeters, next, name);
         });
+        marker.on('click', (e) => {
+          L.DomEvent.stopPropagation(e);
+          const next = points.filter((_, idx) => idx !== i);
+          setPoints(next);
+          emitChange('polygon', center, radiusMeters, next, name);
+        });
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -384,7 +390,7 @@ export default function GeofenceEditor({
         <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
         {shapeType === 'radial'
           ? 'Click the map to place the center. Drag the center to move it, or drag the small diamond handle on the edge to resize.'
-          : `Click the map to add corner points (${points.length} placed, 3+ needed). Drag a point to adjust it.`}
+          : `Click the map to add corner points (${points.length} placed, 3+ needed). Drag a point to move it, or click it to remove it.`}
       </p>
 
       <div
