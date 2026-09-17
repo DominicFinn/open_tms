@@ -33,24 +33,31 @@ export class AutoTenderHandler implements IEventHandler {
     if (payload.carrierId || payload.laneId) return;
 
     try {
-      // Check org setting
-      const org = await this.prisma.organization.findFirst({
+      // The setting, the shipment and the carriers all belong to the event's org. A shipment that
+      // isn't in that org is ignored rather than tendered to another tenant's carriers.
+      const org = await this.prisma.organization.findUnique({
+        where: { id: event.orgId },
         select: { autoTenderEnabled: true },
       });
       if (!org?.autoTenderEnabled) return;
 
+      const shipment = await this.prisma.shipment.findFirst({
+        where: { id: event.entityId, orgId: event.orgId },
+        select: { id: true },
+      });
+      if (!shipment) return;
+
       // Check that no tender already exists for this shipment
       const existingTender = await this.prisma.tender.findFirst({
         where: {
-          shipmentId: event.entityId,
+          shipmentId: shipment.id,
           status: { notIn: ['cancelled'] },
         },
       });
       if (existingTender) return;
 
-      // Get all active carriers
       const carriers = await this.prisma.carrier.findMany({
-        where: { archived: false },
+        where: { orgId: event.orgId, archived: false },
         select: { id: true },
         take: 50,
       });

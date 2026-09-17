@@ -4,6 +4,7 @@ import { EVENT_TYPES } from '../../events/eventTypes.js';
 import { BaseCommandHandler, TransactionClient, EmitFn } from '../BaseCommandHandler.js';
 import { Command } from '../types.js';
 import { sealCredentials } from '../../security/secretVault.js';
+import { CarrierTrackingNotFoundError } from './errors.js';
 
 export interface CreateCarrierTrackingIntegrationPayload {
   carrierId: string;
@@ -36,6 +37,12 @@ export class CreateCarrierTrackingIntegrationCommandHandler extends BaseCommandH
     emit: EmitFn,
   ): Promise<{ id: string; carrierId: string; providerType: string }> {
     const { carrierId, providerType, ...rest } = command.payload;
+
+    const carrier = await tx.carrier.findFirst({
+      where: { id: carrierId, orgId: command.orgId },
+      select: { id: true },
+    });
+    if (!carrier) throw new CarrierTrackingNotFoundError('carrier', carrierId);
 
     const integration = await tx.carrierTrackingIntegration.create({
       data: {

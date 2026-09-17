@@ -22,6 +22,12 @@ export interface DocumentGenerationJob {
 export interface WebhookEvent {
   webhookLogId: string;
   rawPayload: any;
-  apiKeyId: string;
+  /** Null when the request was authenticated by signature rather than an API key. */
+  apiKeyId: string | null;
   ipAddress: string;
+  /**
+   * The tenant resolved from the request's credential. Optional only because messages queued
+   * before #303 lack it; the worker derives it from the API key or dead-letters the message.
+   */
+  orgId?: string;
 }

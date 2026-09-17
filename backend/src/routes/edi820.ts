@@ -13,6 +13,7 @@ import { ITradingPartnerRepository } from '../repositories/TradingPartnerReposit
 import { ICommandBus } from '../commands/CommandBus.js';
 import { RECORD_PAYMENT, RecordPaymentPayload } from '../commands/invoices/RecordPaymentCommand.js';
 import { PrismaClient } from '@prisma/client';
+import { EdiReferenceRepository } from '../repositories/EdiReferenceRepository.js';
 
 interface PaymentResult {
   invoiceNumber: string;
@@ -22,15 +23,18 @@ interface PaymentResult {
   message: string;
 }
 
-import { registerOrgScopeForEdi } from '../auth/orgScopeMiddleware.js';
+import { registerOrgScopeForEdi, requireOrgScope } from '../auth/orgScopeMiddleware.js';
 
 export async function edi820Routes(server: FastifyInstance) {
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
   const tradingPartnerRepo = container.resolve<ITradingPartnerRepository>(TOKENS.ITradingPartnerRepository);
-  const prisma = container.resolve<PrismaClient>(TOKENS.PrismaClient);
+  const ediRefs = new EdiReferenceRepository(container.resolve<PrismaClient>(TOKENS.PrismaClient));
   const edi820ParseService = new EDI820ParseService();
 
   await registerOrgScopeForEdi(server);
+  // Invoice numbers are matched within the tenant, so a request with no tenant is refused rather
+  // than applied to whichever org holds a matching number.
+  server.addHook('preHandler', requireOrgScope);
 
   // Inbound EDI 820 — parse and auto-record payments
   server.post('/api/v1/edi/820/inbound', {
@@ -83,12 +87,9 @@ export async function edi820Routes(server: FastifyInstance) {
     let appliedCount = 0;
     let totalAppliedCents = 0;
 
+    const orgId = req.orgId!;
     for (const item of parsed.remittanceItems) {
-      // Find the invoice by number
-      const invoice = await prisma.invoice.findFirst({
-        where: { invoiceNumber: item.invoiceNumber },
-        select: { id: true, status: true, balanceCents: true, invoiceNumber: true },
-      });
+      const invoice = await ediRefs.findInvoiceByNumber(orgId, item.invoiceNumber);
 
       if (!invoice) {
         results.push({
@@ -129,8 +130,8 @@ export async function edi820Routes(server: FastifyInstance) {
       try {
         const result = await commandBus.dispatch<RecordPaymentPayload, { id: string; invoiceStatus: string }>({
           type: RECORD_PAYMENT,
-          orgId: (req as any).orgId ?? '',
-          actorId: (req as any).user?.sub ?? 'edi-820',
+          orgId,
+          actorId: req.user?.sub ?? 'edi-820',
           payload: {
             invoiceId: invoice.id,
             amountCents: paymentAmount,
@@ -226,10 +227,7 @@ export async function edi820Routes(server: FastifyInstance) {
 
     // Enrich with invoice match status
     const enriched = await Promise.all(parsed.remittanceItems.map(async item => {
-      const invoice = await prisma.invoice.findFirst({
-        where: { invoiceNumber: item.invoiceNumber },
-        select: { id: true, status: true, balanceCents: true, totalCents: true },
-      });
+      const invoice = await ediRefs.findInvoiceByNumber(req.orgId!, item.invoiceNumber);
       return {
         ...item,
         matched: !!invoice,

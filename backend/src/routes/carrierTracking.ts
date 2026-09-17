@@ -6,11 +6,13 @@ import { IShipmentsRepository } from '../repositories/ShipmentsRepository.js';
 import { CarrierTrackingService } from '../services/carrierTracking/CarrierTrackingService.js';
 import { CarrierTrackingProviderRegistry } from '../services/carrierTracking/ProviderRegistry.js';
 import { ICommandBus } from '../commands/CommandBus.js';
+import { ICarriersRepository } from '../repositories/CarriersRepository.js';
 import { CREATE_CARRIER_TRACKING_INTEGRATION } from '../commands/carrierTracking/CreateCarrierTrackingIntegrationCommand.js';
 import { UPDATE_CARRIER_TRACKING_INTEGRATION } from '../commands/carrierTracking/UpdateCarrierTrackingIntegrationCommand.js';
 import { DELETE_CARRIER_TRACKING_INTEGRATION } from '../commands/carrierTracking/DeleteCarrierTrackingIntegrationCommand.js';
 import { container, TOKENS } from '../di/index.js';
 import { openCredentials } from '../security/secretVault.js';
+import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 
 /** Standard { data, error } response schema for Swagger */
 const dataErrorResponse = {
@@ -60,12 +62,84 @@ function mapIntegration(i: any) {
   };
 }
 
+/** Body accepted by PUT and PATCH, which behave identically. */
+const updateIntegrationBody = z.object({
+  providerType: z.string().optional(),
+  status: z.string().optional(),
+  credentials: z.record(z.unknown()).optional(),
+  webhookEnabled: z.boolean().optional(),
+  webhookSecret: z.string().optional(),
+  webhookEndpointId: z.string().optional(),
+  pollingEnabled: z.boolean().optional(),
+  pollingIntervalSeconds: z.number().min(60).optional(),
+  rateLimitDailyMax: z.number().optional(),
+  notes: z.string().optional(),
+});
+
+const updateIntegrationSchema = {
+  type: 'object',
+  properties: {
+    providerType: { type: 'string' },
+    status: { type: 'string' },
+    credentials: { type: 'object' },
+    webhookEnabled: { type: 'boolean' },
+    webhookSecret: { type: 'string' },
+    pollingEnabled: { type: 'boolean' },
+    pollingIntervalSeconds: { type: 'number' },
+    rateLimitDailyMax: { type: 'number' },
+    notes: { type: 'string' },
+  },
+};
+
+const NOT_FOUND = 'Carrier tracking integration not found';
+
+/**
+ * Admin routes for carrier tracking integrations. Registered in the authenticated block, so every
+ * request runs inside the caller's tenant (#303). Integrations have no orgId of their own; the
+ * repository scopes them through their carrier. The public webhook lives in
+ * carrierTrackingWebhook.ts.
+ */
 export async function carrierTrackingRoutes(server: FastifyInstance) {
   const integrationRepo = container.resolve<ICarrierTrackingIntegrationRepository>(TOKENS.ICarrierTrackingIntegrationRepository);
   const shipmentsRepo = container.resolve<IShipmentsRepository>(TOKENS.IShipmentsRepository);
+  const carriersRepo = container.resolve<ICarriersRepository>(TOKENS.ICarriersRepository);
   const trackingService = container.resolve<CarrierTrackingService>(TOKENS.ICarrierTrackingService);
   const providerRegistry = container.resolve<CarrierTrackingProviderRegistry>(TOKENS.ICarrierTrackingProviderRegistry);
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
+
+  await registerOrgScope(server);
+
+  async function dispatchIntegrationCommand(
+    req: FastifyRequest,
+    reply: FastifyReply,
+    type: string,
+    payload: Record<string, unknown>,
+    fallbackError: string,
+  ): Promise<{ ok: true; data: unknown } | { ok: false; body: { data: null; error: string } }> {
+    try {
+      const result = await commandBus.dispatch({
+        type,
+        orgId: req.orgId!,
+        actorId: req.user?.sub ?? null,
+        payload,
+        metadata: { correlationId: randomUUID(), source: 'api' },
+      });
+      if (result.success) return { ok: true, data: result.data };
+      reply.code(400);
+      return { ok: false, body: { data: null, error: result.error ?? fallbackError } };
+    } catch (err) {
+      reply.code(400);
+      return { ok: false, body: { data: null, error: (err as Error).message } };
+    }
+  }
+
+  /** The integration if it belongs to the caller's org; otherwise sends 404 and returns null. */
+  async function loadIntegration(req: FastifyRequest, reply: FastifyReply) {
+    const { id } = req.params as { id: string };
+    const integration = await integrationRepo.findById(id, req.orgId!);
+    if (!integration) reply.code(404);
+    return integration;
+  }
 
   // ── Provider info ──
 
@@ -121,7 +195,6 @@ export async function carrierTrackingRoutes(server: FastifyInstance) {
 
   // ── Integration CRUD ──
 
-  // List all integrations
   server.get('/api/v1/carrier-tracking/integrations', {
     schema: {
       tags: ['Carrier Tracking'],
@@ -137,28 +210,22 @@ export async function carrierTrackingRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, _reply: FastifyReply) => {
     const { providerType, status } = req.query as { providerType?: string; status?: string };
-    const integrations = await integrationRepo.findAll({ providerType, status });
+    const integrations = await integrationRepo.findAll(req.orgId!, { providerType, status });
     return { data: integrations.map(mapIntegration), error: null };
   });
 
-  // Get integration by ID
   server.get('/api/v1/carrier-tracking/integrations/:id', {
     schema: {
       tags: ['Carrier Tracking'],
       summary: 'Get carrier tracking integration by ID',
-      response: { 200: dataErrorResponse },
+      response: { 200: dataErrorResponse, 404: dataErrorResponse },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const { id } = req.params as { id: string };
-    const integration = await integrationRepo.findById(id);
-    if (!integration) {
-      reply.code(404);
-      return { data: null, error: 'Carrier tracking integration not found' };
-    }
+    const integration = await loadIntegration(req, reply);
+    if (!integration) return { data: null, error: NOT_FOUND };
     return { data: mapIntegration(integration), error: null };
   });
 
-  // Create integration
   server.post('/api/v1/carrier-tracking/integrations', {
     schema: {
       tags: ['Carrier Tracking'],
@@ -184,6 +251,7 @@ export async function carrierTrackingRoutes(server: FastifyInstance) {
             error: { type: ['string', 'null'] },
           },
         },
+        404: dataErrorResponse,
       },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
@@ -195,273 +263,126 @@ export async function carrierTrackingRoutes(server: FastifyInstance) {
       pollingIntervalSeconds: z.number().min(60).optional(),
       pollingIntervalMinutes: z.number().min(1).optional(),
       notes: z.string().optional(),
-    }).parse((req as any).body);
+    }).parse(req.body);
+
+    if (!(await carriersRepo.findById(raw.carrierId, req.orgId!))) {
+      reply.code(404);
+      return { data: null, error: 'Carrier not found' };
+    }
 
     // Accept pollingIntervalMinutes from frontend, convert to seconds
     const pollingIntervalSeconds = raw.pollingIntervalMinutes
       ? raw.pollingIntervalMinutes * 60
       : raw.pollingIntervalSeconds;
 
-    const body = {
+    const outcome = await dispatchIntegrationCommand(req, reply, CREATE_CARRIER_TRACKING_INTEGRATION, {
       carrierId: raw.carrierId,
       providerType: raw.providerType,
       credentials: raw.credentials,
       pollingEnabled: raw.pollingEnabled,
       pollingIntervalSeconds,
       notes: raw.notes,
-    };
+    }, 'Failed to create integration');
+    if (!outcome.ok) return outcome.body;
 
-    try {
-      const result = await commandBus.dispatch({
-        type: CREATE_CARRIER_TRACKING_INTEGRATION,
-        orgId: 'default',
-        actorId: null,
-        payload: body,
-        metadata: { correlationId: randomUUID(), source: 'api' },
-      });
-
-      if (!result.success) {
-        reply.code(400);
-        return { data: null, error: result.error ?? 'Failed to create integration' };
-      }
-
-      reply.code(201);
-      return { data: result.data, error: null };
-    } catch (err: any) {
-      reply.code(400);
-      return { data: null, error: err.message };
-    }
+    reply.code(201);
+    return { data: outcome.data, error: null };
   });
 
-  // Update integration
+  const updateHandler = async (req: FastifyRequest, reply: FastifyReply) => {
+    const body = updateIntegrationBody.parse(req.body);
+    const integration = await loadIntegration(req, reply);
+    if (!integration) return { data: null, error: NOT_FOUND };
+
+    const outcome = await dispatchIntegrationCommand(
+      req, reply, UPDATE_CARRIER_TRACKING_INTEGRATION, { id: integration.id, ...body }, 'Failed to update integration',
+    );
+    return outcome.ok ? { data: outcome.data, error: null } : outcome.body;
+  };
+
   server.put('/api/v1/carrier-tracking/integrations/:id', {
     schema: {
       tags: ['Carrier Tracking'],
       summary: 'Update a carrier tracking integration',
-      body: {
-        type: 'object',
-        properties: {
-          providerType: { type: 'string' },
-          status: { type: 'string' },
-          credentials: { type: 'object' },
-          webhookEnabled: { type: 'boolean' },
-          webhookSecret: { type: 'string' },
-          pollingEnabled: { type: 'boolean' },
-          pollingIntervalSeconds: { type: 'number' },
-          rateLimitDailyMax: { type: 'number' },
-          notes: { type: 'string' },
-        },
-      },
-      response: { 200: dataErrorResponse },
+      body: updateIntegrationSchema,
+      response: { 200: dataErrorResponse, 404: dataErrorResponse },
     },
-  }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const { id } = req.params as { id: string };
-    const body = z.object({
-      providerType: z.string().optional(),
-      status: z.string().optional(),
-      credentials: z.record(z.unknown()).optional(),
-      webhookEnabled: z.boolean().optional(),
-      webhookSecret: z.string().optional(),
-      webhookEndpointId: z.string().optional(),
-      pollingEnabled: z.boolean().optional(),
-      pollingIntervalSeconds: z.number().min(60).optional(),
-      rateLimitDailyMax: z.number().optional(),
-      notes: z.string().optional(),
-    }).parse((req as any).body);
+  }, updateHandler);
 
-    try {
-      const result = await commandBus.dispatch({
-        type: UPDATE_CARRIER_TRACKING_INTEGRATION,
-        orgId: 'default',
-        actorId: null,
-        payload: { id, ...body },
-        metadata: { correlationId: randomUUID(), source: 'api' },
-      });
-
-      if (!result.success) {
-        reply.code(400);
-        return { data: null, error: result.error ?? 'Failed to update integration' };
-      }
-
-      return { data: result.data, error: null };
-    } catch (err: any) {
-      reply.code(400);
-      return { data: null, error: err.message };
-    }
-  });
-
-  // PATCH integration (same as PUT, used by frontend detail page)
+  // PATCH behaves like PUT; the frontend detail page uses it.
   server.patch('/api/v1/carrier-tracking/integrations/:id', {
     schema: {
       tags: ['Carrier Tracking'],
       summary: 'Partially update a carrier tracking integration',
-      body: {
-        type: 'object',
-        properties: {
-          providerType: { type: 'string' },
-          status: { type: 'string' },
-          credentials: { type: 'object' },
-          webhookEnabled: { type: 'boolean' },
-          webhookSecret: { type: 'string' },
-          pollingEnabled: { type: 'boolean' },
-          pollingIntervalSeconds: { type: 'number' },
-          rateLimitDailyMax: { type: 'number' },
-          notes: { type: 'string' },
-        },
-      },
-      response: { 200: dataErrorResponse },
+      body: updateIntegrationSchema,
+      response: { 200: dataErrorResponse, 404: dataErrorResponse },
     },
-  }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const { id } = req.params as { id: string };
-    const body = z.object({
-      providerType: z.string().optional(),
-      status: z.string().optional(),
-      credentials: z.record(z.unknown()).optional(),
-      webhookEnabled: z.boolean().optional(),
-      webhookSecret: z.string().optional(),
-      webhookEndpointId: z.string().optional(),
-      pollingEnabled: z.boolean().optional(),
-      pollingIntervalSeconds: z.number().min(60).optional(),
-      rateLimitDailyMax: z.number().optional(),
-      notes: z.string().optional(),
-    }).parse((req as any).body);
+  }, updateHandler);
 
-    try {
-      const result = await commandBus.dispatch({
-        type: UPDATE_CARRIER_TRACKING_INTEGRATION,
-        orgId: 'default',
-        actorId: null,
-        payload: { id, ...body },
-        metadata: { correlationId: randomUUID(), source: 'api' },
-      });
-
-      if (!result.success) {
-        reply.code(400);
-        return { data: null, error: result.error ?? 'Failed to update integration' };
-      }
-
-      return { data: result.data, error: null };
-    } catch (err: any) {
-      reply.code(400);
-      return { data: null, error: err.message };
-    }
-  });
-
-  // Delete integration
   server.delete('/api/v1/carrier-tracking/integrations/:id', {
     schema: {
       tags: ['Carrier Tracking'],
       summary: 'Delete a carrier tracking integration',
-      response: { 200: dataErrorResponse },
+      response: { 200: dataErrorResponse, 404: dataErrorResponse },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const { id } = req.params as { id: string };
+    const integration = await loadIntegration(req, reply);
+    if (!integration) return { data: null, error: NOT_FOUND };
 
-    try {
-      const result = await commandBus.dispatch({
-        type: DELETE_CARRIER_TRACKING_INTEGRATION,
-        orgId: 'default',
-        actorId: null,
-        payload: { id },
-        metadata: { correlationId: randomUUID(), source: 'api' },
-      });
-
-      if (!result.success) {
-        reply.code(400);
-        return { data: null, error: result.error ?? 'Failed to delete integration' };
-      }
-
-      return { data: { deleted: true }, error: null };
-    } catch (err: any) {
-      reply.code(400);
-      return { data: null, error: err.message };
-    }
+    const outcome = await dispatchIntegrationCommand(
+      req, reply, DELETE_CARRIER_TRACKING_INTEGRATION, { id: integration.id }, 'Failed to delete integration',
+    );
+    return outcome.ok ? { data: { deleted: true }, error: null } : outcome.body;
   });
 
   // ── Actions ──
 
-  // Test connection
   server.post('/api/v1/carrier-tracking/integrations/:id/test', {
     schema: {
       tags: ['Carrier Tracking'],
       summary: 'Test a carrier tracking integration connection',
-      response: { 200: dataErrorResponse },
+      response: { 200: dataErrorResponse, 404: dataErrorResponse },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const { id } = req.params as { id: string };
+    const integration = await loadIntegration(req, reply);
+    if (!integration) return { data: null, error: NOT_FOUND };
 
     try {
-      const result = await trackingService.testConnection(id);
+      const result = await trackingService.testConnection(integration.id);
       return { data: result, error: null };
-    } catch (err: any) {
-      reply.code(500);
-      return { data: null, error: err.message };
+    } catch (err) {
+      reply.code(502);
+      return { data: null, error: (err as Error).message };
     }
   });
 
-  // Enable integration
+  const statusHandler = (status: 'active' | 'disabled') => async (req: FastifyRequest, reply: FastifyReply) => {
+    const integration = await loadIntegration(req, reply);
+    if (!integration) return { data: null, error: NOT_FOUND };
+
+    const outcome = await dispatchIntegrationCommand(
+      req, reply, UPDATE_CARRIER_TRACKING_INTEGRATION, { id: integration.id, status }, `Failed to set integration ${status}`,
+    );
+    if (!outcome.ok) return outcome.body;
+    return { data: status === 'active' ? { enabled: true } : { disabled: true }, error: null };
+  };
+
   server.post('/api/v1/carrier-tracking/integrations/:id/enable', {
     schema: {
       tags: ['Carrier Tracking'],
       summary: 'Enable a carrier tracking integration',
-      response: { 200: dataErrorResponse },
+      response: { 200: dataErrorResponse, 404: dataErrorResponse },
     },
-  }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const { id } = req.params as { id: string };
+  }, statusHandler('active'));
 
-    try {
-      const result = await commandBus.dispatch({
-        type: UPDATE_CARRIER_TRACKING_INTEGRATION,
-        orgId: 'default',
-        actorId: null,
-        payload: { id, status: 'active' },
-        metadata: { correlationId: randomUUID(), source: 'api' },
-      });
-
-      if (!result.success) {
-        reply.code(400);
-        return { data: null, error: result.error ?? 'Failed to enable integration' };
-      }
-
-      return { data: { enabled: true }, error: null };
-    } catch (err: any) {
-      reply.code(400);
-      return { data: null, error: err.message };
-    }
-  });
-
-  // Disable integration
   server.post('/api/v1/carrier-tracking/integrations/:id/disable', {
     schema: {
       tags: ['Carrier Tracking'],
       summary: 'Disable a carrier tracking integration',
-      response: { 200: dataErrorResponse },
+      response: { 200: dataErrorResponse, 404: dataErrorResponse },
     },
-  }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const { id } = req.params as { id: string };
+  }, statusHandler('disabled'));
 
-    try {
-      const result = await commandBus.dispatch({
-        type: UPDATE_CARRIER_TRACKING_INTEGRATION,
-        orgId: 'default',
-        actorId: null,
-        payload: { id, status: 'disabled' },
-        metadata: { correlationId: randomUUID(), source: 'api' },
-      });
-
-      if (!result.success) {
-        reply.code(400);
-        return { data: null, error: result.error ?? 'Failed to disable integration' };
-      }
-
-      return { data: { disabled: true }, error: null };
-    } catch (err: any) {
-      reply.code(400);
-      return { data: null, error: err.message };
-    }
-  });
-
-  // Get tracking events for an integration
   server.get('/api/v1/carrier-tracking/integrations/:id/events', {
     schema: {
       tags: ['Carrier Tracking'],
@@ -469,188 +390,126 @@ export async function carrierTrackingRoutes(server: FastifyInstance) {
       querystring: {
         type: 'object',
         properties: {
-          limit: { type: 'number' },
+          limit: { type: 'integer', minimum: 1, maximum: 100 },
         },
       },
-      response: { 200: dataErrorResponse },
+      response: { 200: dataErrorResponse, 404: dataErrorResponse },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const { id } = req.params as { id: string };
+    const integration = await loadIntegration(req, reply);
+    if (!integration) return { data: null, error: NOT_FOUND };
+
     const { limit } = req.query as { limit?: number };
-    const take = Math.min(limit || 20, 100);
-
-    try {
-      const events = await server.prisma.carrierTrackingEvent.findMany({
-        where: { integrationId: id },
-        orderBy: { occurredAt: 'desc' },
-        take,
-        select: {
-          id: true,
-          trackingNumber: true,
-          status: true,
-          statusDetail: true,
-          city: true,
-          state: true,
-          country: true,
-          occurredAt: true,
-          source: true,
-          shipmentId: true,
-        },
-      });
-
-      const mapped = events.map((e: any) => ({
-        ...e,
-        location: [e.city, e.state, e.country].filter(Boolean).join(', '),
-      }));
-
-      return { data: mapped, error: null };
-    } catch (err: any) {
-      reply.code(500);
-      return { data: null, error: err.message };
-    }
+    const events = await integrationRepo.findRecentEvents(integration.id, req.orgId!, Math.min(limit || 20, 100));
+    const mapped = events.map((e) => ({
+      id: e.id,
+      trackingNumber: e.trackingNumber,
+      status: e.status,
+      statusDetail: e.statusDetail,
+      city: e.city,
+      state: e.state,
+      country: e.country,
+      occurredAt: e.occurredAt,
+      source: e.source,
+      shipmentId: e.shipmentId,
+      location: [e.city, e.state, e.country].filter(Boolean).join(', '),
+    }));
+    return { data: mapped, error: null };
   });
 
-  // Manual poll for an integration
   server.post('/api/v1/carrier-tracking/integrations/:id/poll', {
     schema: {
       tags: ['Carrier Tracking'],
       summary: 'Manually trigger polling for a carrier tracking integration',
-      response: { 200: dataErrorResponse },
+      response: { 200: dataErrorResponse, 404: dataErrorResponse },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const { id } = req.params as { id: string };
+    const integration = await loadIntegration(req, reply);
+    if (!integration) return { data: null, error: NOT_FOUND };
+
+    if (integration.status !== 'active') {
+      reply.code(409);
+      return { data: null, error: 'Integration is not active' };
+    }
 
     try {
-      const integration = await integrationRepo.findById(id);
-      if (!integration) {
-        reply.code(404);
-        return { data: null, error: 'Carrier tracking integration not found' };
-      }
-
-      if (integration.status !== 'active') {
-        reply.code(400);
-        return { data: null, error: 'Integration is not active' };
-      }
-
-      const result = await trackingService.pollForUpdates(id);
+      const result = await trackingService.pollForUpdates(integration.id);
       return { data: result, error: null };
-    } catch (err: any) {
-      reply.code(500);
-      return { data: null, error: err.message };
+    } catch (err) {
+      reply.code(502);
+      return { data: null, error: (err as Error).message };
     }
   });
 
   // ── Tracking data ──
 
-  // Get carrier tracking events for a shipment
   server.get('/api/v1/shipments/:shipmentId/carrier-tracking', {
     schema: {
       tags: ['Carrier Tracking'],
       summary: 'Get carrier tracking events for a shipment',
-      response: { 200: dataErrorResponse },
+      response: { 200: dataErrorResponse, 404: dataErrorResponse },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { shipmentId } = req.params as { shipmentId: string };
+    const orgId = req.orgId!;
 
-    try {
-      const events = await server.prisma.carrierTrackingEvent.findMany({
-        where: { shipmentId },
-        orderBy: { occurredAt: 'desc' },
-        take: 1000,
-      });
-
-      const shipment = await shipmentsRepo.findById(shipmentId);
-      const integration = shipment?.carrierId ? await integrationRepo.findByCarrierId(shipment.carrierId) : null;
-      const tracking = {
-        hasCarrier: !!shipment?.carrierId,
-        hasIntegration: !!integration,
-        integrationStatus: integration?.status ?? null,
-      };
-
-      return { data: { events, tracking }, error: null };
-    } catch (err: any) {
-      reply.code(500);
-      return { data: null, error: err.message };
+    const shipment = await shipmentsRepo.findById(shipmentId, orgId);
+    if (!shipment) {
+      reply.code(404);
+      return { data: null, error: 'Shipment not found' };
     }
+
+    const events = await integrationRepo.findEventsByShipment(shipmentId, orgId, 1000);
+    const integration = shipment.carrierId ? await integrationRepo.findByCarrierId(shipment.carrierId, orgId) : null;
+    const tracking = {
+      hasCarrier: !!shipment.carrierId,
+      hasIntegration: !!integration,
+      integrationStatus: integration?.status ?? null,
+    };
+
+    return { data: { events, tracking }, error: null };
   });
 
-  // Manual poll for a shipment
   server.post('/api/v1/shipments/:shipmentId/carrier-tracking/poll', {
     schema: {
       tags: ['Carrier Tracking'],
       summary: 'Manually poll carrier tracking for a shipment',
-      response: { 200: dataErrorResponse },
+      response: { 200: dataErrorResponse, 404: dataErrorResponse, 409: dataErrorResponse },
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { shipmentId } = req.params as { shipmentId: string };
+    const orgId = req.orgId!;
+
+    const shipment = await shipmentsRepo.findById(shipmentId, orgId);
+    if (!shipment) {
+      reply.code(404);
+      return { data: null, error: 'Shipment not found' };
+    }
+    if (!shipment.carrierId) {
+      reply.code(409);
+      return { data: null, error: 'Shipment has no carrier assigned' };
+    }
+    if (!shipment.trackingNumber) {
+      reply.code(409);
+      return { data: null, error: 'Shipment has no tracking number' };
+    }
+
+    const integration = await integrationRepo.findByCarrierId(shipment.carrierId, orgId);
+    if (!integration) {
+      reply.code(404);
+      return { data: null, error: 'No carrier tracking integration found for this carrier' };
+    }
+    if (integration.status !== 'active') {
+      reply.code(409);
+      return { data: null, error: 'Carrier tracking integration is not active' };
+    }
 
     try {
-      // Find the shipment and its carrier
-      const shipment = await server.prisma.shipment.findUnique({
-        where: { id: shipmentId },
-        select: { id: true, carrierId: true, trackingNumber: true },
-      });
-
-      if (!shipment) {
-        reply.code(404);
-        return { data: null, error: 'Shipment not found' };
-      }
-
-      if (!shipment.carrierId) {
-        reply.code(400);
-        return { data: null, error: 'Shipment has no carrier assigned' };
-      }
-
-      if (!shipment.trackingNumber) {
-        reply.code(400);
-        return { data: null, error: 'Shipment has no tracking number' };
-      }
-
-      // Find the carrier tracking integration
-      const integration = await integrationRepo.findByCarrierId(shipment.carrierId);
-
-      if (!integration) {
-        reply.code(404);
-        return { data: null, error: 'No carrier tracking integration found for this carrier' };
-      }
-
-      if (integration.status !== 'active') {
-        reply.code(400);
-        return { data: null, error: 'Carrier tracking integration is not active' };
-      }
-
       const result = await trackingService.pollForUpdates(integration.id);
       return { data: result, error: null };
-    } catch (err: any) {
-      reply.code(500);
-      return { data: null, error: err.message };
-    }
-  });
-
-  // ── Webhook receiver ──
-
-  server.post('/api/v1/carrier-tracking/webhook/:providerType', {
-    schema: {
-      tags: ['Carrier Tracking'],
-      summary: 'Receive inbound webhook from a carrier tracking provider',
-      response: { 200: dataErrorResponse },
-    },
-  }, async (req: FastifyRequest, reply: FastifyReply) => {
-    const { providerType } = req.params as { providerType: string };
-
-    try {
-      const headers: Record<string, string> = {};
-      for (const [key, value] of Object.entries(req.headers)) {
-        if (typeof value === 'string') {
-          headers[key] = value;
-        }
-      }
-
-      const result = await trackingService.processWebhook(providerType, req.body, headers);
-      return { data: result, error: null };
-    } catch (err: any) {
-      reply.code(400);
-      return { data: null, error: err.message };
+    } catch (err) {
+      reply.code(502);
+      return { data: null, error: (err as Error).message };
     }
   });
 }

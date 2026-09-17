@@ -127,11 +127,15 @@ export class ShipmentCutoffMonitorService {
     this.config = { ...DEFAULT_CONFIG, ...config };
   }
 
-  /** Scan all open, carrier-assigned shipments and evaluate each. */
-  async runOnce(now: Date = new Date()): Promise<EvaluationResult[]> {
+  /**
+   * Scan open, carrier-assigned shipments and evaluate each under its own org. The cron passes no
+   * org and scans every tenant; a manual run from a route passes the caller's org and sees only it.
+   */
+  async runOnce(now: Date = new Date(), orgId?: string): Promise<EvaluationResult[]> {
     const openStatuses = ['draft', 'booked', 'at_pickup'];
     const shipments = await this.prisma.shipment.findMany({
       where: {
+        ...(orgId ? { orgId } : {}),
         status: { in: openStatuses },
         archived: false,
         carrierId: { not: null },
@@ -141,12 +145,9 @@ export class ShipmentCutoffMonitorService {
       },
     });
 
-    const org = await this.prisma.organization.findFirst({ select: { id: true } });
-    const orgId = org?.id ?? 'default-org';
-
     const results: EvaluationResult[] = [];
     for (const s of shipments) {
-      const result = await this.evaluateShipment(s as Shipment & { orderShipments: { orderId: string }[] }, now, orgId);
+      const result = await this.evaluateShipment(s as Shipment & { orderShipments: { orderId: string }[] }, now, s.orgId);
       results.push(result);
     }
     return results;

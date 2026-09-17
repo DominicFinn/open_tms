@@ -84,6 +84,8 @@ export const SCOPE_HELPERS: readonly string[] = [
   'attachOrgScopeFromCustomerUserHook',
   'attachOrgScopeFromCarrierUserHook',
   'attachOrgScopeFromPartnerHook',
+  'attachOrgScopeFromApiKeyHook',
+  'attachOrgScopeFromIotWebhookHook',
 ];
 
 /** Public route files that serve no tenant data, or resolve the tenant some other checked way. */
@@ -92,6 +94,8 @@ export const UNSCOPED_ROUTE_FILES: Readonly<Record<string, string>> = {
   'routes/seed.ts': 'Dev and demo seeding, 403 in production. Targets the sole development org.',
   'routes/publicShipmentShare.ts':
     'Share links resolve a single shipment from the access code and viewer token, never from an org.',
+  'routes/carrierTrackingWebhook.ts':
+    'Carrier callbacks. Each event is attributed to the org of the integration whose signing secret verified it.',
   'routes/theme.ts':
     'Two unauthenticated branding reads. resolvePublicOrg refuses to guess once a second org exists.',
 };

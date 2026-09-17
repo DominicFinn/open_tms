@@ -61,43 +61,13 @@
   },
   {
     "rule": "org-fallback",
-    "target": "routes/carrierTracking.ts",
-    "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
-  },
-  {
-    "rule": "org-fallback",
     "target": "routes/comments.ts",
-    "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
-  },
-  {
-    "rule": "org-fallback",
-    "target": "routes/edi210.ts",
-    "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
-  },
-  {
-    "rule": "org-fallback",
-    "target": "routes/edi820.ts",
     "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
   },
   {
     "rule": "org-fallback",
     "target": "routes/issues.ts",
     "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
-  },
-  {
-    "rule": "org-fallback",
-    "target": "services/cutoff/ShipmentCutoffMonitorService.ts",
-    "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
-  },
-  {
-    "rule": "route-without-scope",
-    "target": "routes/carrierTracking.ts",
-    "reason": "Public plugin with no org scope helper. Register one."
-  },
-  {
-    "rule": "route-without-scope",
-    "target": "routes/customerApi.ts",
-    "reason": "Public plugin with no org scope helper. Register one."
   },
   {
     "rule": "route-without-scope",
@@ -110,53 +80,8 @@
     "reason": "Reads req.orgId without registering a scope, so it is undefined and Prisma applies no filter."
   },
   {
-    "rule": "route-without-scope",
-    "target": "routes/webhook.ts",
-    "reason": "Public plugin with no org scope helper. Register one."
-  },
-  {
-    "rule": "unscoped-org-lookup",
-    "target": "events/handlers/AutoTenderHandler.ts",
-    "reason": "Picks the first organization for every tenant (#296). Key it on the caller org."
-  },
-  {
-    "rule": "unscoped-org-lookup",
-    "target": "integrations/SystemLocoAdapter.ts",
-    "reason": "Picks the first organization for every tenant (#296). Key it on the caller org."
-  },
-  {
     "rule": "unscoped-org-lookup",
     "target": "repositories/OrganizationRepository.ts",
     "reason": "getSettings reads and updates the first organization for every tenant, so /organization/settings is shared across tenants."
-  },
-  {
-    "rule": "unscoped-org-lookup",
-    "target": "services/carrierTracking/CarrierTrackingService.ts",
-    "reason": "Picks the first organization for every tenant (#296). Key it on the caller org."
-  },
-  {
-    "rule": "unscoped-org-lookup",
-    "target": "services/cutoff/ShipmentCutoffMonitorService.ts",
-    "reason": "Picks the first organization for every tenant (#296). Key it on the caller org."
-  },
-  {
-    "rule": "unscoped-org-lookup",
-    "target": "services/DailyReportService.ts",
-    "reason": "Picks the first organization for every tenant (#296). Key it on the caller org."
-  },
-  {
-    "rule": "unscoped-org-lookup",
-    "target": "services/LocationResolutionService.ts",
-    "reason": "Picks the first organization for every tenant (#296). Key it on the caller org."
-  },
-  {
-    "rule": "unscoped-org-lookup",
-    "target": "worker.ts",
-    "reason": "Picks the first organization for every tenant (#296). Key it on the caller org."
-  },
-  {
-    "rule": "unscoped-org-lookup",
-    "target": "workers/inboundWebhookWorker.ts",
-    "reason": "Picks the first organization for every tenant (#296). Key it on the caller org."
   }
 ]

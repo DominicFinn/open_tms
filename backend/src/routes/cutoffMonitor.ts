@@ -152,8 +152,8 @@ export async function cutoffMonitorRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { shipmentId } = req.params as { shipmentId: string };
-    const shipment = await prisma.shipment.findUnique({
-      where: { id: shipmentId },
+    const shipment = await prisma.shipment.findFirst({
+      where: { id: shipmentId, orgId: req.orgId! },
       include: { orderShipments: { select: { orderId: true } } },
     });
     if (!shipment) { reply.code(404); return { data: null, error: 'Shipment not found' }; }
@@ -164,8 +164,8 @@ export async function cutoffMonitorRoutes(server: FastifyInstance) {
 
   server.post('/api/v1/cutoff-monitor/run', {
     schema: { tags: ['WMS - Cutoff Monitoring'], summary: 'Manually trigger a full cutoff scan' },
-  }, async () => {
-    const results = await service.runOnce();
+  }, async (req: FastifyRequest) => {
+    const results = await service.runOnce(new Date(), req.orgId!);
     const atRisk = results.filter(r => r.severity);
     return {
       data: {
