@@ -701,6 +701,7 @@ Items from the unified trading partner model that are not yet complete:
 - Real-time data ingestion from System Loco IoT platform (temperature, pressure, shock, light, GPS) ✅ hardened webhook pipeline (verify→enqueue→202, HMAC signature, idempotency), resolves to shipment, updates live position, enriched telemetry. See `docs/SYSTEM_LOCO_INTEGRATION.md`
 - Sensor stream visualization on shipment detail pages ✅ (Telemetry tab)
 - IoT-based alerts and automation (excursion alerts, geofence+sensor triggers) 🔲
+- Full-journey proof: origin departure + ~10 route-based in-transit checkpoints + destination arrival, all as domain events (`tracking.geofence_exited`/`tracking.journey_checkpoint`/`tracking.geofence_entered`) ✅ (#283). v1: origin/destination only, location only — see `docs/DOMAIN_BEHAVIOURS.md` > Tracking (IoT)
 - _Future:_ **Device Reports V2 feed**: continuous full-sensor snapshots + `timeSeries` arrays (denser telemetry than Device Events) 🔲
 - _Future:_ **System Loco Shipments feed**: consume their shipment lifecycle / `leavesOrigin` / `entersDestination` / `leavesRoute` events and map onto our lifecycle + timeline 🔲
 

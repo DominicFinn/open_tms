@@ -344,8 +344,21 @@ the access ledger.
 | Event | Source | Side Effects |
 |-------|--------|-------------|
 | `tracking.location_received` | Inbound webhook worker | ShipmentReadModel.currentLat/Lng updated, geofence check |
-| `tracking.geofence_entered` | Geofence calculation | ShipmentStop marked arrived, orders updated |
+| `tracking.geofence_entered` | `RecordGeofenceArrivalCommand` | ShipmentStop marked arrived, orders updated; also emits `shipment.stop_arrived` for the destination stop |
+| `tracking.geofence_exited` | `RecordGeofenceDepartureCommand` | Origin ShipmentStop marked completed; also emits `shipment.stop_completed` ("Departed origin" on the timeline) |
+| `tracking.journey_checkpoint` | `RecordJourneyCheckpointCommand` | Writes a `ShipmentJourneyCheckpoint` row; no shipment/stop side effect |
 | `tracking.eta_updated` | ETA recalculation | — |
+
+**Full-journey proof (#283).** `ArrivalCriteriaEvaluationService` dispatches all three geofence events
+through the command bus (previously `tracking.geofence_entered` was defined but never published —
+arrival was a silent direct write). On each device ping: a match against a `pending` stop dispatches
+`RecordGeofenceArrivalCommand`; a stop that was `arrived` and is now outside its geofence radius (origin
+only, v1) dispatches `RecordGeofenceDepartureCommand`; otherwise, if the shipment has departed its origin,
+has a `LaneRoute`, and hasn't yet arrived at its destination, its position is located along the route
+(`RouteProgressService.locateOnRoute`) and bucketed into one of 10 segments — a new segment dispatches
+`RecordJourneyCheckpointCommand`. A checkpoint never fires on the same ping as an arrival. Query a
+shipment's full journey via `GET /api/v1/shipments/:id/journey`. v1 scope: origin/destination only (no
+waypoints), location only (no sensor data), no GPS-jitter hysteresis on the geofence boundary.
 
 ### IoT Devices & Vendors
 

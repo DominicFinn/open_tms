@@ -111,6 +111,7 @@ Deploy your own Open TMS instance with one click:
 - **Metrics & Monitoring** - `/metrics` endpoint with read model lag detection, event throughput, queue depths
 - **Event Export API** - Queryable event store with wildcard filters, cursor pagination, and aggregate stats — ready for data warehouse and ML pipeline consumption
 - **Location Auto-Creation** - Automatic location resolution from raw address data. Locations matched by name+city or created with default geofence arrival criteria. Shipment completion auto-triggered when destination arrival criteria are met.
+- **Full-Journey Proof** - Continuous, event-backed proof a shipment travelled from origin to destination: a departure event when the device leaves the origin geofence, ~10 in-transit checkpoints as it crosses segments of the planned route, and an arrival event at the destination. Query via `GET /api/v1/shipments/:id/journey`.
 - **Auto-Tender** - Automatic broadcast tenders created for laneless shipments when enabled (org setting). All active carriers receive offers simultaneously.
 - **Test Suite** - 305 tests across 35 suites covering commands, projections, services, and full CQRS pipeline integration
 - **Soft Delete** - Data preservation with archive functionality

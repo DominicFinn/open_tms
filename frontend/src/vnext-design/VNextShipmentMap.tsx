@@ -509,6 +509,8 @@ export default function VNextShipmentMap() {
   useEffect(() => {
     if (!autoRefresh) return;
     const interval = setInterval(() => {
+      // Skipped while the tab is hidden — see .claude/rules/realtime.md
+      if (document.hidden) return;
       fetchData();
       if (showIssues) {
         setShowIssues(false);

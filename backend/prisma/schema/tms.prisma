@@ -72,6 +72,9 @@ model Shipment {
   cargoScans         CargoScan[]
   cargoDiscrepancies CargoDiscrepancy[]
 
+  // Full-journey proof (departure/checkpoint/arrival geofence events)
+  journeyCheckpoints ShipmentJourneyCheckpoint[]
+
   // Read model relations
   orderReadModels OrderReadModel[]
 
@@ -1702,6 +1705,29 @@ model CargoScan {
   @@index([shipmentStopId])
   @@index([shipmentId])
   @@index([scannedAt])
+}
+
+// Ledger of in-transit location checkpoints along a shipment's planned route,
+// between the origin-departure and destination-arrival geofence events. One
+// row per checkpoint reached — see docs/DOMAIN_BEHAVIOURS.md.
+model ShipmentJourneyCheckpoint {
+  id         String   @id @default(uuid())
+  shipment   Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  shipmentId String
+  orgId      String
+
+  checkpointIndex          Int // 1-9, position along the planned route (10 = destination)
+  lat                      Float
+  lng                      Float
+  distanceAlongRouteMeters Int
+  fractionComplete         Float
+
+  eventTime DateTime
+  createdAt DateTime @default(now())
+
+  @@unique([shipmentId, checkpointIndex])
+  @@index([shipmentId])
+  @@index([orgId])
 }
 
 // Tracks cargo discrepancies — misdrops, missing cargo, unexpected deliveries
