@@ -109,6 +109,13 @@ import { UpdateTradingPartnerCommandHandler } from '../../commands/tradingPartne
 import { CreateDeviceCommandHandler } from '../../commands/devices/CreateDeviceCommand.js';
 import { UpdateDeviceCommandHandler } from '../../commands/devices/UpdateDeviceCommand.js';
 import { AssignDeviceCommandHandler } from '../../commands/devices/AssignDeviceCommand.js';
+import { UnassignDeviceCommandHandler } from '../../commands/devices/UnassignDeviceCommand.js';
+import { UpdateIotVendorSettingsCommandHandler } from '../../commands/iotVendors/UpdateIotVendorSettingsCommand.js';
+import { DeviceRepository } from '../../repositories/DeviceRepository.js';
+import { SensorReadingRepository } from '../../repositories/SensorReadingRepository.js';
+import { IotVendorRepository } from '../../repositories/IotVendorRepository.js';
+import { TelemetryService } from '../../services/iot/TelemetryService.js';
+import { IotVendorSettingsService } from '../../services/iot/IotVendorSettingsService.js';
 import { CreateCarrierUserCommandHandler } from '../../commands/carrierUsers/CreateCarrierUserCommand.js';
 import {
   RecordCargoScanCommandHandler,
@@ -263,6 +270,23 @@ export function registerTmsDependencies(prisma: PrismaClient): void {
 
   container.singleton(TOKENS.ICargoTrackingRepository).toFactory(() => {
     return new CargoTrackingRepository(container.resolve(TOKENS.PrismaClient));
+  });
+
+  // IoT devices, telemetry and vendor settings (#291)
+  container.singleton(TOKENS.IDeviceRepository).toFactory(() => {
+    return new DeviceRepository(container.resolve(TOKENS.PrismaClient));
+  });
+  container.singleton(TOKENS.ISensorReadingRepository).toFactory(() => {
+    return new SensorReadingRepository(container.resolve(TOKENS.PrismaClient));
+  });
+  container.singleton(TOKENS.IIotVendorRepository).toFactory(() => {
+    return new IotVendorRepository(container.resolve(TOKENS.PrismaClient));
+  });
+  container.singleton(TOKENS.ITelemetryService).toFactory(() => {
+    return new TelemetryService(container.resolve(TOKENS.ISensorReadingRepository));
+  });
+  container.singleton(TOKENS.IIotVendorSettingsService).toFactory(() => {
+    return new IotVendorSettingsService(container.resolve(TOKENS.IIotVendorRepository));
   });
 
   // Order line-item rating services (Phase 1)
@@ -659,6 +683,8 @@ export function registerTmsCommandHandlers(bus: CommandBus, deps: CommandHandler
   bus.register(new CreateDeviceCommandHandler(prisma, eventBus));
   bus.register(new UpdateDeviceCommandHandler(prisma, eventBus));
   bus.register(new AssignDeviceCommandHandler(prisma, eventBus));
+  bus.register(new UnassignDeviceCommandHandler(prisma, eventBus));
+  bus.register(new UpdateIotVendorSettingsCommandHandler(prisma, eventBus));
 
   // Carrier User commands
   bus.register(new CreateCarrierUserCommandHandler(prisma, eventBus));

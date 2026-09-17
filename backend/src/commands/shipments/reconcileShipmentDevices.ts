@@ -1,4 +1,8 @@
 import { TransactionClient } from '../BaseCommandHandler.js';
+import { releaseActiveAssignments } from '../devices/releaseActiveAssignments.js';
+
+/** A device id in the list is registered to another org. */
+export const DEVICE_UNAVAILABLE = 'DEVICE_UNAVAILABLE';
 
 export interface ShipmentDeviceInput {
   name: string;
@@ -55,6 +59,11 @@ export async function reconcileShipmentDevices(
 
   // Add / ensure assignments for desired devices.
   for (const [externalId, name] of desired) {
+    // externalId is unique across the platform, so an upsert on it alone would rename another
+    // org's device and pull it onto this shipment. Refuse instead.
+    const owned = await tx.device.findUnique({ where: { externalId }, select: { orgId: true } });
+    if (owned && owned.orgId !== orgId) throw new Error(DEVICE_UNAVAILABLE);
+
     const device = await tx.device.upsert({
       where: { externalId },
       update: { name },
@@ -63,11 +72,9 @@ export async function reconcileShipmentDevices(
 
     if (currentExternalIds.has(externalId)) continue; // already active on this shipment
 
-    // A device tracks one thing at a time — release any active assignment elsewhere.
-    await tx.deviceAssignment.updateMany({
-      where: { deviceId: device.id, active: true },
-      data: { active: false, unassignedAt: new Date() },
-    });
+    for (const releasedId of await releaseActiveAssignments(tx, device.id)) {
+      emitUnassigned(device.id, releasedId);
+    }
 
     const assignment = await tx.deviceAssignment.create({
       data: { deviceId: device.id, shipmentId, active: true },

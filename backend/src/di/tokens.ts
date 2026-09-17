@@ -23,6 +23,11 @@ export const TOKENS = {
 
   IArrivalCriteriaRepository: Symbol.for('IArrivalCriteriaRepository'),
   ICargoTrackingRepository: Symbol.for('ICargoTrackingRepository'),
+  IDeviceRepository: Symbol.for('IDeviceRepository'),
+  ISensorReadingRepository: Symbol.for('ISensorReadingRepository'),
+  IIotVendorRepository: Symbol.for('IIotVendorRepository'),
+  ITelemetryService: Symbol.for('ITelemetryService'),
+  IIotVendorSettingsService: Symbol.for('IIotVendorSettingsService'),
 
   // Service tokens
   ILocationResolutionService: Symbol.for('ILocationResolutionService'),

@@ -657,7 +657,6 @@ open_tms/
 │   │   └── di/             # Dependency injection container
 │   ├── Dockerfile          # Auth service container
 │   └── entrypoint.sh       # Runs migrations on startup
-├── webhook-service/         # Standalone webhook receiver (GCP)
 ├── packages/
 │   └── shared/             # Shared TypeScript types
 ├── terraform/              # Infrastructure as Code
