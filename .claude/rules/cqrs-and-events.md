@@ -34,7 +34,8 @@ The write path for this codebase. Applies to every entity and feature.
 3. **Projection** — Create `<Entity>Projection.ts` in `backend/src/events/projections/` if a read model exists
 4. **Tests** — Unit tests for command handlers AND projections in `backend/src/__tests__/`
 5. **Domain behaviours doc** — Update `docs/DOMAIN_BEHAVIOURS.md` with commands, events, and side effects
-6. **Roadmap** — Update `roadmap.md` to mark items complete or add new items
+6. **Roadmap** — Add the shipped work to `docs/roadmap/completed.md` and remove it from
+   `docs/roadmap/backlog.md` (or `finnwms.md`). Only touch `roadmap.md` if a theme changes
 7. **API docs** — Add Swagger/OpenAPI `schema` blocks to new endpoints
 8. **README** — Update the feature list in `README.md` if adding user-facing capability
 9. **Marketing website** — Review and update `www/` feature pages if the feature is user-facing.
