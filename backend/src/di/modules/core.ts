@@ -28,6 +28,10 @@ import { UpdateCustomerCommandHandler } from '../../commands/customers/UpdateCus
 import { ArchiveCustomerCommandHandler } from '../../commands/customers/ArchiveCustomerCommand.js';
 import { CreateLocationCommandHandler } from '../../commands/locations/CreateLocationCommand.js';
 import { UpdateLocationCommandHandler } from '../../commands/locations/UpdateLocationCommand.js';
+import { GeofenceRepository } from '../../repositories/GeofenceRepository.js';
+import { CreateGeofenceCommandHandler } from '../../commands/geofences/CreateGeofenceCommand.js';
+import { UpdateGeofenceCommandHandler } from '../../commands/geofences/UpdateGeofenceCommand.js';
+import { ArchiveGeofenceCommandHandler } from '../../commands/geofences/ArchiveGeofenceCommand.js';
 import { CreateIssueCommandHandler } from '../../commands/issues/CreateIssueCommand.js';
 import { UpdateIssueCommandHandler } from '../../commands/issues/UpdateIssueCommand.js';
 import { EscalateIssueCommandHandler } from '../../commands/issues/EscalateIssueCommand.js';
@@ -73,6 +77,10 @@ export function registerCoreDependencies(prisma: PrismaClient): void {
 
   container.singleton(TOKENS.IOrganizationRepository).toFactory(() => {
     return new OrganizationRepository(container.resolve(TOKENS.PrismaClient));
+  });
+
+  container.singleton(TOKENS.IGeofenceRepository).toFactory(() => {
+    return new GeofenceRepository(container.resolve(TOKENS.PrismaClient));
   });
 
   container.singleton(TOKENS.ILocationResolutionService).toFactory(() => {
@@ -188,6 +196,11 @@ export function registerCoreCommandHandlers(bus: CommandBus, deps: CommandHandle
   // Location commands
   bus.register(new CreateLocationCommandHandler(prisma, eventBus));
   bus.register(new UpdateLocationCommandHandler(prisma, eventBus));
+
+  // Geofence commands (polymorphic — attach to any entity type)
+  bus.register(new CreateGeofenceCommandHandler(prisma, eventBus));
+  bus.register(new UpdateGeofenceCommandHandler(prisma, eventBus));
+  bus.register(new ArchiveGeofenceCommandHandler(prisma, eventBus));
 
   // Issue commands
   bus.register(new CreateIssueCommandHandler(prisma, eventBus));
