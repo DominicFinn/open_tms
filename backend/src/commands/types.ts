@@ -42,6 +42,17 @@ export interface CommandResult<T = unknown> {
   idempotent?: boolean;
 }
 
+/**
+ * HTTP status for a failed command result.
+ *
+ * Handlers look entities up by `{ id, orgId }`, so another tenant's id reads as
+ * "not found". That has to reach the caller as 404, never 400 or 403, so the
+ * existence of another tenant's record stays opaque.
+ */
+export function commandFailureStatus(error: string | undefined): 404 | 400 {
+  return error && /not found/i.test(error) ? 404 : 400;
+}
+
 /** Interface that all command handlers implement. */
 export interface ICommandHandler<TPayload = unknown, TResult = unknown> {
   readonly commandType: string;

@@ -10,6 +10,7 @@ import { APPROVE_CHARGE, ApproveChargePayload } from '../commands/charges/Approv
 import { REWEIGH_ADJUSTMENT, ReweighAdjustmentPayload } from '../commands/charges/ReweighAdjustmentCommand.js';
 import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 import { guardWrites } from '../auth/guardWrites.js';
+import { commandFailureStatus } from '../commands/types.js';
 
 export async function chargeRoutes(server: FastifyInstance) {
   const chargeService = container.resolve<IChargeService>(TOKENS.IChargeService);
@@ -40,9 +41,6 @@ export async function chargeRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest) => {
     const query = req.query as Record<string, string>;
-    // Always include orgId so the underlying ChargeRepository.findAll
-    // narrows to this tenant — Charge has the column, the previous shape
-    // of this filter just didn't pass it.
     const charges = await chargeService.getCharges({
       orgId: req.orgId!,
       shipmentId: query.shipmentId,
@@ -62,17 +60,8 @@ export async function chargeRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const charge = await chargeRepo.findById(id);
+    const charge = await chargeRepo.findById(id, req.orgId!);
     if (!charge) {
-      reply.code(404);
-      return { data: null, error: 'Charge not found' };
-    }
-    // Multi-tenancy guard: Charge has orgId, but findById doesn't filter on it.
-    // Without this check, a user from another org could fetch any charge by
-    // guessing the UUID. Returning 404 (not 403) keeps the existence of the
-    // resource opaque.
-    const orgId = req.orgId;
-    if (orgId && charge.orgId !== orgId) {
       reply.code(404);
       return { data: null, error: 'Charge not found' };
     }
@@ -131,7 +120,7 @@ export async function chargeRoutes(server: FastifyInstance) {
     try {
       const result = await commandBus.dispatch<CreateChargePayload, { id: string }>({
         type: CREATE_CHARGE,
-        orgId: (req as any).orgId ?? '',
+        orgId: req.orgId!,
         actorId: (req as any).user?.sub ?? null,
         payload: body,
         metadata: {
@@ -141,7 +130,7 @@ export async function chargeRoutes(server: FastifyInstance) {
       });
 
       if (!result.success) {
-        reply.code(400);
+        reply.code(commandFailureStatus(result.error));
         return { data: null, error: result.error };
       }
 
@@ -165,7 +154,7 @@ export async function chargeRoutes(server: FastifyInstance) {
     try {
       const result = await commandBus.dispatch<ApproveChargePayload, { id: string }>({
         type: APPROVE_CHARGE,
-        orgId: (req as any).orgId ?? '',
+        orgId: req.orgId!,
         actorId: (req as any).user?.sub ?? null,
         payload: { chargeId: id },
         metadata: {
@@ -175,7 +164,7 @@ export async function chargeRoutes(server: FastifyInstance) {
       });
 
       if (!result.success) {
-        reply.code(400);
+        reply.code(commandFailureStatus(result.error));
         return { data: null, error: result.error };
       }
 
@@ -194,7 +183,7 @@ export async function chargeRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const charge = await chargeRepo.findById(id);
+    const charge = await chargeRepo.findById(id, req.orgId!);
     if (!charge) {
       reply.code(404);
       return { data: null, error: 'Charge not found' };
@@ -208,7 +197,7 @@ export async function chargeRoutes(server: FastifyInstance) {
 
     // Recalculate summary
     if (charge.shipmentId) {
-      await chargeService.recalculateShipmentSummary(charge.shipmentId);
+      await chargeService.recalculateShipmentSummary(charge.shipmentId, req.orgId!);
     }
 
     return { data: { deleted: true }, error: null };
@@ -223,7 +212,11 @@ export async function chargeRoutes(server: FastifyInstance) {
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
     try {
-      const financials = await chargeService.getShipmentFinancials(id);
+      const financials = await chargeService.getShipmentFinancials(id, req.orgId!);
+      if (!financials) {
+        reply.code(404);
+        return { data: null, error: 'Shipment not found' };
+      }
       return { data: financials, error: null };
     } catch (err: any) {
       reply.code(400);
@@ -255,7 +248,7 @@ export async function chargeRoutes(server: FastifyInstance) {
     }).parse((req as any).body);
 
     try {
-      const breakdown = await ratingService.calculateRate(body);
+      const breakdown = await ratingService.calculateRate(req.orgId!, body);
       return { data: breakdown, error: null };
     } catch (err: any) {
       reply.code(400);
@@ -297,13 +290,13 @@ export async function chargeRoutes(server: FastifyInstance) {
     try {
       const result = await commandBus.dispatch<ReweighAdjustmentPayload, { costChargeId: string; revenueChargeId: string }>({
         type: REWEIGH_ADJUSTMENT,
-        orgId: (req as any).orgId ?? '',
+        orgId: req.orgId!,
         actorId: (req as any).user?.sub ?? null,
         payload: { shipmentId: id, ...body },
         metadata: { correlationId: crypto.randomUUID(), source: 'api' },
       });
       if (!result.success) {
-        reply.code(400);
+        reply.code(commandFailureStatus(result.error));
         return { data: null, error: result.error };
       }
       return { data: result.data, error: null };

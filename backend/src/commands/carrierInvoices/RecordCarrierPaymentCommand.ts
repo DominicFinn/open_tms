@@ -23,8 +23,8 @@ export class RecordCarrierPaymentCommandHandler extends BaseCommandHandler<Recor
   protected async handle(command: Command<RecordCarrierPaymentPayload>, tx: TransactionClient, emit: EmitFn) {
     const { payload } = command;
 
-    const invoice = await tx.carrierInvoice.findUnique({
-      where: { id: payload.carrierInvoiceId },
+    const invoice = await tx.carrierInvoice.findFirst({
+      where: { id: payload.carrierInvoiceId, orgId: command.orgId },
       include: { lineItems: true },
     });
     if (!invoice) throw new Error('Carrier invoice not found');

@@ -19,8 +19,8 @@ export class AcceptQuoteCommandHandler extends BaseCommandHandler<AcceptQuotePay
   }
 
   protected async handle(command: Command<AcceptQuotePayload>, tx: TransactionClient, emit: EmitFn) {
-    const quote = await tx.quote.findUnique({
-      where: { id: command.payload.quoteId },
+    const quote = await tx.quote.findFirst({
+      where: { id: command.payload.quoteId, orgId: command.orgId },
       include: { lineItems: true, customer: { select: { name: true } } },
     });
 
@@ -32,10 +32,8 @@ export class AcceptQuoteCommandHandler extends BaseCommandHandler<AcceptQuotePay
       throw new Error('Quote has expired');
     }
 
-    // Create an order from the quote. Multi-tenancy: copy orgId from the
-    // source quote so the new Order lands in the same tenant rather than
-    // relying on `command.orgId` (admin tooling may dispatch on behalf of
-    // a different actor).
+    // Create an order from the quote. The quote was loaded under command.orgId,
+    // so quote.orgId is the caller's org.
     const orderNumber = `ORD-Q-${quote.quoteNumber.slice(4)}`;
     const order = await tx.order.create({
       data: {
@@ -81,14 +79,15 @@ export class AcceptQuoteCommandHandler extends BaseCommandHandler<AcceptQuotePay
     const shouldCreateShipment = command.payload.createShipment ?? false;
     if (shouldCreateShipment) {
       // Check if org is broker/3pl, or just honor the flag
-      const org = await tx.organization.findFirst({
+      const org = await tx.organization.findUnique({
+        where: { id: command.orgId },
         select: { organizationType: true },
       });
       const isBrokerOrg = org?.organizationType === 'broker' || org?.organizationType === '3pl';
 
       if (isBrokerOrg || command.payload.createShipment) {
         // Generate shipment reference
-        const shipmentCount = await tx.shipment.count();
+        const shipmentCount = await tx.shipment.count({ where: { orgId: command.orgId } });
         shipmentReference = `SH-Q-${String(shipmentCount + 1).padStart(4, '0')}`;
 
         const shipment = await tx.shipment.create({

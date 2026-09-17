@@ -9,16 +9,23 @@ import { DECLINE_QUOTE, DeclineQuotePayload } from '../commands/quotes/DeclineQu
 import { REVISE_QUOTE, ReviseQuotePayload } from '../commands/quotes/ReviseQuoteCommand.js';
 import { ILtlRatingService } from '../services/LtlRatingService.js';
 import { IRatingService } from '../services/RatingService.js';
+import { ILanesRepository } from '../repositories/LanesRepository.js';
+import { ICustomersRepository } from '../repositories/CustomersRepository.js';
 import { CreditCheckService } from '../services/CreditCheckService.js';
 import { guardWrites } from '../auth/guardWrites.js';
+import { commandFailureStatus } from '../commands/types.js';
+import { registerOrgScope } from '../auth/orgScopeMiddleware.js';
 
 export async function quoteRoutes(server: FastifyInstance) {
   const quoteRepo = container.resolve<IQuoteRepository>(TOKENS.IQuoteRepository);
   const commandBus = container.resolve<ICommandBus>(TOKENS.ICommandBus);
   const ltlRatingService = container.resolve<ILtlRatingService>(TOKENS.ILtlRatingService);
   const ratingService = container.resolve<IRatingService>(TOKENS.IRatingService);
+  const laneRepo = container.resolve<ILanesRepository>(TOKENS.ILanesRepository);
+  const customerRepo = container.resolve<ICustomersRepository>(TOKENS.ICustomersRepository);
 
   // Rate calculations (/rates/*) are read-only previews.
+  await registerOrgScope(server);
   server.addHook('preHandler', guardWrites('quotes', { readPaths: ['/rates/'] }));
 
   // List quotes
@@ -37,6 +44,7 @@ export async function quoteRoutes(server: FastifyInstance) {
   }, async (req: FastifyRequest) => {
     const query = req.query as Record<string, string>;
     const quotes = await quoteRepo.findAll({
+      orgId: req.orgId!,
       customerId: query.customerId,
       status: query.status,
     });
@@ -51,7 +59,7 @@ export async function quoteRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const quote = await quoteRepo.findById(id);
+    const quote = await quoteRepo.findById(id, req.orgId!);
     if (!quote) {
       reply.code(404);
       return { data: null, error: 'Quote not found' };
@@ -121,13 +129,13 @@ export async function quoteRoutes(server: FastifyInstance) {
     try {
       const result = await commandBus.dispatch<CreateQuotePayload, { id: string; quoteNumber: string }>({
         type: CREATE_QUOTE,
-        orgId: (req as any).orgId ?? '',
+        orgId: req.orgId!,
         actorId: (req as any).user?.sub ?? null,
         payload: body,
         metadata: { correlationId: crypto.randomUUID(), source: 'api' },
       });
       if (!result.success) {
-        reply.code(400);
+        reply.code(commandFailureStatus(result.error));
         return { data: null, error: result.error };
       }
       reply.code(201);
@@ -156,13 +164,13 @@ export async function quoteRoutes(server: FastifyInstance) {
     try {
       const result = await commandBus.dispatch<AcceptQuotePayload, { id: string; orderId: string; shipmentId?: string | null }>({
         type: ACCEPT_QUOTE,
-        orgId: (req as any).orgId ?? '',
+        orgId: req.orgId!,
         actorId: (req as any).user?.sub ?? null,
         payload: { quoteId: id, createShipment: body.createShipment },
         metadata: { correlationId: crypto.randomUUID(), source: 'api' },
       });
       if (!result.success) {
-        reply.code(400);
+        reply.code(commandFailureStatus(result.error));
         return { data: null, error: result.error };
       }
       return { data: result.data, error: null };
@@ -193,13 +201,13 @@ export async function quoteRoutes(server: FastifyInstance) {
     try {
       const result = await commandBus.dispatch<DeclineQuotePayload, { id: string }>({
         type: DECLINE_QUOTE,
-        orgId: (req as any).orgId ?? '',
+        orgId: req.orgId!,
         actorId: (req as any).user?.sub ?? null,
         payload: { quoteId: id, ...body },
         metadata: { correlationId: crypto.randomUUID(), source: 'api' },
       });
       if (!result.success) {
-        reply.code(400);
+        reply.code(commandFailureStatus(result.error));
         return { data: null, error: result.error };
       }
       return { data: result.data, error: null };
@@ -262,13 +270,13 @@ export async function quoteRoutes(server: FastifyInstance) {
     try {
       const result = await commandBus.dispatch<ReviseQuotePayload, { id: string; quoteNumber: string; version: number }>({
         type: REVISE_QUOTE,
-        orgId: (req as any).orgId ?? '',
+        orgId: req.orgId!,
         actorId: (req as any).user?.sub ?? null,
         payload: { originalQuoteId: id, ...body },
         metadata: { correlationId: crypto.randomUUID(), source: 'api' },
       });
       if (!result.success) {
-        reply.code(400);
+        reply.code(commandFailureStatus(result.error));
         return { data: null, error: result.error };
       }
       reply.code(201);
@@ -343,8 +351,17 @@ export async function quoteRoutes(server: FastifyInstance) {
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const body = (req as any).body;
 
+    const [lane, customer] = await Promise.all([
+      laneRepo.findByIdSimple(body.laneId, req.orgId!),
+      customerRepo.findById(body.customerId, req.orgId!),
+    ]);
+    if (!lane || !customer) {
+      reply.code(404);
+      return { data: null, error: !lane ? 'Lane not found' : 'Customer not found' };
+    }
+
     // Get carrier cost rate from RatingService
-    const rateBreakdown = await ratingService.calculateRate({
+    const rateBreakdown = await ratingService.calculateRate(req.orgId!, {
       laneId: body.laneId,
       carrierId: body.carrierId,
       serviceLevel: body.serviceLevel || 'FTL',
@@ -381,39 +398,27 @@ export async function quoteRoutes(server: FastifyInstance) {
       description: item.description.replace(' (', ' - Customer ('),
     }));
 
-    // Get lane and customer info for context
-    const [lane, customer] = await Promise.all([
-      server.prisma.lane.findUnique({
-        where: { id: body.laneId },
-        select: { id: true, name: true, originId: true, destinationId: true },
-      }),
-      server.prisma.customer.findUnique({
-        where: { id: body.customerId },
-        select: { id: true, name: true },
-      }),
-    ]);
-
     // Create the quote via command
     try {
       const result = await commandBus.dispatch<CreateQuotePayload, { id: string; quoteNumber: string }>({
         type: CREATE_QUOTE,
-        orgId: (req as any).orgId ?? '',
+        orgId: req.orgId!,
         actorId: (req as any).user?.sub ?? null,
         payload: {
           customerId: body.customerId,
-          originId: lane?.originId,
-          destinationId: lane?.destinationId,
+          originId: lane.originId,
+          destinationId: lane.destinationId,
           serviceLevel: body.serviceLevel || 'FTL',
           lineItems: revenueLineItems,
           markupPercent,
           validDays: body.validDays ?? 30,
-          notes: body.notes || `Quick quote from lane ${lane?.name || body.laneId} rates`,
+          notes: body.notes || `Quick quote from lane ${lane.name} rates`,
         },
         metadata: { correlationId: crypto.randomUUID(), source: 'api' },
       });
 
       if (!result.success) {
-        reply.code(400);
+        reply.code(commandFailureStatus(result.error));
         return { data: null, error: result.error };
       }
 
@@ -464,7 +469,11 @@ export async function quoteRoutes(server: FastifyInstance) {
 
     try {
       const creditService = new CreditCheckService(server.prisma);
-      const result = await creditService.checkCredit(id, additionalCents);
+      const result = await creditService.checkCredit(id, req.orgId!, additionalCents);
+      if (!result) {
+        reply.code(404);
+        return { data: null, error: 'Customer not found' };
+      }
       return { data: result, error: null };
     } catch (err: any) {
       reply.code(404);

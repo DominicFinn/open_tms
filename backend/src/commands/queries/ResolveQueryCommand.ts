@@ -24,8 +24,8 @@ export class ResolveQueryCommandHandler extends BaseCommandHandler<ResolveQueryP
   protected async handle(command: Command<ResolveQueryPayload>, tx: TransactionClient, emit: EmitFn) {
     const { payload } = command;
 
-    const query = await tx.financialQuery.findUnique({
-      where: { id: payload.queryId },
+    const query = await tx.financialQuery.findFirst({
+      where: { id: payload.queryId, orgId: command.orgId },
     });
     if (!query) throw new Error('Financial query not found');
 

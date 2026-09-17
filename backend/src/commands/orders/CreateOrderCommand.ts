@@ -137,12 +137,10 @@ export class CreateOrderCommandHandler extends BaseCommandHandler<CreateOrderPay
     // Build legacy line items create input
     const lineItemsCreate = orderData.lineItems?.map(lineItemCreateInput);
 
-    // Multi-tenancy: prefer an explicit orgId on the payload so admin
-    // tools that act on behalf of a tenant can set it; fall back to the
-    // dispatching command's orgId (the JWT path). Order.orgId is NOT
-    // NULL post phase-2 tightening — throw rather than write a half-built
-    // row when neither source supplies one.
-    const orgIdToWrite = (orderData as any).orgId || command.orgId;
+    // Multi-tenancy: the order is written under the command's org and nothing
+    // else. A payload orgId used to override it, which let any caller write an
+    // order into another tenant.
+    const orgIdToWrite = command.orgId;
     if (!orgIdToWrite) {
       throw new Error('orgId is required to create an Order (multi-tenancy)');
     }
@@ -156,7 +154,7 @@ export class CreateOrderCommandHandler extends BaseCommandHandler<CreateOrderPay
       select: { id: true },
     });
     if (!customer) {
-      throw new Error(`Customer ${orderData.customerId} does not belong to org ${orgIdToWrite}`);
+      throw new Error('Customer not found');
     }
 
     const order = await tx.order.create({

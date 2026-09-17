@@ -76,11 +76,6 @@
   },
   {
     "rule": "org-fallback",
-    "target": "commands/orders/CreateOrderCommand.ts",
-    "reason": "An orgId in the payload overrides the command orgId, so a caller can write an order into another tenant."
-  },
-  {
-    "rule": "org-fallback",
     "target": "routes/apiKeys.ts",
     "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
   },
@@ -88,11 +83,6 @@
     "rule": "org-fallback",
     "target": "routes/cargoTracking.ts",
     "reason": "Fixed by #295 (PR #300). Delete when it merges."
-  },
-  {
-    "rule": "org-fallback",
-    "target": "routes/carrierInvoices.ts",
-    "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
   },
   {
     "rule": "org-fallback",
@@ -107,11 +97,6 @@
   {
     "rule": "org-fallback",
     "target": "routes/cartonization.ts",
-    "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
-  },
-  {
-    "rule": "org-fallback",
-    "target": "routes/charges.ts",
     "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
   },
   {
@@ -136,17 +121,7 @@
   },
   {
     "rule": "org-fallback",
-    "target": "routes/financialQueries.ts",
-    "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
-  },
-  {
-    "rule": "org-fallback",
     "target": "routes/inventory.ts",
-    "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
-  },
-  {
-    "rule": "org-fallback",
-    "target": "routes/invoices.ts",
     "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
   },
   {
@@ -167,11 +142,6 @@
   {
     "rule": "org-fallback",
     "target": "routes/productUom.ts",
-    "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
-  },
-  {
-    "rule": "org-fallback",
-    "target": "routes/quotes.ts",
     "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
   },
   {
@@ -221,22 +191,12 @@
   },
   {
     "rule": "unscoped-org-lookup",
-    "target": "commands/quotes/AcceptQuoteCommand.ts",
-    "reason": "Picks the first organization for every tenant (#296). Key it on the caller org."
-  },
-  {
-    "rule": "unscoped-org-lookup",
     "target": "events/handlers/AutoTenderHandler.ts",
     "reason": "Picks the first organization for every tenant (#296). Key it on the caller org."
   },
   {
     "rule": "unscoped-org-lookup",
     "target": "events/handlers/ColdChainComplianceHandler.ts",
-    "reason": "Picks the first organization for every tenant (#296). Key it on the caller org."
-  },
-  {
-    "rule": "unscoped-org-lookup",
-    "target": "events/handlers/MarginAlertHandler.ts",
     "reason": "Picks the first organization for every tenant (#296). Key it on the caller org."
   },
   {

@@ -4,6 +4,10 @@ import { ReweighAdjustmentCommandHandler, REWEIGH_ADJUSTMENT } from '../../comma
 import { EVENT_TYPES } from '../../events/eventTypes';
 import { createTestCommand, mockEventBus } from '../helpers/testUtils';
 
+// Entity lookups are by { id, orgId }; number-sequence lookups carry no id.
+const findById = (row: unknown) =>
+  jest.fn().mockImplementation(({ where }: any) => Promise.resolve(where?.id ? row : null));
+
 const mockCharge = {
   id: 'charge-1',
   orgId: 'test-org',
@@ -32,14 +36,15 @@ const mockCharge = {
 const mockTx = {
   charge: {
     create: jest.fn().mockResolvedValue(mockCharge),
-    findFirst: jest.fn().mockResolvedValue(null),
-    findUnique: jest.fn().mockResolvedValue(mockCharge),
+    findFirst: findById(mockCharge),
     findMany: jest.fn().mockResolvedValue([mockCharge]),
     update: jest.fn().mockResolvedValue({ ...mockCharge, status: 'approved', approvedBy: 'test-user', approvedAt: new Date() }),
   },
   shipmentFinancialSummary: {
     upsert: jest.fn().mockResolvedValue({}),
   },
+  shipment: { findFirst: findById({ id: 'ship-1' }) },
+  order: { findFirst: findById({ id: 'order-1' }) },
   domainEventLog: { create: jest.fn().mockResolvedValue({}) },
 } as any;
 
@@ -50,6 +55,79 @@ const mockPrisma = {
 
 describe('Charge Command Handlers', () => {
   beforeEach(() => jest.clearAllMocks());
+
+  describe('org scoping', () => {
+    function txWithoutOwnedParents() {
+      return {
+        ...mockTx,
+        shipment: { findFirst: jest.fn().mockResolvedValue(null) },
+        order: { findFirst: jest.fn().mockResolvedValue(null) },
+        charge: { ...mockTx.charge, create: jest.fn(), findFirst: jest.fn().mockResolvedValue(null) },
+      } as any;
+    }
+
+    function prismaFor(tx: any) {
+      return {
+        $transaction: jest.fn((fn: Function) => fn(tx)),
+        domainEventLog: { findFirst: jest.fn().mockResolvedValue(null) },
+      } as any;
+    }
+
+    it('will not create a charge on another org\'s shipment', async () => {
+      const tx = txWithoutOwnedParents();
+      const { bus } = mockEventBus();
+      const handler = new CreateChargeCommandHandler(prismaFor(tx), bus);
+
+      const result = await handler.execute(createTestCommand(CREATE_CHARGE, {
+        shipmentId: 'ship-other-org', chargeType: 'linehaul', chargeCategory: 'revenue',
+        description: 'x', amountCents: 100,
+      }));
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Shipment not found');
+      expect(tx.shipment.findFirst.mock.calls[0][0].where).toEqual({ id: 'ship-other-org', orgId: 'test-org' });
+      expect(tx.charge.create).not.toHaveBeenCalled();
+    });
+
+    it('will not create a charge on another org\'s order', async () => {
+      const tx = txWithoutOwnedParents();
+      const { bus } = mockEventBus();
+      const handler = new CreateChargeCommandHandler(prismaFor(tx), bus);
+
+      const result = await handler.execute(createTestCommand(CREATE_CHARGE, {
+        orderId: 'order-other-org', chargeType: 'linehaul', chargeCategory: 'revenue',
+        description: 'x', amountCents: 100,
+      }));
+
+      expect(result.error).toBe('Order not found');
+      expect(tx.charge.create).not.toHaveBeenCalled();
+    });
+
+    it('will not approve another org\'s charge', async () => {
+      const tx = txWithoutOwnedParents();
+      const { bus } = mockEventBus();
+      const handler = new ApproveChargeCommandHandler(prismaFor(tx), bus);
+
+      const result = await handler.execute(createTestCommand(APPROVE_CHARGE, { chargeId: 'charge-other-org' }));
+
+      expect(result.error).toBe('Charge not found');
+      expect(tx.charge.findFirst.mock.calls[0][0].where).toEqual({ id: 'charge-other-org', orgId: 'test-org' });
+    });
+
+    it('will not post a re-weigh adjustment to another org\'s shipment', async () => {
+      const tx = txWithoutOwnedParents();
+      const { bus } = mockEventBus();
+      const handler = new ReweighAdjustmentCommandHandler(prismaFor(tx), bus);
+
+      const result = await handler.execute(createTestCommand(REWEIGH_ADJUSTMENT, {
+        shipmentId: 'ship-other-org', originalChargeCents: 100, adjustedChargeCents: 200,
+        declaredWeightLbs: 100, actualWeightLbs: 200,
+      }));
+
+      expect(result.error).toBe('Shipment not found');
+      expect(tx.charge.create).not.toHaveBeenCalled();
+    });
+  });
 
   describe('CreateChargeCommandHandler', () => {
     it('creates a charge and emits CHARGE_CREATED', async () => {
@@ -210,7 +288,7 @@ describe('Charge Command Handlers', () => {
         ...mockTx,
         charge: {
           ...mockTx.charge,
-          findUnique: jest.fn().mockResolvedValue(null),
+          findFirst: findById(null),
         },
       } as any;
 
@@ -235,7 +313,7 @@ describe('Charge Command Handlers', () => {
         ...mockTx,
         charge: {
           ...mockTx.charge,
-          findUnique: jest.fn().mockResolvedValue({ ...mockCharge, status: 'approved' }),
+          findFirst: findById({ ...mockCharge, status: 'approved' }),
         },
       } as any;
 
@@ -289,6 +367,8 @@ describe('Charge Command Handlers', () => {
           ]),
         },
         shipmentFinancialSummary: { upsert: jest.fn().mockResolvedValue({}) },
+        shipment: { findFirst: findById({ id: 'ship-1' }) },
+        order: { findFirst: findById({ id: 'order-1' }) },
         domainEventLog: { create: jest.fn().mockResolvedValue({}) },
       } as any;
 
@@ -395,6 +475,8 @@ describe('Charge Command Handlers', () => {
           ]),
         },
         shipmentFinancialSummary: { upsert: jest.fn().mockResolvedValue({}) },
+        shipment: { findFirst: findById({ id: 'ship-1' }) },
+        order: { findFirst: findById({ id: 'order-1' }) },
         domainEventLog: { create: jest.fn().mockResolvedValue({}) },
       } as any;
 

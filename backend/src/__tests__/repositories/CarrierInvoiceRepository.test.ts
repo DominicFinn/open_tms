@@ -91,9 +91,9 @@ describe('CarrierInvoiceRepository', () => {
       const prisma = buildPrisma();
       const repo = new CarrierInvoiceRepository(prisma);
 
-      await repo.findAll({});
+      await repo.findAll({ orgId: 'org-1' });
 
-      expect(prisma.carrierInvoice.findMany.mock.calls[0][0].where).toEqual({});
+      expect(prisma.carrierInvoice.findMany.mock.calls[0][0].where).toEqual({ orgId: 'org-1' });
     });
   });
 

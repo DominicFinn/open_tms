@@ -28,8 +28,8 @@ export class CreateInvoiceCommandHandler extends BaseCommandHandler<CreateInvoic
     }
 
     // Get customer
-    const customer = await tx.customer.findUnique({
-      where: { id: payload.customerId },
+    const customer = await tx.customer.findFirst({
+      where: { id: payload.customerId, orgId: command.orgId },
       select: { id: true, name: true, paymentTermsDays: true, currency: true },
     });
     if (!customer) throw new Error('Customer not found');
@@ -37,6 +37,7 @@ export class CreateInvoiceCommandHandler extends BaseCommandHandler<CreateInvoic
     // Collect approved revenue charges
     const charges = await tx.charge.findMany({
       where: {
+        orgId: command.orgId,
         shipmentId: { in: payload.shipmentIds },
         chargeCategory: 'revenue',
         status: 'approved',

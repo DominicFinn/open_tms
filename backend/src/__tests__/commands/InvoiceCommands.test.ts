@@ -6,6 +6,10 @@ import { VoidInvoiceCommandHandler, VOID_INVOICE } from '../../commands/invoices
 import { EVENT_TYPES } from '../../events/eventTypes';
 import { createTestCommand, mockEventBus } from '../helpers/testUtils';
 
+// Entity lookups are by { id, orgId }; number-sequence lookups carry no id.
+const findById = (row: unknown) =>
+  jest.fn().mockImplementation(({ where }: any) => Promise.resolve(where?.id ? row : null));
+
 const mockCustomer = {
   id: 'cust-1', name: 'Acme Corp', paymentTermsDays: 30, currency: 'USD',
 };
@@ -32,15 +36,14 @@ const mockInvoice = {
 };
 
 const mockTx = {
-  customer: { findUnique: jest.fn().mockResolvedValue(mockCustomer) },
+  customer: { findFirst: findById(mockCustomer) },
   charge: {
     findMany: jest.fn().mockResolvedValue([mockCharge]),
     updateMany: jest.fn().mockResolvedValue({ count: 1 }),
   },
   invoice: {
     create: jest.fn().mockResolvedValue(mockInvoice),
-    findUnique: jest.fn().mockResolvedValue(mockInvoice),
-    findFirst: jest.fn().mockResolvedValue(null),
+    findFirst: findById(mockInvoice),
     update: jest.fn().mockResolvedValue(mockInvoice),
   },
   invoiceLineItem: {
@@ -62,6 +65,41 @@ const mockPrisma = {
 
 describe('Invoice Command Handlers', () => {
   beforeEach(() => jest.clearAllMocks());
+
+  describe('org scoping', () => {
+    const txNoInvoice = { ...mockTx, invoice: { ...mockTx.invoice, findFirst: jest.fn().mockResolvedValue(null) } } as any;
+    const prismaNoInvoice = {
+      $transaction: jest.fn((fn: Function) => fn(txNoInvoice)),
+      domainEventLog: { findFirst: jest.fn().mockResolvedValue(null) },
+    } as any;
+
+    it.each([
+      ['approve', ApproveInvoiceCommandHandler, APPROVE_INVOICE, {}],
+      ['send', SendInvoiceCommandHandler, SEND_INVOICE, {}],
+      ['record payment', RecordPaymentCommandHandler, RECORD_PAYMENT, { amountCents: 100 }],
+      ['void', VoidInvoiceCommandHandler, VOID_INVOICE, {}],
+    ] as const)('%s looks the invoice up under the command org', async (_name, Handler, type, extra) => {
+      const { bus } = mockEventBus();
+      const handler = new (Handler as any)(prismaNoInvoice, bus);
+
+      const result = await handler.execute(createTestCommand(type, { invoiceId: 'inv-other-org', ...extra }));
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Invoice not found');
+      expect(txNoInvoice.invoice.findFirst.mock.calls[0][0].where).toEqual({ id: 'inv-other-org', orgId: 'test-org' });
+      expect(txNoInvoice.invoice.update).not.toHaveBeenCalled();
+    });
+
+    it('only invoices charges from the command org', async () => {
+      const { bus } = mockEventBus();
+      const handler = new CreateInvoiceCommandHandler(mockPrisma, bus);
+
+      await handler.execute(createTestCommand(CREATE_INVOICE, { customerId: 'cust-1', shipmentIds: ['ship-1'] }));
+
+      expect(mockTx.customer.findFirst.mock.calls[0][0].where).toEqual({ id: 'cust-1', orgId: 'test-org' });
+      expect(mockTx.charge.findMany.mock.calls[0][0].where).toMatchObject({ orgId: 'test-org' });
+    });
+  });
 
   describe('CreateInvoiceCommandHandler', () => {
     it('creates an invoice from approved charges and emits INVOICE_CREATED', async () => {
@@ -165,7 +203,7 @@ describe('Invoice Command Handlers', () => {
     it('fails for non-draft invoices', async () => {
       const txSent = {
         ...mockTx,
-        invoice: { ...mockTx.invoice, findUnique: jest.fn().mockResolvedValue({ ...mockInvoice, status: 'sent' }) },
+        invoice: { ...mockTx.invoice, findFirst: findById({ ...mockInvoice, status: 'sent' }) },
       };
       const prisma = {
         $transaction: jest.fn((fn: Function) => fn(txSent)),
@@ -259,7 +297,7 @@ describe('Invoice Command Handlers', () => {
     it('rejects payment on void invoice', async () => {
       const txVoid = {
         ...mockTx,
-        invoice: { ...mockTx.invoice, findUnique: jest.fn().mockResolvedValue({ ...mockInvoice, status: 'void' }) },
+        invoice: { ...mockTx.invoice, findFirst: findById({ ...mockInvoice, status: 'void' }) },
       };
       const prisma = {
         $transaction: jest.fn((fn: Function) => fn(txVoid)),
@@ -314,7 +352,7 @@ describe('Invoice Command Handlers', () => {
         ...mockTx,
         invoice: {
           ...mockTx.invoice,
-          findUnique: jest.fn().mockResolvedValue({ ...mockInvoice, paidCents: 50000 }),
+          findFirst: findById({ ...mockInvoice, paidCents: 50000 }),
         },
       };
       const prisma = {

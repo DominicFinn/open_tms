@@ -25,8 +25,8 @@ export class RecordPaymentCommandHandler extends BaseCommandHandler<RecordPaymen
   protected async handle(command: Command<RecordPaymentPayload>, tx: TransactionClient, emit: EmitFn) {
     const { payload } = command;
 
-    const invoice = await tx.invoice.findUnique({
-      where: { id: payload.invoiceId },
+    const invoice = await tx.invoice.findFirst({
+      where: { id: payload.invoiceId, orgId: command.orgId },
     });
 
     if (!invoice) throw new Error('Invoice not found');

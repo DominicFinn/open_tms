@@ -4,6 +4,10 @@ import { RecordCarrierPaymentCommandHandler, RECORD_CARRIER_PAYMENT } from '../.
 import { EVENT_TYPES } from '../../events/eventTypes';
 import { createTestCommand, mockEventBus } from '../helpers/testUtils';
 
+// Entity lookups are by { id, orgId }; number-sequence lookups carry no id.
+const findById = (row: unknown) =>
+  jest.fn().mockImplementation(({ where }: any) => Promise.resolve(where?.id ? row : null));
+
 const mockCarrier = {
   id: 'carrier-1', name: 'Fast Freight LLC', paymentTermsDays: 30,
 };
@@ -21,13 +25,13 @@ const mockCarrierInvoice = {
 };
 
 const mockTx = {
-  carrier: { findUnique: jest.fn().mockResolvedValue(mockCarrier) },
+  carrier: { findFirst: findById(mockCarrier) },
   charge: {
     findMany: jest.fn().mockResolvedValue([mockExpectedCharge]),
   },
   carrierInvoice: {
     create: jest.fn().mockResolvedValue(mockCarrierInvoice),
-    findUnique: jest.fn().mockResolvedValue(mockCarrierInvoice),
+    findFirst: findById(mockCarrierInvoice),
     update: jest.fn().mockResolvedValue(mockCarrierInvoice),
   },
   shipmentFinancialSummary: {
@@ -178,7 +182,7 @@ describe('Carrier Invoice Command Handlers', () => {
         ...mockTx,
         carrierInvoice: {
           ...mockTx.carrierInvoice,
-          findUnique: jest.fn().mockResolvedValue({ ...mockCarrierInvoice, status: 'paid' }),
+          findFirst: findById({ ...mockCarrierInvoice, status: 'paid' }),
         },
       };
       const prisma = {
@@ -204,7 +208,7 @@ describe('Carrier Invoice Command Handlers', () => {
         ...mockTx,
         carrierInvoice: {
           ...mockTx.carrierInvoice,
-          findUnique: jest.fn().mockResolvedValue({ ...mockCarrierInvoice, status: 'approved' }),
+          findFirst: findById({ ...mockCarrierInvoice, status: 'approved' }),
           update: jest.fn().mockResolvedValue({ ...mockCarrierInvoice, status: 'paid' }),
         },
       };

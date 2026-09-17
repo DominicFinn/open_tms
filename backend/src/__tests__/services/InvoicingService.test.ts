@@ -44,7 +44,7 @@ describe('InvoicingService — batching', () => {
         findById: jest.fn().mockResolvedValue({ id: 'inv-1', lineItems: [] }),
       };
       const prisma: any = {
-        customer: { findUnique: jest.fn().mockResolvedValue(customer) },
+        customer: { findFirst: jest.fn().mockResolvedValue(customer) },
         shipmentFinancialSummary: { updateMany: jest.fn().mockResolvedValue({ count: 3 }) },
       };
 
@@ -58,6 +58,7 @@ describe('InvoicingService — batching', () => {
       // Critical: one batched findAll call, not three (one per shipment)
       expect(chargeRepo.findAll).toHaveBeenCalledTimes(1);
       expect(chargeRepo.findAll).toHaveBeenCalledWith({
+        orgId: 'org-1',
         shipmentIds: ['s1', 's2', 's3'],
         chargeCategory: 'revenue',
         status: 'approved',
@@ -71,6 +72,9 @@ describe('InvoicingService — batching', () => {
       expect(prisma.shipmentFinancialSummary.updateMany).toHaveBeenCalledTimes(1);
       const where = prisma.shipmentFinancialSummary.updateMany.mock.calls[0][0].where;
       expect(where.shipmentId.in).toEqual(['s1', 's2', 's3']);
+      expect(where.orgId).toBe('org-1');
+      expect(prisma.customer.findFirst.mock.calls[0][0].where).toEqual({ id: 'cust-1', orgId: 'org-1' });
+      expect(invoiceRepo.findById).toHaveBeenCalledWith('inv-1', 'org-1');
     });
 
     it('throws if no approved revenue charges exist', async () => {
@@ -81,7 +85,7 @@ describe('InvoicingService — batching', () => {
       };
       const invoiceRepo: any = {};
       const prisma: any = {
-        customer: { findUnique: jest.fn().mockResolvedValue(customer) },
+        customer: { findFirst: jest.fn().mockResolvedValue(customer) },
       };
 
       const svc = new InvoicingService(invoiceRepo, chargeRepo, prisma);
@@ -124,10 +128,12 @@ describe('InvoicingService — batching', () => {
 
       expect(chargeRepo.findAll).toHaveBeenCalledTimes(1);
       expect(chargeRepo.findAll).toHaveBeenCalledWith({
+        orgId: 'org-1',
         shipmentIds: ['s1', 's2', 's3'],
         chargeCategory: 'revenue',
         status: 'approved',
       });
+      expect(prisma.shipment.findMany.mock.calls[0][0].where).toMatchObject({ orgId: 'org-1' });
 
       // s1 -> 150, s2 -> 200, s3 -> excluded (no charges)
       expect(result).toHaveLength(2);

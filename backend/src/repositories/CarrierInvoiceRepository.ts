@@ -31,7 +31,7 @@ export interface CreateCarrierInvoiceLineItemDTO {
 }
 
 export interface CarrierInvoiceFilters {
-  orgId?: string;
+  orgId: string;
   carrierId?: string;
   status?: string;
   matchStatus?: string;
@@ -46,7 +46,7 @@ export type CarrierInvoiceWithLineItems = CarrierInvoice & {
 
 export interface ICarrierInvoiceRepository {
   create(data: CreateCarrierInvoiceDTO): Promise<CarrierInvoice>;
-  findById(id: string): Promise<CarrierInvoiceWithLineItems | null>;
+  findById(id: string, orgId: string): Promise<CarrierInvoiceWithLineItems | null>;
   findAll(filters: CarrierInvoiceFilters): Promise<CarrierInvoiceWithLineItems[]>;
   update(id: string, data: Partial<CarrierInvoice>): Promise<CarrierInvoice>;
   addLineItem(data: CreateCarrierInvoiceLineItemDTO): Promise<CarrierInvoiceLineItem>;
@@ -79,9 +79,9 @@ export class CarrierInvoiceRepository implements ICarrierInvoiceRepository {
     }});
   }
 
-  async findById(id: string): Promise<CarrierInvoiceWithLineItems | null> {
-    return this.prisma.carrierInvoice.findUnique({
-      where: { id },
+  async findById(id: string, orgId: string): Promise<CarrierInvoiceWithLineItems | null> {
+    return this.prisma.carrierInvoice.findFirst({
+      where: { id, orgId },
       include: this.includeRelations,
     }) as Promise<CarrierInvoiceWithLineItems | null>;
   }
@@ -89,7 +89,7 @@ export class CarrierInvoiceRepository implements ICarrierInvoiceRepository {
   async findAll(filters: CarrierInvoiceFilters): Promise<CarrierInvoiceWithLineItems[]> {
     return this.prisma.carrierInvoice.findMany({
       where: {
-        ...(filters.orgId && { orgId: filters.orgId }),
+        orgId: filters.orgId,
         ...(filters.carrierId && { carrierId: filters.carrierId }),
         ...(filters.status && { status: filters.status }),
         ...(filters.matchStatus && { matchStatus: filters.matchStatus }),

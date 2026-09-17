@@ -5,6 +5,10 @@ import { ReviseQuoteCommandHandler, REVISE_QUOTE } from '../../commands/quotes/R
 import { EVENT_TYPES } from '../../events/eventTypes';
 import { createTestCommand, mockEventBus } from '../helpers/testUtils';
 
+// Entity lookups are by { id, orgId }; number-sequence lookups carry no id.
+const findById = (row: unknown) =>
+  jest.fn().mockImplementation(({ where }: any) => Promise.resolve(where?.id ? row : null));
+
 const mockCustomer = { id: 'cust-1', name: 'Acme Corp' };
 
 const futureDate = new Date(Date.now() + 30 * 86400000);
@@ -28,10 +32,9 @@ const mockQuote = {
 const mockOrder = { id: 'order-1' };
 
 const mockTx = {
-  customer: { findUnique: jest.fn().mockResolvedValue(mockCustomer) },
+  customer: { findFirst: findById(mockCustomer) },
   quote: {
-    findFirst: jest.fn().mockResolvedValue(null),
-    findUnique: jest.fn().mockResolvedValue(mockQuote),
+    findFirst: findById(mockQuote),
     create: jest.fn().mockResolvedValue(mockQuote),
     update: jest.fn().mockResolvedValue(mockQuote),
   },
@@ -47,6 +50,22 @@ const mockPrisma = {
 
 describe('Quote Command Handlers', () => {
   beforeEach(() => jest.clearAllMocks());
+
+  it('accept looks the quote up under the command org', async () => {
+    const tx = { ...mockTx, quote: { ...mockTx.quote, findFirst: jest.fn().mockResolvedValue(null) } } as any;
+    const prisma = {
+      $transaction: jest.fn((fn: Function) => fn(tx)),
+      domainEventLog: { findFirst: jest.fn().mockResolvedValue(null) },
+    } as any;
+    const { bus } = mockEventBus();
+    const handler = new AcceptQuoteCommandHandler(prisma, bus);
+
+    const result = await handler.execute(createTestCommand(ACCEPT_QUOTE, { quoteId: 'quote-other-org' }));
+
+    expect(result.error).toBe('Quote not found');
+    expect(tx.quote.findFirst.mock.calls[0][0].where).toEqual({ id: 'quote-other-org', orgId: 'test-org' });
+    expect(tx.order.create).not.toHaveBeenCalled();
+  });
 
   describe('CreateQuoteCommandHandler', () => {
     it('creates a quote with line items and emits QUOTE_CREATED', async () => {
@@ -137,7 +156,7 @@ describe('Quote Command Handlers', () => {
       };
       const txExpired = {
         ...mockTx,
-        quote: { ...mockTx.quote, findUnique: jest.fn().mockResolvedValue(expiredQuote) },
+        quote: { ...mockTx.quote, findFirst: findById(expiredQuote) },
       };
       const prisma = {
         $transaction: jest.fn((fn: Function) => fn(txExpired)),
@@ -159,7 +178,7 @@ describe('Quote Command Handlers', () => {
       const acceptedQuote = { ...mockQuote, status: 'accepted' };
       const txAccepted = {
         ...mockTx,
-        quote: { ...mockTx.quote, findUnique: jest.fn().mockResolvedValue(acceptedQuote) },
+        quote: { ...mockTx.quote, findFirst: findById(acceptedQuote) },
       };
       const prisma = {
         $transaction: jest.fn((fn: Function) => fn(txAccepted)),
@@ -216,7 +235,7 @@ describe('Quote Command Handlers', () => {
         ...mockTx,
         quote: {
           ...mockTx.quote,
-          findUnique: jest.fn().mockResolvedValue({ ...mockQuote, customer: { id: 'cust-1', name: 'Acme Corp' } }),
+          findFirst: findById({ ...mockQuote, customer: { id: 'cust-1', name: 'Acme Corp' } }),
           update: jest.fn().mockResolvedValue({ ...mockQuote, status: 'superseded' }),
           create: jest.fn().mockResolvedValue(revisedQuote),
         },
@@ -294,7 +313,7 @@ describe('Quote Command Handlers', () => {
         ...mockTx,
         quote: {
           ...mockTx.quote,
-          findUnique: jest.fn().mockResolvedValue(acceptedQuote),
+          findFirst: findById(acceptedQuote),
         },
         domainEventLog: { create: jest.fn().mockResolvedValue({}) },
       } as any;

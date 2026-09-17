@@ -36,8 +36,8 @@ export class ReceiveCarrierInvoiceCommandHandler extends BaseCommandHandler<Rece
     const { payload } = command;
 
     // Validate carrier exists
-    const carrier = await tx.carrier.findUnique({
-      where: { id: payload.carrierId },
+    const carrier = await tx.carrier.findFirst({
+      where: { id: payload.carrierId, orgId: command.orgId },
       select: { id: true, name: true, paymentTermsDays: true },
     });
     if (!carrier) throw new Error('Carrier not found');
@@ -60,6 +60,7 @@ export class ReceiveCarrierInvoiceCommandHandler extends BaseCommandHandler<Rece
       if (item.shipmentId) {
         const expectedCharges = await tx.charge.findMany({
           where: {
+            orgId: command.orgId,
             shipmentId: item.shipmentId,
             chargeCategory: 'cost',
             chargeType: item.chargeType,

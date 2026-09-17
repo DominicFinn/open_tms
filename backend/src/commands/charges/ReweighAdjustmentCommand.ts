@@ -27,6 +27,12 @@ export class ReweighAdjustmentCommandHandler extends BaseCommandHandler<ReweighA
   protected async handle(command: Command<ReweighAdjustmentPayload>, tx: TransactionClient, emit: EmitFn) {
     const { payload } = command;
 
+    const shipment = await tx.shipment.findFirst({
+      where: { id: payload.shipmentId, orgId: command.orgId },
+      select: { id: true },
+    });
+    if (!shipment) throw new Error('Shipment not found');
+
     const adjustmentCents = payload.adjustedChargeCents - payload.originalChargeCents;
     if (adjustmentCents === 0) {
       throw new Error('No adjustment needed — actual and declared charges are the same');
@@ -83,7 +89,7 @@ export class ReweighAdjustmentCommandHandler extends BaseCommandHandler<ReweighA
 
     // Recalculate shipment summary
     const charges = await tx.charge.findMany({
-      where: { shipmentId: payload.shipmentId, status: { not: 'written_off' } },
+      where: { shipmentId: payload.shipmentId, orgId: command.orgId, status: { not: 'written_off' } },
     });
 
     const revenueCents = charges.filter(c => c.chargeCategory === 'revenue').reduce((s, c) => s + c.amountCents, 0);
