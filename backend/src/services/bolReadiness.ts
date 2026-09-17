@@ -28,14 +28,16 @@ export interface BolReadiness {
  * both document types and the frontend buttons, so each button greys out for
  * exactly the shipments the backend would reject.
  *
- * Returns null if the shipment does not exist.
+ * Returns null if the shipment does not exist in the caller's organization, so a shipment id
+ * from another tenant is indistinguishable from one that doesn't exist (#294).
  */
 export async function evaluateBolReadiness(
   prisma: PrismaClient,
+  orgId: string,
   shipmentId: string,
 ): Promise<BolReadiness | null> {
-  const shipment = await prisma.shipment.findUnique({
-    where: { id: shipmentId },
+  const shipment = await prisma.shipment.findFirst({
+    where: { id: shipmentId, orgId },
     select: {
       id: true,
       originId: true,

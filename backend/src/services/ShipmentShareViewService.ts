@@ -76,7 +76,7 @@ export class ShipmentShareViewService implements IShipmentShareViewService {
     }
 
     if (granted.has('documents')) {
-      view.documents = await this.repo.findDocuments(shipmentId);
+      view.documents = await this.repo.findDocuments(orgId, shipmentId);
     }
 
     return view;

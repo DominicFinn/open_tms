@@ -1,11 +1,8 @@
 import { createDocumentGenerationWorker } from '../../workers/documentGenerationWorker';
 
-function buildPrisma() {
+function buildDocRepo() {
   return {
-    generatedDocument: {
-      findUnique: jest.fn().mockResolvedValue({ metadata: null }),
-      update: jest.fn().mockResolvedValue({}),
-    },
+    mergeMetadata: jest.fn().mockResolvedValue(undefined),
   } as any;
 }
 
@@ -27,10 +24,9 @@ describe('documentGenerationWorker', () => {
 
   afterEach(() => jest.restoreAllMocks());
 
-  it('routes BOL jobs to generateBOL with the correct args', async () => {
-    const prisma = buildPrisma();
+  it('routes BOL jobs to generateBOL with the job org and the correct args', async () => {
     const docService = buildDocService();
-    const worker = createDocumentGenerationWorker(docService, prisma);
+    const worker = createDocumentGenerationWorker(docService, buildDocRepo());
 
     await worker({
       type: 'document.generation',
@@ -40,64 +36,64 @@ describe('documentGenerationWorker', () => {
         templateId: 'tpl-1',
         correlationId: 'corr-1',
         requestedBy: 'user-1',
+        orgId: 'org-a',
       },
     });
 
-    expect(docService.generateBOL).toHaveBeenCalledWith('ship-1', 'tpl-1', 'user-1');
+    expect(docService.generateBOL).toHaveBeenCalledWith('org-a', 'ship-1', 'tpl-1', 'user-1');
   });
 
   it('routes labels/customs/rate_confirmation correctly', async () => {
-    const prisma = buildPrisma();
     const docService = buildDocService();
-    const worker = createDocumentGenerationWorker(docService, prisma);
+    const worker = createDocumentGenerationWorker(docService, buildDocRepo());
 
-    await worker({ type: 'x', payload: { kind: 'labels', entityId: 'ord-1', correlationId: 'c1' } });
-    expect(docService.generateLabels).toHaveBeenCalledWith('ord-1', undefined, undefined);
+    await worker({ type: 'x', payload: { kind: 'labels', entityId: 'ord-1', correlationId: 'c1', orgId: 'org-a' } });
+    expect(docService.generateLabels).toHaveBeenCalledWith('org-a', 'ord-1', undefined, undefined);
 
-    await worker({ type: 'x', payload: { kind: 'customs', entityId: 'ship-1', correlationId: 'c2' } });
-    expect(docService.generateCustomsForm).toHaveBeenCalledWith('ship-1', undefined, undefined);
+    await worker({ type: 'x', payload: { kind: 'customs', entityId: 'ship-1', correlationId: 'c2', orgId: 'org-a' } });
+    expect(docService.generateCustomsForm).toHaveBeenCalledWith('org-a', 'ship-1', undefined, undefined);
 
-    await worker({ type: 'x', payload: { kind: 'rate_confirmation', entityId: 'ship-1', correlationId: 'c3' } });
-    expect(docService.generateRateConfirmation).toHaveBeenCalledWith('ship-1', undefined);
+    await worker({ type: 'x', payload: { kind: 'rate_confirmation', entityId: 'ship-1', correlationId: 'c3', orgId: 'org-a' } });
+    expect(docService.generateRateConfirmation).toHaveBeenCalledWith('org-a', 'ship-1', undefined);
   });
 
-  it('stamps the correlationId onto GeneratedDocument metadata', async () => {
-    const prisma = buildPrisma();
-    prisma.generatedDocument.findUnique.mockResolvedValue({ metadata: { source: 'manual' } });
-    const docService = buildDocService();
-    const worker = createDocumentGenerationWorker(docService, prisma);
+  it('stamps the correlationId onto the document metadata, scoped to the job org', async () => {
+    const docRepo = buildDocRepo();
+    const worker = createDocumentGenerationWorker(buildDocService(), docRepo);
 
     await worker({
       type: 'x',
-      payload: { kind: 'bol', entityId: 'ship-1', correlationId: 'corr-xyz' },
+      payload: { kind: 'bol', entityId: 'ship-1', correlationId: 'corr-xyz', orgId: 'org-a' },
     });
 
-    expect(prisma.generatedDocument.update).toHaveBeenCalledWith({
-      where: { id: 'doc-bol-1' },
-      // existing metadata is preserved, correlationId + kind are added
-      data: { metadata: { source: 'manual', correlationId: 'corr-xyz', generationKind: 'bol' } },
+    expect(docRepo.mergeMetadata).toHaveBeenCalledWith('org-a', 'doc-bol-1', {
+      correlationId: 'corr-xyz',
+      generationKind: 'bol',
     });
   });
 
-  it('rejects payloads missing kind or entityId', async () => {
-    const worker = createDocumentGenerationWorker(buildDocService(), buildPrisma());
+  it('rejects payloads missing kind, entityId or orgId', async () => {
+    const docService = buildDocService();
+    const worker = createDocumentGenerationWorker(docService, buildDocRepo());
 
-    await expect(worker({ type: 'x', payload: { entityId: 'x' } as any })).rejects.toThrow(/Invalid/);
-    await expect(worker({ type: 'x', payload: { kind: 'bol' } as any })).rejects.toThrow(/Invalid/);
+    await expect(worker({ type: 'x', payload: { entityId: 'x', orgId: 'org-a' } as any })).rejects.toThrow(/Invalid/);
+    await expect(worker({ type: 'x', payload: { kind: 'bol', orgId: 'org-a' } as any })).rejects.toThrow(/Invalid/);
+    await expect(worker({ type: 'x', payload: { kind: 'bol', entityId: 'ship-1', correlationId: 'c' } as any })).rejects.toThrow(/Invalid/);
+    expect(docService.generateBOL).not.toHaveBeenCalled();
   });
 
   it('re-throws service errors so pg-boss can retry the job', async () => {
     const docService = buildDocService({
       generateBOL: jest.fn().mockRejectedValue(new Error('PDF render crashed')),
     });
-    const prisma = buildPrisma();
-    const worker = createDocumentGenerationWorker(docService, prisma);
+    const docRepo = buildDocRepo();
+    const worker = createDocumentGenerationWorker(docService, docRepo);
 
     await expect(worker({
       type: 'x',
-      payload: { kind: 'bol', entityId: 'ship-1', correlationId: 'c1' },
+      payload: { kind: 'bol', entityId: 'ship-1', correlationId: 'c1', orgId: 'org-a' },
     })).rejects.toThrow('PDF render crashed');
 
-    expect(prisma.generatedDocument.update).not.toHaveBeenCalled();
+    expect(docRepo.mergeMetadata).not.toHaveBeenCalled();
   });
 });

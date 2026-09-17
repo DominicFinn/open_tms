@@ -11,11 +11,23 @@ import { defaultCustomsTemplate } from './templates/customsTemplate.js';
 import { defaultRateConfirmationTemplate } from './templates/rateConfirmationTemplate.js';
 import { mapCustomsLineItem, totalDeclaredValueFor } from './customs/customsLineItemMapping.js';
 
+/**
+ * Every method takes the caller's orgId and resolves the shipment or order by { id, orgId }, so a
+ * document can only be generated from the caller's own data (#294). A miss throws
+ * DocumentSourceNotFoundError, which the routes answer with 404.
+ */
 export interface IDocumentGenerationService {
-  generateBOL(shipmentId: string, templateId?: string, userId?: string): Promise<{ id: string; fileName: string }>;
-  generateLabels(orderId: string, templateId?: string, userId?: string): Promise<{ id: string; fileName: string }>;
-  generateCustomsForm(shipmentId: string, templateId?: string, userId?: string): Promise<{ id: string; fileName: string }>;
-  generateRateConfirmation(shipmentId: string, userId?: string): Promise<{ id: string; fileName: string }>;
+  generateBOL(orgId: string, shipmentId: string, templateId?: string, userId?: string): Promise<{ id: string; fileName: string }>;
+  generateLabels(orgId: string, orderId: string, templateId?: string, userId?: string): Promise<{ id: string; fileName: string }>;
+  generateCustomsForm(orgId: string, shipmentId: string, templateId?: string, userId?: string): Promise<{ id: string; fileName: string }>;
+  generateRateConfirmation(orgId: string, shipmentId: string, userId?: string): Promise<{ id: string; fileName: string }>;
+}
+
+export class DocumentSourceNotFoundError extends Error {
+  constructor(entity: 'Shipment' | 'Order') {
+    super(`${entity} not found`);
+    this.name = 'DocumentSourceNotFoundError';
+  }
 }
 
 function formatDate(d: Date | null | undefined): string {
@@ -49,12 +61,13 @@ export class DocumentGenerationService implements IDocumentGenerationService {
    * Load organization branding for document templates.
    * Returns org name, primary color, and logo URL (if available).
    */
-  private async loadBranding(): Promise<{
+  private async loadBranding(orgId: string): Promise<{
     orgName: string;
     primaryColor: string;
     logoUrl: string | null;
   }> {
-    const org = await this.prisma.organization.findFirst({
+    const org = await this.prisma.organization.findUnique({
+      where: { id: orgId },
       select: { name: true, themeConfig: true, logoStorageKey: true },
     });
     const themeConfig = org?.themeConfig as Record<string, string> | null;
@@ -65,10 +78,9 @@ export class DocumentGenerationService implements IDocumentGenerationService {
     };
   }
 
-  async generateBOL(shipmentId: string, templateId?: string, userId?: string) {
-    // Load shipment with all relations
-    const shipment = await this.prisma.shipment.findUniqueOrThrow({
-      where: { id: shipmentId },
+  async generateBOL(orgId: string, shipmentId: string, templateId?: string, userId?: string) {
+    const shipment = await this.prisma.shipment.findFirst({
+      where: { id: shipmentId, orgId },
       include: {
         origin: true,
         destination: true,
@@ -88,16 +100,15 @@ export class DocumentGenerationService implements IDocumentGenerationService {
         },
       },
     });
+    if (!shipment) throw new DocumentSourceNotFoundError('Shipment');
 
-    // Generate BOL number
-    const org = await this.prisma.organization.findFirst();
-    const seqNum = (org?.bolSequenceNumber ?? 0) + 1;
-    if (org) {
-      await this.prisma.organization.update({
-        where: { id: org.id },
-        data: { bolSequenceNumber: seqNum },
-      });
-    }
+    // BOL numbers run per organization. The increment is a single atomic update so two
+    // concurrent generations can't read the same value and issue a duplicate number.
+    const { bolSequenceNumber: seqNum } = await this.prisma.organization.update({
+      where: { id: orgId },
+      data: { bolSequenceNumber: { increment: 1 } },
+      select: { bolSequenceNumber: true },
+    });
     const today = new Date();
     const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
     const bolNumber = `BOL-${dateStr}-${String(seqNum).padStart(4, '0')}`;
@@ -107,7 +118,7 @@ export class DocumentGenerationService implements IDocumentGenerationService {
     const allLineItems = orders.flatMap(o => o.lineItems);
     const allUnits = orders.flatMap(o => o.trackableUnits);
     const totalWeight = allLineItems.reduce((sum, li) => sum + (li.weight ?? 0), 0);
-    const branding = await this.loadBranding();
+    const branding = await this.loadBranding(orgId);
 
     const data = {
       branding,
@@ -149,11 +160,11 @@ export class DocumentGenerationService implements IDocumentGenerationService {
     };
 
     // Render template
-    const htmlTemplate = await this.getTemplateHtml('bol', templateId);
+    const htmlTemplate = await this.getTemplateHtml(orgId, 'bol', templateId);
     const html = Handlebars.compile(htmlTemplate)(data);
 
     // Generate PDF
-    const pdfBytes = await this.htmlToPdf(html, `Bill of Lading - ${bolNumber}`);
+    const pdfBytes = await this.htmlToPdf(html, `Bill of Lading - ${bolNumber}`, branding.orgName);
 
     const fileName = `${bolNumber}.pdf`;
     const buffer = Buffer.from(pdfBytes);
@@ -161,6 +172,7 @@ export class DocumentGenerationService implements IDocumentGenerationService {
     const storageKey = `files/${randomUUID()}`;
 
     const doc = await this.storeDocument({
+      orgId,
       documentType: 'bol',
       documentNumber: bolNumber,
       fileName,
@@ -177,9 +189,9 @@ export class DocumentGenerationService implements IDocumentGenerationService {
     return { id: doc.id, fileName };
   }
 
-  async generateLabels(orderId: string, templateId?: string, userId?: string) {
-    const order = await this.prisma.order.findUniqueOrThrow({
-      where: { id: orderId },
+  async generateLabels(orgId: string, orderId: string, templateId?: string, userId?: string) {
+    const order = await this.prisma.order.findFirst({
+      where: { id: orderId, orgId },
       include: {
         customer: true,
         origin: true,
@@ -188,9 +200,10 @@ export class DocumentGenerationService implements IDocumentGenerationService {
         orderShipments: { include: { shipment: { include: { carrier: true } } } },
       },
     });
+    if (!order) throw new DocumentSourceNotFoundError('Order');
 
     const shipment = order.orderShipments[0]?.shipment;
-    const branding = await this.loadBranding();
+    const branding = await this.loadBranding(orgId);
 
     const data = {
       branding,
@@ -207,16 +220,17 @@ export class DocumentGenerationService implements IDocumentGenerationService {
       units: order.trackableUnits,
     };
 
-    const htmlTemplate = await this.getTemplateHtml('label', templateId);
+    const htmlTemplate = await this.getTemplateHtml(orgId, 'label', templateId);
     const html = Handlebars.compile(htmlTemplate)(data);
 
-    const pdfBytes = await this.htmlToPdf(html, `Labels - ${order.orderNumber}`);
+    const pdfBytes = await this.htmlToPdf(html, `Labels - ${order.orderNumber}`, branding.orgName);
 
     const fileName = `Labels-${order.orderNumber}.pdf`;
     const buffer = Buffer.from(pdfBytes);
     const storageKey = `files/${randomUUID()}`;
 
     const doc = await this.storeDocument({
+      orgId,
       documentType: 'label',
       fileName,
       mimeType: 'application/pdf',
@@ -232,9 +246,9 @@ export class DocumentGenerationService implements IDocumentGenerationService {
     return { id: doc.id, fileName };
   }
 
-  async generateCustomsForm(shipmentId: string, templateId?: string, userId?: string) {
-    const shipment = await this.prisma.shipment.findUniqueOrThrow({
-      where: { id: shipmentId },
+  async generateCustomsForm(orgId: string, shipmentId: string, templateId?: string, userId?: string) {
+    const shipment = await this.prisma.shipment.findFirst({
+      where: { id: shipmentId, orgId },
       include: {
         origin: true,
         destination: true,
@@ -245,11 +259,12 @@ export class DocumentGenerationService implements IDocumentGenerationService {
         },
       },
     });
+    if (!shipment) throw new DocumentSourceNotFoundError('Shipment');
 
     const orders = shipment.orderShipments.map(os => os.order);
     const allLineItems = orders.flatMap(o => o.lineItems);
     const totalWeight = allLineItems.reduce((sum, li) => sum + (li.weight ?? 0), 0);
-    const branding = await this.loadBranding();
+    const branding = await this.loadBranding(orgId);
 
     const data = {
       branding,
@@ -272,16 +287,17 @@ export class DocumentGenerationService implements IDocumentGenerationService {
       },
     };
 
-    const htmlTemplate = await this.getTemplateHtml('customs', templateId);
+    const htmlTemplate = await this.getTemplateHtml(orgId, 'customs', templateId);
     const html = Handlebars.compile(htmlTemplate)(data);
 
-    const pdfBytes = await this.htmlToPdf(html, `Customs Form - ${shipment.reference}`);
+    const pdfBytes = await this.htmlToPdf(html, `Customs Form - ${shipment.reference}`, branding.orgName);
 
     const fileName = `Customs-${shipment.reference}.pdf`;
     const buffer = Buffer.from(pdfBytes);
     const storageKey = `files/${randomUUID()}`;
 
     const doc = await this.storeDocument({
+      orgId,
       documentType: 'customs',
       fileName,
       mimeType: 'application/pdf',
@@ -297,9 +313,9 @@ export class DocumentGenerationService implements IDocumentGenerationService {
     return { id: doc.id, fileName };
   }
 
-  async generateRateConfirmation(shipmentId: string, userId?: string) {
-    const shipment = await this.prisma.shipment.findUniqueOrThrow({
-      where: { id: shipmentId },
+  async generateRateConfirmation(orgId: string, shipmentId: string, userId?: string) {
+    const shipment = await this.prisma.shipment.findFirst({
+      where: { id: shipmentId, orgId },
       include: {
         origin: true,
         destination: true,
@@ -314,14 +330,16 @@ export class DocumentGenerationService implements IDocumentGenerationService {
         shipmentFinancialSummary: true,
       },
     });
+    if (!shipment) throw new DocumentSourceNotFoundError('Shipment');
 
     if (!shipment.carrier) throw new Error('Shipment has no carrier assigned');
     if (shipment.charges.length === 0) {
       throw new Error('Shipment has no approved cost charge — award a tender or approve a cost charge before generating a rate confirmation');
     }
 
-    const branding = await this.loadBranding();
-    const org = await this.prisma.organization.findFirst({
+    const branding = await this.loadBranding(orgId);
+    const org = await this.prisma.organization.findUnique({
+      where: { id: orgId },
       select: { mcNumber: true },
     });
 
@@ -355,13 +373,14 @@ export class DocumentGenerationService implements IDocumentGenerationService {
     };
 
     const html = Handlebars.compile(defaultRateConfirmationTemplate)(data);
-    const pdfBytes = await this.htmlToPdf(html, `Rate Confirmation - ${shipment.reference}`);
+    const pdfBytes = await this.htmlToPdf(html, `Rate Confirmation - ${shipment.reference}`, branding.orgName);
 
     const fileName = `RateConfirmation-${shipment.reference}.pdf`;
     const buffer = Buffer.from(pdfBytes);
     const storageKey = `files/${randomUUID()}`;
 
     const doc = await this.storeDocument({
+      orgId,
       documentType: 'rate_confirmation',
       fileName,
       mimeType: 'application/pdf',
@@ -407,14 +426,14 @@ export class DocumentGenerationService implements IDocumentGenerationService {
     });
   }
 
-  private async getTemplateHtml(documentType: string, templateId?: string): Promise<string> {
+  private async getTemplateHtml(orgId: string, documentType: string, templateId?: string): Promise<string> {
     if (templateId) {
-      const template = await this.templateRepo.findById(templateId);
+      const template = await this.templateRepo.findById(orgId, templateId);
       if (template) return template.htmlTemplate;
     }
 
     // Try default template from DB
-    const defaultTemplate = await this.templateRepo.findDefault(documentType);
+    const defaultTemplate = await this.templateRepo.findDefault(orgId, documentType);
     if (defaultTemplate) return defaultTemplate.htmlTemplate;
 
     // Fall back to built-in templates
@@ -432,16 +451,10 @@ export class DocumentGenerationService implements IDocumentGenerationService {
    * Parses block-level HTML (headings, tables, paragraphs) and renders with
    * proper column-aligned tables, inline bold, <br/> line breaks, and word wrapping.
    */
-  async htmlToPdf(html: string, title: string): Promise<Uint8Array> {
+  async htmlToPdf(html: string, title: string, orgName?: string): Promise<Uint8Array> {
     const pdfDoc = await PDFDocument.create();
     pdfDoc.setTitle(title);
-    // Use org name for document creator metadata
-    let creatorName = 'Open TMS';
-    try {
-      const org = await this.prisma.organization.findFirst({ select: { name: true } });
-      if (org?.name && org.name !== 'Default Organization') creatorName = org.name;
-    } catch { /* use fallback */ }
-    pdfDoc.setCreator(creatorName);
+    pdfDoc.setCreator(orgName && orgName !== 'Default Organization' ? orgName : 'Open TMS');
 
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);

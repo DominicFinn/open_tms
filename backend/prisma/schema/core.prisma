@@ -234,6 +234,8 @@ model Organization {
 
   // Issue & Read model relations
   issues             Issue[]
+  documentTemplates  DocumentTemplate[]
+  generatedDocuments GeneratedDocument[]
   issueSignals       IssueSignal[]
   carrierReadModels  CarrierReadModel[]
   customerReadModels CustomerReadModel[]

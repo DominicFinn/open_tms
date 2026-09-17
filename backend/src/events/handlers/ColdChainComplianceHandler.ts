@@ -44,23 +44,21 @@ export class ColdChainComplianceHandler implements IEventHandler {
   }
 
   private async handleShipmentDelivered(event: DomainEvent): Promise<void> {
-    const shipmentId = event.entityId;
-    await this.generateComplianceReportIfNeeded(shipmentId);
+    await this.generateComplianceReportIfNeeded(event.orgId, event.entityId);
   }
 
   private async handleStatusChanged(event: DomainEvent): Promise<void> {
     const payload = event.payload as { newStatus?: string };
     // Generate report when shipment moves to "delivered" or "completed" status
     if (payload.newStatus === 'delivered' || payload.newStatus === 'completed') {
-      const shipmentId = event.entityId;
-      await this.generateComplianceReportIfNeeded(shipmentId);
+      await this.generateComplianceReportIfNeeded(event.orgId, event.entityId);
     }
   }
 
-  private async generateComplianceReportIfNeeded(shipmentId: string): Promise<void> {
+  private async generateComplianceReportIfNeeded(orgId: string, shipmentId: string): Promise<void> {
     // Check if this shipment has cold chain monitoring
-    const shipment = await this.prisma.shipment.findUnique({
-      where: { id: shipmentId },
+    const shipment = await this.prisma.shipment.findFirst({
+      where: { id: shipmentId, orgId },
       select: {
         id: true,
         coldChainDisposition: true,
@@ -83,6 +81,7 @@ export class ColdChainComplianceHandler implements IEventHandler {
     // Check if a compliance report already exists for this shipment
     const existingReport = await this.prisma.generatedDocument.findFirst({
       where: {
+        orgId,
         shipmentId,
         documentType: 'cold_chain_compliance',
       },
@@ -95,11 +94,12 @@ export class ColdChainComplianceHandler implements IEventHandler {
 
     // Generate the compliance report
     const reportService = new ComplianceReportService(this.prisma, this.storageProvider);
-    const result = await reportService.generateComplianceReport(shipmentId);
+    const result = await reportService.generateComplianceReport(orgId, shipmentId);
     console.log(`[ColdChainComplianceHandler] Generated compliance report ${result.documentId} for shipment ${shipmentId}`);
 
     // Check org setting for auto-delivery
-    const org = await this.prisma.organization.findFirst({
+    const org = await this.prisma.organization.findUnique({
+      where: { id: orgId },
       select: { autoDeliverShipmentDocs: true },
     });
 

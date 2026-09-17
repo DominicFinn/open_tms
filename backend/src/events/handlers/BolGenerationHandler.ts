@@ -55,6 +55,7 @@ export class BolGenerationHandler implements IEventHandler {
     if (!plan || plan.bolDocumentId) return;
 
     const document = await this.documentService.generateBOL(
+      event.orgId,
       payload.shipmentId,
       undefined,
       event.actorId ?? undefined

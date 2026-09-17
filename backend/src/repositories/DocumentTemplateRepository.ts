@@ -1,6 +1,7 @@
 import { PrismaClient, DocumentTemplate } from '@prisma/client';
 
 export interface CreateDocumentTemplateDTO {
+  orgId: string;
   name: string;
   documentType: string;
   description?: string;
@@ -18,39 +19,44 @@ export interface UpdateDocumentTemplateDTO {
   active?: boolean;
 }
 
+/**
+ * Templates belong to one organization (#294). The default for a document type is a
+ * per-organization choice, so setting one never unsets another tenant's.
+ */
 export interface IDocumentTemplateRepository {
-  all(): Promise<DocumentTemplate[]>;
-  findById(id: string): Promise<DocumentTemplate | null>;
-  findByType(documentType: string): Promise<DocumentTemplate[]>;
-  findDefault(documentType: string): Promise<DocumentTemplate | null>;
+  all(orgId: string): Promise<DocumentTemplate[]>;
+  findById(orgId: string, id: string): Promise<DocumentTemplate | null>;
+  findByType(orgId: string, documentType: string): Promise<DocumentTemplate[]>;
+  findDefault(orgId: string, documentType: string): Promise<DocumentTemplate | null>;
   create(data: CreateDocumentTemplateDTO): Promise<DocumentTemplate>;
-  update(id: string, data: UpdateDocumentTemplateDTO): Promise<DocumentTemplate>;
-  delete(id: string): Promise<void>;
+  update(orgId: string, id: string, data: UpdateDocumentTemplateDTO): Promise<DocumentTemplate | null>;
+  delete(orgId: string, id: string): Promise<boolean>;
 }
 
 export class DocumentTemplateRepository implements IDocumentTemplateRepository {
   constructor(private prisma: PrismaClient) {}
 
-  async all() {
+  async all(orgId: string) {
     return this.prisma.documentTemplate.findMany({
+      where: { orgId },
       orderBy: { createdAt: 'desc' },
     });
   }
 
-  async findById(id: string) {
-    return this.prisma.documentTemplate.findUnique({ where: { id } });
+  async findById(orgId: string, id: string) {
+    return this.prisma.documentTemplate.findFirst({ where: { id, orgId } });
   }
 
-  async findByType(documentType: string) {
+  async findByType(orgId: string, documentType: string) {
     return this.prisma.documentTemplate.findMany({
-      where: { documentType, active: true },
+      where: { orgId, documentType, active: true },
       orderBy: { createdAt: 'desc' },
     });
   }
 
-  async findDefault(documentType: string) {
+  async findDefault(orgId: string, documentType: string) {
     return this.prisma.documentTemplate.findFirst({
-      where: { documentType, isDefault: true, active: true },
+      where: { orgId, documentType, isDefault: true, active: true },
     });
   }
 
@@ -58,7 +64,7 @@ export class DocumentTemplateRepository implements IDocumentTemplateRepository {
     // If setting as default, unset other defaults of same type
     if (data.isDefault) {
       await this.prisma.documentTemplate.updateMany({
-        where: { documentType: data.documentType, isDefault: true },
+        where: { orgId: data.orgId, documentType: data.documentType, isDefault: true },
         data: { isDefault: false },
       });
     }
@@ -66,22 +72,23 @@ export class DocumentTemplateRepository implements IDocumentTemplateRepository {
     return this.prisma.documentTemplate.create({ data });
   }
 
-  async update(id: string, data: UpdateDocumentTemplateDTO) {
+  async update(orgId: string, id: string, data: UpdateDocumentTemplateDTO) {
+    const template = await this.prisma.documentTemplate.findFirst({ where: { id, orgId } });
+    if (!template) return null;
+
     // If setting as default, unset other defaults of same type
     if (data.isDefault) {
-      const template = await this.prisma.documentTemplate.findUnique({ where: { id } });
-      if (template) {
-        await this.prisma.documentTemplate.updateMany({
-          where: { documentType: template.documentType, isDefault: true, id: { not: id } },
-          data: { isDefault: false },
-        });
-      }
+      await this.prisma.documentTemplate.updateMany({
+        where: { orgId, documentType: template.documentType, isDefault: true, id: { not: id } },
+        data: { isDefault: false },
+      });
     }
 
-    return this.prisma.documentTemplate.update({ where: { id }, data });
+    return this.prisma.documentTemplate.update({ where: { id: template.id }, data });
   }
 
-  async delete(id: string) {
-    await this.prisma.documentTemplate.delete({ where: { id } });
+  async delete(orgId: string, id: string) {
+    const { count } = await this.prisma.documentTemplate.deleteMany({ where: { id, orgId } });
+    return count > 0;
   }
 }

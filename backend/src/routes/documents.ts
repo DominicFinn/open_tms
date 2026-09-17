@@ -6,12 +6,13 @@ import { container } from '../di/container.js';
 import { TOKENS } from '../di/tokens.js';
 import { IDocumentTemplateRepository } from '../repositories/DocumentTemplateRepository.js';
 import { IGeneratedDocumentRepository } from '../repositories/GeneratedDocumentRepository.js';
-import { IDocumentGenerationService } from '../services/DocumentGenerationService.js';
+import { IDocumentGenerationService, DocumentSourceNotFoundError } from '../services/DocumentGenerationService.js';
 import { IBinaryStorageProvider } from '../storage/IBinaryStorageProvider.js';
 import { IQueueAdapter } from '../queue/IQueueAdapter.js';
 import { QUEUES, type DocumentGenerationKind, type DocumentGenerationJob } from '../queue/events.js';
 import { evaluateBolReadiness } from '../services/bolReadiness.js';
 import { requirePermission } from '../middleware/jwtAuth.js';
+import { registerOrgScope, requireOrgScope } from '../auth/orgScopeMiddleware.js';
 
 const createTemplateSchema = z.object({
   name: z.string().min(1),
@@ -112,7 +113,17 @@ const idParam = {
   },
 } as const;
 
+// A shipment or order outside the caller's org reads as missing (#294).
+function generationErrorStatus(err: unknown, fallback: number): number {
+  return err instanceof DocumentSourceNotFoundError ? 404 : fallback;
+}
+
 export async function documentRoutes(server: FastifyInstance) {
+  // Every document and template belongs to one organization (#294). Requests without a tenant
+  // context are refused before any handler runs.
+  await registerOrgScope(server);
+  server.addHook('preHandler', requireOrgScope);
+
   const templateRepo = container.resolve<IDocumentTemplateRepository>(TOKENS.IDocumentTemplateRepository);
   const docRepo = container.resolve<IGeneratedDocumentRepository>(TOKENS.IGeneratedDocumentRepository);
   const docService = container.resolve<IDocumentGenerationService>(TOKENS.IDocumentGenerationService);
@@ -143,7 +154,7 @@ export async function documentRoutes(server: FastifyInstance) {
       templateId: templateId ?? null,
       correlationId,
       requestedBy: req.user?.sub ?? null,
-      orgId: req.user?.organizationId ?? null,
+      orgId: req.orgId!,
     };
     const jobId = await queueAdapter.publish(QUEUES.DOCUMENT_GENERATION, {
       type: 'document.generation',
@@ -168,8 +179,8 @@ export async function documentRoutes(server: FastifyInstance) {
         },
       },
     },
-  }, async () => {
-    const templates = await templateRepo.all();
+  }, async (req) => {
+    const templates = await templateRepo.all(req.orgId!);
     return { data: templates, error: null };
   });
 
@@ -182,7 +193,7 @@ export async function documentRoutes(server: FastifyInstance) {
     },
   }, async (req, reply) => {
     const { id } = req.params as { id: string };
-    const template = await templateRepo.findById(id);
+    const template = await templateRepo.findById(req.orgId!, id);
     if (!template) {
       reply.code(404);
       return { data: null, error: 'Template not found' };
@@ -215,7 +226,7 @@ export async function documentRoutes(server: FastifyInstance) {
       return { data: null, error: parsed.error.issues.map(i => i.message).join('. ') };
     }
 
-    const template = await templateRepo.create(parsed.data);
+    const template = await templateRepo.create({ ...parsed.data, orgId: req.orgId! });
     reply.code(201);
     return { data: template, error: null };
   });
@@ -246,13 +257,11 @@ export async function documentRoutes(server: FastifyInstance) {
       return { data: null, error: parsed.error.issues.map(i => i.message).join('. ') };
     }
 
-    const existing = await templateRepo.findById(id);
-    if (!existing) {
+    const updated = await templateRepo.update(req.orgId!, id, parsed.data);
+    if (!updated) {
       reply.code(404);
       return { data: null, error: 'Template not found' };
     }
-
-    const updated = await templateRepo.update(id, parsed.data);
     return { data: updated, error: null };
   });
 
@@ -268,13 +277,11 @@ export async function documentRoutes(server: FastifyInstance) {
     },
   }, async (req, reply) => {
     const { id } = req.params as { id: string };
-    const existing = await templateRepo.findById(id);
-    if (!existing) {
+    const deleted = await templateRepo.delete(req.orgId!, id);
+    if (!deleted) {
       reply.code(404);
       return { data: null, error: 'Template not found' };
     }
-
-    await templateRepo.delete(id);
     return { data: { message: 'Template deleted' }, error: null };
   });
 
@@ -314,7 +321,7 @@ export async function documentRoutes(server: FastifyInstance) {
     // document. The intended trigger is `POST /load-plans/:id/complete`, which
     // fires automatically after picking and loading. `evaluateBolReadiness` is
     // the single source of truth shared with the frontend button.
-    const readiness = await evaluateBolReadiness(prisma, parsed.data.shipmentId);
+    const readiness = await evaluateBolReadiness(prisma, req.orgId!, parsed.data.shipmentId);
     if (!readiness) {
       reply.code(404);
       return { data: null, error: 'Shipment not found' };
@@ -328,11 +335,11 @@ export async function documentRoutes(server: FastifyInstance) {
     }
 
     try {
-      const result = await docService.generateBOL(parsed.data.shipmentId, parsed.data.templateId);
+      const result = await docService.generateBOL(req.orgId!, parsed.data.shipmentId, parsed.data.templateId, req.user?.sub);
       reply.code(201);
       return { data: result, error: null };
     } catch (err: any) {
-      reply.code(500);
+      reply.code(generationErrorStatus(err, 500));
       return { data: null, error: err.message };
     }
   });
@@ -370,7 +377,7 @@ export async function documentRoutes(server: FastifyInstance) {
     },
   }, async (req, reply) => {
     const { shipmentId } = req.params as { shipmentId: string };
-    const readiness = await evaluateBolReadiness(prisma, shipmentId);
+    const readiness = await evaluateBolReadiness(prisma, req.orgId!, shipmentId);
     if (!readiness) {
       reply.code(404);
       return { data: null, error: 'Shipment not found' };
@@ -405,11 +412,11 @@ export async function documentRoutes(server: FastifyInstance) {
     }
 
     try {
-      const result = await docService.generateLabels(parsed.data.orderId, parsed.data.templateId);
+      const result = await docService.generateLabels(req.orgId!, parsed.data.orderId, parsed.data.templateId, req.user?.sub);
       reply.code(201);
       return { data: result, error: null };
     } catch (err: any) {
-      reply.code(500);
+      reply.code(generationErrorStatus(err, 500));
       return { data: null, error: err.message };
     }
   });
@@ -445,7 +452,7 @@ export async function documentRoutes(server: FastifyInstance) {
     // much as a BOL does, so it shares evaluateBolReadiness rather than
     // duplicating the check. Without this, a shipment with no cargo detail
     // silently produced a customs form that was all blank fill-in lines.
-    const readiness = await evaluateBolReadiness(prisma, parsed.data.shipmentId);
+    const readiness = await evaluateBolReadiness(prisma, req.orgId!, parsed.data.shipmentId);
     if (!readiness) {
       reply.code(404);
       return { data: null, error: 'Shipment not found' };
@@ -456,11 +463,11 @@ export async function documentRoutes(server: FastifyInstance) {
     }
 
     try {
-      const result = await docService.generateCustomsForm(parsed.data.shipmentId, parsed.data.templateId);
+      const result = await docService.generateCustomsForm(req.orgId!, parsed.data.shipmentId, parsed.data.templateId, req.user?.sub);
       reply.code(201);
       return { data: result, error: null };
     } catch (err: any) {
-      reply.code(500);
+      reply.code(generationErrorStatus(err, 500));
       return { data: null, error: err.message };
     }
   });
@@ -482,11 +489,11 @@ export async function documentRoutes(server: FastifyInstance) {
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { shipmentId } = (req as any).body;
     try {
-      const result = await docService.generateRateConfirmation(shipmentId);
+      const result = await docService.generateRateConfirmation(req.orgId!, shipmentId, req.user?.sub);
       reply.code(201);
       return { data: result, error: null };
     } catch (err: any) {
-      reply.code(400);
+      reply.code(generationErrorStatus(err, 400));
       return { data: null, error: err.message };
     }
   });
@@ -541,7 +548,7 @@ export async function documentRoutes(server: FastifyInstance) {
     }
     // Same readiness gate as the sync route — never enqueue a BOL job for a
     // shipment that lacks the legally-required cargo detail.
-    const readiness = await evaluateBolReadiness(prisma, parsed.data.shipmentId);
+    const readiness = await evaluateBolReadiness(prisma, req.orgId!, parsed.data.shipmentId);
     if (!readiness) {
       reply.code(404);
       return { data: null, error: 'Shipment not found' };
@@ -612,7 +619,7 @@ export async function documentRoutes(server: FastifyInstance) {
     }
     // Same readiness gate as the sync route — never enqueue a customs form
     // job for a shipment that lacks the goods detail needed to declare it.
-    const readiness = await evaluateBolReadiness(prisma, parsed.data.shipmentId);
+    const readiness = await evaluateBolReadiness(prisma, req.orgId!, parsed.data.shipmentId);
     if (!readiness) {
       reply.code(404);
       return { data: null, error: 'Shipment not found' };
@@ -663,12 +670,7 @@ export async function documentRoutes(server: FastifyInstance) {
       params: { type: 'object', properties: { correlationId: { type: 'string', format: 'uuid' } } },
     },
   }, async (req) => {
-    const { correlationId } = req.params;
-
-    const doc = await prisma.generatedDocument.findFirst({
-      where: { metadata: { path: ['correlationId'], equals: correlationId } },
-      orderBy: { createdAt: 'desc' },
-    });
+    const doc = await docRepo.findByCorrelationId(req.orgId!, req.params.correlationId);
 
     if (doc) {
       return { data: { status: 'completed', document: doc }, error: null };
@@ -704,7 +706,7 @@ export async function documentRoutes(server: FastifyInstance) {
       documentType?: string;
     };
 
-    const docs = await docRepo.findAll({ shipmentId, orderId, documentType });
+    const docs = await docRepo.findAll(req.orgId!, { shipmentId, orderId, documentType });
     return { data: docs, error: null };
   });
 
@@ -720,7 +722,7 @@ export async function documentRoutes(server: FastifyInstance) {
     },
   }, async (req, reply) => {
     const { id } = req.params as { id: string };
-    const doc = await docRepo.findById(id);
+    const doc = await docRepo.findById(req.orgId!, id);
     if (!doc) {
       reply.code(404);
       return { data: null, error: 'Document not found' };
@@ -742,7 +744,7 @@ export async function documentRoutes(server: FastifyInstance) {
     },
   }, async (req, reply) => {
     const { id } = req.params as { id: string };
-    const doc = await docRepo.findById(id);
+    const doc = await docRepo.findById(req.orgId!, id);
     if (!doc) {
       reply.code(404);
       return { data: null, error: 'Document not found' };
@@ -778,7 +780,7 @@ export async function documentRoutes(server: FastifyInstance) {
     },
   }, async (req, reply) => {
     const { id } = req.params as { id: string };
-    const doc = await docRepo.findById(id);
+    const doc = await docRepo.findById(req.orgId!, id);
     if (!doc) {
       reply.code(404);
       return { data: null, error: 'Document not found' };
@@ -789,7 +791,7 @@ export async function documentRoutes(server: FastifyInstance) {
       try { await storageProvider.delete(doc.storageKey); } catch { /* best effort */ }
     }
 
-    await docRepo.delete(id);
+    await docRepo.delete(req.orgId!, id);
     return { data: { message: 'Document deleted' }, error: null };
   });
 }
