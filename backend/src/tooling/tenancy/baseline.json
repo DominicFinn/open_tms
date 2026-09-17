@@ -21,16 +21,6 @@
   },
   {
     "rule": "model-without-org",
-    "target": "CargoDiscrepancy",
-    "reason": "Fixed by #295 (PR #300). Delete when it merges."
-  },
-  {
-    "rule": "model-without-org",
-    "target": "CargoScan",
-    "reason": "Fixed by #295 (PR #300). Delete when it merges."
-  },
-  {
-    "rule": "model-without-org",
     "target": "ConnectivityLog",
     "reason": "Tenant data with no orgId. Add one, or declare the parent it inherits through."
   },
@@ -48,16 +38,6 @@
     "rule": "model-without-org",
     "target": "CustomFieldVersion",
     "reason": "Tenant data with no orgId. Add one, or declare the parent it inherits through."
-  },
-  {
-    "rule": "model-without-org",
-    "target": "DocumentTemplate",
-    "reason": "Fixed by #294 (PR #304). Delete when it merges."
-  },
-  {
-    "rule": "model-without-org",
-    "target": "GeneratedDocument",
-    "reason": "Fixed by #294 (PR #304). Delete when it merges."
   },
   {
     "rule": "model-without-org",
@@ -83,11 +63,6 @@
     "rule": "org-fallback",
     "target": "routes/apiKeys.ts",
     "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
-  },
-  {
-    "rule": "org-fallback",
-    "target": "routes/cargoTracking.ts",
-    "reason": "Fixed by #295 (PR #300). Delete when it merges."
   },
   {
     "rule": "org-fallback",
@@ -186,11 +161,6 @@
   },
   {
     "rule": "org-fallback",
-    "target": "services/CargoReconciliationService.ts",
-    "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
-  },
-  {
-    "rule": "org-fallback",
     "target": "services/cutoff/ShipmentCutoffMonitorService.ts",
     "reason": "Falls back to a literal or an any-cast org. Read req.orgId from the scope hook."
   },
@@ -231,11 +201,6 @@
   },
   {
     "rule": "unscoped-org-lookup",
-    "target": "events/handlers/ColdChainComplianceHandler.ts",
-    "reason": "Picks the first organization for every tenant (#296). Key it on the caller org."
-  },
-  {
-    "rule": "unscoped-org-lookup",
     "target": "events/handlers/MarginAlertHandler.ts",
     "reason": "Picks the first organization for every tenant (#296). Key it on the caller org."
   },
@@ -262,11 +227,6 @@
   {
     "rule": "unscoped-org-lookup",
     "target": "services/DailyReportService.ts",
-    "reason": "Picks the first organization for every tenant (#296). Key it on the caller org."
-  },
-  {
-    "rule": "unscoped-org-lookup",
-    "target": "services/DocumentGenerationService.ts",
     "reason": "Picks the first organization for every tenant (#296). Key it on the caller org."
   },
   {
