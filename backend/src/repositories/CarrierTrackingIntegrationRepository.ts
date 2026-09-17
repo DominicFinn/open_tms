@@ -1,4 +1,4 @@
-import { Prisma, PrismaClient, CarrierTrackingIntegration } from '@prisma/client';
+import { Prisma, PrismaClient, CarrierTrackingIntegration, CarrierTrackingEvent } from '@prisma/client';
 import { sealCredentials } from '../security/secretVault.js';
 
 export interface CreateCarrierTrackingIntegrationDTO {
@@ -31,14 +31,21 @@ export interface UpdateCarrierTrackingIntegrationDTO {
 }
 
 export type CarrierTrackingIntegrationWithCarrier = CarrierTrackingIntegration & {
-  carrier: { id: string; name: string };
+  carrier: { id: string; name: string; orgId: string };
 };
 
+/**
+ * CarrierTrackingIntegration has no orgId of its own: it inherits its tenant through its carrier
+ * (see tooling/tenancy/policy.ts), so every tenant read filters on `carrier.orgId`.
+ */
 export interface ICarrierTrackingIntegrationRepository {
-  findAll(filters?: { providerType?: string; status?: string }): Promise<CarrierTrackingIntegrationWithCarrier[]>;
-  findById(id: string): Promise<CarrierTrackingIntegrationWithCarrier | null>;
-  findByCarrierId(carrierId: string): Promise<CarrierTrackingIntegrationWithCarrier | null>;
+  findAll(orgId: string, filters?: { providerType?: string; status?: string }): Promise<CarrierTrackingIntegrationWithCarrier[]>;
+  findById(id: string, orgId: string): Promise<CarrierTrackingIntegrationWithCarrier | null>;
+  findByCarrierId(carrierId: string, orgId: string): Promise<CarrierTrackingIntegrationWithCarrier | null>;
+  /** Every tenant's due integrations, for the poll worker. Each row carries its carrier's orgId. */
   findActivePollingIntegrations(): Promise<CarrierTrackingIntegrationWithCarrier[]>;
+  findRecentEvents(integrationId: string, orgId: string, take: number): Promise<CarrierTrackingEvent[]>;
+  findEventsByShipment(shipmentId: string, orgId: string, take: number): Promise<CarrierTrackingEvent[]>;
   create(data: CreateCarrierTrackingIntegrationDTO): Promise<CarrierTrackingIntegration>;
   update(id: string, data: UpdateCarrierTrackingIntegrationDTO): Promise<CarrierTrackingIntegration>;
   delete(id: string): Promise<void>;
@@ -47,14 +54,14 @@ export interface ICarrierTrackingIntegrationRepository {
 }
 
 const integrationInclude = {
-  carrier: { select: { id: true, name: true } },
+  carrier: { select: { id: true, name: true, orgId: true } },
 };
 
 export class CarrierTrackingIntegrationRepository implements ICarrierTrackingIntegrationRepository {
   constructor(private prisma: PrismaClient) {}
 
-  async findAll(filters?: { providerType?: string; status?: string }): Promise<CarrierTrackingIntegrationWithCarrier[]> {
-    const where: Record<string, unknown> = {};
+  async findAll(orgId: string, filters?: { providerType?: string; status?: string }): Promise<CarrierTrackingIntegrationWithCarrier[]> {
+    const where: Prisma.CarrierTrackingIntegrationWhereInput = { carrier: { orgId } };
     if (filters?.providerType) where.providerType = filters.providerType;
     if (filters?.status) where.status = filters.status;
 
@@ -65,16 +72,16 @@ export class CarrierTrackingIntegrationRepository implements ICarrierTrackingInt
     }) as Promise<CarrierTrackingIntegrationWithCarrier[]>;
   }
 
-  async findById(id: string): Promise<CarrierTrackingIntegrationWithCarrier | null> {
-    return this.prisma.carrierTrackingIntegration.findUnique({
-      where: { id },
+  async findById(id: string, orgId: string): Promise<CarrierTrackingIntegrationWithCarrier | null> {
+    return this.prisma.carrierTrackingIntegration.findFirst({
+      where: { id, carrier: { orgId } },
       include: integrationInclude,
     }) as Promise<CarrierTrackingIntegrationWithCarrier | null>;
   }
 
-  async findByCarrierId(carrierId: string): Promise<CarrierTrackingIntegrationWithCarrier | null> {
+  async findByCarrierId(carrierId: string, orgId: string): Promise<CarrierTrackingIntegrationWithCarrier | null> {
     return this.prisma.carrierTrackingIntegration.findFirst({
-      where: { carrierId },
+      where: { carrierId, carrier: { orgId } },
       include: integrationInclude,
     }) as Promise<CarrierTrackingIntegrationWithCarrier | null>;
   }
@@ -88,6 +95,22 @@ export class CarrierTrackingIntegrationRepository implements ICarrierTrackingInt
       include: integrationInclude,
       orderBy: { lastPolledAt: 'asc' },
     }) as Promise<CarrierTrackingIntegrationWithCarrier[]>;
+  }
+
+  async findRecentEvents(integrationId: string, orgId: string, take: number): Promise<CarrierTrackingEvent[]> {
+    return this.prisma.carrierTrackingEvent.findMany({
+      where: { integrationId, shipment: { orgId } },
+      orderBy: { occurredAt: 'desc' },
+      take,
+    });
+  }
+
+  async findEventsByShipment(shipmentId: string, orgId: string, take: number): Promise<CarrierTrackingEvent[]> {
+    return this.prisma.carrierTrackingEvent.findMany({
+      where: { shipmentId, shipment: { orgId } },
+      orderBy: { occurredAt: 'desc' },
+      take,
+    });
   }
 
   async create(data: CreateCarrierTrackingIntegrationDTO): Promise<CarrierTrackingIntegration> {

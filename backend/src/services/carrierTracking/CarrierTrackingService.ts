@@ -13,8 +13,34 @@ import { createEvent } from '../../events/createEvent.js';
 import { openCredentials } from '../../security/secretVault.js';
 import { EVENT_TYPES } from '../../events/eventTypes.js';
 import type { CarrierTrackingProviderRegistry } from './ProviderRegistry.js';
-import type { NormalizedTrackingStatus, TrackingPollResult } from './ICarrierTrackingProvider.js';
+import type { ICarrierTrackingProvider, NormalizedTrackingStatus, TrackingPollResult } from './ICarrierTrackingProvider.js';
 import { CarrierTrackingError } from './ICarrierTrackingProvider.js';
+
+/** No webhook-enabled integration's secret verifies this request, so it has no tenant. */
+export class CarrierWebhookUnauthenticatedError extends Error {
+  constructor(providerType: string) {
+    super(`Webhook from ${providerType} did not verify against any integration`);
+    this.name = 'CarrierWebhookUnauthenticatedError';
+  }
+}
+
+type WebhookIntegration = { id: string; carrierId: string; webhookSecret: string | null; carrier: { orgId: string } };
+
+/**
+ * BUSINESS RULE (#303): a carrier webhook is attributed to the integrations whose signing secret
+ * verifies it, and only to their carrier's org. A provider we cannot verify, or an integration with
+ * no secret, receives nothing: without a signature the only link to a tenant is a tracking number
+ * in the body, which anyone can type.
+ */
+function verifiedBy(
+  provider: ICarrierTrackingProvider,
+  integration: WebhookIntegration,
+  payload: unknown,
+  headers: Record<string, string>,
+): boolean {
+  if (!provider.verifyWebhookSignature || !integration.webhookSecret) return false;
+  return provider.verifyWebhookSignature(payload, headers, integration.webhookSecret);
+}
 
 export class CarrierTrackingService {
   constructor(
@@ -29,6 +55,8 @@ export class CarrierTrackingService {
    * polls the provider, and writes CarrierTrackingEvent records.
    */
   async pollForUpdates(integrationId: string): Promise<{ polled: number; eventsCreated: number }> {
+    // Callers are the poll worker, which runs for every tenant, and routes that have already
+    // checked the integration belongs to the caller. The org comes from the integration's carrier.
     const integration = await this.prisma.carrierTrackingIntegration.findUnique({
       where: { id: integrationId },
       include: { carrier: true },
@@ -41,6 +69,7 @@ export class CarrierTrackingService {
     if (integration.status !== 'active') {
       throw new Error(`Integration ${integrationId} is not active (status: ${integration.status})`);
     }
+    const orgId = integration.carrier.orgId;
 
     // Check rate limits
     if (integration.rateLimitDailyMax && integration.rateLimitCallsToday >= integration.rateLimitDailyMax) {
@@ -59,7 +88,7 @@ export class CarrierTrackingService {
       const credentials = openCredentials(integration.credentials);
       await provider.authenticate(credentials);
     } catch (err) {
-      await this.recordIntegrationError(integrationId, err);
+      await this.recordIntegrationError(integrationId, orgId, err);
       throw err;
     }
 
@@ -68,6 +97,7 @@ export class CarrierTrackingService {
     // dispatched/picked_up values were retired in the lifecycle change.)
     const shipments = await this.prisma.shipment.findMany({
       where: {
+        orgId,
         carrierId: integration.carrierId,
         status: { in: ['in_progress'] },
         trackingNumber: { not: null },
@@ -101,7 +131,7 @@ export class CarrierTrackingService {
       try {
         results = await provider.pollTracking({ trackingNumbers: batch });
       } catch (err) {
-        await this.recordIntegrationError(integrationId, err);
+        await this.recordIntegrationError(integrationId, orgId, err);
         throw err;
       }
 
@@ -120,6 +150,7 @@ export class CarrierTrackingService {
 
         for (const trackingEvent of result.events) {
           const created = await this.writeTrackingEvent(
+            orgId,
             shipment.id,
             integration.carrierId,
             integrationId,
@@ -147,7 +178,8 @@ export class CarrierTrackingService {
   }
 
   /**
-   * Process an incoming webhook from a carrier tracking provider.
+   * Process an incoming webhook from a carrier tracking provider. Throws
+   * CarrierWebhookUnauthenticatedError when no integration's secret verifies it.
    */
   async processWebhook(
     providerType: string,
@@ -160,44 +192,53 @@ export class CarrierTrackingService {
       throw new Error(`Provider "${providerType}" does not support webhooks`);
     }
 
+    const candidates = await this.prisma.carrierTrackingIntegration.findMany({
+      where: { providerType: providerType.toLowerCase(), status: 'active', webhookEnabled: true },
+      select: { id: true, carrierId: true, webhookSecret: true, carrier: { select: { orgId: true } } },
+    });
+    const verified = candidates.filter((integration) => verifiedBy(provider, integration, payload, headers));
+    if (verified.length === 0) throw new CarrierWebhookUnauthenticatedError(providerType);
+
     const webhookResults = await provider.parseWebhook(payload, headers);
     let eventsCreated = 0;
 
     for (const result of webhookResults) {
-      // Find the integration and shipment for this tracking number
-      const shipment = await this.prisma.shipment.findFirst({
-        where: { trackingNumber: result.trackingNumber },
-        select: { id: true, carrierId: true },
-      });
-
-      if (!shipment || !shipment.carrierId) continue;
-
-      const integration = await this.prisma.carrierTrackingIntegration.findFirst({
-        where: {
-          carrierId: shipment.carrierId,
-          providerType: providerType.toLowerCase(),
-          status: 'active',
-          webhookEnabled: true,
-        },
-      });
-
-      if (!integration) continue;
-
-      for (const trackingEvent of result.events) {
-        const created = await this.writeTrackingEvent(
-          shipment.id,
-          shipment.carrierId,
-          integration.id,
-          providerType,
-          result.trackingNumber,
-          trackingEvent,
-          'webhook',
-        );
-        if (created) eventsCreated++;
+      for (const integration of verified) {
+        eventsCreated += await this.recordWebhookResult(integration, providerType, result.trackingNumber, result.events);
       }
     }
 
     return { eventsCreated };
+  }
+
+  private async recordWebhookResult(
+    integration: WebhookIntegration,
+    providerType: string,
+    trackingNumber: string,
+    events: NormalizedTrackingStatus[],
+  ): Promise<number> {
+    const orgId = integration.carrier.orgId;
+    const shipment = await this.prisma.shipment.findFirst({
+      where: { orgId, carrierId: integration.carrierId, trackingNumber },
+      select: { id: true },
+    });
+    if (!shipment) return 0;
+
+    let created = 0;
+    for (const trackingEvent of events) {
+      const written = await this.writeTrackingEvent(
+        orgId,
+        shipment.id,
+        integration.carrierId,
+        integration.id,
+        providerType,
+        trackingNumber,
+        trackingEvent,
+        'webhook',
+      );
+      if (written) created++;
+    }
+    return created;
   }
 
   /**
@@ -244,6 +285,7 @@ export class CarrierTrackingService {
    * Returns true if a new record was created, false if it was a duplicate.
    */
   private async writeTrackingEvent(
+    orgId: string,
     shipmentId: string,
     carrierId: string,
     integrationId: string,
@@ -289,9 +331,6 @@ export class CarrierTrackingService {
     });
 
     // Emit domain event: tracking update received
-    const orgResult = await this.prisma.organization.findFirst({ select: { id: true } });
-    const orgId = orgResult?.id ?? 'system';
-
     const domainEvent = createEvent({
       type: EVENT_TYPES.CARRIER_TRACKING_UPDATE_RECEIVED,
       orgId,
@@ -384,7 +423,7 @@ export class CarrierTrackingService {
     }
   }
 
-  private async recordIntegrationError(integrationId: string, err: unknown): Promise<void> {
+  private async recordIntegrationError(integrationId: string, orgId: string, err: unknown): Promise<void> {
     const message = err instanceof Error ? err.message : String(err);
     await this.prisma.carrierTrackingIntegration.update({
       where: { id: integrationId },
@@ -396,9 +435,6 @@ export class CarrierTrackingService {
 
     // Emit error event
     try {
-      const orgResult = await this.prisma.organization.findFirst({ select: { id: true } });
-      const orgId = orgResult?.id ?? 'system';
-
       const domainEvent = createEvent({
         type: EVENT_TYPES.CARRIER_TRACKING_INTEGRATION_ERROR,
         orgId,

@@ -3,10 +3,12 @@ import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import { IOrdersRepository } from '../repositories/OrdersRepository.js';
 import { IOrganizationRepository } from '../repositories/OrganizationRepository.js';
+import { ILocationsRepository } from '../repositories/LocationsRepository.js';
 import { IShipmentAssignmentService } from '../services/ShipmentAssignmentService.js';
 import { container, TOKENS } from '../di/index.js';
 import { createOrderSchema } from './orders.js';
 import { authenticateApiKey, checkRateLimit } from '../middleware/apiKeyAuth.js';
+import { attachOrgScopeFromApiKeyHook } from '../auth/ingestOrgScope.js';
 
 // Schema for the customer-facing order creation (customerId is not accepted — it comes from the API key)
 const customerCreateOrderSchema = createOrderSchema.omit({ customerId: true }).extend({
@@ -106,6 +108,11 @@ export async function customerApiRoutes(server: FastifyInstance) {
   const ordersRepo = container.resolve<IOrdersRepository>(TOKENS.IOrdersRepository);
   const orgRepo = container.resolve<IOrganizationRepository>(TOKENS.IOrganizationRepository);
   const assignmentService = container.resolve<IShipmentAssignmentService>(TOKENS.IShipmentAssignmentService);
+  const locationsRepo = container.resolve<ILocationsRepository>(TOKENS.ILocationsRepository);
+
+  // The tenant is the org that owns the API key. authenticate() below still produces the error
+  // responses; this only scopes the request.
+  server.addHook('preHandler', attachOrgScopeFromApiKeyHook(server.prisma));
 
   // Register API key security scheme for Swagger
   server.addSchema({
@@ -133,7 +140,7 @@ export async function customerApiRoutes(server: FastifyInstance) {
       return null;
     }
 
-    if (!authResult.customerId) {
+    if (!authResult.customerId || !req.orgId) {
       reply.code(403);
       reply.send({
         data: null,
@@ -244,6 +251,16 @@ export async function customerApiRoutes(server: FastifyInstance) {
     }
 
     const { autoAssign, ...orderFields } = body;
+    const orgId = req.orgId!;
+
+    // A location id from the body must belong to the key's tenant; an id from another tenant reads
+    // as not found, the same as a typo.
+    for (const locationId of [orderFields.originId, orderFields.destinationId]) {
+      if (locationId && !(await locationsRepo.findById(locationId, orgId))) {
+        reply.code(404);
+        return { data: null, error: 'Location not found' };
+      }
+    }
 
     // Get organization settings for default units
     const orgSettings = await orgRepo.getSettings();
@@ -259,6 +276,7 @@ export async function customerApiRoutes(server: FastifyInstance) {
     // Build order data
     const orderData: any = {
       ...orderFields,
+      orgId,
       customerId,
       importSource: 'api'
     };
@@ -363,7 +381,7 @@ export async function customerApiRoutes(server: FastifyInstance) {
       offset: query.offset ? parseInt(query.offset, 10) : 0
     };
 
-    const orders = await ordersRepo.findByCustomerId(customerId, options);
+    const orders = await ordersRepo.findByCustomerId(customerId, { ...options, orgId: req.orgId! });
     return { data: orders, error: null };
   });
 
@@ -411,7 +429,7 @@ export async function customerApiRoutes(server: FastifyInstance) {
     if (!customerId) return;
 
     const { id } = req.params as { id: string };
-    const order = await ordersRepo.findById(id);
+    const order = await ordersRepo.findById(id, req.orgId!);
 
     if (!order || order.customerId !== customerId) {
       reply.code(404);
@@ -465,7 +483,7 @@ export async function customerApiRoutes(server: FastifyInstance) {
     if (!customerId) return;
 
     const { id } = req.params as { id: string };
-    const order = await ordersRepo.findById(id);
+    const order = await ordersRepo.findById(id, req.orgId!);
 
     if (!order || order.customerId !== customerId) {
       reply.code(404);

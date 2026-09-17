@@ -15,8 +15,6 @@ import { createEvent } from '../events/createEvent.js';
 import { EVENT_TYPES } from '../events/eventTypes.js';
 
 export interface RawLocationData {
-  /** Multi-tenancy scope. Optional during the phase-3 transition. */
-  orgId?: string | null;
   name: string;
   address1: string;
   address2?: string;
@@ -39,13 +37,13 @@ export interface ILocationResolutionService {
    * Matching: name + city (case-insensitive). If no match, creates the location
    * and a default geofence arrival criteria.
    */
-  resolveOrCreate(data: RawLocationData, actorId?: string): Promise<LocationResolutionResult>;
+  resolveOrCreate(orgId: string, data: RawLocationData, actorId?: string): Promise<LocationResolutionResult>;
 
   /**
    * Ensure a location has at least one arrival criteria.
    * If it has none, create a default geofence.
    */
-  ensureArrivalCriteria(locationId: string): Promise<void>;
+  ensureArrivalCriteria(orgId: string, locationId: string): Promise<void>;
 }
 
 export class LocationResolutionService implements ILocationResolutionService {
@@ -56,27 +54,24 @@ export class LocationResolutionService implements ILocationResolutionService {
     private eventBus?: IEventBus,
   ) {}
 
-  async resolveOrCreate(data: RawLocationData, actorId?: string): Promise<LocationResolutionResult> {
-    // Try to find an existing location by name + city match, scoped to the
-    // tenant when supplied. Without orgId we keep legacy single-tenant
-    // behaviour so callers that pre-date phase-3 still work.
-    const where: any = {
-      archived: false,
-      name: { equals: data.name, mode: 'insensitive' },
-      city: { equals: data.city, mode: 'insensitive' },
-    };
-    if (data.orgId) where.orgId = data.orgId;
-    const existing = await this.prisma.location.findFirst({ where });
+  async resolveOrCreate(orgId: string, data: RawLocationData, actorId?: string): Promise<LocationResolutionResult> {
+    // Match an existing location by name + city within the tenant.
+    const existing = await this.prisma.location.findFirst({
+      where: {
+        orgId,
+        archived: false,
+        name: { equals: data.name, mode: 'insensitive' },
+        city: { equals: data.city, mode: 'insensitive' },
+      },
+    });
 
     if (existing) {
-      // Ensure existing location has arrival criteria
-      await this.ensureArrivalCriteria(existing.id);
+      await this.ensureArrivalCriteria(orgId, existing.id);
       return { location: existing, created: false };
     }
 
-    // Create new location
     const locationData: CreateLocationDTO = {
-      orgId: data.orgId ?? null,
+      orgId,
       name: data.name,
       address1: data.address1,
       address2: data.address2,
@@ -90,27 +85,18 @@ export class LocationResolutionService implements ILocationResolutionService {
 
     const location = await this.locationsRepo.create(locationData);
 
-    // Create default geofence arrival criteria
-    const org = await this.prisma.organization.findFirst({
-      select: { id: true, defaultGeofenceRadiusMeters: true },
-    });
-    const defaultRadius = org?.defaultGeofenceRadiusMeters ?? 200;
-
     await this.arrivalCriteriaRepo.createDefaultGeofence(
       location.id,
-      defaultRadius,
+      await this.defaultGeofenceRadius(orgId),
       location.lat ?? undefined,
       location.lng ?? undefined,
     );
 
-    // Emit audit event for location created via resolution. Prefer the
-    // payload's orgId (the route resolved it from the JWT); fall back to
-    // the default-Organization probe used by legacy callers.
     if (this.eventBus) {
       try {
         await this.eventBus.publish(createEvent({
           type: EVENT_TYPES.LOCATION_CREATED,
-          orgId: data.orgId || org?.id || 'default',
+          orgId,
           actorId: actorId ?? null,
           entityType: 'location',
           entityId: location.id,
@@ -132,26 +118,26 @@ export class LocationResolutionService implements ILocationResolutionService {
     return { location, created: true };
   }
 
-  async ensureArrivalCriteria(locationId: string): Promise<void> {
+  async ensureArrivalCriteria(orgId: string, locationId: string): Promise<void> {
+    const location = await this.locationsRepo.findById(locationId, orgId);
+    if (!location) return;
+
     const existing = await this.arrivalCriteriaRepo.findByLocationId(locationId);
     if (existing.length > 0) return;
 
-    // Get the location's coordinates and org default radius
-    const [location, org] = await Promise.all([
-      this.locationsRepo.findById(locationId),
-      this.prisma.organization.findFirst({
-        select: { defaultGeofenceRadiusMeters: true },
-      }),
-    ]);
-
-    if (!location) return;
-    const defaultRadius = org?.defaultGeofenceRadiusMeters ?? 200;
-
     await this.arrivalCriteriaRepo.createDefaultGeofence(
       locationId,
-      defaultRadius,
+      await this.defaultGeofenceRadius(orgId),
       location.lat ?? undefined,
       location.lng ?? undefined,
     );
+  }
+
+  private async defaultGeofenceRadius(orgId: string): Promise<number> {
+    const org = await this.prisma.organization.findUnique({
+      where: { id: orgId },
+      select: { defaultGeofenceRadiusMeters: true },
+    });
+    return org?.defaultGeofenceRadiusMeters ?? 200;
   }
 }

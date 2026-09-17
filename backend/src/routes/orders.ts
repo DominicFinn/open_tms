@@ -265,7 +265,7 @@ export async function orderRoutes(server: FastifyInstance) {
     // Auto-resolve locations: if originData/destinationData provided, create the location
     if (!orderData.originId && body.originData) {
       try {
-        const result = await locationResolution.resolveOrCreate(body.originData, req.user?.sub);
+        const result = await locationResolution.resolveOrCreate(req.orgId!, body.originData, req.user?.sub);
         orderData.originId = result.location.id;
         orderData.originValidated = true;
         delete orderData.originData;
@@ -276,7 +276,7 @@ export async function orderRoutes(server: FastifyInstance) {
 
     if (!orderData.destinationId && body.destinationData) {
       try {
-        const result = await locationResolution.resolveOrCreate(body.destinationData, req.user?.sub);
+        const result = await locationResolution.resolveOrCreate(req.orgId!, body.destinationData, req.user?.sub);
         orderData.destinationId = result.location.id;
         orderData.destinationValidated = true;
         delete orderData.destinationData;

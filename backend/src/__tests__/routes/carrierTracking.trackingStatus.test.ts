@@ -27,6 +27,7 @@ function buildApp(opts: {
 }) {
   const integrationRepo = {
     findByCarrierId: jest.fn().mockResolvedValue(opts.integration),
+    findEventsByShipment: jest.fn().mockResolvedValue(opts.events ?? []),
   };
   const shipmentsRepo = {
     findById: jest.fn().mockResolvedValue(opts.shipment),
@@ -44,11 +45,11 @@ function buildApp(opts: {
   });
 
   const app = Fastify();
-  app.decorate('prisma', {
-    carrierTrackingEvent: {
-      findMany: jest.fn().mockResolvedValue(opts.events ?? []),
-    },
-  } as any);
+  app.decorate('prisma', {} as any);
+  // Stands in for the authenticated block's strict org scope.
+  app.addHook('preHandler', async (req) => {
+    req.orgId = 'org-a';
+  });
 
   return app;
 }

@@ -185,12 +185,23 @@ export class EdiImportService implements IEdiImportService {
             continue;
           }
 
+          // orgId comes from options (passed by the route from the JWT) or, for backward compat,
+          // from the customer's org. Customer.orgId is NOT NULL post phase 2.
+          let resolvedOrgId = options.orgId;
+          if (!resolvedOrgId) {
+            const cust = await this.customersRepo.findById(orderCustomerId);
+            resolvedOrgId = cust?.orgId;
+          }
+          if (!resolvedOrgId) {
+            throw new Error('Cannot import EDI: no orgId in options and customer has no orgId');
+          }
+
           // Resolve origin location
           let originId: string | undefined;
           let originData: any;
           if (parsedOrder.origin) {
             if (this.locationResolutionService) {
-              const locResult = await this.locationResolutionService.resolveOrCreate({
+              const locResult = await this.locationResolutionService.resolveOrCreate(resolvedOrgId, {
                 name: parsedOrder.origin.name,
                 address1: parsedOrder.origin.address1 || parsedOrder.origin.name,
                 city: parsedOrder.origin.city,
@@ -218,7 +229,7 @@ export class EdiImportService implements IEdiImportService {
           let destinationData: any;
           if (parsedOrder.destination) {
             if (this.locationResolutionService) {
-              const locResult = await this.locationResolutionService.resolveOrCreate({
+              const locResult = await this.locationResolutionService.resolveOrCreate(resolvedOrgId, {
                 name: parsedOrder.destination.name,
                 address1: parsedOrder.destination.address1 || parsedOrder.destination.name,
                 city: parsedOrder.destination.city,
@@ -254,17 +265,6 @@ export class EdiImportService implements IEdiImportService {
             }))
           }] : [];
 
-          // Create order. orgId comes from options (passed by the route
-          // from the JWT) or — for backward compat — falls back to the
-          // customer's orgId. Customer.orgId is NOT NULL post phase 2.
-          let resolvedOrgId = options.orgId;
-          if (!resolvedOrgId) {
-            const cust = await this.customersRepo.findById(orderCustomerId);
-            resolvedOrgId = cust?.orgId;
-          }
-          if (!resolvedOrgId) {
-            throw new Error('Cannot import EDI: no orgId in options and customer has no orgId');
-          }
           const order = await this.ordersRepo.create({
             orgId: resolvedOrgId,
             orderNumber: parsedOrder.orderNumber,

@@ -104,7 +104,7 @@ export async function locationRoutes(server: FastifyInstance) {
     // Use resolution service to create with default arrival criteria.
     // The service emits LOCATION_CREATED for new locations automatically.
     // For existing locations (resolved, not created), publish LOCATION_UPDATED.
-    const result = await locationResolutionService.resolveOrCreate({ ...body, orgId }, req.user?.sub);
+    const result = await locationResolutionService.resolveOrCreate(orgId, body, req.user?.sub);
 
     if (!result.created) {
       await publishLocationEvent(
@@ -166,7 +166,7 @@ export async function locationRoutes(server: FastifyInstance) {
     const updated = await locationsRepo.update(id, body);
 
     // Ensure arrival criteria exist after edit
-    await locationResolutionService.ensureArrivalCriteria(id);
+    await locationResolutionService.ensureArrivalCriteria(orgId, id);
 
     // Build change tracking
     const changes: Record<string, { before: unknown; after: unknown }> = {};

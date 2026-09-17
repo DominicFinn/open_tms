@@ -7,7 +7,7 @@ jest.mock('../di/tokens.js', () => ({
   TOKENS: new Proxy({}, { get: (_t, prop) => Symbol.for(String(prop)) }),
 }));
 
-import { createInboundWebhookWorker } from '../workers/inboundWebhookWorker.js';
+import { createInboundWebhookWorker, WebhookTenantUnresolvedError } from '../workers/inboundWebhookWorker.js';
 import { EVENT_TYPES } from '../events/eventTypes.js';
 import { QueueMessage } from '../queue/IQueueAdapter.js';
 import { WebhookEvent } from '../queue/events.js';
@@ -18,10 +18,11 @@ function buildPrisma(overrides: any = {}) {
       findUnique: jest.fn().mockResolvedValue({ id: 'log-1' }),
       update: jest.fn().mockResolvedValue({}),
     },
-    organization: { findFirst: jest.fn().mockResolvedValue({ id: 'org-1' }) },
+    apiKey: { findUnique: jest.fn().mockResolvedValue({ orgId: 'org-from-key' }) },
     iotVendor: { findUnique: jest.fn().mockResolvedValue(null) },
-    deviceEvent: { findUnique: jest.fn().mockResolvedValue(null) },
-    device: { findFirst: jest.fn().mockResolvedValue(null) },
+    deviceEvent: { findUnique: jest.fn().mockResolvedValue(null), create: jest.fn() },
+    device: { findFirst: jest.fn().mockResolvedValue(null), findUnique: jest.fn().mockResolvedValue(null), update: jest.fn() },
+    sensorReading: { create: jest.fn() },
     shipment: {
       findFirst: jest.fn().mockResolvedValue({ id: 'shipment-1', reference: 'TRUCK-1' }),
       findUnique: jest.fn().mockResolvedValue({ id: 'shipment-1', reference: 'TRUCK-1' }),
@@ -46,6 +47,7 @@ function legacyMessage(overrides: any = {}): QueueMessage<WebhookEvent> {
       webhookLogId: 'log-1',
       apiKeyId: 'key-1',
       ipAddress: '127.0.0.1',
+      orgId: 'org-1',
       rawPayload: {
         event: {
           device: { id: 'dev-1', name: 'TRUCK-1' },
@@ -113,5 +115,88 @@ describe('createInboundWebhookWorker — legacy format path', () => {
 
     expect(prisma.shipmentEvent.create).not.toHaveBeenCalled();
     expect(fakeEventBus.publish).not.toHaveBeenCalled();
+  });
+});
+
+describe('createInboundWebhookWorker — tenancy', () => {
+  beforeEach(() => {
+    fakeEventBus.publish.mockClear();
+  });
+
+  it('resolves legacy devices, shipments and orders only within the message org', async () => {
+    const prisma = buildPrisma();
+    const worker = createInboundWebhookWorker(prisma, buildDeliveryService());
+
+    await worker(legacyMessage({ orgId: 'org-b' }));
+
+    expect(prisma.device.findFirst.mock.calls[0][0].where.orgId).toBe('org-b');
+    expect(prisma.shipment.findFirst.mock.calls[0][0].where.orgId).toBe('org-b');
+    expect(fakeEventBus.publish).toHaveBeenCalledWith(expect.objectContaining({ orgId: 'org-b' }));
+  });
+
+  it('derives the org from the API key for a message queued before orgId existed', async () => {
+    const prisma = buildPrisma();
+    const worker = createInboundWebhookWorker(prisma, buildDeliveryService());
+
+    await worker(legacyMessage({ orgId: undefined }));
+
+    expect(prisma.apiKey.findUnique).toHaveBeenCalledWith({ where: { id: 'key-1' }, select: { orgId: true } });
+    expect(prisma.shipment.findFirst.mock.calls[0][0].where.orgId).toBe('org-from-key');
+  });
+
+  it('fails a message with neither an orgId nor an API key, so it dead-letters, and writes nothing', async () => {
+    const prisma = buildPrisma();
+    const worker = createInboundWebhookWorker(prisma, buildDeliveryService());
+
+    await expect(worker(legacyMessage({ orgId: undefined, apiKeyId: null }))).rejects.toBeInstanceOf(
+      WebhookTenantUnresolvedError,
+    );
+
+    expect(prisma.shipment.findFirst).not.toHaveBeenCalled();
+    expect(prisma.shipmentEvent.create).not.toHaveBeenCalled();
+    expect(prisma.webhookLog.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'error' }) }),
+    );
+  });
+
+  it('checks the System Loco vendor switch for the message org', async () => {
+    const prisma = buildPrisma({
+      iotVendor: { findUnique: jest.fn().mockResolvedValue({ enabled: false }) },
+    });
+    const worker = createInboundWebhookWorker(prisma, buildDeliveryService());
+
+    await worker(legacyMessage({
+      orgId: 'org-b',
+      rawPayload: { id: 'evt-1', type: 'temperature', owner: 'o', device: { id: 'ext-1', name: 'T1' } },
+    }));
+
+    expect(prisma.iotVendor.findUnique).toHaveBeenCalledWith(expect.objectContaining({
+      where: { orgId_vendorKey: { orgId: 'org-b', vendorKey: 'system_loco' } },
+    }));
+    expect(prisma.webhookLog.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'disabled' }) }),
+    );
+  });
+
+  it('rejects a System Loco feed for a device another org owns, without retrying', async () => {
+    const prisma = buildPrisma({
+      device: {
+        findFirst: jest.fn(),
+        findUnique: jest.fn().mockResolvedValue({ id: 'dev-a', orgId: 'org-a' }),
+        update: jest.fn(),
+      },
+    });
+    const worker = createInboundWebhookWorker(prisma, buildDeliveryService());
+
+    await worker(legacyMessage({
+      orgId: 'org-b',
+      rawPayload: { id: 'evt-2', type: 'temperature', owner: 'o', device: { id: 'ext-1', name: 'T1' } },
+    }));
+
+    expect(prisma.device.update).not.toHaveBeenCalled();
+    expect(prisma.sensorReading.create).not.toHaveBeenCalled();
+    expect(prisma.webhookLog.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'rejected' }) }),
+    );
   });
 });

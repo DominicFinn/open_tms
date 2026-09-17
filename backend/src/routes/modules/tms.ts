@@ -21,6 +21,7 @@ import { edi820Routes } from '../edi820.js';
 import { edi997Routes } from '../edi997.js';
 import { ediImportRoutes } from '../ediImport.js';
 import { carrierTrackingRoutes } from '../carrierTracking.js';
+import { carrierTrackingWebhookRoutes } from '../carrierTrackingWebhook.js';
 import { carrierRoutes } from '../carriers.js';
 import { shipmentRoutes } from '../shipments.js';
 import { shipmentShareLinkRoutes } from '../shipmentShareLinks.js';
@@ -85,13 +86,13 @@ export async function registerTmsPublicRoutes(server: FastifyInstance): Promise<
   await server.register(edi820Routes);
   await server.register(edi997Routes);
   await server.register(ediImportRoutes);
-  // Carrier tracking has a webhook endpoint that must be publicly reachable.
-  // TODO: split webhook into its own route file and add JWT auth to admin endpoints
-  await server.register(carrierTrackingRoutes);
+  // Carrier callbacks authenticate by signature; the admin routes are in the JWT scope below.
+  await server.register(carrierTrackingWebhookRoutes);
 }
 
 /** Registered inside the JWT scope: an internal user token is required. */
 export async function registerTmsAuthenticatedRoutes(app: FastifyInstance): Promise<void> {
+  await app.register(carrierTrackingRoutes);
   await app.register(carrierRoutes);
   await app.register(shipmentRoutes);
   await app.register(shipmentShareLinkRoutes);

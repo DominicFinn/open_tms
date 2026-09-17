@@ -1,4 +1,6 @@
-import { SystemLocoAdapter } from '../integrations/SystemLocoAdapter';
+import { SystemLocoAdapter, DeviceTenantMismatchError } from '../integrations/SystemLocoAdapter';
+
+const ORG = 'test-org';
 
 // ── Mock Prisma ─────────────────────────────────────────────
 function mockPrisma() {
@@ -42,11 +44,6 @@ function mockPrisma() {
         created.deviceEvent.push(e);
         return Promise.resolve(e);
       }),
-    },
-    // Multi-tenancy fallback: the adapter looks up the first Organization
-    // when creating a Device because external IoT webhooks have no JWT.
-    organization: {
-      findFirst: jest.fn().mockResolvedValue({ id: 'test-org' }),
     },
     shipmentEvent: {
       create: jest.fn().mockImplementation(({ data }) => {
@@ -160,7 +157,7 @@ describe('SystemLocoAdapter', () => {
       const prisma = mockPrisma();
       const adapter = new SystemLocoAdapter(prisma);
 
-      await adapter.processDeviceEvent(DEVICE_TEMP_EVENT);
+      await adapter.processDeviceEvent(DEVICE_TEMP_EVENT, ORG);
 
       expect(prisma.device.findUnique).toHaveBeenCalledWith({
         where: { externalId: '660e1a2b3c4d5e6f' },
@@ -179,6 +176,7 @@ describe('SystemLocoAdapter', () => {
       const prisma = mockPrisma();
       prisma.device.findUnique.mockResolvedValue({
         id: 'existing-dev',
+        orgId: ORG,
         externalId: '660e1a2b3c4d5e6f',
         firmware: '2.3.0',
         lastLat: null,
@@ -187,7 +185,7 @@ describe('SystemLocoAdapter', () => {
       });
       const adapter = new SystemLocoAdapter(prisma);
 
-      await adapter.processDeviceEvent(DEVICE_TEMP_EVENT);
+      await adapter.processDeviceEvent(DEVICE_TEMP_EVENT, ORG);
 
       expect(prisma.device.create).not.toHaveBeenCalled();
       expect(prisma.device.update).toHaveBeenCalledTimes(1);
@@ -201,7 +199,7 @@ describe('SystemLocoAdapter', () => {
       const prisma = mockPrisma();
       const adapter = new SystemLocoAdapter(prisma);
 
-      const result = await adapter.processDeviceEvent(DEVICE_TEMP_EVENT);
+      const result = await adapter.processDeviceEvent(DEVICE_TEMP_EVENT, ORG);
 
       expect(result.sensorReadingId).toBe('sr-001');
       expect(prisma.sensorReading.create).toHaveBeenCalledTimes(1);
@@ -219,7 +217,7 @@ describe('SystemLocoAdapter', () => {
       const prisma = mockPrisma();
       const adapter = new SystemLocoAdapter(prisma);
 
-      const result = await adapter.processDeviceEvent(DEVICE_IMPACT_EVENT);
+      const result = await adapter.processDeviceEvent(DEVICE_IMPACT_EVENT, ORG);
 
       expect(result.sensorReadingId).toBe('sr-001');
       const reading = prisma.sensorReading.create.mock.calls[0][0].data;
@@ -232,7 +230,7 @@ describe('SystemLocoAdapter', () => {
       const prisma = mockPrisma();
       const adapter = new SystemLocoAdapter(prisma);
 
-      const result = await adapter.processDeviceEvent(DEVICE_TEMP_EVENT);
+      const result = await adapter.processDeviceEvent(DEVICE_TEMP_EVENT, ORG);
 
       expect(result.deviceEventId).toBe('de-001');
       expect(prisma.deviceEvent.create).toHaveBeenCalledTimes(1);
@@ -246,7 +244,7 @@ describe('SystemLocoAdapter', () => {
       const prisma = mockPrisma();
       const adapter = new SystemLocoAdapter(prisma);
 
-      await adapter.processDeviceEvent(DEVICE_ZONE_CHANGE_EVENT);
+      await adapter.processDeviceEvent(DEVICE_ZONE_CHANGE_EVENT, ORG);
 
       const event = prisma.deviceEvent.create.mock.calls[0][0].data;
       expect(event.eventType).toBe('zoneChange');
@@ -261,7 +259,7 @@ describe('SystemLocoAdapter', () => {
       });
       const adapter = new SystemLocoAdapter(prisma);
 
-      const result = await adapter.processDeviceEvent(DEVICE_TEMP_EVENT);
+      const result = await adapter.processDeviceEvent(DEVICE_TEMP_EVENT, ORG);
 
       expect(result.shipmentId).toBe('ship-123');
       expect(result.matched).toBe(true);
@@ -277,7 +275,7 @@ describe('SystemLocoAdapter', () => {
       });
       const adapter = new SystemLocoAdapter(prisma);
 
-      const result = await adapter.processDeviceEvent(DEVICE_TEMP_EVENT);
+      const result = await adapter.processDeviceEvent(DEVICE_TEMP_EVENT, ORG);
 
       expect(result.shipmentId).toBe('ship-456');
       expect(result.matched).toBe(true);
@@ -291,7 +289,7 @@ describe('SystemLocoAdapter', () => {
       });
       const adapter = new SystemLocoAdapter(prisma);
 
-      const result = await adapter.processDeviceEvent(DEVICE_TEMP_EVENT);
+      const result = await adapter.processDeviceEvent(DEVICE_TEMP_EVENT, ORG);
 
       expect(result.orderId).toBe('ord-789');
       expect(result.matched).toBe(true);
@@ -301,7 +299,7 @@ describe('SystemLocoAdapter', () => {
       const prisma = mockPrisma();
       const adapter = new SystemLocoAdapter(prisma);
 
-      const result = await adapter.processDeviceEvent(DEVICE_TEMP_EVENT);
+      const result = await adapter.processDeviceEvent(DEVICE_TEMP_EVENT, ORG);
 
       expect(result.shipmentId).toBeNull();
       expect(result.orderId).toBeNull();
@@ -315,7 +313,7 @@ describe('SystemLocoAdapter', () => {
       const prisma = mockPrisma();
       const adapter = new SystemLocoAdapter(prisma);
 
-      const result = await adapter.processShipmentEvent(SHIPMENT_REPORT_EVENT);
+      const result = await adapter.processShipmentEvent(SHIPMENT_REPORT_EVENT, ORG);
 
       expect(result.sensorReadingId).toBe('sr-001');
       const reading = prisma.sensorReading.create.mock.calls[0][0].data;
@@ -330,7 +328,7 @@ describe('SystemLocoAdapter', () => {
       const prisma = mockPrisma();
       const adapter = new SystemLocoAdapter(prisma);
 
-      const result = await adapter.processShipmentEvent(SHIPMENT_TEMP_ALERT);
+      const result = await adapter.processShipmentEvent(SHIPMENT_TEMP_ALERT, ORG);
 
       // Should create sensor reading with isAlert=true
       const sensorCalls = prisma.sensorReading.create.mock.calls;
@@ -345,7 +343,7 @@ describe('SystemLocoAdapter', () => {
       const prisma = mockPrisma();
       const adapter = new SystemLocoAdapter(prisma);
 
-      await adapter.processShipmentEvent(SHIPMENT_TEMP_ALERT);
+      await adapter.processShipmentEvent(SHIPMENT_TEMP_ALERT, ORG);
 
       // Temp alert with device info should create DeviceEvent
       // The alert has no device in payload, so this won't create one
@@ -356,7 +354,7 @@ describe('SystemLocoAdapter', () => {
       const prisma = mockPrisma();
       const adapter = new SystemLocoAdapter(prisma);
 
-      await adapter.processShipmentEvent(SHIPMENT_REPORT_EVENT);
+      await adapter.processShipmentEvent(SHIPMENT_REPORT_EVENT, ORG);
 
       expect(prisma.device.findUnique).toHaveBeenCalled();
       expect(prisma.device.create).toHaveBeenCalledTimes(1);
@@ -374,10 +372,48 @@ describe('SystemLocoAdapter', () => {
         payload: { sensors: { temperature: 5.0 } },
       };
 
-      const result = await adapter.processShipmentEvent(noDeviceEvent);
+      const result = await adapter.processShipmentEvent(noDeviceEvent, ORG);
 
       expect(prisma.device.create).not.toHaveBeenCalled();
       expect(result.deviceId).toBe('');
+    });
+  });
+
+  // ── Tenancy ───────────────────────────────────────────────
+  describe('org scoping', () => {
+    it('attributes a new device to the org whose credential sent the feed', async () => {
+      const prisma = mockPrisma();
+      const adapter = new SystemLocoAdapter(prisma);
+
+      await adapter.processDeviceEvent(DEVICE_TEMP_EVENT, 'org-b');
+
+      expect(prisma.device.create.mock.calls[0][0].data.orgId).toBe('org-b');
+    });
+
+    it('refuses a feed for a device registered to another org, and writes nothing', async () => {
+      const prisma = mockPrisma();
+      prisma.device.findUnique.mockResolvedValue({ id: 'dev-a', orgId: 'org-a', externalId: '660e1a2b3c4d5e6f' });
+      const adapter = new SystemLocoAdapter(prisma);
+
+      await expect(adapter.processDeviceEvent(DEVICE_TEMP_EVENT, 'org-b')).rejects.toBeInstanceOf(DeviceTenantMismatchError);
+
+      expect(prisma.device.update).not.toHaveBeenCalled();
+      expect(prisma.sensorReading.create).not.toHaveBeenCalled();
+      expect(prisma.deviceEvent.create).not.toHaveBeenCalled();
+    });
+
+    it('matches shipment references and order numbers only within the feed org', async () => {
+      const prisma = mockPrisma();
+      const adapter = new SystemLocoAdapter(prisma);
+
+      await adapter.processDeviceEvent(DEVICE_TEMP_EVENT, 'org-b');
+
+      expect(prisma.shipment.findFirst.mock.calls[0][0].where).toEqual(
+        expect.objectContaining({ orgId: 'org-b', reference: 'Cold Chain Tracker #7' }),
+      );
+      expect(prisma.order.findFirst.mock.calls[0][0].where).toEqual(
+        expect.objectContaining({ orgId: 'org-b', orderNumber: 'Cold Chain Tracker #7' }),
+      );
     });
   });
 
@@ -388,7 +424,7 @@ describe('SystemLocoAdapter', () => {
       const adapter = new SystemLocoAdapter(prisma);
 
       const noLocation = { ...DEVICE_TEMP_EVENT, location: null };
-      const result = await adapter.processDeviceEvent(noLocation);
+      const result = await adapter.processDeviceEvent(noLocation, ORG);
 
       expect(result.deviceEventId).toBe('de-001');
       // SensorReading should still be created (temp data exists)
@@ -400,7 +436,7 @@ describe('SystemLocoAdapter', () => {
       const adapter = new SystemLocoAdapter(prisma);
 
       const noPayload = { ...DEVICE_TEMP_EVENT, payload: null };
-      const result = await adapter.processDeviceEvent(noPayload);
+      const result = await adapter.processDeviceEvent(noPayload, ORG);
 
       // Should still create device event
       expect(result.deviceEventId).toBe('de-001');
@@ -413,7 +449,7 @@ describe('SystemLocoAdapter', () => {
       );
       const adapter = new SystemLocoAdapter(prisma);
 
-      await expect(adapter.processDeviceEvent(DEVICE_TEMP_EVENT)).rejects.toThrow();
+      await expect(adapter.processDeviceEvent(DEVICE_TEMP_EVENT, ORG)).rejects.toThrow();
     });
   });
 });
