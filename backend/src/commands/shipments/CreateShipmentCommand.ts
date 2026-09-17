@@ -233,6 +233,10 @@ export class CreateShipmentCommandHandler extends BaseCommandHandler<CreateShipm
     // was resolved at the top of this method so every entity in this
     // transaction lands in the same tenant.
 
+    if (body.shipmentTypeId) {
+      await tx.shipmentType.findFirstOrThrow({ where: { id: body.shipmentTypeId, orgId: orgIdToWrite }, select: { id: true } });
+    }
+
     const shipment = await tx.shipment.create({
       data: {
         reference,

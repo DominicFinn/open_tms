@@ -4,8 +4,10 @@ import { TOKENS } from '../di/tokens.js';
 import { IQueueAdapter } from '../queue/IQueueAdapter.js';
 import { QUEUES } from '../queue/events.js';
 import { PgBossQueueAdapter } from '../queue/PgBossQueueAdapter.js';
+import { IWebhookLogRepository } from '../repositories/WebhookLogRepository.js';
 
 export async function queueMonitoringRoutes(server: FastifyInstance) {
+  const webhookLogRepo = container.resolve<IWebhookLogRepository>(TOKENS.IWebhookLogRepository);
   // Get stats for all queues
   server.get('/api/v1/queues/stats', async (_req: FastifyRequest, _reply: FastifyReply) => {
     try {
@@ -117,17 +119,13 @@ export async function queueMonitoringRoutes(server: FastifyInstance) {
       // Get outbound integration log activity. Outbound deliveries are recorded
       // on EdiTransactionLog by OutboundEdiDeliveryService.
       const outboundLogs = await server.prisma.ediTransactionLog.findMany({
-        where: { direction: 'outbound', createdAt: { gte: since } },
+        where: { orgId: req.orgId!, direction: 'outbound', createdAt: { gte: since } },
         select: { createdAt: true, status: true },
         orderBy: { createdAt: 'asc' },
       });
 
       // Get webhook log activity
-      const webhookLogs = await server.prisma.webhookLog.findMany({
-        where: { receivedAt: { gte: since } },
-        select: { receivedAt: true, status: true },
-        orderBy: { receivedAt: 'asc' },
-      });
+      const webhookLogs = await webhookLogRepo.activity(req.orgId!, { receivedFrom: since });
 
       // Bucket into hourly intervals
       const buckets: Record<string, { hour: string; outboundSuccess: number; outboundError: number; inboundSuccess: number; inboundError: number }> = {};

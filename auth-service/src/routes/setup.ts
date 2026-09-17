@@ -43,16 +43,17 @@ export async function setupRoutes(server: FastifyInstance) {
     server.log.info('Default roles and auth providers seeded');
 
     // Create organization if name provided
-    let organizationId: string | undefined;
+    let organizationId: string;
     if (parsed.data.organizationName) {
       const org = await server.prisma.organization.create({
         data: { name: parsed.data.organizationName },
       });
       organizationId = org.id;
     } else {
-      // Use existing organization or create default
+      // Setup only runs before any user exists, so the first org is the deployment's only one.
       const existing = await server.prisma.organization.findFirst();
-      organizationId = existing?.id;
+      organizationId = existing?.id
+        ?? (await server.prisma.organization.create({ data: { name: 'Default Organization' } })).id;
     }
 
     // Register admin user

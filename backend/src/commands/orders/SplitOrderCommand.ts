@@ -192,6 +192,7 @@ export class SplitOrderCommandHandler extends BaseCommandHandler<SplitOrderPaylo
 
     await tx.auditLog.create({
       data: {
+        orgId: order.orgId,
         entityType: 'order',
         entityId: orderId,
         orderId,

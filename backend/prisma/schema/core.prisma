@@ -256,7 +256,8 @@ model Organization {
 }
 
 model AuditLog {
-  id String @id @default(uuid())
+  id    String @id @default(uuid())
+  orgId String
 
   // Entity tracking
   entityType String // "order", "trackable_unit", "line_item"
@@ -353,6 +354,7 @@ model CustomerWebhookDelivery {
 
 model WebhookLog {
   id       String  @id @default(uuid())
+  orgId    String
   apiKey   ApiKey? @relation(fields: [apiKeyId], references: [id], onDelete: SetNull)
   apiKeyId String?
 
@@ -392,7 +394,7 @@ model WebhookLog {
   @@index([apiKeyId])
   @@index([status])
   @@index([shipmentId])
-  @@index([receivedAt])
+  @@index([orgId, receivedAt])
   @@index([deviceName])
 }
 
@@ -411,8 +413,8 @@ model User {
   authProviderId String? // External user ID from the OAuth provider
 
   // Organization
-  organization   Organization? @relation(fields: [organizationId], references: [id])
-  organizationId String?
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String
 
   // Optional link to customer (for customer-portal users)
   customer   Customer? @relation(fields: [customerId], references: [id])
@@ -534,6 +536,7 @@ model BinaryStore {
 
 model Attachment {
   id                 String    @id @default(uuid())
+  orgId              String
   entityType         String // "shipment", "order", "carrier", "customer", "location"
   entityId           String
   fileName           String // Original filename (for Content-Disposition only)
@@ -547,7 +550,7 @@ model Attachment {
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
-  @@index([entityType, entityId])
+  @@index([orgId, entityType, entityId])
   @@index([createdAt])
   @@index([retentionExpiresAt])
 }
@@ -556,6 +559,7 @@ model Attachment {
 
 model CustomFieldVersion {
   id          String  @id @default(uuid())
+  orgId       String
   entityType  String // "shipment", "order", "carrier", "customer", "location"
   version     Int // Auto-incremented per entityType
   description String? // E.g., "Added invoice number field"
@@ -566,8 +570,8 @@ model CustomFieldVersion {
 
   fields CustomFieldDefinition[]
 
-  @@unique([entityType, version])
-  @@index([entityType, active])
+  @@unique([orgId, entityType, version])
+  @@index([orgId, entityType, active])
 }
 
 model CustomFieldDefinition {
@@ -605,6 +609,7 @@ model CustomFieldDefinition {
 
 model CustomFieldAudit {
   id                String   @id @default(uuid())
+  orgId             String
   entityType        String
   action            String // "version_created", "field_added", "field_modified", "field_removed"
   versionId         String? // New version ID
@@ -613,8 +618,7 @@ model CustomFieldAudit {
   performedBy       String? // userId
   createdAt         DateTime @default(now())
 
-  @@index([entityType])
-  @@index([createdAt])
+  @@index([orgId, entityType, createdAt])
 }
 
 // ============================================================
@@ -693,6 +697,7 @@ model EventSubscription {
 
 model UserNotificationPreference {
   id            String   @id @default(uuid())
+  orgId         String
   userId        String
   eventCategory String // "shipment_updates", "exceptions", "triage", "system"
   emailEnabled  Boolean  @default(true)

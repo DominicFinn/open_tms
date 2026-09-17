@@ -1,6 +1,7 @@
 import { PrismaClient, ShipmentType } from '@prisma/client';
 
 export interface CreateShipmentTypeDTO {
+  orgId: string;
   name: string;
   icon?: string;
   color?: string;
@@ -19,36 +20,39 @@ export interface UpdateShipmentTypeDTO {
   requiredFields?: string[];
 }
 
+// Shipment types are per tenant, built-ins included: each org gets its own copy so that one
+// tenant editing a preset never changes another's.
 export interface IShipmentTypesRepository {
-  all(): Promise<ShipmentType[]>;
-  findById(id: string): Promise<ShipmentType | null>;
-  findByName(name: string): Promise<ShipmentType | null>;
+  all(orgId: string): Promise<ShipmentType[]>;
+  findById(id: string, orgId: string): Promise<ShipmentType | null>;
+  findByName(name: string, orgId: string): Promise<ShipmentType | null>;
   create(data: CreateShipmentTypeDTO): Promise<ShipmentType>;
-  update(id: string, data: UpdateShipmentTypeDTO): Promise<ShipmentType>;
-  archive(id: string): Promise<ShipmentType>;
+  update(id: string, orgId: string, data: UpdateShipmentTypeDTO): Promise<ShipmentType | null>;
+  archive(id: string, orgId: string): Promise<ShipmentType | null>;
 }
 
 export class ShipmentTypesRepository implements IShipmentTypesRepository {
   constructor(private prisma: PrismaClient) {}
 
-  async all(): Promise<ShipmentType[]> {
+  async all(orgId: string): Promise<ShipmentType[]> {
     return this.prisma.shipmentType.findMany({
-      where: { archived: false },
+      where: { orgId, archived: false },
       orderBy: [{ isBuiltIn: 'desc' }, { name: 'asc' }],
     });
   }
 
-  async findById(id: string): Promise<ShipmentType | null> {
-    return this.prisma.shipmentType.findFirst({ where: { id, archived: false } });
+  async findById(id: string, orgId: string): Promise<ShipmentType | null> {
+    return this.prisma.shipmentType.findFirst({ where: { id, orgId, archived: false } });
   }
 
-  async findByName(name: string): Promise<ShipmentType | null> {
-    return this.prisma.shipmentType.findFirst({ where: { name, archived: false } });
+  async findByName(name: string, orgId: string): Promise<ShipmentType | null> {
+    return this.prisma.shipmentType.findFirst({ where: { name, orgId, archived: false } });
   }
 
   async create(data: CreateShipmentTypeDTO): Promise<ShipmentType> {
     return this.prisma.shipmentType.create({
       data: {
+        orgId: data.orgId,
         name: data.name,
         icon: data.icon ?? 'local_shipping',
         color: data.color ?? '#6366F1',
@@ -60,7 +64,8 @@ export class ShipmentTypesRepository implements IShipmentTypesRepository {
     });
   }
 
-  async update(id: string, data: UpdateShipmentTypeDTO): Promise<ShipmentType> {
+  async update(id: string, orgId: string, data: UpdateShipmentTypeDTO): Promise<ShipmentType | null> {
+    if (!(await this.findById(id, orgId))) return null;
     return this.prisma.shipmentType.update({
       where: { id },
       data: {
@@ -74,7 +79,8 @@ export class ShipmentTypesRepository implements IShipmentTypesRepository {
     });
   }
 
-  async archive(id: string): Promise<ShipmentType> {
+  async archive(id: string, orgId: string): Promise<ShipmentType | null> {
+    if (!(await this.findById(id, orgId))) return null;
     return this.prisma.shipmentType.update({
       where: { id },
       data: { archived: true, archivedAt: new Date() },

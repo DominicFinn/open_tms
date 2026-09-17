@@ -99,6 +99,7 @@ export class OrderDeliveryService implements IOrderDeliveryService {
     // Write audit log for delivery status change
     await this.prisma.auditLog.create({
       data: {
+        orgId: order.orgId,
         entityType: 'order',
         entityId: update.orderId,
         orderId: update.orderId,
@@ -194,6 +195,7 @@ export class OrderDeliveryService implements IOrderDeliveryService {
 
     await this.prisma.auditLog.create({
       data: {
+        orgId: order.orgId,
         entityType: 'order',
         entityId: orderId,
         orderId,
@@ -284,6 +286,7 @@ export class OrderDeliveryService implements IOrderDeliveryService {
         for (const o of affectedOrders) {
           await tx.auditLog.create({
             data: {
+              orgId: o.orgId,
               entityType: 'order',
               entityId: o.id,
               orderId: o.id,
@@ -320,6 +323,7 @@ export class OrderDeliveryService implements IOrderDeliveryService {
         for (const o of affectedOrders) {
           await tx.auditLog.create({
             data: {
+              orgId: o.orgId,
               entityType: 'order',
               entityId: o.id,
               orderId: o.id,

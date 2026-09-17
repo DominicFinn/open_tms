@@ -32,6 +32,7 @@ export const INHERITED_MODELS: Readonly<Record<string, string>> = {
   CarrierUser: 'carrier',
   CustomerLane: 'customer',
   CustomerUser: 'customer',
+  CustomFieldDefinition: 'version',
   CustomerWebhookDelivery: 'webhook',
   CycleCountLine: 'cycleCount',
   DeviceAssignment: 'device',

@@ -1085,7 +1085,7 @@ export async function orderRoutes(server: FastifyInstance) {
 
     // Fetch audit logs (for now, return empty array - audit logging would be implemented across all operations)
     const auditLogs = await (ordersRepo as any).prisma.auditLog.findMany({
-      where: { orderId: id },
+      where: { orderId: id, orgId },
       orderBy: { createdAt: 'desc' }
     });
 
@@ -1107,6 +1107,7 @@ export async function orderRoutes(server: FastifyInstance) {
     const auditLogs = await (ordersRepo as any).prisma.auditLog.findMany({
       where: {
         orderId: id,
+        orgId,
         action: {
           in: ['delivery_status_changed', 'exception_resolved', 'created', 'status_changed']
         }

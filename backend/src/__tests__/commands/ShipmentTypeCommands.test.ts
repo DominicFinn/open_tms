@@ -6,6 +6,7 @@ import { createTestCommand, mockEventBus } from '../helpers/testUtils';
 
 const baseRow = {
   id: 'st-1',
+  orgId: 'test-org',
   name: 'Cold Chain',
   icon: 'ac_unit',
   color: '#0EA5E9',
@@ -23,7 +24,10 @@ const mockTx = {
   shipmentType: {
     create: jest.fn().mockResolvedValue(baseRow),
     update: jest.fn().mockResolvedValue(baseRow),
-    findUniqueOrThrow: jest.fn().mockResolvedValue(baseRow),
+    // Org-aware: a row is only found when the where clause names its org.
+    findFirst: jest.fn().mockImplementation(({ where }: any) =>
+      Promise.resolve(where.id === baseRow.id && where.orgId === baseRow.orgId ? baseRow : null),
+    ),
   },
   domainEventLog: { create: jest.fn().mockResolvedValue({}) },
 } as any;
@@ -51,7 +55,7 @@ describe('ShipmentType command handlers', () => {
       expect(result.events[0].type).toBe(EVENT_TYPES.SHIPMENT_TYPE_CREATED);
       expect(result.events[0].entityType).toBe('shipment_type');
       expect(mockTx.shipmentType.create).toHaveBeenCalledWith(expect.objectContaining({
-        data: expect.objectContaining({ name: 'Cold Chain', icon: 'ac_unit' }),
+        data: expect.objectContaining({ orgId: 'test-org', name: 'Cold Chain', icon: 'ac_unit' }),
       }));
     });
 
@@ -90,11 +94,23 @@ describe('ShipmentType command handlers', () => {
       const call = mockTx.shipmentType.update.mock.calls[0][0];
       expect(Object.keys(call.data)).toEqual(['icon']);
     });
+
+    it('treats another org\'s type as not found', async () => {
+      const { bus } = mockEventBus();
+      const handler = new UpdateShipmentTypeCommandHandler(mockPrisma, bus);
+      const result = await handler.execute(
+        createTestCommand(UPDATE_SHIPMENT_TYPE, { id: 'st-1', data: { name: 'Hijacked' } }, { orgId: 'other-org' })
+      );
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/not found/);
+      expect(result.events).toHaveLength(0);
+      expect(mockTx.shipmentType.update).not.toHaveBeenCalled();
+    });
   });
 
   describe('ArchiveShipmentTypeCommandHandler', () => {
     it('archives a non-built-in type', async () => {
-      mockTx.shipmentType.findUniqueOrThrow.mockResolvedValueOnce({ ...baseRow, isBuiltIn: false });
+      mockTx.shipmentType.findFirst.mockResolvedValueOnce({ ...baseRow, isBuiltIn: false });
       mockTx.shipmentType.update.mockResolvedValueOnce({ ...baseRow, archived: true });
       const { bus } = mockEventBus();
       const handler = new ArchiveShipmentTypeCommandHandler(mockPrisma, bus);
@@ -104,12 +120,21 @@ describe('ShipmentType command handlers', () => {
     });
 
     it('refuses to archive a built-in type', async () => {
-      mockTx.shipmentType.findUniqueOrThrow.mockResolvedValueOnce({ ...baseRow, isBuiltIn: true });
+      mockTx.shipmentType.findFirst.mockResolvedValueOnce({ ...baseRow, isBuiltIn: true });
       const { bus } = mockEventBus();
       const handler = new ArchiveShipmentTypeCommandHandler(mockPrisma, bus);
       const result = await handler.execute(createTestCommand(ARCHIVE_SHIPMENT_TYPE, { id: 'st-1' }));
       expect(result.success).toBe(false);
       expect(result.error).toMatch(/Built-in/);
+      expect(mockTx.shipmentType.update).not.toHaveBeenCalled();
+    });
+
+    it('treats another org\'s type as not found', async () => {
+      const { bus } = mockEventBus();
+      const handler = new ArchiveShipmentTypeCommandHandler(mockPrisma, bus);
+      const result = await handler.execute(createTestCommand(ARCHIVE_SHIPMENT_TYPE, { id: 'st-1' }, { orgId: 'other-org' }));
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/not found/);
       expect(mockTx.shipmentType.update).not.toHaveBeenCalled();
     });
   });

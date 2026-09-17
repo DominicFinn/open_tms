@@ -34,25 +34,6 @@ describe('TradingPartnerRepository — EDI logs', () => {
         data: expect.objectContaining({ orgId: 'org-1', partnerId: 'p-1' }),
       });
     });
-
-    it('writes a row even when caller passes no orgId (legacy path)', async () => {
-      const prisma = buildPrisma();
-      const repo = new TradingPartnerRepository(prisma);
-
-      await repo.createLog({
-        partnerId: 'p-1',
-        transactionType: '850',
-        direction: 'inbound',
-        status: 'success',
-      });
-
-      // No auto-derivation today (Customer/Carrier/Partner have no orgId
-      // column), so the row lands with orgId undefined and the read
-      // endpoints tolerate it.
-      expect(prisma.ediTransactionLog.create).toHaveBeenCalled();
-      const call = prisma.ediTransactionLog.create.mock.calls[0][0];
-      expect(call.data.orgId).toBeUndefined();
-    });
   });
 
   describe('findLogs', () => {

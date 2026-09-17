@@ -59,7 +59,7 @@ export class UpdateShipmentCommandHandler extends BaseCommandHandler<UpdateShipm
   ): Promise<{ id: string }> {
     const { id, data } = command.payload;
 
-    const previous = await tx.shipment.findFirstOrThrow({ where: { id, archived: false } });
+    const previous = await tx.shipment.findFirstOrThrow({ where: { id, orgId: command.orgId, archived: false } });
 
     // Resolve lane origin/destination if laneId provided
     const updateData: any = { ...data };
@@ -68,9 +68,13 @@ export class UpdateShipmentCommandHandler extends BaseCommandHandler<UpdateShipm
     delete updateData.devices;
     delete updateData.waypoints;
     if (data.laneId) {
-      const lane = await tx.lane.findFirstOrThrow({ where: { id: data.laneId, archived: false } });
+      const lane = await tx.lane.findFirstOrThrow({ where: { id: data.laneId, orgId: command.orgId, archived: false } });
       updateData.originId = lane.originId;
       updateData.destinationId = lane.destinationId;
+    }
+
+    if (data.shipmentTypeId) {
+      await tx.shipmentType.findFirstOrThrow({ where: { id: data.shipmentTypeId, orgId: command.orgId }, select: { id: true } });
     }
 
     const updated = await tx.shipment.update({ where: { id }, data: updateData });

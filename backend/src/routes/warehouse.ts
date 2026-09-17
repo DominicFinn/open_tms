@@ -842,7 +842,7 @@ export async function warehouseRoutes(server: FastifyInstance) {
       metadata: z.record(z.any()).optional(),
     }).parse(req.body);
 
-    const log = await prisma.connectivityLog.create({ data: body });
+    const log = await prisma.connectivityLog.create({ data: { ...body, orgId: req.orgId! } });
     reply.code(201);
     return { data: log, error: null };
   });

@@ -67,6 +67,11 @@ export class AuthService implements IAuthService {
       return { success: false, error: 'Email already registered' };
     }
 
+    const organizationId = input.organizationId ?? await this.userRepo.soleOrganizationId();
+    if (!organizationId) {
+      return { success: false, error: 'organizationId is required' };
+    }
+
     // Hash password and create user
     const passwordHash = await this.passwordService.hash(input.password);
     const user = await this.userRepo.create({
@@ -74,7 +79,7 @@ export class AuthService implements IAuthService {
       passwordHash,
       firstName: input.firstName,
       lastName: input.lastName,
-      organizationId: input.organizationId,
+      organizationId,
     });
 
     // Assign default role

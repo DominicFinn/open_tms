@@ -58,8 +58,8 @@ export async function shipmentTypeRoutes(server: FastifyInstance) {
       description: 'List all non-archived shipment types',
       response: { 200: { type: 'object', properties: { data: { type: 'array', items: shipmentTypeSchema }, error: { type: 'string', nullable: true } } } },
     },
-  }, async () => {
-    const data = await repo.all();
+  }, async (req: FastifyRequest) => {
+    const data = await repo.all(req.orgId!);
     return { data, error: null };
   });
 
@@ -71,7 +71,7 @@ export async function shipmentTypeRoutes(server: FastifyInstance) {
     },
   }, async (req: FastifyRequest, reply: FastifyReply) => {
     const { id } = req.params as { id: string };
-    const found = await repo.findById(id);
+    const found = await repo.findById(id, req.orgId!);
     if (!found) {
       reply.code(404);
       return { data: null, error: 'Shipment type not found' };
@@ -97,7 +97,7 @@ export async function shipmentTypeRoutes(server: FastifyInstance) {
       reply.code(400);
       return { data: null, error: result.error };
     }
-    const created = await repo.findById((result.data as any).id);
+    const created = await repo.findById((result.data as any).id, req.orgId!);
     reply.code(201);
     return { data: created, error: null };
   });
@@ -122,7 +122,7 @@ export async function shipmentTypeRoutes(server: FastifyInstance) {
       reply.code(result.error?.includes('not found') ? 404 : 400);
       return { data: null, error: result.error };
     }
-    const updated = await repo.findById(id);
+    const updated = await repo.findById(id, req.orgId!);
     return { data: updated, error: null };
   });
 

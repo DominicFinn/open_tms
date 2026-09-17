@@ -501,6 +501,7 @@ export class OrderConversionService implements IOrderConversionService {
 
       await tx.auditLog.create({
         data: {
+          orgId,
           entityType: 'order',
           entityId: orderId,
           orderId,

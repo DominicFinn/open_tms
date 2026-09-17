@@ -899,6 +899,7 @@ export async function qualityCentreRoutes(server: FastifyInstance) {
     const storageBackend = process.env.S3_ENDPOINT && process.env.S3_BUCKET ? 's3' : 'database';
 
     const attachment = await attachmentRepo.create({
+      orgId,
       entityType: 'sop_audit',
       entityId: auditId,
       fileName,
@@ -944,7 +945,7 @@ export async function qualityCentreRoutes(server: FastifyInstance) {
       reply.code(404);
       return { data: null, error: 'Audit not found' };
     }
-    const attachments = await attachmentRepo.findByEntity('sop_audit', auditId);
+    const attachments = await attachmentRepo.findByEntity(req.orgId!, 'sop_audit', auditId);
     return { data: attachments, error: null };
   });
 

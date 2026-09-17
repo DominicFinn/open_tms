@@ -46,9 +46,18 @@ const BUILT_IN_TYPES: Array<{
   },
 ];
 
+// Every org gets its own copy of the built-ins, so this runs per org. An org created after startup
+// picks them up on the next start.
 export async function seedBuiltInShipmentTypes(prisma: PrismaClient): Promise<void> {
+  const orgs = await prisma.organization.findMany({ select: { id: true } });
+  for (const org of orgs) {
+    await seedBuiltInShipmentTypesForOrg(prisma, org.id);
+  }
+}
+
+export async function seedBuiltInShipmentTypesForOrg(prisma: PrismaClient, orgId: string): Promise<void> {
   for (const t of BUILT_IN_TYPES) {
-    const existing = await prisma.shipmentType.findFirst({ where: { name: t.name } });
+    const existing = await prisma.shipmentType.findFirst({ where: { orgId, name: t.name } });
     if (existing) {
       if (existing.isBuiltIn) {
         await prisma.shipmentType.update({
@@ -60,6 +69,7 @@ export async function seedBuiltInShipmentTypes(prisma: PrismaClient): Promise<vo
     }
     await prisma.shipmentType.create({
       data: {
+        orgId,
         name: t.name,
         icon: t.icon,
         color: t.color,
